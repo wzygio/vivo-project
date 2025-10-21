@@ -1,0 +1,6311 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WorkBook xmlVersion="20211223" releaseVersion="11.0.0">
+<TableDataMap>
+<TableData name="BATCH" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2025-09-04]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[C441\',\'N236]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2025-07-04]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[WITH BATCH_INFO AS(
+SELECT '批次' AS DATE_TYPE
+      ,T2.LOT
+      ,T1. GLASS_ID 
+      ,S.PRODUCTCODE 
+--      ,MIN(T1.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM (SELECT PRODUCTREQUESTNAME
+            ,CASE WHEN D.CREATETIME > '2023-12-01 00:00:00' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE '23/'||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END  AS LOT
+      FROM DWR_MES_PRODUCTREQUEST D
+      WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       LEFT JOIN DWT_INOUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND INOUT_TYPE ='IN'
+       LEFT JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   AND T1.DATE_TIMEKEY >= TO_CHAR( '${dtStartDate}'::TIMESTAMP-INTERVAL '6 MONTH','YYYYMMDD')
+   AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   --AND T2.LOT IN ('05/08蒸镀批')
+   --AND S.PRODUCTCODE='D36'
+ GROUP BY T2.LOT
+         ,T1.GLASS_ID 
+         ,S.PRODUCTCODE
+)
+SELECT D.PROD_CODE||'-'||B.LOT AS N_LOT
+      ,B.LOT AS LOT
+      ,MIN(D.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM BATCH_INFO B
+       INNER JOIN DWS_YLD_WAREHOUSING_D D
+               ON B.GLASS_ID = D.GLASS_ID
+ WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+ ${IF(LEN(cmcbProdCode)=0,"","AND D.PROD_CODE IN ('"+cmcbProdCode+"')")}
+ GROUP BY D.PROD_CODE,D.PROD_CODE||'-'||B.LOT,B.LOT
+ ORDER BY  D.PROD_CODE||'-'||B.LOT
+          ,MIN(D.DATE_TIMEKEY)]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="PRODUCTCODE" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters/>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[SELECT
+    PRODUCT_CODE
+FROM
+    DWR_MES_PRODUCTSPEC_V
+GROUP BY
+    PRODUCT_CODE
+ORDER BY
+    PRODUCT_CODE]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="SEARCH_RESTORE_YLD" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="txtID"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[C441\',\'N236]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2025-09-04]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O>
+<![CDATA[25/08/22蒸镀批]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2025-07-01]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[WITH BATCH_INFO AS(
+SELECT '批次' AS DATE_TYPE
+      ,T2.LOT
+      ,T1. GLASS_ID 
+      ,S.PRODUCTCODE 
+--      ,MIN(T1.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM (SELECT PRODUCTREQUESTNAME
+           ,CASE WHEN D.CREATETIME >= '20231201' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE TO_CHAR(D.CREATETIME,'YY/')||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END AS LOT
+      FROM DWR_MES_PRODUCTREQUEST D
+      WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       LEFT JOIN DWT_INOUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND INOUT_TYPE ='IN'
+       LEFT JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   AND T1.DATE_TIMEKEY >= TO_CHAR( '${dtStartDate}'::TIMESTAMP-INTERVAL '6 MONTH','YYYYMMDD')
+   AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   --AND T2.LOT IN ('05/08蒸镀批')
+   --AND S.PRODUCTCODE='D36'
+ ${IF(LEN(cmcbProdCode)=0,"","AND S.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+ ${IF(LEN(cmcbBatch) = 0,"", "AND T2.LOT IN ('" + cmcbBatch + "')" )}
+ GROUP BY T2.LOT
+         ,T1.GLASS_ID 
+         ,S.PRODUCTCODE
+)
+--,
+--BATCH_DATA AS(
+--SELECT B.PRODUCTCODE||'-'||B.LOT AS N_LOT
+--      ,B.LOT AS LOT
+--      ,MIN(D.DATE_TIMEKEY) AS DATE_TIMEKEY
+--  FROM BATCH_INFO B
+--       INNER JOIN DWS_YLD_WAREHOUSING_D D
+--               ON B.GLASS_ID = D.GLASS_ID
+-- WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+--   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+-- GROUP BY B.PRODUCTCODE||'-'||B.LOT,B.LOT
+--)
+SELECT '批次' AS DATE_TYPE
+	  ,T.LOT AS DATE_VALUE
+      ,A.PROD_CODE
+      ,COALESCE(A.FACTORY,'未分责') AS FACTORY
+      ,SUM(A.DFT_QTY) AS GROUP_DFT_TY
+      ,SUM(CASE WHEN A.RISK_FLAG <> 'Y' THEN A.DFT_QTY ELSE 0 END) AS NOT_RISK_DFT_QTY 
+  FROM BATCH_INFO T
+       INNER JOIN 
+       (SELECT W.PROD_CODE
+		      ,DECODE(G.FACTORY,'TP','TP','CELL','OLED',G.FACTORY) 
+		      ,W.PANEL_ID
+		      ,W.RISK_FLAG 
+		      ,1 AS DFT_QTY
+		  FROM DWS_DFT_WAREHOUSING_D W
+		       LEFT JOIN IMP_CT_DFT_GROUP G
+		              ON W.DEFECT_CODE = G.DEFECT_CODE
+		       LEFT JOIN DWR_MES_PRODUCTSPEC P
+		              ON W.PROD_ID = P.PRODUCTSPECNAME
+		 WHERE W.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+		   AND W.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+             ${IF(LEN(cmcbProdCode)=0,"","AND W.PROD_CODE IN ('"+cmcbProdCode+"')")}
+		   ${IF(LEN(txtID) = 0,"", "AND SUBSTR(S.PANEL_ID,1,11) IN ('" + txtID + "')" )} 
+		 GROUP BY  W.PROD_CODE
+			      ,G.FACTORY 
+			      ,W.PANEL_ID
+		          ,W.RISK_FLAG
+	    ) A
+	   ON SUBSTR(A.PANEL_ID,1,12) = T.GLASS_ID
+ --WHERE A.FACTORY IS NOT NULL
+ GROUP BY T.LOT
+	     ,A.PROD_CODE
+         ,A.FACTORY]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="PRODSPEC" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[D17]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[SELECT
+    PROD_ID
+FROM
+    DWR_MES_PRODUCTSPEC_V
+WHERE FACTORY = 'POSTCELL'
+${IF(LEN(cmcbProdCode)=0,"","AND PRODUCT_CODE IN ('"+cmcbProdCode+"')")}
+GROUP BY
+    PROD_ID
+ORDER BY
+   PROD_ID]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="SEARCH_RUKU" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="txtID"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[C441\',\'N236]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdSpec"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2025-09-03]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2025-07-01]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O>
+<![CDATA[25/08/22蒸镀批]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbSubProdType"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[WITH BATCH_INFO AS(
+SELECT '批次' AS DATE_TYPE
+      ,T2.LOT
+      ,T1. GLASS_ID 
+      ,S.PRODUCTCODE 
+--      ,MIN(T1.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM (SELECT PRODUCTREQUESTNAME
+           ,CASE WHEN D.CREATETIME >= '20231201' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE TO_CHAR(D.CREATETIME,'YY/')||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END AS LOT
+      FROM DWR_MES_PRODUCTREQUEST D
+      WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       LEFT JOIN DWT_INOUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND INOUT_TYPE ='IN'
+       LEFT JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   AND T1.DATE_TIMEKEY >= TO_CHAR( '${dtStartDate}'::TIMESTAMP-INTERVAL '6 MONTH','YYYYMMDD')
+   AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   --AND T2.LOT IN ('05/08蒸镀批')
+   --AND S.PRODUCTCODE='D36'
+ ${IF(LEN(cmcbProdCode)=0,"","AND S.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+ ${IF(LEN(cmcbBatch) = 0,"", "AND T2.LOT IN ('" + cmcbBatch + "')" )}
+ GROUP BY T2.LOT
+         ,T1.GLASS_ID 
+         ,S.PRODUCTCODE
+),
+BATCH_DATA AS(
+SELECT D.PROD_CODE||'-'||B.LOT AS N_LOT
+      ,B.LOT AS LOT
+      ,D.PROD_CODE
+      ,MIN(D.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM BATCH_INFO B
+       INNER JOIN DWS_YLD_WAREHOUSING_D D
+               ON B.GLASS_ID = D.GLASS_ID
+ WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+ GROUP BY D.PROD_CODE||'-'||B.LOT,B.LOT,D.PROD_CODE
+ )
+,DWS_YLD_WAREHOUSING_D AS(
+SELECT  T.MONTH_TIMEKEY 
+       ,T.WEEK_TIMEKEY 
+       ,T.DATE_TIMEKEY 
+       ,T.PROD_CODE 
+       ,T.PROD_ID 
+       ,T.SUB_PROD_TYPE 
+       ,T.SUB_PROD_ID
+       ,T.PANEL_GRADE 
+       ,DTL_GRADE
+       ,T.OUTPUT_QTY
+       ,T.SHEET_ID 
+       ,T.GLASS_ID
+       ,T.RP_FLAG 
+       ,T.RP_FACTORY 
+       ,T.RISK_FLAG 
+       ,T.INVENTORYCODE 
+       ,DECODE(R.RISK_FACTORY ,'',T.RISK_FACTORY,NULL,T.RISK_FACTORY,R.RISK_FACTORY ) AS RISK_FACTORY
+       ,T.A1_SHIP_FLAG
+FROM (
+      SELECT D.MONTH_TIMEKEY 
+            ,D.WEEK_TIMEKEY 
+            ,D.DATE_TIMEKEY 
+            ,D.PROD_CODE 
+            ,D.PROD_ID 
+            ,D.SUB_PROD_TYPE 
+            ,D.SUB_PROD_ID
+            ,D.PANEL_GRADE 
+            ,COALESCE(D.DTL_GRADE,'S') AS DTL_GRADE
+            ,D.OUTPUT_QTY
+            ,D.SHEET_ID 
+            ,D.GLASS_ID
+            ,D.RP_FLAG 
+            ,D.RP_FACTORY 
+            ,D.RISK_FLAG 
+            ,D.INVENTORYCODE 
+            ,CASE WHEN D.RISKCOMMENT ='AVI漏检风险 沈祥/未分责'
+                  THEN SPLIT_PART(SPLIT_PART(D.RISKCOMMENT,' ',2),'/',2)
+                  ELSE SPLIT_PART(SPLIT_PART(D.RISKCOMMENT,'-',2),'/',2) END AS RISK_FACTORY
+            ,CASE WHEN D.DATE_TIMEKEY >= '20221127' AND D.DTL_GRADE = 'A1' THEN 'Y' ELSE D.A1_SHIP_FLAG  END AS A1_SHIP_FLAG --11月27日后A1全部算为良品，不再卡控是否出货，11月27日前保持A1出货为良品
+       FROM DWS_YLD_WAREHOUSING_D D
+      WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+        AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+        AND D.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   ${IF(LEN(cmcbProdCode)=0,"","AND D.PROD_CODE IN ('"+cmcbProdCode+"')")}
+   ${IF(LEN(cmcbProdSpec)=0,"","AND D.PROD_ID IN ('"+cmcbProdSpec+"')")}
+   ${IF(LEN(cmcbSubProdType) = 0,"", "AND D.SUB_PROD_TYPE IN ('" + cmcbSubProdType + "')" )}
+   ${IF(LEN(txtID) = 0,"", "AND D.SHEET_ID IN ('" + txtID + "')" )}  
+          ) T  
+     LEFT JOIN IMP_RUKU_RISK_DUTY R 
+            ON T.PROD_CODE=R.PROD_CODE 
+           AND T.SUB_PROD_ID=R.SUB_PROD_ID 
+           )
+,YLD_INFO AS(
+SELECT B.LOT
+      ,D.PROD_CODE 
+      ,SUM(D.OUTPUT_QTY) AS SHIP_QTY --入库数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' THEN 0 ELSE CASE WHEN G.GRADE_FLAG ='Y' OR (D.DTL_GRADE = 'A1' AND D.A1_SHIP_FLAG = 'Y') THEN D.OUTPUT_QTY ELSE 0 END END ) AS AA1_QTY --良品数
+      ,SUM(CASE WHEN D.RISK_FLAG <> 'Y' AND (G.GRADE_FLAG ='N'OR PANEL_GRADE='S' OR (D.DTL_GRADE = 'A1' AND D.A1_SHIP_FLAG = 'N')) THEN D.OUTPUT_QTY ELSE 0 END) AS NOT_RISK_DFT_QTY --非风险品不良数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' THEN D.OUTPUT_QTY ELSE 0 END) AS RISK_AA1_QTY --风险品AA1数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND R.RISK_FACTORY IN ('ARRAY','ARRAY+OLED') THEN (CASE WHEN R.RISK_FACTORY = 'ARRAY+OLED' THEN D.OUTPUT_QTY*0.5 ELSE D.OUTPUT_QTY END) ELSE 0 END) AS A_RISK_AA1_QTY --风险品AA1的ARRAY责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND R.RISK_FACTORY IN ('OLED','ARRAY+OLED') THEN (CASE WHEN R.RISK_FACTORY = 'ARRAY+OLED' THEN D.OUTPUT_QTY*0.5 ELSE D.OUTPUT_QTY END) ELSE 0 END) AS O_RISK_AA1_QTY --风险品AA1的OLED责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND (D.RISK_FACTORY IS NULL OR D.RISK_FACTORY = ''OR D.RISK_FACTORY = '未分责') THEN D.OUTPUT_QTY ELSE 0 END) AS Q_RISK_AA1_QTY --风险品AA1未分责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND R.RISK_FACTORY IN ('ARRAY','ARRAY+OLED') THEN D.OUTPUT_QTY ELSE 0 END) AS A_RISK_QTY --ARRAY责风险品数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y 'AND R.RISK_FACTORY IN ('OLED','ARRAY+OLED') THEN D.OUTPUT_QTY ELSE 0 END) AS O_RISK_QTY --ARRAY责风险品数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND R.RISK_FACTORY='开发责'  THEN D.OUTPUT_QTY ELSE 0 END) AS KFZ_RISK_AA1_QTY --开发责风险品AA1数
+  FROM BATCH_INFO B 
+  LEFT JOIN DWS_YLD_WAREHOUSING_D D 
+              ON B.GLASS_ID = D.GLASS_ID
+  LEFT JOIN IMP_RUKU_RISK_DUTY R
+         ON D.PROD_CODE = R.PROD_CODE 
+        AND D.SUB_PROD_ID = R.SUB_PROD_ID 
+  LEFT JOIN IMP_YLD_GRADE_FLAG G 
+         ON D.DTL_GRADE=G.GRADE 
+WHERE 1=1 
+AND D.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+ GROUP BY  B.LOT
+	     ,D.PROD_CODE  	  
+)
+,DFT_INFO AS(
+SELECT B.LOT
+      ,D.PROD_CODE 
+      ,COALESCE(G.FACTORY,'/') AS FACTORY
+      ,COALESCE(G.DEFECT_GROUP,'/') AS DEFECT_GROUP 
+      ,D.DEFECT_CODE
+      ,COALESCE(G.DEFECT_DESC,D.DEFECT_CODE) AS DEFECT_DESC  
+      ,SUM(D.DFT_QTY) AS DFT_QTY 
+  FROM BATCH_INFO B
+  LEFT JOIN DWS_DFT_WAREHOUSING_D D
+         ON B.GLASS_ID =D.GLASS_ID 
+  LEFT JOIN IMP_CT_DFT_GROUP G
+         ON D.DEFECT_CODE = G.DEFECT_CODE 
+ WHERE 1=1
+   AND D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   AND D.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   ${IF(LEN(cmcbProdCode)=0,"","AND D.PROD_CODE IN ('"+cmcbProdCode+"')")}
+   ${IF(LEN(cmcbProdSpec)=0,"","AND D.PROD_ID IN ('"+cmcbProdSpec+"')")}
+   ${IF(LEN(txtID) = 0,"", "AND D.SHEET_ID IN ('" + txtID + "')" )} 
+ GROUP BY B.LOT
+         ,D.PROD_CODE 
+         ,COALESCE(G.FACTORY,'/') 
+         ,COALESCE(G.DEFECT_GROUP,'/')
+         ,D.DEFECT_CODE
+         ,COALESCE(G.DEFECT_DESC,D.DEFECT_CODE)
+)
+SELECT '批次' AS DATE_TYPE
+      ,T.LOT AS DATE_VALUE
+      ,Y.PROD_CODE
+      ,COALESCE(Y.SHIP_QTY,0) AS FENMU
+      ,COALESCE(Y.SHIP_QTY,0) AS SHIP_QTY
+      ,Y.AA1_QTY
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.AA1_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS YLD_RATIO
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.NOT_RISK_DFT_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS NOT_RISK_DFT_RATIO
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.RISK_AA1_QTY/COALESCE(Y.SHIP_QTY,0) 
+        END AS RISK_AA1_RATIO
+      ,Y.A_RISK_AA1_QTY
+      ,Y.O_RISK_AA1_QTY
+      ,Y.Q_RISK_AA1_QTY
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.A_RISK_AA1_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS A_RISK_AA1_RATIO
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.O_RISK_AA1_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS O_RISK_AA1_RATIO
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.Q_RISK_AA1_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS Q_RISK_AA1_RATIO
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.KFZ_RISK_AA1_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS KFZ_RISK_AA1_RATIO
+      ,Y.A_RISK_QTY
+      ,Y.O_RISK_QTY
+      ,D.FACTORY AS DFT_FACTORY
+      ,D.DEFECT_GROUP||';'||D.DEFECT_DESC AS DEFECT_DESC
+      ,D.DEFECT_CODE 
+      ,CASE WHEN COALESCE(Y.SHIP_QTY,0) = 0 THEN 0
+            ELSE D.DFT_QTY/COALESCE(Y.SHIP_QTY,0)
+        END AS DFT_RATIO
+  FROM BATCH_DATA T 		       
+       LEFT JOIN YLD_INFO Y
+              ON T.LOT = Y.LOT 
+             AND T.PROD_CODE=Y.PROD_CODE
+       LEFT JOIN DFT_INFO D
+              ON Y.LOT = D.LOT 
+             AND Y.PROD_CODE = D.PROD_CODE             
+ORDER BY T.DATE_TIMEKEY,T.LOT,Y.PROD_CODE]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="SEARCH_GROUP" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="txtID"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[N236]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdSpec"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2025-09-18]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O>
+<![CDATA[25/05/13蒸镀批]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2025-05-01]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[WITH BATCH_INFO AS(
+SELECT '批次' AS DATE_TYPE
+      ,T2.LOT
+      ,T1. GLASS_ID 
+      ,S.PRODUCTCODE 
+--      ,MIN(T1.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM (SELECT PRODUCTREQUESTNAME
+             ,CASE WHEN D.CREATETIME >= '20231201' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE TO_CHAR(D.CREATETIME,'YY/')||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END AS LOT
+         FROM DWR_MES_PRODUCTREQUEST D
+        WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       LEFT JOIN DWT_INOUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND INOUT_TYPE ='IN'
+       LEFT JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   AND T1.DATE_TIMEKEY >= TO_CHAR( '${dtStartDate}'::TIMESTAMP-INTERVAL '6 MONTH','YYYYMMDD')
+   AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   --AND T2.LOT IN ('05/08蒸镀批')
+   --AND S.PRODUCTCODE='D36'
+ ${IF(LEN(cmcbProdCode)=0,"","AND S.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+ ${IF(LEN(cmcbBatch) = 0,"", "AND T2.LOT IN ('" + cmcbBatch + "')" )}
+ GROUP BY T2.LOT
+         ,T1.GLASS_ID 
+         ,S.PRODUCTCODE
+),BATCH_DATA AS(
+SELECT D.PROD_CODE||'-'||B.LOT AS N_LOT
+      ,B.LOT AS LOT
+      ,D.PROD_CODE AS PRODUCTCODE
+      ,MIN(D.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM BATCH_INFO B
+       INNER JOIN DWS_YLD_WAREHOUSING_D D
+               ON B.GLASS_ID = D.GLASS_ID
+ WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+ GROUP BY D.PROD_CODE||'-'||B.LOT,B.LOT,D.PROD_CODE
+)
+SELECT '批次' AS DATE_TYPE
+      ,T.LOT AS DATE_VALUE
+      ,A.PROD_CODE
+      ,G.DEFECT_GROUP
+      ,SUM(A.DFT_QTY) AS GROUP_DFT_TY
+  FROM BATCH_INFO T
+       INNER JOIN (SELECT distinct I.DEFECT_GROUP FROM IMP_CT_DFT_GROUP I) G
+              ON 1=1
+       INNER JOIN (SELECT PRODUCTCODE FROM DWR_MES_PRODUCTSPEC WHERE 1=1 ${IF(LEN(cmcbProdCode)=0,"","AND PRODUCTCODE IN ('"+cmcbProdCode+"')")} GROUP BY PRODUCTCODE) P
+              ON 1=1
+       INNER JOIN 
+       (SELECT W.PROD_CODE
+		      ,G.DEFECT_GROUP 
+		      ,W.PANEL_ID
+		      ,1 AS DFT_QTY
+		  FROM DWS_DFT_WAREHOUSING_D W
+		       LEFT JOIN IMP_CT_DFT_GROUP G
+		              ON W.DEFECT_CODE = G.DEFECT_CODE
+		       LEFT JOIN DWR_MES_PRODUCTSPEC P
+		              ON W.PROD_ID = P.PRODUCTSPECNAME
+		 WHERE W.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+		   AND W.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+           ${IF(LEN(cmcbProdCode)=0,"","AND W.PROD_CODE IN ('"+cmcbProdCode+"')")}
+		   ${IF(LEN(cmcbProdSpec)=0,"","AND W.PROD_ID IN ('"+cmcbProdSpec+"')")}
+		   ${IF(LEN(txtID) = 0,"", "AND SUBSTR(W.PANEL_ID,1,11) IN ('" + txtID + "')" )} 
+		 GROUP BY  W.PROD_CODE
+			      ,G.DEFECT_GROUP 
+			      ,W.PANEL_ID
+	    ) A
+	   ON T.GLASS_ID = SUBSTR(A.PANEL_ID,1,12) 
+	  AND G.DEFECT_GROUP = A.DEFECT_GROUP
+	  AND P.PRODUCTCODE = A.PROD_CODE
+ GROUP BY T.LOT
+	     ,A.PROD_CODE
+	     ,G.DEFECT_GROUP
+ ORDER BY T.LOT
+	     ,A.PROD_CODE
+         ,G.DEFECT_GROUP]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="DATEINFO" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters/>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[SELECT MONTH_TIMEKEY AS DATE_VALUE
+      ,TO_DATE(DATE_START_TIMEKEY,'YYYYMMDD') AS DATE_START_TIMEKEY
+      ,TO_DATE(DATE_END_TIMEKEY,'YYYYMMDD') AS DATE_END_TIMEKEY 
+  FROM DWD_CALENDAR 
+ WHERE 1=1
+   AND FACTORY = 'ARRAY' 
+   AND TIME_TYPE = 'MONTH'
+ GROUP BY MONTH_TIMEKEY
+         ,DATE_START_TIMEKEY
+         ,DATE_END_TIMEKEY]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="SEARCH_RUKU_RISK" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2025-09-04]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="txtID"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[C441\',\'N236]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdSpec"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O>
+<![CDATA[25/08/22蒸镀批]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2025-07-04]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[WITH BATCH_INFO AS(
+SELECT '批次' AS DATE_TYPE
+      ,T2.LOT
+      ,T1. GLASS_ID 
+      ,S.PRODUCTCODE 
+--      ,MIN(T1.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM (SELECT PRODUCTREQUESTNAME
+           ,CASE WHEN D.CREATETIME >= '20231201' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE TO_CHAR(D.CREATETIME,'YY/')||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END AS LOT
+      FROM DWR_MES_PRODUCTREQUEST D
+      WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       LEFT JOIN DWT_INOUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND INOUT_TYPE ='IN'
+       LEFT JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   AND T1.DATE_TIMEKEY >= TO_CHAR( '${dtStartDate}'::TIMESTAMP-INTERVAL '6 MONTH','YYYYMMDD')
+   AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   --AND T2.LOT IN ('05/08蒸镀批')
+   --AND S.PRODUCTCODE='D36'
+ ${IF(LEN(cmcbProdCode)=0,"","AND S.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+ ${IF(LEN(cmcbBatch) = 0,"", "AND T2.LOT IN ('" + cmcbBatch + "')" )}
+ GROUP BY T2.LOT
+         ,T1.GLASS_ID 
+         ,S.PRODUCTCODE
+),
+BATCH_DATA AS(
+SELECT D.PROD_CODE||'-'||B.LOT AS N_LOT
+      ,B.LOT AS LOT
+      ,D.PROD_CODE
+      ,MIN(D.DATE_TIMEKEY) AS DATE_TIMEKEY
+  FROM BATCH_INFO B
+       INNER JOIN DWS_YLD_WAREHOUSING_D D
+               ON B.GLASS_ID = D.GLASS_ID
+ WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+ GROUP BY D.PROD_CODE||'-'||B.LOT,B.LOT,D.PROD_CODE
+),
+DWS_YLD_WAREHOUSING_D_F AS(
+SELECT  G.MONTH_TIMEKEY 
+       ,G.WEEK_TIMEKEY 
+       ,G.DATE_TIMEKEY 
+       ,G.PROD_CODE 
+       ,G.PROD_ID 
+       ,G.SUB_PROD_TYPE 
+       ,G.SUB_PROD_ID
+       ,G.PANEL_GRADE 
+       ,G.DTL_GRADE
+       ,CASE WHEN G.RISK_FACTORY='ARRAY+OLED'
+             THEN G.OUTPUT_QTY/2
+             ELSE G.OUTPUT_QTY
+             END AS OUTPUT_QTY
+       ,G.SHEET_ID 
+       ,G.GLASS_ID
+       ,G.RISK_FLAG 
+       ,G.A1_SHIP_FLAG
+       ,CASE WHEN G.RISK_FACTORY='ARRAY+OLED'
+             THEN UNNEST(STRING_TO_ARRAY(G.RISK_FACTORY,'+') ) 
+             ELSE G.RISK_FACTORY 
+             END AS RISK_FACTORY 
+	   ,G.RISKCOMMENT --风险品描述
+FROM (            
+SELECT  T.MONTH_TIMEKEY 
+       ,T.WEEK_TIMEKEY 
+       ,T.DATE_TIMEKEY 
+       ,T.PROD_CODE 
+       ,T.PROD_ID 
+       ,T.SUB_PROD_TYPE 
+       ,T.SUB_PROD_ID
+       ,T.PANEL_GRADE 
+       ,DTL_GRADE
+       ,T.OUTPUT_QTY
+       ,T.SHEET_ID 
+       ,T.GLASS_ID
+       ,T.RISK_FLAG 
+		      ,CASE WHEN (T.RISK_FACTORY IS NOT NULL AND T.RISK_FACTORY <>'')
+		            THEN  T.RISK_FACTORY
+		            WHEN (T.RISK_FACTORY IS  NULL OR T.RISK_FACTORY ='') AND (R.RISK_FACTORY IS NOT NULL OR R.RISK_FACTORY <>'')
+		            THEN R.RISK_FACTORY 
+		            ELSE T.RISKFACTORY 
+		            END AS RISK_FACTORY--风险品责任工厂
+       ,CASE WHEN (T.RISK_DSC IS NOT NULL OR T.RISK_DSC <>'')
+		            THEN  T.RISK_DSC
+		            WHEN (T.RISK_DSC IS NULL  OR T.RISK_DSC ='') AND (R.RISK_COMMENT IS NOT NULL OR R.RISK_COMMENT <>'')
+		            THEN R.RISK_COMMENT 
+		            ELSE T.RISKCOMMENT 
+		            END AS RISKCOMMENT --风险品描述
+       ,T.A1_SHIP_FLAG
+FROM (
+      SELECT Y.MONTH_TIMEKEY 
+            ,Y.WEEK_TIMEKEY 
+            ,D.FIRST_SHIP_DATE AS DATE_TIMEKEY 
+            ,P.PRODUCTCODE AS PROD_CODE 
+            ,D.PROD_ID 
+            ,R.SUBPRODUCTIONTYPE  AS SUB_PROD_TYPE 
+            ,D.SUB_PROD_ID
+            ,D.PANEL_GRADE 
+            ,D.PANEL_ID 
+            ,CASE WHEN D.DTL_GRADE IS NULL 
+                  THEN 'S'
+	              ELSE D.DTL_GRADE
+	              END AS DTL_GRADE 
+            ,SUM(D.OPER_OUT_PNL_QTY) AS OUTPUT_QTY
+	        ,SUBSTR(D.PANEL_ID,1,11) AS SHEET_ID
+	        ,SUBSTR(D.PANEL_ID,1,12) AS GLASS_ID
+            ,D.RISK_FLAG  
+            ,H.RISK_FACTORY 
+            ,R.RISKFACTORY 
+            ,R.RISKCOMMENT 
+            ,H.RISK_DSC
+            ,CASE WHEN D.FIRST_SHIP_DATE >= '20221127' AND D.DTL_GRADE = 'A1' 
+                  THEN 'Y' 
+                  ELSE D.A1_SHIP_FLAG  
+                  END AS A1_SHIP_FLAG --11月27日后A1全部算为良品，不再卡控是否出货，11月27日前保持A1出货为良品
+       FROM DWT_WAREHOUSING_PNL D
+  LEFT JOIN DWD_CALENDAR Y
+	     ON D.FIRST_SHIP_DATE = Y.TIME_KEY
+	    AND Y.FACTORY = 'ARRAY'
+  LEFT JOIN DWR_MES_PRODUCTSPEC P
+	     ON D.PROD_ID = P.PRODUCTSPECNAME
+  LEFT JOIN DWR_MES_PRODUCTREQUEST R
+	     ON D.SUB_PROD_ID = R.PRODUCTREQUESTNAME  
+	     LEFT JOIN (SELECT COALESCE(P1.PANEL_ID, P.PANEL_ID, A.LOTNAME) AS LOTNAME,
+                    A.RISKFACTORY AS RISK_FACTORY ,
+                   (A.RISKCODE::TEXT || ' '::TEXT) || COALESCE(T.DESCRIPTION, ''::CHARACTER VARYING)::TEXT AS RISK_DSC
+                  FROM DWR_MES_CT_RISKHOLDPRODUCT A
+             LEFT JOIN DWR_MES_PRODUCTSPEC_V B 
+                    ON B.FACTORY::TEXT = 'POSTCELL'::TEXT 
+                   AND SUBSTR(A.LOTNAME::TEXT, 3, 2) = B.OLD_PRODUCT_CODE::TEXT
+             LEFT JOIN DWR_MES_PNL P 
+                    ON A.LOTNAME::TEXT =LEFT(P.PANEL_ID::TEXT, 12) 
+                   AND LENGTH(A.LOTNAME::TEXT) = 12
+             LEFT JOIN DWR_MES_PNL P1 
+                    ON A.LOTNAME::TEXT = LEFT(P1.PANEL_ID::TEXT, 11) 
+                   AND LENGTH(A.LOTNAME::TEXT) = 11
+              LEFT JOIN ( SELECT DESCRIPTION,
+                                 REASONCODE
+                            FROM DWR_MES_REASONCODE
+                           WHERE DWR_MES_REASONCODE.REASONCODETYPE::TEXT = 'RiskHoldCode'::TEXT 
+                           AND (DWR_MES_REASONCODE.AVAILABILITY::TEXT = ANY (ARRAY['Available'::TEXT, 'Availability'::TEXT]A)) 
+                           AND DWR_MES_REASONCODE.SUPERREASONCODE IS NOT NULL) T
+                   ON T.REASONCODE::TEXT = A.RISKCODE::TEXT
+              GROUP BY COALESCE(P1.PANEL_ID, P.PANEL_ID, A.LOTNAME)
+                       , A.RISKFACTORY
+                        ,(A.RISKCODE::TEXT || ' '::TEXT) || COALESCE(T.DESCRIPTION, ''::CHARACTER VARYING)::TEXT
+                        ,A.RISKDUTYUSER 
+                        ,A.RISKDEPT ) H 
+        ON D.PANEL_ID =H.LOTNAME
+     WHERE D.FIRST_SHIP_DATE >= REPLACE('${dtStartDate}','-','')
+       AND D.FIRST_SHIP_DATE <= REPLACE('${dtEndDate}','-','')
+       AND D.DATE_TIMEKEY>=REPLACE('${dtStartDate}','-','')
+--       AND P.PRODUCTCODE ='C20'
+--       AND D.FIRST_SHIP_DATE >='20231224'
+--       AND D.FIRST_SHIP_DATE <='20231230'
+       AND R.SUBPRODUCTIONTYPE IN ('ESLC','P','LCFG','SLCFG','SYZLC')
+--       AND D.RISK_FLAG ='Y'
+   ${IF(LEN(cmcbProdCode)=0,"","AND P.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+   ${IF(LEN(cmcbProdSpec)=0,"","AND D.PROD_ID IN ('"+cmcbProdSpec+"')")}
+   ${IF(LEN(txtID) = 0,"", "AND D.SUBSTR(D.PANEL_ID,1,11) IN ('" + txtID + "')" )}  
+GROUP BY     Y.MONTH_TIMEKEY 
+            ,Y.WEEK_TIMEKEY 
+            ,D.OPER_OUT_PNL_QTY
+            ,D.FIRST_SHIP_DATE 
+            ,P.PRODUCTCODE  
+            ,D.PROD_ID 
+            ,D.PANEL_ID 
+            ,R.SUBPRODUCTIONTYPE  
+            ,D.SUB_PROD_ID
+            ,D.PANEL_GRADE 
+            ,CASE WHEN D.DTL_GRADE IS NULL 
+                  THEN 'S'
+	              ELSE D.DTL_GRADE
+	              END  
+	        ,SUBSTR(D.PANEL_ID,1,11) 
+	        ,SUBSTR(D.PANEL_ID,1,12) 
+            ,D.RISK_FLAG  
+            ,H.RISK_FACTORY
+            ,R.RISKFACTORY 
+            ,CASE WHEN D.FIRST_SHIP_DATE >= '20221127' AND D.DTL_GRADE = 'A1' 
+                  THEN 'Y' 
+                  ELSE D.A1_SHIP_FLAG  
+                  END
+            ,R.RISKCOMMENT 
+            ,H.RISK_DSC
+          ) T  
+ LEFT JOIN IMP_RUKU_RISK_DUTY R 
+         ON T.PROD_CODE=R.PROD_CODE 
+         AND T.SUB_PROD_ID=R.SUB_PROD_ID 
+         ) G    
+         )
+,YLD_INFO AS(
+SELECT B.LOT
+      ,D.PROD_CODE 
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' THEN 0 ELSE CASE WHEN  G.GRADE_FLAG ='Y' OR (D.DTL_GRADE = 'A1' AND D.A1_SHIP_FLAG = 'Y') THEN D.OUTPUT_QTY ELSE 0 END END ) AS AA1_QTY --良品数
+      ,SUM(CASE WHEN D.RISK_FLAG <> 'Y' AND (G.GRADE_FLAG ='N' OR PANEL_GRADE='S' OR (D.DTL_GRADE = 'A1' AND D.A1_SHIP_FLAG = 'N')) THEN D.OUTPUT_QTY ELSE 0 END) AS NOT_RISK_DFT_QTY --非风险品不良数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' THEN D.OUTPUT_QTY ELSE 0 END) AS RISK_AA1_QTY --风险品AA1数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('ARRAY','阵列部') THEN OUTPUT_QTY  ELSE 0 END) AS A_RISK_AA1_QTY --风险品AA1的ARRAY责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('TP','触控部') THEN OUTPUT_QTY  ELSE 0 END) AS T_RISK_AA1_QTY --风险品AA1的TP责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('OLED','蒸镀封装部') THEN D.OUTPUT_QTY ELSE 0 END) AS O_RISK_AA1_QTY --风险品AA1的OLED责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('屏体部') THEN D.OUTPUT_QTY ELSE 0 END) AS P_RISK_AA1_QTY --风险品AA1的CELL责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND (D.RISK_FACTORY IS NULL OR D.RISK_FACTORY NOT IN ('ARRAY','TP','OLED','阵列部','触控部','蒸镀封装部','屏体部','开发责')) THEN D.OUTPUT_QTY ELSE 0 END) AS Q_RISK_AA1_QTY --风险品AA1未分责
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('ARRAY','阵列部') THEN D.OUTPUT_QTY ELSE 0 END) AS A_RISK_QTY --ARRAY责风险品数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y 'AND D.RISK_FACTORY IN ('TP','触控部') THEN D.OUTPUT_QTY ELSE 0 END) AS T_RISK_QTY --TP责风险品数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY IN ('OLED','蒸镀封装部','屏体部') THEN D.OUTPUT_QTY ELSE 0 END) AS O_RISK_QTY --OLED责风险品数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y' AND D.RISK_FACTORY='开发责' THEN D.OUTPUT_QTY ELSE 0 END) AS KFZ_RISK_AA1_QTY --开发责风险品AA1数
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y'  THEN  D.OUTPUT_QTY ELSE 0 END) AS RISK_QTY --风险品总数
+  FROM BATCH_INFO B 
+  LEFT JOIN DWS_YLD_WAREHOUSING_D_F D 
+              ON B.GLASS_ID = D.GLASS_ID
+  LEFT JOIN IMP_YLD_GRADE_FLAG G 
+         ON D.DTL_GRADE=G.GRADE 
+WHERE 1=1 
+AND D.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+ GROUP BY  B.LOT
+	     ,D.PROD_CODE  	)
+,DFT_INFO AS(
+SELECT B.LOT
+      ,D.PROD_CODE
+      , CASE WHEN D.RISK_FACTORY IN('ARRAY','阵列部')
+             THEN 'ARRAY'
+             WHEN D.RISK_FACTORY IN('TP','触控部')
+             THEN 'TP'
+             WHEN D.RISK_FACTORY IN('OLED','蒸镀封装部')
+             THEN 'OLED'
+             WHEN D.RISK_FACTORY IN('屏体部')
+             THEN 'CELL'
+             WHEN D.RISK_FACTORY IS NULL OR D.RISK_FACTORY NOT IN ('ARRAY','TP','OLED','阵列部','触控部','蒸镀封装部','屏体部','开发责')
+             THEN '未分责'
+             ELSE '开发责'
+             END AS FACTORY
+      , COALESCE (D.RISKCOMMENT ,'-') AS RISKCOMMENT
+      ,SUM(CASE WHEN D.RISK_FLAG = 'Y' AND G.GRADE_FLAG ='Y'  THEN  D.OUTPUT_QTY ELSE 0 END) AS DFT_QTY 
+ FROM BATCH_INFO B 
+  LEFT JOIN DWS_YLD_WAREHOUSING_D_F D 
+              ON B.GLASS_ID = D.GLASS_ID
+  LEFT JOIN IMP_YLD_GRADE_FLAG G 
+         ON D.DTL_GRADE=G.GRADE 
+ GROUP BY B.LOT
+      ,D.PROD_CODE 
+      , CASE WHEN D.RISK_FACTORY IN('ARRAY','阵列部')
+             THEN 'ARRAY'
+             WHEN D.RISK_FACTORY IN('TP','触控部')
+             THEN 'TP'
+             WHEN D.RISK_FACTORY IN('OLED','蒸镀封装部')
+             THEN 'OLED'
+             WHEN D.RISK_FACTORY IN('屏体部')
+             THEN 'CELL'
+             WHEN D.RISK_FACTORY IS NULL OR D.RISK_FACTORY NOT IN ('ARRAY','TP','OLED','阵列部','触控部','蒸镀封装部','屏体部','开发责')
+             THEN '未分责'
+             ELSE '开发责'
+             END 
+      ,COALESCE (D.RISKCOMMENT ,'-')
+      )
+,SHIP_QTY AS (
+SELECT B.LOT
+      ,D.PROD_CODE
+      ,SUM(OUTPUT_QTY) AS SHIP_QTY --入库数
+ FROM  BATCH_INFO B 
+  LEFT JOIN DWS_YLD_WAREHOUSING_D D 
+              ON B.GLASS_ID = D.GLASS_ID
+ WHERE D.DATE_TIMEKEY >= REPLACE('${dtStartDate}','-','')
+   AND D.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+   AND D.SUB_PROD_TYPE IN ('ESLC','P','SLCFG','LCFG','SYZLC')
+   ${IF(LEN(cmcbProdCode)=0,"","AND D.PROD_CODE IN ('"+cmcbProdCode+"')")}
+   ${IF(LEN(cmcbProdSpec)=0,"","AND D.PROD_ID IN ('"+cmcbProdSpec+"')")}
+ GROUP BY B.LOT
+      ,D.PROD_CODE 
+      )
+SELECT '批次' AS DATE_TYPE
+      ,T.LOT AS DATE_VALUE
+      ,Y.PROD_CODE
+      ,COALESCE(P.SHIP_QTY,0) AS FENMU
+      ,COALESCE(P.SHIP_QTY,0) AS SHIP_QTY
+      ,Y.AA1_QTY
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS YLD_RATIO
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.NOT_RISK_DFT_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS NOT_RISK_DFT_RATIO
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0) 
+        END AS RISK_AA1_RATIO
+      ,Y.RISK_AA1_QTY
+      ,Y.A_RISK_AA1_QTY
+      ,Y.T_RISK_AA1_QTY
+      ,Y.O_RISK_AA1_QTY
+      ,Y.Q_RISK_AA1_QTY
+      ,Y.KFZ_RISK_AA1_QTY
+      ,Y.P_RISK_AA1_QTY
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.A_RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS A_RISK_AA1_RATIO
+       ,CASE WHEN COALESCE(P.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.T_RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS T_RISK_AA1_RATIO 
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0) = 0 THEN 0
+            ELSE Y.O_RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS O_RISK_AA1_RATIO
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.Q_RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS Q_RISK_AA1_RATIO
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0)  = 0 THEN 0
+            ELSE Y.KFZ_RISK_AA1_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS KFZ_RISK_AA1_RATIO
+      ,Y.A_RISK_QTY
+      ,Y.O_RISK_QTY
+      ,D.FACTORY AS DFT_FACTORY
+      ,D.RISKCOMMENT AS DEFECT_DESC
+      ,CASE WHEN COALESCE(P.SHIP_QTY,0) = 0 THEN 0
+            ELSE D.DFT_QTY/COALESCE(P.SHIP_QTY,0)
+        END AS DFT_RATIO
+  FROM BATCH_DATA T 		       
+       LEFT JOIN YLD_INFO Y
+              ON T.LOT = Y.LOT 
+             AND T.PROD_CODE=Y.PROD_CODE
+       LEFT JOIN DFT_INFO D
+              ON Y.LOT = D.LOT 
+             AND Y.PROD_CODE = D.PROD_CODE  
+       LEFT JOIN SHIP_QTY P
+              ON Y.LOT = P.LOT 
+             AND Y.PROD_CODE = P.PROD_CODE 
+ORDER BY T.DATE_TIMEKEY,T.LOT,Y.PROD_CODE]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+<TableData name="SEARCH_EVAQTY" class="com.fr.data.impl.DBTableData">
+<Desensitizations desensitizeOpen="false"/>
+<Parameters>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O>
+<![CDATA[2024-02-26]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O>
+<![CDATA[C20]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O>
+<![CDATA[]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O>
+<![CDATA[2024-02-01]]></O>
+</Parameter>
+</Parameters>
+<Attributes maxMemRowCount="-1"/>
+<Connection class="com.fr.data.impl.NameDatabaseConnection">
+<DatabaseName>
+<![CDATA[gp_conn]]></DatabaseName>
+</Connection>
+<Query>
+<![CDATA[--入库批次报表：蒸镀批次数量计算(吴文君)
+WITH EVA_GLASS AS (
+SELECT T1.GLASS_ID
+      ,S.PRODUCTCODE AS PROD_CODE
+      ,T2.LOT AS SUB_PROD_ID
+      ,S.SUBPRODUCTUNITQUANTITY1
+      ,COUNT(DISTINCT T1.GLASS_ID)OVER(PARTITION BY T2.LOT,S.PRODUCTCODE)*S.SUBPRODUCTUNITQUANTITY1/2 AS EVA_QTY
+  FROM (SELECT PRODUCTREQUESTNAME
+            ,CASE WHEN D.CREATETIME >= '20231201' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'YY/MM/DD') ,'YY/MM/DD') ||'蒸镀批'
+             ELSE TO_CHAR(D.CREATETIME,'YY/')||TO_CHAR(TO_DATE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_MATCHES(DESCRIPTION,'[0-9]A*/[0-9]A*蒸镀批')::VARCHAR,'蒸镀批',''),'{',''),'}',''),'MM/DD') ,'MM/DD') ||'蒸镀批'
+             END AS LOT
+      FROM DWR_MES_PRODUCTREQUEST D
+      WHERE D.SUBPRODUCTIONTYPE IN( 'ESLC','P')) T2
+       INNER JOIN DWT_INPUT_GLS T1
+              ON T1.SUB_PROD_ID = T2.PRODUCTREQUESTNAME
+             AND T1.OPER_CODE ='21200'
+             AND T1.DATE_TIMEKEY >= TO_CHAR('${dtStartDate}'::TIMESTAMP - INTERVAL '3 MONTH','YYYYMMDD')
+             AND T1.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+       INNER JOIN DWR_MES_PRODUCTSPEC S
+              ON T1.PROD_ID = S.PRODUCTSPECNAME 
+ WHERE T1.SUB_PROD_TYPE IN( 'ESLC','P')
+--   AND T2.LOT IN ('23/11/01蒸镀批')
+   ${IF(LEN(cmcbProdCode)=0,"","AND S.PRODUCTCODE IN ('"+cmcbProdCode+"')")}
+   ${IF(LEN(cmcbBatch)=0,"","AND T2.LOT IN ('"+cmcbBatch+"')")}
+ GROUP BY T1.GLASS_ID,T2.LOT,S.SUBPRODUCTUNITQUANTITY1,S.PRODUCTCODE
+),
+OLED_TP_SY_OUTOUT AS (
+SELECT O.GLASS_ID 
+	  ,O.OUTPUT_PNL_QTY
+	  ,O.CANCEL_OUTPUT_PNL_QTY
+	  ,O.EVENT_NAME
+	  ,O.SUB_PROD_TYPE
+	  ,ROW_NUMBER()OVER(PARTITION BY O.GLASS_ID ORDER BY EVENT_TIMEKEY DESC) AS RN
+  FROM EVA_GLASS E 
+       INNER JOIN DWT_OUTPUT_GLS O
+              ON E.GLASS_ID = O.GLASS_ID 
+ WHERE O.DATE_TIMEKEY >= TO_CHAR('${dtStartDate}'::TIMESTAMP - INTERVAL '3 MONTH','YYYYMMDD')
+   AND O.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','')
+),
+PC_SY_OUTPUT AS (
+SELECT SUBSTR(A.PANEL_ID,1,12) AS GLASS_ID
+      ,SUM(A.OUTPUT_ALL_PNL_QTY) AS BEHIND_EVA_PC_SY_QTY
+  FROM (SELECT O.PANEL_ID 
+		      ,O.OUTPUT_ALL_PNL_QTY
+		      ,O.SUB_PROD_TYPE 
+		      ,O.EVENT_NAME
+		      ,ROW_NUMBER()OVER(PARTITION BY O.PANEL_ID ORDER BY EVENT_TIMEKEY DESC) AS RN
+		  FROM DWT_OUTPUT_PNL O
+		 WHERE O.SUB_PROD_TYPE NOT IN ('ESLC','P','LCFG','SLCFG','SYZLC')
+		   AND O.PROD_TYPE = 'E'
+		   AND O.DATE_TIMEKEY >= TO_CHAR('${dtStartDate}'::TIMESTAMP - INTERVAL '1 MONTH','YYYYMMDD')
+		   AND O.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','') 
+		   AND SUBSTR(O.PANEL_ID,1,12) IN (SELECT O.GLASS_ID FROM OLED_TP_SY_OUTOUT O WHERE O.SUB_PROD_TYPE IN ('ESLC','P') AND O.RN = 1)
+		) A   
+ WHERE A.RN = 1
+   AND A.OUTPUT_ALL_PNL_QTY > 0
+ GROUP BY SUBSTR(A.PANEL_ID,1,12)
+ )
+SELECT E.PROD_CODE
+      ,E.SUB_PROD_ID
+      ,E.EVA_QTY
+      ,SUM(CASE WHEN S.SCRAP_TYPE = 'Scrap' AND S.SUB_PROD_TYPE IN ('ESLC','P') THEN  S.SCRAP_PNL_QTY ELSE 0 END) AS BEHIND_EVA_SCRAP_QTY
+      ,COUNT(DISTINCT (CASE WHEN S.SCRAP_TYPE = 'NGShip' THEN S.GLASS_ID 
+                             WHEN S.SCRAP_TYPE = 'Scrap' AND S.SUB_PROD_TYPE NOT IN ('ESLC','P') THEN S.GLASS_ID
+                            WHEN O.GLASS_ID IS NOT NULL THEN O.GLASS_ID ELSE NULL END))*E.SUBPRODUCTUNITQUANTITY1/2
+       + COALESCE(SUM(P.BEHIND_EVA_PC_SY_QTY),0) AS BEHIND_EVA_SY_QTY
+  FROM EVA_GLASS E
+       LEFT JOIN DWT_SCRAP_GLS S
+              ON E.GLASS_ID = S.GLASS_ID 
+		     AND S.SCRAP_GLS_QTY + S.NGSHIP_GLS_QTY - S.UNSCRAP_GLS_QTY - S.NGUNSHIP_GLS_QTY > 0
+		     AND S.DATE_TIMEKEY >= TO_CHAR('${dtStartDate}'::TIMESTAMP - INTERVAL '3 MONTH','YYYYMMDD')
+		     AND S.DATE_TIMEKEY <= REPLACE('${dtEndDate}','-','') 
+	   LEFT JOIN OLED_TP_SY_OUTOUT O
+	          ON E.GLASS_ID = O.GLASS_ID 
+		     AND O.SUB_PROD_TYPE NOT IN ('ESLC','P')
+		LEFT JOIN PC_SY_OUTPUT P
+		       ON E.GLASS_ID = P.GLASS_ID
+ WHERE 1=1
+ GROUP BY E.PROD_CODE
+         ,E.SUB_PROD_ID
+         ,E.EVA_QTY
+         ,E.SUBPRODUCTUNITQUANTITY1]]></Query>
+<PageQuery>
+<![CDATA[]]></PageQuery>
+</TableData>
+</TableDataMap>
+<ElementCaseMobileAttr>
+<ElementCaseMobileAttrProvider horizontal="1" vertical="1" zoom="true" refresh="false" isUseHTML="false" isMobileCanvasSize="false" appearRefresh="false" allowFullScreen="false" allowDoubleClickOrZoom="true" functionalWhenUnactivated="false"/>
+</ElementCaseMobileAttr>
+<Report class="com.fr.report.worksheet.WorkSheet" name="入库良率还原">
+<ReportPageAttr>
+<HR/>
+<FR/>
+<HC/>
+<FC/>
+<USE REPEAT="false" PAGE="false" WRITE="false"/>
+</ReportPageAttr>
+<ColumnPrivilegeControl/>
+<RowPrivilegeControl/>
+<RowHeight defaultValue="723900">
+<![CDATA[1584000,722880,876300,864000,0,0,0,0,0,0,0,0,0,0,864000,0,0,864000,0,0,0,864000,0,0,864000,0,0,864000,0,0,864000,864000,0,864000,0,864000,0,864000,0,864000,0,864000,0,864000,864000,864000,864000,864000,864000,864000,723900]]></RowHeight>
+<ColumnWidth defaultValue="2743200">
+<![CDATA[439200,4610100,4838700,3168000,0,2743200,2743200,2743200,2743200,2743200,2743200]]></ColumnWidth>
+<CellElementList>
+<C c="0" r="0">
+<PrivilegeControl/>
+<Expand>
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="1" r="0" cs="3" s="0">
+<O>
+<![CDATA[入库良率还原By批次报表V1.0]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="1" cs="2" s="1">
+<O>
+<![CDATA[报表说明]]></O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="CIM报表说明录入表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="REPORT_ID"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=reportName]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_dialog]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName showPI="true">
+<![CDATA[/Common/Help.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="1" r="2" rs="2" s="2">
+<O>
+<![CDATA[Type\\n类别]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="2" r="2" s="2">
+<O>
+<![CDATA[产品型号]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="2" s="2">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="prod_code"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ColWidthHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="1"/>
+</C>
+<C c="2" r="3" s="3">
+<O>
+<![CDATA[批次]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="3" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="date_value"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="1"/>
+</C>
+<C c="1" r="4" rs="10" s="4">
+<O>
+<![CDATA[图数据]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="2" r="4" s="4">
+<O>
+<![CDATA[入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="4" s="5">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D7 / D6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="5" s="4">
+<O>
+<![CDATA[分母]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="5" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D16)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="6" s="4">
+<O>
+<![CDATA[良品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="6" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D17)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="7" s="4">
+<O>
+<![CDATA[ARRAY还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="7" s="5">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D9 + D14 * 0.5 + D10) / D6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="8" s="4">
+<O>
+<![CDATA[ARRAY风险品AA1数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="8" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D19)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="9" s="4">
+<O>
+<![CDATA[ARRAY责不良数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="9" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D21)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="10" s="4">
+<O>
+<![CDATA[OLED还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="10" s="5">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D12 + D14 * 0.5 + D13) / D6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="11" s="4">
+<O>
+<![CDATA[OLED风险品AA1数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="11" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D26)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="12" s="4">
+<O>
+<![CDATA[OLED责不良数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="12" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D27)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="13" s="4">
+<O>
+<![CDATA[未理清风险品AA1数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="13" s="6">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=SUM(D20)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="1" r="14" rs="16" s="4">
+<O>
+<![CDATA[入库良率还原]]></O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="14" s="4">
+<O>
+<![CDATA[入库良率]]></O>
+<PrivilegeControl/>
+<Expand dir="1"/>
+</C>
+<C c="3" r="14" s="7">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="yld_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="1" leftParentDefault="false" upParentDefault="false" up="D4"/>
+</C>
+<C c="2" r="15" s="4">
+<O>
+<![CDATA[分母]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="15" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="fenmu"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="16" s="4">
+<O>
+<![CDATA[良品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="16" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="17" rs="4" s="4">
+<O>
+<![CDATA[ARRAY还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="17" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D19 + D20 * 0.5 + D21) / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false" upParentDefault="false" up="D4"/>
+</C>
+<C c="3" r="18" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="a_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="3" r="19" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="q_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_type]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="3" r="20" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[ARRAY]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="21" rs="3" s="4">
+<O>
+<![CDATA[TP还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="21" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D23 + D24) / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="22" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="t_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="3" r="23" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[TP]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="2" r="24" rs="3" s="4">
+<O>
+<![CDATA[OLED还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="24" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D26 + D20 * 0.5 + D27) / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="25" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="o_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="3" r="26" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[OLED]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="27" rs="3" s="4">
+<O>
+<![CDATA[屏体还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="27" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (D29 + D30) / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false">
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="3" r="28" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="p_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="3" r="29" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[屏体]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="1" r="30" rs="13" s="4">
+<O>
+<![CDATA[非风险品]]></O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="30" s="4">
+<O>
+<![CDATA[不良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="30" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="not_risk_dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="31" rs="2" s="4">
+<O>
+<![CDATA[ARRAY责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="31" s="7">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D33 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="32" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[ARRAY]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="33" rs="2" s="4">
+<O>
+<![CDATA[TP责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="33" s="7">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D35 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="34" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[TP]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="2" r="35" rs="2" s="4">
+<O>
+<![CDATA[OLED责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="35" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D37 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="36" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[OLED]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="37" rs="2" s="4">
+<O>
+<![CDATA[屏体责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="37" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D39 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="38" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[屏体]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="39" rs="2" s="4">
+<O>
+<![CDATA[开发责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="39" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D41 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="40" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[开发]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="41" rs="2" s="4">
+<O>
+<![CDATA[未分责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="41" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D43 / D16]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="3" r="42" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="not_risk_dft_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[未分责]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="1" r="43" rs="7" s="4">
+<O>
+<![CDATA[风险品]]></O>
+<PrivilegeControl/>
+<Expand leftParentDefault="false"/>
+</C>
+<C c="2" r="43" s="4">
+<O>
+<![CDATA[风险品率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="43" s="9">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="44" s="4">
+<O>
+<![CDATA[ARRAY责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="44" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="a_risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="45" s="4">
+<O>
+<![CDATA[TP责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="45" s="9">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="t_risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="2" r="46" s="4">
+<O>
+<![CDATA[OLED责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="46" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="o_risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="47" s="4">
+<O>
+<![CDATA[屏体责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="47" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="p_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false"/>
+</C>
+<C c="2" r="48" s="4">
+<O>
+<![CDATA[开发责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="48" s="9">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="kfz_risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="2" r="49" s="4">
+<O>
+<![CDATA[未分责]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="49" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="q_risk_aa1_ratio"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="3" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+</CellElementList>
+<ReportAttrSet>
+<ReportSettings headerHeight="0" footerHeight="0">
+<PaperSetting/>
+<FollowingTheme background="false"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+</ReportSettings>
+<Header reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Header>
+<Footer reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Footer>
+</ReportAttrSet>
+<PrivilegeControl/>
+</Report>
+<Report class="com.fr.report.worksheet.WorkSheet" name="非风险品">
+<ReportPageAttr>
+<HR F="0" T="3"/>
+<FR/>
+<HC/>
+<FC/>
+<UPFCR COLUMN="false" ROW="true"/>
+<USE REPEAT="false" PAGE="false" WRITE="false"/>
+</ReportPageAttr>
+<ColumnPrivilegeControl/>
+<RowPrivilegeControl/>
+<RowHeight defaultValue="723900">
+<![CDATA[1584000,722880,876300,864000,864000,0,864000,864000,864000,864000,864000,0,0,0,0,864000,0,0,864000,0,0,864000,0,0,864000,0,864000,864000,723900]]></RowHeight>
+<ColumnWidth defaultValue="2743200">
+<![CDATA[439200,2880000,6480000,6480000,4533900,0,2743200,3168000,0,2743200,2743200]]></ColumnWidth>
+<CellElementList>
+<C c="0" r="0">
+<PrivilegeControl/>
+<Expand>
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="1" r="0" cs="5" s="0">
+<O>
+<![CDATA[入库良率还原CODE明细By批次报表V1.0]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="1" s="10">
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="1" s="11">
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="CIM报表说明录入表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="op"/>
+<O>
+<![CDATA[write]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmbReportName"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=reportName]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName showPI="true">
+<![CDATA[/Common/CIM报表说明录入表.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="4" r="1" cs="2" s="11">
+<O>
+<![CDATA[报表说明]]></O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="CIM报表说明录入表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="REPORT_ID"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=reportName]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_dialog]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName showPI="true">
+<![CDATA[/Common/Help.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="1" r="2" rs="2" s="12">
+<O>
+<![CDATA[Factory\\n归属工厂]]></O>
+<PrivilegeControl/>
+<CellPageAttr/>
+<Expand/>
+</C>
+<C c="2" r="2" rs="2" s="2">
+<O>
+<![CDATA[DefectGroup\\n不良分组]]></O>
+<PrivilegeControl/>
+<CellPageAttr/>
+<Expand/>
+</C>
+<C c="3" r="2" s="12">
+<O>
+<![CDATA[产品型号]]></O>
+<PrivilegeControl/>
+<CellPageAttr/>
+<Expand/>
+</C>
+<C c="4" r="2" cs="2" s="2">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="prod_code"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ColWidthHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="1"/>
+</C>
+<C c="3" r="3" s="12">
+<O>
+<![CDATA[批次]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="3" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="date_value"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="1"/>
+</C>
+<C c="1" r="4" cs="3" s="3">
+<O>
+<![CDATA[入库数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="4" cs="2" s="13">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="ship_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=E3 + '-' + E4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="5" cs="3" s="3">
+<O>
+<![CDATA[入库]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="5" cs="2" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="fenmu"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="6" cs="3" s="3">
+<O>
+<![CDATA[蒸镀数量]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="6" s="14">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_EVAQTY" columnName="eva_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[sub_prod_id]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="1" leftParentDefault="false" left="B7" upParentDefault="false" up="E4"/>
+</C>
+<C c="1" r="7" cs="3" s="3">
+<O>
+<![CDATA[蒸镀后报废数量]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="7" s="15">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_EVAQTY" columnName="behind_eva_scrap_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="1" r="8" cs="3" s="3">
+<O>
+<![CDATA[蒸镀后转实验数量]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="8" s="14">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_EVAQTY" columnName="behind_eva_sy_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="1" r="9" cs="3" s="3">
+<O>
+<![CDATA[批次入库率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="9" s="16">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=IF((E5+E8)/(E7-E9)>1,1,(E5+E8)/(E7-E9))]]></Attributes>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[LEN(E7)=0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="1" leftParentDefault="false" left="B7" upParentDefault="false" up="E4"/>
+</C>
+<C c="1" r="10" cs="3" s="3">
+<O>
+<![CDATA[入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="10" cs="2" s="8">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="yld_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[E11 < 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="11" cs="3" s="3">
+<O>
+<![CDATA[风险品率（A+A1）]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="11" cs="2" s="9">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="risk_aa1_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="12" cs="3" rs="4" s="3">
+<O>
+<![CDATA[ARRAY还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="12" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[ARRAY]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="13" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="a_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="14" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="q_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="15" cs="2" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (E13 + E14 + E15 * 0.5) / E6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="16" cs="3" rs="3" s="3">
+<O>
+<![CDATA[TP还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="16" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[TP]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.SummaryGrouper">
+<FN>
+<![CDATA[com.fr.data.util.function.SumFunction]]></FN>
+</RG>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="17" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="t_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="18" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (E18 + E17) / E6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="5" r="18" s="8">
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="19" cs="3" rs="3" s="3">
+<O>
+<![CDATA[OLED还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="4" r="19" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[OLED]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="20" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="o_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="21" cs="2" s="8">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (E20 + E21 + E15 * 0.5) / E6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="22" cs="3" rs="3" s="3">
+<O>
+<![CDATA[屏体还原入库良率]]></O>
+<PrivilegeControl/>
+<Expand>
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="4" r="22" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RESTORE_YLD" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[屏体]]></O>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="23" s="6">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="p_risk_aa1_qty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="24" cs="2" s="9">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=1 - (E23 + E24) / E6]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="25" cs="3" rs="2" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_GROUP" columnName="defect_group"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+<cellSortAttr/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0">
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="4" r="25" cs="2" s="17">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_GROUP" columnName="group_dft_ty"/>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[date_value]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="3"/>
+</Compare>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[prod_code]]></CNAME>
+<Compare op="0">
+<ColumnRow column="4" row="2"/>
+</Compare>
+</Condition>
+</JoinCondition>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0"/>
+</C>
+<C c="4" r="26" cs="2" s="18">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=E26 / E5]]></Attributes>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率Panel不良明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbDefectGroup"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C38]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=E3 + '-' + E4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/DB18_Search_Ruku_Defect_Panel_Detail.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.ListCondition">
+<JoinCondition join="1">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'Array_Line']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'Array_AD']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'OLED_色偏']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'OLED_RS查杀']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'TP_NG']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'ARRAY整合']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'CELL整合']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> '屏体制造']]></Formula>
+</Condition>
+</JoinCondition>
+<JoinCondition join="0">
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[B27 <> 'ARRAY_RS查杀_线、AD']]></Formula>
+</Condition>
+</JoinCondition>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0">
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="1" r="27" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="D28"/>
+</C>
+<C c="2" r="27" s="3">
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=INDEXOFARRAY(SPLIT(D28, ";"), 1)]]></Attributes>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="D28"/>
+</C>
+<C c="3" r="27" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="defect_desc"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=INDEXOFARRAY(SPLIT($$$, ";"), 2)]]></Content>
+</Present>
+<Expand dir="0" leftParentDefault="false" left="A5" order="2">
+<SortFormula>
+<![CDATA[E28{AND(E4 = "WEEK", E4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="E28{AND(E4 = &quot;WEEK&quot;, E4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="4" r="27" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.SummaryGrouper">
+<FN>
+<![CDATA[com.fr.data.util.function.SumFunction]]></FN>
+</RG>
+<Parameters/>
+<cellSortAttr/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率Panel不良明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbDefectGroup"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C28]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbDefectCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=INDEXOFARRAY(SPLIT(D28, ";"), 2)]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=E3 + '-' + E4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/DB18_Search_Ruku_Defect_Panel_Detail.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand>
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="7" r="28" s="19">
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率Panel不良明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbDefectGroup"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D39]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=F4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=F5]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbDefectCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=INDEXOFARRAY(SPLIT(E39, ";"), 2)]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/DB18_Search_Ruku_Defect_Panel_Detail.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="8" r="28" s="19">
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率Panel不良明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbDefectGroup"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D39]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="dtStartDate"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=F4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="dtEndDate"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=F5]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbDefectCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=INDEXOFARRAY(SPLIT(E39, ";"), 2)]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/DB18_Search_Ruku_Defect_Panel_Detail.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+</CellElementList>
+<ReportAttrSet>
+<ReportSettings headerHeight="0" footerHeight="0">
+<PaperSetting/>
+<FollowingTheme background="false"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+</ReportSettings>
+<Header reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Header>
+<Footer reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Footer>
+</ReportAttrSet>
+<PrivilegeControl/>
+</Report>
+<Report class="com.fr.report.worksheet.WorkSheet" name="风险品">
+<ReportPageAttr>
+<HR/>
+<FR/>
+<HC/>
+<FC/>
+<USE REPEAT="false" PAGE="false" WRITE="false"/>
+</ReportPageAttr>
+<ColumnPrivilegeControl/>
+<RowPrivilegeControl/>
+<RowHeight defaultValue="723900">
+<![CDATA[1584000,722880,876300,864000,864000,864000,864000,864000,864000,864000,864000,864000,864000,723900,864000,864000,864000,864000,864000,723900]]></RowHeight>
+<ColumnWidth defaultValue="2743200">
+<![CDATA[439200,5791200,6480000,3168000,0,2743200,2743200,2743200,2743200,2743200,2743200]]></ColumnWidth>
+<CellElementList>
+<C c="0" r="0">
+<PrivilegeControl/>
+<Expand>
+<cellSortAttr/>
+</Expand>
+</C>
+<C c="1" r="0" cs="4" s="0">
+<O>
+<![CDATA[入库良率还原CODE明细By批次报表V1.0]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="1" s="10">
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="2" r="1" s="11">
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="CIM报表说明录入表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="op"/>
+<O>
+<![CDATA[write]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmbReportName"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=reportName]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName showPI="true">
+<![CDATA[/Common/CIM报表说明录入表.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="3" r="1" cs="2" s="11">
+<O>
+<![CDATA[报表说明]]></O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="CIM报表说明录入表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="REPORT_ID"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=reportName]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_dialog]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName showPI="true">
+<![CDATA[/Common/Help.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Expand/>
+</C>
+<C c="1" r="2" rs="2" s="12">
+<O>
+<![CDATA[Factory\\n归属工厂]]></O>
+<PrivilegeControl/>
+<CellPageAttr/>
+<Expand/>
+</C>
+<C c="2" r="2" s="12">
+<O>
+<![CDATA[产品型号]]></O>
+<PrivilegeControl/>
+<CellPageAttr/>
+<Expand/>
+</C>
+<C c="3" r="2" cs="2" s="2">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="prod_code"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ColWidthHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="1"/>
+</C>
+<C c="2" r="3" s="12">
+<O>
+<![CDATA[批次]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="3" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="date_value"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="1"/>
+</C>
+<C c="1" r="4" cs="2" s="3">
+<O>
+<![CDATA[风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="4" cs="2" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="5" cs="2" s="3">
+<O>
+<![CDATA[风险品率]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="5" cs="2" s="9">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="risk_aa1_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="1" r="6" cs="2" s="3">
+<O>
+<![CDATA[ARRAY风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="6" cs="2" s="21">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="a_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[ARRAY\',\'ARRAY+OLED\',\'阵列部\',\'触控部]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="1" r="7" cs="2" s="3">
+<O>
+<![CDATA[TP风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="7" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="t_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[TP\',\'触控部]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="4" r="7" s="22">
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="8" cs="2" s="3">
+<O>
+<![CDATA[OLED风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="8" cs="2" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="o_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[OLED\',\'ARRAY+OLED\',\'蒸镀封装部]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="1" r="9" cs="2" s="3">
+<O>
+<![CDATA[屏体风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="9" cs="2" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="p_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[屏体部]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="1" r="10" cs="2" s="3">
+<O>
+<![CDATA[开发责风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="10" cs="2" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="kfz_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[开发责]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="1" r="11" cs="2" s="3">
+<O>
+<![CDATA[未分责风险品数]]></O>
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="3" r="11" cs="2" s="20">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="q_risk_aa1_qty"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="入库良率明细报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbIndex"/>
+<O>
+<![CDATA[含返工]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[工艺整合部\',\'屏模整合部\',\'未分责\',\'-]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskType"/>
+<O>
+<![CDATA[Y]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H051_Search_Warehousing_Detail.cptx]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.ValueHighlightAction">
+<O>
+<![CDATA[0]]></O>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="1" r="12" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C13"/>
+</C>
+<C c="2" r="12" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[ARRAY]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false" left="A4" order="2">
+<SortFormula>
+<![CDATA[D13{AND(D4 = "WEEK", D4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="D13{AND(D4 = &quot;WEEK&quot;, D4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="3" r="12" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper">
+<Attr divideMode="1"/>
+</RG>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C13]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[ARRAY\',\'阵列部\',\'触控部\',\'ARRAY+OLED]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand leftParentDefault="false" left="C13"/>
+</C>
+<C c="1" r="13" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Condition class="com.fr.data.condition.ListCondition"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C14"/>
+</C>
+<C c="2" r="13" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[TP]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Result>
+<![CDATA[$$$]]></Result>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0"/>
+</C>
+<C c="3" r="13" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C14]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[TP\',\'触控部]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand dir="0"/>
+</C>
+<C c="4" r="13" s="18">
+<PrivilegeControl/>
+<Expand/>
+</C>
+<C c="1" r="14" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C15"/>
+</C>
+<C c="2" r="14" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[OLED]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false" left="A4" order="2">
+<SortFormula>
+<![CDATA[D13{AND(D4 = "WEEK", D4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="D13{AND(D4 = &quot;WEEK&quot;, D4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="3" r="14" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper">
+<Attr divideMode="1"/>
+</RG>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C15]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[OLED\',\'蒸镀封装部\',\'ARRAY+OLED]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand leftParentDefault="false" left="C15"/>
+</C>
+<C c="1" r="15" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C15"/>
+</C>
+<C c="2" r="15" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[CELL]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false" left="A4" order="2">
+<SortFormula>
+<![CDATA[D13{AND(D4 = "WEEK", D4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="D13{AND(D4 = &quot;WEEK&quot;, D4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="3" r="15" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper">
+<Attr divideMode="1"/>
+</RG>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C15]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[屏体部]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand leftParentDefault="false" left="C16"/>
+</C>
+<C c="1" r="16" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C17"/>
+</C>
+<C c="2" r="16" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[开发责]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false" left="A4" order="2">
+<SortFormula>
+<![CDATA[D13{AND(D4 = "WEEK", D4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="D13{AND(D4 = &quot;WEEK&quot;, D4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="3" r="16" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper">
+<Attr divideMode="1"/>
+</RG>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C17]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[开发责]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand leftParentDefault="false" left="C17"/>
+</C>
+<C c="1" r="17" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_factory"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<Expand dir="0" leftParentDefault="false" left="C18"/>
+</C>
+<C c="2" r="17" s="3">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="defect_desc"/>
+<Condition class="com.fr.data.condition.CommonCondition">
+<CNUMBER>
+<![CDATA[0]]></CNUMBER>
+<CNAME>
+<![CDATA[dft_factory]]></CNAME>
+<Compare op="0">
+<O>
+<![CDATA[未分责]]></O>
+</Compare>
+</Condition>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper"/>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ISNULL($$$)]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.RowHeightHighlightAction"/>
+</Highlight>
+</HighlightList>
+<Expand dir="0" leftParentDefault="false" left="A4" order="2">
+<SortFormula>
+<![CDATA[D13{AND(D4 = "WEEK", D4 = "2")}]]></SortFormula>
+<cellSortAttr>
+<sortExpressions>
+<formulaSortExpression sortRule="2" formula="D13{AND(D4 = &quot;WEEK&quot;, D4 = &quot;2&quot;)}"/>
+</sortExpressions>
+</cellSortAttr>
+</Expand>
+</C>
+<C c="3" r="17" cs="2" s="18">
+<O t="DSColumn">
+<Attributes dsName="SEARCH_RUKU_RISK" columnName="dft_ratio"/>
+<Complex/>
+<RG class="com.fr.report.cell.cellattr.core.group.FunctionGrouper">
+<Attr divideMode="1"/>
+</RG>
+<Parameters/>
+</O>
+<PrivilegeControl/>
+<NameJavaScriptGroup>
+<NameJavaScript name="风险品入库信息报表">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<JavaScript class="com.fr.js.ReportletHyperlink">
+<Parameters>
+<Parameter>
+<Attributes name="cmcbBatch"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3 + '-' + D4]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="chcbAutoRefresh"/>
+<O t="B">
+<![CDATA[true]]></O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbProdCode"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=D3]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskComment"/>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=C18]]></Attributes>
+</O>
+</Parameter>
+<Parameter>
+<Attributes name="cmcbRiskFactory"/>
+<O>
+<![CDATA[未分责\',\'工艺整合部\',\'屏模整合部]]></O>
+</Parameter>
+</Parameters>
+<TargetFrame>
+<![CDATA[_blank_fs]]></TargetFrame>
+<Features width="600" height="400"/>
+<ReportletName extendParameters="true" showPI="true">
+<![CDATA[/Yield_Monitoring/Overall_Yield/H063_Search_Risk_Warehousing.cpt]]></ReportletName>
+<Attr>
+<DialogAttr class="com.fr.js.ReportletHyperlinkDialogAttr">
+<O>
+<![CDATA[]]></O>
+<Location center="true"/>
+</DialogAttr>
+</Attr>
+</JavaScript>
+</JavaScript>
+</NameJavaScript>
+</NameJavaScriptGroup>
+<HighlightList>
+<Highlight class="com.fr.report.cell.cellattr.highlight.DefaultHighlight">
+<Name>
+<![CDATA[条件属性1]]></Name>
+<Condition class="com.fr.data.condition.FormulaCondition">
+<Formula>
+<![CDATA[ROW() % 2 = 0]]></Formula>
+</Condition>
+<HighlightAction class="com.fr.report.cell.cellattr.highlight.BackgroundHighlightAction">
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+</HighlightAction>
+</Highlight>
+</HighlightList>
+<Present class="com.fr.base.present.FormulaPresent">
+<Content>
+<![CDATA[=IF(ISNULL($$$), 0, $$$)]]></Content>
+</Present>
+<Expand leftParentDefault="false" left="C18"/>
+</C>
+</CellElementList>
+<ReportAttrSet>
+<ReportSettings headerHeight="0" footerHeight="0">
+<PaperSetting/>
+<FollowingTheme background="false"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+</ReportSettings>
+<Header reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Header>
+<Footer reportPageType="0">
+<Background name="NullBackground"/>
+<LeftList/>
+<CenterList/>
+<RightList/>
+</Footer>
+</ReportAttrSet>
+<PrivilegeControl/>
+</Report>
+<ReportParameterAttr>
+<Attributes showWindow="true" delayPlaying="true" windowPosition="1" align="0" useParamsTemplate="false" currentIndex="8"/>
+<PWTitle>
+<![CDATA[参数]]></PWTitle>
+<ParameterUI class="com.fr.form.main.parameter.FormParameterUI">
+<Parameters/>
+<Layout class="com.fr.form.ui.container.WParameterLayout">
+<WidgetName name="para"/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<FollowingTheme borderStyle="false"/>
+<Margin top="0" left="0" bottom="0" right="0"/>
+<Border>
+<border style="0" borderRadius="0" type="0" borderStyle="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+<WidgetTitle>
+<O>
+<![CDATA[新建标题]]></O>
+<FRFont name="SimSun" style="0" size="72"/>
+<Position pos="0"/>
+</WidgetTitle>
+<Alpha alpha="1.0"/>
+</Border>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1118482" hor="-1" ver="-1"/>
+</color>
+</Background>
+<LCAttr vgap="0" hgap="0" compInterval="0"/>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.DateEditor">
+<WidgetName name="dtEndDate"/>
+<LabelName name="结束月份："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<allowBlank>
+<![CDATA[false]]></allowBlank>
+<DateAttr/>
+<widgetValue>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=TODAY()]]></Attributes>
+</O>
+</widgetValue>
+</InnerWidget>
+<BoundsAttr x="250" y="9" width="110" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.DateEditor">
+<WidgetName name="dtStartDate"/>
+<LabelName name="开始月份："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<allowBlank>
+<![CDATA[false]]></allowBlank>
+<DateAttr/>
+<widgetValue>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=TODAY()-7]]></Attributes>
+</O>
+</widgetValue>
+</InnerWidget>
+<BoundsAttr x="70" y="9" width="110" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblEndDate"/>
+<LabelName name="开始月份："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[结束时间：]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="4" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="180" y="9" width="70" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblStartDate"/>
+<LabelName name="工厂："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[开始时间：]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="4" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="0" y="9" width="70" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.TextEditor">
+<WidgetName name="txtID"/>
+<LabelName name="量产工单类型：ESLC、P、LCFG（量产返工）、SLCFG（试量产返工）、SYZLC（实验转量产）"/>
+<WidgetAttr invisible="true" aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<TextAttr/>
+<Reg class="com.fr.form.ui.reg.NoneReg"/>
+<widgetValue>
+<O t="XMLable" class="com.fr.base.Formula">
+<Attributes>
+<![CDATA[=REPLACE($txtID_1,",","','")]]></Attributes>
+</O>
+</widgetValue>
+<MobileScanCodeAttr scanCode="true" textInputMode="0" isSupportManual="true" isSupportScan="true" isSupportNFC="false" nfcContentType="0"/>
+<MobileTextEditAttr allowOneClickClear="true"/>
+</InnerWidget>
+<BoundsAttr x="521" y="59" width="174" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="label0"/>
+<WidgetID widgetID="0cb5b977-b7eb-4cb4-8d4a-c66781006738"/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[量产工单类型：ESLC、P、LCFG（量产返工）、SLCFG（试量产返工）、SYZLC（实验转量产）]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="0" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72">
+<foreground>
+<FineColor color="-65536" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="0" y="59" width="521" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.TextEditor">
+<WidgetName name="txtID_1"/>
+<LabelName name="SHEET_ID:"/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<EMSG>
+<![CDATA[ID不能为空！]]></EMSG>
+<TextAttr/>
+<Reg class="com.fr.form.ui.reg.NoneReg"/>
+<widgetValue>
+<O>
+<![CDATA[]]></O>
+</widgetValue>
+<MobileScanCodeAttr scanCode="true" textInputMode="0" isSupportManual="true" isSupportScan="true" isSupportNFC="false" nfcContentType="0"/>
+<MobileTextEditAttr allowOneClickClear="true"/>
+</InnerWidget>
+<BoundsAttr x="248" y="38" width="472" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblProductID"/>
+<LabelName name="工单类型："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[SHEET_ID:]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="0" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="180" y="38" width="68" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.ComboCheckBox">
+<WidgetName name="cmcbProdSpec"/>
+<LabelName name="产品规格："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<EMSG>
+<![CDATA[工单类型不可为空！]]></EMSG>
+<Dictionary class="com.fr.data.impl.TableDataDictionary">
+<FormulaDictAttr kiName="prod_id" viName="prod_id"/>
+<TableDataDictAttr>
+<TableData class="com.fr.data.impl.NameTableData">
+<Name>
+<![CDATA[PRODSPEC]]></Name>
+</TableData>
+</TableDataDictAttr>
+</Dictionary>
+<widgetValue>
+<O>
+<![CDATA[]]></O>
+</widgetValue>
+<RAAttr delimiter="&apos;,&apos;" isArray="false"/>
+</InnerWidget>
+<BoundsAttr x="610" y="9" width="110" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblProdSpec"/>
+<LabelName name="工单类型："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[产品规格：]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="4" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="540" y="9" width="70" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.parameter.FormSubmitButton">
+<WidgetName name="formSubmit0"/>
+<LabelName name="工单类型："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<Text>
+<![CDATA[查询]]></Text>
+<Hotkeys>
+<![CDATA[enter]]></Hotkeys>
+</InnerWidget>
+<BoundsAttr x="773" y="9" width="80" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.ComboCheckBox">
+<WidgetName name="cmcbBatch"/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<EMSG>
+<![CDATA[蒸镀批次不可为空！]]></EMSG>
+<allowBlank>
+<![CDATA[false]]></allowBlank>
+<Dictionary class="com.fr.data.impl.TableDataDictionary">
+<FormulaDictAttr kiName="lot" viName="n_lot"/>
+<TableDataDictAttr>
+<TableData class="com.fr.data.impl.NameTableData">
+<Name>
+<![CDATA[BATCH]]></Name>
+</TableData>
+</TableDataDictAttr>
+</Dictionary>
+<widgetValue>
+<O>
+<![CDATA[]]></O>
+</widgetValue>
+<RAAttr delimiter="&apos;,&apos;" isArray="false"/>
+</InnerWidget>
+<BoundsAttr x="70" y="38" width="110" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblBatch"/>
+<LabelName name="工单类型："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[蒸镀批次：]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="4" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="0" y="38" width="70" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.ComboCheckBox">
+<WidgetName name="cmcbProdCode"/>
+<LabelName name="产品型号："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<EMSG>
+<![CDATA[产品型号不可为空！]]></EMSG>
+<allowBlank>
+<![CDATA[false]]></allowBlank>
+<Dictionary class="com.fr.data.impl.TableDataDictionary">
+<FormulaDictAttr kiName="product_code" viName="product_code"/>
+<TableDataDictAttr>
+<TableData class="com.fr.data.impl.NameTableData">
+<Name>
+<![CDATA[PRODUCTCODE]]></Name>
+</TableData>
+</TableDataDictAttr>
+</Dictionary>
+<widgetValue>
+<O>
+<![CDATA[]]></O>
+</widgetValue>
+<RAAttr delimiter="&apos;,&apos;" isArray="false"/>
+</InnerWidget>
+<BoundsAttr x="430" y="9" width="110" height="21"/>
+</Widget>
+<Widget class="com.fr.form.ui.container.WAbsoluteLayout$BoundsWidget">
+<InnerWidget class="com.fr.form.ui.Label">
+<WidgetName name="lblProdCode"/>
+<LabelName name="结束月份："/>
+<WidgetAttr aspectRatioLocked="false" aspectRatioBackup="0.0" description="">
+<MobileBookMark useBookMark="false" bookMarkName="" frozen="false" index="-1" oldWidgetName=""/>
+<PrivilegeControl/>
+</WidgetAttr>
+<widgetValue>
+<O>
+<![CDATA[产品型号：]]></O>
+</widgetValue>
+<LabelAttr verticalcenter="true" textalign="4" autoline="true"/>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<border style="0">
+<color>
+<FineColor color="-723724" hor="-1" ver="-1"/>
+</color>
+</border>
+</InnerWidget>
+<BoundsAttr x="360" y="9" width="70" height="21"/>
+</Widget>
+<ShowBookmarks showBookmarks="false"/>
+<Sorted sorted="false"/>
+<MobileWidgetList>
+<Widget widgetName="dtStartDate"/>
+<Widget widgetName="dtEndDate"/>
+<Widget widgetName="cmcbProdCode"/>
+<Widget widgetName="cmcbProdSpec"/>
+<Widget widgetName="formSubmit0"/>
+<Widget widgetName="cmcbBatch"/>
+<Widget widgetName="txtID_1"/>
+<Widget widgetName="txtID"/>
+</MobileWidgetList>
+<FrozenWidgets/>
+<MobileBookMarkStyle class="com.fr.form.ui.mobile.impl.DefaultMobileBookMarkStyle"/>
+<Display display="true"/>
+<DelayDisplayContent delay="true"/>
+<UseParamsTemplate use="false"/>
+<paramFireStopEdit fireEvent="false"/>
+<Position position="0"/>
+<Design_Width design_width="867"/>
+<NameTagModified>
+<TagModified tag="txtID_1" modified="true"/>
+<TagModified tag="formSubmit0" modified="true"/>
+<TagModified tag="txtID" modified="true"/>
+<TagModified tag="cmcbProdCode" modified="true"/>
+<TagModified tag="cmcbProdSpec" modified="true"/>
+<TagModified tag="dtEndDate_c" modified="true"/>
+<TagModified tag="dtStartDate_c" modified="true"/>
+<TagModified tag="cmcbSubProdType" modified="true"/>
+</NameTagModified>
+<WidgetNameTagMap>
+<NameTag name="txtID_1" tag="SHEET_ID:"/>
+<NameTag name="formSubmit0" tag="工单类型："/>
+<NameTag name="txtID" tag="量产工单类型：ESLC、P、LCFG（量产返工）、SLCFG（试量产返工）、SYZLC（实验转量产）"/>
+<NameTag name="cmcbProdCode" tag="产品型号："/>
+<NameTag name="cmcbProdSpec" tag="产品规格："/>
+<NameTag name="dtEndDate_c" tag="结束月份："/>
+<NameTag name="dtStartDate_c" tag="开始月份："/>
+<NameTag name="cmcbSubProdType" tag="工单类型："/>
+</WidgetNameTagMap>
+<ParamAttr class="com.fr.report.mobile.DefaultMobileParamStyle"/>
+<ParamStyle class="com.fr.report.mobile.EmptyMobileParamStyle"/>
+<FollowingTheme background="false"/>
+</Layout>
+<DesignAttr width="867" height="84"/>
+</ParameterUI>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1118482" hor="-1" ver="-1"/>
+</color>
+</Background>
+</ReportParameterAttr>
+<StyleList>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="1" size="112"/>
+<Background name="NullBackground"/>
+<Border/>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="NullBackground"/>
+<Border/>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="80">
+<foreground>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-10710096" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="5"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="80">
+<foreground>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-10710096" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72">
+<foreground>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-10710096" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4144960" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4144960" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="NullBackground"/>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style imageLayout="1">
+<FRFont name="SimSun" style="0" size="72"/>
+<Background name="NullBackground"/>
+<Border>
+<Bottom style="5"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="NullBackground"/>
+<Border>
+<Bottom style="5"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="80">
+<foreground>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-10710096" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="NullBackground"/>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="4">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0]]></Format>
+<FRFont name="微软雅黑" style="0" size="72"/>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4144960" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0.00%]]></Format>
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style imageLayout="1">
+<FRFont name="SimSun" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="NullBackground"/>
+<Border/>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0]]></Format>
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<Format class="com.fr.base.CoreDecimalFormat" roundingMode="6">
+<![CDATA[#0]]></Format>
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-4004097" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+<Style horizontal_alignment="0" imageLayout="1">
+<FRFont name="微软雅黑" style="0" size="72" underline="1">
+<foreground>
+<FineColor color="-16776961" hor="-1" ver="-1"/>
+</foreground>
+</FRFont>
+<Background name="ColorBackground">
+<color>
+<FineColor color="-1" hor="-1" ver="-1"/>
+</color>
+</Background>
+<Border>
+<Top style="1"/>
+<Bottom style="1"/>
+<Left style="1"/>
+<Right style="1"/>
+</Border>
+</Style>
+</StyleList>
+<DesensitizationList/>
+<DesignerVersion DesignerVersion="LAA"/>
+<PreviewType PreviewType="2"/>
+<TemplateThemeAttrMark class="com.fr.base.iofile.attr.TemplateThemeAttrMark">
+<TemplateThemeAttrMark name="兼容主题" dark="false"/>
+</TemplateThemeAttrMark>
+<StrategyConfigsAttr class="com.fr.esd.core.strategy.persistence.StrategyConfigsAttr">
+<StrategyConfigs/>
+</StrategyConfigsAttr>
+<ForkIdAttrMark class="com.fr.base.iofile.attr.ForkIdAttrMark">
+<ForkIdAttrMark forkId="f1d1d058-170b-42a3-aebc-3146cc11aaa3"/>
+</ForkIdAttrMark>
+<TemplateIdAttMark class="com.fr.base.iofile.attr.TemplateIdAttrMark">
+<TemplateIdAttMark TemplateId="f1d1d058-170b-42a3-aebc-3146cc11aaa3"/>
+</TemplateIdAttMark>
+</WorkBook>

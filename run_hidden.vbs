@@ -1,0 +1,1 @@
+CreateObject("WScript.Shell").Run "D:\wzy\Python\vivo-project\start_streamlit.bat", 0, False

@@ -1,0 +1,49 @@
+# config.yaml
+# 这是我们项目的主配置文件
+
+# 应用程序级别的设置
+application:
+  cache_ttl_hours: 4
+
+# 数据加载相关的参数
+data_source:
+  product_code: "M678"
+  work_order_types:
+    - "ESLC"
+    - "P"
+    - "LCFG"
+    - "SLCFG"
+    - "SYZLC"
+
+# 数据处理相关的参数
+processing:
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "OLED_Mura"
+
+  defect_multipliers:
+    '彩斑Mura': 0.15
+    'G彩短条Mura': 0.15
+    'S向棱形彩色带状Mura': 0.1
+    
+logging:
+  file_name: "app.log"
+
+# UI界面相关的配置
+ui:
+  icons:
+  home: "🏠"
+  dashboard: "📊"
+  chart_up: "📈"
+  chart_down: "📉"
+  report: "📋"
+  datasheet: "📄"
+  arrow_right: "➡️"
+  rocket: "🚀"
+  refresh: "🔄"
+  settings: "⚙️"
+  success: "✅"
+  error: "❌"
+  warning: "⚠️"
+  info: "ℹ️"

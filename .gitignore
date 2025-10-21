@@ -1,0 +1,24 @@
+# 虚拟环境
+Vivo_project/
+.venv/
+
+# 日志和输出
+logs/
+output/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# IDE 配置文件
+.vscode/
+.idea/
+
+# 敏感信息
+.env
+
+# 临时数据
+data/temp/
+
+# 文件信息
+docs/
