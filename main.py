@@ -1,68 +1,102 @@
 #%%
-# main.py
+# main.py (V2.0 - 全工作流测试版)
 import logging
+import pandas as pd
 from dotenv import load_dotenv
 from pathlib import Path
 import sys
+import openpyxl
+
+# a. 获取项目根目录 (vivo-project)
+project_root = Path(__file__).resolve().parent
+# b. [关键] 将【src目录】添加到Python的搜索路径中
+src_root = project_root / 'src'
+if str(src_root) not in sys.path:
+    sys.path.insert(0, str(src_root)) # 使用 insert(0) 确保最高优先级
 
 # --- 1. 初始化与配置 ---
-
-# 确保项目根目录在搜索路径中
-project_root = Path(__file__).resolve().parent
-if str(project_root) not in sys.path:
-    sys.path.append(str(project_root))
+from vivo_project.app.setup import AppSetup
+AppSetup.initialize_app()
 
 # 导入我们的工具类和工作流
 from vivo_project.utils.utils import Utils
 from vivo_project.services.workflow_handler import WorkflowHandler
 
-# 设置日志系统
-Utils.setup_logging("main_test_run.log")
-
-# 加载环境变量
-# 注意: 确保你的.env文件在/config目录下
-env_path = project_root / 'config' / '.env'
-load_dotenv(dotenv_path=env_path)
-
 def main():
     """
-    项目主入口函数，用于测试后台工作流。
+    项目主入口函数，用于【一键测试】所有后台工作流的健全性。
+    它会依次调用每个工作流，并记录成功或失败，但不会打印数据内容。
     """
-    logging.info("--- [测试运行] OLED不良率分析项目启动 ---")
+    logging.info("--- [测试运行] 全工作流健全性检查启动 ---")
     
-    # --- 2. 直接调用核心工作流 ---
-    # 这个函数现在会返回一个包含多个DataFrame的字典
-    result_data = WorkflowHandler.run_sheet_defect_rate_workflow()
-    
-    # --- 3. 检查并打印结果 ---
-    if result_data:
-        logging.info("工作流执行成功，返回了数据字典。")
-        
-        # 打印主表 (Group Level Summary)
-        print("\n" + "="*20 + " 主表 (Group Level Summary) 预览: " + "="*20)
-        group_summary_df = result_data.get("group_level_summary")
-        if group_summary_df is not None and not group_summary_df.empty:
-            print(group_summary_df.head())
-        else:
-            print("未能获取到Group级别总览表。")
+    # --- 2. 定义所有需要测试的工作流函数名称 ---
+    workflows_to_test = [
+        "run_sheet_defect_rate_workflow",
+        "run_lot_defect_rate_workflow",
+        # "run_mwd_trend_workflow",
+        # "run_code_level_mwd_trend_workflow",
+        # "run_current_month_trend_workflow",
+        # "run_mapping_data_workflow",
+    ]
 
-        # 打印明细表 (Code Level Details)
-        print("\n" + "="*20 + " 明细表 (Code Level Details) 预览: " + "="*20)
-        code_details_dict = result_data.get("code_level_details")
-        if code_details_dict:
-            for group_name, detail_df in code_details_dict.items():
-                print(f"\n--- {group_name} ---")
-                if detail_df is not None and not detail_df.empty:
-                    print(detail_df.head())
-                else:
-                    print(f"(该Group下未发现缺陷数据)")
-        else:
-            print("未能获取到Code级别明细表。")
+    success_count = 0
+    failure_count = 0
 
+    output_debug_dir = project_root / "data" / "processed"
+    # --- 3. 循环测试每个工作流 ---
+    for workflow_name in workflows_to_test:
+        logging.info(f"--- 正在测试: {workflow_name} ---")
+        try:
+            # 使用getattr动态获取要调用的函数
+            workflow_func = getattr(WorkflowHandler, workflow_name)
+            result = workflow_func()
+
+            # --- [核心修改 2] 使用 Utils.save_dict_to_excel ---
+            if workflow_name == 'run_sheet_defect_rate_workflow' and result:
+                Utils.save_dict_to_excel( # <-- 修改调用
+                    data_dict=result,
+                    output_dir=output_debug_dir,
+                    filename="debug_SHEET_results.xlsx"
+                )
+            if workflow_name == 'run_lot_defect_rate_workflow' and result:
+                Utils.save_dict_to_excel( # <-- 修改调用
+                    data_dict=result,
+                    output_dir=output_debug_dir,
+                    filename="debug_LOT_results.xlsx"
+                )
+            if workflow_name == 'run_code_level_mwd_trend_workflow' and result:
+                 # Utils.save_dict_to_excel 也能处理 mwd 结果字典
+                Utils.save_dict_to_excel( # <-- 修改调用
+                    data_dict=result,
+                    output_dir=output_debug_dir,
+                    filename="debug_MWD_CODE_results.xlsx"
+                )
+                
+            # 检查结果（即使不打印，也确认它没有因逻辑错误而返回意外的None）
+            if result is not None:
+                logging.info(f"[成功] {workflow_name} 执行完毕。")
+                success_count += 1
+            else:
+                # 某些函数在特定条件下（如无数据）返回None是正常的，我们将其标记为警告
+                logging.warning(f"[警告] {workflow_name} 执行完毕，但返回了 None。")
+                success_count += 1 # 只要没崩溃，就算执行成功
+                
+        except Exception as e:
+            # 如果函数执行过程中发生任何崩溃，记录错误并继续
+            logging.error(f"[失败] {workflow_name} 执行时发生异常: {e}", exc_info=True)
+            failure_count += 1
+
+    # --- 4. 打印最终总结 ---
+    logging.info("--- [测试运行] 全工作流健全性检查结束 ---")
+    print("\n" + "="*30 + " 测试总结 " + "="*30)
+    print(f"  成功: {success_count} 个")
+    print(f"  失败: {failure_count} 个")
+    print("="*72)
+
+    if failure_count > 0:
+        logging.error("测试运行中发现错误，请检查上面的日志详情 (main_test_run.log)。")
     else:
-        logging.error("工作流执行失败，未返回任何数据。")
-        
-    logging.info("--- [测试运行] 项目流程结束 ---")
+        logging.info("所有工作流均已成功执行，未发生崩溃。")
 
 
 if __name__ == '__main__':

@@ -26,7 +26,124 @@ processing:
     '彩斑Mura': 0.15
     'G彩短条Mura': 0.15
     'S向棱形彩色带状Mura': 0.1
+
+  mapping_hotspot_script:
     
+    # 脚本 1: (你现有的规则)
+    - enable: true
+      target_code: '彩斑Mura'
+      target_batch_index: 'oldest'
+      mode: 'additive' 
+      hotspot_adder: 40
+      normal_multiplier_in_add_mode: 0.2
+      hotspot_rules:
+        - { 
+            type: 'position', 
+            value: [
+              ['1E', 'F0'], ['2A', 'F0'], ['2B', 'F0'], ['2C', 'F0'],
+              ['2D', 'F0'], ['2E', 'F0'], ['1E', 'M0'], ['1E', 'N0'],
+              ['1C', 'R0'], ['1E', 'R0']
+            ] 
+          }
+
+    - enable: true
+      target_code: 'S向亮线'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'multiplicative'          # <--- 不同的模式
+      hotspot_multiplier: 0.3
+      normal_multiplier: 1
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+    - enable: true
+      target_code: 'G向单暗线'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'multiplicative'          # <--- 不同的模式
+      hotspot_multiplier: 0.5
+      normal_multiplier: 1
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+    - enable: true
+      target_code: 'G3亮点'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'additive'          # <--- 不同的模式
+      hotspot_adder: 5
+      normal_multiplier_in_add_mode: 0.8
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+    - enable: true
+      target_code: '群亮点'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'additive'          # <--- 不同的模式
+      hotspot_adder: 5
+      normal_multiplier_in_add_mode: 0.8
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+    - enable: true
+      target_code: '大面积亮点'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'additive'          # <--- 不同的模式
+      hotspot_adder: 3
+      normal_multiplier_in_add_mode: 0.8
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+    - enable: true
+      target_code: 'B暗点'       # <--- 不同的Code
+      target_batch_index: 'oldest'    # <--- 不同的批次
+      mode: 'additive'          # <--- 不同的模式
+      hotspot_adder: 3
+      normal_multiplier_in_add_mode: 0.8
+      hotspot_rules:
+        - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
+
+  'sheet_hotspot_config': {
+      'enable': True,
+      'random_seed': 2025,
+      
+      'hide_hotspot_config': {
+          # --- [核心修改] 分别定义 Sheet 和 Lot 的波动幅度 ---
+          'fluctuation_sheet': 0.5,  
+          'fluctuation_lot': 0.3,
+      },
+  }
+
+  rate_override_config:
+    override_file_sheet: "override_rates_sheet.xlsx"  # <-- 指定 Sheet 覆盖文件名 (示例)
+    override_file_lot: "override_rates_lot.xlsx"      # <-- 指定 Lot 覆盖文件名 (示例)
+    override_file: "override_rates.xlsx"
+
+    override_sheet_name_sheet: "SheetLevelOverrides" # <-- 读取 Sheet 覆盖数据的 Sheet 页名 (示例)
+    override_sheet_name_lot: "LotLevelOverrides"     # <-- 读取 Lot 覆盖数据的 Sheet 页名 (示例)
+    override_sheet_name: "Overrides"
+
+  dispersion_config: {
+      'enable': True,
+      
+      # 1. 默认权重 (您提到的 [1:1:...] 逻辑)
+      'default_lot_weight': 1,
+      'default_sheet_weight': 1,
+      
+      # 2. 您要的“接口”：为特定Code指定Lot/Sheet的权重
+      'code_specific_lot_weights': {
+          'S向亮线': {
+              'L3MR58E38': 10, # <--- 将这个Lot的权重设为10
+          }
+      },
+
+      'code_specific_sheet_weights': {
+            'PCD裂纹亮线': {
+              'L3MR57E1J16': 20
+            }
+      },
+      
+      # 3. 随机种子 "盐"，用于确保可复现性；字符串可以通过哈希函数转换为数字
+      'random_seed_salt': "vivo_project_2025"
+    }
+
 logging:
   file_name: "app.log"
 
