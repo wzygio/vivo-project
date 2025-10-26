@@ -9,7 +9,7 @@ import streamlit as st
 
 from vivo_project.config import CONFIG
 
-from vivo_project.infrastructure.db_handler import DatabaseHandler
+from vivo_project.infrastructure.db_handler import DatabaseManager
 from vivo_project.infrastructure.data_loader import load_panel_details, load_array_input_times
 from vivo_project.core.mwd_trend_processor import create_mwd_trend_data, create_code_level_mwd_trend_data, create_current_month_trend_data
 from vivo_project.core.sheet_lot_processor import calculate_lot_defect_rates, calculate_sheet_defect_rates
@@ -25,7 +25,7 @@ class WorkflowHandler:
         这是所有数据的“单一真相来源”。
         """
         logging.info("--- [L1 Cache Miss] 原始数据缓存未命中，开始执行数据库查询... ---")
-        db_manager = DatabaseHandler()
+        db_manager = DatabaseManager()
         if db_manager.engine is None: return pd.DataFrame()
         end_date = datetime.now()
         start_date = end_date - relativedelta(months=4)
@@ -337,7 +337,7 @@ class WorkflowHandler:
         根据Lot ID列表，获取并缓存相关的阵列投入时间。
         """
         logging.info("--- [Cache Miss] 阵列投入时间缓存未命中，开始查询数据库... ---")
-        db_manager = DatabaseHandler()
+        db_manager = DatabaseManager()
         if db_manager.engine is None: return pd.DataFrame()
         
         # 将元组转换回列表以供函数使用

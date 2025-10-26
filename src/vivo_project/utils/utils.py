@@ -5,14 +5,7 @@ from pathlib import Path
 import openpyxl # 确保导入 openpyxl 用于 ExcelWriter
 import sys
 
-
-try:
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-except NameError:
-    # 如果在交互式环境（如Jupyter）中，__file__ 未定义，则使用当前工作目录
-    PROJECT_ROOT = Path.cwd()
-
-LOG_DIR = PROJECT_ROOT / "logs"
+from vivo_project.config import LOG_DIR, PROJECT_ROOT 
 
 class Utils:
     """
@@ -21,42 +14,35 @@ class Utils:
 
     @staticmethod
     def setup_logging(log_filename: str = "app.log"):
-        """
-        初始化项目全局日志系统。
-        将日志同时输出到控制台和指定的日志文件。
-        """
-        # 1. 确保日志目录存在
-        try:
-            LOG_DIR.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            print(f"警告：无法创建日志目录 {LOG_DIR}。日志可能只会输出到控制台。错误: {e}")
+        """初始化日志系统，输出到文件和控制台。"""
+        # --- [修改] 使用导入的 LOG_DIR ---
+        LOG_DIR.mkdir(parents=True, exist_ok=True) # 确保日志目录存在
+        log_filepath = LOG_DIR / log_filename
 
-        # 2. 定义日志格式
-        log_format = "%(asctime)s - %(levelname)s - [%(module)s] - %(message)s"
-        date_format = "%Y-%m-%d %H:%M:%S"
+        # --- 配置根 logger ---
+        # ... (日志配置逻辑不变，确保使用了 log_filepath) ...
+        log_format = '%(asctime)s - %(levelname)s - [%(module)s] - %(message)s'
+        log_date_format = '%Y-%m-%d %H:%M:%S'
 
-        # 3. 获取根日志记录器并设置级别
-        # (我们使用 logging.basicConfig 来配置根记录器)
-        logging.basicConfig(
-            level=logging.INFO,
-            format=log_format,
-            datefmt=date_format,
-            handlers=[
-                # 处理器1：输出到文件
-                logging.FileHandler(LOG_DIR / log_filename, encoding='utf-8'),
-                # 处理器2：输出到控制台 (stdout)
-                logging.StreamHandler(sys.stdout)
-            ],
-            # 确保每次调用都重新配置
-            force=True 
-        )
-        
-        # 抑制 'fsspec' (pandas依赖) 等库的冗余日志
-        logging.getLogger('fsspec').setLevel(logging.WARNING)
-        logging.getLogger('matplotlib').setLevel(logging.WARNING)
+        # 清除可能存在的旧处理器，避免重复日志
+        root_logger = logging.getLogger()
+        if root_logger.hasHandlers():
+            root_logger.handlers.clear()
 
-        logging.info(f"日志系统已初始化，将同时输出到文件 '{LOG_DIR / log_filename}' 和控制台。")
+        # 配置日志级别
+        root_logger.setLevel(logging.INFO) # 或者根据需要设置为 DEBUG
 
+        # 文件处理器
+        file_handler = logging.FileHandler(log_filepath, encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
+        root_logger.addHandler(file_handler)
+
+        # 控制台处理器
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
+        root_logger.addHandler(console_handler)
+
+        logging.info(f"日志系统已初始化，将同时输出到文件 '{log_filepath}' 和控制台。")
 
     @staticmethod
     def save_dict_to_excel(data_dict: dict, output_dir: Path, filename: str):

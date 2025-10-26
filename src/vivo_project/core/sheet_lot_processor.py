@@ -5,15 +5,8 @@ import logging, sys
 from pathlib import Path
 from typing import Dict, Any
 
-from vivo_project.config import CONFIG
+from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT
 from vivo_project.utils.utils import Utils # 假设 Utils.save_dict_to_excel 在这里
-
-# a. 获取项目根目录 (vivo-project)
-project_root = Path(__file__).resolve().parent.parent.parent.parent
-# b. [关键] 将【src目录】添加到Python的搜索路径中
-src_root = project_root / 'src'
-if str(src_root) not in sys.path:
-    sys.path.insert(0, str(src_root)) # 使用 insert(0) 确保最高优先级
 
 # ==============================================================================
 #                      ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
@@ -30,7 +23,7 @@ def calculate_sheet_defect_rates(
     按顺序执行 过滤 -> 计算原始 -> [模拟] -> [覆盖] -> 重聚合 -> 截断 六个步骤。
     """
     logging.info("开始执行Sheet级不良率完整业务流程 (V3.9 - 添加覆盖探针)...")
-    debug_output_dir = project_root / "data" / "processed"
+    debug_output_dir = PROJECT_ROOT / "data" / "processed"
 
     try:
         # --- 步骤 1: 聚合 Sheet 基础信息 ---

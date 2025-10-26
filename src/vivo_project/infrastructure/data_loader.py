@@ -9,11 +9,11 @@ from pathlib import Path
 from vivo_project.config import CONFIG
 
 if TYPE_CHECKING:
-    from vivo_project.infrastructure.db_handler import DatabaseHandler
+    from vivo_project.infrastructure.db_handler import DatabaseManager
 
 # --- [新增] 用于按倍率调整不良Panel数量的辅助函数 ---
 def load_panel_details(
-    db_manager: 'DatabaseHandler', 
+    db_manager: 'DatabaseManager', 
     start_date: str, 
     end_date: str, 
     prod_code: str, 
@@ -73,7 +73,7 @@ def load_panel_details(
         return pd.DataFrame()
     
 def load_array_input_times(
-    db_manager: 'DatabaseHandler', 
+    db_manager: 'DatabaseManager', 
     lot_ids: List[str]
 ) -> pd.DataFrame:
     """

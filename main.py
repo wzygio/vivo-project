@@ -7,20 +7,20 @@ from pathlib import Path
 import sys
 import openpyxl
 
-# a. 获取项目根目录 (vivo-project)
+# --- [核心修改] 恢复路径计算和 sys.path 添加 ---
+# a. 获取项目根目录 (main.py 所在的目录)
 project_root = Path(__file__).resolve().parent
-# b. [关键] 将【src目录】添加到Python的搜索路径中
+# b. 计算 src 目录路径
 src_root = project_root / 'src'
+# c. [关键] 将 src 目录添加到 Python 搜索路径的最前面
 if str(src_root) not in sys.path:
-    sys.path.insert(0, str(src_root)) # 使用 insert(0) 确保最高优先级
-
-# --- 1. 初始化与配置 ---
-from vivo_project.app.setup import AppSetup
-AppSetup.initialize_app()
+    sys.path.insert(0, str(src_root))
 
 # 导入我们的工具类和工作流
+from vivo_project.app.setup import AppSetup
 from vivo_project.utils.utils import Utils
 from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.config import PROJECT_ROOT, DATA_DIR
 
 def main():
     """
@@ -28,7 +28,9 @@ def main():
     它会依次调用每个工作流，并记录成功或失败，但不会打印数据内容。
     """
     logging.info("--- [测试运行] 全工作流健全性检查启动 ---")
-    
+
+    AppSetup.initialize_app()
+
     # --- 2. 定义所有需要测试的工作流函数名称 ---
     workflows_to_test = [
         "run_sheet_defect_rate_workflow",
@@ -42,7 +44,7 @@ def main():
     success_count = 0
     failure_count = 0
 
-    output_debug_dir = project_root / "data" / "processed"
+    output_debug_dir = DATA_DIR / "processed"
     # --- 3. 循环测试每个工作流 ---
     for workflow_name in workflows_to_test:
         logging.info(f"--- 正在测试: {workflow_name} ---")
