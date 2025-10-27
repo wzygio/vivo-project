@@ -14,35 +14,43 @@ class Utils:
 
     @staticmethod
     def setup_logging(log_filename: str = "app.log"):
-        """初始化日志系统，输出到文件和控制台。"""
-        # --- [修改] 使用导入的 LOG_DIR ---
-        LOG_DIR.mkdir(parents=True, exist_ok=True) # 确保日志目录存在
+        """初始化日志系统，输出到文件(覆盖模式)和控制台。"""
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         log_filepath = LOG_DIR / log_filename
 
-        # --- 配置根 logger ---
-        # ... (日志配置逻辑不变，确保使用了 log_filepath) ...
         log_format = '%(asctime)s - %(levelname)s - [%(module)s] - %(message)s'
         log_date_format = '%Y-%m-%d %H:%M:%S'
 
-        # 清除可能存在的旧处理器，避免重复日志
         root_logger = logging.getLogger()
+        # --- [可选但推荐] 设置日志级别应尽早 ---
+        #     防止在清除 handlers 之前记录了不需要的低级别日志
+        root_logger.setLevel(logging.INFO) # 或 DEBUG
+
+        # 清除旧处理器 (保持不变)
         if root_logger.hasHandlers():
-            root_logger.handlers.clear()
+            # 移除处理器并关闭它们，确保文件句柄被释放
+            for handler in root_logger.handlers[:]:
+                handler.close()
+                root_logger.removeHandler(handler)
 
-        # 配置日志级别
-        root_logger.setLevel(logging.INFO) # 或者根据需要设置为 DEBUG
+        # --- [核心修改] 文件处理器，使用 mode='w' ---
+        try:
+            file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8') # <-- 添加 mode='w'
+            file_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
+            root_logger.addHandler(file_handler)
+        except Exception as e:
+             # 如果文件无法以写入模式打开（例如权限问题），至少还能输出到控制台
+             logging.error(f"无法以写入模式打开日志文件 '{log_filepath}': {e}")
 
-        # 文件处理器
-        file_handler = logging.FileHandler(log_filepath, encoding='utf-8')
-        file_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
-        root_logger.addHandler(file_handler)
 
-        # 控制台处理器
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
-        root_logger.addHandler(console_handler)
+        # --- 控制台处理器 (保持不变) ---
+        # 避免重复添加控制台处理器（如果之前被清除了）
+        if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+             console_handler = logging.StreamHandler(sys.stdout)
+             console_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
+             root_logger.addHandler(console_handler)
 
-        logging.info(f"日志系统已初始化，将同时输出到文件 '{log_filepath}' 和控制台。")
+        logging.info(f"日志系统已初始化，将同时输出到文件 '{log_filepath}' (覆盖模式) 和控制台。")
 
     @staticmethod
     def save_dict_to_excel(data_dict: dict, output_dir: Path, filename: str):

@@ -25,7 +25,7 @@ processing:
   defect_multipliers:
     '彩斑Mura': 0.15
     'G彩短条Mura': 0.15
-    'S向棱形彩色带状Mura': 0.1
+    # 'S向棱形彩色带状Mura': 0.1
 
   mapping_hotspot_script:
     
@@ -112,12 +112,12 @@ processing:
   }
 
   rate_override_config:
-    override_file_sheet: "override_rates_sheet.xlsx"  # <-- 指定 Sheet 覆盖文件名 (示例)
-    override_file_lot: "override_rates_lot.xlsx"      # <-- 指定 Lot 覆盖文件名 (示例)
+    # override_file_sheet: "override_rates_sheet.xlsx"  # <-- 指定 Sheet 覆盖文件名 (示例)
+    # override_file_lot: "override_rates_lot.xlsx"      # <-- 指定 Lot 覆盖文件名 (示例)
     override_file: "override_rates.xlsx"
 
-    override_sheet_name_sheet: "SheetLevelOverrides" # <-- 读取 Sheet 覆盖数据的 Sheet 页名 (示例)
-    override_sheet_name_lot: "LotLevelOverrides"     # <-- 读取 Lot 覆盖数据的 Sheet 页名 (示例)
+    # override_sheet_name_sheet: "SheetLevelOverrides" # <-- 读取 Sheet 覆盖数据的 Sheet 页名 (示例)
+    # override_sheet_name_lot: "LotLevelOverrides"     # <-- 读取 Lot 覆盖数据的 Sheet 页名 (示例)
     override_sheet_name: "Overrides"
 
   dispersion_config: {

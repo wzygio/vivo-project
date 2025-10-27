@@ -5,7 +5,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from pathlib import Path
 import sys
-import openpyxl
 
 # --- [核心修改] 恢复路径计算和 sys.path 添加 ---
 # a. 获取项目根目录 (main.py 所在的目录)
@@ -35,10 +34,10 @@ def main():
     workflows_to_test = [
         "run_sheet_defect_rate_workflow",
         "run_lot_defect_rate_workflow",
-        # "run_mwd_trend_workflow",
-        # "run_code_level_mwd_trend_workflow",
-        # "run_current_month_trend_workflow",
-        # "run_mapping_data_workflow",
+        "run_mwd_trend_workflow",
+        "run_code_level_mwd_trend_workflow",
+        "run_current_month_trend_workflow",
+        "run_mapping_data_workflow",
     ]
 
     success_count = 0
