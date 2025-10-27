@@ -145,7 +145,7 @@ if mapping_data_source is not None and not mapping_data_source.empty:
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="mapping_focus",
         filter_by='occurrence',          # <--- 明确指定按 count 筛选
-        count_threshold=50           # <--- 这个阈值现在会作用于 Panel 出现次数
+        count_threshold=10           # <--- 这个阈值现在会作用于 Panel 出现次数
     )
     
     if selected_code_info_mapping.get("code"):

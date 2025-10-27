@@ -34,7 +34,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         df_filtered_by_count = df[df['batch_no'].isin(valid_batches_by_count)]
 
         valid_datetimes = pd.to_datetime(df_filtered_by_count['batch_no'], format='%Y/%m/%d', errors='coerce').dropna().unique()
-        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:3]
+        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:4]
         latest_three_batch_strs = [pd.to_datetime(d).strftime('%Y/%m/%d') for d in latest_three_datetimes]
         df_final_batches = df_filtered_by_count[df_filtered_by_count['batch_no'].isin(latest_three_batch_strs)]
         df_defective_panels = df_final_batches[df_final_batches['defect_desc'].notna()].copy() # 使用.copy()
@@ -158,96 +158,108 @@ def _get_deterministically_modified_panel_id(panel_id: str, batch_no: str) -> st
 
 @staticmethod
 def apply_hotspot_modification_to_matrix(
-    heatmap_matrix: pd.DataFrame, 
-    batch_no: str, 
-    code_desc: str, 
-    batch_index: str, 
-    script_config: dict
+    heatmap_matrix: pd.DataFrame,
+    batch_no: str,
+    code_desc: str,
+    batch_index: str,
+    script_config_list: list  # <--- 参数名是 list，接收列表
 ) -> pd.DataFrame:
     """
-    [V2.2 - 双模式版] 
-    按照“剧本”修饰已聚合的Mapping图矩阵。
-    支持 'multiplicative' (倍率) 和 'additive' (加值) 两种模式。
+    [V2.4 - 列表搜索 + 修复随机性]
+    按照“剧本库”(列表)修饰已聚合的Mapping图矩阵。
+    它会搜索列表，找到第一个匹配 code 和 batch 的脚本并执行。
+    加值模式使用确定性随机波动。
     """
     try:
-        if not script_config.get('enable', False):
+        # --- [核心逻辑 1] 搜索匹配的脚本 ---
+        matched_script = None
+        for script in script_config_list: # 遍历传入的列表
+            # 使用 .get() 安全访问字典键
+            if (script.get('enable', False) and
+                script.get('target_code') == code_desc and
+                script.get('target_batch_index') == batch_index):
+
+                matched_script = script # 将找到的 *字典* 赋给 matched_script
+                break # 找到第一个匹配项，停止搜索
+
+        # 如果没有匹配的脚本，则返回原始矩阵
+        if matched_script is None:
+            logging.debug(f"未找到 Code '{code_desc}' / Batch '{batch_index}' 的匹配修饰脚本，跳过。")
             return heatmap_matrix
-            
-        if (code_desc == script_config.get('target_code') and 
-            batch_index == script_config.get('target_batch_index')):
-            
-            logging.info(f"为批次 {batch_no} (Code: {code_desc}) 应用Mapping热点修饰...")
-            
-            # --- [核心修改] 1. 加载所有模式的参数 ---
-            mode = script_config.get('mode', 'multiplicative') # 默认为倍率模式
-            hotspot_rules = script_config.get('hotspot_rules', [])
-            
-            # 倍率模式参数
-            hot_multi = script_config.get('hotspot_multiplier', 1.0)
-            norm_multi = script_config.get('normal_multiplier', 1.0)
-            
-            # 加值模式参数
-            hot_add = script_config.get('hotspot_adder', 0)
-            norm_multi_in_add = script_config.get('normal_multiplier_in_add_mode', 1.0)
 
-            # 2. 准备“翻译器” (使用21列)
-            row_name_to_index = {
-                '1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4,
-                '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9
-            }
-            col_name_to_index = {f"{chr(ord('A') + i)}0": i for i in range(19)}
-            
-            # 3. 创建一个【布尔型】的“高发区蒙版” (Hotspot Mask)
-            #    蒙版与热图一样大，默认所有单元格都【不是】高发区 (False)
-            hotspot_mask = pd.DataFrame(
-                np.full(heatmap_matrix.shape, False),
-                index=heatmap_matrix.index,
-                columns=heatmap_matrix.columns
+        logging.info(f"为批次 {batch_no} (Code: {code_desc}) 应用匹配的Mapping热点修饰脚本...")
+
+        # --- [核心逻辑 2] 使用匹配到的脚本字典 (matched_script) 执行操作 ---
+
+        # 1. 加载所有模式的参数 (从 matched_script 获取)
+        mode = matched_script.get('mode', 'multiplicative')
+        hotspot_rules = matched_script.get('hotspot_rules', [])
+        hot_multi = matched_script.get('hotspot_multiplier', 1.0)
+        norm_multi = matched_script.get('normal_multiplier', 1.0)
+        hot_add = matched_script.get('hotspot_adder', 0)
+        norm_multi_in_add = matched_script.get('normal_multiplier_in_add_mode', 1.0)
+
+        # 2. 准备“翻译器” (10行 x 21列) - (保持不变)
+        row_name_to_index = {
+            '1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4,
+            '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9
+        }
+        col_name_to_index = {f"{chr(ord('A') + i)}0": i for i in range(21)} # 确认是21列
+
+        # 3. 创建“高发区蒙版” (保持不变)
+        hotspot_mask = pd.DataFrame(
+            np.full(heatmap_matrix.shape, False),
+            index=heatmap_matrix.index,
+            columns=heatmap_matrix.columns
+        )
+
+        # 4. 遍历所有规则，在蒙版上“绘制”高发区 (保持不变)
+        for rule in hotspot_rules:
+            hotspot_type = rule.get('type')
+            hotspot_values = rule.get('value', [])
+            # ... (处理 'row', 'col', 'position' 的逻辑不变) ...
+            if hotspot_type == 'row':
+                 row_indices = [row_name_to_index.get(name) for name in hotspot_values if name in row_name_to_index]
+                 if row_indices: hotspot_mask.iloc[row_indices, :] = True # type: ignore
+            elif hotspot_type == 'col':
+                 col_indices = [col_name_to_index.get(name) for name in hotspot_values if name in col_name_to_index]
+                 if col_indices:
+                      # 确保列索引在 DataFrame 范围内
+                      valid_col_indices = [idx for idx in col_indices if idx in heatmap_matrix.columns]
+                      if valid_col_indices: hotspot_mask.iloc[:, valid_col_indices] = True # type: ignore
+            elif hotspot_type == 'position':
+                 for pos in hotspot_values:
+                      row_idx = row_name_to_index.get(pos[0])
+                      col_idx = col_name_to_index.get(pos[1])
+                      if row_idx is not None and col_idx is not None and \
+                         row_idx in heatmap_matrix.index and col_idx in heatmap_matrix.columns:
+                           hotspot_mask.iloc[row_idx, col_idx] = True # 使用 iloc
+
+        # 5. 根据模式，应用数学逻辑
+        if mode == 'additive':
+            logging.info(f"应用“加值”模式: 高发区(+{hot_add}), 其他区(x{norm_multi_in_add})")
+            # a. 为随机波动添加确定性种子
+            seed_str = f"{batch_no}-{code_desc}-{mode}"
+            seed = abs(hash(seed_str)) % (2**32 - 1)
+            rng_offset = np.random.default_rng(seed)
+            # b. 生成确定性随机波动
+            fluctuation_range = max(1, int(hot_add * 0.5))
+            random_offset = rng_offset.integers(
+                -fluctuation_range, fluctuation_range + 1, size=heatmap_matrix.shape
             )
+            # c. 应用逻辑
+            modified_matrix = (heatmap_matrix * norm_multi_in_add)
+            temp_matrix = modified_matrix + hot_add + random_offset
+            modified_matrix = modified_matrix.where(~hotspot_mask, temp_matrix)
 
-            # 4. 遍历所有规则，在蒙版上“绘制”高发区
-            for rule in hotspot_rules:
-                hotspot_type = rule.get('type')
-                hotspot_values = rule.get('value', [])
-                
-                if hotspot_type == 'row':
-                    row_indices = [row_name_to_index.get(name) for name in hotspot_values if name in row_name_to_index]
-                    if row_indices:
-                        hotspot_mask.loc[row_indices, :] = True
-                
-                elif hotspot_type == 'col':
-                    col_indices = [col_name_to_index.get(name) for name in hotspot_values if name in col_name_to_index]
-                    if col_indices:
-                        col_int_indices = [col for col in col_indices if col in hotspot_mask.columns]
-                        if col_int_indices:
-                            hotspot_mask[col_int_indices] = True
-                
-                elif hotspot_type == 'position':
-                    for pos in hotspot_values:
-                        row_idx = row_name_to_index.get(pos[0])
-                        col_idx = col_name_to_index.get(pos[1])
-                        if row_idx is not None and col_idx is not None and col_idx in hotspot_mask.columns:
-                            hotspot_mask.loc[row_idx, col_idx] = True
-            
-            # 5. [核心修改] 根据模式，应用不同的数学逻辑
-            if mode == 'additive':
-                logging.info(f"应用“加值”模式: 高发区(+{hot_add}), 其他区(x{norm_multi_in_add})")
-                # a. 先对所有区域应用“正常”倍率
-                modified_matrix = (heatmap_matrix * norm_multi_in_add)
-                # b. 然后，只对“高发区”应用“加值”
-                modified_matrix = modified_matrix.where(~hotspot_mask, modified_matrix + hot_add + np.random.randint(-5, 5))
-            
-            else: # 默认为 'multiplicative'
-                logging.info(f"应用“倍率”模式: 高发区(x{hot_multi}), 其他区(x{norm_multi})")
-                # 使用 np.where 创建“倍率蒙版”
-                multiplier_mask = np.where(hotspot_mask, hot_multi, norm_multi)
-                modified_matrix = heatmap_matrix * multiplier_mask
+        else: # 默认为 'multiplicative'
+            logging.info(f"应用“倍率”模式: 高发区(x{hot_multi}), 其他区(x{norm_multi})")
+            multiplier_mask = np.where(hotspot_mask, hot_multi, norm_multi)
+            modified_matrix = heatmap_matrix * multiplier_mask
 
-            # 6. 确保结果为非负整数
-            return modified_matrix.astype(int).clip(lower=0)
-        
-        return heatmap_matrix
-        
+        # 6. 确保结果为非负整数 (保持不变)
+        return modified_matrix.astype(int).clip(lower=0)
+
     except Exception as e:
         logging.error(f"在应用Mapping矩阵修饰时发生错误: {e}", exc_info=True)
-        return heatmap_matrix
+        return heatmap_matrix # 出错时返回原始矩阵
