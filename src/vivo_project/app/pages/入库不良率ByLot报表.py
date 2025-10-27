@@ -72,7 +72,7 @@ if all_data:
             column_config={
                 "lot_id": st.column_config.TextColumn("Lot ID"),
                 "warehousing_time": st.column_config.DateColumn("入库时间", format="YYYY/MM/DD"),
-                "array_input_time": st.column_config.DatetimeColumn("阵列投入时间", format="YYYY/MM/DD HH:mm"),
+                "array_input_time": st.column_config.DatetimeColumn("阵列投入时间", format="YYYY/MM/DD"),
                 "pass_rate": st.column_config.NumberColumn("过货率", format="%.2f%%"),
                 "array_pixel_rate": st.column_config.NumberColumn("Array_Pixel不良率", format="%.2f%%"),
                 "array_line_rate": st.column_config.NumberColumn("Array_Line不良率", format="%.2f%%"),

@@ -2,7 +2,6 @@
 import pandas as pd
 import logging
 from pathlib import Path
-import openpyxl # 确保导入 openpyxl 用于 ExcelWriter
 import sys
 
 from vivo_project.config import LOG_DIR, PROJECT_ROOT 
@@ -109,9 +108,6 @@ class Utils:
                             else:
                                  logging.warning(f"[调试] 'code_level_details' 中的键 '{group_name}' 不是有效的 DataFrame 或为空，已跳过。")
 
-                    # --- 情况 3: 其他类型的值 (忽略) ---
-                    # (可以选择性地记录日志或处理其他嵌套结构)
-
                 # --- 报告结果 ---
                 if saved_sheets_count > 0:
                      logging.info(f"[调试探针] 成功将 {saved_sheets_count} 个 DataFrame 保存到: {file_path}")
@@ -120,5 +116,3 @@ class Utils:
 
         except Exception as e:
             logging.error(f"[调试] 保存调试 Excel 文件 '{filename}' 时发生错误: {e}", exc_info=True)
-
-# --- 文件结束 ---

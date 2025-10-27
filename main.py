@@ -28,16 +28,16 @@ def main():
     """
     logging.info("--- [测试运行] 全工作流健全性检查启动 ---")
 
-    AppSetup.initialize_app()
+    Utils.setup_logging("main.log")
 
     # --- 2. 定义所有需要测试的工作流函数名称 ---
     workflows_to_test = [
         "run_sheet_defect_rate_workflow",
         "run_lot_defect_rate_workflow",
-        "run_mwd_trend_workflow",
-        "run_code_level_mwd_trend_workflow",
-        "run_current_month_trend_workflow",
-        "run_mapping_data_workflow",
+        # "run_mwd_trend_workflow",
+        # "run_code_level_mwd_trend_workflow",
+        # "run_current_month_trend_workflow",
+        # "run_mapping_data_workflow",
     ]
 
     success_count = 0

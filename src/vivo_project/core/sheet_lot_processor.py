@@ -5,7 +5,7 @@ import logging, sys
 from pathlib import Path
 from typing import Dict, Any
 
-from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT
+from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import Utils # 假设 Utils.save_dict_to_excel 在这里
 
 # ==============================================================================
@@ -42,7 +42,6 @@ def calculate_sheet_defect_rates(
         else:
                 # 确保 array_input_time 列存在，即使为空
                 sheet_base_info_df['array_input_time'] = pd.NaT
-
 
         # --- 步骤 2: 过滤 Sheet ---
         logging.info("步骤2: 过滤 Sheet...")
@@ -97,16 +96,14 @@ def calculate_sheet_defect_rates(
 
         # --- 步骤 5: 应用覆盖逻辑 ---
         logging.info("步骤5: 应用 Sheet 级不良率覆盖...")
-        override_sheet_df, _ = _load_override_excel(
-                file_config_key='override_file',
-                sheet_config_key='override_sheet_name_sheet'
-        )
+        override_sheet_df, _ = _load_override_excel()
+        desc_to_group_map = _get_desc_to_group_map(panel_details_df) # 使用原始 Panel DF
         overridden_code_details = _override_rates(
-                simulated_code_details_dict=sim_code_details,
-                override_data_df=override_sheet_df,
-                entity_id_col='sheet_id'
+             simulated_code_details_dict=sim_code_details,
+             override_data_df=override_sheet_df,
+             entity_id_col='sheet_id',
+             desc_to_group_map=desc_to_group_map # <--- 传递映射
         )
-
 
         # --- 探针 2: 保存覆盖后的数据 ---
         try:
@@ -138,7 +135,6 @@ def calculate_sheet_defect_rates(
             "group_level_summary_for_chart": sim_group_chart,
             "code_level_details": overridden_code_details
         }
-
 
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Sheet 级不良率截断...")
@@ -223,14 +219,15 @@ def calculate_lot_defect_rates(
 
         # --- 步骤 5: 应用 Lot 级覆盖逻辑 ---
         logging.info("步骤5: 应用 Lot 级不良率覆盖...")
-        _, override_lot_avg_df = _load_override_excel(
-                file_config_key='override_file',
-                sheet_config_key='override_sheet_name_lot' # <-- 使用 Lot 的 sheet name key
-        )
+        # a. 加载覆盖数据 (使用 config key 指定文件名和统一的 sheet 名 key, 取 Lot 平均值)
+        _, override_lot_avg_df = _load_override_excel()
+        # --- [新增] 获取 Desc -> Group 映射 (或者可以从 sheet_results 传递过来) ---
+        desc_to_group_map = _get_desc_to_group_map(panel_details_df)
         overridden_lot_code_details = _override_rates(
-                simulated_code_details_dict=simulated_lot_code_details,
-                override_data_df=override_lot_avg_df, # <-- 使用 Lot 平均覆盖数据
-                entity_id_col='lot_id'
+             simulated_code_details_dict=simulated_lot_code_details,
+             override_data_df=override_lot_avg_df,
+             entity_id_col='lot_id',
+             desc_to_group_map=desc_to_group_map # <--- 传递映射
         )
 
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
@@ -252,11 +249,10 @@ def calculate_lot_defect_rates(
             "code_level_details": overridden_lot_code_details
         }
 
-
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Lot 级不良率截断...")
         group_level_thresholds = {'upper': 0.02, 'lower': 0.005}
-        code_level_thresholds = {'upper': 0.01, 'lower': 0.003}
+        code_level_thresholds = {'upper': 0.01, 'lower': 0.0002}
         final_results = _apply_defect_capping(
             overridden_lot_results,
             group_level_thresholds,
@@ -275,7 +271,6 @@ def calculate_lot_defect_rates(
 # ==============================================================================
 #                      辅助函数：计算数据
 # ==============================================================================
-
 # --- 基础信息计算 ---
 @staticmethod
 def _calculate_lot_base_info_with_median_time(
@@ -694,102 +689,199 @@ def _generate_simulated_rates(
 # ==============================================================================
 #                      辅助函数：覆盖数据
 # ==============================================================================
-@staticmethod
-def _load_override_excel(
-    file_config_key: str = 'override_file', sheet_config_key: str = 'override_sheet_name',
-    resource_dir: Path = Path("resource")
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """
-    [辅助函数 V1.2 - 支持指定 Sheet 页] 加载 Excel 覆盖文件。
-    """
-    override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
-    file_name = override_config.get(file_config_key)
-    sheet_name = override_config.get(sheet_config_key)
-    if not file_name: return None, None
-    file_path = resource_dir / file_name
-    if not file_path.exists(): return None, None
-    if sheet_name is None: sheet_name = 0
-    try:
-        expected_cols = ['lot_id', 'sheet_id', 'override_rate', 'defect_desc']
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
-        missing_cols = [col for col in expected_cols if col not in df.columns]
-        if missing_cols: return None, None
-        if df['override_rate'].dtype == 'object':
-                df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%').astype('float') / 100.0
-        elif not pd.api.types.is_numeric_dtype(df['override_rate']): return None, None
-        df['defect_desc'] = df['defect_desc'].astype(str).str.strip()
-        df.dropna(subset=expected_cols, inplace=True)
-        if df.empty: return None, None
-        lot_override_df = df.groupby(['lot_id', 'defect_desc'])['override_rate'].mean().reset_index()
-        lot_override_df.rename(columns={'override_rate': 'override_rate_avg'}, inplace=True)
-        return df[expected_cols], lot_override_df[['lot_id', 'defect_desc', 'override_rate_avg']]
-    except ValueError as ve:
-            if f"Worksheet named '{sheet_name}' not found" in str(ve): logging.error(...)
-            else: logging.error(...)
-            return None, None
-    except Exception as e:
-        logging.error(...)
-        return None, None
 
 @staticmethod
-def _get_desc_to_group_map(panel_details_df: pd.DataFrame) -> dict:
+def _load_override_excel(
+    file_config_key: str = 'override_file',
+    sheet_config_key: str = 'override_sheet_name',
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """
-    [辅助函数 V1.0] 构建 Desc -> Group 映射。
+    [新-辅助函数 V1.3 - 增加探针] 加载并预处理 Excel 文件。
     """
-    if panel_details_df is None or panel_details_df.empty or \
-        'defect_desc' not in panel_details_df.columns or \
-        'defect_group' not in panel_details_df.columns:
-        return {}
+    logging.info(f"--- [探针] 开始加载覆盖数据 (FileKey: '{file_config_key}', SheetKey: '{sheet_config_key}') ---")
+
     try:
-        mapping_df = panel_details_df[['defect_desc', 'defect_group']].dropna().drop_duplicates(subset=['defect_desc'])
-        desc_to_group = mapping_df.set_index('defect_desc')['defect_group'].to_dict()
-        return desc_to_group
+        # --- 探针 1: 检查配置字典 ---
+        override_config = CONFIG.get('processing', {}).get('rate_override_config')
+        if not override_config:
+            logging.error(f"[探针] 失败：在 config.yaml 中未找到 'processing.rate_override_config' 节。")
+            return None, None
+        logging.info(f"[探针] 成功加载 'rate_override_config' 节。")
+
+        # --- 探针 2: 检查文件名配置 ---
+        file_name = override_config.get(file_config_key)
+        if not file_name:
+            logging.error(f"[探针] 失败：在 'rate_override_config' 中未找到文件名键 '{file_config_key}'。")
+            return None, None
+        logging.info(f"[探针] 获取到文件名: '{file_name}'")
+
+        # --- 探针 3: 检查 Sheet 页名配置 ---
+        sheet_name = override_config.get(sheet_config_key)
+        if not sheet_name:
+            logging.error(f"[探针] 失败：在 'rate_override_config' 中未找到 Sheet 页名键 '{sheet_config_key}'。")
+            return None, None
+        logging.info(f"[探针] 获取到 Sheet 页名: '{sheet_name}'")
+
+        # --- 探针 4: 检查文件是否存在 ---
+        file_path = RESOURCE_DIR / file_name
+        if not file_path.exists():
+            logging.error(f"[探针] 失败：文件不存在于路径: {file_path.resolve()}")
+            return None, None
+        logging.info(f"[探针] 确认文件存在: {file_path.resolve()}")
+
+        # --- 探针 5: 尝试读取 Excel (包含 Sheet 页检查) ---
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        logging.info(f"[探针] 成功读取 Excel 文件和 Sheet 页 '{sheet_name}'。")
+
+        # --- 探针 6: 检查必需列 ---
+        expected_cols = ['lot_id', 'sheet_id', 'override_rate', 'defect_desc']
+        missing_cols = [col for col in expected_cols if col not in df.columns]
+        if missing_cols:
+            logging.error(f"[探针] 失败：Excel (Sheet: '{sheet_name}') 缺少必需列: {missing_cols}。实际列: {df.columns.to_list()}")
+            return None, None
+        logging.info(f"[探针] 必需列检查通过。")
+
+        # --- 探针 7: 清洗数据 (转换百分比) ---
+        if df['override_rate'].dtype == 'object':
+             df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%').astype('float') / 100.0
+        elif pd.api.types.is_numeric_dtype(df['override_rate']):
+             pass # 已经是数字，很好
+        else:
+             logging.error(f"[探针] 失败：'override_rate' 列既不是对象也不是数字，无法转换。类型: {df['override_rate'].dtype}")
+             return None, None
+        df['defect_desc'] = df['defect_desc'].astype(str).str.strip()
+        logging.info(f"[探针] 速率列和 Desc 列已清洗。")
+
+        # --- 探针 8: 检查空数据 (dropna 后) ---
+        original_row_count = len(df)
+        df.dropna(subset=expected_cols, inplace=True)
+        if df.empty:
+            logging.error(f"[探针] 失败：清洗和 dropna 后无有效数据（原始行数: {original_row_count}）。请检查 Excel 内容是否完整。")
+            return None, None
+        logging.info(f"[探针] 清洗后剩余 {len(df)} 条有效数据。")
+
+        # --- 探针 9: 预计算 Lot 平均值 ---
+        lot_override_df = df.groupby(['lot_id', 'defect_desc'])['override_rate'].mean().reset_index()
+        lot_override_df.rename(columns={'override_rate': 'override_rate_avg'}, inplace=True)
+        lot_override_df['override_rate_avg'] = lot_override_df['override_rate_avg'] * 0.5
+        logging.info(f"[探针] 成功预计算 {len(lot_override_df)} 条 Lot 平均覆盖记录。")
+
+        # --- 成功返回 ---
+        return df[expected_cols], lot_override_df[['lot_id', 'defect_desc', 'override_rate_avg']]
+
+    except ValueError as ve: # 捕获 pd.read_excel 的 Sheet 页未找到错误
+         if f"Worksheet named '{sheet_name}' not found" in str(ve):
+              logging.error(f"[探针] 失败：在文件 '{file_path}' 中找不到名为 '{sheet_name}' 的 Sheet 页。")
+         else:
+              logging.error(f"[探针] 加载或处理覆盖文件时发生 ValueError: {ve}", exc_info=True)
+         return None, None
     except Exception as e:
-        return {}
+        logging.error(f"[探针] 加载或处理覆盖文件时发生未知错误: {e}", exc_info=True)
+        return None, None
 
 @staticmethod
 def _override_rates(
     simulated_code_details_dict: Dict[str, pd.DataFrame],
     override_data_df: pd.DataFrame | None,
-    entity_id_col: str
+    entity_id_col: str,
+    desc_to_group_map: dict # <--- 重新需要这个映射
 ) -> Dict[str, pd.DataFrame]:
     """
-    [核心函数 V1.3 - 修正返回逻辑] 执行覆盖 (仅替换)。
+    [核心函数 V1.4 - 遍历覆盖数据] 使用外部数据覆盖模拟的不良率和不良数。
+    遍历覆盖文件中的每一行，定位并修改目标 DataFrame。
     """
     if override_data_df is None or override_data_df.empty:
+        logging.info(f"无覆盖数据提供 ({entity_id_col} 级别)，跳过覆盖步骤。")
         return simulated_code_details_dict
+
     rate_col_name = 'override_rate' if entity_id_col == 'sheet_id' else 'override_rate_avg'
-    if rate_col_name not in override_data_df.columns:
-            return simulated_code_details_dict
-    final_results_dict = simulated_code_details_dict.copy()
+    if rate_col_name not in override_data_df.columns or \
+       entity_id_col not in override_data_df.columns or \
+       'defect_desc' not in override_data_df.columns:
+         logging.error(f"覆盖数据 DataFrame ({entity_id_col}) 缺少必需列 ('{entity_id_col}', 'defect_desc', '{rate_col_name}')，无法执行覆盖。")
+         return simulated_code_details_dict # 返回原始模拟结果
+
+    logging.info(f"开始使用外部数据覆盖 {entity_id_col} 级别的不良率 (遍历覆盖数据)...")
+    # --- [核心修改] 创建副本以进行修改 ---
+    final_results_dict = {group: df.copy() for group, df in simulated_code_details_dict.items() if df is not None}
     total_overridden_count = 0
-    for group, df_sim in final_results_dict.items():
-        if df_sim is None or df_sim.empty: continue
+    processed_indices = set() # 记录处理过的 override 行索引，避免重复计数
+
+    # --- [核心修改] 遍历覆盖 DataFrame 的每一行 ---
+    for index, override_row in override_data_df.iterrows():
+        target_desc = override_row['defect_desc']
+        target_entity_id = override_row[entity_id_col]
+        override_rate = override_row[rate_col_name]
+
+        # 1. 查找目标 Group
+        target_group = desc_to_group_map.get(target_desc)
+        if not target_group:
+            logging.debug(f"跳过覆盖：无法找到 Code '{target_desc}' 对应的 Group。")
+            continue
+
+        # 2. 查找目标 Group 的 DataFrame
+        target_df = final_results_dict.get(target_group)
+        if target_df is None or target_df.empty:
+            logging.debug(f"跳过覆盖：在模拟结果中找不到 Group '{target_group}' 或其 DataFrame 为空。")
+            continue
+
+        # 3. 在目标 DataFrame 中查找匹配行
+        #    确保比较的类型一致 (例如 ID 列都是字符串)
         try:
-            df_merged = pd.merge(
-                df_sim, override_data_df[[entity_id_col, 'defect_desc', rate_col_name]],
-                on=[entity_id_col, 'defect_desc'], how='left', indicator=True
-            )
-            override_mask = df_merged['_merge'] == 'both'
-            current_overridden_count = override_mask.sum()
-            if current_overridden_count > 0:
-                total_overridden_count += current_overridden_count
-                df_merged.loc[override_mask, 'defect_rate'] = df_merged.loc[override_mask, rate_col_name]
-                if 'total_panels' in df_merged.columns:
-                    df_merged.loc[override_mask, 'defect_panel_count'] = np.maximum(0, np.round(
-                        df_merged.loc[override_mask, 'defect_rate'] * df_merged.loc[override_mask, 'total_panels']
-                    )).astype(int)
-            cols_to_drop = ['_merge', rate_col_name]
-            df_processed = df_merged.drop(columns=cols_to_drop, errors='ignore')
-            final_results_dict[group] = df_processed
-        except Exception as group_error:
-                final_results_dict[group] = df_sim # 保留原始
+            match_mask = (target_df[entity_id_col].astype(str) == str(target_entity_id)) & \
+                         (target_df['defect_desc'] == target_desc)
+        except KeyError:
+             logging.warning(f"跳过覆盖：尝试在 Group '{target_group}' DataFrame 中匹配时缺少列。列: {target_df.columns.to_list()}")
+             continue
+
+        # 4. 如果找到匹配行，则应用覆盖
+        matched_indices = target_df.index[match_mask]
+        if not matched_indices.empty:
+            # 更新 defect_rate
+            target_df.loc[matched_indices, 'defect_rate'] = override_rate
+
+            # 重新计算 defect_panel_count
+            if 'total_panels' in target_df.columns:
+                # 使用 .loc 获取匹配行的 total_panels (可能有多行匹配，虽然理论上不应)
+                panels = target_df.loc[matched_indices, 'total_panels']
+                new_counts = np.maximum(0, np.round(override_rate * panels)).astype(int)
+                target_df.loc[matched_indices, 'defect_panel_count'] = new_counts
+                # 记录成功覆盖的行数 (基于 override 文件的索引)
+                if index not in processed_indices:
+                     total_overridden_count += len(matched_indices) # 或 +=1 如果确定 override 文件无重复
+                     processed_indices.add(index)
+
+            else:
+                logging.warning(f"Group '{target_group}' 的模拟数据缺少 'total_panels'，无法为覆盖的记录重新计算不良数 (ID: {target_entity_id}, Code: {target_desc})。")
+
+    # --- 零匹配检查 (保持不变) ---
     if total_overridden_count == 0 and not override_data_df.empty:
-        error_message = f"数据覆盖失败 ({entity_id_col} 级别): ..."
+        error_message = f"数据覆盖失败 ({entity_id_col} 级别): 覆盖文件中的记录未能与任何处理中的数据匹配成功。程序已中断。请检查 Excel 文件中的 '{entity_id_col}' 和 'defect_desc' 是否与程序数据完全一致。"
         logging.error(error_message)
         raise ValueError(error_message)
+
     logging.info(f"不良率覆盖完成，共覆盖 {total_overridden_count} 条记录。")
     return final_results_dict
+
+@staticmethod
+def _get_desc_to_group_map(panel_details_df: pd.DataFrame) -> dict:
+    """
+    [辅助函数 V1.0] 从 Panel 数据构建 defect_desc 到 defect_group 的映射字典。
+    """
+    # ... (代码与之前 V1.0 版本一致) ...
+    if panel_details_df is None or panel_details_df.empty or \
+       'defect_desc' not in panel_details_df.columns or \
+       'defect_group' not in panel_details_df.columns:
+        logging.warning("无法构建 Desc -> Group 映射，Panel 数据无效或缺少列。")
+        return {}
+    try:
+        mapping_df = panel_details_df[['defect_desc', 'defect_group']].dropna().drop_duplicates(subset=['defect_desc'])
+        desc_to_group = mapping_df.set_index('defect_desc')['defect_group'].to_dict()
+        logging.info(f"成功构建了 {len(desc_to_group)} 条 Desc -> Group 映射。")
+        return desc_to_group
+    except Exception as e:
+        logging.error(f"构建 Desc -> Group 映射时出错: {e}", exc_info=True)
+        return {}
 
 # --- 重聚合 ---
 @staticmethod

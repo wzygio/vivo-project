@@ -25,7 +25,7 @@ if str(SRC_ROOT) not in sys.path:
 # --- 其他常用路径常量 (保持不变) ---
 LOG_DIR = PROJECT_ROOT / "logs"
 DATA_DIR = PROJECT_ROOT / "data"
-RESOURCE_DIR = PROJECT_ROOT / "resource"
+RESOURCE_DIR = PROJECT_ROOT / "resources"
 CONFIG_FILE = PROJECT_ROOT / "config" / "config.yaml"
 ENV_FILE = PROJECT_ROOT / ".env" # <--- 定义 .env 文件路径
 

@@ -116,7 +116,7 @@ def parse_panel_id_to_coords(panel_id: str) -> tuple | None:
     col_char = col_code[0]
     col_map_index = ord(col_char) - ord('A')
     row_index = row_map.get(row_code)
-    if row_index is not None and 0 <= col_map_index < 21: # 确保使用21列
+    if row_index is not None and 0 <= col_map_index < 19: # 确保使用21列
         return (row_index, col_map_index)
     return None
 
@@ -128,9 +128,9 @@ def create_mapping_heatmap(matrix_df, title, global_max_value):
         zmin=0, zmax=max(1, global_max_value)
     )
     row_labels = ['1A', '1B', '1C', '1D', '1E', '2A', '2B', '2C', '2D', '2E']
-    col_labels = [f"{chr(ord('A') + i)}0" for i in range(21)] # 确保使用21列
+    col_labels = [f"{chr(ord('A') + i)}0" for i in range(19)] # 确保使用21列
     fig.update_layout(
-        xaxis=dict(tickmode='array', tickvals=list(range(21)), ticktext=col_labels),
+        xaxis=dict(tickmode='array', tickvals=list(range(19)), ticktext=col_labels),
         yaxis=dict(tickmode='array', tickvals=list(range(10)), ticktext=row_labels),
         xaxis_side='top', height=450
     )
@@ -145,7 +145,7 @@ if mapping_data_source is not None and not mapping_data_source.empty:
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="mapping_focus",
         filter_by='occurrence',          # <--- 明确指定按 count 筛选
-        count_threshold=10           # <--- 这个阈值现在会作用于 Panel 出现次数
+        count_threshold=50           # <--- 这个阈值现在会作用于 Panel 出现次数
     )
     
     if selected_code_info_mapping.get("code"):
@@ -169,7 +169,7 @@ if mapping_data_source is not None and not mapping_data_source.empty:
             df_batch_coords[['row', 'col']] = df_batch_coords[['row', 'col']].astype(int)
             
             heatmap_matrix = pd.pivot_table(df_batch_coords, values='panel_id', index='row', columns='col', aggfunc='count', fill_value=0)
-            heatmap_matrix = heatmap_matrix.reindex(index=range(10), columns=range(21), fill_value=0) # 21列
+            heatmap_matrix = heatmap_matrix.reindex(index=range(10), columns=range(19), fill_value=0) # 21列
             
             batch_index = 'oldest'
             if i == len(sorted_batches_list) - 1: batch_index = 'latest'
