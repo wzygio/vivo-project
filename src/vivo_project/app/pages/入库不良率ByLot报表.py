@@ -161,7 +161,7 @@ if all_data:
             source_data=all_codes_df,
             target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="lot_focus_table", # 使用唯一的key
-            rate_threshold=0.0002 # 沿用我们之前设置的阈值
+            rate_threshold=0.0005 # 沿用我们之前设置的阈值
         )
 
         # 3. 根据组件的选择结果进行后续操作

@@ -10,7 +10,7 @@ def create_code_selection_ui(
     target_defect_groups: list,
     key_prefix: str,
     filter_by: str = 'rate',      # <--- [新增] 明确筛选模式 ('rate' 或 'count')
-    rate_threshold: float = 0.001,
+    rate_threshold: float = 0.0005,
     count_threshold: int = 10
 ) -> dict:
     """
@@ -39,28 +39,31 @@ def create_code_selection_ui(
             st.error(f"UI组件错误(key={key_prefix})：传入的数据源缺少必需的列 ('defect_group' or 'defect_desc')。")
             processed_df = None # 标记为无效
 
-        # --- [核心修改] 使用 filter_by 参数决定筛选逻辑 ---
+        # --- [核心修改] 实现三种筛选模式 ---
         elif filter_by == 'rate':
             if 'defect_rate' in processed_df.columns:
                 logging.info(f"CodeSelection ({key_prefix}): 按平均不良率 > {rate_threshold:.4f} 筛选")
                 metrics = processed_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].mean()
                 eligible_series = metrics[metrics > rate_threshold]
             else:
-                logging.warning(f"CodeSelection ({key_prefix}): 请求按 'rate' 筛选，但缺少 'defect_rate' 列。将不进行筛选或返回空列表。")
-                # eligible_series 保持为空
+                logging.warning(f"CodeSelection ({key_prefix}): 请求按 'rate' 筛选，但缺少 'defect_rate' 列。无 Code 可选。")
 
-        elif filter_by == 'count':
+        elif filter_by == 'panel_count':
             if 'defect_panel_count' in processed_df.columns:
                 logging.info(f"CodeSelection ({key_prefix}): 按累计不良 Panel 数 > {count_threshold} 筛选")
-                # --- [核心修改] 使用 sum('defect_panel_count') ---
                 metrics = processed_df.groupby(['defect_group', 'defect_desc'])['defect_panel_count'].sum()
                 eligible_series = metrics[metrics > count_threshold]
             else:
-                logging.warning(f"CodeSelection ({key_prefix}): 请求按 'count' 筛选，但缺少 'defect_panel_count' 列。将不进行筛选或返回空列表。")
-                # eligible_series 保持为空
+                logging.warning(f"CodeSelection ({key_prefix}): 请求按 'panel_count' 筛选，但缺少 'defect_panel_count' 列。无 Code 可选。")
+
+        elif filter_by == 'occurrence':
+            logging.info(f"CodeSelection ({key_prefix}): 按出现次数 > {count_threshold} 筛选")
+            # --- 使用 .size() ---
+            metrics = processed_df.groupby(['defect_group', 'defect_desc']).size()
+            eligible_series = metrics[metrics > count_threshold]
+
         else:
-             logging.error(f"CodeSelection ({key_prefix}): 无效的 filter_by 参数 '{filter_by}'。应为 'rate' 或 'count'。")
-             # eligible_series 保持为空
+             logging.error(f"CodeSelection ({key_prefix}): 无效的 filter_by 参数 '{filter_by}'。应为 'rate', 'panel_count' 或 'occurrence'。")
 
 
         # --- 生成选项列表 (基于筛选结果) ---

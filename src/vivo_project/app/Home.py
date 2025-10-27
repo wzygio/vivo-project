@@ -23,9 +23,7 @@ st.set_page_config(
 )
 
 # --- 1. 欢迎与简介 ---
-st.title(f"{icons.get('home', '🏠')} 天柱不良分析平台") # 从配置调用图标
-st.markdown("本平台旨在提供一个自动化的数据分析与可视化工具，帮助工艺工程师快速定位和分析不良问题。")
-
+st.title(f"天柱不良分析平台") # 从配置调用图标
 
 # --- 2. 关键指标速览 (KPI Snapshot) ---
 st.header(f"{icons.get('chart_up', '📈')} 关键指标速览 (最近60天)") # 从配置调用图标
@@ -46,39 +44,23 @@ with st.container(border=True):
     st.page_link(
         "pages/入库不良率ByLot报表.py", # 假设你的文件名是这个
         label=f"{icons.get('arrow_right', '➡️')} 入库不良率ByLot报表",
-        icon=icons.get('report', '📋') # 使用不同的图标
     )
 
 with st.container(border=True):
     st.page_link(
         "pages/入库不良率BySheet报表.py", # 假设你的文件名是这个
         label=f"{icons.get('arrow_right', '➡️')} 入库不良率BySheet报表",
-        icon=icons.get('datasheet', '📄') # 使用不同的图标
     )
 
 with st.container(border=True):
     st.page_link(
         "pages/入库不良率月周天趋势图.py", # 假设你的文件名是这个
         label=f"{icons.get('arrow_right', '➡️')} 入库不良率月周天趋势图",
-        icon=icons.get('chart_up', '📈') # 使用不同的图标
     )
 
 with st.container(border=True):
     st.page_link(
         "pages/入库不良率集中性分析图.py", # 假设你的文件名是这个
         label=f"{icons.get('arrow_right', '➡️')} 入库不良率集中性分析图",
-        icon=icons.get('chart_up', '📈') # 使用不同的图标
     )
 
-# --- 4. 辅助信息 (侧边栏) ---
-st.sidebar.divider()
-st.sidebar.info(
-    f"""
-    **{icons.get('info', 'ℹ️')} 项目说明**
-    
-    本应用用于查询指定产品的入库不良率。
-    - **数据源**: 生产数据库
-    - **缓存**: {CONFIG['application']['cache_ttl_hours']}小时更新
-    - **技术支持**: [你的名字/部门]
-    """
-)

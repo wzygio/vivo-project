@@ -37,9 +37,9 @@ mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 # ==============================================================================
 # [颜色和顺序] 定义全局颜色和堆叠顺序
 COLOR_MAP = {
-    'Array_Line': '#1f77b4',  # Plotly默认的蓝色
-    'OLED_Mura': '#d62728',   # Plotly默认的红色
-    'Array_Pixel': '#aec7e8'   # Plotly默认的浅蓝色
+    'Array_Line': "#1930ff",  # Plotly默认的蓝色
+    'OLED_Mura': "#ff2828",   # Plotly默认的红色
+    'Array_Pixel': "#6fb9ff"   # Plotly默认的浅蓝色
 }
 STACKING_ORDER = CONFIG['processing']['target_defect_groups']
 CATEGORY_ORDERS_MAP = {"defect_group": STACKING_ORDER}
@@ -160,8 +160,9 @@ if mwd_group_data is not None:
         best_month_rate = monthly_total_rates.min()
         if best_month_rate > 0:
             warning_line_value = best_month_rate * 1.1
-            st.info(f"警戒线已生成：基于本期最佳月度总不良率 ({best_month_rate:.2%}) 计算得出，目标值为 {warning_line_value:.2%}")
+        
 
+    warning_line_value = None
     col1, col2, col3 = st.columns(3)
     with col1:
         fig_m = create_and_update_chart(df_monthly, "月度趋势", False, True, y_axis_range, COLOR_MAP, CATEGORY_ORDERS_MAP, warning_line_value)
@@ -216,7 +217,7 @@ if mwd_code_data:
         source_data=source_df_for_selector,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="trend_focus",
-        rate_threshold=0.0002
+        rate_threshold=0.0005
     )
 
     if selected_code_info_trend.get("code"):
@@ -240,6 +241,7 @@ if mwd_code_data:
             if best_month_rate > 0:
                 warning_line_value = best_month_rate * 1.1
 
+        warning_line_value = None
         st.markdown(f"#### **{code_desc}月周天趋势图**")
         chart_col1, chart_col2, chart_col3 = st.columns(3)
         with chart_col1:

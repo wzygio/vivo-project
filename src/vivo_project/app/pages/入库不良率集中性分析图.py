@@ -52,7 +52,7 @@ if code_details_dict:
         source_data=all_codes_df,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="lot_focus_table", # 使用唯一的key
-        rate_threshold=0.0002
+        rate_threshold=0.0005
     )
 
     # 4. 根据组件的选择结果进行后续操作
@@ -144,7 +144,8 @@ if mapping_data_source is not None and not mapping_data_source.empty:
         source_data=mapping_data_source,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="mapping_focus",
-        count_threshold=50
+        filter_by='occurrence',          # <--- 明确指定按 count 筛选
+        count_threshold=50           # <--- 这个阈值现在会作用于 Panel 出现次数
     )
     
     if selected_code_info_mapping.get("code"):

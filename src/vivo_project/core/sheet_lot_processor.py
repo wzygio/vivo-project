@@ -221,7 +221,6 @@ def calculate_lot_defect_rates(
                 logging.warning("Lot 级不良率模拟失败或返回无效格式，将尝试在原始数据上应用覆盖。")
                 simulated_lot_code_details = raw_lot_results['code_level_details']
 
-
         # --- 步骤 5: 应用 Lot 级覆盖逻辑 ---
         logging.info("步骤5: 应用 Lot 级不良率覆盖...")
         _, override_lot_avg_df = _load_override_excel(
@@ -233,7 +232,6 @@ def calculate_lot_defect_rates(
                 override_data_df=override_lot_avg_df, # <-- 使用 Lot 平均覆盖数据
                 entity_id_col='lot_id'
         )
-
 
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
@@ -258,7 +256,7 @@ def calculate_lot_defect_rates(
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Lot 级不良率截断...")
         group_level_thresholds = {'upper': 0.02, 'lower': 0.005}
-        code_level_thresholds = {'upper': 0.01, 'lower': 0.001}
+        code_level_thresholds = {'upper': 0.01, 'lower': 0.003}
         final_results = _apply_defect_capping(
             overridden_lot_results,
             group_level_thresholds,

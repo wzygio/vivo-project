@@ -86,7 +86,7 @@ processing:
       target_code: '大面积亮点'       # <--- 不同的Code
       target_batch_index: 'oldest'    # <--- 不同的批次
       mode: 'additive'          # <--- 不同的模式
-      hotspot_adder: 3
+      hotspot_adder: 5
       normal_multiplier_in_add_mode: 0.8
       hotspot_rules:
         - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
@@ -95,7 +95,7 @@ processing:
       target_code: 'B暗点'       # <--- 不同的Code
       target_batch_index: 'oldest'    # <--- 不同的批次
       mode: 'additive'          # <--- 不同的模式
-      hotspot_adder: 3
+      hotspot_adder: 5
       normal_multiplier_in_add_mode: 0.8
       hotspot_rules:
         - { type: 'row', value: ['2E'] } # 示例：高亮第一列和最后一列
@@ -150,17 +150,17 @@ logging:
 # UI界面相关的配置
 ui:
   icons:
-  home: "🏠"
-  dashboard: "📊"
-  chart_up: "📈"
-  chart_down: "📉"
-  report: "📋"
-  datasheet: "📄"
-  arrow_right: "➡️"
-  rocket: "🚀"
-  refresh: "🔄"
-  settings: "⚙️"
-  success: "✅"
-  error: "❌"
-  warning: "⚠️"
-  info: "ℹ️"
+    home: "🏠"
+    dashboard: "📊"
+    chart_up: "📈"
+    chart_down: "📉"
+    report: "📋"
+    datasheet: "📄"
+    arrow_right: "➡️"
+    rocket: "🚀"
+    refresh: "🔄"
+    settings: "⚙️"
+    success: "✅"
+    error: "❌"
+    warning: "⚠️"
+    info: "ℹ️"

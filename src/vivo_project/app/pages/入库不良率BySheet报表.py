@@ -178,7 +178,7 @@ if all_data:
             source_data=df_in_scope,
             target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="sheet_focus",  # 唯一的key
-            count_threshold=50         # 按数量筛选
+            rate_threshold=0.0005 # 沿用我们之前设置的阈值
         )
 
         # 4. 根据组件的选择结果进行后续操作

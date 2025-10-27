@@ -20,7 +20,7 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         # span值越小，当天数据的权重越高。可以把它想象成一个“大概的”窗口大小。
         EMA_SPAN = 7
         SCALING_FACTOR = 0.7
-        MIN_PANEL_COUNT_FOR_TODAY = 1000
+        MIN_PANEL_COUNT_FOR_TODAY = 5000
 
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
@@ -92,9 +92,9 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
     logging.info("开始聚合Code级月、周、天数据 (V2.2 - 最终稳定版)...")
     if panel_details_df.empty: return None
     try:
-        EMA_SPAN = 7
+        EMA_SPAN = 3
         SCALING_FACTOR = 0.7
-        MIN_PANEL_COUNT_FOR_TODAY = 10000
+        MIN_PANEL_COUNT_FOR_TODAY = 5000
         
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
@@ -172,7 +172,6 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         logging.error(f"在聚合Code级趋势数据时发生错误: {e}", exc_info=True)
         return None
 
-
 @staticmethod
 def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defects: list) -> pd.DataFrame | None:
     """
@@ -183,7 +182,7 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defec
     if panel_details_df.empty: return None
     try:
         MIN_PANEL_COUNT_FOR_TODAY = 10000
-        EMA_SPAN = 1
+        EMA_SPAN = 7
         SCALING_FACTOR = 0.7
         
         # 1. 初始数据聚合
