@@ -33,12 +33,12 @@ mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 lot_data = WorkflowHandler.run_lot_defect_rate_workflow()
 
 # ==============================================================================
-#                      模块3: 按Code查询Lot集中性 (带排序功能图表)
+#                      按Code查询Lot集中性 (带排序功能图表)
 # ==============================================================================
 st.header("🔬 ByCode查询Lot集中性")
 
 # 确认我们有正确的数据源
-code_details_dict = lot_data.get("lot_code_level_details")
+code_details_dict = lot_data.get("code_level_details")
 
 if code_details_dict:
     # 1. 准备数据源
@@ -52,7 +52,7 @@ if code_details_dict:
         source_data=all_codes_df,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="lot_focus_table", # 使用唯一的key
-        rate_threshold=0.0005
+        rate_threshold=0.0002
     )
 
     # 4. 根据组件的选择结果进行后续操作
@@ -144,7 +144,7 @@ if mapping_data_source is not None and not mapping_data_source.empty:
         source_data=mapping_data_source,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="mapping_focus",
-        count_threshold=10
+        count_threshold=50
     )
     
     if selected_code_info_mapping.get("code"):

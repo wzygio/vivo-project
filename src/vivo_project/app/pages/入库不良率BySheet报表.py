@@ -1,4 +1,4 @@
-# src/vivo_project/app/pages/1_📈_Sheet不良率总览.py
+# src/vivo_project/app/pages/入库不良率BySheet报表.py
 import streamlit as st
 import pandas as pd
 import sys
@@ -15,6 +15,7 @@ AppSetup.initialize_app()
 from vivo_project.config import CONFIG
 from vivo_project.services.workflow_handler import WorkflowHandler
 
+
 # --- 2. UI 界面布局 ---
 st.set_page_config(page_title="入库不良率BySheet报表", layout="wide")
 st.title("📈 入库不良率BySheet报表")
@@ -24,11 +25,13 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 加载数据 ---
-# (数据已在WorkflowHandler层被缓存)
 all_data = WorkflowHandler.run_sheet_defect_rate_workflow()
 
+# ==============================================================================
+#                      --- 模块1: Group不良率明细表 (By Sheet) ---
+# ==============================================================================
 if all_data:
-    # --- 模块1: Group不良率明细表 (By Sheet) ---
+    
     group_summary_df_full = all_data.get("group_level_summary_for_table")
     if group_summary_df_full is None or group_summary_df_full.empty:
         st.error("未能加载Group级别数据，请检查后台。")
@@ -95,7 +98,10 @@ if all_data:
         )
     st.divider()
 
-    # --- 模块2: 按Sheet ID查询Code级别详情 ---
+# ==============================================================================
+#                      --- 模块2: 按Sheet ID查询Code级别详情 ---
+# ==============================================================================
+    
     st.markdown("### ✍️ 按Sheet ID查询Code不良率")
 
     sheet_ids = final_filtered_df['sheet_id'].unique() # <--- 关键：只从已筛选的DF中获取Sheet ID
@@ -152,7 +158,9 @@ if all_data:
 
     st.divider()
 
-    # --- 模块3: 按Code查询Sheet集中性 (Top 20) ---
+# ==============================================================================
+#                      --- 模块3: 按Code查询Sheet集中性 (Top 20) ---
+# ==============================================================================
     st.header("🔬 ByCode查询Sheet集中性")
     
     code_details_dict = all_data.get("code_level_details")
@@ -170,7 +178,7 @@ if all_data:
             source_data=df_in_scope,
             target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="sheet_focus",  # 唯一的key
-            count_threshold=20         # 按数量筛选
+            count_threshold=50         # 按数量筛选
         )
 
         # 4. 根据组件的选择结果进行后续操作

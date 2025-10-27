@@ -1,4 +1,4 @@
-# src/vivo_project/app/pages/3_📋_入库不良率ByLot报表.py
+# src/vivo_project/app/pages/入库不良率ByLot报表.py
 
 import streamlit as st
 import pandas as pd
@@ -27,8 +27,11 @@ if st.button("🔄 刷新数据"):
 # (数据已在WorkflowHandler层被缓存)
 all_data = WorkflowHandler.run_lot_defect_rate_workflow()
 
+
 if all_data:
-    # --- 模块1: Group不良率明细表 (By Lot) ---
+# ==============================================================================
+#                      --- 模块1: Group不良率明细表 (By Lot) ---
+# ==============================================================================
     group_summary_df_full = all_data.get("group_level_summary_for_table")
     if group_summary_df_full is None or group_summary_df_full.empty:
         st.error("未能加载Lot级别数据，请检查后台。")
@@ -84,7 +87,9 @@ if all_data:
         )
     st.divider()
 
-    # --- 模块2: 按Lot ID查询Code级别详情 ---
+# ==============================================================================
+#                      --- 模块2: 按Lot ID查询Code级别详情 ---
+# ==============================================================================
     st.markdown("### ✍️ 按Lot ID查询Code级别详情")
 
     lot_ids = filtered_group_summary_df['lot_id'].unique()
@@ -101,7 +106,7 @@ if all_data:
             if selected_lot not in lot_ids:
                 st.warning(f"输入的Lot ID '{selected_lot}' 不存在于当前数据范围内。")
             else:
-                code_details_dict = all_data.get("lot_code_level_details")
+                code_details_dict = all_data.get("code_level_details")
                 if code_details_dict is None:
                     st.error("未能加载Code级别明细数据。")
                     st.stop()
@@ -140,11 +145,13 @@ if all_data:
         st.info("在当前日期范围内无Lot可供查询。")
 
     st.divider()
-    
-    # --- 模块3: 按Code查询Lot集中性 (Top 20) ---
+
+# ==============================================================================
+#                      --- 模块3: 按Code查询Lot集中性 (Top 20) ---
+# ==============================================================================
     st.header("🔬 ByCode查询Lot集中性")
     
-    code_details_dict = all_data.get("lot_code_level_details")
+    code_details_dict = all_data.get("code_level_details")
     if code_details_dict:
         # 1. 准备数据源
         all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
@@ -154,7 +161,7 @@ if all_data:
             source_data=all_codes_df,
             target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="lot_focus_table", # 使用唯一的key
-            rate_threshold=0.0005 # 沿用我们之前设置的阈值
+            rate_threshold=0.0002 # 沿用我们之前设置的阈值
         )
 
         # 3. 根据组件的选择结果进行后续操作

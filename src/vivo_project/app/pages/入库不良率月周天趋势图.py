@@ -216,7 +216,7 @@ if mwd_code_data:
         source_data=source_df_for_selector,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="trend_focus",
-        rate_threshold=0.001
+        rate_threshold=0.0002
     )
 
     if selected_code_info_trend.get("code"):
