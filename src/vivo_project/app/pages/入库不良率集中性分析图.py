@@ -32,9 +32,13 @@ current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
 mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 lot_data = WorkflowHandler.run_lot_defect_rate_workflow()
 
-if not all ([mwd_group_data, mwd_code_data, current_month_trend_data, mapping_data_source, lot_data]):
+def is_valid_data(data):
+    """检查数据是否有效（不为None，且如果是DataFrame则不为空）"""
+    return data is not None and (not isinstance(data, pd.DataFrame) or not data.empty)
+if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, current_month_trend_data, mapping_data_source, lot_data])):
     st.info("数据已过期，请点击\"🔄 刷新数据\"按钮重新加载")
     sys.exit(1)
+
 
 # ==============================================================================
 #                      按Code查询Lot集中性 (带排序功能图表)
