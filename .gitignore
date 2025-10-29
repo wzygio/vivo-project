@@ -18,8 +18,7 @@ __pycache__/
 .env
 
 # 临时数据
-data/temp/
-data
+data/
 
 # 文件信息
 docs/
