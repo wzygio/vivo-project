@@ -55,7 +55,6 @@ def load_config(
             logging.warning(f"YAML 配置文件未找到: {config_path}")
     except Exception as e:
         logging.error(f"加载或解析 YAML 文件 {config_path} 时出错: {e}")
-        # 即使 YAML 加载失败，也继续尝试加载 .env
 
     try:
         if env_path.is_file():

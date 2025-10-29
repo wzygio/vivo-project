@@ -32,6 +32,10 @@ current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
 mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 lot_data = WorkflowHandler.run_lot_defect_rate_workflow()
 
+if not all ([mwd_group_data, mwd_code_data, current_month_trend_data, mapping_data_source, lot_data]):
+    st.info("数据已过期，请点击\"🔄 刷新数据\"按钮重新加载")
+    sys.exit(1)
+
 # ==============================================================================
 #                      按Code查询Lot集中性 (带排序功能图表)
 # ==============================================================================
@@ -52,7 +56,7 @@ if code_details_dict:
         source_data=all_codes_df,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="lot_focus_table", # 使用唯一的key
-        rate_threshold=0.0005
+        rate_threshold=0.0002
     )
 
     # 4. 根据组件的选择结果进行后续操作
@@ -107,7 +111,6 @@ else:
 # ==============================================================================
 #                      按Code查询Mapping集中性
 # ==============================================================================
-
 def parse_panel_id_to_coords(panel_id: str) -> tuple | None:
     """(已修正) Mapping图坐标解析 (21列)"""
     if not isinstance(panel_id, str) or len(panel_id) < 15: return None

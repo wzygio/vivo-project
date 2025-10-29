@@ -5,10 +5,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import sys
-from pathlib import Path
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
 # --- 1. 初始化与配置 ---
 from vivo_project.app.setup import AppSetup
@@ -217,7 +213,7 @@ if mwd_code_data:
         source_data=source_df_for_selector,
         target_defect_groups=CONFIG['processing']['target_defect_groups'],
         key_prefix="trend_focus",
-        rate_threshold=0.0005
+        rate_threshold=0.0001
     )
 
     if selected_code_info_trend.get("code"):

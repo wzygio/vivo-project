@@ -23,3 +23,6 @@ data
 
 # 文件信息
 docs/
+
+# 数据源
+resources/

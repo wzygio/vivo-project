@@ -9,7 +9,7 @@ from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import Utils # 假设 Utils.save_dict_to_excel 在这里
 
 # ==============================================================================
-#                      ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
+#              ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
 # ==============================================================================
 @staticmethod
 def calculate_sheet_defect_rates(
@@ -412,28 +412,27 @@ def _calculate_raw_rates(
 
         # b. 清理 code_numerators
         if code_numerators.columns.duplicated().any():
-                logging.warning(f"Code 计数 DataFrame (code_numerators) 包含重复列名，将尝试清理...")
-                code_numerators = code_numerators.loc[:, ~code_numerators.columns.duplicated()]
+            logging.warning(f"Code 计数 DataFrame (code_numerators) 包含重复列名，将尝试清理...")
+            code_numerators = code_numerators.loc[:, ~code_numerators.columns.duplicated()]
         # 确保 entity_id_col 存在
         if entity_id_col not in code_numerators.columns and not code_numerators.empty:
-                logging.error(f"清理重复列后，Code 计数 DataFrame 缺少 '{entity_id_col}' 列。")
-                all_codes_with_base = pd.DataFrame() # 创建空 DF 继续
+            logging.error(f"清理重复列后，Code 计数 DataFrame 缺少 '{entity_id_col}' 列。")
+            all_codes_with_base = pd.DataFrame() # 创建空 DF 继续
         else:
-                # c. 执行 Merge
-                all_codes_with_base = pd.DataFrame() # 初始化为空
-                if not code_numerators.empty and not base_info_subset_for_code.empty: # 确保两个 DF 都有内容
-                    if entity_id_col in code_numerators.columns and entity_id_col in base_info_subset_for_code.columns:
-                        all_codes_with_base = pd.merge(
-                            code_numerators,
-                            base_info_subset_for_code,
-                            on=entity_id_col,
-                            how='left'
-                        )
-                    else:
-                        logging.error(f"无法执行 Merge，因为 '{entity_id_col}' 列在输入 DataFrame 中缺失。")
-                elif code_numerators.empty:
-                    logging.warning(f"Code 计数 DataFrame 为空 ({entity_id_col})，Merge 结果将为空。")
-                # else: base_info_subset_for_code is empty (理论上不会发生，因为 base_info_df_filtered 非空)
+            # c. 执行 Merge
+            all_codes_with_base = pd.DataFrame() # 初始化为空
+            if not code_numerators.empty and not base_info_subset_for_code.empty: # 确保两个 DF 都有内容
+                if entity_id_col in code_numerators.columns and entity_id_col in base_info_subset_for_code.columns:
+                    all_codes_with_base = pd.merge(
+                        code_numerators,
+                        base_info_subset_for_code,
+                        on=entity_id_col,
+                        how='left'
+                    )
+                else:
+                    logging.error(f"无法执行 Merge，因为 '{entity_id_col}' 列在输入 DataFrame 中缺失。")
+            elif code_numerators.empty:
+                logging.warning(f"Code 计数 DataFrame 为空 ({entity_id_col})，Merge 结果将为空。")
 
         # d. 计算 Code 级不良率
         if all_codes_with_base.empty:
@@ -584,6 +583,7 @@ def _simulate_concentration(
             logging.warning(f"在 config.yaml 中未找到 '{fluctuation_key}'，将使用默认波动 {default_fluc}。")
             current_fluc = default_fluc
         logging.info(f"为 {entity_id_col} 应用波动幅度: {current_fluc}")
+        
         df_monthly = None
         if mwd_code_data and mwd_code_data.get('monthly') is not None:
                 df_monthly = mwd_code_data['monthly'].copy()
@@ -592,7 +592,8 @@ def _simulate_concentration(
                     df_monthly = None
                 else:
                     df_monthly['defect_rate'] = pd.to_numeric(df_monthly['defect_rate'], errors='coerce').fillna(0)
-        # else: logging.warning(...)
+        else: logging.warning("未找到月度趋势数据，无法进行动态基准模拟。")
+        
         sim_code_details = raw_results["code_level_details"].copy()
         seed = config.get('random_seed', 2025)
         rng = np.random.default_rng(seed)
@@ -603,7 +604,8 @@ def _simulate_concentration(
                         base_info_df = base_info_df.reset_index()
                     else:
                         base_info_df = None
-        # else: logging.error(...)
+        else: logging.error(f"未找到 {entity_id_col} 级汇总数据，无法进行动态基准模拟。")
+        
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
             processed_codes_list = []
@@ -668,7 +670,7 @@ def _add_monthly_base_rate_to_df(
             logging.error(f"为 {entity_id_col} / Code '{code_desc}' 匹配月度基准时出错: {merge_err}", exc_info=True)
             df_code_with_base['monthly_base_rate'] = 0.0
             df_code_with_base = df_code_with_base.drop(columns=['time_period'], errors='ignore')
-    # else: logging.warning(...)
+    else: logging.warning(f"未找到基准信息或月度数据，无法为 {entity_id_col} / Code '{code_desc}' 添加月度基准。")
     return df_code_with_base
 
 @staticmethod
