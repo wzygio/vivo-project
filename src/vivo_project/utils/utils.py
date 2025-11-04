@@ -21,8 +21,6 @@ class Utils:
         log_date_format = '%Y-%m-%d %H:%M:%S'
 
         root_logger = logging.getLogger()
-        # --- [可选但推荐] 设置日志级别应尽早 ---
-        #     防止在清除 handlers 之前记录了不需要的低级别日志
         root_logger.setLevel(logging.INFO) # 或 DEBUG
 
         # 清除旧处理器 (保持不变)

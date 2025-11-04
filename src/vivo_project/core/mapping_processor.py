@@ -23,7 +23,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
     if panel_details_df.empty: return pd.DataFrame()
     try:
         FIRST_REDUCTION_FACTOR = 0.7
-        SECOND_REDUCTION_FACTOR = 0.9
+        SECOND_REDUCTION_FACTOR = 0.8
         SEED = 42
 
         # --- 步骤1: 筛选有效批次和不良Panel (与之前版本一致) ---
@@ -71,7 +71,6 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         for batch_no in sorted_batches:
             # 从【已被修改过】的DF中提取当前批次
             df_current_batch = df_defective_panels_modified[df_defective_panels_modified['batch_no'] == batch_no]
-            # ... (后续的级联衰减for循环逻辑完全不变)
             processed_codes_in_batch = []
             for code_desc, df_code_group in df_current_batch.groupby('defect_desc'):
                 current_count = len(df_code_group)
@@ -217,7 +216,6 @@ def apply_hotspot_modification_to_matrix(
         for rule in hotspot_rules:
             hotspot_type = rule.get('type')
             hotspot_values = rule.get('value', [])
-            # ... (处理 'row', 'col', 'position' 的逻辑不变) ...
             if hotspot_type == 'row':
                  row_indices = [row_name_to_index.get(name) for name in hotspot_values if name in row_name_to_index]
                  if row_indices: hotspot_mask.iloc[row_indices, :] = True # type: ignore
