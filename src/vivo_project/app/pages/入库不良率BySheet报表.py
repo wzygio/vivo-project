@@ -102,7 +102,7 @@ if all_data:
 #                      --- 模块2: 按Sheet ID查询Code级别详情 ---
 # ==============================================================================
     
-    st.markdown("### ✍️ 按Sheet ID查询Code不良率")
+    st.markdown("### ✍️ By Sheet ID查询Code不良率")
 
     sheet_ids = final_filtered_df['sheet_id'].unique() # <--- 关键：只从已筛选的DF中获取Sheet ID
     

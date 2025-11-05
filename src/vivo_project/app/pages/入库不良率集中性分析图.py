@@ -19,7 +19,7 @@ from vivo_project.services.workflow_handler import WorkflowHandler
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(page_title="不良率趋势分析", layout="wide")
-st.title("📊 入库不良率趋势图")
+st.title("📊 入库不良率集中性分析图")
 
 if st.button("🔄 刷新数据"):
     st.cache_data.clear()
@@ -130,7 +130,7 @@ st.divider()
 # ==============================================================================
 #                      [新] Sheet 集中性查询 (按 Lot) - Group 堆叠图
 # ==============================================================================
-st.header("🔬 ByLot查询Sheet不良率")
+st.header("🔬 ByLot查询Sheet不良率分布")
 
 # --- 1. 检查 Sheet 级别数据 ---
 if sheet_data and sheet_data.get("group_level_summary_for_table") is not None:
@@ -284,7 +284,7 @@ def create_mapping_heatmap(matrix_df, title, global_max_value):
     fig.update_yaxes(autorange="reversed")
     return fig
 
-st.header("🗺️ 按Code查询Mapping集中性")
+st.header("🗺️ ByCode查询Mapping集中性")
 
 if mapping_data_source is not None and not mapping_data_source.empty:
     selected_code_info_mapping = create_code_selection_ui(
