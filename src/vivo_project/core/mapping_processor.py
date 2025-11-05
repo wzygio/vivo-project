@@ -40,18 +40,17 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         df_defective_panels = df_final_batches[df_final_batches['defect_desc'].notna()].copy() # 使用.copy()
         if df_defective_panels.empty: return pd.DataFrame()
 
-            # --- [核心修改] 将位置随机化逻辑移入循环内部 ---
+         # --- [核心修改] 将位置随机化逻辑移入循环内部 ---
         sorted_batches = sorted(latest_three_batch_strs)
         
         # 1. 创建一个列表，用于收集每个批次处理后的结果
         batches_after_pos_modification = []
         
-        # 2. 遍历批次，只对最新的一个进行位置修改
+        # 2. 遍历批次，对最新三个批次的Panel ID进行位置随机化
         for i, batch_no in enumerate(sorted_batches):
             df_current_batch = df_defective_panels[df_defective_panels['batch_no'] == batch_no].copy()
             
-            # 判断是否是最后一个（即最新的）批次
-            if i >= len(sorted_batches) - 2:
+            if i > 0:
                 df_current_batch['panel_id'] = df_current_batch.apply(
                     lambda row: _get_deterministically_modified_panel_id(row['panel_id'], row['batch_no']),
                     axis=1
