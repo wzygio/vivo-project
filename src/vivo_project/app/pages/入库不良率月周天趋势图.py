@@ -25,8 +25,6 @@ if st.button("🔄 刷新数据"):
 # --- 3. 数据加载 ---
 mwd_group_data = WorkflowHandler.run_mwd_trend_workflow()
 mwd_code_data = WorkflowHandler.run_code_level_mwd_trend_workflow()
-current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
-mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 
 # ==============================================================================
 #                      辅助函数

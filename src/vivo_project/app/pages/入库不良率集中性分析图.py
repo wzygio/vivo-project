@@ -128,7 +128,7 @@ else:
 st.divider()
 
 # ==============================================================================
-#                      [新] Sheet 集中性查询 (按 Lot) - Group 堆叠图
+#                      Sheet 集中性查询 (按 Lot) - Group 堆叠图
 # ==============================================================================
 st.header("🔬 ByLot查询Sheet不良率分布")
 
@@ -318,9 +318,11 @@ if mapping_data_source is not None and not mapping_data_source.empty:
             heatmap_matrix = pd.pivot_table(df_batch_coords, values='panel_id', index='row', columns='col', aggfunc='count', fill_value=0)
             heatmap_matrix = heatmap_matrix.reindex(index=range(10), columns=range(19), fill_value=0) # 21列
             
-            batch_index = 'oldest'
-            if i == len(sorted_batches_list) - 1: batch_index = 'latest'
-            elif i == len(sorted_batches_list) - 2: batch_index = 'second_latest'
+            batch_index = 'middle'
+            if i == 0: 
+                batch_index = 'oldest'
+            elif i == len(sorted_batches_list) - 1: 
+                batch_index = 'latest'
             
             modified_matrix = apply_hotspot_modification_to_matrix(
                 heatmap_matrix, batch_no, code, batch_index, script_config

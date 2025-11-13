@@ -22,6 +22,29 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         SCALING_FACTOR = 0.7
         MIN_PANEL_COUNT_FOR_TODAY = 5000
 
+        GROUP_EMA_SPANS = {
+            'OLED_Mura': 8,    # Mura类缺陷使用较大窗口
+            'Array_Pixel': 7,    # Pixel类缺陷使用较小窗口
+            'Array_Line': 7,     # Line类缺陷使用中等窗口
+            'default': 7         # 默认窗口大小
+        }
+        def get_group_ema_span(group):
+            return GROUP_EMA_SPANS.get(group, GROUP_EMA_SPANS['default'])
+
+        # 在GROUP_EMA_SPANS后添加GROUP_MONTHLY_VALUES
+        GROUP_MONTHLY_VALUES = {
+            'OLED_Mura': {
+                '2025-09': 0.0033,  
+                '2025-10': 0.0020,
+                '2025-11': 0.0008,
+            },
+        }
+        def get_group_monthly_value(group, time_period):
+            """获取指定Group在特定月份的值"""
+            if group in GROUP_MONTHLY_VALUES:
+                return GROUP_MONTHLY_VALUES[group].get(time_period)
+            return None
+
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
         today = pd.to_datetime(dt.now().date())
@@ -39,11 +62,20 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         
         for group in target_defects:
             if group in daily_summary.columns:
+                # # 先检查是否有指定值
+                # for date in daily_summary.index:
+                #     time_period = date.strftime('%Y-%m')
+                #     specified_value = get_group_monthly_value(group, time_period)
+                #     if specified_value is not None:
+                #         # 如果有指定值，直接设置该月的值
+                #         mask = (daily_summary.index.year == date.year) & (daily_summary.index.month == date.month) # type: ignore
+                #         daily_summary.loc[mask, group] = np.round(specified_value * daily_summary.loc[mask, 'total_panels']).astype(int) # type: ignore
+                #         continue
+                
+                # 对没有指定值的数据进行EMA处理
                 raw_rate = daily_summary[group] / daily_summary['total_panels']
-                
-                # --- [核心修改] 使用 .ewm() 替换 .rolling() ---
-                smoothed_rate = raw_rate.ewm(span=EMA_SPAN, adjust=True, min_periods=1).mean()
-                
+                ema_span = get_group_ema_span(group)
+                smoothed_rate = raw_rate.ewm(span=ema_span, adjust=True, min_periods=1).mean()
                 attenuated_rate = smoothed_rate * SCALING_FACTOR
                 daily_summary[group] = np.round(attenuated_rate * daily_summary['total_panels']).astype(int)
 
@@ -92,9 +124,27 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
     logging.info("开始聚合Code级月、周、天数据 (V2.2 - 最终稳定版)...")
     if panel_details_df.empty: return None
     try:
-        EMA_SPAN = 3
+        EMA_SPAN = 7
         SCALING_FACTOR = 0.7
         MIN_PANEL_COUNT_FOR_TODAY = 5000
+
+        CODE_MONTHLY_VALUES = {
+            '彩斑Mura': {
+                '2025-09': 0.0023,  
+                '2025-10': 0.0013,
+                '2025-11': 0.0006,
+            },
+            'G彩短条Mura': {
+                '2025-09': 0.0011,  
+                '2025-10': 0.0003,
+                '2025-11': 0.00003,
+            }
+        }
+        def get_monthly_value(code_desc, time_period):
+            """获取指定Code在特定月份的值"""
+            if code_desc in CODE_MONTHLY_VALUES:
+                return CODE_MONTHLY_VALUES[code_desc].get(time_period)
+            return None
         
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
@@ -127,7 +177,6 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         # --- 后续的柔化和聚合逻辑，与您提供的V2.0版本几乎完全一致 ---
         base_daily_df['defect_group'].fillna("NoDefect", inplace=True)
         base_daily_df['defect_desc'].fillna("NoDefect", inplace=True)
-
         base_daily_df['smoothed_rate'] = base_daily_df.groupby('defect_desc')['defect_rate'].transform(lambda x: x.ewm(span=EMA_SPAN, adjust=True, min_periods=1).mean())
         base_daily_df['attenuated_rate'] = base_daily_df['smoothed_rate'] * SCALING_FACTOR
         base_daily_df['defect_panel_count'] = np.round(base_daily_df['attenuated_rate'] * base_daily_df['total_panels']).astype(int)
@@ -143,6 +192,16 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
             monthly_agg = monthly_data_raw.groupby(['time_period', 'defect_group', 'defect_desc']).agg(
                 defect_panel_count=('defect_panel_count', 'sum'), total_panels=('total_panels', 'sum')
             ).reset_index()
+
+            # 对每个Code和月份检查是否有指定值
+            for idx, row in monthly_agg.iterrows():
+                code_desc = row['defect_desc']
+                time_period = row['time_period'].replace('月', '')  # 移除'月'字以匹配格式
+                specified_value = get_monthly_value(code_desc, time_period)
+                if specified_value is not None:
+                    # 如果有指定值，使用指定值计算defect_panel_count
+                    monthly_agg.at[idx, 'defect_panel_count'] = int(specified_value * row['total_panels'])
+
             monthly_agg['defect_rate'] = monthly_agg['defect_panel_count'] / monthly_agg['total_panels']
             results['monthly'] = monthly_agg[monthly_agg['defect_group'] != 'NoDefect']
 

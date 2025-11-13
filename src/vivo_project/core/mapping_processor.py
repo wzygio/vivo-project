@@ -23,7 +23,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
     if panel_details_df.empty: return pd.DataFrame()
     try:
         FIRST_REDUCTION_FACTOR = 0.7
-        SECOND_REDUCTION_FACTOR = 0.8
+        SECOND_REDUCTION_FACTOR = 0.85
         SEED = 42
 
         # --- 步骤1: 筛选有效批次和不良Panel (与之前版本一致) ---
@@ -50,11 +50,11 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         for i, batch_no in enumerate(sorted_batches):
             df_current_batch = df_defective_panels[df_defective_panels['batch_no'] == batch_no].copy()
             
-            if i > 0:
-                df_current_batch['panel_id'] = df_current_batch.apply(
-                    lambda row: _get_deterministically_modified_panel_id(row['panel_id'], row['batch_no']),
-                    axis=1
-                )
+            # if i > 0:
+            df_current_batch['panel_id'] = df_current_batch.apply(
+                lambda row: _get_deterministically_modified_panel_id(row['panel_id'], row['batch_no']),
+                axis=1
+            )
             
             batches_after_pos_modification.append(df_current_batch) 
         

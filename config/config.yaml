@@ -28,7 +28,6 @@ processing:
     'S向棱形彩色带状Mura': 0.05
 
   mapping_hotspot_script:
-    
     # 脚本 1: (你现有的规则)
     - enable: true
       target_code: '彩斑Mura'
