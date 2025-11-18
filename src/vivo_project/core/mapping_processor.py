@@ -23,7 +23,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
     if panel_details_df.empty: return pd.DataFrame()
     try:
         FIRST_REDUCTION_FACTOR = 0.7
-        SECOND_REDUCTION_FACTOR = 0.85
+        SECOND_REDUCTION_FACTOR = 0.9
         SEED = 42
 
         # --- 步骤1: 筛选有效批次和不良Panel (与之前版本一致) ---
@@ -34,13 +34,12 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         df_filtered_by_count = df[df['batch_no'].isin(valid_batches_by_count)]
 
         valid_datetimes = pd.to_datetime(df_filtered_by_count['batch_no'], format='%Y/%m/%d', errors='coerce').dropna().unique()
-        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:4]
+        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:3] # 取最新的3个有效批次
         latest_three_batch_strs = [pd.to_datetime(d).strftime('%Y/%m/%d') for d in latest_three_datetimes]
         df_final_batches = df_filtered_by_count[df_filtered_by_count['batch_no'].isin(latest_three_batch_strs)]
         df_defective_panels = df_final_batches[df_final_batches['defect_desc'].notna()].copy() # 使用.copy()
         if df_defective_panels.empty: return pd.DataFrame()
 
-         # --- [核心修改] 将位置随机化逻辑移入循环内部 ---
         sorted_batches = sorted(latest_three_batch_strs)
         
         # 1. 创建一个列表，用于收集每个批次处理后的结果
@@ -61,7 +60,6 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         # 3. 将可能被修改过的批次数据重新合并
         df_defective_panels_modified = pd.concat(batches_after_pos_modification)
 
-        # --- 后续的“级联衰减”逻辑，在【可能被修改过位置】的数据上执行 ---
         logging.info("应用“级联衰减”抽样算法...")
         max_allowed_counts = {}
         processed_dfs = []
@@ -188,7 +186,6 @@ def apply_hotspot_modification_to_matrix(
         logging.info(f"为批次 {batch_no} (Code: {code_desc}) 应用匹配的Mapping热点修饰脚本...")
 
         # --- [核心逻辑 2] 使用匹配到的脚本字典 (matched_script) 执行操作 ---
-
         # 1. 加载所有模式的参数 (从 matched_script 获取)
         mode = matched_script.get('mode', 'multiplicative')
         hotspot_rules = matched_script.get('hotspot_rules', [])

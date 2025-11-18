@@ -17,15 +17,35 @@ data_source:
 
 # 数据处理相关的参数
 processing:
+  array_input_time:
+    custom_times:
+      # 高发sheet_id：共计 5 个
+      L3MR58E5C08: '20250805'
+      L3MR58E5C03: '20250805' 
+      L3MR58E5C10: '20250805'
+      L3MR58E5C26: '20250805'
+      L3MR58E5C04: '20250805'
+
+      # 非高发sheet_id：共计 10 个
+      L3MR58E5C01: '20250805'
+      L3MR58E5C02: '20250805'
+      L3MR58E5C05: '20250805'
+      L3MR58E5C06: '20250805'
+      L3MR58E5C07: '20250805'
+      L3MR58E5C09: '20250805'
+      L3MR58E5C27: '20250805'
+      L3MR58E5C28: '20250805'
+      L3MR58E5C29: '20250805'
+      L3MR58E5C30: '20250805'
+
   target_defect_groups:
     - "Array_Line"
     - "Array_Pixel"
     - "OLED_Mura"
 
   defect_multipliers:
-    '彩斑Mura': 0.15
-    'G彩短条Mura': 0.15
-    'S向棱形彩色带状Mura': 0.05
+    '彩斑Mura': 0.4
+    'G彩短条Mura': 0.2
 
   mapping_hotspot_script:
     # 脚本 1: (你现有的规则)
@@ -45,57 +65,55 @@ processing:
             ] 
           }
 
-    
-
     - enable: true
-      target_code: 'S向单暗线'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'multiplicative'          # <--- 不同的模式
+      target_code: 'S向单暗线'       
+      target_batch_index: 'oldest'    
+      mode: 'multiplicative'          
       hotspot_multiplier: 1.3
       normal_multiplier: 0.7
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] }
+        - { type: 'col', value: ['A0', 'B0', 'S0'] } 
     
     - enable: true
-      target_code: 'PCD裂纹亮线'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: 'PCD裂纹亮线'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 3
       normal_multiplier_in_add_mode: 10
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] } 
+        - { type: 'col', value: ['A0', 'B0', 'S0'] } 
 
     - enable: true
-      target_code: 'G3亮点'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: 'G3亮点'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 10
       normal_multiplier_in_add_mode: 0.8
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'R0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] } 
+        - { type: 'col', value: ['A0', 'B0', 'R0'] } 
 
     - enable: true
-      target_code: '群亮点'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: '群亮点'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 5
       normal_multiplier_in_add_mode: 0.8
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] } 
+        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
 
     - enable: true
-      target_code: '大面积亮点'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: '大面积亮点'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 5
       normal_multiplier_in_add_mode: 3
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] }
+        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
         - { 
             type: 'position', 
             value: [
@@ -106,24 +124,24 @@ processing:
           }
 
     - enable: true
-      target_code: 'B暗点'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: 'B暗点'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 5
       normal_multiplier_in_add_mode: 0.5
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] } 
+        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
 
     - enable: true
-      target_code: '可修复暗点'       # <--- 不同的Code
-      target_batch_index: 'oldest'    # <--- 不同的批次
-      mode: 'additive'          # <--- 不同的模式
+      target_code: '可修复暗点'       
+      target_batch_index: 'oldest'    
+      mode: 'additive'          
       hotspot_adder: 5
       normal_multiplier_in_add_mode: 0.5
       hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } # 示例：高亮第一列和最后一列
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } # 示例：高亮第一列和最后一列
+        - { type: 'row', value: ['2E', '1A'] } 
+        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
 
 
   'sheet_hotspot_config': {

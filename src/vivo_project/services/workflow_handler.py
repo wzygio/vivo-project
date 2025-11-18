@@ -243,8 +243,6 @@ class WorkflowHandler:
             target_defects=CONFIG['processing']['target_defect_groups']
         )
  
- 
-    # --- [新增] 用于调用Code级趋势数据的新方法 ---
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def run_code_level_mwd_trend_workflow() -> Dict[str, pd.DataFrame] | None:
@@ -291,8 +289,6 @@ class WorkflowHandler:
 
         return sheet_results
 
-    
-
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def run_lot_defect_rate_workflow() -> Dict[str, Any] | None:
@@ -329,7 +325,6 @@ class WorkflowHandler:
             target_defects=CONFIG['processing']['target_defect_groups']
         )
     
-    # --- [新增] 用于获取和缓存阵列投入时间的新工作流 ---
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def run_array_input_time_workflow(lot_ids: Tuple[str, ...]) -> pd.DataFrame:
@@ -339,11 +334,12 @@ class WorkflowHandler:
         logging.info("--- [Cache Miss] 阵列投入时间缓存未命中，开始查询数据库... ---")
         db_manager = DatabaseManager()
         if db_manager.engine is None: return pd.DataFrame()
-        
-        # 将元组转换回列表以供函数使用
-        return load_array_input_times(db_manager=db_manager, lot_ids=list(lot_ids))
-    
 
+        custom_times = CONFIG['processing']['array_input_time']['custom_times']
+        # 结果: {'SHEET001': '20231201', 'SHEET002': '20231202'}
+
+        # 将元组转换回列表以供函数使用
+        return load_array_input_times(db_manager=db_manager, lot_ids=list(lot_ids), enable_custom_times=True, custom_times=custom_times)
     
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")

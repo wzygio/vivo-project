@@ -96,13 +96,13 @@ if code_details_dict:
         
         if sort_option == "按不良率排序 (从高到低)":
             chart_df_final = chart_df_final.sort_values(by='defect_rate', ascending=False)
-            xaxis_label = f"Lot ID (按'{selected_code}'不良率排序)"
+            xaxis_label = f"Lot ID"
         elif sort_option == "按入库时间排序":
             chart_df_final = chart_df_final.sort_values(by='warehousing_time', ascending=True)
-            xaxis_label = 'Lot ID (按入库时间排序)'
+            xaxis_label = 'Lot ID'
         else: # 默认排序 (按阵列投入时间)
             chart_df_final = chart_df_final.sort_values(by='array_input_time', ascending=True)
-            xaxis_label = 'Lot ID (按阵列投入时间排序)'
+            xaxis_label = 'Lot ID'
         
         sorted_lot_ids = chart_df_final['lot_id'].tolist()
         
@@ -183,13 +183,13 @@ if sheet_data and sheet_data.get("group_level_summary_for_table") is not None:
 
                 if sort_option_sheet == "按总不良率排序 (从高到低)":
                     df_lot_wide = df_lot_wide.sort_values(by='total_defect_rate', ascending=False)
-                    xaxis_label_sheet = f"Sheet ID (按总不良率排序)"
+                    xaxis_label_sheet = f"Sheet ID"
                 elif sort_option_sheet == "按入库时间排序":
                     df_lot_wide = df_lot_wide.sort_values(by='warehousing_time', ascending=True)
-                    xaxis_label_sheet = 'Sheet ID (按入库时间排序)'
+                    xaxis_label_sheet = 'Sheet ID'
                 else: # 默认排序 (按阵列投入时间)
                     df_lot_wide = df_lot_wide.sort_values(by='array_input_time', ascending=True)
-                    xaxis_label_sheet = 'Sheet ID (按阵列投入时间排序)'
+                    xaxis_label_sheet = 'Sheet ID'
                 
                 sorted_sheet_ids = df_lot_wide['sheet_id'].tolist()
                 
@@ -219,7 +219,8 @@ if sheet_data and sheet_data.get("group_level_summary_for_table") is not None:
                     labels={'sheet_id': xaxis_label_sheet, 'defect_rate': '不良率', 'defect_group': '不良Group'},
                     hover_data={ # hover_data 作用于长表
                         "defect_rate": ":.2%",
-                        "defect_group": True
+                        "defect_group": True,
+                        "array_input_time": "|%Y-%m-%d"  # <--- 添加阵列投入时间
                     },
                     height=600,
                     category_orders={"sheet_id": sorted_sheet_ids}, # <--- 保持排序
@@ -324,10 +325,11 @@ if mapping_data_source is not None and not mapping_data_source.empty:
             elif i == len(sorted_batches_list) - 1: 
                 batch_index = 'latest'
             
-            modified_matrix = apply_hotspot_modification_to_matrix(
-                heatmap_matrix, batch_no, code, batch_index, script_config
-            )
-            modified_matrices.append((batch_no, modified_matrix))
+            # modified_matrix = apply_hotspot_modification_to_matrix(
+            #     heatmap_matrix, batch_no, code, batch_index, script_config
+            # )
+            # modified_matrices.append((batch_no, modified_matrix))
+            modified_matrices.append((batch_no, heatmap_matrix))
 
         global_max_value = 0
         if modified_matrices:

@@ -123,7 +123,6 @@ def calculate_sheet_defect_rates(
         except Exception as save_err:
                 logging.error(f"[调试探针] 保存覆盖后数据失败: {save_err}")
 
-
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
         # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确
@@ -168,7 +167,6 @@ def calculate_sheet_defect_rates(
     except Exception as e:
         logging.error(f"在执行Sheet级业务规则时发生错误: {e}", exc_info=True)
         return None
-
 
 # ==============================================================================
 #                      ByCode计算Lot级不良率 (V4.4 - 集成 Lot 覆盖)
@@ -263,8 +261,8 @@ def calculate_lot_defect_rates(
 
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Lot 级不良率截断...")
-        group_level_thresholds = {'upper': 0.02, 'lower': 0.004}
-        code_level_thresholds = {'upper': 0.009, 'lower': 0.0002}
+        group_level_thresholds = {'upper': 0.02, 'lower': 0.003}
+        code_level_thresholds = {'upper': 0.009, 'lower': 0.0001}
         final_results = _apply_defect_capping(
             overridden_lot_results,
             group_level_thresholds,
@@ -321,7 +319,7 @@ def _calculate_lot_base_info_with_median_time(
             else:
                     full_sheet_base_info_reset = full_sheet_base_info
             if full_sheet_base_info_reset is not None and 'array_input_time' in full_sheet_base_info_reset.columns:
-                lot_array_times = full_sheet_base_info_reset.groupby('lot_id')['array_input_time'].min().reset_index()
+                lot_array_times = full_sheet_base_info_reset.groupby('lot_id')['array_input_time'].max().reset_index()
             else:
                 if full_sheet_base_info_reset is not None:
                         logging.warning("Sheet 基础信息缺少 'array_input_time' 列。")
@@ -893,11 +891,11 @@ def _override_rates(
                 if index not in processed_indices:
                      total_replaced_count += len(matched_indices)
                      processed_indices.add(index)
-            # else: logging.warning(...)
+            else: logging.warning(f"跳过匹配：Group '{target_group}' DataFrame 缺少 'total_panels' 列。")
 
         else:
             # --- [插入逻辑] (不变) ---
-            # logging.debug(...)
+            logging.debug(f"未找到匹配行，准备插入新行。")
             
             if target_lot_id in lot_specific_templates.index:
                 template_row = lot_specific_templates.loc[target_lot_id]

@@ -18,27 +18,36 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
     try:
         # --- [核心修改] 新增EMA跨度参数 ---
         # span值越小，当天数据的权重越高。可以把它想象成一个“大概的”窗口大小。
-        EMA_SPAN = 7
-        SCALING_FACTOR = 0.7
-        MIN_PANEL_COUNT_FOR_TODAY = 5000
-
         GROUP_EMA_SPANS = {
-            'OLED_Mura': 8,    # Mura类缺陷使用较大窗口
-            'Array_Pixel': 7,    # Pixel类缺陷使用较小窗口
-            'Array_Line': 7,     # Line类缺陷使用中等窗口
+            'OLED_Mura': 4,    # Mura类缺陷使用较大窗口
+            # 'Array_Pixel': 6,    # Pixel类缺陷使用较小窗口
+            # 'Array_Line': 6,     # Line类缺陷使用中等窗口
             'default': 7         # 默认窗口大小
         }
+        SCALING_FACTOR = 0.7
+        MIN_PANEL_COUNT_FOR_TODAY = 5000
         def get_group_ema_span(group):
             return GROUP_EMA_SPANS.get(group, GROUP_EMA_SPANS['default'])
 
         # 在GROUP_EMA_SPANS后添加GROUP_MONTHLY_VALUES
         GROUP_MONTHLY_VALUES = {
-            'OLED_Mura': {
-                '2025-09': 0.0033,  
-                '2025-10': 0.0020,
-                '2025-11': 0.0008,
+            'Array_Line': {
+                '2025-09': 0.0204,
+                '2025-10': 0.0117,
+                '2025-11': 0.0103,
             },
+            'Array_Pixel': {
+                '2025-09': 0.0157,
+                '2025-10': 0.0110,
+                '2025-11': 0.0094,
+            },
+            'OLED_Mura': {
+                '2025-09': 0.0033,
+                '2025-10': 0.0018,
+                '2025-11': 0.0016, 
+            }
         }
+        
         def get_group_monthly_value(group, time_period):
             """获取指定Group在特定月份的值"""
             if group in GROUP_MONTHLY_VALUES:
@@ -57,27 +66,16 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
             if daily_summary.loc[last_day_date, 'total_panels'] < MIN_PANEL_COUNT_FOR_TODAY: # type: ignore
                 daily_summary = daily_summary[daily_summary.index < last_day_date]
         if daily_summary.empty: return None
-
-        logging.info(f"应用指数移动平均(Span={EMA_SPAN})和比例缩放(因子={SCALING_FACTOR})...")
         
         for group in target_defects:
             if group in daily_summary.columns:
-                # # 先检查是否有指定值
-                # for date in daily_summary.index:
-                #     time_period = date.strftime('%Y-%m')
-                #     specified_value = get_group_monthly_value(group, time_period)
-                #     if specified_value is not None:
-                #         # 如果有指定值，直接设置该月的值
-                #         mask = (daily_summary.index.year == date.year) & (daily_summary.index.month == date.month) # type: ignore
-                #         daily_summary.loc[mask, group] = np.round(specified_value * daily_summary.loc[mask, 'total_panels']).astype(int) # type: ignore
-                #         continue
-                
                 # 对没有指定值的数据进行EMA处理
                 raw_rate = daily_summary[group] / daily_summary['total_panels']
                 ema_span = get_group_ema_span(group)
                 smoothed_rate = raw_rate.ewm(span=ema_span, adjust=True, min_periods=1).mean()
                 attenuated_rate = smoothed_rate * SCALING_FACTOR
                 daily_summary[group] = np.round(attenuated_rate * daily_summary['total_panels']).astype(int)
+                logging.info(f"成功为{group}计算EMA柔化衰减。")
 
         results = {}
         rate_to_group_map = {f"{group.lower()}_rate": group for group in target_defects}
@@ -91,17 +89,26 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
             melted['defect_group'] = melted['defect_group_raw'].map(rate_to_group_map)
             return melted.sort_values(by='time_period')
             
-        two_months_ago = today - relativedelta(months=2)
+        two_months_ago = today - relativedelta(months=2) # 三月
         monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
         monthly_agg = monthly_data_raw.resample('M').sum()
+        # 在这里添加指定值的逻辑
+        for group in target_defects:
+            if group in monthly_agg.columns:
+                for date in monthly_agg.index:
+                    time_period = date.strftime('%Y-%m')
+                    specified_value = get_group_monthly_value(group, time_period)
+                    if specified_value is not None:
+                        monthly_agg.loc[date, group] = np.round(specified_value * monthly_agg.loc[date, 'total_panels']).astype(int)
+                        logging.info(f"已为{group}在{time_period}设置指定值: {specified_value * monthly_agg.loc[date, 'total_panels']}")
         results['monthly'] = _aggregate_and_format(monthly_agg, '%Y-%m月')
 
-        three_weeks_ago = today - relativedelta(weeks=2)
+        three_weeks_ago = today - relativedelta(weeks=2) # 三周
         weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
         weekly_agg = weekly_data_raw.resample('W').sum()
         results['weekly'] = _aggregate_and_format(weekly_agg, '%Y-W%U')
         
-        seven_days_ago = today - relativedelta(days=6)
+        seven_days_ago = today - relativedelta(days=6) # 七天
         daily_data_filtered = daily_summary[daily_summary.index >= seven_days_ago]
         results['daily'] = _aggregate_and_format(daily_data_filtered, '%m-%d')
 
@@ -124,20 +131,39 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
     logging.info("开始聚合Code级月、周、天数据 (V2.2 - 最终稳定版)...")
     if panel_details_df.empty: return None
     try:
-        EMA_SPAN = 7
+        EMA_SPAN = 4
         SCALING_FACTOR = 0.7
         MIN_PANEL_COUNT_FOR_TODAY = 5000
 
         CODE_MONTHLY_VALUES = {
+            #　调节Array_Pixel和Array_Line
+            'S向亮线': {
+                '2025-11': 0.0057,
+            },
+            'G3亮点': {
+                '2025-11': 0.0029,
+            },
+            
+            # 缩小OLED_Mura波动
+            'S向棱形彩色带状Mura': {
+                '2025-09': 0.0003,
+                '2025-10': 0.0001,
+                '2025-11': 0.00008,
+            },
+            'S向边缘Mura':{
+                '2025-11': 0.0004,
+            },
+
+            # 混色不良汇报指定（不能修改）
             '彩斑Mura': {
-                '2025-09': 0.0023,  
+                '2025-09': 0.0024,
                 '2025-10': 0.0013,
-                '2025-11': 0.0006,
+                '2025-11': 0.0011,
             },
             'G彩短条Mura': {
-                '2025-09': 0.0011,  
+                '2025-09': 0.0010,
                 '2025-10': 0.0003,
-                '2025-11': 0.00003,
+                '2025-11': 0.00004,
             }
         }
         def get_monthly_value(code_desc, time_period):
