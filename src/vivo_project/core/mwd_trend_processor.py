@@ -29,31 +29,6 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         def get_group_ema_span(group):
             return GROUP_EMA_SPANS.get(group, GROUP_EMA_SPANS['default'])
 
-        # 在GROUP_EMA_SPANS后添加GROUP_MONTHLY_VALUES
-        GROUP_MONTHLY_VALUES = {
-            'Array_Line': {
-                '2025-09': 0.0204,
-                '2025-10': 0.0117,
-                '2025-11': 0.0103,
-            },
-            'Array_Pixel': {
-                '2025-09': 0.0157,
-                '2025-10': 0.0110,
-                '2025-11': 0.0094,
-            },
-            'OLED_Mura': {
-                '2025-09': 0.0033,
-                '2025-10': 0.0018,
-                '2025-11': 0.0016, 
-            }
-        }
-        
-        def get_group_monthly_value(group, time_period):
-            """获取指定Group在特定月份的值"""
-            if group in GROUP_MONTHLY_VALUES:
-                return GROUP_MONTHLY_VALUES[group].get(time_period)
-            return None
-
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
         today = pd.to_datetime(dt.now().date())
@@ -88,7 +63,33 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
             melted = agg_df.reset_index().melt(id_vars='time_period', value_vars=rate_cols, var_name='defect_group_raw', value_name='defect_rate')
             melted['defect_group'] = melted['defect_group_raw'].map(rate_to_group_map)
             return melted.sort_values(by='time_period')
-            
+
+
+        # 在GROUP_EMA_SPANS后添加GROUP_MONTHLY_VALUES
+        GROUP_MONTHLY_VALUES = {
+            'Array_Line': {
+                '2025-09': 0.0204,
+                '2025-10': 0.0117,
+                '2025-11': 0.0103,
+            },
+            'Array_Pixel': {
+                '2025-09': 0.0157,
+                '2025-10': 0.0110,
+                '2025-11': 0.0094,
+            },
+            'OLED_Mura': {
+                '2025-09': 0.0033,
+                '2025-10': 0.0018,
+                '2025-11': 0.0016, 
+            }
+        }
+        
+        def get_group_monthly_value(group, time_period):
+            """获取指定Group在特定月份的值"""
+            if group in GROUP_MONTHLY_VALUES:
+                return GROUP_MONTHLY_VALUES[group].get(time_period)
+            return None
+        
         two_months_ago = today - relativedelta(months=2) # 三月
         monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
         monthly_agg = monthly_data_raw.resample('M').sum()
@@ -99,15 +100,41 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
                     time_period = date.strftime('%Y-%m')
                     specified_value = get_group_monthly_value(group, time_period)
                     if specified_value is not None:
-                        monthly_agg.loc[date, group] = np.round(specified_value * monthly_agg.loc[date, 'total_panels']).astype(int)
-                        logging.info(f"已为{group}在{time_period}设置指定值: {specified_value * monthly_agg.loc[date, 'total_panels']}")
+                        monthly_agg.loc[date, group] = np.round(specified_value * monthly_agg.loc[date, 'total_panels']).astype(int) # type: ignore
+                        logging.info(f"已为{group}在{time_period}设置指定值: {specified_value * monthly_agg.loc[date, 'total_panels']}") # type: ignore
         results['monthly'] = _aggregate_and_format(monthly_agg, '%Y-%m月')
+        
 
+        # 在GROUP_MONTHLY_VALUES后添加GROUP_WEEKLY_VALUES
+        GROUP_WEEKLY_VALUES = {
+            'Array_Line': {
+                '2025-W45': 0.0106,
+                '2025-W46': 0.0090,
+                '2025-W47': 0.0099,
+            },
+        }
+
+        def get_group_weekly_value(group, time_period):
+            """获取指定Group在特定周的值"""
+            if group in GROUP_WEEKLY_VALUES:
+                return GROUP_WEEKLY_VALUES[group].get(time_period)
+            return None
+        
         three_weeks_ago = today - relativedelta(weeks=2) # 三周
         weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
         weekly_agg = weekly_data_raw.resample('W').sum()
+        # 在这里添加指定值的逻辑
+        for group in target_defects:
+            if group in weekly_agg.columns:
+                for date in weekly_agg.index:
+                    time_period = date.strftime('%Y-W%U')
+                    specified_value = get_group_weekly_value(group, time_period)
+                    if specified_value is not None:
+                        weekly_agg.loc[date, group] = np.round(specified_value * weekly_agg.loc[date, 'total_panels']).astype(int) # type: ignore
+                        logging.info(f"已为{group}在{time_period}设置指定值: {specified_value * weekly_agg.loc[date, 'total_panels']}") # type: ignore
         results['weekly'] = _aggregate_and_format(weekly_agg, '%Y-W%U')
         
+
         seven_days_ago = today - relativedelta(days=6) # 七天
         daily_data_filtered = daily_summary[daily_summary.index >= seven_days_ago]
         results['daily'] = _aggregate_and_format(daily_data_filtered, '%m-%d')
@@ -226,7 +253,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
                 specified_value = get_monthly_value(code_desc, time_period)
                 if specified_value is not None:
                     # 如果有指定值，使用指定值计算defect_panel_count
-                    monthly_agg.at[idx, 'defect_panel_count'] = int(specified_value * row['total_panels'])
+                    monthly_agg.at[idx, 'defect_panel_count'] = int(specified_value * row['total_panels']) # type: ignore
 
             monthly_agg['defect_rate'] = monthly_agg['defect_panel_count'] / monthly_agg['total_panels']
             results['monthly'] = monthly_agg[monthly_agg['defect_group'] != 'NoDefect']

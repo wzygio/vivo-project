@@ -9,8 +9,7 @@ from vivo_project.config import CONFIG
 from pathlib import Path
 
 # ==============================================================================
-#                      ByCode计算Mapping集中性
-# ==============================================================================  
+#                      ByCode计算Mapping集中性# ==============================================================================  
 @staticmethod
 def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
     """

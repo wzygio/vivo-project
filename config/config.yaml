@@ -44,7 +44,7 @@ processing:
     - "OLED_Mura"
 
   defect_multipliers:
-    '彩斑Mura': 0.4
+    '彩斑Mura': 0.35
     'G彩短条Mura': 0.2
 
   mapping_hotspot_script:
