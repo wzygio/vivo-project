@@ -26,12 +26,15 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 数据加载 ---
+# 月周天良率数据
 mwd_group_data = WorkflowHandler.run_mwd_trend_workflow()
 mwd_code_data = WorkflowHandler.run_code_level_mwd_trend_workflow()
-current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
-mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
+# current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
+
+# 集中性数据
 lot_data = WorkflowHandler.run_lot_defect_rate_workflow()
 sheet_data = WorkflowHandler.run_sheet_defect_rate_workflow()
+mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
 
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
@@ -49,7 +52,7 @@ def clean_group_name(name):
 def is_valid_data(data):
     """检查数据是否有效（不为None，且如果是DataFrame则不为空）"""
     return data is not None and (not isinstance(data, pd.DataFrame) or not data.empty)
-if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, current_month_trend_data, mapping_data_source, lot_data])):
+if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, mapping_data_source, lot_data])):
     st.info("数据已过期，请点击\"🔄 刷新数据\"按钮重新加载")
     sys.exit(1)
 
