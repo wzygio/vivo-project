@@ -11,7 +11,6 @@ from dateutil.relativedelta import relativedelta
 # --- 1. 初始化与配置 ---
 from vivo_project.app.setup import AppSetup
 from vivo_project.app.components.components import create_code_selection_ui
-from vivo_project.core.mapping_processor import apply_hotspot_modification_to_matrix
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
@@ -84,47 +83,107 @@ if code_details_dict:
         selected_code = selected_code_info["code"]
         
         # a. 筛选出所选Code的全部数据
-        chart_df_final = all_codes_df[all_codes_df['defect_desc'] == selected_code]
+        chart_df_final = all_codes_df[all_codes_df['defect_desc'] == selected_code].copy()
 
-        # b. 排序逻辑
-        sort_option = st.selectbox(
-            "选择排序方式:",
-            options=[
-                "默认排序 (按阵列投入时间)", 
-                "按入库时间排序",
-                "按不良率排序 (从高到低)"
-            ],
-            key="lot_code_sorter"
-        )
+        # --- [新增] 数据预处理：生成月别和带日期的周别标签 (周一~周日) ---
+        def get_week_label(date_obj):
+            if pd.isna(date_obj): return "Unknown"
+            # isocalendar() 标准：周一为1，周日为7，完全符合您的需求
+            iso_year, iso_week, _ = date_obj.isocalendar()
+            # 计算该周的周一 (1) 和 周日 (7)
+            monday = datetime.fromisocalendar(iso_year, iso_week, 1).date()
+            sunday = datetime.fromisocalendar(iso_year, iso_week, 7).date()
+            return f"{iso_year}-W{iso_week:02d} ({monday.strftime('%m/%d')}-{sunday.strftime('%m/%d')})"
+
+        # 生成辅助列
+        chart_df_final['month_str'] = chart_df_final['warehousing_time'].apply(lambda x: x.strftime('%Y-%m') if pd.notnull(x) else "Unknown")
+        chart_df_final['week_label'] = chart_df_final['warehousing_time'].apply(get_week_label)
+
+        # --- [新增] UI 布局与筛选逻辑 ---
+        st.markdown(f"#### **{selected_code}** ")
         
+        f_col1, f_col2, f_col3 = st.columns(3)
+
+        # 1. 排序方式
+        with f_col1:
+            sort_option = st.selectbox(
+                "1. 选择排序方式:",
+                options=[
+                    "默认排序 (按阵列投入时间)", 
+                    "按入库时间排序",
+                    "按不良率排序 (从高到低)"
+                ],
+                key="lot_code_sorter"
+            )
+
+        # 2. 月别筛选 (选项源自全量数据)
+        with f_col2:
+            available_months = sorted(chart_df_final['month_str'].unique().tolist(), reverse=True)
+            selected_month = st.selectbox(
+                "2. 月别筛选:",
+                options=["全部月份"] + available_months,
+                key="lot_code_month_filter"
+            )
+
+        # 3. 周别筛选 (取消联动：选项源自全量数据 chart_df_final，而非过滤后的数据)
+        with f_col3:
+            available_weeks = sorted(chart_df_final['week_label'].unique().tolist(), reverse=True)
+            selected_week = st.selectbox(
+                "3. 周别筛选:",
+                options=["全部周"] + available_weeks,
+                key="lot_code_week_filter"
+            )
+
+        # --- 应用筛选逻辑 (独立叠加) ---
+        df_filtered = chart_df_final.copy()
+
+        # 应用月筛选
+        if selected_month != "全部月份":
+            df_filtered = df_filtered[df_filtered['month_str'] == selected_month]
+        
+        # 应用周筛选 (注意：如果月和周选的时间段不重合，这里数据会变为空，这是正常的逻辑结果)
+        if selected_week != "全部周":
+            df_filtered = df_filtered[df_filtered['week_label'] == selected_week]
+
+        # --- 排序逻辑 ---
         if sort_option == "按不良率排序 (从高到低)":
-            chart_df_final = chart_df_final.sort_values(by='defect_rate', ascending=False)
+            df_filtered = df_filtered.sort_values(by='defect_rate', ascending=False)
             xaxis_label = f"Lot ID"
         elif sort_option == "按入库时间排序":
-            chart_df_final = chart_df_final.sort_values(by='warehousing_time', ascending=True)
+            df_filtered = df_filtered.sort_values(by='warehousing_time', ascending=True)
             xaxis_label = 'Lot ID'
-        else: # 默认排序 (按阵列投入时间)
-            chart_df_final = chart_df_final.sort_values(by='array_input_time', ascending=True)
+        else: # 默认排序
+            df_filtered = df_filtered.sort_values(by='array_input_time', ascending=True)
             xaxis_label = 'Lot ID'
         
-        sorted_lot_ids = chart_df_final['lot_id'].tolist()
+        sorted_lot_ids = df_filtered['lot_id'].tolist()
         
-        st.markdown(f"#### **{selected_code}** ")
-        # c. 绘图逻辑
-        fig_lot = px.bar(
-            chart_df_final, x='lot_id', y='defect_rate',
-            labels={'lot_id': xaxis_label, 'defect_rate': '不良率', 'array_input_time': '阵列投入时间', 'warehousing_time': '入库时间'},
-            hover_data={
-                "warehousing_time": "|%Y/%m/%d", 
-                "array_input_time": "|%Y/%m/%d %H:%M",
-                "defect_panel_count": True, 
-                "defect_rate": ":.2%"
-            },
-            height=600, category_orders={"lot_id": sorted_lot_ids}
-        )
-        fig_lot.update_traces(marker_color='#1f77b4')
-        fig_lot.update_layout(yaxis_tickformat='.2%', xaxis_tickangle=-45)
-        st.plotly_chart(fig_lot, use_container_width=True)
+        # 绘图判断
+        if df_filtered.empty:
+            st.warning("当前筛选条件组合下无数据 (例如：选中的月份不包含选中的周)。")
+        else:
+            # c. 绘图逻辑
+            fig_lot = px.bar(
+                df_filtered, x='lot_id', y='defect_rate',
+                labels={
+                    'lot_id': xaxis_label, 
+                    'defect_rate': '不良率', 
+                    'array_input_time': '阵列投入时间', 
+                    'warehousing_time': '入库时间', 
+                    'defect_panel_count': '不良panel数',
+                    'week_label': '周别'},
+                hover_data={
+                    "warehousing_time": "|%Y/%m/%d", 
+                    "array_input_time": "|%Y/%m/%d %H:%M",
+                    "defect_panel_count": True, 
+                    "defect_rate": ":.2%",
+                    "week_label": True
+                },
+                height=600, category_orders={"lot_id": sorted_lot_ids}
+            )
+            fig_lot.update_traces(marker_color='#1f77b4')
+            fig_lot.update_layout(yaxis_tickformat='.2%', xaxis_tickangle=-45)
+            st.plotly_chart(fig_lot, use_container_width=True)
 else:
     st.warning("未能加载Lot的Code级明细数据，无法执行此分析。")
 

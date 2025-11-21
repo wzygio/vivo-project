@@ -1,10 +1,8 @@
-# 可能位于 src/vivo_project/app/components/components.py 或类似文件
+# src/vivo_project/app/components/components.py
 import pandas as pd
 import streamlit as st
-import logging # <-- 确保导入 logging
+import logging
 
-# [修改] 移除了 @staticmethod，因为它现在是一个独立函数
-# 如果它仍然属于 Components 类，请保留 @staticmethod
 def create_code_selection_ui(
     source_data: pd.DataFrame | dict,
     target_defect_groups: list,
