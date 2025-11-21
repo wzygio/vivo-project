@@ -8,13 +8,15 @@ from dateutil.relativedelta import relativedelta
 
 from vivo_project.config import CONFIG
 
+
 @staticmethod
 def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) -> Dict[str, pd.DataFrame] | None:
     """
-    (V3.6 - 升级至EMA)
-    使用指数移动平均(EMA)进行数据平滑，使当天数据权重更高。
+    (V3.7 - 修复周别一致性)
+    使用指数移动平均(EMA)进行数据平滑。
+    强制使用 ISO 8601 (周一~周日) 标准计算周别，解决 Group 与 Code 级周号不一致问题。
     """
-    logging.info("开始为Group级月/周/天执行'柔化衰减'数据处理 (V3.6 - EMA)...")
+    logging.info("开始为Group级月/周/天执行'柔化衰减'数据处理 (V3.7 - ISO Fix)...")
     if panel_details_df.empty: return None
     
     try:
@@ -60,9 +62,23 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         rate_cols = list(rate_to_group_map.keys())
         
         def _aggregate_and_format(agg_df, time_format_str):
+            """
+            辅助函数：计算比率并格式化时间列
+            [修改] 增加对 'ISO' 特殊标记的处理
+            """
             for group in target_defects:
                 agg_df[f"{group.lower()}_rate"] = agg_df.get(group, 0) / agg_df['total_panels']
-            agg_df['time_period'] = agg_df.index.strftime(time_format_str)
+            
+            # --- [核心修改] 统一周别格式化逻辑 ---
+            if time_format_str == 'ISO':
+                # 针对周度数据，使用 isocalendar 确保周一到周日为一周
+                # agg_df.index 此时通常是 Resample 后的 Sunday，ISO 算法会将其归入正确的一周
+                iso_df = agg_df.index.isocalendar()
+                agg_df['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
+            else:
+                agg_df['time_period'] = agg_df.index.strftime(time_format_str)
+            # -----------------------------------
+
             melted = agg_df.reset_index().melt(
                 id_vars='time_period', 
                 value_vars=rate_cols, 
@@ -81,9 +97,10 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
             _process_group_monthly_data(daily_summary, target_defects, monthly_values, today),
             '%Y-%m月'
         )
+        # [修改] 传入 'ISO' 标记
         results['weekly'] = _aggregate_and_format(
             _process_group_weekly_data(daily_summary, target_defects, weekly_values, today),
-            '%Y-W%U'
+            'ISO' 
         )
         
         # 处理日度数据
@@ -100,7 +117,7 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
 
 @staticmethod
 def _process_group_monthly_data(daily_summary: pd.DataFrame, target_defects: list, 
-                         monthly_values: dict, today: dt) -> pd.DataFrame:
+                            monthly_values: dict, today: dt) -> pd.DataFrame:
     """处理月度数据的工具函数"""
     two_months_ago = today - relativedelta(months=2)
     monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
@@ -124,16 +141,21 @@ def _process_group_monthly_data(daily_summary: pd.DataFrame, target_defects: lis
 @staticmethod
 def _process_group_weekly_data(daily_summary: pd.DataFrame, target_defects: list,
                         weekly_values: dict, today: dt) -> pd.DataFrame:
-    """处理周度数据的工具函数"""
+    """处理周度数据的工具函数 (已适配 ISO 周)"""
     three_weeks_ago = today - relativedelta(weeks=2)
     weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
+    # Resample 'W' 默认以周日结束。即 Index 为该周的周日。
     weekly_agg = weekly_data_raw.resample('W').sum()
     
     # 应用指定值
     for group in target_defects:
         if group in weekly_agg.columns:
             for date in weekly_agg.index:
-                time_period = date.strftime('%Y-W%U')
+                # --- [核心修改] 使用 ISO 算法生成 Key，确保与配置文件和前端展示一致 ---
+                iso_year, iso_week, _ = date.isocalendar()
+                time_period = f"{iso_year}-W{iso_week:02d}"
+                # ----------------------------------------------------------------
+                
                 if group in weekly_values:
                     specified_value = weekly_values[group].get(time_period)
                     if specified_value is not None:
@@ -148,13 +170,11 @@ def _process_group_weekly_data(daily_summary: pd.DataFrame, target_defects: list
 @staticmethod
 def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str, pd.DataFrame] | None:
     """
-    [V2.2 - 最终稳定版] 
-    1. 基于最稳定的"先打标签，再分组"模式。
-    2. 修复IntCastingNaNError。
-    3. 统一周定义。
-    4. 在正确的位置添加"末日数据过滤器"。
+    [V2.3 - ISO Fix] 
+    1. 修复周别计算逻辑，统一使用 ISO 8601 (Mon-Sun)。
+    2. 解决 Group 与 Code 级图表周号错位问题。
     """
-    logging.info("开始聚合Code级月、周、天数据 (V2.2 - 最终稳定版)...")
+    logging.info("开始聚合Code级月、周、天数据 (V2.3 - ISO Fix)...")
     if panel_details_df.empty: return None
     
     try:
@@ -213,8 +233,14 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         # 处理周度数据
         three_weeks_ago = today - relativedelta(weeks=2)
         weekly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W')].copy()
+        
         if not weekly_data_raw.empty:
-            weekly_data_raw['time_period'] = weekly_data_raw['warehousing_time'].dt.strftime('%Y-W%U')
+            # --- [核心修改] 使用 ISO Calender 生成标准的 YYYY-Wxx ---
+            # 这样 Mon(周一) 到 Sun(周日) 都会被分配到同一个 Week Number
+            iso_df = weekly_data_raw['warehousing_time'].dt.isocalendar()
+            weekly_data_raw['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format) # type: ignore
+            # -----------------------------------------------------
+            
             weekly_agg = weekly_data_raw.groupby(['time_period', 'defect_group', 'defect_desc']).agg(
                 defect_panel_count=('defect_panel_count', 'sum'), 
                 total_panels=('total_panels', 'sum')
@@ -229,7 +255,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
             daily_data_final['time_period'] = daily_data_final['warehousing_time'].dt.strftime('%m-%d')
             results['daily'] = daily_data_final[daily_data_final['defect_group'] != 'NoDefect']
 
-        logging.info("成功聚合Code级月、周、天数据 (最终稳定版)。")
+        logging.info("成功聚合Code级月、周、天数据 (最终稳定版 - ISO Fix)。")
         return results
 
     except Exception as e:
@@ -289,7 +315,7 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defec
 
         # 2. [核心逻辑] 动态筛选出当月1日至今的数据
         today = pd.to_datetime(dt.now().date())
-        start_of_current_month = today.replace(day=1) # The key change is here
+        start_of_current_month = today.replace(day=1) 
         daily_summary = daily_summary[daily_summary.index >= start_of_current_month]
 
         # 3. 应用“末日数据”过滤器
