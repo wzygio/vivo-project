@@ -12,7 +12,7 @@ from vivo_project.app.components.components import create_code_selection_ui
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(page_title="不良率趋势分析", layout="wide")
@@ -23,8 +23,9 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 数据加载 ---
-mwd_group_data = WorkflowHandler.run_mwd_trend_workflow()
-mwd_code_data = WorkflowHandler.run_code_level_mwd_trend_workflow()
+service = YieldAnalysisService()
+mwd_group_data = service.get_mwd_trend_data()
+mwd_code_data = service.get_code_level_trend_data()
 
 # ==============================================================================
 #                      辅助函数
@@ -134,9 +135,11 @@ if mwd_group_data is not None:
         df_weekly = mwd_group_data.get('weekly')
         df_daily = mwd_group_data.get('daily')
     else:
-        if mwd_group_data.get('monthly') is not None: df_monthly = mwd_group_data.get('monthly')[mwd_group_data.get('monthly')['defect_group'] == selected_group]
-        if mwd_group_data.get('weekly') is not None: df_weekly = mwd_group_data.get('weekly')[mwd_group_data.get('weekly')['defect_group'] == selected_group]
-        if mwd_group_data.get('daily') is not None: df_daily = mwd_group_data.get('daily')[mwd_group_data.get('daily')['defect_group'] == selected_group]
+        df_monthly, df_weekly, df_daily = [
+            data[data['defect_group'] == selected_group] if data is not None else None
+            for data in (mwd_group_data.get('monthly'), mwd_group_data.get('weekly'), mwd_group_data.get('daily'))
+        ]
+
 
     max_rate = 0
     all_dfs = [df_monthly, df_weekly, df_daily]
@@ -219,9 +222,11 @@ if mwd_code_data:
         code_desc = selected_code_info_trend["code"]
         
         df_m, df_w, df_d = None, None, None
-        if mwd_code_data.get('monthly') is not None: df_m = mwd_code_data.get('monthly')[mwd_code_data.get('monthly')['defect_desc'] == code_desc]
-        if mwd_code_data.get('weekly') is not None: df_w = mwd_code_data.get('weekly')[mwd_code_data.get('weekly')['defect_desc'] == code_desc]
-        if mwd_code_data.get('daily') is not None: df_d = mwd_code_data.get('daily')[mwd_code_data.get('daily')['defect_desc'] == code_desc]
+        df_m, df_w, df_d = [
+            data[data['defect_desc'] == code_desc] if data is not None else None
+            for data in (mwd_code_data.get('monthly'), mwd_code_data.get('weekly'), mwd_code_data.get('daily'))
+        ]
+
 
         max_rate = 0
         for df in [df_m, df_w, df_d]:

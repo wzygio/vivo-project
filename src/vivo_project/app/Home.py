@@ -9,7 +9,7 @@ from vivo_project.app.setup import AppSetup
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 提取配置 ---
 ui_config = CONFIG.get('ui', {}) # 使用.get()更安全，避免KeyError

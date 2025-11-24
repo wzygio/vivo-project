@@ -13,7 +13,7 @@ from vivo_project.app.components.components import create_code_selection_ui
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 
 
 # --- 2. UI 界面布局 ---
@@ -25,7 +25,8 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 加载数据 ---
-all_data = WorkflowHandler.run_sheet_defect_rate_workflow()
+service = YieldAnalysisService()
+all_data = service.get_sheet_defect_rates()
 
 # ==============================================================================
 #                      --- 模块1: Group不良率明细表 (By Sheet) ---

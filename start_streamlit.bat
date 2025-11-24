@@ -1,22 +1,26 @@
 @echo off
-ECHO Starting Streamlit Report App...
+TITLE Visionox AI System Launcher
+ECHO ========================================================
+ECHO       Starting Visionox M3 Ultimate System...
+ECHO ========================================================
 
-REM 1. 切换到项目所在的盘符
+REM 1. 切换环境
 D:
-
-REM 2. 进入项目根目录的绝对路径
 cd D:\wzy\Python\vivo-project
-ECHO [INFO] Current directory is: %cd%
+ECHO [INFO] Current directory: %cd%
 
-REM 3. [核心修改] 进入 'src' 目录：这是为了让 Python 解释器能正确找到 'vivo_project' 这个包
-ECHO [INFO] Changing working directory to 'src'...
-pushd src
+REM 2. [后台] 启动门户网站 (Port 8000)
+REM 使用 start 命令开启一个新窗口运行 Flask，互不干扰
+ECHO [INFO] Starting Portal Service on Port 8000...
+start "Visionox Portal" Vivo_project\Scripts\python.exe src\run_portal.py
 
-REM 4. 启动 Streamlit 服务：
-REM    [核心修改] 因为我们已在 'src' 目录中，所以需要用 '..\' 来返回上一级才能找到 'Vivo_project' 虚拟环境。
-REM    同时，运行的脚本路径也变为 'vivo_project\app\home.py'
-ECHO [INFO] Starting Streamlit server on port 8503...
-..\Vivo_project\Scripts\python.exe -m streamlit run vivo_project\app\home.py --server.port 8504
+REM 3. [后台] 启动 Streamlit 服务 (Port 8503)
+ECHO [INFO] Starting Streamlit Core on Port 8503...
+start "Streamlit Core" Vivo_project\Scripts\python.exe -m streamlit run vivo_project\app\home.py --server.port 8503 --server.headless true
 
-REM 5. [推荐] 当服务停止后 (例如你按了 Ctrl+C)，退出 'src' 目录
-popd
+REM 4. 等待几秒让服务就绪，然后自动打开浏览器访问门户入口
+timeout /t 3 >nul
+explorer "http://localhost:8000"
+
+ECHO [SUCCESS] All systems are running. Close the popup windows to stop services.
+PAUSE

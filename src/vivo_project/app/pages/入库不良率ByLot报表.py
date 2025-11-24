@@ -13,7 +13,7 @@ from vivo_project.app.components.components import create_code_selection_ui
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(page_title="入库不良率ByLot报表", layout="wide")
@@ -24,8 +24,8 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 加载数据 ---
-# (数据已在WorkflowHandler层被缓存)
-all_data = WorkflowHandler.run_lot_defect_rate_workflow()
+service = YieldAnalysisService()
+all_data = service.get_lot_defect_rates()
 
 
 if all_data:

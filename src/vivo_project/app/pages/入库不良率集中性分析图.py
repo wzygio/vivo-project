@@ -14,7 +14,7 @@ from vivo_project.app.components.components import create_code_selection_ui
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(page_title="不良率趋势分析", layout="wide")
@@ -26,14 +26,15 @@ if st.button("🔄 刷新数据"):
 
 # --- 3. 数据加载 ---
 # 月周天良率数据
-mwd_group_data = WorkflowHandler.run_mwd_trend_workflow()
-mwd_code_data = WorkflowHandler.run_code_level_mwd_trend_workflow()
+service = YieldAnalysisService()
+mwd_group_data = service.get_mwd_trend_data()
+mwd_code_data = service.get_code_level_trend_data()
 # current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
 
 # 集中性数据
-lot_data = WorkflowHandler.run_lot_defect_rate_workflow()
-sheet_data = WorkflowHandler.run_sheet_defect_rate_workflow()
-mapping_data_source = WorkflowHandler.run_mapping_data_workflow()
+lot_data = service.get_lot_defect_rates()
+sheet_data = service.get_sheet_defect_rates()
+mapping_data_source = service.get_mapping_data()
 
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
@@ -61,7 +62,7 @@ if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, mapping_data_sourc
 st.header("🔬 ByCode查询Lot集中性")
 
 # 确认我们有正确的数据源
-code_details_dict = lot_data.get("code_level_details")
+code_details_dict = lot_data.get("code_level_details") if lot_data else None
 
 if code_details_dict:
     # 1. 准备数据源

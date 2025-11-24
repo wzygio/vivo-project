@@ -12,9 +12,9 @@ try:
     SRC_ROOT = Path(__file__).resolve().parent.parent
     PROJECT_ROOT = SRC_ROOT.parent
 except NameError:
-     PROJECT_ROOT = Path.cwd()
-     SRC_ROOT = PROJECT_ROOT / "src"
-     logging.warning(f"__file__ 未定义，假定项目根目录为: {PROJECT_ROOT}")
+    PROJECT_ROOT = Path.cwd()
+    SRC_ROOT = PROJECT_ROOT / "src"
+    logging.warning(f"__file__ 未定义，假定项目根目录为: {PROJECT_ROOT}")
 
 # --- 将 SRC_ROOT 添加到 sys.path (保持不变) ---
 if str(SRC_ROOT) not in sys.path:

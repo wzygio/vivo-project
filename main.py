@@ -18,7 +18,7 @@ if str(src_root) not in sys.path:
 # 导入我们的工具类和工作流
 from vivo_project.app.setup import AppSetup
 from vivo_project.utils.utils import Utils
-from vivo_project.services.workflow_handler import WorkflowHandler
+from vivo_project.services.yield_service import YieldAnalysisService
 from vivo_project.config import PROJECT_ROOT, DATA_DIR
 
 def main():
