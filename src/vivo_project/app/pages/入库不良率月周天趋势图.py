@@ -15,17 +15,21 @@ from vivo_project.config import CONFIG
 from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 2. UI 界面布局 ---
-st.set_page_config(page_title="不良率趋势分析", layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+
 st.title("📊 入库不良率趋势图")
 
 if st.button("🔄 刷新数据"):
     st.cache_data.clear()
     st.rerun()
 
+
+
+
 # --- 3. 数据加载 ---
-service = YieldAnalysisService()
-mwd_group_data = service.get_mwd_trend_data()
-mwd_code_data = service.get_code_level_trend_data()
+
+mwd_group_data = YieldAnalysisService.get_mwd_trend_data()
+mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
 
 # ==============================================================================
 #                      辅助函数

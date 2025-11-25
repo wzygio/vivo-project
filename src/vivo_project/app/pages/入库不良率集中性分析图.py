@@ -17,7 +17,8 @@ from vivo_project.config import CONFIG
 from vivo_project.services.yield_service import YieldAnalysisService
 
 # --- 2. UI 界面布局 ---
-st.set_page_config(page_title="不良率趋势分析", layout="wide")
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+
 st.title("📊 入库不良率集中性分析图")
 
 if st.button("🔄 刷新数据"):
@@ -25,16 +26,9 @@ if st.button("🔄 刷新数据"):
     st.rerun()
 
 # --- 3. 数据加载 ---
-# 月周天良率数据
-service = YieldAnalysisService()
-mwd_group_data = service.get_mwd_trend_data()
-mwd_code_data = service.get_code_level_trend_data()
-# current_month_trend_data = WorkflowHandler.run_current_month_trend_workflow()
-
-# 集中性数据
-lot_data = service.get_lot_defect_rates()
-sheet_data = service.get_sheet_defect_rates()
-mapping_data_source = service.get_mapping_data()
+lot_data = YieldAnalysisService.get_lot_defect_rates()
+sheet_data = YieldAnalysisService.get_sheet_defect_rates()
+mapping_data_source = YieldAnalysisService.get_mapping_data()
 
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
@@ -52,7 +46,7 @@ def clean_group_name(name):
 def is_valid_data(data):
     """检查数据是否有效（不为None，且如果是DataFrame则不为空）"""
     return data is not None and (not isinstance(data, pd.DataFrame) or not data.empty)
-if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, mapping_data_source, lot_data])):
+if not all(map(is_valid_data, [mapping_data_source, lot_data, sheet_data])):
     st.info("数据已过期，请点击\"🔄 刷新数据\"按钮重新加载")
     sys.exit(1)
 
@@ -62,11 +56,12 @@ if not all(map(is_valid_data, [mwd_group_data, mwd_code_data, mapping_data_sourc
 st.header("🔬 ByCode查询Lot集中性")
 
 # 确认我们有正确的数据源
-code_details_dict = lot_data.get("code_level_details") if lot_data else None
+if lot_data and lot_data.get("code_level_details") is not None:
 
-if code_details_dict:
+    code_details_dict = lot_data.get("code_level_details")
+
     # 1. 准备数据源
-    all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
+    all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True) # type: ignore
     # 格式化时间列
     all_codes_df['warehousing_time'] = pd.to_datetime(all_codes_df['warehousing_time'], format='%Y%m%d', errors='coerce').dt.date
     all_codes_df['array_input_time'] = pd.to_datetime(all_codes_df['array_input_time'], errors='coerce')

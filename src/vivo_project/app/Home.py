@@ -1,66 +1,101 @@
-# Home.py (旧称 app.py)
 import streamlit as st
+import streamlit.components.v1 as components
 from pathlib import Path
-import sys
-import logging
 
-# --- 1. 初始化与配置 ---
-from vivo_project.app.setup import AppSetup
-AppSetup.initialize_app()
-
-from vivo_project.config import CONFIG
-from vivo_project.services.yield_service import YieldAnalysisService
-
-# --- 提取配置 ---
-ui_config = CONFIG.get('ui', {}) # 使用.get()更安全，避免KeyError
-icons = ui_config.get('icons', {})
-
-# --- UI 界面布局 ---
+# 1. 基础配置
 st.set_page_config(
-    page_title="天柱不良分析平台",
-    page_icon=icons.get('dashboard', '📊'), # 从配置调用图标
-    layout="wide"
+    page_title="Visionox M3 Portal",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# --- 1. 欢迎与简介 ---
-st.title(f"天柱不良分析平台") # 从配置调用图标
+# ==============================================================================
+#  核心魔法：CSS 样式注入 (去除 Streamlit 所有原生 UI，实现伪全屏)
+# ==============================================================================
+FULL_SCREEN_CSS = """
+<style>
+    /* 1. 隐藏顶部 Header (包括 Deploy 按钮、汉堡菜单、Running 动画) */
+    header[data-testid="stHeader"] {
+        display: none;
+    }
+    
+    /* 2. 隐藏底部 Footer */
+    footer {
+        display: none;
+    }
+    
+    /* 3. 移除主内容区域的默认内边距 (Padding) */
+    .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
+        max-width: 100% !important;
+    }
+    
+    /* 4. 移除顶部空白间隙 */
+    .main > div {
+        padding-top: 0rem !important;
+    }
+    
+    /* 5. 强制 iframe 填满视口高度 (防止双滚动条) */
+    iframe {
+        height: 100vh !important; /* 强制占满 100% 视口高度 */
+        display: block;
+    }
+    
+    /* 6. 隐藏侧边栏本身 (防止鼠标误触边缘滑出) */
+    [data-testid="stSidebar"] {
+        display: none;
+    }
+</style>
+"""
+st.markdown(FULL_SCREEN_CSS, unsafe_allow_html=True)
 
-# --- 2. 关键指标速览 (KPI Snapshot) ---
-st.header(f"{icons.get('chart_up', '📈')} 关键指标速览 (最近60天)") # 从配置调用图标
+# ==============================================================================
+#  资源加载逻辑
+# ==============================================================================
+def load_resource(filename):
+    """读取 resources/static 下的文件内容"""
+    current_dir = Path(__file__).parent.resolve()
+    # 路径回溯：src/vivo_project/app -> src/vivo_project -> src -> (Root) -> resources
+    project_root = current_dir.parent.parent.parent
+    static_dir = project_root / "resources" / "static"
+    
+    file_path = static_dir / filename
+    
+    if not file_path.exists():
+        st.error(f"Error: 找不到文件 {file_path}")
+        return ""
+        
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return f.read()
 
-# (这里的KPI数据是占位符，未来可以替换为真实查询)
-col1, col2, col3 = st.columns(3)
-col1.metric(label="总分析Sheet数", value="7,890", delta="1.2% (较上期)")
-col2.metric(label="平均Panel不良率", value="0.87%", delta="-0.05%", delta_color="inverse")
-col3.metric(label="最高风险缺陷", value="Array_Line", help="这是近期出现次数最多的缺陷类型")
+def render_portal():
+    # 1. 加载源码
+    html_content = load_resource("index.html")
+    css_content = load_resource("style.css")
+    js_config = load_resource("config.js")
+    js_logic = load_resource("script.js")
 
-st.divider()
-
-# --- 3. 页面导航/目录 ---
-st.header(f"{icons.get('report', '📚')} 导航") # 从配置调用图标
-st.write("请从下方选择您需要分析的报表模块，或使用左侧侧边栏进行导航。")
-
-with st.container(border=True):
-    st.page_link(
-        "pages/入库不良率ByLot报表.py", # 假设你的文件名是这个
-        label=f"{icons.get('arrow_right', '➡️')} 入库不良率ByLot报表",
+    # 2. 内联替换 (Inlining)
+    # 将 CSS/JS 内容直接注入 HTML，确保 Streamlit iframe 能正确解析
+    final_html = html_content.replace(
+        '<link rel="stylesheet" href="style.css">',
+        f"<style>{css_content}</style>"
+    )
+    final_html = final_html.replace(
+        '<script src="config.js"></script>',
+        f"<script>{js_config}</script>"
+    )
+    final_html = final_html.replace(
+        '<script src="script.js"></script>',
+        f"<script>{js_logic}</script>"
     )
 
-with st.container(border=True):
-    st.page_link(
-        "pages/入库不良率BySheet报表.py", # 假设你的文件名是这个
-        label=f"{icons.get('arrow_right', '➡️')} 入库不良率BySheet报表",
-    )
+    # 3. 渲染组件
+    # height=1080 只是保底值，CSS 中的 100vh !important 会覆盖它实现全屏
+    components.html(final_html, height=1080, scrolling=False)
 
-with st.container(border=True):
-    st.page_link(
-        "pages/入库不良率月周天趋势图.py", # 假设你的文件名是这个
-        label=f"{icons.get('arrow_right', '➡️')} 入库不良率月周天趋势图",
-    )
-
-with st.container(border=True):
-    st.page_link(
-        "pages/入库不良率集中性分析图.py", # 假设你的文件名是这个
-        label=f"{icons.get('arrow_right', '➡️')} 入库不良率集中性分析图",
-    )
-
+if __name__ == "__main__":
+    render_portal()
