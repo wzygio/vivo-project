@@ -8,6 +8,7 @@ ECHO ========================================================
 REM 1. 切换环境
 D:
 cd D:\wzy\Python\vivo-project
+call Vivo_project\Scripts\activate
 ECHO [INFO] Current directory: %cd%
 
 REM 2. [核心] 启动 Streamlit 门户服务 (Port 8503)

@@ -1,4 +1,4 @@
-import os
+import os, logging
 import comtypes.client
 import glob
 import shutil  # <--- 新增：用于删除文件夹
@@ -15,9 +15,9 @@ def ppt_to_images(input_ppt_path, output_folder):
         try:
             # 直接删除整个文件夹及其内容
             shutil.rmtree(abs_output_folder)
-            print(f"旧文件夹已清理: {abs_output_folder}")
+            logging.info(f"旧文件夹已清理: {abs_output_folder}")
         except Exception as e:
-            print(f"清理文件夹失败: {e}")
+            logging.info(f"清理文件夹失败: {e}")
     
     # 重新创建空文件夹
     os.makedirs(abs_output_folder)
@@ -40,12 +40,12 @@ def ppt_to_images(input_ppt_path, output_folder):
             # 如果你的屏幕是 1080P，也可以改成 1920, 1080
             slide.Export(image_path, "JPG", 2560, 1440)
             
-            print(f"已导出高清图片: {image_name}")
+            logging.info(f"已导出高清图片: {image_name}")
 
         return True
 
     except Exception as e:
-        print(f"转换出错: {e}")
+        logging.info(f"转换出错: {e}")
         return False
     finally:
         if presentation:

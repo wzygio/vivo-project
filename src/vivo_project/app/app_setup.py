@@ -1,6 +1,7 @@
 # src/vivo_project/app/setup.py
 import logging
 from vivo_project.utils.utils import Utils
+from vivo_project.config import CONFIG
 
 class AppSetup:
     @staticmethod

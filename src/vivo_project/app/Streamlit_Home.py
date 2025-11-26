@@ -5,7 +5,8 @@ import sys
 import logging
 
 # --- 1. 初始化与配置 ---
-from vivo_project.app.setup import AppSetup
+from vivo_project.config import CONFIG
+from vivo_project.app.app_setup import AppSetup
 AppSetup.initialize_app()
 
 from vivo_project.config import CONFIG
