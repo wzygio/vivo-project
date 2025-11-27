@@ -7,108 +7,135 @@ from vivo_project.config import CONFIG
 from vivo_project.utils.app_setup import AppSetup
 AppSetup.initialize_app()
 
+# [新增] 引入 PDF 服务
 from vivo_project.services.ppt_service import PPTService
+from vivo_project.services.pdf_service import PDFService
 from vivo_project.app.components.components import render_page_header
 
-st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+# 删除 set_page_config (因为 Home.py 已经设置了全局宽屏)
+# st.set_page_config(layout="wide", initial_sidebar_state="collapsed") 
+
 render_page_header("📋 解析资料")
 
 # --- 2. 定义常量与路径 ---
-# 假设所有 PPT 都放在这个目录下
-PPT_SOURCE_DIR = "resources/analysis_ppt" 
-IMG_OUTPUT_DIR = "resources/ppt_images"
+# [修改] 改个更通用的名字，建议把 PPT 和 PDF 都放在这个文件夹里
+DOC_SOURCE_DIR = "resources/analysis_files" 
+IMG_OUTPUT_DIR = "data/doc_cache"      # 图片缓存目录
 
-# 确保源目录存在，避免报错
-if not os.path.exists(PPT_SOURCE_DIR):
-    os.makedirs(PPT_SOURCE_DIR)
+# 确保目录存在
+if not os.path.exists(DOC_SOURCE_DIR):
+    os.makedirs(DOC_SOURCE_DIR)
 
 # --- 3. 状态管理 (Session State) ---
-# 我们需要记住当前正在查看哪个文件
-if 'viewing_ppt' not in st.session_state:
-    st.session_state.viewing_ppt = None # 存储当前正在查看的文件名
+if 'viewing_file' not in st.session_state:
+    st.session_state.viewing_file = None # 存储当前正在查看的文件名
 
-# --- 4. 实例化 Service ---
-ppt_service = PPTService(output_dir=IMG_OUTPUT_DIR)
+# --- 辅助函数：获取对应的 Service ---
+def get_service_by_filename(filename, output_dir):
+    """根据文件后缀返回对应的 Service 实例"""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext in ['.ppt', '.pptx']:
+        return PPTService(output_dir), "PPT"
+    elif ext in ['.pdf']:
+        return PDFService(output_dir), "PDF"
+    return None, None
 
 # ==============================================================================
 #  界面区域 A: 标题与文件列表
 # ==============================================================================
-st.caption("浏览、下载或在线预览服务器上的分析报告。")
+st.caption("下载或在线预览服务器上的分析报告 (支持 PPTX 和 PDF)。")
 
-# 获取文件列表
-ppt_files = [f for f in os.listdir(PPT_SOURCE_DIR) if f.endswith(('.pptx', '.ppt'))]
+# [修改] 扩展文件扫描范围
+all_files = [f for f in os.listdir(DOC_SOURCE_DIR) if f.lower().endswith(('.pptx', '.ppt', '.pdf'))]
 
-if not ppt_files:
-    st.warning(f"文件夹 `{PPT_SOURCE_DIR}` 为空，请先上传 PPT 文件。")
+if not all_files:
+    st.warning(f"文件夹 `{DOC_SOURCE_DIR}` 为空，请上传 PPT 或 PDF 文件。")
 else:
-    st.markdown("### 📄 报告列表")
+    st.markdown("### 资料列表")
     
-    # 遍历文件列表，生成每一行
-    for ppt_file in ppt_files:
-        file_path = os.path.join(PPT_SOURCE_DIR, ppt_file)
+    # 遍历文件列表
+    for doc_file in all_files:
+        file_path = os.path.join(DOC_SOURCE_DIR, doc_file)
+        ext = os.path.splitext(doc_file)[1].lower()
         
-        # --- 容器化设计：每一行一个带边框的卡片 ---
+        # 根据类型设置图标和 MIME
+        if ext == '.pdf':
+            icon = "📕"
+            mime_type = "application/pdf"
+        else:
+            icon = "📊"
+            mime_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+        # --- 容器化设计 ---
         with st.container(border=True):
-            # 使用列布局：名称占大头，按钮占小头
             # [图标+名称 (70%)]  [下载 (15%)]  [查看 (15%)]
             col_name, col_dl, col_view = st.columns([7, 1.5, 1.5])
             
             with col_name:
-                # 垂直居中显示文件名，加个小图标美化
-                st.markdown(f"**📊 {ppt_file}**")
+                st.markdown(f"**{icon} {doc_file}**")
             
             with col_dl:
-                # 读取文件二进制流用于下载
-                # 注意：这里只是读取流，不耗时
                 with open(file_path, "rb") as f:
                     st.download_button(
                         label="⬇️ 下载",
                         data=f,
-                        file_name=ppt_file,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        key=f"dl_{ppt_file}", # 唯一Key
-                        use_container_width=True # 按钮填满列宽，显得整齐
+                        file_name=doc_file,
+                        mime=mime_type,
+                        key=f"dl_{doc_file}",
+                        use_container_width=True
                     )
             
             with col_view:
                 # 查看按钮
-                # 点击后，更新 session_state，并触发转换
-                if st.button("👁️ 查看", key=f"view_{ppt_file}", use_container_width=True):
+                if st.button("👁️ 查看", key=f"view_{doc_file}", use_container_width=True):
                     # 1. 更新状态
-                    st.session_state.viewing_ppt = ppt_file
+                    st.session_state.viewing_file = doc_file
                     
-                    # 2. 立即触发转换 (带 Loading 效果)
-                    # 注意：传入 ppt_service 的是相对路径
-                    rel_path = os.path.join(PPT_SOURCE_DIR, ppt_file)
-                    with st.spinner(f"正在解析 {ppt_file}，请稍候..."):
-                        success = ppt_service.convert_to_images(rel_path)
-                        if not success:
-                            st.error("解析失败，请检查后台日志。")
-                            st.session_state.viewing_ppt = None # 重置状态
-                        else:
-                            st.rerun() # 强制刷新页面以展示下方预览区
+                    # 2. 实例化对应的 Service
+                    service, doc_type = get_service_by_filename(doc_file, IMG_OUTPUT_DIR)
+                    
+                    if service:
+                        # 3. 立即触发转换
+                        rel_path = os.path.join(DOC_SOURCE_DIR, doc_file)
+                        with st.spinner(f"正在启动 {doc_type} 引擎解析 {doc_file}，请稍候..."):
+                            success = service.convert_to_images(rel_path)
+                            if not success:
+                                st.error("解析失败，请检查后台日志。")
+                                st.session_state.viewing_file = None
+                            else:
+                                st.rerun() # 刷新页面显示预览
+                    else:
+                        st.error("不支持的文件类型。")
 
 # ==============================================================================
 #  界面区域 B: 预览窗口 (仅当选择了文件时显示)
 # ==============================================================================
-if st.session_state.viewing_ppt:
-    st.markdown("---") # 分割线
+if st.session_state.viewing_file:
+    current_file = st.session_state.viewing_file
+    st.markdown("---") 
     
-    # 标题栏：显示当前文件名 + 关闭按钮
+    # 标题栏
     col_title, col_close = st.columns([9, 1])
     with col_title:
-        st.subheader(f"📖 正在预览: {st.session_state.viewing_ppt}")
+        st.subheader(f"📖 正在预览: {current_file}")
     with col_close:
         if st.button("❌ 关闭", type="primary"):
-            st.session_state.viewing_ppt = None
+            st.session_state.viewing_file = None
             st.rerun()
 
-    # 获取图片并展示
-    images = ppt_service.get_images()
+    # [修改] 重新获取 Service 以读取图片
+    # 因为 PPTService 和 PDFService 都往同一个 IMG_OUTPUT_DIR 写图片，
+    # 且文件名格式都是 slide_xx.jpg 或 page_xx.png，
+    # 所以只要实例化对应的 Service 调用 get_images() 即可。
+    service, _ = get_service_by_filename(current_file, IMG_OUTPUT_DIR)
     
-    if images:
-        # 优化体验：可以在这里加一个滑动条或者分页，但垂直滚动最直观
-        for idx, img_path in enumerate(images):
-            st.image(img_path, caption=f"Slide {idx+1}", use_container_width=True)
-    else:
-        st.warning("未找到解析后的图片，请尝试重新点击“查看”。")
+    if service:
+        images = service.get_images()
+        
+        if images:
+            st.info(f"共加载 {len(images)} 页内容")
+            # 垂直滚动展示
+            for idx, img_path in enumerate(images):
+                st.image(img_path, caption=f"Page {idx+1}", use_container_width=True)
+        else:
+            st.warning("缓存目录为空，请尝试重新点击“查看”。")

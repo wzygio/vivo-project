@@ -1,10 +1,12 @@
 # src/vivo_project/core/sheet_lot_processor.py
 import pandas as pd
 import numpy as np
-import logging, sys
+import logging, sys, io
 from pathlib import Path
 from typing import Dict, Any
 from collections import defaultdict
+import comtypes.client
+import comtypes
 
 from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import save_dict_to_excel # 假设 save_dict_to_excel 在这里
@@ -98,10 +100,13 @@ def calculate_sheet_defect_rates(
         # --- [核心修改] 步骤 5: 应用覆盖逻辑 (传入 desc_to_group_map) ---
         logging.info("步骤5: 应用 Sheet 级不良率覆盖...")
         # a. 加载覆盖数据
+        override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
         override_sheet_df, _ = _load_override_excel(
-                file_config_key='override_file',
-                sheet_config_key='override_sheet_name'
+            override_file=override_config.get('override_file', ''),
+            override_sheet_name=override_config.get('override_sheet_name', '')
         )
+
+
         # b. [新增] 获取 Desc -> Group 映射
         #    使用 panel_details_df (未过滤) 来构建最全的映射
         desc_to_group_map = _get_desc_to_group_map(panel_details_df)
@@ -226,10 +231,12 @@ def calculate_lot_defect_rates(
         # --- [核心修改] 步骤 5: 应用 Lot 级覆盖逻辑 (传入 desc_to_group_map) ---
         logging.info("步骤5: 应用 Lot 级不良率覆盖...")
         # a. 加载覆盖数据
+        override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
         _, override_lot_avg_df = _load_override_excel(
-                file_config_key='override_file',
-                sheet_config_key='override_sheet_name'
+            override_file=override_config.get('override_file', ''),
+            override_sheet_name=override_config.get('override_sheet_name', '')
         )
+
         # b. [新增] 获取 Desc -> Group 映射
         desc_to_group_map = _get_desc_to_group_map(panel_details_df)
         # c. 执行覆盖
@@ -704,92 +711,121 @@ def _generate_simulated_rates(
 
 @staticmethod
 def _load_override_excel(
-    file_config_key: str = 'override_file',
-    sheet_config_key: str = 'override_sheet_name',
+    override_file: str,
+    override_sheet_name: str
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """
-    [新-辅助函数 V1.3 - 增加探针] 加载并预处理 Excel 文件。
+    [新-辅助函数 V2.0 - COM 终极方案] 
+    利用 Excel 应用程序本身来读取数据，完美绕过 BadZipFile 和文件锁。
     """
-    logging.info(f"--- [探针] 开始加载覆盖数据 (FileKey: '{file_config_key}', SheetKey: '{sheet_config_key}') ---")
+    logging.info(f"--- [COM Loader] 开始加载覆盖数据 (文件: '{override_file}') ---")
 
+    if not override_file or not override_sheet_name:
+        return None, None
+
+    file_path = RESOURCE_DIR / override_file
+    abs_path = str(file_path.resolve()) # COM 必须使用绝对路径
+
+    if not file_path.exists():
+        logging.error(f"[COM] 文件不存在: {abs_path}")
+        return None, None
+
+    # --- COM 初始化 ---
     try:
-        # --- 探针 1: 检查配置字典 ---
-        override_config = CONFIG.get('processing', {}).get('rate_override_config')
-        if not override_config:
-            logging.error(f"[探针] 失败：在 config.yaml 中未找到 'processing.rate_override_config' 节。")
+        comtypes.CoInitialize()
+    except:
+        pass # 忽略重复初始化的错误
+
+    excel_app = None
+    workbook = None
+    
+    try:
+        logging.info("[COM] 正在启动 Excel 应用程序实例...")
+        # 1. 启动 Excel (静默模式)
+        excel_app = comtypes.client.CreateObject("Excel.Application")
+        excel_app.Visible = False
+        excel_app.DisplayAlerts = False 
+
+        # 2. 打开工作簿 (这一步是关键，Excel 进程有权限读取文件)
+        logging.info(f"[COM] 正在打开工作簿: {abs_path}")
+        workbook = excel_app.Workbooks.Open(abs_path)
+
+        # 3. 找到指定 Sheet
+        try:
+            sheet = workbook.Sheets(override_sheet_name)
+        except Exception:
+            logging.error(f"[COM] 找不到名为 '{override_sheet_name}' 的 Sheet 页。")
             return None, None
-        logging.info(f"[探针] 成功加载 'rate_override_config' 节。")
 
-        # --- 探针 2: 检查文件名配置 ---
-        file_name = override_config.get(file_config_key)
-        if not file_name:
-            logging.error(f"[探针] 失败：在 'rate_override_config' 中未找到文件名键 '{file_config_key}'。")
+        # 4. 直接从内存获取数据 (二维元组)
+        raw_data = sheet.UsedRange.Value()
+        
+        if not raw_data or len(raw_data) < 2:
+            logging.warning("[COM] Excel 数据为空或只有表头。")
             return None, None
-        logging.info(f"[探针] 获取到文件名: '{file_name}'")
 
-        # --- 探针 3: 检查 Sheet 页名配置 ---
-        sheet_name = override_config.get(sheet_config_key)
-        if not sheet_name:
-            logging.error(f"[探针] 失败：在 'rate_override_config' 中未找到 Sheet 页名键 '{sheet_config_key}'。")
-            return None, None
-        logging.info(f"[探针] 获取到 Sheet 页名: '{sheet_name}'")
+        logging.info(f"[COM] 成功通过 Excel 提取数据，共 {len(raw_data)} 行。")
 
-        # --- 探针 4: 检查文件是否存在 ---
-        file_path = RESOURCE_DIR / file_name
-        if not file_path.exists():
-            logging.error(f"[探针] 失败：文件不存在于路径: {file_path.resolve()}")
-            return None, None
-        logging.info(f"[探针] 确认文件存在: {file_path.resolve()}")
+        # 5. 转换为 Pandas DataFrame
+        header = raw_data[0]
+        rows = raw_data[1:]
+        
+        # 规整数据，防止某些行为空导致长度不一致
+        rows_cleaned = []
+        for row in rows:
+            rows_cleaned.append(list(row) if row else [None]*len(header))
 
-        # --- 探针 5: 尝试读取 Excel (包含 Sheet 页检查) ---
-        df = pd.read_excel(file_path, sheet_name=sheet_name)
-        logging.info(f"[探针] 成功读取 Excel 文件和 Sheet 页 '{sheet_name}'。")
+        df = pd.DataFrame(rows_cleaned, columns=list(header))
 
-        # --- 探针 6: 检查必需列 ---
+        # --- 以下是标准的数据清洗逻辑 ---
         expected_cols = ['lot_id', 'sheet_id', 'override_rate', 'defect_desc']
+        
+        # 清理列名空格
+        df.columns = [str(c).strip() for c in df.columns]
+        
         missing_cols = [col for col in expected_cols if col not in df.columns]
         if missing_cols:
-            logging.error(f"[探针] 失败：Excel (Sheet: '{sheet_name}') 缺少必需列: {missing_cols}。实际列: {df.columns.to_list()}")
+            logging.error(f"[COM] 缺少必需列: {missing_cols}。实际列: {df.columns.to_list()}")
             return None, None
-        logging.info(f"[探针] 必需列检查通过。")
 
-        # --- 探针 7: 清洗数据 (转换百分比) ---
+        # 处理百分比/数值
         if df['override_rate'].dtype == 'object':
-             df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%').astype('float') / 100.0
-        elif pd.api.types.is_numeric_dtype(df['override_rate']):
-             pass # 已经是数字，很好
-        else:
-             logging.error(f"[探针] 失败：'override_rate' 列既不是对象也不是数字，无法转换。类型: {df['override_rate'].dtype}")
-             return None, None
+             df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%')
+             df['override_rate'] = pd.to_numeric(df['override_rate'], errors='coerce')
+             # 如果 Excel 返回的是 '50' 代表 50%，则需要除以 100
+             # 如果 Excel 返回的是 0.5，则不需要
+             # 简单的启发式判断：如果大多数值 > 1，说明是百分数分子
+             if df['override_rate'].mean() > 1.0:
+                 df['override_rate'] = df['override_rate'] / 100.0
+
         df['defect_desc'] = df['defect_desc'].astype(str).str.strip()
-        logging.info(f"[探针] 速率列和 Desc 列已清洗。")
-
-        # --- 探针 8: 检查空数据 (dropna 后) ---
-        original_row_count = len(df)
+        
+        # 移除空行
         df.dropna(subset=expected_cols, inplace=True)
-        if df.empty:
-            logging.error(f"[探针] 失败：清洗和 dropna 后无有效数据（原始行数: {original_row_count}）。请检查 Excel 内容是否完整。")
-            return None, None
-        logging.info(f"[探针] 清洗后剩余 {len(df)} 条有效数据。")
-
-        # --- 探针 9: 预计算 Lot 平均值 ---
+        
+        # 计算 Lot 平均值
         lot_override_df = df.groupby(['lot_id', 'defect_desc'])['override_rate'].mean().reset_index()
         lot_override_df.rename(columns={'override_rate': 'override_rate_avg'}, inplace=True)
-        lot_override_df['override_rate_avg'] = lot_override_df['override_rate_avg']
-        logging.info(f"[探针] 成功预计算 {len(lot_override_df)} 条 Lot 平均覆盖记录。")
 
-        # --- 成功返回 ---
         return df[expected_cols], lot_override_df[['lot_id', 'defect_desc', 'override_rate_avg']]
 
-    except ValueError as ve: # 捕获 pd.read_excel 的 Sheet 页未找到错误
-         if f"Worksheet named '{sheet_name}' not found" in str(ve):
-              logging.error(f"[探针] 失败：在文件 '{file_path}' 中找不到名为 '{sheet_name}' 的 Sheet 页。")
-         else:
-              logging.error(f"[探针] 加载或处理覆盖文件时发生 ValueError: {ve}", exc_info=True)
-         return None, None
     except Exception as e:
-        logging.error(f"[探针] 加载或处理覆盖文件时发生未知错误: {e}", exc_info=True)
+        logging.error(f"[COM] Excel 读取失败: {e}", exc_info=True)
         return None, None
+
+    finally:
+        # 6. 清理资源
+        if workbook:
+            try:
+                workbook.Close(False)
+            except: pass
+        if excel_app:
+            try:
+                excel_app.Quit()
+            except: pass
+        try:
+            comtypes.CoUninitialize()
+        except: pass
 
 
 @staticmethod
