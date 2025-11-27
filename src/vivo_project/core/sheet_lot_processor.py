@@ -7,7 +7,7 @@ from typing import Dict, Any
 from collections import defaultdict
 
 from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
-from vivo_project.utils.utils import Utils # 假设 save_dict_to_excel 在这里
+from vivo_project.utils.utils import save_dict_to_excel # 假设 save_dict_to_excel 在这里
 
 # ==============================================================================
 #              ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
