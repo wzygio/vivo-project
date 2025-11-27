@@ -7,7 +7,7 @@ from typing import Dict, Any
 from collections import defaultdict
 
 from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
-from vivo_project.utils.utils import Utils # 假设 Utils.save_dict_to_excel 在这里
+from vivo_project.utils.utils import Utils # 假设 save_dict_to_excel 在这里
 
 # ==============================================================================
 #              ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
@@ -86,7 +86,7 @@ def calculate_sheet_defect_rates(
 
         # --- 探针 1: 保存覆盖前的数据 ---
         try:
-            Utils.save_dict_to_excel(
+            save_dict_to_excel(
                 data_dict=sim_code_details,
                 output_dir=debug_output_dir,
                 filename="debug_sheet_before_override.xlsx"
@@ -115,7 +115,7 @@ def calculate_sheet_defect_rates(
 
         # --- 探针 2: 保存覆盖后的数据 ---
         try:
-            Utils.save_dict_to_excel(
+            save_dict_to_excel(
                 data_dict=overridden_code_details, # <-- 保存覆盖后的字典
                 output_dir=debug_output_dir,
                 filename="debug_sheet_after_override.xlsx" # <-- 不同文件名

@@ -9,7 +9,7 @@ class AppSetup:
         """
         初始化应用的日志系统。
         """
-        Utils.setup_logging("app.log")
+        setup_logging("app.log")
         logging.info("Application setup complete (logging initialized).")
 
     

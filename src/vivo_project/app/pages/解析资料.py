@@ -8,7 +8,10 @@ from vivo_project.utils.app_setup import AppSetup
 AppSetup.initialize_app()
 
 from vivo_project.services.ppt_service import PPTService
-from vivo_project.app.components.components import create_code_selection_ui
+from vivo_project.app.components.components import render_page_header
+
+st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+render_page_header("📋 解析资料")
 
 # --- 2. 定义常量与路径 ---
 # 假设所有 PPT 都放在这个目录下
@@ -30,7 +33,6 @@ ppt_service = PPTService(output_dir=IMG_OUTPUT_DIR)
 # ==============================================================================
 #  界面区域 A: 标题与文件列表
 # ==============================================================================
-st.title("🗂️ 资料解析中心")
 st.caption("浏览、下载或在线预览服务器上的分析报告。")
 
 # 获取文件列表

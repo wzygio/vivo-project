@@ -18,7 +18,7 @@ if str(src_root) not in sys.path:
 # 导入我们的工具类和工作流
 from vivo_project.config import CONFIG
 from vivo_project.utils.app_setup import AppSetup
-from vivo_project.utils.utils import Utils
+from vivo_project.utils.utils import setup_logging, save_dict_to_excel
 from vivo_project.services.yield_service import YieldAnalysisService
 from vivo_project.config import PROJECT_ROOT, DATA_DIR
 
@@ -29,7 +29,7 @@ def main():
     """
     logging.info("--- [测试运行] 全工作流健全性检查启动 ---")
 
-    Utils.setup_logging("main.log")
+    setup_logging("main.log")
 
     # --- 2. 定义所有需要测试的工作流函数名称 ---
     workflows_to_test = [
@@ -50,25 +50,25 @@ def main():
         logging.info(f"--- 正在测试: {workflow_name} ---")
         try:
             # 使用getattr动态获取要调用的函数
-            workflow_func = getattr(WorkflowHandler, workflow_name)
+            workflow_func = getattr(YieldAnalysisService, workflow_name)
             result = workflow_func()
 
-            # --- [核心修改 2] 使用 Utils.save_dict_to_excel ---
+            # --- [核心修改 2] 使用 save_dict_to_excel ---
             if workflow_name == 'run_sheet_defect_rate_workflow' and result:
-                Utils.save_dict_to_excel( # <-- 修改调用
+                save_dict_to_excel( # <-- 修改调用
                     data_dict=result,
                     output_dir=output_debug_dir,
                     filename="debug_SHEET_results.xlsx"
                 )
             if workflow_name == 'run_lot_defect_rate_workflow' and result:
-                Utils.save_dict_to_excel( # <-- 修改调用
+                save_dict_to_excel( # <-- 修改调用
                     data_dict=result,
                     output_dir=output_debug_dir,
                     filename="debug_LOT_results.xlsx"
                 )
             if workflow_name == 'run_code_level_mwd_trend_workflow' and result:
-                 # Utils.save_dict_to_excel 也能处理 mwd 结果字典
-                Utils.save_dict_to_excel( # <-- 修改调用
+                 # save_dict_to_excel 也能处理 mwd 结果字典
+                save_dict_to_excel( # <-- 修改调用
                     data_dict=result,
                     output_dir=output_debug_dir,
                     filename="debug_MWD_CODE_results.xlsx"

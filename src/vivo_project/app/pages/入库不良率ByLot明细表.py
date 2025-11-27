@@ -13,17 +13,13 @@ from vivo_project.utils.app_setup import AppSetup
 AppSetup.initialize_app()
 
 from vivo_project.services.yield_service import YieldAnalysisService
-from vivo_project.app.components.components import create_code_selection_ui
+from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+render_page_header("📋 入库不良率ByLot明细表")
 
-st.title("📋 入库不良率ByLot明细表")
-
-if st.button("🔄 刷新数据"):
-    st.cache_data.clear()
-    st.rerun()
 
 # --- 3. 加载数据 ---
 all_data = YieldAnalysisService.get_lot_defect_rates()

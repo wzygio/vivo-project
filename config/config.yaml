@@ -18,6 +18,9 @@ data_source:
 # 数据处理相关的参数
 processing:
 
+  use_local_snapshot: True
+  snapshot_path: 'data/panel_details_snapshot.parquet'
+  
   # 1. Group 级修正配置 (宽表模式：Key是列名/DefectGroup)
   group_monthly_values:
     Array_Line:
