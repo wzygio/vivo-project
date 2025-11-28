@@ -16,7 +16,7 @@ from vivo_project.services.pdf_service import PDFService
 AppSetup.initialize_app()
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-render_page_header("📋 解析资料阅览室")
+render_page_header("📋 专项资料")
 
 # --- 2. 路径定义 ---
 DOC_SOURCE_DIR = "resources/project_files"

@@ -173,8 +173,35 @@ if lot_data and lot_data.get("code_level_details") is not None:
                 height=600, category_orders={"lot_id": sorted_lot_ids}
             )
             fig_lot.update_traces(marker_color='#1f77b4')
-            fig_lot.update_layout(yaxis_tickformat='.2%', xaxis_tickangle=-45)
-            st.plotly_chart(fig_lot, use_container_width=True)
+            fig_lot.update_layout(
+                yaxis_tickformat='.2%', 
+                xaxis_tickangle=-45,
+                clickmode='event+select' # [优化] 显式开启点击模式
+            )
+            
+            # --- [核心修改] 开启图表交互联动 ---
+            # 1. on_select="rerun": 点击柱子后触发页面刷新
+            # 2. selection_mode="points": 允许点选
+            select_event = st.plotly_chart(
+                fig_lot, 
+                use_container_width=True, 
+                on_select="rerun", 
+                selection_mode="points"
+            )
+
+            # --- [核心修改] 处理点击事件 ---
+            # 检查是否有选中事件
+            if select_event and select_event.selection and select_event.selection["points"]:
+                # 获取点击的第一个点的 x 轴数据 (即 Lot ID)
+                clicked_point = select_event.selection["points"][0]
+                clicked_lot_id = clicked_point["x"]
+                
+                # 联动逻辑：如果点击的 Lot ID 与当前下方的搜索框内容不一致，则更新并刷新
+                # "sheet_focus_lot_input" 是下方 Sheet 查询输入框的 key
+                if st.session_state.get("sheet_focus_lot_input") != clicked_lot_id:
+                    st.session_state["sheet_focus_lot_input"] = clicked_lot_id
+                    st.toast(f"已自动定位 Lot: {clicked_lot_id}", icon="🎯") # 给个小提示
+                    st.rerun() # 强制刷新，使下方输入框和图表立即更新
 else:
     st.warning("未能加载Lot的Code级明细数据，无法执行此分析。")
 
@@ -223,16 +250,21 @@ if sheet_data and sheet_data.get("group_level_summary_for_table") is not None:
                 # 4. 筛选出该 Lot 的所有 Sheet 数据 (宽表)
                 df_lot_wide = group_summary_df[group_summary_df['lot_id'] == selected_lot]
 
-                # 5. 排序逻辑
-                sort_option_sheet = st.selectbox(
-                    "选择 Sheet 排序方式:",
-                    options=[
-                        "默认排序 (按阵列投入时间)",
-                        "按入库时间排序",
-                        "按总不良率排序 (从高到低)" # <-- 修改为总不良率
-                    ],
-                    key="sheet_group_sorter"
-                )
+                col1, col2, col3 = st.columns([1, 1, 1])
+
+                # 在第一列放置输入框
+                with col1:
+                    sort_option_sheet = st.selectbox(
+                        "选择 Sheet 排序方式:",
+                        options=[
+                            "默认排序 (按阵列投入时间)",
+                            "按入库时间排序",
+                            "按总不良率排序 (从高到低)" # <-- 修改为总不良率
+                        ],
+                        key="sheet_group_sorter"
+                    )
+
+                
 
                 if sort_option_sheet == "按总不良率排序 (从高到低)":
                     df_lot_wide = df_lot_wide.sort_values(by='total_defect_rate', ascending=False)
