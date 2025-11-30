@@ -5,11 +5,11 @@ from vivo_project.config import CONFIG
 
 class AppSetup:
     @staticmethod
-    def initialize_app():
+    def initialize_app(log_name="app.log"):
         """
         初始化应用的日志系统。
         """
-        setup_logging("app.log")
+        setup_logging(log_name)
         logging.info("Application setup complete (logging initialized).")
 
     

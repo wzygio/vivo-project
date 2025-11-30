@@ -5,7 +5,11 @@ from pathlib import Path
 # --- 1. 初始化与配置 ---
 from vivo_project.config import CONFIG, PROJECT_ROOT # 引入 PROJECT_ROOT 用于绝对路径
 from vivo_project.utils.app_setup import AppSetup
-AppSetup.initialize_app()
+# 使用 cache_resource 避免重复初始化
+@st.cache_resource
+def init_global_resources():
+    AppSetup.initialize_app()
+init_global_resources()
 
 from vivo_project.services.ppt_service import PPTService
 from vivo_project.services.pdf_service import PDFService

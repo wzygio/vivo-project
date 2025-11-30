@@ -13,7 +13,11 @@ from vivo_project.services.excel_service import ExcelService
 from vivo_project.services.ppt_service import PPTService
 from vivo_project.services.pdf_service import PDFService
 
-AppSetup.initialize_app()
+# 使用 cache_resource 避免重复初始化
+@st.cache_resource
+def init_global_resources():
+    AppSetup.initialize_app()
+init_global_resources()
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 render_page_header("📋 专项资料")

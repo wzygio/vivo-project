@@ -9,7 +9,11 @@ import plotly.graph_objects as go
 # --- 1. 初始化与配置 ---
 from vivo_project.config import CONFIG
 from vivo_project.utils.app_setup import AppSetup
-AppSetup.initialize_app()
+# 使用 cache_resource 避免重复初始化
+@st.cache_resource
+def init_global_resources():
+    AppSetup.initialize_app()
+init_global_resources()
 
 from vivo_project.services.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
