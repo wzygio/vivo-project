@@ -1,6 +1,21 @@
+import sys
+import os
+from pathlib import Path
+
+# --- 🛡️ [标准样板代码] 入口路径修正 ---
+# 仅在 "入口文件" (被直接运行的文件) 中写这段代码
+# 其他被 import 的业务文件里一行都不要写
+current_file = Path(__file__).resolve()
+src_root = current_file.parent.parent.parent # 这里的层级要数对
+
+if str(src_root) not in sys.path:
+    sys.path.insert(0, str(src_root))
+# ------------------------------------
+
 import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
+
 
 # 1. 基础配置
 st.set_page_config(
