@@ -313,7 +313,7 @@ def _calculate_lot_base_info_with_median_time(
             total_panels=('panel_id', 'nunique'),
             warehousing_time_median=('warehousing_datetime', lambda x: x.quantile(0.75))
         ).reset_index()
-        lot_base_agg['warehousing_time'] = lot_base_agg['warehousing_time_median'].dt.strftime('%Y%m%d').fillna('')
+        lot_base_agg['warehousing_time'] = lot_base_agg['warehousing_time_median'].dt.strftime('%Y%m%d').fillna('') # type: ignore
         lot_base_info_df = lot_base_agg[['lot_id', 'total_panels', 'warehousing_time']]
         lot_array_times = None
         if full_sheet_base_info is not None and not full_sheet_base_info.empty:
@@ -993,7 +993,7 @@ def _override_rates(
                      target_df = pd.DataFrame(columns=df_new.columns)
                 
                 # 确保列对齐
-                final_results_dict[group] = pd.concat([target_df, df_new], ignore_index=True).where(pd.notna, None)
+                final_results_dict[group] = pd.concat([target_df, df_new], ignore_index=True).where(pd.notna, None) # type: ignore
 
 
     # --- [核心修改] 移除零匹配检查 ---

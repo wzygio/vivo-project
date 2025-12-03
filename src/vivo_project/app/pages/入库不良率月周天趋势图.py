@@ -16,10 +16,8 @@ def init_global_resources():
 init_global_resources()
 
 from vivo_project.services.yield_service import YieldAnalysisService
-from vivo_project.app.components.components import create_code_selection_ui, render_page_header
-from vivo_project.app.charts.mwd_chart import create_and_update_chart, create_single_trend_chart
-
-# --- 1. 初始化与配置 ---
+from vivo_project.app.components.components import create_code_selection_ui, render_page_header, calculate_warning_lines
+from vivo_project.app.charts.mwd_chart import create_and_update_chart, create_single_trend_chart, slice_recent_data
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -29,7 +27,8 @@ render_page_header("📊 入库不良率月周天趋势图")
 # --- 3. 数据加载 ---
 mwd_group_data = YieldAnalysisService.get_mwd_trend_data()
 mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
-
+# warning_lines_cache = calculate_warning_lines(mwd_code_data)
+warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
 
 # ==============================================================================
 #                      辅助函数
@@ -67,6 +66,15 @@ if mwd_group_data is not None:
         ]
 
 
+    # --- [核心修改] 前端切片：只展示最近的数据 ---
+    # 月度：近3个月
+    df_monthly = slice_recent_data(df_monthly, n_recent=3)
+    # 周度：近3周 (或4周，您自己决定)
+    df_weekly = slice_recent_data(df_weekly, n_recent=3)
+    # 日度：近7天
+    df_daily = slice_recent_data(df_daily, n_recent=7)
+    # ---------------------------------------------
+
     max_rate = 0
     all_dfs = [df_monthly, df_weekly, df_daily]
     for df in all_dfs:
@@ -75,16 +83,10 @@ if mwd_group_data is not None:
             valid_max = bar_heights[np.isfinite(bar_heights)].max()
             if pd.notna(valid_max): max_rate = max(max_rate, valid_max)
     if not np.isfinite(max_rate) or max_rate == 0: max_rate = 0.1
-    y_axis_range = [0, max_rate * 1.2]
+    y_axis_range = [0, max_rate * 1.35]
 
-    warning_line_value = None
-    if df_monthly is not None and not df_monthly.empty:
-        monthly_total_rates = df_monthly.groupby('time_period')['defect_rate'].sum()
-        best_month_rate = monthly_total_rates.min()
-        if best_month_rate > 0:
-            warning_line_value = best_month_rate * 1.1
+    warning_line_value = max_rate * 1.3
         
-
     warning_line_value = None
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -153,20 +155,21 @@ if mwd_code_data:
             for data in (mwd_code_data.get('monthly'), mwd_code_data.get('weekly'), mwd_code_data.get('daily'))
         ]
 
-
+        # --- [核心修改] 前端切片：只展示最近的数据 ---
+        # 必须先切片再计算 Y 轴范围，否则 Y 轴会被以前的高点撑大
+        df_m = slice_recent_data(df_m, n_recent=3)
+        df_w = slice_recent_data(df_w, n_recent=3)
+        df_d = slice_recent_data(df_d, n_recent=7)
+        # ---------------------------------------------
+        
         max_rate = 0
         for df in [df_m, df_w, df_d]:
             if df is not None and not df.empty:
                 max_rate = max(max_rate, df['defect_rate'].max())
-        y_axis_range = [0, max_rate * 1.25] if max_rate > 0 else [0, 0.01]
+        y_axis_range = [0, max_rate * 1.35] if max_rate > 0 else [0, 0.01]
 
-        warning_line_value = None
-        if df_m is not None and not df_m.empty:
-            best_month_rate = df_m['defect_rate'].min()
-            if best_month_rate > 0:
-                warning_line_value = best_month_rate * 1.1
-
-        warning_line_value = None
+        # warning_line_value = warning_lines_cache.get(code_desc)
+            
         st.markdown(f"#### **{code_desc}月周天趋势图**")
         chart_col1, chart_col2, chart_col3 = st.columns(3)
         with chart_col1:

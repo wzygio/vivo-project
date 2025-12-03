@@ -119,7 +119,7 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
 def _process_group_monthly_data(daily_summary: pd.DataFrame, target_defects: list, 
                             monthly_values: dict, today: dt) -> pd.DataFrame:
     """处理月度数据的工具函数"""
-    two_months_ago = today - relativedelta(months=2)
+    two_months_ago = today - relativedelta(months=3)
     monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
     monthly_agg = monthly_data_raw.resample('M').sum()
     
@@ -266,7 +266,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
 @staticmethod
 def _process_code_monthly_data(base_daily_df: pd.DataFrame, monthly_values: dict, today: dt) -> pd.DataFrame:
     """处理Code级月度数据的工具函数"""
-    two_months_ago = today - relativedelta(months=2)
+    two_months_ago = today - relativedelta(months=3)
     monthly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('M') >= pd.Period(two_months_ago, 'M')].copy()
     
     if monthly_data_raw.empty:

@@ -1,13 +1,13 @@
-import logging
+import logging, os
 import pandas as pd
 import streamlit as st
 from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime
+from pathlib import Path
 from dateutil.relativedelta import relativedelta
-import random
 
 # --- Config & Infra ---
-from vivo_project.config import CONFIG
+from vivo_project.config import CONFIG, RESOURCE_DIR
 from vivo_project.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
@@ -34,6 +34,7 @@ class YieldAnalysisService:
     为了适应 Streamlit 的重运行机制，所有方法均为静态并进行缓存。
     这确保了在下拉框切换等交互操作中，数据获取是瞬间完成的。
     """
+
 
     # ==========================================================================
     #  1. 基础数据源 (L1 & L2 Cache)
@@ -198,3 +199,83 @@ class YieldAnalysisService:
         repo = PanelRepository()
         custom_times = CONFIG['processing']['array_input_time']['custom_times']
         return repo.get_array_input_times(list(lot_ids), custom_times)
+    
+    @staticmethod
+    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
+    def load_static_warning_lines(config_file: str = CONFIG['path']['static_warning_lines_file']):
+        """
+        [新功能] 读取静态 Excel 配置文件，获取每个 Code 的固定警戒线。
+        读取 B列(Code) 和 F列(预警线)。
+        """
+        logging.info("--- 开始加载静态警戒线配置 ---")
+        config_file_path = os.path.join(RESOURCE_DIR, config_file)
+        logging.info(f"配置文件路径: {config_file_path}")
+        
+        if not os.path.exists(config_file_path):
+            st.error(f"⚠️ 未找到警戒线配置文件: {config_file_path}")
+            return {}
+
+        try:
+            # 1. 读取 Excel
+            logging.info("步骤1: 读取Excel文件...")
+            df = pd.read_excel(config_file_path, header=0, engine='openpyxl')
+            logging.info(f"成功读取Excel，共 {len(df)} 行数据")
+            
+            # 2. 检查必要的列是否存在
+            logging.info("步骤2: 检查列名...")
+            df.columns = df.columns.str.strip()
+            
+            required_cols = ['Code', '预警线']
+            if not all(col in df.columns for col in required_cols):
+                logging.warning(f"未找到标准列名，尝试使用列索引读取...")
+                if df.shape[1] > 5:
+                    df = df.iloc[:, [1, 5]]
+                    df.columns = ['Code', '预警线']
+                    logging.info("成功使用列索引读取数据")
+                else:
+                    logging.error("Excel文件列数不足，无法读取数据")
+                    return {}
+
+            # 3. 数据清洗
+            logging.info("步骤3: 开始数据清洗...")
+            warning_lines = {}
+            valid_count = 0
+            invalid_count = 0
+            
+            for idx, row in df.iterrows():
+                code = row['Code']
+                val = row['预警线']
+                
+                if pd.isna(code):
+                    invalid_count += 1
+                    continue
+                    
+                if pd.isna(val) or val == '' or val == '报表无数据':
+                    invalid_count += 1
+                    continue
+                    
+                try:
+                    if isinstance(val, str):
+                        if '%' in val:
+                            val = float(val.strip('%')) / 100.0
+                        else:
+                            val = float(val)
+                    else:
+                        val = float(val)
+                    
+                    warning_lines[str(code).strip()] = val
+                    valid_count += 1
+                    logging.debug(f"成功处理Code: {code}, 预警线: {val}")
+                    
+                except ValueError as e:
+                    invalid_count += 1
+                    logging.warning(f"跳过无效数据行 {idx}: {code} - {val}, 错误: {e}")
+                    continue
+
+            logging.info(f"数据处理完成，有效记录: {valid_count}, 无效记录: {invalid_count}")
+            return warning_lines
+
+        except Exception as e:
+            logging.error(f"读取警戒线配置失败: {e}", exc_info=True)
+            st.error(f"读取警戒线配置失败: {e}")
+            return {}

@@ -5,6 +5,28 @@ import logging, os
 from pathlib import Path
 from  vivo_project.config import CONFIG
 
+@st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
+def calculate_warning_lines(mwd_code_data):
+    """计算所有Code的警戒线值并缓存结果"""
+    if mwd_code_data is None:
+        return {}
+    
+    monthly_data = mwd_code_data.get('monthly')
+    if monthly_data is None or (isinstance(monthly_data, pd.DataFrame) and monthly_data.empty):
+        return {}
+    
+    warning_lines = {}
+    
+    # 按Code分组计算警戒线
+    for code in monthly_data['defect_desc'].unique():
+        code_monthly = monthly_data[monthly_data['defect_desc'] == code]
+        monthly_rates = code_monthly.groupby('time_period')['defect_rate'].sum()
+        max_monthly_rate = monthly_rates.max()
+        warning_lines[code] = max_monthly_rate * 1.35 if max_monthly_rate > 0 else None
+    
+    return warning_lines
+
+
 def render_page_header(title: str):
     """
     渲染统一的页面头部组件
@@ -15,7 +37,7 @@ def render_page_header(title: str):
     # 1. 获取配置中的快照路径 (逻辑与 PanelRepository 保持一致)
     processing_conf = CONFIG.get('processing', {})
     snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
-    snapshot_path = Path(snapshot_path_str)
+    snapshot_path = Path(snapshot_path_str).resolve()
 
     # 2. 定义刷新回调函数
     def _global_refresh_callback():

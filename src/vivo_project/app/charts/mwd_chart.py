@@ -4,6 +4,17 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+# --- [新增] 辅助函数：截取最近N个周期 ---
+def slice_recent_data(df, n_recent=3, time_col='time_period'):
+    """保留 DataFrame 中 time_col 列最近的 n_recent 个唯一值对应的数据"""
+    if df is None or df.empty:
+        return df
+    unique_periods = sorted(df[time_col].unique())
+    if len(unique_periods) > n_recent:
+        recent_periods = unique_periods[-n_recent:]
+        return df[df[time_col].isin(recent_periods)]
+    return df
+
 def create_and_update_chart(df, title, show_legend, show_yticklabels, y_range, color_map, category_orders_map, warning_line_value=None):
     """(已升级) 绘制Group堆叠图，带警戒线"""
     if df is None or df.empty:

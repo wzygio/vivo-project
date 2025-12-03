@@ -15,6 +15,9 @@ data_source:
     - "SLCFG"
     - "SYZLC"
 
+path:
+  static_warning_lines_file: 'M678入库不良率规格.xlsx'
+
 # 数据处理相关的参数
 processing:
 

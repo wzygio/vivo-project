@@ -2,11 +2,9 @@ import sys
 import os
 from pathlib import Path
 
-# --- 🛡️ [标准样板代码] 入口路径修正 ---
-# 仅在 "入口文件" (被直接运行的文件) 中写这段代码
-# 其他被 import 的业务文件里一行都不要写
+# 仅在 "入口文件" (被直接运行的文件) 中写这段代码，其他被 import 的业务文件里一行都不要写
 current_file = Path(__file__).resolve()
-src_root = current_file.parent.parent.parent # 这里的层级要数对
+src_root = current_file.parent.parent.parent 
 
 if str(src_root) not in sys.path:
     sys.path.insert(0, str(src_root))
@@ -16,6 +14,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
 
+from vivo_project.utils.app_setup import AppSetup
+@st.cache_resource
+def init_portal_resources():
+    AppSetup.initialize_app(log_name="portal_main.log")
 
 # 1. 基础配置
 st.set_page_config(

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import sys
+import sys, logging
 from pathlib import Path
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -18,7 +18,8 @@ def init_global_resources():
 init_global_resources()
 
 from vivo_project.services.yield_service import YieldAnalysisService
-from vivo_project.app.components.components import create_code_selection_ui, render_page_header
+from vivo_project.app.components.components import create_code_selection_ui, render_page_header, calculate_warning_lines
+from vivo_project.app.charts.sheet_lot_chart import create_lot_chart
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -28,6 +29,9 @@ render_page_header("📊 入库不良率集中性分析图")
 lot_data = YieldAnalysisService.get_lot_defect_rates()
 sheet_data = YieldAnalysisService.get_sheet_defect_rates()
 mapping_data_source = YieldAnalysisService.get_mapping_data()
+mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
+# warning_lines_cache = calculate_warning_lines(mwd_code_data)
+warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
 
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
@@ -76,6 +80,7 @@ if lot_data and lot_data.get("code_level_details") is not None:
     # 4. 根据组件的选择结果进行后续操作
     if selected_code_info.get("code"):
         selected_code = selected_code_info["code"]
+        code_desc = selected_code_info["code"]
         
         # a. 筛选出所选Code的全部数据
         chart_df_final = all_codes_df[all_codes_df['defect_desc'] == selected_code].copy()
@@ -153,59 +158,32 @@ if lot_data and lot_data.get("code_level_details") is not None:
         
         sorted_lot_ids = df_filtered['lot_id'].tolist()
         
-        # 绘图判断
+        # 绘图
         if df_filtered.empty:
             st.warning("当前筛选条件组合下无数据 (例如：选中的月份不包含选中的周)。")
         else:
-            # c. 绘图逻辑
-            fig_lot = px.bar(
-                df_filtered, x='lot_id', y='defect_rate',
-                labels={
-                    'lot_id': xaxis_label, 
-                    'defect_rate': '不良率', 
-                    'array_input_time': '阵列投入时间', 
-                    'warehousing_time': '入库时间', 
-                    'defect_panel_count': '不良panel数',
-                    'week_label': '周别'},
-                hover_data={
-                    "warehousing_time": "|%Y/%m/%d", 
-                    "array_input_time": "|%Y/%m/%d %H:%M",
-                    "defect_panel_count": True, 
-                    "defect_rate": ":.2%",
-                    "week_label": True
-                },
-                height=600, category_orders={"lot_id": sorted_lot_ids}
-            )
-            fig_lot.update_traces(marker_color='#1f77b4')
-            fig_lot.update_layout(
-                yaxis_tickformat='.2%', 
-                xaxis_tickangle=-45,
-                clickmode='event+select' # [优化] 显式开启点击模式
-            )
+            warning_line_value = warning_lines_cache.get(code_desc)
+
+            # 使用修改后的绘图函数
+            fig_lot = create_lot_chart(df_filtered, xaxis_label, sorted_lot_ids, warning_line_value)
             
-            # --- [核心修改] 开启图表交互联动 ---
-            # 1. on_select="rerun": 点击柱子后触发页面刷新
-            # 2. selection_mode="points": 允许点选
+            # 保持原有的交互功能
             select_event = st.plotly_chart(
-                fig_lot, 
-                use_container_width=True, 
-                on_select="rerun", 
+                fig_lot,
+                use_container_width=True,
+                on_select="rerun",
                 selection_mode="points"
             )
-
-            # --- [核心修改] 处理点击事件 ---
-            # 检查是否有选中事件
-            if select_event and select_event.selection and select_event.selection["points"]:
-                # 获取点击的第一个点的 x 轴数据 (即 Lot ID)
-                clicked_point = select_event.selection["points"][0]
+            
+            # 保持原有的点击事件处理逻辑
+            if select_event and select_event.selection and select_event.selection["points"]: # type: ignore
+                clicked_point = select_event.selection["points"][0] # type: ignore
                 clicked_lot_id = clicked_point["x"]
-                
-                # 联动逻辑：如果点击的 Lot ID 与当前下方的搜索框内容不一致，则更新并刷新
-                # "sheet_focus_lot_input" 是下方 Sheet 查询输入框的 key
                 if st.session_state.get("sheet_focus_lot_input") != clicked_lot_id:
                     st.session_state["sheet_focus_lot_input"] = clicked_lot_id
-                    st.toast(f"已自动定位 Lot: {clicked_lot_id}", icon="🎯") # 给个小提示
-                    st.rerun() # 强制刷新，使下方输入框和图表立即更新
+                    st.toast(f"已自动定位 Lot: {clicked_lot_id}", icon="🎯")
+                    st.rerun()
+
 else:
     st.warning("未能加载Lot的Code级明细数据，无法执行此分析。")
 
