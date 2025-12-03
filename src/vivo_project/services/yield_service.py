@@ -204,78 +204,102 @@ class YieldAnalysisService:
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def load_static_warning_lines(config_file: str = CONFIG['path']['static_warning_lines_file']):
         """
-        [新功能] 读取静态 Excel 配置文件，获取每个 Code 的固定警戒线。
-        读取 B列(Code) 和 F列(预警线)。
+        [新功能 - 降维打击版]
+        1. 在内存中将 Excel 转换为 CSV 流（清洗格式）。
+        2. 使用全屏扫描算法 (Grid Search) 自动定位 Code 和 预警线 的坐标。
         """
-        logging.info("--- 开始加载静态警戒线配置 ---")
+        logging.info("--- 开始加载静态警戒线配置 (内存CSV清洗 + 全屏扫描) ---")
         config_file_path = os.path.join(RESOURCE_DIR, config_file)
-        logging.info(f"配置文件路径: {config_file_path}")
         
         if not os.path.exists(config_file_path):
             st.error(f"⚠️ 未找到警戒线配置文件: {config_file_path}")
             return {}
 
         try:
-            # 1. 读取 Excel
-            logging.info("步骤1: 读取Excel文件...")
-            df = pd.read_excel(config_file_path, header=0, engine='openpyxl')
-            logging.info(f"成功读取Excel，共 {len(df)} 行数据")
+            # --- 步骤 1: 读取 Excel 并“降维”为 CSV ---
+            df_raw = pd.read_excel(config_file_path, header=None, dtype=str, engine='openpyxl')
             
-            # 2. 检查必要的列是否存在
-            logging.info("步骤2: 检查列名...")
-            df.columns = df.columns.str.strip()
+            # [关键] 模拟“另存为 CSV”的过程：转为 CSV 字符串，再读回来
+            # 这会去除合并单元格的副作用，将空位填充为空字符串
+            import io
+            csv_buffer = io.StringIO()
+            df_raw.to_csv(csv_buffer, index=False, header=False)
+            csv_buffer.seek(0)
+            df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
             
-            required_cols = ['Code', '预警线']
-            if not all(col in df.columns for col in required_cols):
-                logging.warning(f"未找到标准列名，尝试使用列索引读取...")
-                if df.shape[1] > 5:
-                    df = df.iloc[:, [1, 5]]
-                    df.columns = ['Code', '预警线']
-                    logging.info("成功使用列索引读取数据")
-                else:
-                    logging.error("Excel文件列数不足，无法读取数据")
-                    return {}
+            logging.info(f"Excel 已在内存中清洗为纯文本矩阵，形状: {df_clean.shape}")
 
-            # 3. 数据清洗
-            logging.info("步骤3: 开始数据清洗...")
+            # --- 步骤 2: 全屏扫描定位表头 (Grid Search) ---
+            header_row_idx = -1
+            code_col_idx = -1
+            limit_col_idx = -1
+            
+            # 扫描前 20 行
+            for r in range(min(20, len(df_clean))):
+                row_values = df_clean.iloc[r].str.strip().str.lower().values
+                
+                # 寻找关键词所在的列索引
+                c_idx = -1
+                l_idx = -1
+                
+                for c, val in enumerate(row_values):
+                    if val == 'code': # 精确匹配 Code
+                        c_idx = c
+                    # 模糊匹配 预警线 或 warning
+                    if '预警线' in val or 'warning' in val or 'limit' in val:
+                        l_idx = c
+                
+                # 如果同一行既找到了 Code 又找到了 预警线，锁定目标！
+                if c_idx != -1 and l_idx != -1:
+                    header_row_idx = r
+                    code_col_idx = c_idx
+                    limit_col_idx = l_idx
+                    logging.info(f"🎯 锁定表头坐标: 行={r}, Code列={c_idx}, 预警线列={l_idx}")
+                    break
+            
+            if header_row_idx == -1:
+                logging.error("扫描失败：未在前20行中找到同时包含'Code'和'预警线'的行。")
+                return {}
+
+            # --- 步骤 3: 精准提取数据 ---
             warning_lines = {}
             valid_count = 0
-            invalid_count = 0
             
-            for idx, row in df.iterrows():
-                code = row['Code']
-                val = row['预警线']
+            # 从表头行的下一行开始遍历
+            for curr_r in range(header_row_idx + 1, len(df_clean)):
+                # 使用锁定的列索引提取数据
+                raw_code = df_clean.iloc[curr_r, code_col_idx]
+                raw_val = df_clean.iloc[curr_r, limit_col_idx]
                 
-                if pd.isna(code):
-                    invalid_count += 1
+                # 清洗数据
+                code_str = str(raw_code).strip()
+                val_str = str(raw_val).strip()
+                
+                # 1. 过滤空 Code
+                if not code_str or code_str.lower() in ['nan', 'none']:
                     continue
-                    
-                if pd.isna(val) or val == '' or val == '报表无数据':
-                    invalid_count += 1
+                
+                # 2. 过滤无效预警线
+                if not val_str or val_str.lower() in ['nan', 'none', '报表无数据', '-', '/']:
                     continue
-                    
+                
                 try:
-                    if isinstance(val, str):
-                        if '%' in val:
-                            val = float(val.strip('%')) / 100.0
-                        else:
-                            val = float(val)
+                    final_val = 0.0
+                    # 3. 处理百分号 (Excel 转 CSV 后百分号可能会保留)
+                    if '%' in val_str:
+                        final_val = float(val_str.replace('%', '')) / 100.0
                     else:
-                        val = float(val)
+                        final_val = float(val_str)
                     
-                    warning_lines[str(code).strip()] = val
+                    warning_lines[code_str] = final_val
                     valid_count += 1
-                    logging.debug(f"成功处理Code: {code}, 预警线: {val}")
                     
-                except ValueError as e:
-                    invalid_count += 1
-                    logging.warning(f"跳过无效数据行 {idx}: {code} - {val}, 错误: {e}")
+                except ValueError:
                     continue
 
-            logging.info(f"数据处理完成，有效记录: {valid_count}, 无效记录: {invalid_count}")
+            logging.info(f"✅ 警戒线加载成功，共提取 {valid_count} 条配置。")
             return warning_lines
 
         except Exception as e:
             logging.error(f"读取警戒线配置失败: {e}", exc_info=True)
-            st.error(f"读取警戒线配置失败: {e}")
             return {}

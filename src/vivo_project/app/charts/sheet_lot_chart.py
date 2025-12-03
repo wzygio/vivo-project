@@ -37,8 +37,7 @@ def create_lot_chart(df, xaxis_label, sorted_lot_ids, warning_line_value=None):
             line_dash="dash",
             line_color="red",
             line_width=2,
-            annotation_text=f"",
-            # annotation_text=f"警戒线: {warning_line_value:.2%}",
+            annotation_text=f"spec: {warning_line_value:.2%}",
             annotation_position="bottom right",
             annotation_font_color="red"
         )

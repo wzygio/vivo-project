@@ -16,7 +16,7 @@ def slice_recent_data(df, n_recent=3, time_col='time_period'):
     return df
 
 def create_and_update_chart(df, title, show_legend, show_yticklabels, y_range, color_map, category_orders_map, warning_line_value=None):
-    """(已升级) 绘制Group堆叠图，带警戒线"""
+    """(已升级) 绘制Group堆叠图，带spec"""
     if df is None or df.empty:
         st.info(f"无 {title.replace('趋势','')} 数据。")
         return None
@@ -45,7 +45,7 @@ def create_and_update_chart(df, title, show_legend, show_yticklabels, y_range, c
     if warning_line_value is not None and warning_line_value > 0:
         fig.add_hline(
             y=warning_line_value, line_dash="dash", line_color="red", line_width=2,
-            annotation_text=f"警戒线: {warning_line_value:.2%}", 
+            annotation_text=f"spec: {warning_line_value:.2%}", 
             annotation_position="bottom right", annotation_font_color="red"
         )
     
@@ -58,7 +58,7 @@ def create_and_update_chart(df, title, show_legend, show_yticklabels, y_range, c
     return fig
 
 def create_single_trend_chart(df, title, y_range, warning_line_value=None):
-    """(已升级) 绘制Code单柱图，带警戒线和柱顶标签"""
+    """(已升级) 绘制Code单柱图，带spec和柱顶标签"""
     if df is None or df.empty:
         st.info(f"无 {title.replace('趋势','')} 数据。")
         return None
@@ -81,7 +81,7 @@ def create_single_trend_chart(df, title, y_range, warning_line_value=None):
     if warning_line_value is not None and warning_line_value > 0:
         fig.add_hline(
             y=warning_line_value, line_dash="dash", line_color="red", line_width=2,
-            annotation_text=f"警戒线: {warning_line_value:.2%}", 
+            annotation_text=f"spec: {warning_line_value:.2%}", 
             annotation_position="bottom right", annotation_font_color="red"
         )
     

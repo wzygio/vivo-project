@@ -200,7 +200,6 @@ processing:
       'random_seed': 2025,
       
       'hide_hotspot_config': {
-          # --- [核心修改] 分别定义 Sheet 和 Lot 的波动幅度 ---
           'fluctuation_sheet': 0.5,  
           'fluctuation_lot': 0.3,
       },

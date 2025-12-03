@@ -30,8 +30,8 @@ lot_data = YieldAnalysisService.get_lot_defect_rates()
 sheet_data = YieldAnalysisService.get_sheet_defect_rates()
 mapping_data_source = YieldAnalysisService.get_mapping_data()
 mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
-# warning_lines_cache = calculate_warning_lines(mwd_code_data)
-warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
+warning_lines_cache = calculate_warning_lines(mwd_code_data)
+# warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
 
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
