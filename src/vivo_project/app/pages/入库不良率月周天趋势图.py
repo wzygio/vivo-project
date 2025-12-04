@@ -27,8 +27,8 @@ render_page_header("📊 入库不良率月周天趋势图")
 # --- 3. 数据加载 ---
 mwd_group_data = YieldAnalysisService.get_mwd_trend_data()
 mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
-# warning_lines_cache = calculate_warning_lines(mwd_code_data)
-warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
+warning_lines_cache = calculate_warning_lines(mwd_code_data)
+# warning_lines_cache = YieldAnalysisService.load_static_warning_lines()
 
 # ==============================================================================
 #                      辅助函数

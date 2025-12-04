@@ -202,22 +202,21 @@ class YieldAnalysisService:
     
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def load_static_warning_lines(config_file: str = CONFIG['path']['static_warning_lines_file']):
+    def load_static_warning_lines(file_name: str = CONFIG['path']['static_warning_lines_file'], sheet_name: str = CONFIG['path']['static_warning_lines_sheet']) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
         1. 在内存中将 Excel 转换为 CSV 流（清洗格式）。
         2. 使用全屏扫描算法 (Grid Search) 自动定位 Code 和 预警线 的坐标。
         """
-        logging.info("--- 开始加载静态警戒线配置 (内存CSV清洗 + 全屏扫描) ---")
-        config_file_path = os.path.join(RESOURCE_DIR, config_file)
-        
-        if not os.path.exists(config_file_path):
-            st.error(f"⚠️ 未找到警戒线配置文件: {config_file_path}")
-            return {}
-
         try:
             # --- 步骤 1: 读取 Excel 并“降维”为 CSV ---
-            df_raw = pd.read_excel(config_file_path, header=None, dtype=str, engine='openpyxl')
+            df_raw = pd.read_excel(
+                os.path.join(RESOURCE_DIR, file_name), 
+                header=None, 
+                dtype=str, 
+                engine='openpyxl',
+                sheet_name=sheet_name
+            )
             
             # [关键] 模拟“另存为 CSV”的过程：转为 CSV 字符串，再读回来
             # 这会去除合并单元格的副作用，将空位填充为空字符串
@@ -229,36 +228,19 @@ class YieldAnalysisService:
             
             logging.info(f"Excel 已在内存中清洗为纯文本矩阵，形状: {df_clean.shape}")
 
-            # --- 步骤 2: 全屏扫描定位表头 (Grid Search) ---
-            header_row_idx = -1
-            code_col_idx = -1
-            limit_col_idx = -1
+            # --- 步骤 2: 使用固定的列位置 ---
+            header_row_idx = 0  # 第一行
+            code_col_idx = 1    # B列（第二列，索引为1）
+            limit_col_idx = 5   # F列（第六列，索引为5）
             
-            # 扫描前 20 行
-            for r in range(min(20, len(df_clean))):
-                row_values = df_clean.iloc[r].str.strip().str.lower().values
-                
-                # 寻找关键词所在的列索引
-                c_idx = -1
-                l_idx = -1
-                
-                for c, val in enumerate(row_values):
-                    if val == 'code': # 精确匹配 Code
-                        c_idx = c
-                    # 模糊匹配 预警线 或 warning
-                    if '预警线' in val or 'warning' in val or 'limit' in val:
-                        l_idx = c
-                
-                # 如果同一行既找到了 Code 又找到了 预警线，锁定目标！
-                if c_idx != -1 and l_idx != -1:
-                    header_row_idx = r
-                    code_col_idx = c_idx
-                    limit_col_idx = l_idx
-                    logging.info(f"🎯 锁定表头坐标: 行={r}, Code列={c_idx}, 预警线列={l_idx}")
-                    break
+            # 验证表头内容
+            code_header = str(df_clean.iloc[0, code_col_idx]).strip().lower()
+            limit_header = str(df_clean.iloc[0, limit_col_idx]).strip().lower()
             
-            if header_row_idx == -1:
-                logging.error("扫描失败：未在前20行中找到同时包含'Code'和'预警线'的行。")
+            if code_header != 'code' or not any(keyword in limit_header for keyword in ['预警线', 'warning', 'limit']):
+                error_msg = f"表头验证失败：B列应为'Code'（实际：{code_header}），F列应包含'预警线'相关关键词（实际：{limit_header}）"
+                logging.error(error_msg)
+                st.error(error_msg)
                 return {}
 
             # --- 步骤 3: 精准提取数据 ---
@@ -274,14 +256,6 @@ class YieldAnalysisService:
                 # 清洗数据
                 code_str = str(raw_code).strip()
                 val_str = str(raw_val).strip()
-                
-                # 1. 过滤空 Code
-                if not code_str or code_str.lower() in ['nan', 'none']:
-                    continue
-                
-                # 2. 过滤无效预警线
-                if not val_str or val_str.lower() in ['nan', 'none', '报表无数据', '-', '/']:
-                    continue
                 
                 try:
                     final_val = 0.0
