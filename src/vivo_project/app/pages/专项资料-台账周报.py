@@ -197,163 +197,165 @@ if st.session_state.viewing_file:  # 如果有正在查看的文件
 
     # --- 多态渲染逻辑 ---
     try:
-        # Case 1: Excel 编辑器 (核心修改部分)
+        # Case 1: Excel 编辑器 (新增行修复版)
         if curr_type == 'EXCEL':
             file_path = os.path.join(DOC_SOURCE_DIR, curr_file)
             
             # 1. 首次加载或重新加载逻辑
-            # 如果缓存为空，或者缓存的文件不是当前文件，则从磁盘读取
             if st.session_state.editor_data is None or st.session_state.editor_file_ref != curr_file:
                 with st.spinner("正在加载最新数据并校验版本..."):
-                    # 读取数据
-                    df = ExcelService.load_and_clean_data(file_path)
-                    # 读取时间戳 (用于乐观锁)
+                    df = ExcelService.load_and_clean_data(file_path, sheet_name="Sheet1")
+                    
+                    status_mapping = {"Open": "🔴 Open", "Close": "🟢 Close", "Monitor": "🟡 Monitor"}
+                    if "状态" in df.columns:
+                        df["状态"] = df["状态"].replace(status_mapping)
+                    
+                    # ======================================================
+                    # [新增] 注入临时辅助列 "移除"，用于控制删除
+                    # 插入到第0列，默认值为 False
+                    # ======================================================
+                    if "移除" not in df.columns:
+                        df.insert(0, "移除", False)
+                    
                     ts = ExcelService.get_file_timestamp(file_path)
                     
-                    # 存入 Session State
                     st.session_state.editor_data = df
                     st.session_state.editor_timestamp = ts
                     st.session_state.editor_file_ref = curr_file
-            
-            # 2. 渲染可编辑表格 (Data Editor)
-            # 注意：data_editor 不支持 style.map 颜色，只能用 column_config 配置格式
-            if st.session_state.editor_data is not None and not st.session_state.editor_data.empty:
+
+            # 2. 渲染区域
+            if st.session_state.editor_data is not None:
                 
-                # 定义列配置 (美化版)
+                # 定义列配置 (保持不变)
                 column_cfg = {
-                    "No.": st.column_config.NumberColumn(
-                        "序号", 
-                        format="%d", 
-                        width="small",
-                        help="Issue 唯一编号"
-                    ),
-                    
-                    # 1. 针对长文本：虽然无法自动换行，但强制设为 large 宽度，最大化可视区域
-                    "Issue描述": st.column_config.TextColumn(
-                        "Issue 描述", 
-                        width="large",  # 关键：加宽
-                        required=True,
-                        help="详细的异常描述信息"
-                    ),
-                    "原因分析": st.column_config.TextColumn(
-                        "原因分析", 
-                        width="large", # 关键：加宽
-                        help="以及排查出的根本原因"
-                    ),
-                    
-                    # 2. 针对日期：使用原生日期控件，解决 '1970-01-01' 丑陋问题
-                    "发生日期": st.column_config.DateColumn(
-                        "发生日期",
-                        format="YYYY-MM-DD",
-                        width="medium"
-                    ),
-
-                    # 2. 针对日期：使用原生日期控件，解决 '1970-01-01' 丑陋问题
-                    "关闭日期": st.column_config.DateColumn(
-                        "关闭日期",
-                        format="YYYY-MM-DD",
-                        width="medium"
-                    ),
-                    
-                    # 3. 针对状态：加入 Emoji 视觉符号，提升高级感
-                    # 注意：保存到 Excel 时也会包含这些 Emoji，这在现代系统中通常是兼容的
+                    "移除": st.column_config.CheckboxColumn("🗑️", width="small", help="勾选后点击上方删除按钮"),
+                    "No.": st.column_config.NumberColumn("序号", format="%d", width="small"),
+                    "Issue描述": st.column_config.TextColumn("Issue 描述", width="large", required=True),
+                    "原因分析": st.column_config.TextColumn("原因分析", width="large"),
+                    "发生日期": st.column_config.DateColumn("发生日期", format="YYYY-MM-DD", width="medium"),
                     "状态": st.column_config.SelectboxColumn(
-                        "当前状态",
-                        width="medium",
-                        options=[
-                            "🔴 Open", 
-                            "🟢 Close", 
-                            "🟡 Monitor", 
-                            "⚪ Pending"
-                        ],
-                        required=True,
-                        help="红色:未结案 | 绿色:已结案"
+                        "当前状态", width="medium",
+                        options=["🔴 Open", "🟢 Close", "🟡 Monitor", "⚪ Pending"],
+                        required=True
                     ),
-                    
-                    # 4. 针对数值/指标：如果有良率或数值列，可以格式化
-                    # 这里假设 '北极星指标' 可能是文本，如果是数字可以用 NumberColumn
-                    "北极星指标": st.column_config.TextColumn(
-                        "北极星指标",
-                        width="medium"
-                    ),
-                    
-                    # 5. 其他辅助列优化
-                    "工艺段": st.column_config.TextColumn("工艺段", width="small"),
-                    "发现方": st.column_config.TextColumn("发现方", width="small"),
-                    "型号": st.column_config.TextColumn("型号", width="small"),
                 }
 
-                # --- 数据清洗：将旧的纯文本状态映射为新的 Emoji 状态，确保 UI 显示正确 ---
-                status_mapping = {
-                    "Open": "🔴 Open",
-                    "Close": "🟢 Close",
-                    "Monitor": "🟡 Monitor"
-                }
-                # 如果 '状态' 列存在，则应用映射；如果映射字典里找不到(如空值)，保持原样
-                if "状态" in st.session_state.editor_data.columns:
-                     st.session_state.editor_data["状态"] = st.session_state.editor_data["状态"].replace(status_mapping)
-                
-                # 渲染编辑器，返回值是用户修改后的新 DataFrame
-                edited_df = st.data_editor(
-                    st.session_state.editor_data,  # 传入缓存的数据
-                    height=600,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config=column_cfg,
-                    num_rows="dynamic", # 允许增删行
-                    key=f"editor_{curr_file}" # 确保唯一 Key
-                )
-                
-                # 3. 保存按钮区
-                st.info("💡 提示：支持多人并发编辑。若保存时提示冲突，请刷新页面获取最新版后重试。")
-                
-                col_save, col_info = st.columns([1, 5])
-                with col_save:
-                    # 使用一个容器来存放保存后的反馈信息，避免UI跳动
-                    save_status_container = st.empty()
+                # ==========================================================
+                # [核心修复] 开启大表单模式：所有按钮都放入 Form
+                # ==========================================================
+                with st.form(key=f"form_{curr_file}"):
                     
-                    if st.button("💾 保存修改", type="primary", use_container_width=True):
-                        with st.spinner("正在安全写入..."):
-                            # 1. 尝试保存
-                            success, msg = ExcelService.save_data_with_lock(
-                                file_path, 
-                                edited_df, 
-                                st.session_state.editor_timestamp
-                            )
+                    # --- A. 顶部功能按钮区 (都在 Form 内部) ---
+                    col_btn_add, col_btn_del, col_hint = st.columns([1, 1, 8])
+                    
+                    with col_btn_add:
+                        # [修改] 变为 form_submit_button
+                        btn_add = st.form_submit_button("➕ New", type="secondary", use_container_width=True)
+                    
+                    with col_btn_del:
+                        # [修改] 变为 form_submit_button
+                        btn_del = st.form_submit_button("🗑️ Delete", type="secondary", use_container_width=True)
+                        
+                    with col_hint:
+                        st.caption("💡 提示：勾选左侧复选框可删除。修改后请点击底部保存。")
+
+                    # --- B. 编辑器区域 ---
+                    # 此时 edited_df 会包含您刚刚勾选的状态，即使还没有点击保存
+                    edited_df = st.data_editor(
+                        st.session_state.editor_data,
+                        height=600,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config=column_cfg,
+                        key=f"editor_{curr_file}"
+                    )
+                    
+                    # --- C. 底部保存区 ---
+                    col_save, col_space = st.columns([1, 5])
+                    with col_save:
+                        btn_save = st.form_submit_button("💾 Save", type="primary", use_container_width=True)
+
+                # ==========================================================
+                # [逻辑处理] 根据点击的按钮分发逻辑
+                # ==========================================================
+                
+                # 1. 处理新增
+                if btn_add:
+                    # 使用 edited_df (最新的前端数据) 而不是 st.session_state.editor_data (旧数据)
+                    # 这样可以保留您在新增前填写的未保存内容！
+                    current_df = edited_df 
+                    
+                    # 智能序号
+                    new_no = 1
+                    if not current_df.empty and "No." in current_df.columns:
+                        try:
+                            max_val = pd.to_numeric(current_df["No."], errors='coerce').max()
+                            if not pd.isna(max_val): new_no = int(max_val) + 1
+                        except: pass
+                    
+                    new_row = {col: "" for col in current_df.columns}
+                    new_row["No."] = new_no
+                    new_row["状态"] = "🔴 Open"
+                    new_row["发生日期"] = pd.Timestamp.now().normalize()
+                    new_row["Issue描述"] = "(请在此处填写描述)"
+                    new_row["移除"] = False
+                    
+                    st.session_state.editor_data = pd.concat(
+                        [current_df, pd.DataFrame([new_row])], 
+                        ignore_index=True
+                    )
+                    st.success(f"已追加新行 No.{new_no}")
+                    st.rerun()
+
+                # 2. 处理删除 (这是您最关心的修复)
+                elif btn_del:
+                    # edited_df 里包含了您刚刚勾选的 ✅
+                    rows_to_delete = edited_df["移除"].sum()
+                    
+                    if rows_to_delete == 0:
+                        st.warning("⚠️ 请先勾选表格第一列的复选框，再点击删除。")
+                    else:
+                        # 执行删除过滤
+                        st.session_state.editor_data = edited_df[~edited_df["移除"]].reset_index(drop=True)
+                        st.success(f"🗑️ 已移除 {rows_to_delete} 行。")
+                        st.rerun()
+
+                # 3. 处理保存
+                elif btn_save:
+                    logging.info(f"[Form] 用户提交保存: {curr_file}")
+                    
+                    # 剔除辅助列
+                    df_to_save = edited_df.drop(columns=["移除"], errors='ignore')
+
+                    with st.spinner("正在安全写入..."):
+                        success, msg = ExcelService.save_data_with_lock(
+                            file_path, 
+                            df_to_save, 
+                            st.session_state.editor_timestamp,
+                            sheet_name="Sheet1"
+                        )
+                        
+                        if success:
+                            st.success(msg)
+                            # 保存成功后，更新 Session
+                            # 注意：这里我们得把“移除”列加回去，否则刷新后复选框会消失
+                            df_saved_display = df_to_save.copy()
+                            df_saved_display.insert(0, "移除", False)
                             
-                            if success:
-                                # A. 保存成功：正常刷新
-                                st.success(msg)
-                                logging.info(f"User saved file: {curr_file}")
-                                st.session_state.editor_data = edited_df
-                                st.session_state.editor_timestamp = ExcelService.get_file_timestamp(file_path)
-                                time.sleep(1) 
-                                st.rerun() 
-                            else:
-                                # B. 保存失败（冲突）：启动“逃生舱”
-                                # 注意：这里绝对不要 rerun，否则数据就丢了！
-                                save_status_container.error(f"⚠️ {msg}")
-                                
-                                # 在错误信息下方，直接提供当前数据的下载备份
-                                # 将当前的 DataFrame 转为 Excel 字节流
-                                import io
-                                buffer = io.BytesIO()
-                                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                                    edited_df.to_excel(writer, index=False)
-                                
-                                # 显示备份下载按钮
-                                st.warning("您的修改尚未保存！请先下载您的修改版本作为备份，然后刷新页面。")
-                                st.download_button(
-                                    label="📥 下载我的修改备份 (防丢失)",
-                                    data=buffer,
-                                    file_name=f"冲突备份_{curr_file}",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    key="backup_download_btn"
-                                )
-                                logging.warning(f"Save conflict for {curr_file}, user offered backup.")
-
+                            st.session_state.editor_data = df_saved_display
+                            st.session_state.editor_timestamp = ExcelService.get_file_timestamp(file_path)
+                            time.sleep(1) 
+                            st.rerun() 
+                        else:
+                            st.error(f"⚠️ {msg}")
+                            # 备份下载
+                            import io
+                            buffer = io.BytesIO()
+                            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                                df_to_save.to_excel(writer, index=False)
+                            st.download_button("📥 下载备份", data=buffer, file_name=f"冲突备份_{curr_file}")
             else:
-                st.warning("Excel 内容为空或读取失败。")
+                st.warning("数据加载异常，请尝试刷新页面。")
 
         # Case 2: PDF / PPT 渲染 (读取缓存图片)
         elif curr_type in ['PDF', 'PPT']:

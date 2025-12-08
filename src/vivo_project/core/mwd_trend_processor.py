@@ -184,7 +184,8 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         MIN_PANEL_COUNT_FOR_TODAY = 5000
 
         # 月度指定值配置
-        CODE_MONTHLY_VALUES = CONFIG['processing']['code_monthly_values']
+        CODE_MONTHLY_VALUES = CONFIG['processing'].get('code_monthly_values', {}) or {}
+
         
         # 数据预处理
         df = panel_details_df.copy()

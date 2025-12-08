@@ -21,7 +21,6 @@ path:
 
 # 数据处理相关的参数
 processing:
-
   use_local_snapshot: True
   snapshot_path: 'data/panel_details_snapshot.parquet'
   
@@ -29,45 +28,29 @@ processing:
   group_monthly_values:
     Array_Line:
       '2025-10': 0.0117
-      '2025-11': 0.0103
+      '2025-11': 0.0105
     Array_Pixel:
       '2025-10': 0.0110
-      '2025-11': 0.0094
-      '2025-12': 0.0112
+      '2025-11': 0.0101
+      '2025-12': 0.0122
     OLED_Mura:
       '2025-10': 0.0018
-      '2025-11': 0.0016
+      '2025-11': 0.0017
 
   group_weekly_values:
-    Array_Line:
-      '2025-W47': 0.0099
+    Array_Pixel:
+      '2025-W49': 0.0122
 
   code_monthly_values:
-    S向亮线:
-      '2025-11': 0.0057
-    G3亮点:
+    '暗点':
+      '2025-10': 0.0016
+      '2025-11': 0.0015
+    'G3亮点':
+      '2025-10': 0.0030
       '2025-11': 0.0029
-      '2025-12': 0.0036
-    暗点:
-      '2025-12': 0.0025
-    S向棱形彩色带状Mura:
-      '2025-10': 0.0001
-      '2025-11': 0.00008
-    S向边缘Mura:
-      '2025-11': 0.0004
-    彩斑Mura:
-      '2025-10': 0.0013
-      '2025-11': 0.0011
-    G彩短条Mura:
-      '2025-10': 0.0003
-      '2025-11': 0.00004
-
+  
   code_weekly_values:
-    G3亮点:
-      '2025-W49': 0.0036
-    暗点:
-      '2025-W49': 0.0025
-
+  
 
   array_input_time:
     custom_times:
@@ -98,6 +81,9 @@ processing:
   defect_multipliers:
     '彩斑Mura': 0.35
     'G彩短条Mura': 0.2
+    'G3亮点': 0.9
+    '群暗点': 0.8
+    '暗点': 0.7
 
   mapping_hotspot_script:
     # 脚本 1: (你现有的规则)

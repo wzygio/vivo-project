@@ -1,42 +1,32 @@
-@echo off
-TITLE Visionox AI System Launcher (Unified)
-ECHO ========================================================
-ECHO       Starting Visionox M3 Ultimate System...
-ECHO       (Portal + Yield System + PPT Viewer)
-ECHO ========================================================
+REM ========================================================
+REM 0. 自动查杀旧进程。防止进程堆积，确保每次启动都是最新的单一实例
+REM ========================================================
+ECHO [INFO] Checking for existing process on port 8503...
+for /f "tokens=5" %%a in ('netstat -aon ^| find ":8503" ^| find "LISTENING"') do (
+    ECHO [INFO] Killing old process PID: %%a
+    taskkill /f /pid %%a >nul 2>&1
+)
 
-REM 1. 切换到项目根目录
+REM ========================================================
+REM 1. 设置环境变量
+REM ========================================================
 D:
-REM 建议加上引号，防止路径中有空格
 cd "D:\wzy\Python\vivo-project"
-ECHO [INFO] Current directory: %cd%
-
-REM 2. 激活虚拟环境
-call Vivo_project\Scripts\activate
-
-REM 3. 设置 PYTHONPATH
-REM 将 src 目录显式加入 Python 搜索路径，确保 import vivo_project 正常工作
 set PYTHONPATH=%cd%\src;%PYTHONPATH%
-ECHO [INFO] PYTHONPATH set to include src directory.
 
 REM ========================================================
-REM [第一步] 强制更新数据快照 (阻塞执行)
+REM 2. 激活虚拟环境
 REM ========================================================
-ECHO [INFO] Step 1: Updating Data Snapshot (This may take a while)...
-REM 调用 snapshot 工具，强制从数据库拉取最新数据并保存
-REM 这一步会阻塞（等待），直到数据准备好，确保 UI 启动时显示的是最新数据
-python src\vivo_project\utils\create_snapshot.py
+IF EXIST "Vivo_project\Scripts\activate.bat" (
+    call "Vivo_project\Scripts\activate.bat"
+)
 
 REM ========================================================
-REM [第二步] 启动 Streamlit 服务 (新窗口异步运行)
+REM 3. 启动 Streamlit (使用 pythonw)
 REM ========================================================
 ECHO [INFO] Step 2: Starting Integrated Portal on Port 8503...
-REM 使用 start 开启新窗口，这样 Streamlit 在后台运行，不会卡住当前的脚本窗口
-start "Visionox Unified System" python -m streamlit run src\vivo_project\app\Home.py --server.port 8503 --server.headless true
+python -m streamlit run src\vivo_project\app\Home.py --server.port 8503
 
-REM ========================================================
-REM [第三步] 等待服务预热并打开浏览器
-REM ========================================================
 ECHO [INFO] Step 3: Waiting for services to initialize...
 REM 加载 HTML/JS 资源可能需要一点时间，保持 5 秒等待
 timeout /t 5 >nul
@@ -44,9 +34,7 @@ timeout /t 5 >nul
 ECHO [INFO] Opening Browser...
 explorer "http://localhost:8503"
 
-ECHO ========================================================
-ECHO [SUCCESS] System is running at http://localhost:8503
-ECHO           Close the popup window to stop the service.
-ECHO ========================================================
-REM 保持窗口开启，方便查看快照更新的日志 (Success/Error)
-PAUSE
+REM ========================================================
+REM 4. 退出
+REM ========================================================
+exit

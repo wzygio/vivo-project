@@ -34,7 +34,6 @@ def setup_logging(log_filename: str = "app.log"):
             # 如果文件无法以写入模式打开（例如权限问题），至少还能输出到控制台
             logging.error(f"无法以写入模式打开日志文件 '{log_filepath}': {e}")
 
-
     # --- 控制台处理器 (保持不变) ---
     # 避免重复添加控制台处理器（如果之前被清除了）
     if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
