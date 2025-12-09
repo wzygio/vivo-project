@@ -47,6 +47,10 @@ processing:
     'G3亮点':
       '2025-10': 0.0030
       '2025-11': 0.0029
+    '彩斑Mura':
+      '2025-09': 0.0023
+      '2025-10': 0.0017
+      '2025-11': 0.0015
   
   code_weekly_values:
   
@@ -78,7 +82,7 @@ processing:
     - "OLED_Mura"
 
   defect_multipliers:
-    '彩斑Mura': 0.35
+    '彩斑Mura': 0.3
     'G彩短条Mura': 0.2
     'G3亮点': 0.9
     '群暗点': 0.8
@@ -205,10 +209,9 @@ processing:
       # 2. 您要的“接口”：为特定Code指定Lot/Sheet的权重
       'code_specific_lot_weights': {
           'S向亮线': {
-              'L3MR58E38': 10, # <--- 将这个Lot的权重设为10
+              'L3MR58E38': 10,
           }
       },
-
       'code_specific_sheet_weights': {
             'PCD裂纹亮线': {
               'L3MR57E1J16': 20
