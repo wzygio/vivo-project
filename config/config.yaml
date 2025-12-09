@@ -38,8 +38,7 @@ processing:
       '2025-11': 0.0017
 
   group_weekly_values:
-    Array_Pixel:
-      '2025-W49': 0.0122
+
 
   code_monthly_values:
     '暗点':

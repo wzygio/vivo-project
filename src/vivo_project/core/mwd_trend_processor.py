@@ -34,8 +34,8 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         today = pd.to_datetime(dt.now().date())
         
         # 构建日度汇总
-        daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels')
-        daily_defect_counts = df.groupby([df['warehousing_time'].dt.date, 'defect_group'])['panel_id'].nunique().unstack(level='defect_group').fillna(0)
+        daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels') # type: ignore
+        daily_defect_counts = df.groupby([df['warehousing_time'].dt.date, 'defect_group'])['panel_id'].nunique().unstack(level='defect_group').fillna(0) # type: ignore
         daily_summary = pd.concat([daily_summary, daily_defect_counts], axis=1).fillna(0)
         daily_summary.index = pd.to_datetime(daily_summary.index)
         
@@ -193,8 +193,8 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         today = pd.to_datetime(dt.now().date())
 
         # 构建日度汇总
-        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels')
-        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count')
+        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
+        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore
         
         base_daily_df = pd.merge(daily_total_panels.reset_index(), daily_code_defects.reset_index(), on='warehousing_time', how='left')
         
@@ -233,7 +233,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
 
         # 处理周度数据
         three_weeks_ago = today - relativedelta(weeks=2)
-        weekly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W')].copy()
+        weekly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W')].copy() # type: ignore
         
         if not weekly_data_raw.empty:
             # --- [核心修改] 使用 ISO Calender 生成标准的 YYYY-Wxx ---
@@ -253,7 +253,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         seven_days_ago = today - relativedelta(days=6)
         daily_data_final = base_daily_df[base_daily_df['warehousing_time'] >= seven_days_ago].copy()
         if not daily_data_final.empty:
-            daily_data_final['time_period'] = daily_data_final['warehousing_time'].dt.strftime('%m-%d')
+            daily_data_final['time_period'] = daily_data_final['warehousing_time'].dt.strftime('%m-%d') # type: ignore
             results['daily'] = daily_data_final[daily_data_final['defect_group'] != 'NoDefect']
 
         logging.info("成功聚合Code级月、周、天数据 (最终稳定版 - ISO Fix)。")
@@ -268,7 +268,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
 def _process_code_monthly_data(base_daily_df: pd.DataFrame, monthly_values: dict, today: dt) -> pd.DataFrame:
     """处理Code级月度数据的工具函数"""
     two_months_ago = today - relativedelta(months=3)
-    monthly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('M') >= pd.Period(two_months_ago, 'M')].copy()
+    monthly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('M') >= pd.Period(two_months_ago, 'M')].copy() # type: ignore
     
     if monthly_data_raw.empty:
         return pd.DataFrame()
@@ -309,8 +309,8 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defec
         # 1. 初始数据聚合
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels')
-        daily_defect_counts = df.groupby([df['warehousing_time'].dt.date, 'defect_group'])['panel_id'].nunique().unstack(level='defect_group').fillna(0)
+        daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels') # type: ignore
+        daily_defect_counts = df.groupby([df['warehousing_time'].dt.date, 'defect_group'])['panel_id'].nunique().unstack(level='defect_group').fillna(0) # type: ignore
         daily_summary = pd.concat([daily_summary, daily_defect_counts], axis=1).fillna(0)
         daily_summary.index = pd.to_datetime(daily_summary.index)
 
