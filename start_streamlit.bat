@@ -31,9 +31,6 @@ ECHO [INFO] Step 3: Waiting for services to initialize...
 REM 加载 HTML/JS 资源可能需要一点时间，保持 5 秒等待
 timeout /t 5 >nul
 
-ECHO [INFO] Opening Browser...
-explorer "http://localhost:8503"
-
 REM ========================================================
 REM 4. 退出
 REM ========================================================

@@ -190,6 +190,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
 
         # 月度指定值配置
         CODE_MONTHLY_VALUES = CONFIG['processing'].get('code_monthly_values', {}) or {}
+        CODE_WEEKLY_VALUES = CONFIG['processing'].get('code_weekly_values', {}) or {}
 
         # 数据预处理
         df = panel_details_df.copy()
@@ -235,22 +236,8 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         # 使用工具函数处理月度数据
         results['monthly'] = _process_code_monthly_data(base_daily_df, CODE_MONTHLY_VALUES, today)
 
-        # 处理周度数据
-        three_weeks_ago = today - relativedelta(weeks=2)
-        weekly_data_raw = base_daily_df[base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W')].copy() # type: ignore
-        
-        if not weekly_data_raw.empty:
-            # --- [核心修改] 使用 ISO Calender 生成标准的 YYYY-Wxx ---
-            # 这样 Mon(周一) 到 Sun(周日) 都会被分配到同一个 Week Number
-            iso_df = weekly_data_raw['warehousing_time'].dt.isocalendar()
-            weekly_data_raw['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format) # type: ignore
-            
-            weekly_agg = weekly_data_raw.groupby(['time_period', 'defect_group', 'defect_desc']).agg(
-                defect_panel_count=('defect_panel_count', 'sum'), 
-                total_panels=('total_panels', 'sum')
-            ).reset_index()
-            weekly_agg['defect_rate'] = weekly_agg['defect_panel_count'] / weekly_agg['total_panels']
-            results['weekly'] = weekly_agg[weekly_agg['defect_group'] != 'NoDefect']
+        # 使用工具函数处理周度数据
+        results['weekly'] = _process_code_weekly_data(base_daily_df, CODE_WEEKLY_VALUES, today)
 
         # 处理日度数据
         seven_days_ago = today - relativedelta(days=6)
@@ -298,6 +285,50 @@ def _process_code_monthly_data(base_daily_df: pd.DataFrame, monthly_values: dict
     monthly_agg['defect_rate'] = monthly_agg['defect_panel_count'] / monthly_agg['total_panels']
     return monthly_agg[monthly_agg['defect_group'] != 'NoDefect']
 
+
+@staticmethod
+def _process_code_weekly_data(base_daily_df: pd.DataFrame, weekly_values: dict, today: dt) -> pd.DataFrame:
+    """处理Code级周度数据的工具函数 (已适配 ISO 周)"""
+    # 添加空值检查
+    weekly_values = weekly_values or {}
+    
+    # 获取最近3周的数据
+    three_weeks_ago = today - relativedelta(weeks=2)
+    weekly_data_raw = base_daily_df[
+        base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W') # type: ignore
+    ].copy()
+    
+    if weekly_data_raw.empty:
+        return pd.DataFrame()
+    
+    # 生成ISO周标识
+    iso_df = weekly_data_raw['warehousing_time'].dt.isocalendar()
+    weekly_data_raw['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
+    
+    # 按周聚合数据
+    weekly_agg = weekly_data_raw.groupby(['time_period', 'defect_group', 'defect_desc']).agg(
+        defect_panel_count=('defect_panel_count', 'sum'),
+        total_panels=('total_panels', 'sum')
+    ).reset_index()
+    
+    # 应用指定值
+    for idx, row in weekly_agg.iterrows():
+        code_desc = row['defect_desc']
+        time_period = row['time_period']
+        
+        if code_desc in weekly_values:
+            specified_value = weekly_values[code_desc].get(time_period)
+            if specified_value is not None:
+                weekly_agg.at[idx, 'defect_panel_count'] = int(
+                    specified_value * row['total_panels']
+                )
+                logging.info(f"已为{code_desc}在{time_period}设置指定值")
+    
+    # 计算不良率
+    weekly_agg['defect_rate'] = weekly_agg['defect_panel_count'] / weekly_agg['total_panels']
+    
+    # 过滤掉无缺陷的数据
+    return weekly_agg[weekly_agg['defect_group'] != 'NoDefect']
 
 
 @staticmethod
