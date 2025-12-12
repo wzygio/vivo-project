@@ -24,7 +24,7 @@ processing:
   use_local_snapshot: True
   snapshot_path: 'data/panel_details_snapshot.parquet'
   
-  # 1. Group 级修正配置 (宽表模式：Key是列名/DefectGroup)
+  # 1. Group 级修正配置
   group_monthly_values:
     Array_Line:
       '2025-10': 0.0117
@@ -39,7 +39,7 @@ processing:
 
   group_weekly_values:
 
-
+  # 2. Code 级修正配置
   code_monthly_values:
     'G向单亮线':
       '2025-12': 0.0007
@@ -50,6 +50,8 @@ processing:
     'G3亮点':
       '2025-10': 0.0030
       '2025-11': 0.0029
+    '可修复暗点':
+      '2025-12': 0.0007
 
     '彩斑Mura':
       '2025-09': 0.0023
@@ -89,11 +91,13 @@ processing:
     - "OLED_Mura"
 
   defect_multipliers:
-    '彩斑Mura': 0.3
-    'G彩短条Mura': 0.2
     'G3亮点': 0.9
     '群暗点': 0.8
     '暗点': 0.7
+
+    '彩斑Mura': 0.3
+    'G彩短条Mura': 0.2
+
 
   mapping_hotspot_script:
     # 脚本 1: (你现有的规则)

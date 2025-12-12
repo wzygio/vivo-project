@@ -64,7 +64,7 @@ if all_data:
     else:
         # 准备用于显示的副本 (乘以100)
         df_for_display_group = final_filtered_df.copy()
-        rate_columns_to_convert = ["pass_rate", "array_pixel_rate", "array_line_rate", "oled_mura_rate"]
+        rate_columns_to_convert = ["array_pixel_rate", "array_line_rate", "oled_mura_rate"]
         
         for col in rate_columns_to_convert:
             if col in df_for_display_group.columns:
@@ -77,13 +77,12 @@ if all_data:
                 "lot_id": st.column_config.TextColumn("Lot ID"),
                 "warehousing_time": st.column_config.DateColumn("入库时间", format="YYYY/MM/DD"),
                 "array_input_time": st.column_config.DatetimeColumn("阵列投入时间", format="YYYY/MM/DD"),
-                "pass_rate": st.column_config.NumberColumn("过货率", format="%.2f%%"),
                 "array_pixel_rate": st.column_config.NumberColumn("Array_Pixel不良率", format="%.2f%%"),
                 "array_line_rate": st.column_config.NumberColumn("Array_Line不良率", format="%.2f%%"),
                 "oled_mura_rate": st.column_config.NumberColumn("OLED_Mura不良率", format="%.2f%%"),
             },
             column_order=[
-                "sheet_id", "lot_id", "warehousing_time", "array_input_time", "pass_rate",
+                "sheet_id", "lot_id", "warehousing_time", "array_input_time",
                 "array_pixel_rate", "array_line_rate", "oled_mura_rate"
             ],
             hide_index=True,

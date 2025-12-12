@@ -18,7 +18,8 @@ init_global_resources()
 
 from vivo_project.services.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
-
+# [新增] 引入筛选器辅助函数
+from vivo_project.app.charts.sheet_details_chart import render_lot_id_filter
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -30,9 +31,9 @@ all_data = YieldAnalysisService.get_lot_defect_rates()
 
 
 if all_data:
-# ==============================================================================
-#                      --- 模块1: Group不良率明细表 (By Lot) ---
-# ==============================================================================
+    # ==============================================================================
+    #                      --- 模块1: Group不良率明细表 (By Lot) ---
+    # ==============================================================================
     group_summary_df_full = all_data.get("group_level_summary_for_table")
     if group_summary_df_full is None or group_summary_df_full.empty:
         st.error("未能加载Lot级别数据，请检查后台。")
@@ -40,28 +41,36 @@ if all_data:
         
     group_summary_df_full['warehousing_time'] = pd.to_datetime(group_summary_df_full['warehousing_time'], format='%Y%m%d').dt.date
     
-    st.markdown("### 📅 日期范围选择")
+    st.markdown("### 📅 筛选条件") # 修改标题
     today = datetime.now().date()
     three_months_ago = today - relativedelta(months=3)
 
-    col1, col2, _ = st.columns(3)
+    col1, col2, col3 = st.columns(3) # 改为3列
     with col1:
         start_date = st.date_input("起始日期", value=three_months_ago, key="lot_start_date")
     with col2:
         end_date = st.date_input("结束日期", value=today, key="lot_end_date")
 
+    # 1. 先按日期筛选
     filtered_group_summary_df = group_summary_df_full[
         (group_summary_df_full['warehousing_time'] >= start_date) &
         (group_summary_df_full['warehousing_time'] <= end_date)
     ]
 
+    # 2. [新增] 再按 Lot ID 筛选
+    with col3:
+        # 获取当前日期范围内所有可用的 Lot ID
+        lot_ids_in_range = set(filtered_group_summary_df['lot_id'].unique())
+        # 调用复用的筛选函数
+        final_filtered_df = render_lot_id_filter(filtered_group_summary_df, lot_ids_in_range)
+
     st.markdown("### 📄 Group不良率明细表 (By Lot)")
 
-    if filtered_group_summary_df.empty:
-        st.warning("在您选择的日期范围内没有数据。")
+    if final_filtered_df.empty:
+        st.warning("在您选择的筛选条件下没有数据。")
     else:
         # 准备用于显示的副本 (乘以100)
-        df_for_display_group = filtered_group_summary_df.copy()
+        df_for_display_group = final_filtered_df.copy()
         rate_columns_to_convert_group = ["pass_rate", "array_pixel_rate", "array_line_rate", "oled_mura_rate"]
         
         for col in rate_columns_to_convert_group:
@@ -88,24 +97,37 @@ if all_data:
         )
     st.divider()
 
-# ==============================================================================
-#                      --- 模块2: 按Lot ID查询Code级别详情 ---
-# ==============================================================================
+    # ==============================================================================
+    #                      --- 模块2: 按Lot ID查询Code级别详情 ---
+    # ==============================================================================
     st.markdown("### ✍️ By Lot ID查询Code级别详情")
 
-    lot_ids = filtered_group_summary_df['lot_id'].unique()
+    # 使用经过筛选后的 Lot 列表作为备选
+    lot_ids = final_filtered_df['lot_id'].unique()
     
     if len(lot_ids) > 0:
-        default_lot_id = lot_ids[0]
-        selected_lot = st.text_input(
-            "请在此输入或粘贴您想查询的Lot ID:",
-            value=default_lot_id,
-            key="lot_text_input"
+        default_val = lot_ids[0]
+        # [修改] 使用 text_area 支持多行输入
+        selected_lots_str = st.text_area(
+            "请在此输入或粘贴您想查询的Lot IDs (每行一个):",
+            value=default_val,
+            key="lot_text_area_input",
+            height=100
         )
 
-        if selected_lot:
-            if selected_lot not in lot_ids:
-                st.warning(f"输入的Lot ID '{selected_lot}' 不存在于当前数据范围内。")
+        if selected_lots_str:
+            # [新增] 解析多行输入
+            input_lots = [lot.strip() for lot in selected_lots_str.split('\n') if lot.strip()]
+            
+            # [新增] 校验有效性
+            invalid_lots = [lot for lot in input_lots if lot not in lot_ids]
+            valid_lots = [lot for lot in input_lots if lot in lot_ids]
+
+            if invalid_lots:
+                st.warning(f"以下 Lot ID 不存在于当前筛选范围内: {', '.join(invalid_lots)}")
+            
+            if not valid_lots:
+                st.info("请输入有效的 Lot ID 进行查询。")
             else:
                 code_details_dict = all_data.get("code_level_details")
                 if code_details_dict is None:
@@ -119,7 +141,8 @@ if all_data:
                     detail_df = code_details_dict.get(group_name)
                     
                     if detail_df is not None and not detail_df.empty:
-                        filtered_df = detail_df[detail_df['lot_id'] == selected_lot]
+                        # [修改] 使用 isin 进行多 Lot 筛选
+                        filtered_df = detail_df[detail_df['lot_id'].isin(valid_lots)]
                         
                         if not filtered_df.empty:
                             df_for_display_code = filtered_df.copy()
@@ -139,17 +162,17 @@ if all_data:
                                 use_container_width=True
                             )
                         else:
-                            st.info(f"此Lot ({selected_lot}) 下无该类型不良。")
+                            st.info(f"所选 Lot IDs 下无该类型不良。")
                     else:
                         st.warning(f"未能加载 {group_name} 的明细数据。")
     else:
-        st.info("在当前日期范围内无Lot可供查询。")
+        st.info("在当前筛选条件下无Lot可供查询。")
 
     st.divider()
 
-# ==============================================================================
-#                      --- 模块3: 按Code查询Lot集中性 (Top 20) ---
-# ==============================================================================
+    # ==============================================================================
+    #                      --- 模块3: 按Code查询Lot集中性 (Top 20) ---
+    # ==============================================================================
     st.header("🔬 ByCode查询Lot集中性")
     
     code_details_dict = all_data.get("code_level_details")
@@ -157,25 +180,29 @@ if all_data:
         # 1. 准备数据源
         all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
         
-        # 2. 调用智能UI组件
+        # 2. [关键] 预先筛选数据源，使其与主表保持一致
+        # 'lot_ids' 是在模块2开头从 'final_filtered_df' 中获取的
+        df_in_scope = all_codes_df[all_codes_df['lot_id'].isin(lot_ids)]
+
+        # 3. 调用智能UI组件 (传入筛选后的范围)
         selected_code_info = create_code_selection_ui(
-            source_data=all_codes_df,
+            source_data=df_in_scope,
             target_defect_groups=CONFIG['processing']['target_defect_groups'],
-            key_prefix="lot_focus_table", # 使用唯一的key
-            rate_threshold=0.0005 # 沿用我们之前设置的阈值
+            key_prefix="lot_focus_table_filtered", # 使用新key避免冲突
+            rate_threshold=0.0005 
         )
 
-        # 3. 根据组件的选择结果进行后续操作
+        # 4. 根据组件的选择结果进行后续操作
         if selected_code_info.get("code"):
             group = selected_code_info["group"]
             code = selected_code_info["code"]
             
             st.markdown(f"#### 不良Code **'{code}'** 的Top 20问题Lot")
             
-            # a. 筛选出所选Code的全部数据
-            result_df = all_codes_df[
-                (all_codes_df['defect_group'] == group) &
-                (all_codes_df['defect_desc'] == code)
+            # a. 筛选出所选Code的全部数据 (在范围内)
+            result_df = df_in_scope[
+                (df_in_scope['defect_group'] == group) &
+                (df_in_scope['defect_desc'] == code)
             ]
             
             # b. 排序并取前20

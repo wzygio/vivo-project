@@ -19,7 +19,7 @@ st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 render_page_header("📋 解析资料")
 
 # --- 2. 定义常量与路径 ---
-DOC_SOURCE_DIR = "resources/analysis_files" 
+DOC_SOURCE_DIR = "resources/analysis_files"
 IMG_OUTPUT_DIR = "data/doc_cache"
 
 if not os.path.exists(DOC_SOURCE_DIR):
