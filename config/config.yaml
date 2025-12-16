@@ -39,6 +39,7 @@ processing:
 
   group_weekly_values:
 
+
   # 2. Code 级修正配置
   code_monthly_values:
     'G向单亮线':
@@ -62,8 +63,10 @@ processing:
     'G向单亮线':
       '2025-W49': 0.0006
       '2025-W50': 0.0009
+    '可修复暗点':
+      '2025-W49': 0.0008
+      '2025-W50': 0.0013
   
-
   array_input_time:
     custom_times:
       # 高发sheet_id：共计 5 个
@@ -97,7 +100,6 @@ processing:
 
     '彩斑Mura': 0.3
     'G彩短条Mura': 0.2
-
 
   mapping_hotspot_script:
     # 脚本 1: (你现有的规则)

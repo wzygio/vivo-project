@@ -71,7 +71,7 @@ def render_page_header(title: str):
         st.write("") 
         st.write("")
         st.button(
-            "🔄 刷新数据", 
+            "🔄 刷新数据(10min)", 
             key=f"btn_refresh_{title}", # 使用标题作为 key 的一部分，防止不同页面冲突
             on_click=_global_refresh_callback, 
             use_container_width=True,
@@ -115,7 +115,6 @@ def create_code_selection_ui(
         # --- [核心修改] 实现三种筛选模式 ---
         elif filter_by == 'rate':
             if 'defect_rate' in processed_df.columns:
-                logging.info(f"CodeSelection ({key_prefix}): 按平均不良率 > {rate_threshold:.4f} 筛选")
                 metrics = processed_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].mean()
                 eligible_series = metrics[metrics > rate_threshold]
             else:

@@ -150,8 +150,8 @@ def calculate_sheet_defect_rates(
 
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Sheet 级不良率截断...")
-        group_level_thresholds_sheet = {'upper': 0.60, 'lower': 0.000}
-        code_level_thresholds_sheet = {'upper': 0.30, 'lower': 0.000}
+        group_level_thresholds_sheet = {'upper': 1, 'lower': 0.000}
+        code_level_thresholds_sheet = {'upper': 1, 'lower': 0.000}
         final_results = _apply_defect_capping(
             overridden_results,
             group_level_thresholds_sheet,
@@ -232,9 +232,14 @@ def calculate_lot_defect_rates(
         logging.info("步骤5: 应用 Lot 级不良率覆盖...")
         # a. 加载覆盖数据
         override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
-        _, override_lot_avg_df = _load_override_excel(
+        override_sheet_df, _= _load_override_excel(
             override_file=override_config.get('override_file', ''),
             override_sheet_name=override_config.get('override_sheet_name', '')
+        )
+        override_lot_avg_df = _calculate_lot_override_rate_heuristic(
+            override_df=override_sheet_df,       # 传入 Sheet 级的覆盖明细
+            lot_base_info_df=lot_base_info_df,   # 传入 Lot 基础信息 (含时间)
+            mwd_code_data=mwd_code_data          # 传入月度趋势数据
         )
 
         # b. [新增] 获取 Desc -> Group 映射
@@ -268,8 +273,8 @@ def calculate_lot_defect_rates(
 
         # --- 步骤 7: 截断 ---
         logging.info("步骤7: 应用 Lot 级不良率截断...")
-        group_level_thresholds = {'upper': 0.02, 'lower': 0.003}
-        code_level_thresholds = {'upper': 0.009, 'lower': 0.0001}
+        group_level_thresholds = {'upper': 1, 'lower': 0.003}
+        code_level_thresholds = {'upper': 1, 'lower': 0.0001}
         final_results = _apply_defect_capping(
             overridden_lot_results,
             group_level_thresholds,
@@ -827,182 +832,273 @@ def _load_override_excel(
             comtypes.CoUninitialize()
         except: pass
 
+@staticmethod
+def _calculate_lot_override_rate_heuristic(
+    override_df: pd.DataFrame,
+    lot_base_info_df: pd.DataFrame,
+    mwd_code_data: Dict[str, pd.DataFrame] | None
+) -> pd.DataFrame:
+    """
+    [新增 V1.0 - 启发式公式] 计算 Lot 级覆盖良损。
+    公式: LotRate = 当月良损 + (同卡Sheet良损之和) / (30 + 同卡Sheet数)
+    """
+    logging.info("开始使用启发式公式计算 Lot 级覆盖不良率...")
+    
+    if override_df is None or override_df.empty:
+        return pd.DataFrame()
+
+    try:
+        # 1. 计算 "同卡Sheet良损和" (Sum) 和 "同卡Sheet数" (Count)
+        # -----------------------------------------------------------
+        # 按 Lot 和 缺陷描述分组聚合
+        lot_stats = override_df.groupby(['lot_id', 'defect_desc'])['override_rate'].agg(
+            rate_sum='sum',
+            sheet_count='count'
+        ).reset_index()
+        
+        # 2. 准备 "当月良损" (Base Rate)
+        # -----------------------------------------------------------
+        # 需要先获取每个 Lot 的时间，以便匹配月度数据
+        if lot_base_info_df is not None and not lot_base_info_df.empty:
+            # 仅保留需要的列
+            lot_dates = lot_base_info_df[['lot_id', 'warehousing_time']].drop_duplicates()
+            # 合并时间信息到统计表
+            lot_stats = pd.merge(lot_stats, lot_dates, on='lot_id', how='left')
+        else:
+            lot_stats['warehousing_time'] = pd.NaT
+            logging.warning("缺少 Lot 基础信息，无法匹配当月良损，将默认当月良损为 0。")
+
+        # 将时间转换为 YYYY-MM 格式以匹配 mwd_code_data
+        lot_stats['time_period'] = pd.to_datetime(
+            lot_stats['warehousing_time'], format='%Y%m%d', errors='coerce'
+        ).dt.strftime('%Y-%m月')
+        
+        # 从 mwd_code_data 中提取月度基准
+        monthly_map = {}
+        if mwd_code_data and 'monthly' in mwd_code_data:
+            df_monthly = mwd_code_data['monthly']
+            if not df_monthly.empty and {'time_period', 'defect_desc', 'defect_rate'}.issubset(df_monthly.columns):
+                # 构建查找字典: (时间, 描述) -> 率
+                # 预处理：确保 rate 是 float
+                df_monthly['defect_rate'] = pd.to_numeric(df_monthly['defect_rate'], errors='coerce').fillna(0)
+                monthly_map = df_monthly.set_index(['time_period', 'defect_desc'])['defect_rate'].to_dict()
+            else:
+                logging.warning("月度趋势数据格式不正确或为空。")
+
+        # 定义查找函数
+        def get_base_rate(row):
+            key = (row.get('time_period'), row['defect_desc'])
+            return monthly_map.get(key, 0.0)
+
+        # 应用查找
+        lot_stats['base_rate'] = lot_stats.apply(get_base_rate, axis=1)
+        
+        # 3. 应用最终公式
+        # -----------------------------------------------------------
+        # 公式: Base + Sum / (30 + Count)
+        # 注意: 平滑因子 30 是硬编码的经验值
+        smoothing_factor = 30
+        lot_stats['override_rate_avg'] = lot_stats['base_rate'] + (
+            lot_stats['rate_sum'] / (smoothing_factor + lot_stats['sheet_count'])
+        )
+        
+        logging.info(f"Lot 级覆盖率计算完成，共计算 {len(lot_stats)} 条记录。")
+        
+        # 返回符合 _override_rates 预期的格式: [lot_id, defect_desc, override_rate_avg]
+        return lot_stats[['lot_id', 'defect_desc', 'override_rate_avg']]
+
+    except Exception as e:
+        logging.error(f"使用启发式公式计算 Lot 覆盖率时出错: {e}", exc_info=True)
+        # 出错时返回空 DF，避免中断主流程
+        return pd.DataFrame()
 
 @staticmethod
 def _override_rates(
-    simulated_code_details_dict: Dict[str, pd.DataFrame],
-    override_data_df: pd.DataFrame | None,
-    entity_id_col: str,
-    desc_to_group_map: dict
-) -> Dict[str, pd.DataFrame]:
-    """
-    [核心函数 V1.6 - 修正 Lot 覆盖检查] 使用外部数据覆盖模拟的不良率和不良数。
-    遍历覆盖文件：匹配则替换，不匹配则按 Lot 模板插入。
-    """
-    if override_data_df is None or override_data_df.empty:
-        logging.info(f"无覆盖数据提供 ({entity_id_col} 级别)，跳过覆盖步骤。")
-        return simulated_code_details_dict
+        simulated_code_details_dict: Dict[str, pd.DataFrame],
+        override_data_df: pd.DataFrame | None,
+        entity_id_col: str,
+        desc_to_group_map: dict
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        [核心函数 V1.7 - 增加覆盖审计与追踪] 使用外部数据覆盖模拟的不良率。
+        增加了针对特定丢失 ID 的调试追踪和最终的未命中报告。
+        """
+        if override_data_df is None or override_data_df.empty:
+            logging.info(f"无覆盖数据提供 ({entity_id_col} 级别)，跳过覆盖步骤。")
+            return simulated_code_details_dict
 
-    # --- [核心修改] 动态定义必需列 ---
-    rate_col_name = 'override_rate' if entity_id_col == 'sheet_id' else 'override_rate_avg'
-    
-    # 通用必需列
-    required_cols = ['lot_id', 'defect_desc', rate_col_name]
-    # 根据层级添加特定 ID 列
-    if entity_id_col == 'sheet_id':
-         required_cols.append('sheet_id')
+        # --- 动态定义必需列 ---
+        rate_col_name = 'override_rate' if entity_id_col == 'sheet_id' else 'override_rate_avg'
+        required_cols = ['lot_id', 'defect_desc', rate_col_name]
+        if entity_id_col == 'sheet_id': required_cols.append('sheet_id')
+        required_cols = list(dict.fromkeys(required_cols)) 
 
-    # 确保列表唯一
-    required_cols = list(dict.fromkeys(required_cols)) 
+        missing_cols = [col for col in required_cols if col not in override_data_df.columns]
+        if missing_cols:
+            logging.error(f"覆盖数据 DataFrame ({entity_id_col}) 缺少必需列: {missing_cols}，无法执行覆盖。")
+            return simulated_code_details_dict
 
-    # 检查必需列是否存在
-    missing_cols = [col for col in required_cols if col not in override_data_df.columns]
-    if missing_cols:
-         logging.error(f"覆盖数据 DataFrame ({entity_id_col}) 缺少必需列: {missing_cols}，无法执行覆盖。")
-         return simulated_code_details_dict # 返回原始模拟结果
-    # --- [修改结束] ---
+        logging.info(f"开始使用外部数据覆盖 {entity_id_col} 级别的不良率 (替换+插入)...")
+        
+        # --- [审计准备] ---
+        # 1. 记录 Excel 中所有的 ID，用于最后对比
+        all_config_ids = set(override_data_df[entity_id_col].astype(str).str.strip().unique())
+        # 2. 记录成功处理（替换或插入）的 ID
+        processed_ids = set()
+        # 3. 定义“重点嫌疑人”列表 (根据您的反馈)
+        watchlist = ['L3MR5A0B023', 'L3MR5A0B026']
 
-    logging.info(f"开始使用外部数据覆盖 {entity_id_col} 级别的不良率 (替换+插入)...")
-    
-    # --- [核心修改] 创建副本以进行修改 ---
-    final_results_dict = {group: df.copy() for group, df in simulated_code_details_dict.items() if df is not None}
-    total_replaced_count = 0
-    total_inserted_count = 0
+        # 复制副本
+        final_results_dict = {group: df.copy() for group, df in simulated_code_details_dict.items() if df is not None}
+        total_replaced_count = 0
+        total_inserted_count = 0
 
-    # --- 准备模板查找表 (逻辑不变) ---
-    all_sim_df_list = [df for df in final_results_dict.values() if not df.empty]
-    if not all_sim_df_list:
-         logging.error("无法执行插入，因为模拟数据中没有任何可用的模板行。")
-         return simulated_code_details_dict
-         
-    all_sim_df = pd.concat(all_sim_df_list, ignore_index=True)
-    if all_sim_df.empty:
-         logging.error("无法执行插入，因为合并后的模拟数据为空，无法创建模板。")
-         return simulated_code_details_dict
-    
-    generic_template_row = all_sim_df.iloc[0]
-    lot_specific_templates = all_sim_df.drop_duplicates(subset=['lot_id']).set_index('lot_id')
-    
-    new_rows_to_add_by_group = defaultdict(list)
-    processed_indices = set()
+        # --- 准备模板 ---
+        all_sim_df_list = [df for df in final_results_dict.values() if not df.empty]
+        if not all_sim_df_list:
+            logging.error("无法执行插入，因为模拟数据中没有任何可用的模板行。")
+            return simulated_code_details_dict
+        
+        all_sim_df = pd.concat(all_sim_df_list, ignore_index=True)
+        generic_template_row = all_sim_df.iloc[0]
+        lot_specific_templates = all_sim_df.drop_duplicates(subset=['lot_id']).set_index('lot_id')
+        
+        new_rows_to_add_by_group = defaultdict(list)
+        processed_indices = set()
 
-    # --- 遍历覆盖 DataFrame 的每一行 (逻辑不变) ---
-    for index, override_row in override_data_df.iterrows():
-        target_desc = override_row['defect_desc']
-        target_entity_id = override_row[entity_id_col]
-        target_lot_id = override_row['lot_id']
-        override_rate = override_row[rate_col_name]
+        # --- 遍历覆盖 DataFrame ---
+        for index, override_row in override_data_df.iterrows():
+            target_desc = str(override_row['defect_desc']).strip()
+            # 确保 ID 转字符串并去空格，防止 "ID " != "ID"
+            target_entity_id = str(override_row[entity_id_col]).strip() 
+            target_lot_id = override_row['lot_id']
+            override_rate = override_row[rate_col_name]
 
-        # 1. 查找目标 Group (不变)
-        target_group = desc_to_group_map.get(target_desc)
-        if not target_group:
-            logging.debug(f"跳过匹配：未找到缺陷描述 '{target_desc}' 对应的 Group。")
-            continue
+            # --- [调试追踪] 如果是嫌疑人，打印详细路径 ---
+            is_target_trace = target_entity_id in watchlist
+            if is_target_trace:
+                logging.warning(f"!!! [追踪] 发现目标 ID: {target_entity_id}")
+                logging.warning(f"    - 缺陷描述: '{target_desc}'")
 
-        # 2. 查找目标 Group 的 DataFrame (不变)
-        target_df = final_results_dict.get(target_group)
-        if target_df is None:
-            logging.warning(f"跳过匹配：Group '{target_group}' DataFrame 不存在。")
-            continue # 如果 Group 键不存在，跳过
+            # 1. 查找目标 Group
+            target_group = desc_to_group_map.get(target_desc)
+            if not target_group:
+                if is_target_trace:
+                    logging.error(f"    -> [失败] 映射失败！'{target_desc}' 未在 desc_to_group_map 中找到对应的 Group。")
+                    logging.error(f"    -> 当前可用映射 keys (前10个): {list(desc_to_group_map.keys())[:10]}")
+                else:
+                    logging.debug(f"跳过匹配：未找到缺陷描述 '{target_desc}' 对应的 Group。")
+                continue
 
-        # 3. 在目标 DataFrame 中查找匹配行 (替换逻辑) (不变)
-        match_mask = pd.Series(False, index=target_df.index)
-        if not target_df.empty:
-            try:
-                match_mask = (target_df[entity_id_col].astype(str) == str(target_entity_id)) & \
+            if is_target_trace:
+                logging.warning(f"    - 映射 Group: '{target_group}'")
+
+            # 2. 查找目标 Group 的 DataFrame
+            target_df = final_results_dict.get(target_group)
+            if target_df is None:
+                if is_target_trace:
+                    logging.error(f"    -> [失败] Group '{target_group}' 在 simulated_code_details_dict 中不存在 Key。")
+                else:
+                    logging.warning(f"跳过匹配：Group '{target_group}' DataFrame 不存在。")
+                continue 
+
+            # 3. 匹配行
+            match_mask = pd.Series(False, index=target_df.index)
+            if not target_df.empty:
+                # 确保 target_df 中的 ID 也转为 string 对比
+                match_mask = (target_df[entity_id_col].astype(str).str.strip() == target_entity_id) & \
                              (target_df['defect_desc'] == target_desc)
-            except KeyError:
-                 logging.warning(f"跳过匹配：尝试在 Group '{target_group}' DataFrame 中匹配时缺少列。")
 
-        matched_indices = target_df.index[match_mask]
+            matched_indices = target_df.index[match_mask]
 
-        # 4. 根据是否匹配，执行替换或准备插入 (不变)
-        if not matched_indices.empty:
-            # --- [替换逻辑] (不变) ---
-            target_df.loc[matched_indices, 'defect_rate'] = override_rate
-            if 'total_panels' in target_df.columns:
-                panels = target_df.loc[matched_indices, 'total_panels']
-                new_counts = np.maximum(0, np.round(override_rate * panels)).astype(int)
-                target_df.loc[matched_indices, 'defect_panel_count'] = new_counts
-                if index not in processed_indices:
-                     total_replaced_count += len(matched_indices)
-                     processed_indices.add(index)
-            else: logging.warning(f"跳过匹配：Group '{target_group}' DataFrame 缺少 'total_panels' 列。")
-
-        else:
-            # --- [插入逻辑] (不变) ---
-            logging.debug(f"未找到匹配行，准备插入新行。")
-            
-            if target_lot_id in lot_specific_templates.index:
-                template_row = lot_specific_templates.loc[target_lot_id]
+            # 4. 执行
+            if not matched_indices.empty:
+                # --- 替换 ---
+                if is_target_trace: logging.warning(f"    -> [动作] 找到匹配行，执行替换。")
+                target_df.loc[matched_indices, 'defect_rate'] = override_rate
+                if 'total_panels' in target_df.columns:
+                    panels = target_df.loc[matched_indices, 'total_panels']
+                    new_counts = np.maximum(0, np.round(override_rate * panels)).astype(int)
+                    target_df.loc[matched_indices, 'defect_panel_count'] = new_counts
+                    if index not in processed_indices:
+                        total_replaced_count += len(matched_indices)
+                        processed_indices.add(index)
+                        processed_ids.add(target_entity_id) # 记录成功
             else:
-                logging.warning(f"Lot ID '{target_lot_id}' (来自 {target_entity_id}) 在模拟数据中无模板，将使用通用模板。")
-                template_row = generic_template_row
+                # --- 插入 ---
+                if is_target_trace: logging.warning(f"    -> [动作] 未找到匹配行，准备插入。")
+                if target_lot_id in lot_specific_templates.index:
+                    template_row = lot_specific_templates.loc[target_lot_id]
+                else:
+                    template_row = generic_template_row
 
-            try:
-                template_panels = float(template_row.get('total_panels', 1))
-                if template_panels == 0: template_panels = 1.0
+                try:
+                    template_panels = float(template_row.get('total_panels', 1))
+                    if template_panels == 0: template_panels = 1.0
 
-                new_row = {
-                    # [修正] 确保 sheet_id (如果适用) 被正确获取
-                    'sheet_id': override_row['sheet_id'] if entity_id_col == 'sheet_id' else (template_row.get('sheet_id', '') if 'sheet_id' in template_row else ''), # Lot 级别插入时，sheet_id 用模板的或为空
-                    'lot_id': target_lot_id,
-                    'defect_desc': target_desc,
-                    'defect_rate': override_rate,
-                    'defect_group': target_group,
-                    'total_panels': template_panels,
-                    'defect_panel_count': np.maximum(0, np.round(override_rate * template_panels)).astype(int),
-                    'warehousing_time': template_row.get('warehousing_time', ''),
-                    'array_input_time': template_row.get('array_input_time', pd.NaT),
-                    'pass_rate': template_row.get('pass_rate', 0.0)
-                }
-                
-                # [修正] 当 entity_id_col 是 'lot_id' 时，新行中也需要 'lot_id'
-                # (上面的 new_row 构造已包含 sheet_id 和 lot_id)
-                if entity_id_col == 'lot_id':
-                     new_row['lot_id'] = target_entity_id # 确保 entity_id 列的值是正确的
-                
-                
-                target_df_cols = target_df.columns.to_list()
-                if not target_df_cols and (target_group not in new_rows_to_add_by_group): # 如果目标 DF 是空的，并且是第一次添加
-                     # 从 new_row 动态确定列
-                     target_df_cols = [col for col in ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time', 'defect_group', 'defect_desc', 'defect_panel_count', 'defect_rate', 'total_panels', 'pass_rate'] if col in new_row]
-                     # 如果 final_results_dict[target_group] 是 None 或空 DF，需要用新列创建它
-                     if final_results_dict.get(target_group) is None or final_results_dict.get(target_group).empty: # type: ignore
-                          final_results_dict[target_group] = pd.DataFrame(columns=target_df_cols)
-                
-                new_row_filtered = {k: v for k, v in new_row.items() if k in target_df_cols}
-                
-                new_rows_to_add_by_group[target_group].append(new_row_filtered)
-                if index not in processed_indices:
-                     total_inserted_count += 1
-                     processed_indices.add(index)
-
-            except Exception as insert_err:
-                 logging.error(f"构建用于插入的新行时失败 (ID: {target_entity_id}, Code: {target_desc}): {insert_err}", exc_info=True)
-
-
-    # --- 合并新行 (不变) ---
-    if new_rows_to_add_by_group:
-        logging.info(f"正在将 {total_inserted_count} 条新记录插入到结果中...")
-        for group, new_rows in new_rows_to_add_by_group.items():
-            if new_rows:
-                df_new = pd.DataFrame(new_rows)
-                target_df = final_results_dict.get(group) # 获取可能已更新的 DF
-                if target_df is None: # 如果 Group 之前不存在
-                     target_df = pd.DataFrame(columns=df_new.columns)
-                
-                # 确保列对齐
-                final_results_dict[group] = pd.concat([target_df, df_new], ignore_index=True).where(pd.notna, None) # type: ignore
+                    new_row = {
+                        'sheet_id': target_entity_id if entity_id_col == 'sheet_id' else (template_row.get('sheet_id', '') if 'sheet_id' in template_row else ''),
+                        'lot_id': target_lot_id,
+                        'defect_desc': target_desc,
+                        'defect_rate': override_rate,
+                        'defect_group': target_group,
+                        'total_panels': template_panels,
+                        'defect_panel_count': np.maximum(0, np.round(override_rate * template_panels)).astype(int),
+                        'warehousing_time': template_row.get('warehousing_time', ''),
+                        'array_input_time': template_row.get('array_input_time', pd.NaT),
+                        'pass_rate': template_row.get('pass_rate', 0.0)
+                    }
+                    
+                    if entity_id_col == 'lot_id': new_row['lot_id'] = target_entity_id 
+                    
+                    # 动态列对齐
+                    target_df_cols = target_df.columns.to_list()
+                    if not target_df_cols and (target_group not in new_rows_to_add_by_group): 
+                         target_df_cols = [col for col in ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time', 'defect_group', 'defect_desc', 'defect_panel_count', 'defect_rate', 'total_panels', 'pass_rate'] if col in new_row]
+                         if final_results_dict.get(target_group) is None or final_results_dict.get(target_group).empty: # type: ignore
+                             final_results_dict[target_group] = pd.DataFrame(columns=target_df_cols)
+                    
+                    new_row_filtered = {k: v for k, v in new_row.items() if k in target_df_cols}
+                    new_rows_to_add_by_group[target_group].append(new_row_filtered)
+                    
+                    if index not in processed_indices:
+                        total_inserted_count += 1
+                        processed_indices.add(index)
+                        processed_ids.add(target_entity_id) # 记录成功
+                        
+                except Exception as insert_err:
+                    logging.error(f"构建插入行失败 (ID: {target_entity_id}): {insert_err}", exc_info=True)
 
 
-    # --- [核心修改] 移除零匹配检查 ---
-    if total_replaced_count == 0 and total_inserted_count == 0 and not override_data_df.empty:
-        logging.warning(f"数据覆盖操作完成 ({entity_id_col} 级别)，但 0 条记录被替换，0 条记录被插入。请检查 Excel 文件内容是否与数据匹配。")
-        # 不再抛出 ValueError
+        # --- 合并新行 ---
+        if new_rows_to_add_by_group:
+            for group, new_rows in new_rows_to_add_by_group.items():
+                if new_rows:
+                    df_new = pd.DataFrame(new_rows)
+                    target_df = final_results_dict.get(group)
+                    if target_df is None: target_df = pd.DataFrame(columns=df_new.columns)
+                    final_results_dict[group] = pd.concat([target_df, df_new], ignore_index=True).where(pd.notna, None) # type: ignore
 
-    logging.info(f"不良率覆盖完成，共替换 {total_replaced_count} 条记录，插入 {total_inserted_count} 条记录。")
-    return final_results_dict
+        # --- [最终审计报告] ---
+        # 计算未命中的 ID
+        failed_ids = all_config_ids - processed_ids
+        
+        logging.info(f"覆盖审计完成: Excel中共配置 {len(all_config_ids)} 个ID，成功应用 {len(processed_ids)} 个，失败 {len(failed_ids)} 个。")
+        
+        if failed_ids:
+            # 转换为 list 并排序以便查看，只打印前 20 个避免刷屏
+            failed_list = sorted(list(failed_ids))
+            logging.error("========== [覆盖失败名单 (前20个)] ==========")
+            logging.error(f"以下 ID 在配置文件中存在，但未被替换或插入: {failed_list[:20]}")
+            logging.error("可能原因: 1. 缺陷描述无法映射到 Group; 2. 格式/空格问题; 3. Group DataFrame 初始化失败。")
+            
+            # 如果您的目标 ID 在失败名单中，再次显式警告
+            for watch_id in watchlist:
+                if watch_id in failed_ids:
+                    logging.error(f">>> 警告: 目标 ID '{watch_id}' 确认覆盖失败！请检查上方追踪日志。")
+            logging.error("===========================================")
+
+        return final_results_dict
 
 @staticmethod
 def _get_desc_to_group_map(panel_details_df: pd.DataFrame) -> dict:
@@ -1027,61 +1123,118 @@ def _get_desc_to_group_map(panel_details_df: pd.DataFrame) -> dict:
 # --- 重聚合 ---
 @staticmethod
 def _reaggregate_groups_from_codes(
-    sim_code_details: Dict[str, pd.DataFrame],
-    raw_base_info_df: pd.DataFrame,
-    target_defects: list,
-    entity_id_col: str
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    [辅助函数 V1.1 - 通用版] 重聚合 Group 数据。
-    """
-    logging.info(f"模拟/覆盖完成，正在重新聚合 {entity_id_col} 的 Group 级数据...")
-    if not sim_code_details or all(df.empty for df in sim_code_details.values()):
-            empty_df = pd.DataFrame()
-            return empty_df, empty_df
-    try: # 添加 try-except 块增加健壮性
-        all_simulated_entities = pd.concat(sim_code_details.values(), ignore_index=True)
-        if all_simulated_entities.empty:
-                empty_df = pd.DataFrame()
-                return empty_df, empty_df
-        group_numerators = all_simulated_entities.groupby([entity_id_col, 'defect_group'])['defect_panel_count'].sum()
-        group_numerators_df = group_numerators.unstack(level='defect_group').fillna(0)
-        if entity_id_col not in raw_base_info_df.columns:
-            base_info_df_indexed = raw_base_info_df.reset_index()
-        else:
-            base_info_df_indexed = raw_base_info_df
-        base_cols_to_keep = [entity_id_col, 'total_panels', 'pass_rate']
-        for col in ['lot_id', 'warehousing_time', 'array_input_time']:
-            if col in base_info_df_indexed.columns and col not in base_cols_to_keep:
-                base_cols_to_keep.append(col)
-        base_cols_to_keep = [col for col in base_cols_to_keep if col in base_info_df_indexed.columns]
-        base_info_subset_df = base_info_df_indexed[base_cols_to_keep].drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)
-        group_summary_df = base_info_subset_df.join(group_numerators_df, how='left').fillna(0)
-        final_group_df = group_summary_df.reset_index()
-        rate_cols = []
-        for defect_type in target_defects:
-            count_col_name = defect_type
-            if count_col_name not in final_group_df.columns: final_group_df[count_col_name] = 0
-            new_count_col_name = f"{defect_type.lower()}_count"
-            final_group_df.rename(columns={count_col_name: new_count_col_name}, inplace=True)
-            rate_col_name = f"{defect_type.lower()}_rate"
-            final_group_df[rate_col_name] = np.where(
-                final_group_df['total_panels'] > 0,
-                final_group_df[new_count_col_name] / final_group_df['total_panels'], 0
-            )
-            rate_cols.append(rate_col_name)
-        final_ui_columns_base = [entity_id_col, 'pass_rate']
-        for col in ['lot_id', 'warehousing_time', 'array_input_time']:
+        sim_code_details: Dict[str, pd.DataFrame],
+        raw_base_info_df: pd.DataFrame,
+        target_defects: list,
+        entity_id_col: str
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        [辅助函数 V1.8 - 包含自愈机制] 重聚合 Group 数据。
+        修复逻辑：在聚合前，先检查 sim_code_details 中是否存在 raw_base_info_df 缺失的 Entity (如覆盖插入的 Sheet)，
+        如果有，则从 Code 数据中提取元数据反向补全基础信息，防止 Left Join 导致数据丢失。
+        """
+        logging.info(f"模拟/覆盖完成，正在重新聚合 {entity_id_col} 的 Group 级数据 (含基础信息完整性检查)...")
+        
+        if not sim_code_details or all(df.empty for df in sim_code_details.values()):
+            return pd.DataFrame(), pd.DataFrame()
+
+        try:
+            # 1. 合并所有不良明细数据 (这是最新的事实数据)
+            all_simulated_entities = pd.concat(sim_code_details.values(), ignore_index=True)
+            if all_simulated_entities.empty:
+                return pd.DataFrame(), pd.DataFrame()
+
+            # --- [关键修复: 基础信息自愈] ---
+            # 准备基础信息的 Master Copy
+            if entity_id_col not in raw_base_info_df.columns and raw_base_info_df.index.name != entity_id_col:
+                 # 极端情况防御
+                 base_info_master = raw_base_info_df.copy()
+            else:
+                 # 确保 ID 是列
+                 base_info_master = raw_base_info_df.reset_index() if raw_base_info_df.index.name == entity_id_col else raw_base_info_df.copy()
+
+            # 提取现有的 ID 集合 (转字符串以防类型不匹配)
+            if entity_id_col in base_info_master.columns:
+                existing_ids = set(base_info_master[entity_id_col].astype(str).str.strip())
+            else:
+                existing_ids = set()
+
+            # 从 Code 数据中提取所有出现的 ID
+            if entity_id_col in all_simulated_entities.columns:
+                active_ids_series = all_simulated_entities[entity_id_col].astype(str).str.strip()
+                # 找出 "黑户" (在 Code 中有，但 Base 中没有的 ID)
+                missing_mask = ~active_ids_series.isin(existing_ids)
+                
+                if missing_mask.any():
+                    missing_ids = active_ids_series[missing_mask].unique()
+                    logging.warning(f"检测到 {len(missing_ids)} 个实体 (如 {missing_ids[:3]}...) 在基础信息中缺失，正在从不良明细中恢复元数据...")
+                    
+                    # 提取元数据列 (在 _override_rates 中我们已经确保新行包含这些列)
+                    meta_cols = [entity_id_col, 'total_panels', 'pass_rate', 'warehousing_time', 'lot_id', 'array_input_time']
+                    # 只提取存在的列
+                    available_meta_cols = [c for c in meta_cols if c in all_simulated_entities.columns]
+                    
+                    # 提取并去重
+                    recovered_rows = all_simulated_entities.loc[missing_mask, available_meta_cols].drop_duplicates(subset=[entity_id_col])
+                    
+                    # 追加到主名册
+                    base_info_master = pd.concat([base_info_master, recovered_rows], ignore_index=True)
+                    logging.info("基础信息补全完成。")
+            # -------------------------------
+
+            # 2. 准备 Group 级分子 (Pivot)
+            group_numerators = all_simulated_entities.groupby([entity_id_col, 'defect_group'])['defect_panel_count'].sum()
+            group_numerators_df = group_numerators.unstack(level='defect_group').fillna(0)
+
+            # 3. 准备最终的基础信息 (用于 Join)
+            # 此时 base_info_master 已经包含了所有需要的人
+            base_cols_to_keep = [entity_id_col, 'total_panels', 'pass_rate']
+            for col in ['lot_id', 'warehousing_time', 'array_input_time']:
+                if col in base_info_master.columns and col not in base_cols_to_keep:
+                    base_cols_to_keep.append(col)
+            
+            # 清理并设置索引
+            base_info_subset_df = base_info_master[base_cols_to_keep].drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)
+
+            # 4. 执行 Join (现在 Left Join 安全了，因为左边包含了所有新 ID)
+            group_summary_df = base_info_subset_df.join(group_numerators_df, how='left').fillna(0)
+            final_group_df = group_summary_df.reset_index()
+
+            # 5. 计算比率 (Rate)
+            rate_cols = []
+            for defect_type in target_defects:
+                count_col_name = defect_type
+                if count_col_name not in final_group_df.columns: 
+                    final_group_df[count_col_name] = 0
+                
+                new_count_col_name = f"{defect_type.lower()}_count"
+                final_group_df.rename(columns={count_col_name: new_count_col_name}, inplace=True)
+                
+                rate_col_name = f"{defect_type.lower()}_rate"
+                # 避免分母为0
+                final_group_df[rate_col_name] = np.where(
+                    final_group_df['total_panels'] > 0,
+                    final_group_df[new_count_col_name] / final_group_df['total_panels'], 
+                    0
+                )
+                rate_cols.append(rate_col_name)
+
+            # 6. 准备 UI 格式
+            final_ui_columns_base = [entity_id_col, 'pass_rate']
+            for col in ['lot_id', 'warehousing_time', 'array_input_time']:
                 if col in final_group_df.columns and col not in final_ui_columns_base:
                     final_ui_columns_base.append(col)
-        final_ui_columns = final_ui_columns_base + rate_cols
-        final_ui_columns = [col for col in final_ui_columns if col in final_group_df.columns]
-        group_level_for_ui = final_group_df.reindex(columns=final_ui_columns).fillna(0)
-        return group_level_for_ui, final_group_df
-    except Exception as e:
+            
+            final_ui_columns = final_ui_columns_base + rate_cols
+            final_ui_columns = [col for col in final_ui_columns if col in final_group_df.columns]
+            
+            group_level_for_ui = final_group_df.reindex(columns=final_ui_columns).fillna(0)
+
+            return group_level_for_ui, final_group_df
+
+        except Exception as e:
             logging.error(f"重聚合 Group 数据 ({entity_id_col}) 时出错: {e}", exc_info=True)
-            empty_df = pd.DataFrame()
-            return empty_df, empty_df # 返回空 DF 避免后续错误
+            return pd.DataFrame(), pd.DataFrame()
 
 # ==============================================================================
 #                      辅助函数：处理截断
@@ -1206,7 +1359,7 @@ def _apply_random_cap_and_floor(
     """
     if rate > upper_threshold:
         # 使用传入的 rng 实例生成随机数
-        return rng.uniform(upper_threshold * 0.7, upper_threshold * 1.3)
+        return rng.uniform(upper_threshold * 0.8, upper_threshold * 1)
     elif 0 < rate < lower_threshold:
             # 对于下限，确保波动范围有意义
             low_bound = max(0, lower_threshold * 0.8) # 确保不低于0
