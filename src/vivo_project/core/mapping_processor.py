@@ -22,7 +22,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
     logging.info("开始为Mapping图准备数据 (V1.3 - 含位置随机化)...")
     if panel_details_df.empty: return pd.DataFrame()
     try:
-        FIRST_REDUCTION_FACTOR = 0.85
+        FIRST_REDUCTION_FACTOR = 0.8
         SECOND_REDUCTION_FACTOR = 0.95
         SEED = 42
 
@@ -34,7 +34,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         df_filtered_by_count = df[df['batch_no'].isin(valid_batches_by_count)]
 
         valid_datetimes = pd.to_datetime(df_filtered_by_count['batch_no'], format='%Y/%m/%d', errors='coerce').dropna().unique()
-        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:6] # 取最新的n个有效批次
+        latest_three_datetimes = sorted(valid_datetimes, reverse=True)[:5] # 取最新的n个有效批次
         latest_three_batch_strs = [pd.to_datetime(d).strftime('%Y/%m/%d') for d in latest_three_datetimes]
         df_final_batches = df_filtered_by_count[df_filtered_by_count['batch_no'].isin(latest_three_batch_strs)]
         df_defective_panels = df_final_batches[df_final_batches['defect_desc'].notna()].copy() # 使用.copy()
@@ -68,6 +68,9 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         for batch_no in sorted_batches:
             # 从【已被修改过】的DF中提取当前批次
             df_current_batch = df_defective_panels_modified[df_defective_panels_modified['batch_no'] == batch_no]
+            if df_current_batch.empty:
+                continue
+
             processed_codes_in_batch = []
             for code_desc, df_code_group in df_current_batch.groupby('defect_desc'):
                 current_count = len(df_code_group)

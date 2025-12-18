@@ -315,7 +315,7 @@ def _calculate_lot_base_info_with_median_time(
                 logging.warning("转换 warehousing_time 为日期后，没有剩余的 Panel 数据用于 Lot 聚合。")
                 return pd.DataFrame()
         lot_base_agg = panel_df_with_dt.groupby('lot_id').agg(
-            total_panels=('panel_id', 'nunique'),
+            total_panels=('panel_id', 'nunique'), # 计算lot总数：传入的 panel_details_df 中，该 Lot ID 下有多少个唯一的 Panel ID
             warehousing_time_median=('warehousing_datetime', lambda x: x.quantile(0.75))
         ).reset_index()
         lot_base_agg['warehousing_time'] = lot_base_agg['warehousing_time_median'].dt.strftime('%Y%m%d').fillna('') # type: ignore
