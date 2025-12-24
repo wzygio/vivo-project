@@ -8,8 +8,8 @@ from collections import defaultdict
 import comtypes.client
 import comtypes
 
-from vivo_project.config import CONFIG, DATA_DIR, PROJECT_ROOT, RESOURCE_DIR
-from vivo_project.utils.utils import save_dict_to_excel # 假设 save_dict_to_excel 在这里
+from vivo_project.config import CONFIG, PROJECT_ROOT, RESOURCE_DIR
+from vivo_project.utils.utils import save_dict_to_excel
 
 # ==============================================================================
 #              ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
@@ -43,8 +43,8 @@ def calculate_sheet_defect_rates(
             # 合并后可以重新设置索引，如果后续流程需要
             # sheet_base_info_df = sheet_base_info_df.set_index('sheet_id')
         else:
-                # 确保 array_input_time 列存在，即使为空
-                sheet_base_info_df['array_input_time'] = pd.NaT
+            # 确保 array_input_time 列存在，即使为空
+            sheet_base_info_df['array_input_time'] = pd.NaT
 
         # --- 步骤 2: 过滤 Sheet ---
         logging.info("步骤2: 过滤 Sheet...")
@@ -60,7 +60,6 @@ def calculate_sheet_defect_rates(
             return None
         valid_entities = sheet_base_info_filtered['sheet_id'].unique() # 从过滤后的结果获取有效 ID
         panel_details_df_filtered = panel_details_df[panel_details_df['sheet_id'].isin(valid_entities)]
-
 
         # --- 步骤 3: 计算原始不良率 ---
         logging.info("步骤3: 计算原始 Sheet 级不良率...")
@@ -86,18 +85,7 @@ def calculate_sheet_defect_rates(
                 sim_code_details = raw_results['code_level_details']
 
 
-        # --- 探针 1: 保存覆盖前的数据 ---
-        try:
-            save_dict_to_excel(
-                data_dict=sim_code_details,
-                output_dir=debug_output_dir,
-                filename="debug_sheet_before_override.xlsx"
-            )
-        except Exception as save_err:
-                logging.error(f"[调试探针] 保存覆盖前数据失败: {save_err}")
-
-
-        # --- [核心修改] 步骤 5: 应用覆盖逻辑 (传入 desc_to_group_map) ---
+        # --- 步骤 5: 应用覆盖逻辑 (传入 desc_to_group_map) ---
         logging.info("步骤5: 应用 Sheet 级不良率覆盖...")
         # a. 加载覆盖数据
         override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
@@ -105,8 +93,6 @@ def calculate_sheet_defect_rates(
             override_file=override_config.get('override_file', ''),
             override_sheet_name=override_config.get('override_sheet_name', '')
         )
-
-
         # b. [新增] 获取 Desc -> Group 映射
         #    使用 panel_details_df (未过滤) 来构建最全的映射
         desc_to_group_map = _get_desc_to_group_map(panel_details_df)
@@ -117,16 +103,6 @@ def calculate_sheet_defect_rates(
                 entity_id_col='sheet_id',
                 desc_to_group_map=desc_to_group_map # <--- 传递映射
         )
-
-        # --- 探针 2: 保存覆盖后的数据 ---
-        try:
-            save_dict_to_excel(
-                data_dict=overridden_code_details, # <-- 保存覆盖后的字典
-                output_dir=debug_output_dir,
-                filename="debug_sheet_after_override.xlsx" # <-- 不同文件名
-            )
-        except Exception as save_err:
-                logging.error(f"[调试探针] 保存覆盖后数据失败: {save_err}")
 
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
@@ -228,7 +204,7 @@ def calculate_lot_defect_rates(
                 logging.warning("Lot 级不良率模拟失败或返回无效格式，将尝试在原始数据上应用覆盖。")
                 simulated_lot_code_details = raw_lot_results['code_level_details']
 
-        # --- [核心修改] 步骤 5: 应用 Lot 级覆盖逻辑 (传入 desc_to_group_map) ---
+        # --- 步骤 5: 应用 Lot 级覆盖逻辑 (传入 desc_to_group_map) ---
         logging.info("步骤5: 应用 Lot 级不良率覆盖...")
         # a. 加载覆盖数据
         override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
@@ -241,7 +217,6 @@ def calculate_lot_defect_rates(
             lot_base_info_df=lot_base_info_df,   # 传入 Lot 基础信息 (含时间)
             mwd_code_data=mwd_code_data          # 传入月度趋势数据
         )
-
         # b. [新增] 获取 Desc -> Group 映射
         desc_to_group_map = _get_desc_to_group_map(panel_details_df)
         # c. 执行覆盖

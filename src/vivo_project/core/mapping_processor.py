@@ -2,11 +2,6 @@
 import numpy as np
 import pandas as pd
 import logging
-from typing import Dict, Any
-from datetime import datetime as dt
-from dateutil.relativedelta import relativedelta
-from vivo_project.config import CONFIG
-from pathlib import Path
 
 # ==============================================================================
 #                      ByCode计算Mapping集中性
@@ -97,33 +92,6 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
         logging.error(f"在准备Mapping数据时发生错误: {e}", exc_info=True)
         return pd.DataFrame()
 
-# --- [新增] Mapping图位置修改所需的辅助函数 ---
-@staticmethod
-def _parse_panel_id_to_coords(panel_id: str) -> tuple | None:
-    """[内部工具] 将Panel ID解析为其在Sheet上的(行, 列)数字坐标。"""
-    if not isinstance(panel_id, str) or len(panel_id) < 15: return None
-    row_code, col_code = panel_id[11:13], panel_id[13:15]
-    row_map = {
-        '1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4,
-        '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9
-    }
-    col_map_index = ord(col_code[0]) - ord('A')
-    row_index = row_map.get(row_code)
-    if row_index is not None and 0 <= col_map_index < 19:
-        return (row_index, col_map_index)
-    return None
-
-@staticmethod
-def _reconstruct_panel_id(original_panel_id: str, new_row: int, new_col: int) -> str:
-    """[内部工具] 根据新的数字坐标，重构Panel ID字符串。"""
-    sheet_id = original_panel_id[:11]
-    row_rev_map = {
-        0: '1A', 1: '1B', 2: '1C', 3: '1D', 4: '1E',
-        5: '2A', 6: '2B', 7: '2C', 8: '2D', 9: '2E'
-    }
-    col_char = chr(ord('A') + new_col)
-    return f"{sheet_id}{row_rev_map[new_row]}{col_char}0"
-
 @staticmethod
 def _get_deterministically_modified_panel_id(panel_id: str, batch_no: str) -> str:
     """
@@ -154,6 +122,32 @@ def _get_deterministically_modified_panel_id(panel_id: str, batch_no: str) -> st
     
     # 5. 重构并返回新的Panel ID
     return _reconstruct_panel_id(panel_id, new_row, new_col)
+
+@staticmethod
+def _parse_panel_id_to_coords(panel_id: str) -> tuple | None:
+    """[内部工具] 将Panel ID解析为其在Sheet上的(行, 列)数字坐标。"""
+    if not isinstance(panel_id, str) or len(panel_id) < 15: return None
+    row_code, col_code = panel_id[11:13], panel_id[13:15]
+    row_map = {
+        '1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4,
+        '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9
+    }
+    col_map_index = ord(col_code[0]) - ord('A')
+    row_index = row_map.get(row_code)
+    if row_index is not None and 0 <= col_map_index < 19:
+        return (row_index, col_map_index)
+    return None
+
+@staticmethod
+def _reconstruct_panel_id(original_panel_id: str, new_row: int, new_col: int) -> str:
+    """[内部工具] 根据新的数字坐标，重构Panel ID字符串。"""
+    sheet_id = original_panel_id[:11]
+    row_rev_map = {
+        0: '1A', 1: '1B', 2: '1C', 3: '1D', 4: '1E',
+        5: '2A', 6: '2B', 7: '2C', 8: '2D', 9: '2E'
+    }
+    col_char = chr(ord('A') + new_col)
+    return f"{sheet_id}{row_rev_map[new_row]}{col_char}0"
 
 @staticmethod
 def apply_hotspot_modification_to_matrix(
