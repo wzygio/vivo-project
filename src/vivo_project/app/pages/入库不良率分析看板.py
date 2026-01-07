@@ -231,7 +231,7 @@ with st.container(border=True):
     # 筛选栏
     lc1, lc2, lc3 = st.columns(3)
     with lc1: 
-        l_sort = st.selectbox("排序:", ["默认(投入时间)", "按不良率(降序)", "按入库时间"], key="u_lot_sort")
+        l_sort = st.selectbox("排序:", ["按入库时间(默认)", "按阵列投入时间", "按不良率(降序)"], key="u_lot_sort")
     with lc2:
         l_months = sorted(df_lot_curr['month_str'].dropna().unique(), reverse=True)
         l_sel_m = st.selectbox("月别:", ["全部"] + l_months, key="u_lot_m")
@@ -247,7 +247,7 @@ with st.container(border=True):
     if l_sort == "按不良率(降序)":
         df_lot_curr = df_lot_curr.sort_values('defect_rate', ascending=False)
         x_lbl = "Lot ID"
-    elif l_sort == "按入库时间":
+    elif l_sort == "按阵列投入时间":
         df_lot_curr = df_lot_curr.sort_values('warehousing_time')
         x_lbl = "Lot ID"
     else:
