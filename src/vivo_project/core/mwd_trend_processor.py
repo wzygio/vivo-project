@@ -12,11 +12,12 @@ from vivo_project.config import CONFIG
 @staticmethod
 def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) -> Dict[str, pd.DataFrame] | None:
     """
-    (V3.7 - 修复周别一致性)
+    (V3.8 - 支持入库量透传)
     使用指数移动平均(EMA)进行数据平滑。
-    强制使用 ISO 8601 (周一~周日) 标准计算周别，解决 Group 与 Code 级周号不一致问题。
+    强制使用 ISO 8601 标准计算周别。
+    [新增] 确保 total_panels 字段在 Melt 过程中被保留，以便图表绘制双轴。
     """
-    logging.info("开始为Group级月/周/天执行'柔化衰减'数据处理 (V3.7 - ISO Fix)...")
+    logging.info("开始为Group级月/周/天执行'柔化衰减'数据处理 (V3.8 - Dual Axis Ready)...")
     if panel_details_df.empty: return None
     
     try:
@@ -64,23 +65,24 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         def _aggregate_and_format(agg_df, time_format_str):
             """
             辅助函数：计算比率并格式化时间列
-            [修改] 增加对 'ISO' 特殊标记的处理
+            [修改] id_vars 中增加 'total_panels'，确保入库量信息不丢失
             """
+            # 1. 计算率
             for group in target_defects:
                 agg_df[f"{group.lower()}_rate"] = agg_df.get(group, 0) / agg_df['total_panels']
             
-            # --- [核心修改] 统一周别格式化逻辑 ---
+            # 2. 格式化时间
             if time_format_str == 'ISO':
-                # 针对周度数据，使用 isocalendar 确保周一到周日为一周
-                # agg_df.index 此时通常是 Resample 后的 Sunday，ISO 算法会将其归入正确的一周
                 iso_df = agg_df.index.isocalendar()
                 agg_df['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
             else:
                 agg_df['time_period'] = agg_df.index.strftime(time_format_str)
-            # -----------------------------------
-
+            
+            # 3. Melt (关键修改：保留 total_panels)
+            # 注意：total_panels 会随着每个 defect_group 重复，这是符合 Tidy Data 格式的，
+            # 在绘图时去重即可。
             melted = agg_df.reset_index().melt(
-                id_vars='time_period', 
+                id_vars=['time_period', 'total_panels'],  # <--- [新增] 保留 total_panels
                 value_vars=rate_cols, 
                 var_name='defect_group_raw', 
                 value_name='defect_rate'
@@ -88,16 +90,14 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
             melted['defect_group'] = melted['defect_group_raw'].map(rate_to_group_map)
             return melted.sort_values(by='time_period')
         
-        # 使用工具函数处理月度和周度数据
+        # 处理不同时间维度
         monthly_values = CONFIG['processing']['group_monthly_values']
         weekly_values = CONFIG['processing']['group_weekly_values']
         
-        # 处理不同时间维度的数据
         results['monthly'] = _aggregate_and_format(
             _process_group_monthly_data(daily_summary, target_defects, monthly_values, today),
             '%Y-%m月'
         )
-        # [修改] 传入 'ISO' 标记
         results['weekly'] = _aggregate_and_format(
             _process_group_weekly_data(daily_summary, target_defects, weekly_values, today),
             'ISO' 
@@ -107,8 +107,9 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         seven_days_ago = today - relativedelta(days=6)
         daily_data_filtered = daily_summary[daily_summary.index >= seven_days_ago]
         results['daily'] = _aggregate_and_format(daily_data_filtered, '%m-%d')
-        
-        logging.info("成功执行Group级EMA'柔化衰减'处理。")
+        # [移除] 这里原本有一个针对 daily 的 merge 操作，现在不需要了，因为 total_panels 已经穿透
+
+        logging.info("成功执行Group级EMA'柔化衰减'处理 (含入库量)。")
         return results
         
     except Exception as e:
