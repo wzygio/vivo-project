@@ -67,7 +67,7 @@ def prepare_mapping_data(panel_details_df: pd.DataFrame) -> pd.DataFrame:
                 continue
 
             processed_codes_in_batch = []
-            for code_desc, df_code_group in df_current_batch.groupby('defect_desc'):
+            for code_desc, df_code_group in df_current_batch.groupby('defect_desc'): # type: ignore
                 current_count = len(df_code_group)
                 prev_max_count = max_allowed_counts.get(code_desc, float('inf'))
                 if prev_max_count == float('inf'):
