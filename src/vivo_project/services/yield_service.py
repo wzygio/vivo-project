@@ -34,8 +34,6 @@ class YieldAnalysisService:
     为了适应 Streamlit 的重运行机制，所有方法均为静态并进行缓存。
     这确保了在下拉框切换等交互操作中，数据获取是瞬间完成的。
     """
-
-
     # ==========================================================================
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
@@ -50,6 +48,7 @@ class YieldAnalysisService:
         repo = PanelRepository()
         
         end_date = datetime.now()
+        # end_date = datetime(2025, 12, 31)
         start_date = end_date - relativedelta(months=4)
         
         return repo.get_panel_details(

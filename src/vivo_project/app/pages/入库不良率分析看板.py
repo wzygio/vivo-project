@@ -13,7 +13,6 @@ from vivo_project.app.components.components import create_code_selection_ui, ren
 from vivo_project.app.charts.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
-    create_group_trend_chart_panel,
     slice_recent_data
 )
 from vivo_project.app.charts.sheet_lot_chart import (
@@ -148,11 +147,11 @@ if mwd_group_data:
     # 绘图
     gc1, gc2, gc3 = st.columns(3)
     with gc1:
-        st.plotly_chart(create_group_trend_chart_panel(df_m, "月度趋势", False, True, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True) # type: ignore
+        st.plotly_chart(create_group_trend_chart(df_m, "月度趋势", False, True, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
     with gc2:
-        st.plotly_chart(create_group_trend_chart_panel(df_w, "周度趋势", False, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True) # type: ignore
+        st.plotly_chart(create_group_trend_chart(df_w, "周度趋势", False, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
     with gc3:
-        st.plotly_chart(create_group_trend_chart_panel(df_d, "日度趋势", True, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True) # type: ignore
+        st.plotly_chart(create_group_trend_chart(df_d, "日度趋势", True, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
 
 st.divider()
 

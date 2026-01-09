@@ -32,7 +32,7 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
         # 数据预处理
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        today = pd.to_datetime(dt.now().date())
+        today = df['warehousing_time'].max()
         
         # 构建日度汇总
         daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels') # type: ignore
@@ -196,7 +196,7 @@ def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str
         # 数据预处理
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        today = pd.to_datetime(dt.now().date())
+        today = df['warehousing_time'].max()
 
         # 构建日度汇总
         daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
@@ -354,7 +354,7 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defec
         daily_summary.index = pd.to_datetime(daily_summary.index)
 
         # 2. [核心逻辑] 动态筛选出当月1日至今的数据
-        today = pd.to_datetime(dt.now().date())
+        today = df['warehousing_time'].max()
         start_of_current_month = today.replace(day=1) 
         daily_summary = daily_summary[daily_summary.index >= start_of_current_month]
 
