@@ -7,6 +7,7 @@ from typing import Dict, Any
 from collections import defaultdict
 import comtypes.client
 import comtypes
+from datetime import datetime
 
 from vivo_project.config import CONFIG, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import save_dict_to_excel
@@ -19,7 +20,8 @@ def calculate_sheet_defect_rates(
     panel_details_df: pd.DataFrame,
     target_defects: list,
     array_input_times_df: pd.DataFrame,
-    mwd_code_data: Dict[str, pd.DataFrame] | None
+    mwd_code_data: Dict[str, pd.DataFrame] | None,
+    start_date:datetime
 ) -> Dict[str, Any] | None:
     """
     (V3.9 - 添加覆盖探针, 修正调用)
@@ -104,6 +106,16 @@ def calculate_sheet_defect_rates(
                 desc_to_group_map=desc_to_group_map # <--- 传递映射
         )
 
+        # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
+        # 理由：覆盖插入逻辑可能会通过模板克隆出历史日期的行，在此处统一清理
+        start_date_str = start_date.strftime('%Y%m%d') # 转换为 'YYYYMMDD' 字符串
+        logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Sheet...")
+        for group in overridden_code_details:
+            df_grp = overridden_code_details[group]
+            if not df_grp.empty and 'warehousing_time' in df_grp.columns:
+                # 仅保留在分析窗口内的数据
+                overridden_code_details[group] = df_grp[df_grp['warehousing_time'] >= start_date_str].copy()
+
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
         # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确
@@ -157,7 +169,8 @@ def calculate_lot_defect_rates(
     panel_details_df: pd.DataFrame,
     sheet_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    target_defects: list
+    target_defects: list,
+    start_date: datetime
 ) -> Dict[str, Any] | None:
     """
     (V4.4 - 集成 Lot 覆盖, 修正调用)
@@ -227,6 +240,14 @@ def calculate_lot_defect_rates(
                 desc_to_group_map=desc_to_group_map # <--- 传递映射
         )
 
+        # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
+        start_date_str = start_date.strftime('%Y%m%d')
+        logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Lot...")
+        for group in overridden_lot_code_details:
+            df_grp_lot = overridden_lot_code_details[group]
+            if not df_grp_lot.empty and 'warehousing_time' in df_grp_lot.columns:
+                overridden_lot_code_details[group] = df_grp_lot[df_grp_lot['warehousing_time'] >= start_date_str].copy()
+                
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
         # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确

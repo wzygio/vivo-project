@@ -258,10 +258,10 @@ with st.container(border=True):
     if l_sort == "按不良率(降序)":
         df_lot_curr = df_lot_curr.sort_values('defect_rate', ascending=False)
         x_lbl = "Lot ID"
-    elif l_sort == "按阵列投入时间":
+    elif l_sort == "按入库时间(默认)":
         df_lot_curr = df_lot_curr.sort_values('warehousing_time')
         x_lbl = "Lot ID"
-    else:
+    elif l_sort == "按阵列投入时间":
         df_lot_curr = df_lot_curr.sort_values('array_input_time')
         x_lbl = "Lot ID"
 

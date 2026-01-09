@@ -38,6 +38,19 @@ class YieldAnalysisService:
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
 
+    _end_date: datetime = datetime.now()
+    _start_date: datetime = _end_date - relativedelta(months=4)
+
+    @classmethod
+    def set_analysis_end_date(cls, end_date: datetime):
+        """
+        [新增] 允许外部注入结束时间 (例如用于回溯分析或跨年模拟)
+        注意：调用此方法后，建议执行 YieldAnalysisService.get_raw_panel_details.clear() 清除缓存
+        """
+        cls._end_date = end_date
+        cls._start_date = end_date - relativedelta(months=4)
+        logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
+
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def get_raw_panel_details() -> pd.DataFrame:
@@ -47,10 +60,12 @@ class YieldAnalysisService:
         # 在静态方法内部实例化 Repo
         repo = PanelRepository()
         
-        end_date = datetime.now()
-        # end_date = datetime(2025, 12, 31)
-        start_date = end_date - relativedelta(months=4)
+        # [修改] 不再硬编码，而是使用类属性
+        end_date = YieldAnalysisService._end_date
+        start_date = YieldAnalysisService._start_date
         
+        logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
+
         return repo.get_panel_details(
             start_date=start_date.strftime('%Y-%m-%d'),
             end_date=end_date.strftime('%Y-%m-%d'),
@@ -145,7 +160,8 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             target_defects=target_defects,
             array_input_times_df=array_times_df,
-            mwd_code_data=mwd_code_data
+            mwd_code_data=mwd_code_data,
+            start_date=YieldAnalysisService._start_date
         )
 
     @staticmethod
@@ -171,7 +187,8 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             sheet_results=sheet_results,
             mwd_code_data=mwd_code_data,
-            target_defects=target_defects
+            target_defects=target_defects,
+            start_date=YieldAnalysisService._start_date
         )
 
     # ==========================================================================
