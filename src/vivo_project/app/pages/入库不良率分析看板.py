@@ -146,12 +146,23 @@ if mwd_group_data:
 
     # 绘图
     gc1, gc2, gc3 = st.columns(3)
-    with gc1:
-        st.plotly_chart(create_group_trend_chart(df_m, "月度趋势", False, True, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
-    with gc2:
-        st.plotly_chart(create_group_trend_chart(df_w, "周度趋势", False, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
-    with gc3:
-        st.plotly_chart(create_group_trend_chart(df_d, "日度趋势", True, False, y_limit, COLOR_MAP, CATEGORY_ORDERS), use_container_width=True, show_input_slider=True) # type: ignore
+    
+    # 统一配置三个图表的数据和参数
+    chart_configs = [
+        (df_m, "月度趋势", False, True, gc1),
+        (df_w, "周度趋势", False, False, gc2),
+        (df_d, "日度趋势", True, False, gc3)
+    ]
+    
+    for df, title, show_slider, show_count, col in chart_configs:
+        with col:
+            if df is not None and not df.empty:
+                st.plotly_chart(
+                    create_group_trend_chart(df, title, show_slider, show_count, y_limit, COLOR_MAP, CATEGORY_ORDERS, show_input_count=True),
+                    use_container_width=True
+                )
+            else:
+                st.info(f"{title}数据暂无")
 
 st.divider()
 

@@ -86,23 +86,68 @@ class PanelRepository:
                 logging.warning(f"⚠️ 本地快照读取失败: {e}，将转为数据库查询。")
                 # 读取失败 fallback 到查库，无需额外操作
 
-        # --- C. 执行数据库查询 ---
-        # 代码走到这里，说明要么 force_refresh=True，要么快照过期，要么快照不存在
+        # --- C. 执行数据库查询 (升级为分片模式) ---
         if self.db.engine is None:
             logging.error("数据库连接未初始化，无法查询 Panel 数据。")
             return pd.DataFrame()
 
-        logging.info(f"📡 [Repo] 正在从数据库查询 Panel 数据: {start_date} 至 {end_date}")
+        logging.info(f"📡 [Repo] 准备查询 Panel 数据: {start_date} 至 {end_date}")
         
-        df_result = load_panel_details(
-            db_manager=self.db,
-            start_date=start_date,
-            end_date=end_date,
-            prod_code=product_code,
-            work_order_types=work_order_types
-        )
+        try:
+            # 1. 转换日期对象
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            
+            # 2. 定义分片步长 (例如：每次查 30 天)
+            chunk_days = 30
+            current_start = start_dt
+            all_chunks = []
+            
+            logging.info(f"🔄 [Repo] 启动分片查询策略 (步长: {chunk_days}天)...")
 
-        # --- D. 自动保存/更新快照 ---
+            while current_start <= end_dt:
+                # 计算当前分片的结束时间
+                current_end = current_start + timedelta(days=chunk_days)
+                # 不超过总结束时间
+                if current_end > end_dt:
+                    current_end = end_dt
+                
+                # 格式化为字符串
+                s_str = current_start.strftime("%Y-%m-%d")
+                e_str = current_end.strftime("%Y-%m-%d")
+                
+                logging.info(f"   >> Fetching chunk: {s_str} ~ {e_str} ...")
+                
+                # 调用底层 Loader (原子查询)
+                df_chunk = load_panel_details(
+                    db_manager=self.db,
+                    start_date=s_str,
+                    end_date=e_str,
+                    prod_code=product_code,
+                    work_order_types=work_order_types
+                )
+                
+                if not df_chunk.empty:
+                    all_chunks.append(df_chunk)
+                    logging.info(f"      Got {len(df_chunk)} rows.")
+                    
+                current_start = current_end + timedelta(days=1)
+
+            # 3. 合并所有分片
+            if all_chunks:
+                df_result = pd.concat(all_chunks, ignore_index=True)
+                # 去重 (防止万一的时间重叠)
+                df_result.drop_duplicates(subset=['panel_id'], inplace=True)
+                logging.info(f"🎉 [Repo] 分片查询完成，总数据量: {len(df_result)} 行。")
+            else:
+                logging.warning("⚠️ [Repo] 所有分片查询均未返回数据。")
+                df_result = pd.DataFrame()
+
+        except Exception as query_err:
+            logging.error(f"❌ [Repo] 数据库分片查询过程中发生严重错误: {query_err}", exc_info=True)
+            return pd.DataFrame()
+
+        # --- D. 自动保存/更新快照 (保持不变) ---
         if not df_result.empty and self.use_snapshot:
             try:
                 logging.info(f"💾 [Repo] 获取到新数据，正在更新本地快照: {self.snapshot_path}")
