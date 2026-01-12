@@ -1,7 +1,14 @@
 import logging                                                                     # 导入日志模块
-import pandas as pd                                                                # 导入Pandas
+import pandas as pd
+import numpy as np   
+from unittest.mock import patch
+
 from vivo_project.core.mwd_trend_processor import create_code_level_mwd_trend_data # 导入趋势处理器
-from vivo_project.core.sheet_lot_processor import _add_daily_base_rate_to_df      # 导入模拟映射逻辑
+from vivo_project.core.sheet_lot_processor import (
+   _add_daily_base_rate_to_df, 
+   _apply_defect_capping, 
+   calculate_sheet_defect_rates 
+)      # 导入模拟映射逻辑
 
 def test_ema_smoothing_logic(sample_panel_df):                                     # 测试EMA平滑与中值钳制逻辑
     """验证Code级EMA平滑是否生效且稳定"""                                             # 函数文档说明
@@ -50,3 +57,103 @@ def test_daily_base_rate_mapping(sample_mwd_data):                              
     assert 'daily_base_rate' in mapped_df.columns                                # 断言基准率列已生成
     assert not mapped_df['daily_base_rate'].isnull().any()                       # 断言没有缺失值
     logging.info("日度基准映射测试通过。")                                             # 记录测试通过
+
+# [修改] 这里的 Patch 路径要指向模块中的函数名，而不是类方法
+@patch('vivo_project.core.sheet_lot_processor._load_override_excel')
+def test_cap_then_override_priority(mock_load_excel, mock_processing_config, sample_panel_df):
+    """
+    [Test Case 2] 测试 '先截断，再覆盖' 的流程优先级 (Integration Test)
+    """
+    logging.info("正在测试 '先截断 -> 再覆盖' 的优先级顺序...")
+
+    # --- 1. 准备 Mock ---
+    # [关键修复] 补全 'lot_id' 列。这是 override 模块内部校验所必需的。
+    mock_override_df = pd.DataFrame({
+        'sheet_id': ['S001'],
+        'lot_id': ['L1'],  # <--- 新增此列
+        'defect_desc': ['Code_High'],
+        'override_rate': [0.50]
+    })
+    mock_load_excel.return_value = (mock_override_df, None)
+
+    # --- 2. 准备输入数据 ---
+    total_panels = 200 
+    defect_count = 180 # 90% 不良率
+    
+    input_df = pd.DataFrame({
+        'sheet_id': ['S001'] * total_panels,
+        'panel_id': [f'P{i}' for i in range(total_panels)],
+        'lot_id': ['L1'] * total_panels,
+        'warehousing_time': [pd.to_datetime('2025-12-01')] * total_panels,
+        'defect_group': ['OLED_Mura'] * defect_count + ['NoDefect'] * (total_panels - defect_count),
+        'defect_desc': ['Code_High'] * defect_count + ['NoDefect'] * (total_panels - defect_count)
+    })
+
+    warning_lines = {'Code_High': 0.10}
+
+    # --- 3. 执行核心计算函数 ---
+    final_results = calculate_sheet_defect_rates(
+        panel_details_df=input_df,
+        target_defects=['OLED_Mura'],
+        array_input_times_df=pd.DataFrame(),
+        mwd_code_data=None,
+        start_date=pd.to_datetime('2025-01-01'),
+        warning_lines=warning_lines
+    )
+
+    # --- 4. 验证结果 ---
+    assert final_results is not None, "计算结果为None"
+    
+    code_details = final_results['code_level_details'].get('OLED_Mura')
+    assert code_details is not None
+    
+    target_row = code_details[
+        (code_details['sheet_id'] == 'S001') & 
+        (code_details['defect_desc'] == 'Code_High')
+    ]
+    
+    assert not target_row.empty
+    final_rate = target_row['defect_rate'].iloc[0]
+    
+    logging.info(f"最终结果: {final_rate}")
+    
+    # 断言覆盖生效 (0.50)
+    assert np.isclose(final_rate, 0.50, atol=0.001), \
+        f"优先级错误！期望覆盖值 0.50，实际得到 {final_rate}。"
+        
+    logging.info("优先级顺序测试通过。")
+
+def test_precision_spec_capping():
+    """
+    [Test Case 1] 测试精确截断逻辑 (Unit Test)
+    """
+    logging.info("正在测试 Spec 精确截断逻辑...")
+    
+    df_code = pd.DataFrame({
+        'sheet_id': ['S1'] * 100,
+        'defect_desc': ['Code_X'] * 100,
+        'defect_rate': [0.20] * 100,
+        'total_panels': [1000] * 100
+    })
+    
+    results_dict = {
+        "group_level_summary_for_chart": pd.DataFrame(),
+        "code_level_details": {'GroupA': df_code}
+    }
+    
+    warning_lines = {'Code_X': 0.05}
+    
+    # [修改] 直接调用函数
+    capped_results = _apply_defect_capping(
+        results_dict=results_dict,
+        group_thresholds={'upper': 1.0, 'lower': 0.0},
+        code_thresholds={'upper': 1.0, 'lower': 0.0},
+        warning_lines=warning_lines
+    )
+    
+    final_rates = capped_results['code_level_details']['GroupA']['defect_rate'].values
+    
+    assert np.all(final_rates <= 0.05), "截断上限验证失败"
+    assert np.all(final_rates >= 0.04), "软截断下限验证失败" # 0.05 * 0.8 = 0.04
+    
+    logging.info("Spec 精确截断逻辑测试通过。")

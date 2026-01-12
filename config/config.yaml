@@ -24,6 +24,9 @@ processing:
   use_local_snapshot: True
   snapshot_path: 'data/panel_details_snapshot.parquet'
   
+  defect_capping:
+    enable: True
+
   # 1. Group 级修正配置
   group_monthly_values:
     Array_Line:
@@ -198,11 +201,11 @@ processing:
         - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
 
 
-  'sheet_hotspot_config': {
-      'enable': True,
-      'random_seed': 2025,
+  sheet_hotspot_config: {
+      enable: True,
+      random_seed: 2025,
       
-      'hide_hotspot_config': {
+      hide_hotspot_config: {
           'fluctuation_sheet': 0.5,  
           'fluctuation_lot': 0.3,
       },

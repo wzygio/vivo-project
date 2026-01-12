@@ -138,11 +138,10 @@ class YieldAnalysisService:
     # ==========================================================================
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
     # ==========================================================================
-
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def get_sheet_defect_rates() -> Dict[str, Any] | None:
-        """计算 Sheet 级良率 (直接缓存结果)"""
+        """计算 Sheet 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
         # 1. 主数据
@@ -152,22 +151,26 @@ class YieldAnalysisService:
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data() # 注意：这里建议使用高平滑度的模拟版本
         target_defects = CONFIG['processing']['target_defect_groups']
 
-        # 3. 核心计算
+        # [新增] 3. 加载警戒线配置
+        warning_lines = YieldAnalysisService.load_static_warning_lines()
+
+        # 4. 核心计算
         return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
             target_defects=target_defects,
             array_input_times_df=array_times_df,
             mwd_code_data=mwd_code_data,
-            start_date=YieldAnalysisService._start_date
+            start_date=YieldAnalysisService._start_date, # 传入类属性 start_date
+            warning_lines=warning_lines  # [新增] 注入
         )
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def get_lot_defect_rates() -> Dict[str, Any] | None:
-        """计算 Lot 级良率 (直接缓存结果)"""
+        """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
         # 1. 主数据
@@ -182,13 +185,17 @@ class YieldAnalysisService:
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
         target_defects = CONFIG['processing']['target_defect_groups']
 
-        # 4. 核心计算
+        # [新增] 4. 加载警戒线配置
+        warning_lines = YieldAnalysisService.load_static_warning_lines()
+
+        # 5. 核心计算
         return calculate_lot_defect_rates(
             panel_details_df=panel_df,
             sheet_results=sheet_results,
             mwd_code_data=mwd_code_data,
             target_defects=target_defects,
-            start_date=YieldAnalysisService._start_date
+            start_date=YieldAnalysisService._start_date,
+            warning_lines=warning_lines  # [新增] 注入
         )
 
     # ==========================================================================

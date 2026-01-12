@@ -17,3 +17,26 @@ def sample_panel_df():                                                          
 def sample_mwd_data():                                                             # 提供趋势图数据
     """提供模拟的趋势分析数据集"""                                                   # 函数文档说明
     return DataFactory.create_mock_mwd_data()                                      # 调用工厂生成MWD字典
+
+@pytest.fixture
+def mock_processing_config(monkeypatch):
+    """
+    [Fixture] 强制开启截断和覆盖功能的配置
+    """
+    new_config = CONFIG.copy()
+    new_config['processing'] = {
+        'defect_capping': {
+            'enable': True,
+            'group_thresholds': {'upper': 1.0, 'lower': 0.0}, # 放宽全局限制，专注于测 Spec
+            'code_thresholds': {'upper': 1.0, 'lower': 0.0}
+        },
+        'rate_override_config': {
+            'enable': True, # 实际上代码里没用这个开关，是靠有没有文件，但保持配置一致
+            'override_file': 'dummy.xlsx',
+            'override_sheet_name': 'Sheet1'
+        },
+        'target_defect_groups': ['OLED_Mura']
+    }
+    # 使用 monkeypatch 临时替换 CONFIG 中的 processing
+    monkeypatch.setitem(CONFIG, 'processing', new_config['processing'])
+    return new_config

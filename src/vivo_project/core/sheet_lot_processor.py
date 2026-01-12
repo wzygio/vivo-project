@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import logging, sys, io
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from collections import defaultdict
 import comtypes.client
 import comtypes
@@ -13,8 +13,9 @@ from dateutil.relativedelta import relativedelta
 from vivo_project.config import CONFIG, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import save_dict_to_excel
 
+
 # ==============================================================================
-#              ByCode计算Sheet级不良率 (V3.9 - 集成覆盖+探针)
+#             ByCode计算Sheet级不良率
 # ==============================================================================
 @staticmethod
 def calculate_sheet_defect_rates(
@@ -22,147 +23,122 @@ def calculate_sheet_defect_rates(
     target_defects: list,
     array_input_times_df: pd.DataFrame,
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    start_date:datetime
+    start_date: datetime,
+    warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
     """
-    (V3.9 - 添加覆盖探针, 修正调用)
-    按顺序执行 过滤 -> 计算原始 -> [模拟] -> [覆盖] -> 重聚合 -> 截断 六个步骤。
+    (V4.1 - 逻辑重构) 顺序: 基础聚合 -> 过滤 -> 原始计算 -> [模拟] -> [截断] -> [覆盖] -> 重聚合
     """
-    logging.info("开始执行Sheet级不良率完整业务流程 (V3.9 - 添加覆盖探针)...")
-    debug_output_dir = PROJECT_ROOT / "data" / "processed"
-
+    logging.info("开始Sheet级计算 (截断 -> 覆盖 模式)...")
+    
     try:
-        # --- 步骤 1: 聚合 Sheet 基础信息 ---
-        logging.info("步骤1: 聚合 Sheet 基础信息...")
-        aggregation_rules = {'panel_id': 'nunique', 'lot_id': 'first', 'warehousing_time': 'first'}
-        sheet_base_info_df = panel_details_df.groupby('sheet_id').agg(aggregation_rules)
-        sheet_base_info_df = sheet_base_info_df.rename(columns={'panel_id': 'total_panels'})
+        # --- 1. 基础信息聚合 ---
+        agg_rules = {'panel_id': 'nunique', 'lot_id': 'first', 'warehousing_time': 'first'}
+        sheet_base = panel_details_df.groupby('sheet_id').agg(agg_rules).rename(columns={'panel_id': 'total_panels'})
+        
+        if sheet_base.index.name == 'sheet_id': 
+            sheet_base = sheet_base.reset_index()
+
         if not array_input_times_df.empty:
-            sheet_array_times = array_input_times_df.copy()
-            # 确保 sheet_id 是列以便合并
-            if sheet_base_info_df.index.name == 'sheet_id':
-                    sheet_base_info_df = sheet_base_info_df.reset_index()
-            sheet_base_info_df = pd.merge(sheet_base_info_df, sheet_array_times, on='sheet_id', how='left')
-            # 合并后可以重新设置索引，如果后续流程需要
-            # sheet_base_info_df = sheet_base_info_df.set_index('sheet_id')
+            if sheet_base.index.name == 'sheet_id': sheet_base = sheet_base.reset_index()
+            sheet_base = pd.merge(sheet_base, array_input_times_df, on='sheet_id', how='left')
         else:
-            # 确保 array_input_time 列存在，即使为空
-            sheet_base_info_df['array_input_time'] = pd.NaT
+            sheet_base['array_input_time'] = pd.NaT
 
-        # --- 步骤 2: 过滤 Sheet ---
-        logging.info("步骤2: 过滤 Sheet...")
-        # 注意：_filter_by_pass_rate 需要 total_panels 列，确保它存在
-        sheet_base_info_filtered = _filter_by_pass_rate(
-            base_df=sheet_base_info_df.copy(), # 传入包含 total_panels 的 DF
-            denominator=190,
-            threshold=0.9,
-            entity_name="sheet"
-        )
-        if sheet_base_info_filtered.empty:
-            logging.warning("Sheet 过货率筛选后无剩余数据。")
-            return None
-        valid_entities = sheet_base_info_filtered['sheet_id'].unique() # 从过滤后的结果获取有效 ID
-        panel_details_df_filtered = panel_details_df[panel_details_df['sheet_id'].isin(valid_entities)]
+        # --- 2. 过货率过滤 ---
+        sheet_base_filtered = _filter_by_pass_rate(sheet_base.copy(), 190, 0.9, "sheet")
+        if sheet_base_filtered.empty: return None
+        
+        valid_ids = sheet_base_filtered['sheet_id'].unique()
+        panel_df_filtered = panel_details_df[panel_details_df['sheet_id'].isin(valid_ids)]
 
-        # --- 步骤 3: 计算原始不良率 ---
-        logging.info("步骤3: 计算原始 Sheet 级不良率...")
-        # 传递过滤后的基础信息，确保设置为 index 以便 join
+        # --- 3. 计算原始不良率 ---
         raw_results = _calculate_raw_rates(
-            panel_details_df_filtered=panel_details_df_filtered,
-            base_info_df_filtered=sheet_base_info_filtered.set_index('sheet_id'), # <-- 设 index
+            panel_details_df_filtered=panel_df_filtered,
+            base_info_df_filtered=sheet_base_filtered.set_index('sheet_id'),
             target_defects=target_defects,
             entity_id_col='sheet_id'
         )
-        if raw_results is None: raise Exception("原始不良率计算步骤失败。")
+        if not raw_results: raise Exception("原始计算失败")
 
+        # --- 4. 模拟数据 ---
+        sim_code_details = _simulate_concentration(raw_results, mwd_code_data, 'sheet_id')
+        if not isinstance(sim_code_details, dict): 
+            sim_code_details = raw_results['code_level_details']
+        
+        # 将模拟后的 Code 数据回填到 raw_results 中，为截断做准备
+        current_results = raw_results.copy()
+        current_results['code_level_details'] = sim_code_details
 
-        # --- 步骤 4: 模拟数据 ---
-        logging.info("步骤4: 应用 Sheet 级不良率模拟...")
-        sim_code_details = _simulate_concentration(
-            raw_results=raw_results,
-            mwd_code_data=mwd_code_data,
-            entity_id_col='sheet_id'
-        )
-        if sim_code_details is None or not isinstance(sim_code_details, dict): # 增加类型检查
-                logging.warning("Sheet 级不良率模拟失败或返回无效格式，将尝试在原始数据上应用覆盖。")
-                sim_code_details = raw_results['code_level_details']
-
-
-        # --- 步骤 5: 应用覆盖逻辑 (传入 desc_to_group_map) ---
-        logging.info("步骤5: 应用 Sheet 级不良率覆盖...")
-        # a. 加载覆盖数据
-        override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
-        override_sheet_df, _ = _load_override_excel(
-            override_file=override_config.get('override_file', ''),
-            override_sheet_name=override_config.get('override_sheet_name', '')
-        )
-        # b. [新增] 获取 Desc -> Group 映射
-        #    使用 panel_details_df (未过滤) 来构建最全的映射
-        desc_to_group_map = _get_desc_to_group_map(panel_details_df)
-        # c. 执行覆盖
-        overridden_code_details = _override_rates(
-                simulated_code_details_dict=sim_code_details,
-                override_data_df=override_sheet_df,
-                entity_id_col='sheet_id',
-                desc_to_group_map=desc_to_group_map # <--- 传递映射
-        )
-
-        # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
-        adjusted_start_date = start_date + relativedelta(months=1)  # 增加一个月
-        start_date_str = adjusted_start_date.strftime('%Y%m%d')  # 转换为 'YYYYMMDD' 字符串
-        logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Sheet...")
-        for group in overridden_code_details:
-            df_grp = overridden_code_details[group]
-            if not df_grp.empty and 'warehousing_time' in df_grp.columns:
-                # 仅保留在分析窗口内的数据
-                overridden_code_details[group] = df_grp[df_grp['warehousing_time'] >= start_date_str].copy()
-
-        # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
-        logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
-        # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确
-        base_info_for_reagg = raw_results['group_level_summary_for_chart']
-        # 如果索引不是 sheet_id, 重置它
-        if base_info_for_reagg.index.name != 'sheet_id':
-                base_info_for_reagg = base_info_for_reagg.reset_index()
-
-        sim_group_ui, sim_group_chart = _reaggregate_groups_from_codes(
-            sim_code_details=overridden_code_details,
-            raw_base_info_df=base_info_for_reagg, # <-- 使用准备好的基础信息
-            target_defects=target_defects,
-            entity_id_col='sheet_id' # <-- 确保传递 sheet_id
-        )
-        overridden_results = {
-            "group_level_summary_for_table": sim_group_ui,
-            "group_level_summary_for_chart": sim_group_chart,
-            "code_level_details": overridden_code_details
-        }
-
-        # --- 步骤 7: 截断 ---
-        logging.info("步骤7: 应用 Sheet 级不良率截断...")
-        group_level_thresholds_sheet = {'upper': 1, 'lower': 0.000}
-        code_level_thresholds_sheet = {'upper': 1, 'lower': 0.000}
-        final_results = _apply_defect_capping(
-            overridden_results,
-            group_level_thresholds_sheet,
-            code_level_thresholds_sheet
-        )
-
-        # 将原始完整的 Sheet 基础信息添加到最终结果 (如果需要)
-        # 确保 sheet_base_info_df 包含 sheet_id 作为列或索引
-        if 'sheet_id' not in sheet_base_info_df.columns and sheet_base_info_df.index.name != 'sheet_id':
-            final_results['full_sheet_base_info'] = sheet_base_info_df.reset_index()
+        # --- 5. [调整顺序] 应用截断 (Capping) ---
+        # 说明：先让系统自动把数据限制在 Spec 范围内
+        config = CONFIG.get('processing', {})
+        capping_cfg = config.get('defect_capping', {})
+        
+        if capping_cfg.get('enable', True):
+            capped_results = _apply_defect_capping(
+                results_dict=current_results,
+                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 0.15, 'lower': 0.005}),
+                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 0.05, 'lower': 0.001}),
+                warning_lines=warning_lines or {}
+            )
+            # 获取截断后的 Code 明细
+            current_code_details = capped_results['code_level_details']
         else:
-            final_results['full_sheet_base_info'] = sheet_base_info_df
+            current_code_details = sim_code_details
 
-        logging.info("Sheet级业务规则应用完成 (V3.9 - 添加覆盖探针)。")
+        # --- 6. [调整顺序] 应用覆盖 (Override) ---
+        # 说明：人工覆盖是最高指令，覆盖后的数据不再受截断限制
+        override_cfg = config.get('rate_override_config', {})
+        override_df, _ = _load_override_excel(
+            override_cfg.get('override_file', ''), 
+            override_cfg.get('override_sheet_name', '')
+        )
+        
+        desc_map = _get_desc_to_group_map(panel_details_df)
+        
+        final_code_details = _override_rates(
+            simulated_code_details_dict=current_code_details, # 输入已截断的数据
+            override_data_df=override_df,
+            entity_id_col='sheet_id',
+            desc_to_group_map=desc_map
+        )
+
+        # 窗口过滤
+        start_str = (start_date + relativedelta(months=1)).strftime('%Y%m%d')
+        for grp, df in final_code_details.items():
+            if not df.empty and 'warehousing_time' in df.columns:
+                final_code_details[grp] = df[df['warehousing_time'] >= start_str].copy()
+
+        # --- 7. 重聚合 (Re-aggregate) ---
+        # 基于 "截断 + 覆盖" 后的 Code 数据，重新计算 Group 汇总
+        base_info_reagg = raw_results['group_level_summary_for_chart']
+        if base_info_reagg.index.name != 'sheet_id': base_info_reagg = base_info_reagg.reset_index()
+
+        ui_df, chart_df = _reaggregate_groups_from_codes(
+            sim_code_details=final_code_details,
+            raw_base_info_df=base_info_reagg,
+            target_defects=target_defects,
+            entity_id_col='sheet_id'
+        )
+
+        final_results = {
+            "group_level_summary_for_table": ui_df,
+            "group_level_summary_for_chart": chart_df,
+            "code_level_details": final_code_details,
+            "full_sheet_base_info": sheet_base # 保留原始全量信息
+        }
+        
+        logging.info("Sheet级计算完成。")
         return final_results
 
     except Exception as e:
-        logging.error(f"在执行Sheet级业务规则时发生错误: {e}", exc_info=True)
+        logging.error(f"Sheet级计算异常: {e}", exc_info=True)
         return None
 
+
 # ==============================================================================
-#                      ByCode计算Lot级不良率 (V4.4 - 集成 Lot 覆盖)
+#                       ByCode计算Lot级不良率
 # ==============================================================================
 @staticmethod
 def calculate_lot_defect_rates(
@@ -170,121 +146,106 @@ def calculate_lot_defect_rates(
     sheet_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     target_defects: list,
-    start_date: datetime
+    start_date: datetime,
+    warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
     """
-    (V4.4 - 集成 Lot 覆盖, 修正调用)
-    执行 计算原始 -> 过滤 -> [模拟] -> [覆盖] -> 重聚合 -> 截断 的串行流程。
+    (V4.5 - 逻辑重构) 顺序: 基础计算 -> 过滤 -> 原始 -> [模拟] -> [截断] -> [覆盖] -> 重聚合
     """
-    logging.info("开始执行Lot级不良率完整业务流程 (V4.4 - 集成 Lot 覆盖)...")
+    logging.info("开始Lot级计算 (截断 -> 覆盖 模式)...")
 
     try:
-        # --- 步骤 1: 计算 Lot 基础信息 ---
-        logging.info("步骤1: 计算 Lot 级基础信息...")
-        full_sheet_base_info = sheet_results.get("full_sheet_base_info")
-        lot_base_info_df = _calculate_lot_base_info_with_median_time(
-            panel_details_df, full_sheet_base_info
-        )
-        if lot_base_info_df.empty: return None
+        # --- 1. Lot 基础信息 ---
+        full_sheet_info = sheet_results.get("full_sheet_base_info")
+        lot_base = _calculate_lot_base_info_with_median_time(panel_details_df, full_sheet_info)
+        if lot_base.empty: return None
 
-        # --- 步骤 2: 过滤 Lot ---
-        logging.info("步骤2: 过滤 Lot...")
-        lot_base_info_filtered = _filter_by_pass_rate(
-                base_df=lot_base_info_df.copy(), denominator=190 * 30, threshold=0.10, entity_name="Lot"
-        )
-        if lot_base_info_filtered.empty: return None
+        # --- 2. 过滤 ---
+        lot_base_filtered = _filter_by_pass_rate(lot_base.copy(), 190 * 30, 0.10, "Lot")
+        if lot_base_filtered.empty: return None
+        
+        valid_lots = lot_base_filtered['lot_id'].unique()
+        panel_df_lot = panel_details_df[panel_details_df['lot_id'].isin(valid_lots)]
 
-        # --- 步骤 3: 计算原始 Lot 级不良率 ---
-        logging.info("步骤3: 计算原始 Lot 级不良率...")
-        valid_lot_ids = lot_base_info_filtered['lot_id'].unique()
-        panel_details_df_filtered_for_lot = panel_details_df[panel_details_df['lot_id'].isin(valid_lot_ids)]
+        # --- 3. 原始计算 ---
         raw_lot_results = _calculate_raw_rates(
-            panel_details_df_filtered=panel_details_df_filtered_for_lot,
-            base_info_df_filtered=lot_base_info_filtered.set_index('lot_id'), # <-- 设 index
+            panel_details_df_filtered=panel_df_lot,
+            base_info_df_filtered=lot_base_filtered.set_index('lot_id'),
             target_defects=target_defects,
             entity_id_col='lot_id'
         )
-        if raw_lot_results is None: raise Exception("Lot级原始不良率计算失败。")
+        if not raw_lot_results: raise Exception("Lot原始计算失败")
 
-        # --- 步骤 4: 模拟数据 ---
-        logging.info("步骤4: 应用 Lot 级不良率模拟...")
-        simulated_lot_code_details = _simulate_concentration(
-            raw_results=raw_lot_results,
-            mwd_code_data=mwd_code_data,
-            entity_id_col='lot_id' # <-- 指定 lot_id
-        )
-        if simulated_lot_code_details is None or not isinstance(simulated_lot_code_details, dict):
-                logging.warning("Lot 级不良率模拟失败或返回无效格式，将尝试在原始数据上应用覆盖。")
-                simulated_lot_code_details = raw_lot_results['code_level_details']
+        # --- 4. 模拟 ---
+        sim_lot_codes = _simulate_concentration(raw_lot_results, mwd_code_data, 'lot_id')
+        if not isinstance(sim_lot_codes, dict): sim_lot_codes = raw_lot_results['code_level_details']
+        
+        current_lot_results = raw_lot_results.copy()
+        current_lot_results['code_level_details'] = sim_lot_codes
 
-        # --- 步骤 5: 应用 Lot 级覆盖逻辑 (传入 desc_to_group_map) ---
-        logging.info("步骤5: 应用 Lot 级不良率覆盖...")
-        # a. 加载覆盖数据
-        override_config = CONFIG.get('processing', {}).get('rate_override_config', {})
+        # --- 5. [调整顺序] 截断 (Capping) ---
+        config = CONFIG.get('processing', {})
+        capping_cfg = config.get('defect_capping', {})
+        
+        if capping_cfg.get('enable', True):
+            capped_results = _apply_defect_capping(
+                results_dict=current_lot_results,
+                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 1, 'lower': 0.003}),
+                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 1, 'lower': 0.0001}),
+                warning_lines=warning_lines or {}
+            )
+            current_code_details = capped_results['code_level_details']
+        else:
+            current_code_details = sim_lot_codes
+
+        # --- 6. [调整顺序] 覆盖 (Override) ---
+        override_cfg = config.get('rate_override_config', {})
         override_sheet_df, _= _load_override_excel(
-            override_file=override_config.get('override_file', ''),
-            override_sheet_name=override_config.get('override_sheet_name', '')
+            override_cfg.get('override_file', ''), 
+            override_cfg.get('override_sheet_name', '')
         )
-        override_lot_avg_df = _calculate_lot_override_rate_heuristic(
-            override_df=override_sheet_df,       # 传入 Sheet 级的覆盖明细
-            lot_base_info_df=lot_base_info_df,   # 传入 Lot 基础信息 (含时间)
-            mwd_code_data=mwd_code_data          # 传入月度趋势数据
+        # 计算 Lot 平均覆盖值
+        override_lot_avg = _calculate_lot_override_rate_heuristic(
+            override_df=override_sheet_df,
+            lot_base_info_df=lot_base,
+            mwd_code_data=mwd_code_data
         )
-        # b. [新增] 获取 Desc -> Group 映射
-        desc_to_group_map = _get_desc_to_group_map(panel_details_df)
-        # c. 执行覆盖
-        overridden_lot_code_details = _override_rates(
-                simulated_code_details_dict=simulated_lot_code_details,
-                override_data_df=override_lot_avg_df, # <-- 使用 Lot 平均覆盖数据
-                entity_id_col='lot_id',
-                desc_to_group_map=desc_to_group_map # <--- 传递映射
+        
+        desc_map = _get_desc_to_group_map(panel_details_df)
+        
+        final_code_details = _override_rates(
+            simulated_code_details_dict=current_code_details, # 输入已截断数据
+            override_data_df=override_lot_avg,
+            entity_id_col='lot_id',
+            desc_to_group_map=desc_map
         )
 
-        # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
-        adjusted_start_date = start_date + relativedelta(months=1)  # 增加一个月
-        start_date_str = adjusted_start_date.strftime('%Y%m%d')  # 转换为 'YYYYMMDD' 字符串
-        logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Lot...")
-        for group in overridden_lot_code_details:
-            df_grp_lot = overridden_lot_code_details[group]
-            if not df_grp_lot.empty and 'warehousing_time' in df_grp_lot.columns:
-                overridden_lot_code_details[group] = df_grp_lot[df_grp_lot['warehousing_time'] >= start_date_str].copy()
+        # 窗口过滤
+        start_str = (start_date + relativedelta(months=1)).strftime('%Y%m%d')
+        for grp, df in final_code_details.items():
+            if not df.empty and 'warehousing_time' in df.columns:
+                final_code_details[grp] = df[df['warehousing_time'] >= start_str].copy()
 
-        # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
-        logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
-        # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确
-        base_info_for_reagg_lot = raw_lot_results['group_level_summary_for_chart']
-        if base_info_for_reagg_lot.index.name != 'lot_id':
-                base_info_for_reagg_lot = base_info_for_reagg_lot.reset_index()
+        # --- 7. 重聚合 ---
+        base_info_reagg = raw_lot_results['group_level_summary_for_chart']
+        if base_info_reagg.index.name != 'lot_id': base_info_reagg = base_info_reagg.reset_index()
 
-        sim_group_ui, sim_group_chart = _reaggregate_groups_from_codes(
-            sim_code_details=overridden_lot_code_details, # <-- 使用覆盖后数据
-            raw_base_info_df=base_info_for_reagg_lot, # <-- 使用准备好的基础信息
+        ui_df, chart_df = _reaggregate_groups_from_codes(
+            sim_code_details=final_code_details,
+            raw_base_info_df=base_info_reagg,
             target_defects=target_defects,
-            entity_id_col='lot_id' # <-- 指定 lot_id
+            entity_id_col='lot_id'
         )
-        overridden_lot_results = {
-            "group_level_summary_for_table": sim_group_ui,
-            "group_level_summary_for_chart": sim_group_chart,
-            "code_level_details": overridden_lot_code_details
+
+        return {
+            "group_level_summary_for_table": ui_df,
+            "group_level_summary_for_chart": chart_df,
+            "code_level_details": final_code_details
         }
 
-        # --- 步骤 7: 截断 ---
-        logging.info("步骤7: 应用 Lot 级不良率截断...")
-        group_level_thresholds = {'upper': 1, 'lower': 0.003}
-        code_level_thresholds = {'upper': 1, 'lower': 0.0001}
-        final_results = _apply_defect_capping(
-            overridden_lot_results,
-            group_level_thresholds,
-            code_level_thresholds
-        )
-
-        logging.info("Lot级业务规则应用完成 (V4.4 - 集成 Lot 覆盖)。")
-        return final_results
-
     except Exception as e:
-        logging.error(f"在执行Lot级业务规则时发生错误: {e}", exc_info=True)
+        logging.error(f"Lot级计算异常: {e}", exc_info=True)
         return None
-
 
 
 # ==============================================================================
@@ -666,7 +627,7 @@ def _add_daily_base_rate_to_df(
         try:
             # 1. 建立当前 Code 的日期查找表: {DateString -> Rate}
             code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
-            code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d')
+            code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d') # type: ignore
             lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
 
             # 2. 获取当前待模拟 Lot 对应的入库日期
@@ -1257,79 +1218,95 @@ def _filter_by_pass_rate(
     logging.info(f"过货率筛选完成：从 {original_count} 个{entity_name}中筛选出 {filtered_count} 个。")
     return df_filtered
 
-# --- 截断 ---
 @staticmethod
 def _apply_defect_capping(
-    results_dict: Dict[str, Any], # 修改变量名以反映输入是处理后的结果
+    results_dict: Dict[str, Any],
     group_thresholds: dict,
-    code_thresholds: dict
+    code_thresholds: dict,
+    warning_lines: Optional[Dict[str, float]] = None  # 修改此处
 ) -> Dict[str, Any]:
     """
-    [辅助函数 - 通用 V1.1] 应用不良率截断 (对处理后的结果)。
-    增加对输入字典结构的健壮性检查。
+    [辅助函数 V2.0 - 精确 Spec 截断] 
+    根据 warning_lines 对每个 Code 应用专属的上限截断。
     """
-    logging.info("开始对不良率进行可配置的随机截断处理...")
-    # [新增] 输入检查
+    logging.info("开始对不良率进行可配置的随机截断处理 (支持 Spec 精确截断)...")
+    
+    # 输入检查
     if not isinstance(results_dict, dict):
-            logging.error("传递给 _apply_defect_capping 的输入不是字典，无法截断。")
-            return results_dict # 返回原始输入或引发错误
+        logging.error("传递给 _apply_defect_capping 的输入不是字典，无法截断。")
+        return results_dict
     if "group_level_summary_for_chart" not in results_dict or \
-        "code_level_details" not in results_dict or \
-        not isinstance(results_dict["code_level_details"], dict):
-            logging.error("传递给 _apply_defect_capping 的字典结构不完整，无法截断。")
-            return results_dict
+        "code_level_details" not in results_dict:
+        return results_dict
 
+    warning_lines = warning_lines or {} # 确保不为 None
+    base_seed = 101
+    
     try:
-        base_seed = 101
-        # 1. 截断 Group 级数据
+        # 1. 截断 Group 级数据 (保持原有逻辑，使用全局配置)
         df_group_chart = results_dict["group_level_summary_for_chart"].copy()
         rate_cols = [col for col in df_group_chart.columns if col.endswith('_rate')]
+        
         for i, col_name in enumerate(rate_cols):
-            # 使用确定性种子以保证可复现性
-            # np.random.seed(base_seed + i) # 旧方法，会影响全局
-            rng_capping = np.random.default_rng(base_seed + i) # 使用独立生成器
+            rng_capping = np.random.default_rng(base_seed + i)
+            # Group 级依然使用配置文件中的通用阈值
             df_group_chart[col_name] = df_group_chart[col_name].apply(
-                lambda rate: _apply_random_cap_and_floor( # 调用时加上类名
+                lambda rate: _apply_random_cap_and_floor(
                     rate,
                     upper_threshold=group_thresholds['upper'],
                     lower_threshold=group_thresholds['lower'],
-                    rng=rng_capping # 传递生成器
+                    rng=rng_capping
                 )
             )
 
-        # 2. 截断 Code 级数据
-        dict_code_details = results_dict["code_level_details"].copy() # 操作副本
-        rng_capping_code = np.random.default_rng(base_seed + 99) # Code 级使用一个种子
+        # 2. [核心升级] 截断 Code 级数据 (应用专属 Spec)
+        dict_code_details = results_dict["code_level_details"].copy()
+        rng_capping_code = np.random.default_rng(base_seed + 99)
+        
+        # 默认上限 (兜底用)
+        fallback_upper = code_thresholds['upper']
+        fallback_lower = code_thresholds['lower']
+
         for group, df_code in dict_code_details.items():
             if df_code is not None and not df_code.empty and 'defect_rate' in df_code.columns:
                 df_code_mod = df_code.copy()
-                df_code_mod['defect_rate'] = df_code_mod['defect_rate'].apply(
-                    lambda rate: _apply_random_cap_and_floor( # 调用时加上类名
-                        rate,
-                        upper_threshold=code_thresholds['upper'],
-                        lower_threshold=code_thresholds['lower'],
-                        rng=rng_capping_code # 传递生成器
+                
+                # 定义行级处理函数：动态查找 Spec
+                def _row_capper(row):
+                    # 1. 查找专属 Spec
+                    code_name = str(row.get('defect_desc', '')).strip()
+                    # 优先使用 warning_lines 中的值，找不到则用 fallback_upper
+                    spec_limit = warning_lines.get(code_name, fallback_upper)
+                    
+                    # 2. 执行软截断
+                    return _apply_random_cap_and_floor(
+                        rate=row['defect_rate'],
+                        upper_threshold=spec_limit,   # <--- 使用专属 Spec
+                        lower_threshold=fallback_lower,
+                        rng=rng_capping_code
                     )
-                )
-                # [新增] 截断后重新计算不良数
+
+                # 应用截断
+                df_code_mod['defect_rate'] = df_code_mod.apply(_row_capper, axis=1)
+
+                # [联动] 截断后重新计算 defect_panel_count
                 if 'total_panels' in df_code_mod.columns:
-                        df_code_mod['defect_panel_count'] = np.maximum(0, np.round(
-                            df_code_mod['defect_rate'] * df_code_mod['total_panels']
-                        )).astype(int)
+                    df_code_mod['defect_panel_count'] = np.maximum(0, np.round(
+                        df_code_mod['defect_rate'] * df_code_mod['total_panels']
+                    )).astype(int)
 
-                dict_code_details[group] = df_code_mod # 更新字典中的 DataFrame
+                dict_code_details[group] = df_code_mod
 
-        # 3. 重新准备 UI 汇总表 (基于已截断的 Group 数据)
-        final_ui_columns = list(results_dict.get("group_level_summary_for_table", pd.DataFrame()).columns) # 从原始结果获取列顺序
-        if not final_ui_columns and not df_group_chart.empty: # Fallback
-                final_ui_columns = df_group_chart.columns.tolist()
-
+        # 3. 重新准备 UI 汇总表
+        final_ui_columns = list(results_dict.get("group_level_summary_for_table", pd.DataFrame()).columns)
+        if not final_ui_columns and not df_group_chart.empty:
+            final_ui_columns = df_group_chart.columns.tolist()
         group_level_for_ui = df_group_chart.reindex(columns=final_ui_columns).fillna(0) if final_ui_columns else df_group_chart
 
-        logging.info("不良率随机截断处理完成。")
+        logging.info("不良率精确截断处理完成。")
 
-        # 4. 构建并返回最终结果字典
-        final_capped_results = results_dict.copy() # 复制原始字典结构
+        # 4. 返回结果
+        final_capped_results = results_dict.copy()
         final_capped_results["group_level_summary_for_table"] = group_level_for_ui
         final_capped_results["group_level_summary_for_chart"] = df_group_chart
         final_capped_results["code_level_details"] = dict_code_details
@@ -1337,7 +1314,7 @@ def _apply_defect_capping(
 
     except Exception as e:
         logging.error(f"在应用截断时发生错误: {e}", exc_info=True)
-        return results_dict # 出错时返回未截断的结果
+        return results_dict
 
 
 @staticmethod
@@ -1345,20 +1322,26 @@ def _apply_random_cap_and_floor(
     rate: float,
     upper_threshold: float,
     lower_threshold: float,
-    rng: np.random.Generator # <--- 接收生成器实例
-    ) -> float:
+    rng: np.random.Generator
+) -> float:
     """
-    [辅助函数 V1.1 - 使用独立 RNG] 对单个不良率数值应用可复现的随机上下限截断。
+    [辅助函数 V2.0 - 软截断] 
+    当 rate 超标时，返回 [Limit * 0.8, Limit] 之间的随机值，
+    确保截断后的数据依然呈现自然的随机波动，而非死板的直线。
     """
     if rate > upper_threshold:
-        # 使用传入的 rng 实例生成随机数
-        return rng.uniform(upper_threshold * 0.8, upper_threshold * 1)
+        # [核心逻辑] 软截断：在 Spec 的 80% ~ 100% 之间随机浮动
+        # 这样每个超标 Lot 的最终值都会略有不同，消除“人工痕迹”
+        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold)
+        return safe_rate
+        
     elif 0 < rate < lower_threshold:
-            # 对于下限，确保波动范围有意义
-            low_bound = max(0, lower_threshold * 0.8) # 确保不低于0
-            high_bound = lower_threshold * 1.2
-            if low_bound >= high_bound: # 如果下限计算有问题，返回一个固定值
-                return low_bound
-            return rng.uniform(low_bound, high_bound)
+        # 下限保护 (保持不变)
+        low_bound = max(0, lower_threshold * 0.8)
+        high_bound = lower_threshold * 1.2
+        if low_bound >= high_bound:
+            return low_bound
+        return rng.uniform(low_bound, high_bound)
+        
     else:
         return rate

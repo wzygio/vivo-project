@@ -200,8 +200,8 @@ def create_code_level_mwd_trend_data(
         today = pd.to_datetime(dt.now().date())
 
         # 构建基础日度汇总
-        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels')
-        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count')
+        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
+        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore
         
         base_daily_df = pd.merge(daily_total_panels.reset_index(), daily_code_defects.reset_index(), on='warehousing_time', how='left')
         base_daily_df['defect_panel_count'].fillna(0, inplace=True)
@@ -255,7 +255,7 @@ def create_code_level_mwd_trend_data(
         seven_days_ago = today - relativedelta(days=6)
         daily_data_ui = results['daily_full'][results['daily_full']['warehousing_time'] >= seven_days_ago].copy()
         if not daily_data_ui.empty:
-            daily_data_ui['time_period'] = daily_data_ui['warehousing_time'].dt.strftime('%m-%d')
+            daily_data_ui['time_period'] = daily_data_ui['warehousing_time'].dt.strftime('%m-%d') # type: ignore
             results['daily'] = daily_data_ui
 
         logging.info("成功聚合Code级模拟增强版数据。")
