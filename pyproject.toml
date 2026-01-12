@@ -19,6 +19,7 @@ dependencies = [
     "comtypes",              # 用于 Excel COM 方案
     "pyarrow>=21.0.0",       # Parquet 快照支持
     "altair>=5.5.0",         # Streamlit 辅助绘图
+    "pymupdf>=1.26.7",
 ]
 
 [tool.uv]

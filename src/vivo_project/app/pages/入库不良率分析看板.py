@@ -217,9 +217,24 @@ with st.container(border=True):
     c_ylim = [0, c_max * 1.25] if c_max > 0 else [0, 0.01]
 
     rc1, rc2, rc3 = st.columns(3)
-    with rc1: st.plotly_chart(create_code_trend_chart(cd_m, "月度", c_ylim, curr_warning), use_container_width=True) # type: ignore
-    with rc2: st.plotly_chart(create_code_trend_chart(cd_w, "周度", c_ylim, curr_warning), use_container_width=True) # type: ignore
-    with rc3: st.plotly_chart(create_code_trend_chart(cd_d, "日度", c_ylim, curr_warning), use_container_width=True) # type: ignore
+
+    # 统一配置三个图表的数据和参数
+    chart_configs = [
+        (cd_m, "月度", rc1),
+        (cd_w, "周度", rc2),
+        (cd_d, "日度", rc3)
+    ]
+
+    for df, title, col in chart_configs:
+        with col:
+            if df is not None and not df.empty:
+                fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
+                if fig is not None:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info(f"暂无{title}数据")
+            else:
+                st.info(f"暂无{title}数据")
 
 # ==============================================================================
 #  Row B: Lot 集中性 (批次维度) - 支持交互
@@ -230,6 +245,7 @@ lot_details = lot_data.get("code_level_details", {})
 df_lot_all = pd.concat(lot_details.values(), ignore_index=True)
 df_lot_all['warehousing_time'] = pd.to_datetime(df_lot_all['warehousing_time'], format='%Y%m%d', errors='coerce')
 df_lot_curr = df_lot_all[df_lot_all['defect_desc'] == curr_code].copy()
+df_lot_curr = df_lot_curr[df_lot_curr['defect_rate'] > 0]
 
 # 辅助列
 iso_s = df_lot_curr['warehousing_time'].dt.isocalendar()

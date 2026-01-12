@@ -78,8 +78,8 @@ def calculate_sheet_defect_rates(
         if capping_cfg.get('enable', True):
             capped_results = _apply_defect_capping(
                 results_dict=current_results,
-                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 0.15, 'lower': 0.005}),
-                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 0.05, 'lower': 0.001}),
+                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 1, 'lower': 0.005}),
+                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 1, 'lower': 0.001}),
                 warning_lines=warning_lines or {}
             )
             # 获取截断后的 Code 明细
@@ -305,238 +305,185 @@ def _calculate_lot_base_info_with_median_time(
         logging.error(f"计算 Lot 基础信息时发生错误: {e}", exc_info=True)
         return pd.DataFrame()
 
-    
-
-# --- 计算原始不良率 ---
 @staticmethod
 def _calculate_raw_rates(
     panel_details_df_filtered: pd.DataFrame,
-    base_info_df_filtered: pd.DataFrame, # 期望 entity_id_col 是索引
+    base_info_df_filtered: pd.DataFrame, 
     target_defects: list,
     entity_id_col: str
 ) -> Dict[str, Any] | None:
     """
-    [辅助函数 - 通用 V1.6 - 重构 Code 明细准备 + 包含探针] 计算原始不良率。
+    [辅助函数 - 通用 V2.2 - 回归原始版] 
+    策略：完全回归到 V1.6 的逻辑（只保留有不良记录的 Lot），
+    仅增加了一行列名去重代码以修复 ValueError。
     """
-    logging.info(f"开始计算{entity_id_col}级原始不良率...")
+    logging.info(f"开始计算{entity_id_col}级原始不良率 (回归原始逻辑)...")
+    
     if base_info_df_filtered.index.name != entity_id_col:
-            logging.error(f"传递给 _calculate_raw_rates 的 base_info_df_filtered 索引不是 '{entity_id_col}'。")
-            return None
+        logging.error(f"索引不匹配: 期望 '{entity_id_col}'，实际 '{base_info_df_filtered.index.name}'")
+        return None
 
     try:
-        # --- 步骤 1: 计算 Code 级分子 ---
+        # --- 步骤 1: 计算分子 (仅含 count > 0 的记录) ---
         code_numerators = pd.DataFrame(columns=[entity_id_col, 'defect_group', 'defect_desc', 'defect_panel_count'])
         if not panel_details_df_filtered.empty:
-                code_numerators = panel_details_df_filtered.groupby(
-                    [entity_id_col, 'defect_group', 'defect_desc']
-                )['panel_id'].nunique().reset_index(name='defect_panel_count')
-        else:
-                logging.warning(f"用于计算原始不良率的 Panel 数据为空 ({entity_id_col})。")
+            code_numerators = panel_details_df_filtered.groupby(
+                [entity_id_col, 'defect_group', 'defect_desc']
+            )['panel_id'].nunique().reset_index(name='defect_panel_count')
 
         # --- 步骤 2: 准备 Group 级数据 ---
-        group_numerators_df = pd.DataFrame()
+        group_numerators = pd.DataFrame()
         if not code_numerators.empty:
-                group_numerators = code_numerators.groupby([entity_id_col, 'defect_group'])['defect_panel_count'].sum()
-                group_numerators_df = group_numerators.unstack(level='defect_group').fillna(0)
-        # 使用 join 合并
+            group_numerators = code_numerators.groupby([entity_id_col, 'defect_group'])['defect_panel_count'].sum()
+        
+        group_numerators_df = group_numerators.unstack(level='defect_group').fillna(0)
         group_summary_df = base_info_df_filtered.join(group_numerators_df, how='left').fillna(0)
-        final_group_df = group_summary_df.reset_index() # entity_id_col 成为列
+        final_group_df = group_summary_df.reset_index()
 
-        # 计算 Group 级不良率
+        # 计算 Group Rate
         rate_cols = []
         for defect_type in target_defects:
-            count_col_name = defect_type # Group name from unstack
-            # 确保 Group 列存在 (即使全为 0)
-            if count_col_name not in final_group_df.columns:
-                final_group_df[count_col_name] = 0
-
-            # 重命名 count 列
+            count_col_name = defect_type
+            if count_col_name not in final_group_df.columns: final_group_df[count_col_name] = 0
             new_count_col_name = f"{defect_type.lower()}_count"
-            # 使用 errors='ignore' 避免在列不存在时报错 (虽然上面已添加)
             final_group_df.rename(columns={count_col_name: new_count_col_name}, inplace=True, errors='ignore')
-
-            # 计算 rate 列
+            
             rate_col_name = f"{defect_type.lower()}_rate"
-            # 确保 new_count_col_name 存在 (重命名可能失败) 且 total_panels 存在
             if new_count_col_name in final_group_df.columns and 'total_panels' in final_group_df.columns:
-                    final_group_df[rate_col_name] = np.where(
-                        final_group_df['total_panels'] > 0,
-                        final_group_df[new_count_col_name] / final_group_df['total_panels'],
-                        0
-                    )
-                    rate_cols.append(rate_col_name)
+                final_group_df[rate_col_name] = np.where(
+                    final_group_df['total_panels'] > 0,
+                    final_group_df[new_count_col_name] / final_group_df['total_panels'], 0
+                )
             else:
-                    logging.warning(f"无法计算 Group Rate '{rate_col_name}'，缺少列 '{new_count_col_name}' 或 'total_panels'。")
-                    final_group_df[rate_col_name] = 0.0 # 创建列并填充 0
-                    rate_cols.append(rate_col_name) # 仍然添加到列表
+                final_group_df[rate_col_name] = 0.0
+            rate_cols.append(rate_col_name)
 
-
-        # --- 步骤 3: 准备 Code 级数据 (合并 + 计算 Rate) ---
-        # a. 准备基础信息 DataFrame
+        # --- 步骤 3: 准备 Code 级数据 ---
+            
+        # a. 准备基础信息
         base_info_for_code = base_info_df_filtered.reset_index()
+        
+        # [这是唯一的新增修改] 防止 'lot_id' 重复导致的 ValueError
         base_cols_for_code = [entity_id_col]
         if 'lot_id' in base_info_for_code.columns and entity_id_col != 'lot_id': base_cols_for_code.append('lot_id')
         for col in ['warehousing_time', 'array_input_time', 'total_panels', 'pass_rate']:
-                if col in base_info_for_code.columns: base_cols_for_code.append(col)
+            if col in base_info_for_code.columns: base_cols_for_code.append(col)
+        # 去重
         base_cols_for_code = list(dict.fromkeys(base_cols_for_code))
+        
         # 清理 base_info_for_code 重复列
         if base_info_for_code.columns.duplicated().any():
-                logging.warning(f"基础信息 DataFrame (base_info_for_code) 包含重复列名，将尝试清理...")
-                base_info_for_code = base_info_for_code.loc[:, ~base_info_for_code.columns.duplicated()]
-                base_cols_for_code = [col for col in base_cols_for_code if col in base_info_for_code.columns]
-        if entity_id_col not in base_info_for_code.columns:
-                logging.error(f"清理重复列后，基础信息 DataFrame 缺少 '{entity_id_col}' 列。")
-                return None
+            base_info_for_code = base_info_for_code.loc[:, ~base_info_for_code.columns.duplicated()]
+            
+        # 确保列存在
+        base_cols_for_code = [c for c in base_cols_for_code if c in base_info_for_code.columns]
         base_info_subset_for_code = base_info_for_code[base_cols_for_code].drop_duplicates(subset=[entity_id_col])
-
 
         # b. 清理 code_numerators
         if code_numerators.columns.duplicated().any():
-            logging.warning(f"Code 计数 DataFrame (code_numerators) 包含重复列名，将尝试清理...")
             code_numerators = code_numerators.loc[:, ~code_numerators.columns.duplicated()]
-        # 确保 entity_id_col 存在
-        if entity_id_col not in code_numerators.columns and not code_numerators.empty:
-            logging.error(f"清理重复列后，Code 计数 DataFrame 缺少 '{entity_id_col}' 列。")
-            all_codes_with_base = pd.DataFrame() # 创建空 DF 继续
-        else:
-            # c. 执行 Merge
-            all_codes_with_base = pd.DataFrame() # 初始化为空
-            if not code_numerators.empty and not base_info_subset_for_code.empty: # 确保两个 DF 都有内容
-                if entity_id_col in code_numerators.columns and entity_id_col in base_info_subset_for_code.columns:
-                    all_codes_with_base = pd.merge(
-                        code_numerators,
-                        base_info_subset_for_code,
-                        on=entity_id_col,
-                        how='left'
-                    )
-                else:
-                    logging.error(f"无法执行 Merge，因为 '{entity_id_col}' 列在输入 DataFrame 中缺失。")
-            elif code_numerators.empty:
-                logging.warning(f"Code 计数 DataFrame 为空 ({entity_id_col})，Merge 结果将为空。")
 
-        # d. 计算 Code 级不良率
-        if all_codes_with_base.empty:
-            logging.warning(f"DataFrame 'all_codes_with_base' 为空 ({entity_id_col})，无法计算 Code 级不良率。")
-            all_codes_with_base['defect_rate'] = np.nan # 添加空列
-        elif 'total_panels' not in all_codes_with_base.columns or 'defect_panel_count' not in all_codes_with_base.columns:
-                logging.error(f"DataFrame 'all_codes_with_base' 缺少 'total_panels' 或 'defect_panel_count' 列，无法计算 Code 级不良率。")
-                all_codes_with_base['defect_rate'] = np.nan
+        # c. 执行 Merge (原始逻辑：以 code_numerators 为主)
+        # 这保证了只保留有不良记录的 Lot，绝不会产生 0 值空位
+        if code_numerators.empty:
+            all_codes_with_base = pd.DataFrame()
         else:
+            if entity_id_col in code_numerators.columns and entity_id_col in base_info_subset_for_code.columns:
+                all_codes_with_base = pd.merge(
+                    code_numerators,              # 左表！
+                    base_info_subset_for_code,    # 右表
+                    on=entity_id_col,
+                    how='left'
+                )
+            else:
+                logging.error(f"缺少连接键 '{entity_id_col}'，无法合并。")
+                return None
+
+        # d. 计算 Rate
+        if all_codes_with_base.empty:
+            all_codes_with_base['defect_rate'] = np.nan
+        else:
+            all_codes_with_base['total_panels'] = all_codes_with_base['total_panels'].fillna(0)
             all_codes_with_base['defect_rate'] = np.where(
-                    (all_codes_with_base['total_panels'].notna()) & (all_codes_with_base['total_panels'] > 0),
-                    all_codes_with_base['defect_panel_count'] / all_codes_with_base['total_panels'],
-                    0
+                all_codes_with_base['total_panels'] > 0,
+                all_codes_with_base['defect_panel_count'] / all_codes_with_base['total_panels'],
+                0.0
             )
 
-        # --- 步骤 4: 调用新辅助函数准备 Code 级明细字典 ---
+        # --- 步骤 4: 分组整理 ---
+        # 直接调用原始的 _prepare_code_level_details (不需要额外的过滤逻辑了)
         code_level_details_dict = _prepare_code_level_details(
-            all_codes_with_base=all_codes_with_base, # 传入包含 defect_rate 的 DF
+            all_codes_with_base=all_codes_with_base,
             target_defects=target_defects,
             entity_id_col=entity_id_col
         )
 
-
-        # --- 步骤 5: 准备 UI 汇总表 ---
-        final_ui_columns_base = [entity_id_col, 'pass_rate']
-        for col in ['lot_id', 'warehousing_time', 'array_input_time']:
-                if col in final_group_df.columns and col not in final_ui_columns_base:
-                    final_ui_columns_base.append(col)
-        final_ui_columns = final_ui_columns_base + rate_cols
-        final_ui_columns = [col for col in final_ui_columns if col in final_group_df.columns]
-        group_level_for_ui = final_group_df.reindex(columns=final_ui_columns).fillna(0)
-
-        # --- 返回结果 ---
         return {
-            "group_level_summary_for_table": group_level_for_ui,
+            "group_level_summary_for_table": final_group_df.fillna(0),
             "group_level_summary_for_chart": final_group_df,
             "code_level_details": code_level_details_dict
         }
+
     except Exception as e:
-        logging.error(f"在计算{entity_id_col}级原始不良率时发生错误: {e}", exc_info=True)
+        logging.error(f"计算{entity_id_col}级原始不良率时出错: {e}", exc_info=True)
         return None
 
- # --- [新增] 辅助函数：准备 Code 级明细字典 ---
+# 请务必也替换这个辅助函数，确保它也是原始纯净版
 @staticmethod
 def _prepare_code_level_details(
-    all_codes_with_base: pd.DataFrame, # 输入: 合并了基础信息的 Code 数据
-    target_defects: list,             # 输入: 目标 Group 列表
-    entity_id_col: str                # 输入: 'sheet_id' 或 'lot_id'
+    all_codes_with_base: pd.DataFrame, 
+    target_defects: list,             
+    entity_id_col: str                
 ) -> Dict[str, pd.DataFrame]:
     """
-    [新-辅助函数 V1.0 - 包含探针] 从合并后的 Code 数据准备 code_level_details 字典。
-    包含按 Group 拆分、选择列、处理空组和排序的逻辑。
+    [辅助函数 V1.0 - 原始版] 
     """
     code_level_details_dict = {}
-    logging.info(f"--- 开始准备 Code 级明细字典 ({entity_id_col}) ---")
-
-    # 定义最终需要的列顺序
+    
     detail_cols_ordered = [
         entity_id_col, 'lot_id', 'warehousing_time', 'array_input_time',
         'defect_group', 'defect_desc', 'defect_panel_count', 'defect_rate',
         'total_panels', 'pass_rate'
     ]
 
-    # 确保所有 target_defects 都在字典中作为 key 存在
     for group in target_defects:
-        logging.debug(f"处理 Group: {group} ({entity_id_col})")
-        subset_df = pd.DataFrame() # 初始化为空
+        subset_df = pd.DataFrame()
         if not all_codes_with_base.empty and 'defect_group' in all_codes_with_base.columns:
-                # 使用 .loc 明确筛选，避免 SettingWithCopyWarning
                 subset_df = all_codes_with_base.loc[all_codes_with_base['defect_group'] == group].copy()
-        else:
-                logging.warning(f"无法为 Group '{group}' ({entity_id_col}) 筛选数据，源 DataFrame 为空或缺少 'defect_group' 列。")
 
-        # 只保留实际存在的列，并确保唯一性
         final_cols_temp = [col for col in detail_cols_ordered if col in subset_df.columns]
-        final_cols = list(dict.fromkeys(final_cols_temp)) # 去重
+        final_cols = list(dict.fromkeys(final_cols_temp))
 
         if subset_df.empty:
-            logging.debug(f"Group '{group}' ({entity_id_col}) 没有数据，创建空 DataFrame。")
             code_level_details_dict[group] = pd.DataFrame(columns=final_cols)
-            continue # 处理下一个 group
+            continue 
 
-        # --- 清理 subset_df (最后的保险) ---
         if subset_df.columns.duplicated().any():
-                logging.warning(f"[准备 Code 明细] DataFrame subset_df (Group: {group}) 包含重复列，将强制清理！")
                 subset_df = subset_df.loc[:, ~subset_df.columns.duplicated()]
-                # 重新确定 final_cols
-                final_cols_temp = [col for col in detail_cols_ordered if col in subset_df.columns]
-                final_cols = list(dict.fromkeys(final_cols_temp))
+        
+        if entity_id_col not in subset_df.columns:
+                code_level_details_dict[group] = subset_df
+                continue
 
-        # 确保 entity_id_col 存在于最终列列表中
-        if entity_id_col not in final_cols:
-                logging.error(f"[准备 Code 明细] 最终列列表缺少 '{entity_id_col}'，无法排序 Group '{group}'。将返回未排序数据。")
-                code_level_details_dict[group] = subset_df # 返回未排序（可能包含多余列）
-                continue # 处理下一个 group
+        final_code_df_subset = subset_df[[c for c in final_cols if c in subset_df.columns]]
 
-        # 选择最终列
-        final_code_df_subset = subset_df[final_cols]
-
-        # 执行排序
         try:
-            # 重置索引并丢弃旧索引，确保索引是默认的 RangeIndex
             final_code_df_subset_reset = final_code_df_subset.reset_index(drop=True)
-
-            # 检查排序键是否存在
             sort_keys = [key for key in [entity_id_col, 'defect_rate'] if key in final_code_df_subset.columns]
-            if len(sort_keys) == 2: # 只有当两个键都存在时才按两者排序
+            
+            if len(sort_keys) == 2: 
                 code_level_details_dict[group] = final_code_df_subset_reset.sort_values(
                     by=sort_keys, ascending=[True, False]
                 )
             elif len(sort_keys) == 1:
                 code_level_details_dict[group] = final_code_df_subset_reset.sort_values(by=sort_keys[0])
             else:
-                code_level_details_dict[group] = final_code_df_subset_reset # 无法排序，返回重置索引后的
+                code_level_details_dict[group] = final_code_df_subset_reset
 
-        except ValueError as sort_error:
-                # 捕获排序错误（例如重复列错误）
-                logging.error(f"!!! 在排序 Group '{group}' ({entity_id_col}) 时遇到 ValueError: {sort_error}")
-                logging.error(f"    DataFrame 列名: {final_code_df_subset.columns.to_list()}")
-                code_level_details_dict[group] = final_code_df_subset # 返回未排序
+        except ValueError:
+                code_level_details_dict[group] = final_code_df_subset
 
-    logging.info(f"--- 完成准备 Code 级明细字典 ({entity_id_col}) ---")
     return code_level_details_dict
-    
 # ==============================================================================
 #                      辅助函数：模拟数据
 # ==============================================================================

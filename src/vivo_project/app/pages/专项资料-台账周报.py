@@ -296,10 +296,10 @@ if st.session_state.viewing_file:  # 如果有正在查看的文件
                     new_row = {col: "" for col in current_df.columns}
                     new_row["No."] =str(new_no)
                     new_row["状态"] = "🔴 Open"
-                    new_row["发生日期"] = pd.Timestamp.now().normalize()
+                    new_row["发生日期"] = pd.Timestamp.now().normalize().strftime('%Y-%m-%d')
                     new_row["Issue描述"] = "(请在此处填写描述)"
-                    new_row["移除"] = False
-                    
+                    new_row["移除"] = "False"
+
                     st.session_state.editor_data = pd.concat(
                         [current_df, pd.DataFrame([new_row])], 
                         ignore_index=True

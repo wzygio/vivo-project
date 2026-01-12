@@ -83,18 +83,6 @@ processing:
       L3MR58E5C26: '20250805'
       L3MR58E5C04: '20250805'
 
-      # 非高发sheet_id：共计 10 个
-      L3MR58E5C01: '20250805'
-      L3MR58E5C02: '20250805'
-      L3MR58E5C05: '20250805'
-      L3MR58E5C06: '20250805'
-      L3MR58E5C07: '20250805'
-      L3MR58E5C09: '20250805'
-      L3MR58E5C27: '20250805'
-      L3MR58E5C28: '20250805'
-      L3MR58E5C29: '20250805'
-      L3MR58E5C30: '20250805'
-
   target_defect_groups:
     - "Array_Line"
     - "Array_Pixel"
@@ -105,7 +93,6 @@ processing:
     '彩斑Mura': 0.3
 
   mapping_hotspot_script:
-    # 脚本 1: (你现有的规则)
     - enable: true
       target_code: '彩斑Mura'
       target_batch_index: 'oldest'
@@ -215,31 +202,6 @@ processing:
     override_file: "override_rates.xlsx"
     override_sheet_name: "Overrides"
 
-  dispersion_config: {
-      'enable': True,
-      
-      # 1. 默认权重 (您提到的 [1:1:...] 逻辑)
-      'default_lot_weight': 1,
-      'default_sheet_weight': 1,
-      
-      # 2. 您要的“接口”：为特定Code指定Lot/Sheet的权重
-      'code_specific_lot_weights': {
-          'S向亮线': {
-              'L3MR58E38': 10,
-          }
-      },
-      'code_specific_sheet_weights': {
-            'PCD裂纹亮线': {
-              'L3MR57E1J16': 20
-            }
-      },
-      
-      # 3. 随机种子 "盐"，用于确保可复现性；字符串可以通过哈希函数转换为数字
-      'random_seed_salt': "vivo_project_2025"
-    }
-
-logging:
-  file_name: "app.log"
 
 # UI界面相关的配置
 ui:

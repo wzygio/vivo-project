@@ -151,7 +151,7 @@ class YieldAnalysisService:
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data() # 注意：这里建议使用高平滑度的模拟版本
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=40)
         target_defects = CONFIG['processing']['target_defect_groups']
 
         # [新增] 3. 加载警戒线配置
@@ -182,7 +182,7 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=40)
         target_defects = CONFIG['processing']['target_defect_groups']
 
         # [新增] 4. 加载警戒线配置

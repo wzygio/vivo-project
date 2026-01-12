@@ -7,8 +7,11 @@ from vivo_project.core.mwd_trend_processor import create_code_level_mwd_trend_da
 from vivo_project.core.sheet_lot_processor import (
    _add_daily_base_rate_to_df, 
    _apply_defect_capping, 
-   calculate_sheet_defect_rates 
-)      # 导入模拟映射逻辑
+   calculate_sheet_defect_rates,
+   calculate_lot_defect_rates,
+   _calculate_raw_rates,\
+   _calculate_lot_base_info_with_median_time
+)      
 
 def test_ema_smoothing_logic(sample_panel_df):                                     # 测试EMA平滑与中值钳制逻辑
     """验证Code级EMA平滑是否生效且稳定"""                                             # 函数文档说明
@@ -157,3 +160,77 @@ def test_precision_spec_capping():
     assert np.all(final_rates >= 0.04), "软截断下限验证失败" # 0.05 * 0.8 = 0.04
     
     logging.info("Spec 精确截断逻辑测试通过。")
+
+def test_strict_zero_filtering_isolated(mock_processing_config):
+    """
+    [Test Case 4 - 隔离验证版] 验证“零高度柱体剔除”逻辑
+    
+    我们绕过 calculate_lot_defect_rates 中的硬编码阈值干扰，
+    直接测试核心函数 _calculate_raw_rates 的 Join 逻辑。
+    
+    场景：
+    - Lot_Bad: 有不良记录 -> 必须保留
+    - Lot_Good: 无不良记录 -> 必须消失 (不能生成 rate=0 的占位行)
+    """
+    logging.info("正在验证严格零值剔除逻辑 (隔离环境)...")
+
+    # 1. 构造测试数据
+    data = []
+    
+    # Lot_Bad: 有 'Code_X' 不良
+    for i in range(100):
+        data.append({
+            'sheet_id': f'S_Bad_{i}', 'panel_id': f'P_Bad_{i}', 'lot_id': 'Lot_Bad',
+            'warehousing_time': '20250101',
+            'defect_group': 'Group_Target',
+            'defect_desc': 'Code_X' 
+        })
+        
+    # Lot_Good: 完全是良品 (NoDefect)
+    for i in range(100):
+        data.append({
+            'sheet_id': f'S_Good_{i}', 'panel_id': f'P_Good_{i}', 'lot_id': 'Lot_Good',
+            'warehousing_time': '20250102',
+            'defect_group': 'NoDefect', 
+            'defect_desc': 'NoDefect'
+        })
+        
+    panel_df = pd.DataFrame(data)
+    
+    # 2. 手动构建基础信息 (模拟 _calculate_lot_base_info_with_median_time 的结果)
+    lot_base = pd.DataFrame({
+        'lot_id': ['Lot_Bad', 'Lot_Good'],
+        'total_panels': [100, 100],
+        'warehousing_time': ['20250101', '20250102'],
+        'array_input_time': [pd.NaT, pd.NaT] # 不重要
+    })
+    
+    # 3. 直接调用核心计算逻辑
+    # 这里的关键是：如果是 Left Join (Numerator左表)，Lot_Good 应该直接消失
+    raw_results = _calculate_raw_rates(
+        panel_details_df_filtered=panel_df,
+        base_info_df_filtered=lot_base.set_index('lot_id'),
+        target_defects=['Group_Target'],
+        entity_id_col='lot_id'
+    )
+    
+    assert raw_results is not None, "原始计算结果不应为空"
+    
+    # 获取 Group_Target 的结果
+    # 注意：我们只关心 Group_Target，Lot_Good 在这个 Group 下应该是没有数据的
+    code_df = raw_results['code_level_details'].get('Group_Target', pd.DataFrame())
+    
+    # 4. 验证 Lot_Bad 存在
+    bad_lot_row = code_df[code_df['lot_id'] == 'Lot_Bad']
+    assert not bad_lot_row.empty, "严重错误：有不良的 Lot_Bad 丢失了！"
+    assert bad_lot_row['defect_rate'].iloc[0] > 0, "Lot_Bad 的良损率应大于 0"
+    
+    # 5. [核心验证] 验证 Lot_Good 不存在
+    # 如果代码逻辑正确 (剔除0值)，这里应该是空的
+    good_lot_row = code_df[code_df['lot_id'] == 'Lot_Good']
+    
+    if not good_lot_row.empty:
+        actual_rate = good_lot_row['defect_rate'].values[0]
+        assert False, f"测试失败！发现 '无不良的 Lot_Good' 残留在结果中 (Rate={actual_rate})，这将导致图表出现空白断档。"
+        
+    logging.info("✅ 验证通过：结果中只包含有不良记录的 Lot，零值 Lot 已被彻底剔除。")
