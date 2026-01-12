@@ -8,6 +8,7 @@ from collections import defaultdict
 import comtypes.client
 import comtypes
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 from vivo_project.config import CONFIG, PROJECT_ROOT, RESOURCE_DIR
 from vivo_project.utils.utils import save_dict_to_excel
@@ -107,8 +108,8 @@ def calculate_sheet_defect_rates(
         )
 
         # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
-        # 理由：覆盖插入逻辑可能会通过模板克隆出历史日期的行，在此处统一清理
-        start_date_str = start_date.strftime('%Y%m%d') # 转换为 'YYYYMMDD' 字符串
+        adjusted_start_date = start_date + relativedelta(months=1)  # 增加一个月
+        start_date_str = adjusted_start_date.strftime('%Y%m%d')  # 转换为 'YYYYMMDD' 字符串
         logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Sheet...")
         for group in overridden_code_details:
             df_grp = overridden_code_details[group]
@@ -149,10 +150,9 @@ def calculate_sheet_defect_rates(
         # 将原始完整的 Sheet 基础信息添加到最终结果 (如果需要)
         # 确保 sheet_base_info_df 包含 sheet_id 作为列或索引
         if 'sheet_id' not in sheet_base_info_df.columns and sheet_base_info_df.index.name != 'sheet_id':
-                final_results['full_sheet_base_info'] = sheet_base_info_df.reset_index()
+            final_results['full_sheet_base_info'] = sheet_base_info_df.reset_index()
         else:
-                final_results['full_sheet_base_info'] = sheet_base_info_df
-
+            final_results['full_sheet_base_info'] = sheet_base_info_df
 
         logging.info("Sheet级业务规则应用完成 (V3.9 - 添加覆盖探针)。")
         return final_results
@@ -241,13 +241,14 @@ def calculate_lot_defect_rates(
         )
 
         # --- [新增] 步骤 5.1: 过滤历史数据 (确保不早于分析窗口开始时间) ---
-        start_date_str = start_date.strftime('%Y%m%d')
+        adjusted_start_date = start_date + relativedelta(months=1)  # 增加一个月
+        start_date_str = adjusted_start_date.strftime('%Y%m%d')  # 转换为 'YYYYMMDD' 字符串
         logging.info(f"正在进行窗口过滤，排除入库时间早于 {start_date_str} 的 Lot...")
         for group in overridden_lot_code_details:
             df_grp_lot = overridden_lot_code_details[group]
             if not df_grp_lot.empty and 'warehousing_time' in df_grp_lot.columns:
                 overridden_lot_code_details[group] = df_grp_lot[df_grp_lot['warehousing_time'] >= start_date_str].copy()
-                
+
         # --- 步骤 6: 从 [覆盖后] 的 Code 数据重新聚合 Group 数据 ---
         logging.info("步骤6: 从覆盖后的 Code 级数据重聚合 Group 级数据...")
         # 确保传递给 _reaggregate_groups_from_codes 的 raw_base_info_df 包含必要列且索引正确
@@ -585,110 +586,106 @@ def _simulate_concentration(
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V2.7 - 分层波动] 调度器。
+    [辅助函数 V2.8 - 调度优化] 使用全量日度数据作为模拟底座。
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V2.7 - 分层波动)...")
+    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V2.8 - EMA 日度映射)...")
     try:
         config = CONFIG.get('processing', {}).get('sheet_hotspot_config', {})
         if not config.get('enable', False):
-            logging.info(f"{entity_id_col} 级不良率模拟未启用，跳过此步骤。")
             return raw_results['code_level_details']
+        
+        # 获取波动配置
         cfg_hide = config.get('hide_hotspot_config', {})
         fluctuation_key = f"fluctuation_{entity_id_col.replace('_id', '')}"
-        current_fluc = cfg_hide.get(fluctuation_key)
-        if current_fluc is None:
-            default_fluc = 0.1
-            logging.warning(f"在 config.yaml 中未找到 '{fluctuation_key}'，将使用默认波动 {default_fluc}。")
-            current_fluc = default_fluc
-        logging.info(f"为 {entity_id_col} 应用波动幅度: {current_fluc}")
-        
-        df_monthly = None
-        if mwd_code_data and mwd_code_data.get('monthly') is not None:
-                df_monthly = mwd_code_data['monthly'].copy()
-                if not {'defect_desc', 'time_period', 'defect_rate'}.issubset(df_monthly.columns):
-                    logging.error("月度趋势数据缺少必要列，无法进行动态基准模拟。")
-                    df_monthly = None
-                else:
-                    df_monthly['defect_rate'] = pd.to_numeric(df_monthly['defect_rate'], errors='coerce').fillna(0)
-        else: logging.warning("未找到月度趋势数据，无法进行动态基准模拟。")
+        current_fluc = cfg_hide.get(fluctuation_key, 0.1)
         
         sim_code_details = raw_results["code_level_details"].copy()
         seed = config.get('random_seed', 2025)
         rng = np.random.default_rng(seed)
         base_info_df = raw_results.get("group_level_summary_for_chart")
-        if base_info_df is not None:
-                if entity_id_col not in base_info_df.columns:
-                    if entity_id_col == base_info_df.index.name:
-                        base_info_df = base_info_df.reset_index()
-                    else:
-                        base_info_df = None
-        else: logging.error(f"未找到 {entity_id_col} 级汇总数据，无法进行动态基准模拟。")
         
+        if base_info_df is None:
+            logging.error("缺少基础汇总数据，模拟终止。")
+            return sim_code_details
+
+        # 遍历计算
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
+            
             processed_codes_list = []
-            if entity_id_col not in df_all_codes_in_group.columns:
-                    processed_codes_list.append(df_all_codes_in_group)
-                    continue
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
-                df_code_with_base = _add_monthly_base_rate_to_df(
-                    df_code=df_code, code_desc=code_desc, entity_id_col=entity_id_col,
-                    base_info_df=base_info_df, df_monthly=df_monthly
+                # [修改] 传入完整的 mwd_code_data 字典
+                df_code_with_base = _add_daily_base_rate_to_df(
+                    df_code=df_code, 
+                    code_desc=code_desc, 
+                    entity_id_col=entity_id_col,
+                    base_info_df=base_info_df, 
+                    mwd_code_data=mwd_code_data
                 )
-                new_rates = _generate_simulated_rates(
-                    df_code_with_base_rate=df_code_with_base, rng=rng, fluc=current_fluc
-                )
+                
+                new_rates = _generate_simulated_rates(df_code_with_base, rng, current_fluc)
+                
                 df_code_processed = df_code_with_base.copy()
                 df_code_processed['defect_rate'] = new_rates
                 df_code_processed['defect_panel_count'] = np.maximum(0, np.round(df_code_processed['defect_rate'] * df_code_processed['total_panels'])).astype(int)
-                if 'monthly_base_rate' in df_code_processed.columns:
-                        df_code_processed = df_code_processed.drop(columns=['monthly_base_rate'])
+                
+                # 清理临时列
+                if 'daily_base_rate' in df_code_processed.columns:
+                    df_code_processed = df_code_processed.drop(columns=['daily_base_rate'])
                 processed_codes_list.append(df_code_processed)
+            
             if processed_codes_list:
-                    try:
-                        sim_code_details[group] = pd.concat(processed_codes_list, ignore_index=True)
-                    except ValueError:
-                        sim_code_details[group] = pd.DataFrame()
+                sim_code_details[group] = pd.concat(processed_codes_list, ignore_index=True)
+                
         return sim_code_details
     except Exception as e:
-        logging.error(f"在执行 {entity_id_col} 级不良率模拟调度时发生错误: {e}", exc_info=True)
+        logging.error(f"模拟调度失败: {e}", exc_info=True)
         return raw_results.get('code_level_details', {})
 
 @staticmethod
-def _add_monthly_base_rate_to_df(
-    df_code: pd.DataFrame, code_desc: str, entity_id_col: str,
-    base_info_df: pd.DataFrame | None, df_monthly: pd.DataFrame | None
+def _add_daily_base_rate_to_df(
+    df_code: pd.DataFrame, 
+    code_desc: str, 
+    entity_id_col: str,
+    base_info_df: pd.DataFrame | None, 
+    mwd_code_data: Dict[str, pd.DataFrame] | None # 现在接收整个字典
 ) -> pd.DataFrame:
     """
-    [辅助函数 V1.1 - 优化时间合并] 添加月度基准。
+    [辅助函数 V1.3 - 日度丝滑映射]
+    放弃查找月份，改为根据 Lot 日期查找 EMA 平滑后的日度值。
+    1. 解决了“阶梯状”断层问题。
+    2. 配合中值钳制，解决了“小样本/集中入库”偏置问题。
     """
     df_code_with_base = df_code.copy()
-    df_code_with_base['monthly_base_rate'] = 0.0
-    if df_monthly is not None and base_info_df is not None:
+    df_code_with_base['daily_base_rate'] = 0.0 # 保持列名兼容，实际是日度基准
+    
+    # 提取全量日度 EMA 数据源
+    df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
+    
+    if df_daily_ema is not None and base_info_df is not None:
         try:
-            base_info_df_for_map = None
-            if entity_id_col not in base_info_df.columns and base_info_df.index.name != entity_id_col: pass
-            elif 'warehousing_time' not in base_info_df.columns: pass
+            # 1. 建立当前 Code 的日期查找表: {DateString -> Rate}
+            code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
+            code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d')
+            lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
+
+            # 2. 获取当前待模拟 Lot 对应的入库日期
+            # 需要先从 base_info_df 中捞出 Lot 对应的 warehousing_time
+            if entity_id_col not in base_info_df.columns and base_info_df.index.name == entity_id_col:
+                base_info_temp = base_info_df.reset_index()
             else:
-                base_info_df_for_map = base_info_df.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
-            warehousing_times = None
-            if base_info_df_for_map is not None:
-                warehousing_times = df_code_with_base[entity_id_col].map(base_info_df_for_map)
-            if warehousing_times is not None and not warehousing_times.isnull().all():
-                warehousing_time_dt = pd.to_datetime(warehousing_times, format='%Y%m%d', errors='coerce')
-                valid_time_mask = warehousing_time_dt.notna()
-                df_code_with_base['time_period'] = ''
-                df_code_with_base.loc[valid_time_mask, 'time_period'] = warehousing_time_dt[valid_time_mask].dt.strftime('%Y-%m月')
-            else:
-                df_code_with_base['time_period'] = ''
-            monthly_lookup = df_monthly[df_monthly['defect_desc'] == code_desc].set_index('time_period')['defect_rate']
-            df_code_with_base['monthly_base_rate'] = df_code_with_base['time_period'].map(monthly_lookup).fillna(0)
-            df_code_with_base = df_code_with_base.drop(columns=['time_period'], errors='ignore')
-        except Exception as merge_err:
-            logging.error(f"为 {entity_id_col} / Code '{code_desc}' 匹配月度基准时出错: {merge_err}", exc_info=True)
-            df_code_with_base['monthly_base_rate'] = 0.0
-            df_code_with_base = df_code_with_base.drop(columns=['time_period'], errors='ignore')
-    else: logging.warning(f"未找到基准信息或月度数据，无法为 {entity_id_col} / Code '{code_desc}' 添加月度基准。")
+                base_info_temp = base_info_df
+                
+            lot_date_map = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
+            
+            # 3. 映射基准值 (精确到天)
+            # lot_dates 会得到一系列如 '20251216' 的字符串
+            lot_dates = df_code_with_base[entity_id_col].map(lot_date_map)
+            df_code_with_base['daily_base_rate'] = lot_dates.map(lookup_dict).fillna(0)
+            
+        except Exception as e:
+            logging.error(f"为 Code '{code_desc}' 进行日度基准映射时出错: {e}")
+            
     return df_code_with_base
 
 @staticmethod
@@ -700,7 +697,7 @@ def _generate_simulated_rates(
     """
     num_sheets = len(df_code_with_base_rate)
     if num_sheets == 0: return np.array([])
-    base_rates_series = df_code_with_base_rate['monthly_base_rate']
+    base_rates_series = df_code_with_base_rate['daily_base_rate']
     random_factors = rng.uniform(1 - fluc, 1 + fluc, size=num_sheets)
     initial_rates = base_rates_series.values * random_factors # type: ignore
     final_rates = np.maximum(0, initial_rates)

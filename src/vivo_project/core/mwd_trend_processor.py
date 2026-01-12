@@ -23,7 +23,7 @@ def create_mwd_trend_data(panel_details_df: pd.DataFrame, target_defects: list) 
     try:
         # 配置参数
         GROUP_EMA_SPANS = {
-            'OLED_Mura': 4,
+            'OLED_Mura': 7,
             'default': 7
         }
         SCALING_FACTOR = 0.7
@@ -174,86 +174,96 @@ def _process_group_weekly_data(daily_summary: pd.DataFrame, target_defects: list
 
     
 @staticmethod
-def create_code_level_mwd_trend_data(panel_details_df: pd.DataFrame) -> Dict[str, pd.DataFrame] | None:
+def create_code_level_mwd_trend_data(
+    panel_details_df: pd.DataFrame,
+    ema_span: int = 7,          # [新增] 支持人为指定，默认15（模拟时建议设为30-40）
+    scaling_factor: float = 0.7  # [新增] 支持人为指定
+) -> Dict[str, pd.DataFrame] | None:
     """
-    [V2.3 - ISO Fix] 
-    1. 修复周别计算逻辑，统一使用 ISO 8601 (Mon-Sun)。
-    2. 解决 Group 与 Code 级图表周号错位问题。
+    [V2.4 - 模拟增强版] 
+    1. 引入中值钳制(Clamping)逻辑，防止小样本/集中入库干扰基准。
+    2. 使用 adjust=False 模式计算 EMA，确保历史模拟值的确定性。
+    3. 输出 daily_full 供模拟器执行高精度映射。
     """
-    logging.info("开始聚合Code级月、周、天数据 (V2.3 - ISO Fix)...")
+    logging.info(f"开始聚合Code级数据 (EMA_SPAN={ema_span}, SCALING={scaling_factor})...")
     if panel_details_df.empty: return None
     
     try:
-        # 配置参数
-        EMA_SPAN = 4
-        SCALING_FACTOR = 0.7
+        # 基础配置
         MIN_PANEL_COUNT_FOR_TODAY = 5000
-
-        # 月度指定值配置
         CODE_MONTHLY_VALUES = CONFIG['processing'].get('code_monthly_values', {}) or {}
         CODE_WEEKLY_VALUES = CONFIG['processing'].get('code_weekly_values', {}) or {}
 
         # 数据预处理
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        today = df['warehousing_time'].max()
+        today = pd.to_datetime(dt.now().date())
 
-        # 构建日度汇总
-        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
-        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore
+        # 构建基础日度汇总
+        daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels')
+        daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count')
         
         base_daily_df = pd.merge(daily_total_panels.reset_index(), daily_code_defects.reset_index(), on='warehousing_time', how='left')
-        
-        # 修复IntCastingNaNError
         base_daily_df['defect_panel_count'].fillna(0, inplace=True)
         base_daily_df['defect_rate'] = base_daily_df['defect_panel_count'] / base_daily_df['total_panels']
         base_daily_df['warehousing_time'] = pd.to_datetime(base_daily_df['warehousing_time'])
 
-        # 末日数据过滤器
+        # 末日过滤器 (保持原有逻辑)
         if not base_daily_df.empty:
             last_day_date = base_daily_df['warehousing_time'].max()
             last_day_panel_count = base_daily_df[base_daily_df['warehousing_time'] == last_day_date]['total_panels'].iloc[0]
             if last_day_panel_count < MIN_PANEL_COUNT_FOR_TODAY:
-                logging.warning(
-                    f"最后一天的Panel入库数 ({last_day_panel_count}) 小于阈值 {MIN_PANEL_COUNT_FOR_TODAY}。"
-                    f"为避免数据失真，将忽略 {last_day_date.date()} 的数据。"
-                )
                 base_daily_df = base_daily_df[base_daily_df['warehousing_time'] < last_day_date]
 
         if base_daily_df.empty: return None
 
-        # EMA处理
+        # --- [核心优化1: 异常波动钳制] ---
+        # 计算各 Code 的不良率中值，用于识别“离谱”的异常点
         base_daily_df['defect_group'].fillna("NoDefect", inplace=True)
         base_daily_df['defect_desc'].fillna("NoDefect", inplace=True)
-        base_daily_df['smoothed_rate'] = base_daily_df.groupby('defect_desc')['defect_rate'].transform(
-            lambda x: x.ewm(span=EMA_SPAN, adjust=True, min_periods=1).mean()
+        code_medians = base_daily_df.groupby('defect_desc')['defect_rate'].transform('median')
+        
+        # 逻辑：如果某天入库量极小(<1万)且不良率超过中值的5倍，则参与计算时强制下压至中值
+        # 这样即便发生“几千片全是不良”的情况，也不会拉歪 EMA 曲线
+        base_daily_df['protected_rate'] = np.where(
+            (base_daily_df['defect_rate'] > code_medians * 5) & (base_daily_df['total_panels'] < 10000),
+            code_medians,
+            base_daily_df['defect_rate']
         )
-        base_daily_df['attenuated_rate'] = base_daily_df['smoothed_rate'] * SCALING_FACTOR
+
+        # --- [核心优化2: 丝滑 EMA 计算] ---
+        # adjust=False 是关键，它确保了今天的数据加入不会去重新修正历史的平均值（利于 Lot 不变性）
+        base_daily_df['smoothed_rate'] = base_daily_df.groupby('defect_desc')['protected_rate'].transform(
+            lambda x: x.ewm(span=ema_span, adjust=False, min_periods=1).mean()
+        )
+        base_daily_df['attenuated_rate'] = base_daily_df['smoothed_rate'] * scaling_factor
+        
+        # 更新最终值
         base_daily_df['defect_panel_count'] = np.round(base_daily_df['attenuated_rate'] * base_daily_df['total_panels']).astype(int)
         base_daily_df['defect_rate'] = base_daily_df['attenuated_rate']
         
         results = {}
-
-        # 使用工具函数处理月度数据
+        # 处理月度/周度数据 (复用原有工具函数)
         results['monthly'] = _process_code_monthly_data(base_daily_df, CODE_MONTHLY_VALUES, today)
-
-        # 使用工具函数处理周度数据
         results['weekly'] = _process_code_weekly_data(base_daily_df, CODE_WEEKLY_VALUES, today)
 
-        # 处理日度数据
-        seven_days_ago = today - relativedelta(days=6)
-        daily_data_final = base_daily_df[base_daily_df['warehousing_time'] >= seven_days_ago].copy()
-        if not daily_data_final.empty:
-            daily_data_final['time_period'] = daily_data_final['warehousing_time'].dt.strftime('%m-%d') # type: ignore
-            results['daily'] = daily_data_final[daily_data_final['defect_group'] != 'NoDefect']
+        # --- [核心优化3: 输出全量日度数据供模拟使用] ---
+        # 排除填充的 NoDefect
+        results['daily_full'] = base_daily_df[base_daily_df['defect_group'] != 'NoDefect'].copy()
 
-        logging.info("成功聚合Code级月、周、天数据 (最终稳定版 - ISO Fix)。")
+        # UI 显示用的最近7天数据
+        seven_days_ago = today - relativedelta(days=6)
+        daily_data_ui = results['daily_full'][results['daily_full']['warehousing_time'] >= seven_days_ago].copy()
+        if not daily_data_ui.empty:
+            daily_data_ui['time_period'] = daily_data_ui['warehousing_time'].dt.strftime('%m-%d')
+            results['daily'] = daily_data_ui
+
+        logging.info("成功聚合Code级模拟增强版数据。")
         return results
 
     except Exception as e:
         logging.error(f"在聚合Code级趋势数据时发生错误: {e}", exc_info=True)
         return None
-
 
 @staticmethod
 def _process_code_monthly_data(base_daily_df: pd.DataFrame, monthly_values: dict, today: dt) -> pd.DataFrame:

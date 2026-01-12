@@ -127,13 +127,13 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_code_level_trend_data() -> Dict[str, pd.DataFrame] | None:
+    def get_code_level_trend_data(ema_span: int = 7) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
-        return create_code_level_mwd_trend_data(panel_details_df=panel_df)
+        return create_code_level_mwd_trend_data(panel_details_df=panel_df, ema_span=ema_span)
 
     # ==========================================================================
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
@@ -151,7 +151,7 @@ class YieldAnalysisService:
 
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids)) # 调用下面的静态辅助方法
+        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
         target_defects = CONFIG['processing']['target_defect_groups']
 
