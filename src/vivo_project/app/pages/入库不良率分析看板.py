@@ -6,6 +6,7 @@ import sys
 # --- 1. 配置与初始化 ---
 from vivo_project.config import CONFIG
 from vivo_project.utils.app_setup import AppSetup
+from vivo_project.services.alert_service import AlertService
 from vivo_project.services.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 
@@ -13,7 +14,9 @@ from vivo_project.app.components.components import create_code_selection_ui, ren
 from vivo_project.app.charts.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
-    slice_recent_data
+    slice_recent_data,
+    detect_abnormal_fluctuations,
+    prepare_union_data_for_filter
 )
 from vivo_project.app.charts.sheet_lot_chart import (
     create_lot_defect_chart, 
@@ -27,60 +30,6 @@ def init_global_resources():
     AppSetup.initialize_app()
 init_global_resources()
 
-# --- 2. 辅助逻辑：构建全能筛选源 (并集策略) ---
-@st.cache_data(ttl="1h")
-def _prepare_union_data_for_filter(
-    mwd_data: dict, 
-    lot_data: dict, 
-    mapping_data: pd.DataFrame
-) -> pd.DataFrame:
-    """
-    [核心策略]：并集筛选 (Union Strategy)
-    分别从 Trend, Lot, Mapping 中提取满足各自门槛的 Code，合并为一个主表。
-    用于欺骗筛选器组件，使其能同时展示所有维度的关注点。
-    """
-    candidates = {} # {(group, code): max_rate}
-
-    # 1. 提取 Trend 候选者 (门槛 > 0.01%)
-    # mwd_data 是 dict {'monthly': df, ...}
-    if mwd_data:
-        trend_df = pd.concat([df for df in mwd_data.values() if df is not None], ignore_index=True)
-        if not trend_df.empty:
-            # 按 Code 分组取最大不良率
-            valid_trend = trend_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
-            valid_trend = valid_trend[valid_trend > 0.0001] # 0.01%
-            for (grp, code), rate in valid_trend.items():
-                candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
-
-    # 2. 提取 Lot 候选者 (门槛 > 0.02%)
-    # lot_data['code_level_details'] 是 dict {group: df}
-    if lot_data and lot_data.get('code_level_details'):
-        lot_dfs = lot_data['code_level_details'].values()
-        if lot_dfs:
-            lot_full = pd.concat(lot_dfs, ignore_index=True)
-            if not lot_full.empty:
-                valid_lot = lot_full.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
-                valid_lot = valid_lot[valid_lot > 0.0002] # 0.02%
-                for (grp, code), rate in valid_lot.items():
-                    candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
-
-    # 3. 提取 Mapping 候选者 (门槛 > 10 count)
-    if mapping_data is not None and not mapping_data.empty:
-        # Mapping 只有 count，没有 rate
-        counts = mapping_data.groupby(['defect_group', 'defect_desc']).size()
-        valid_map = counts[counts > 10]
-        for (grp, code), _ in valid_map.items(): # type: ignore
-            # 如果该 Code 仅在 Mapping 中出现，给一个默认权重以便排序
-            # 如果它也在 Trend/Lot 中，保留原有的 rate
-            if (grp, code) not in candidates:
-                candidates[(grp, code)] = 0.0001 
-
-    # 4. 构建最终 DataFrame
-    if not candidates:
-        return pd.DataFrame(columns=['defect_group', 'defect_desc', 'defect_rate'])
-    
-    rows = [{'defect_group': k[0], 'defect_desc': k[1], 'defect_rate': v} for k, v in candidates.items()]
-    return pd.DataFrame(rows)
 
 # ==============================================================================
 #  页面主逻辑
@@ -88,7 +37,7 @@ def _prepare_union_data_for_filter(
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 render_page_header("📊 入库不良率分析看板")
 
-# --- 3. 全局数据加载 ---
+# --- 2 全局数据加载 ---
 with st.spinner("正在加载全维度分析数据..."):
     # 并行加载所有服务数据
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data()
@@ -97,6 +46,10 @@ with st.spinner("正在加载全维度分析数据..."):
     sheet_data = YieldAnalysisService.get_sheet_defect_rates()
     mapping_data = YieldAnalysisService.get_mapping_data()
     warning_lines = YieldAnalysisService.load_static_warning_lines()
+    alert_messages = AlertService.get_dashboard_alerts(
+        mwd_group_data=mwd_group_data,
+        mwd_code_data=mwd_code_data
+    )
 
 # 基础校验
 if not all([mwd_code_data, lot_data, sheet_data]):
@@ -114,6 +67,29 @@ COLOR_MAP = {
 }
 
 CATEGORY_ORDERS = {"defect_group": CONFIG['processing']['target_defect_groups']}
+
+# ==============================================================================
+# [修改] 自动预警展示区 - 增加正常状态提示
+# ==============================================================================
+with st.spinner("正在进行智能预警扫描..."):
+    alert_messages = AlertService.get_dashboard_alerts(
+        mwd_group_data=mwd_group_data,
+        mwd_code_data=mwd_code_data
+    )
+
+# 渲染结果
+if alert_messages:
+    # 有报警 -> 红色警告框
+    with st.container(border=True):
+        st.error(f"🚨 系统检测到 {len(alert_messages)} 项异常 (包含系统趋势 & 真实批次比对)")
+        for msg in alert_messages:
+            st.markdown(msg)
+else:
+    # 无报警 -> 绿色成功提示
+    st.success("✅ 系统监测正常：未发现良率突变或批次异常。")
+
+# 加个分割线让视觉更清晰
+st.divider()
 
 # ==============================================================================
 #  第一部分: 宏观监控 (Group级趋势) - 独立筛选
@@ -172,7 +148,7 @@ st.divider()
 st.subheader("2️⃣ 入库不良率分析 (Code Level)")
 
 # 1. 准备“全能候选池”
-master_df = _prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
+master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 
 # 2. 渲染筛选器 (阈值设为0，因为已经在 prepare 阶段筛选过了)
 selection = create_code_selection_ui(

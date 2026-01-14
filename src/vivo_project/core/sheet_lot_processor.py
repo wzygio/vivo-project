@@ -1263,7 +1263,6 @@ def _apply_defect_capping(
         logging.error(f"在应用截断时发生错误: {e}", exc_info=True)
         return results_dict
 
-
 @staticmethod
 def _apply_random_cap_and_floor(
     rate: float,
@@ -1279,7 +1278,7 @@ def _apply_random_cap_and_floor(
     if rate > upper_threshold:
         # [核心逻辑] 软截断：在 Spec 的 80% ~ 100% 之间随机浮动
         # 这样每个超标 Lot 的最终值都会略有不同，消除“人工痕迹”
-        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold)
+        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold * 0.95)
         return safe_rate
         
     elif 0 < rate < lower_threshold:

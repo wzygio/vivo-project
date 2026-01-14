@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 from pathlib import Path
 
 # 从您的配置模块导入CONFIG
-from vivo_project.config import CONFIG
+from vivo_project.config import CONFIG, RESOURCE_DIR
 
 if TYPE_CHECKING:
     from vivo_project.infrastructure.db_handler import DatabaseManager
@@ -173,3 +173,21 @@ def load_array_input_times(
     except Exception as e:
         logging.error(f"提取阵列投入时间时发生错误: {e}")
         return pd.DataFrame()
+
+def load_raw_report(file_name: str, sheet_name: str) -> pd.DataFrame | None:
+    """
+    读取无表头的原始 Excel 报表，用于处理复杂表头结构。
+    返回的 DataFrame 列名为整数索引 (0, 1, 2...)。
+    """
+    file_path = RESOURCE_DIR / file_name
+    if not file_path.exists():
+        logging.warning(f"外部基准报表不存在: {file_path}")
+        return None
+        
+    try:
+        # header=None 是关键，防止 Pandas 乱猜表头
+        df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
+        return df
+    except Exception as e:
+        logging.error(f"读取外部报表失败 ({file_name}): {e}")
+        return None

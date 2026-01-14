@@ -251,3 +251,129 @@ def create_single_trend_chart(df, title, y_range, warning_line_value=None):
     )
     fig.update_xaxes(type='category', tickangle=-45 if "日度" in title else 0)
     return fig
+
+@st.cache_data(ttl="1h")
+def detect_abnormal_fluctuations(
+    group_monthly: pd.DataFrame, 
+    code_monthly: pd.DataFrame
+) -> list[str]:
+    """
+    [新增] 异常波动自动检测逻辑
+    规则:
+    1. 当月 > 上月 * 2 (翻倍)
+    2. 当月 - 上月 > 0.2 (激增20%)
+    """
+    alerts = []
+
+    # 1. 检测 Group 级
+    if group_monthly is not None and not group_monthly.empty:
+        # 确保按时间排序
+        df_g = group_monthly.sort_values('time_period')
+        for grp, sub_df in df_g.groupby('defect_group'):
+            if len(sub_df) < 2: continue
+            
+            # 取最后两个月
+            curr_row = sub_df.iloc[-1]
+            prev_row = sub_df.iloc[-2]
+            
+            r_curr = curr_row['defect_rate']
+            r_prev = prev_row['defect_rate']
+            
+            # 规则判定
+            # 避免 prev为0时的除法问题，直接用乘法判定
+            # 增加 r_curr > 0.001 的微小阈值，防止 0.00001 -> 0.00002 这种无意义的翻倍报警
+            is_doubled = (r_curr > r_prev * 2) and (r_curr > 0.001)
+            is_surged = (r_curr - r_prev > 0.2)
+            
+            if is_doubled or is_surged:
+                reasons = []
+                if is_doubled: reasons.append("环比翻倍")
+                if is_surged: reasons.append("增幅超20%")
+                
+                alerts.append(
+                    f"🔴 **Group 预警 [{grp}]**: {curr_row['time_period']} 良损 ({r_curr:.2%}) "
+                    f"较上月 ({r_prev:.2%}) {'/'.join(reasons)}"
+                )
+
+    # 2. 检测 Code 级
+    if code_monthly is not None and not code_monthly.empty:
+        df_c = code_monthly.sort_values('time_period')
+        for desc, sub_df in df_c.groupby('defect_desc'):
+            if len(sub_df) < 2: continue
+            
+            curr_row = sub_df.iloc[-1]
+            prev_row = sub_df.iloc[-2]
+            
+            r_curr = curr_row['defect_rate']
+            r_prev = prev_row['defect_rate']
+            
+            # Code 级可能有很多小杂项，建议稍微提高一点点敏感度门槛
+            # 例如：只有当良损 > 0.1% (0.001) 时才报翻倍，避免噪音
+            is_doubled = (r_curr > r_prev * 2) and (r_curr > 0.001)
+            is_surged = (r_curr - r_prev > 0.2)
+            
+            if is_doubled or is_surged:
+                reasons = []
+                if is_doubled: reasons.append("环比翻倍")
+                if is_surged: reasons.append("增幅超20%")
+                
+                alerts.append(
+                    f"⚠️ **Code 预警 [{desc}]**: {curr_row['time_period']} 良损 ({r_curr:.2%}) "
+                    f"较上月 ({r_prev:.2%}) {'/'.join(reasons)}"
+                )
+    
+    return alerts
+
+@st.cache_data(ttl="1h")
+def prepare_union_data_for_filter(
+    mwd_data: dict, 
+    lot_data: dict, 
+    mapping_data: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    [核心策略]：并集筛选 (Union Strategy)
+    分别从 Trend, Lot, Mapping 中提取满足各自门槛的 Code，合并为一个主表。
+    用于欺骗筛选器组件，使其能同时展示所有维度的关注点。
+    """
+    candidates = {} # {(group, code): max_rate}
+
+    # 1. 提取 Trend 候选者 (门槛 > 0.01%)
+    # mwd_data 是 dict {'monthly': df, ...}
+    if mwd_data:
+        trend_df = pd.concat([df for df in mwd_data.values() if df is not None], ignore_index=True)
+        if not trend_df.empty:
+            # 按 Code 分组取最大不良率
+            valid_trend = trend_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
+            valid_trend = valid_trend[valid_trend > 0.0001] # 0.01%
+            for (grp, code), rate in valid_trend.items():
+                candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
+
+    # 2. 提取 Lot 候选者 (门槛 > 0.02%)
+    # lot_data['code_level_details'] 是 dict {group: df}
+    if lot_data and lot_data.get('code_level_details'):
+        lot_dfs = lot_data['code_level_details'].values()
+        if lot_dfs:
+            lot_full = pd.concat(lot_dfs, ignore_index=True)
+            if not lot_full.empty:
+                valid_lot = lot_full.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
+                valid_lot = valid_lot[valid_lot > 0.0002] # 0.02%
+                for (grp, code), rate in valid_lot.items():
+                    candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
+
+    # 3. 提取 Mapping 候选者 (门槛 > 10 count)
+    if mapping_data is not None and not mapping_data.empty:
+        # Mapping 只有 count，没有 rate
+        counts = mapping_data.groupby(['defect_group', 'defect_desc']).size()
+        valid_map = counts[counts > 10]
+        for (grp, code), _ in valid_map.items(): # type: ignore
+            # 如果该 Code 仅在 Mapping 中出现，给一个默认权重以便排序
+            # 如果它也在 Trend/Lot 中，保留原有的 rate
+            if (grp, code) not in candidates:
+                candidates[(grp, code)] = 0.0001 
+
+    # 4. 构建最终 DataFrame
+    if not candidates:
+        return pd.DataFrame(columns=['defect_group', 'defect_desc', 'defect_rate'])
+    
+    rows = [{'defect_group': k[0], 'defect_desc': k[1], 'defect_rate': v} for k, v in candidates.items()]
+    return pd.DataFrame(rows)

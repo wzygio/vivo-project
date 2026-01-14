@@ -34,6 +34,7 @@ class PanelRepository:
         self.use_snapshot = processing_conf.get('use_local_snapshot', True) # 默认开启
         self.snapshot_path = Path(processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet'))
 
+    
     def get_panel_details(self, 
                           start_date: str, 
                           end_date: str, 

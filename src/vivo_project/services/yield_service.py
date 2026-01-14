@@ -225,7 +225,7 @@ class YieldAnalysisService:
     
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def load_static_warning_lines(file_name: str = CONFIG['path']['static_warning_lines_file'], sheet_name: str = CONFIG['path']['static_warning_lines_sheet']) -> Dict[str, Any]:
+    def load_static_warning_lines(file_name: str = CONFIG['paths']['static_warning_lines']['file_name'], sheet_name: str = CONFIG['paths']['static_warning_lines']['sheet_name']) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
         1. 在内存中将 Excel 转换为 CSV 流（清洗格式）。

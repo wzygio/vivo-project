@@ -15,9 +15,15 @@ data_source:
     - "SLCFG"
     - "SYZLC"
 
-path:
-  static_warning_lines_file: 'M678入库不良率规格-old.xlsx'
-  static_warning_lines_sheet: 'M678入库不良率规格'
+paths:
+  static_warning_lines: {
+    'file_name': 'M678入库不良率规格-old.xlsx',
+    'sheet_name': 'M678入库不良率规格'
+  }
+  benchmark_report_config: {
+    'file_name': 'V3良率及不良率By批次汇总报表.xlsx',
+    'sheet_name': 'CT'
+  }
 
 # 数据处理相关的参数
 processing:
