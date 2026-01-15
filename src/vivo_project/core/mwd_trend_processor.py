@@ -179,7 +179,7 @@ def create_code_level_mwd_trend_data(
     if panel_details_df.empty: return None
     
     try:
-        MIN_PANEL_COUNT_FOR_TODAY = 5000
+        MIN_PANEL_COUNT_FOR_TODAY = 500
         CODE_MONTHLY_VALUES = CONFIG['processing'].get('code_monthly_values', {}) or {}
         CODE_WEEKLY_VALUES = CONFIG['processing'].get('code_weekly_values', {}) or {}
 

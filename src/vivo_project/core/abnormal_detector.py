@@ -50,12 +50,12 @@ class AbnormalDetector:
         
         # 规则: 翻倍(且基数>0.1%) 或 激增20%
         is_doubled = (r_curr > r_prev * 2) and (r_curr > 0.001)
-        is_surged = (r_curr - r_prev > 0.2)
+        is_surged = (r_curr - r_prev > 0.002)
         
         if is_doubled or is_surged:
             reasons = []
             if is_doubled: reasons.append("环比翻倍")
-            if is_surged: reasons.append("增幅>20%")
+            if is_surged: reasons.append("增幅>0.2%")
             
             return (f"📊 **{title_prefix}** (系统): {curr_row['time_period']} "
                     f"良损 {r_curr:.2%} vs 上月 {r_prev:.2%} -> {' & '.join(reasons)}")
@@ -139,7 +139,7 @@ class AbnormalDetector:
                     v_p = float(raw_df.iloc[row_idx, col_prev]) # type: ignore
                     
                     # 规则: 翻倍(基数>0.1%) 或 激增>20%
-                    if (v_c > v_p * 2 and v_c > 0.001) or (v_c - v_p > 0.2):
+                    if (v_c > v_p * 2 and v_c > 0.001) or (v_c - v_p > 0.002):
                         return (f"🚨 **{type_label} 真实报表预警 [{name}]**: "
                                 f"批次{batch_curr} ({v_c:.2%}) vs 批次{batch_prev} ({v_p:.2%}) -> 异常波动")
                 except (ValueError, TypeError):

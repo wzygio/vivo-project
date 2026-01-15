@@ -161,7 +161,7 @@ def calculate_lot_defect_rates(
         if lot_base.empty: return None
 
         # --- 2. 过滤 ---
-        lot_base_filtered = _filter_by_pass_rate(lot_base.copy(), 190 * 30, 0.10, "Lot")
+        lot_base_filtered = _filter_by_pass_rate(lot_base.copy(), 190 * 30, 0.2, "Lot")
         if lot_base_filtered.empty: return None
         
         valid_lots = lot_base_filtered['lot_id'].unique()
@@ -1276,9 +1276,9 @@ def _apply_random_cap_and_floor(
     确保截断后的数据依然呈现自然的随机波动，而非死板的直线。
     """
     if rate > upper_threshold:
-        # [核心逻辑] 软截断：在 Spec 的 80% ~ 100% 之间随机浮动
+        # [核心逻辑] 软截断：在 Spec 的 80% ~ 95% 之间随机浮动
         # 这样每个超标 Lot 的最终值都会略有不同，消除“人工痕迹”
-        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold * 0.95)
+        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold * 0.9)
         return safe_rate
         
     elif 0 < rate < lower_threshold:

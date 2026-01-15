@@ -8,9 +8,7 @@ from vivo_project.core.sheet_lot_processor import (
    _add_daily_base_rate_to_df, 
    _apply_defect_capping, 
    calculate_sheet_defect_rates,
-   calculate_lot_defect_rates,
-   _calculate_raw_rates,\
-   _calculate_lot_base_info_with_median_time
+   _calculate_raw_rates
 )      
 
 def test_ema_smoothing_logic(sample_panel_df):                                     # 测试EMA平滑与中值钳制逻辑
