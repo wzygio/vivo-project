@@ -16,7 +16,7 @@ def init_global_resources():
     AppSetup.initialize_app()
 init_global_resources()
 
-from vivo_project.services.yield_service import YieldAnalysisService
+from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 # [新增] 引入筛选器辅助函数
 from vivo_project.app.charts.sheet_details_chart import render_lot_id_filter

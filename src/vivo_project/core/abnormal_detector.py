@@ -10,9 +10,80 @@ class AbnormalDetector:
     1. 系统趋势检测：基于清洗后的月度数据 (环比翻倍/激增)。
     2. 基准报表检测：基于外部 Excel 的批次数据 (最新批次 vs 上一批次)。
     """
+    # 统一阈值配置 (方便一处修改，处处生效)
+    THRESHOLD_DOUBLING_RATIO = 2.0  # 翻倍
+    THRESHOLD_DOUBLING_BASE = 0.001 # 翻倍的基数门槛 (0.1%)
+    THRESHOLD_SURGE_DELTA = 0.002   # 激增绝对值 (0.2%)
 
     # ==========================================================================
-    #  逻辑 A: 系统内部月度趋势检测 (迁移自前端)
+    #  逻辑 A: 纯布尔判断 (供 Regulator 调用)
+    # ==========================================================================
+    @classmethod
+    def is_value_trend_abnormal(cls, curr_val: float, prev_val: float) -> bool:
+        """
+        判断两个数值之间是否存在异常波动 (翻倍 或 激增)
+        """
+        # 规则 1: 环比翻倍 (且当前值不至于微乎其微)
+        is_doubled = (curr_val > prev_val * cls.THRESHOLD_DOUBLING_RATIO) and (curr_val > cls.THRESHOLD_DOUBLING_BASE)
+        # 规则 2: 绝对值激增
+        is_surged = (curr_val - prev_val > cls.THRESHOLD_SURGE_DELTA)
+        
+        return is_doubled or is_surged
+
+    @classmethod
+    def is_benchmark_abnormal(cls, raw_df: pd.DataFrame, target_group_or_code: str) -> bool:
+        """
+        判断外部报表中，指定 Group/Code 的最新两个批次是否异常。
+        True = 外部也崩了 (确实有事)
+        False = 外部很稳 (可能是系统误报)
+        """
+        if raw_df is None or raw_df.empty:
+            return False # 没数据默认当做没异常，或者保守策略
+
+        try:
+            # 1. 定位批次产出率行
+            mask_yield = raw_df[2].astype(str).str.strip() == "批次产出率"
+            if not mask_yield.any(): return False
+            yield_row_idx = int(mask_yield.idxmax())
+
+            # 2. 筛选有效列 (最新两个 >20% 的批次)
+            valid_cols = []
+            for col_idx in range(raw_df.shape[1] - 1, 4, -1):
+                try:
+                    val = float(raw_df.iloc[yield_row_idx, col_idx]) # type: ignore
+                    if val > 0.2:
+                        valid_cols.append(col_idx)
+                        if len(valid_cols) == 2: break
+                except (ValueError, TypeError):
+                    continue
+            
+            if len(valid_cols) < 2: return False
+            col_curr, col_prev = valid_cols[0], valid_cols[1]
+
+            # 3. 定位目标行
+            target_row_idx = None
+            # C列是 Group, D列是 Code
+            for r in range(yield_row_idx + 1, len(raw_df)):
+                g_val = str(raw_df.iloc[r, 2]).strip()
+                c_val = str(raw_df.iloc[r, 3]).strip()
+                if g_val == target_group_or_code or c_val == target_group_or_code:
+                    target_row_idx = r
+                    break
+            
+            if target_row_idx is None: return False
+
+            # 4. 执行数值比对
+            v_c = float(raw_df.iloc[target_row_idx, col_curr]) # type: ignore
+            v_p = float(raw_df.iloc[target_row_idx, col_prev]) # type: ignore
+            
+            return cls.is_value_trend_abnormal(v_c, v_p)
+
+        except Exception as e:
+            logging.error(f"基准比对布尔检查出错: {e}")
+            return False
+        
+    # ==========================================================================
+    #  逻辑 B: 系统内部月度趋势检测 (迁移自前端)
     # ==========================================================================
     @staticmethod
     def detect_system_trend_alerts(
@@ -49,8 +120,8 @@ class AbnormalDetector:
         r_prev = float(prev_row['defect_rate'])
         
         # 规则: 翻倍(且基数>0.1%) 或 激增20%
-        is_doubled = (r_curr > r_prev * 2) and (r_curr > 0.001)
-        is_surged = (r_curr - r_prev > 0.002)
+        is_doubled = (r_curr > r_prev * AbnormalDetector.THRESHOLD_DOUBLING_RATIO) and (r_curr > AbnormalDetector.THRESHOLD_DOUBLING_BASE)
+        is_surged = (r_curr - r_prev > AbnormalDetector.THRESHOLD_SURGE_DELTA)
         
         if is_doubled or is_surged:
             reasons = []
@@ -139,7 +210,7 @@ class AbnormalDetector:
                     v_p = float(raw_df.iloc[row_idx, col_prev]) # type: ignore
                     
                     # 规则: 翻倍(基数>0.1%) 或 激增>20%
-                    if (v_c > v_p * 2 and v_c > 0.001) or (v_c - v_p > 0.002):
+                    if (v_c > v_p * AbnormalDetector.THRESHOLD_DOUBLING_RATIO and v_c > AbnormalDetector.THRESHOLD_DOUBLING_BASE) or (v_c - v_p > AbnormalDetector.THRESHOLD_SURGE_DELTA):
                         return (f"🚨 **{type_label} 真实报表预警 [{name}]**: "
                                 f"批次{batch_curr} ({v_c:.2%}) vs 批次{batch_prev} ({v_p:.2%}) -> 异常波动")
                 except (ValueError, TypeError):

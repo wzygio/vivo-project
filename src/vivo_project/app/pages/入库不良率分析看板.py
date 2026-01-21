@@ -6,8 +6,8 @@ import sys
 # --- 1. 配置与初始化 ---
 from vivo_project.config import CONFIG
 from vivo_project.utils.app_setup import AppSetup
-from vivo_project.services.alert_service import AlertService
-from vivo_project.services.yield_service import YieldAnalysisService
+from vivo_project.application.alert_service import AlertService
+from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 
 # 引入图表组件

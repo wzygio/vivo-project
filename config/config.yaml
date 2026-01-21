@@ -1,29 +1,30 @@
-# config.yaml
-# 这是我们项目的主配置文件
-
 # 应用程序级别的设置
 application:
-  cache_ttl_hours: 4
+  cache_ttl_hours: 4 # 缓存时间（小时）
 
 # 数据加载相关的参数
 data_source:
   product_code: "M678"
   work_order_types:
-    - "ESLC"
-    - "P"
-    - "LCFG"
-    - "SLCFG"
-    - "SYZLC"
+    - "ESLC" # 量产
+    - "P" # 量产
+    # - "LCFG" # 量产返工
+    # - "SLCFG" # 试量产返工
+    # - "SYZLC" # 实验转量产
 
+# 本地文件读取
 paths:
-  static_warning_lines: {
-    'file_name': 'M678入库不良率规格-old.xlsx',
-    'sheet_name': 'M678入库不良率规格'
-  }
-  benchmark_report_config: {
-    'file_name': 'V3良率及不良率By批次汇总报表.xlsx',
-    'sheet_name': 'CT'
-  }
+  static_warning_lines: 
+    file_name: 'M678入库不良率规格-old.xlsx'
+    sheet_name: 'M678入库不良率规格'  
+
+  benchmark_report_config: 
+    file_name: 'V3良率及不良率By批次汇总报表.xlsx'
+    sheet_name: 'CT'
+
+  rate_override_config:
+    override_file: "override_rates.xlsx"
+    override_sheet_name: "Overrides"
 
 # 数据处理相关的参数
 processing:
@@ -44,44 +45,21 @@ processing:
       '2025-10': 0.0110
       '2025-11': 0.0101
       '2025-12': 0.0091
-      '2026-01': 0.0093
+      '2026-01': 0.0091
     OLED_Mura:
       '2025-10': 0.0018
       '2025-11': 0.0017
       '2025-12': 0.0012
-      '2026-01': 0.0015
+      '2026-01': 0.0013
 
   group_weekly_values:
-    Array_Line:
-      '2026-W01': 0.0107
-    Array_Pixel:
-      '2026-W01': 0.0105
-    OLED_Mura:
-      '2026-W01': 0.0015
 
   # 2. Code 级修正配置
   code_monthly_values:
-    'G3亮点':
-      '2025-11': 0.0029
-    '群暗点':
-      '2026-01': 0.0035
-    '暗点':
-      '2026-01': 0.0015
-      
-    '彩斑Mura':
-      '2025-10': 0.0017
-      '2025-11': 0.0015
-    'G彩短条Mura':
-      '2025-09': 0.0030
-      '2025-10': 0.0010
 
   code_weekly_values:
-    '群暗点':
-      '2026-W01': 0.0032
-    '暗点':
-      '2026-W01': 0.0015
-    
-    
+  
+  # 3. lot阵列投入时间
   array_input_time:
     custom_times:
       # 高发sheet_id：共计 5 个
@@ -91,15 +69,18 @@ processing:
       L3MR58E5C26: '20250805'
       L3MR58E5C04: '20250805'
 
+  # 4. defect_group
   target_defect_groups:
     - "Array_Line"
     - "Array_Pixel"
     - "OLED_Mura"
 
+  # 5. defect_code倍率调节
   defect_multipliers:
-    '暗点': 0.8
+    '暗点': 0.7
     '彩斑Mura': 0.3
 
+  # 6. Mapping集中性调节
   mapping_hotspot_script:
     - enable: true
       target_code: '彩斑Mura'
@@ -125,90 +106,7 @@ processing:
       normal_multiplier: 0.7
       hotspot_rules:
         - { type: 'row', value: ['2E', '1A'] }
-        - { type: 'col', value: ['A0', 'B0', 'S0'] } 
-    
-    - enable: true
-      target_code: 'PCD裂纹亮线'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 3
-      normal_multiplier_in_add_mode: 10
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } 
-        - { type: 'col', value: ['A0', 'B0', 'S0'] } 
-
-    - enable: true
-      target_code: 'G3亮点'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 10
-      normal_multiplier_in_add_mode: 0.8
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } 
-        - { type: 'col', value: ['A0', 'B0', 'R0'] } 
-
-    - enable: true
-      target_code: '群亮点'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 5
-      normal_multiplier_in_add_mode: 0.8
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } 
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
-
-    - enable: true
-      target_code: '大面积亮点'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 5
-      normal_multiplier_in_add_mode: 3
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] }
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
-        - { 
-            type: 'position', 
-            value: [
-              ['1E', 'F0'], ['2A', 'F0'], ['2B', 'F0'], ['2C', 'F0'],
-              ['2D', 'F0'], ['2E', 'F0'], ['1E', 'M0'], ['1E', 'N0'],
-              ['1C', 'R0'], ['1E', 'R0']
-            ] 
-          }
-
-    - enable: true
-      target_code: 'B暗点'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 5
-      normal_multiplier_in_add_mode: 0.5
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } 
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
-
-    - enable: true
-      target_code: '可修复暗点'       
-      target_batch_index: 'oldest'    
-      mode: 'additive'          
-      hotspot_adder: 5
-      normal_multiplier_in_add_mode: 0.5
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] } 
-        - { type: 'col', value: ['A0', 'B0', 'R0', 'S0'] } 
-
-
-  sheet_hotspot_config: {
-      enable: True,
-      random_seed: 2025,
-      
-      hide_hotspot_config: {
-          'fluctuation_sheet': 0.5,  
-          'fluctuation_lot': 0.3,
-      },
-  }
-
-  rate_override_config:
-    override_file: "override_rates.xlsx"
-    override_sheet_name: "Overrides"
+        - { type: 'col', value: ['A0', 'B0', 'S0'] }
 
 
 # UI界面相关的配置

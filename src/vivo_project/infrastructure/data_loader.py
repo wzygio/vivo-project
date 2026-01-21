@@ -29,33 +29,31 @@ def load_panel_details(
     end_date_fmt = end_date.replace('-', '')
     work_orders_str = "','".join(work_order_types)
 
+    # dws_dft_warehousing_d： 获取defect_code
+    # spot_glass_batch_info： 获取批次号
+    # dwr_mes_productspec： 获取产品号
+    # imp_ct_dft_group： 获取defect_group及defect_desc
     sql_query = f"""
-    WITH PanelDefects AS (
-    SELECT D.PANEL_ID, D.DEFECT_CODE
-    FROM DWS_DFT_WAREHOUSING_D D
-    WHERE D.DATE_TIMEKEY BETWEEN '{start_date_fmt}' AND '{end_date_fmt}'
-    AND D.PROD_CODE = '{prod_code}'
-    )
-    SELECT 
-        SUBSTR(R.DESCRIPTION, 1, 10) AS batch_no,
-        SUBSTR(D.PANEL_ID, 1, 9) AS lot_id, 
-        SUBSTR(D.PANEL_ID, 1, 11) AS sheet_id, 
-        D.PANEL_ID AS panel_id, 
-        P.PRODUCTCODE AS prod_code, 
-        D.FIRST_SHIP_DATE AS warehousing_time, 
-        PD.DEFECT_CODE AS defect_code, 
-        G.DEFECT_DESC AS defect_desc, 
-        G.DEFECT_GROUP AS defect_group
-    FROM DWT_WAREHOUSING_PNL D
-    LEFT JOIN DWR_MES_PRODUCTSPEC P ON D.PROD_ID = P.PRODUCTSPECNAME
-    LEFT JOIN DWR_MES_PRODUCTREQUEST R ON D.SUB_PROD_ID = R.PRODUCTREQUESTNAME
-    LEFT JOIN PanelDefects PD ON D.PANEL_ID = PD.PANEL_ID
-    LEFT JOIN IMP_CT_DFT_GROUP G ON PD.DEFECT_CODE = G.DEFECT_CODE
-    WHERE D.LAST_FLAG = 'Y'
-    AND D.FIRST_SHIP_DATE BETWEEN '{start_date_fmt}' AND '{end_date_fmt}'
-    AND P.PRODUCTCODE = '{prod_code}'
-    AND R.SUBPRODUCTIONTYPE IN ('{work_orders_str}')
-    ORDER BY batch_no, lot_id, sheet_id, panel_id;
+    select 
+        sgbi.lot as batch_no,
+        substr(dwp.panel_id, 1, 9) as lot_id, 
+        substr(dwp.panel_id, 1, 11) as sheet_id, 
+        dwp.panel_id as panel_id, 
+        dwp.first_ship_date as warehousing_time, 
+        dmp.productcode as prod_code, 
+        ddwd.defect_code as defect_code,
+        icdg.defect_desc as defect_desc, 
+        icdg.defect_group as defect_group
+    from dwt_warehousing_pnl dwp
+    left join dws_dft_warehousing_d ddwd on dwp.panel_id = ddwd.panel_id 
+    left join spot_glass_batch_info sgbi on substr(dwp.panel_id, 1, 11) = substr(sgbi.glass_id, 1, 11)
+    left join dwr_mes_productspec dmp on dwp.prod_id = dmp.productspecname
+    left join imp_ct_dft_group icdg on icdg.defect_code = ddwd.defect_code
+    where dwp.last_flag = 'y'
+        and dwp.first_ship_date between '{start_date_fmt}' and '{end_date_fmt}'
+        and ddwd.productcode = '{prod_code}'
+        and dwp.sub_prod_type in ('{work_orders_str}')
+    order by batch_no, lot_id, sheet_id, panel_id;
     """
     
     try:
@@ -174,7 +172,7 @@ def load_array_input_times(
         logging.error(f"提取阵列投入时间时发生错误: {e}")
         return pd.DataFrame()
 
-def load_raw_report(file_name: str, sheet_name: str) -> pd.DataFrame | None:
+def load_excel_report(file_name: str, sheet_name: str) -> pd.DataFrame | None:
     """
     读取无表头的原始 Excel 报表，用于处理复杂表头结构。
     返回的 DataFrame 列名为整数索引 (0, 1, 2...)。

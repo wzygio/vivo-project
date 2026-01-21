@@ -12,10 +12,10 @@ from vivo_project.utils.app_setup import AppSetup  # 导入应用初始化工具
 from vivo_project.app.components.components import render_page_header  # 导入页头渲染组件
 
 # 引入所有 Service
-from vivo_project.services.file_manager_service import FileManagerService  # 文件管理服务
-from vivo_project.services.excel_service import ExcelService  # Excel 服务
-from vivo_project.services.ppt_service import PPTService  # PPT 服务
-from vivo_project.services.pdf_service import PDFService  # PDF 服务
+from vivo_project.application.file_manager_service import FileManagerService  # 文件管理服务
+from vivo_project.application.excel_service import ExcelService  # Excel 服务
+from vivo_project.application.ppt_service import PPTService  # PPT 服务
+from vivo_project.application.pdf_service import PDFService  # PDF 服务
 
 # 使用 cache_resource 避免重复初始化
 @st.cache_resource

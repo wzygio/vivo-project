@@ -11,8 +11,8 @@ def init_global_resources():
     AppSetup.initialize_app()
 init_global_resources()
 
-from vivo_project.services.ppt_service import PPTService
-from vivo_project.services.pdf_service import PDFService
+from vivo_project.application.ppt_service import PPTService
+from vivo_project.application.pdf_service import PDFService
 from vivo_project.app.components.components import render_page_header
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")

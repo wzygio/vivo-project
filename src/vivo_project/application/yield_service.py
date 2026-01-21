@@ -39,7 +39,7 @@ class YieldAnalysisService:
     # ==========================================================================
 
     _end_date: datetime = datetime.now()
-    _start_date: datetime = _end_date - relativedelta(months=4)
+    _start_date: datetime = _end_date - relativedelta(months=3)
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
@@ -48,7 +48,7 @@ class YieldAnalysisService:
         注意：调用此方法后，建议执行 YieldAnalysisService.get_raw_panel_details.clear() 清除缓存
         """
         cls._end_date = end_date
-        cls._start_date = end_date - relativedelta(months=4)
+        cls._start_date = end_date - relativedelta(months=3)
         logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
 
     @staticmethod
@@ -151,7 +151,7 @@ class YieldAnalysisService:
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=50)
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
         target_defects = CONFIG['processing']['target_defect_groups']
 
         # [新增] 3. 加载警戒线配置
@@ -182,7 +182,7 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=50)
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
         target_defects = CONFIG['processing']['target_defect_groups']
 
         # [新增] 4. 加载警戒线配置

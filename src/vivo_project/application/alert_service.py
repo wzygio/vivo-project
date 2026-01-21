@@ -3,7 +3,7 @@ from typing import Dict, List, Any
 import pandas as pd
 
 from vivo_project.config import CONFIG
-from vivo_project.infrastructure.data_loader import load_raw_report
+from vivo_project.infrastructure.data_loader import load_excel_report
 from vivo_project.core.abnormal_detector import AbnormalDetector
 
 class AlertService:
@@ -58,7 +58,7 @@ class AlertService:
         
         if file_name:
             # A. 加载外部文件
-            raw_report_df = load_raw_report(file_name, sheet_name)
+            raw_report_df = load_excel_report(file_name, sheet_name)
             
             if raw_report_df is not None:
                 # B. 提取目标列表 (Context)

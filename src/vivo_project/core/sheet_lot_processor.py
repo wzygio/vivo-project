@@ -89,7 +89,7 @@ def calculate_sheet_defect_rates(
 
         # --- 6. [调整顺序] 应用覆盖 (Override) ---
         # 说明：人工覆盖是最高指令，覆盖后的数据不再受截断限制
-        override_cfg = config.get('rate_override_config', {})
+        override_cfg = CONFIG.get('paths', {}).get('rate_override_config', {})
         override_df, _ = _load_override_excel(
             override_cfg.get('override_file', ''), 
             override_cfg.get('override_sheet_name', '')
@@ -199,7 +199,7 @@ def calculate_lot_defect_rates(
             current_code_details = sim_lot_codes
 
         # --- 6. [调整顺序] 覆盖 (Override) ---
-        override_cfg = config.get('rate_override_config', {})
+        override_cfg = CONFIG.get('paths', {}).get('rate_override_config', {})
         override_sheet_df, _= _load_override_excel(
             override_cfg.get('override_file', ''), 
             override_cfg.get('override_sheet_name', '')
