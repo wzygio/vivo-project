@@ -134,9 +134,8 @@ if all_data:
                     st.error("未能加载Code级别明细数据。")
                     st.stop()
 
-                target_defect_groups = CONFIG['processing']['target_defect_groups']
                 
-                for group_name in target_defect_groups:
+                for group_name in sorted(code_details_dict.keys()):
                     st.subheader(group_name)
                     detail_df = code_details_dict.get(group_name)
                     
@@ -187,7 +186,6 @@ if all_data:
         # 3. 调用智能UI组件 (传入筛选后的范围)
         selected_code_info = create_code_selection_ui(
             source_data=df_in_scope,
-            target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="lot_focus_table_filtered", # 使用新key避免冲突
             rate_threshold=0.0005 
         )

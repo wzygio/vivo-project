@@ -20,7 +20,6 @@ from vivo_project.utils.utils import save_dict_to_excel
 @staticmethod
 def calculate_sheet_defect_rates(
     panel_details_df: pd.DataFrame,
-    target_defects: list,
     array_input_times_df: pd.DataFrame,
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     start_date: datetime,
@@ -53,6 +52,7 @@ def calculate_sheet_defect_rates(
         panel_df_filtered = panel_details_df[panel_details_df['sheet_id'].isin(valid_ids)]
 
         # --- 3. 计算原始不良率 ---
+        target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         raw_results = _calculate_raw_rates(
             panel_details_df_filtered=panel_df_filtered,
             base_info_df_filtered=sheet_base_filtered.set_index('sheet_id'),
@@ -145,7 +145,6 @@ def calculate_lot_defect_rates(
     panel_details_df: pd.DataFrame,
     sheet_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    target_defects: list,
     start_date: datetime,
     warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
@@ -168,6 +167,7 @@ def calculate_lot_defect_rates(
         panel_df_lot = panel_details_df[panel_details_df['lot_id'].isin(valid_lots)]
 
         # --- 3. 原始计算 ---
+        target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         raw_lot_results = _calculate_raw_rates(
             panel_details_df_filtered=panel_df_lot,
             base_info_df_filtered=lot_base_filtered.set_index('lot_id'),
@@ -800,7 +800,7 @@ def _calculate_lot_override_rate_heuristic(
         # 注意: 平滑因子 30 是硬编码的经验值
         smoothing_factor = 30
         lot_stats['override_rate_avg'] = lot_stats['base_rate'] + (
-            lot_stats['rate_sum'] / (smoothing_factor + lot_stats['sheet_count'])
+            lot_stats['rate_sum'] / (float(smoothing_factor) + lot_stats['sheet_count'])
         )
         
         logging.info(f"Lot 级覆盖率计算完成，共计算 {len(lot_stats)} 条记录。")

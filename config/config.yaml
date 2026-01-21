@@ -5,6 +5,13 @@ application:
 # 数据加载相关的参数
 data_source:
   product_code: "M678"
+
+  # 4. defect_group
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "OLED_Mura"
+    
   work_order_types:
     - "ESLC" # 量产
     - "P" # 量产
@@ -69,12 +76,6 @@ processing:
       L3MR58E5C26: '20250805'
       L3MR58E5C04: '20250805'
 
-  # 4. defect_group
-  target_defect_groups:
-    - "Array_Line"
-    - "Array_Pixel"
-    - "OLED_Mura"
-
   # 5. defect_code倍率调节
   defect_multipliers:
     '暗点': 0.7
@@ -108,6 +109,13 @@ processing:
         - { type: 'row', value: ['2E', '1A'] }
         - { type: 'col', value: ['A0', 'B0', 'S0'] }
 
+  sheet_hotspot_config: 
+      enable: True,
+      random_seed: 2025,
+      hide_hotspot_config: {
+          'fluctuation_sheet': 0.2,  
+          'fluctuation_lot': 0.1,
+      }
 
 # UI界面相关的配置
 ui:

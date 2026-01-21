@@ -12,9 +12,8 @@ from vivo_project.core.trend_regulator import TrendRegulator
 @staticmethod
 def create_mwd_trend_data(
     panel_details_df: pd.DataFrame, 
-    target_defects: list,
     ema_span: int = 4,
-    scaling_factor: float = 1
+    scaling_factor: float = 1.2
 ) -> Dict[str, pd.DataFrame] | None:
     """
     (V5.1 - 最终防线版)
@@ -44,6 +43,7 @@ def create_mwd_trend_data(
                 daily_summary = daily_summary[daily_summary.index < last_day_date]
         if daily_summary.empty: return None
         
+        target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         # Shadow EMA 计算
         for group in target_defects:
             if group in daily_summary.columns:
@@ -128,14 +128,14 @@ def create_mwd_trend_data(
 #  Level 1: 原始聚合函数 (只聚合，不修改)
 # ==============================================================================
 @staticmethod
-def _aggregate_group_monthly_raw(daily_summary: pd.DataFrame, target_defects: list, today: dt) -> pd.DataFrame:
+def _aggregate_group_monthly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
     """仅负责时间过滤和重采样聚合"""
     two_months_ago = today - relativedelta(months=3)
     monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
     return monthly_data_raw.resample('M').sum()
 
 @staticmethod
-def _aggregate_group_weekly_raw(daily_summary: pd.DataFrame, target_defects: list, today: dt) -> pd.DataFrame:
+def _aggregate_group_weekly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
     """仅负责时间过滤和重采样聚合"""
     three_weeks_ago = today - relativedelta(weeks=2)
     weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
@@ -373,7 +373,7 @@ def _format_code_df(df: pd.DataFrame, time_format_str: str) -> pd.DataFrame:
 
 
 @staticmethod
-def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defects: list) -> pd.DataFrame | None:
+def create_current_month_trend_data(panel_details_df: pd.DataFrame) -> pd.DataFrame | None:
     """
     (V5.0 - Shadow EMA 抗噪版)
     本月至今趋势：全面升级为使用 _calculate_adaptive_shadow_ema。
@@ -406,6 +406,7 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame, target_defec
         if daily_summary.empty: return None
 
         # 4. Shadow EMA 计算
+        target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         for group in target_defects:
             if group in daily_summary.columns:
                 smoothed_rates = _calculate_adaptive_shadow_ema(

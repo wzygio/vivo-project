@@ -75,9 +75,11 @@ def render_sheet_id_query(sheet_ids, code_details_dict):
     if not valid_sheets:
         return
     
-    target_defect_groups = CONFIG['processing']['target_defect_groups']
+    if not code_details_dict:
+        st.warning("未找到任何不良明细数据。")
+        return
     
-    for group_name in target_defect_groups:
+    for group_name in sorted(code_details_dict.keys()):
         st.subheader(group_name)
         detail_df = code_details_dict.get(group_name)
         

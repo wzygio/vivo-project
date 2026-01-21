@@ -127,7 +127,6 @@ if all_data:
         # 3. 调用智能UI组件
         selected_code_info = create_code_selection_ui(
             source_data=df_in_scope,
-            target_defect_groups=CONFIG['processing']['target_defect_groups'],
             key_prefix="sheet_focus",  # 唯一的key
             rate_threshold=0.0005 # 沿用我们之前设置的阈值
         )

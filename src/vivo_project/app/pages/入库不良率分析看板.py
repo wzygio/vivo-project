@@ -46,14 +46,11 @@ with st.spinner("正在加载全维度分析数据..."):
     sheet_data = YieldAnalysisService.get_sheet_defect_rates()
     mapping_data = YieldAnalysisService.get_mapping_data()
     warning_lines = YieldAnalysisService.load_static_warning_lines()
-    alert_messages = AlertService.get_dashboard_alerts(
-        mwd_group_data=mwd_group_data,
-        mwd_code_data=mwd_code_data
-    )
 
 # 基础校验
-if not all([mwd_code_data, lot_data, sheet_data]):
-    st.error("部分核心数据加载失败，请检查后台日志。")
+if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
+    st.error("部分核心数据加载失败 (数据为空或数据库连接异常)，请检查后台日志。")
+    # 可以在这里添加一个重试按钮或者显示具体哪个数据为空
     st.stop()
 
 # --- 常量 ---
@@ -66,7 +63,7 @@ COLOR_MAP = {
     'array_pixel_rate': "#6fb9ff"   # Plotly默认的浅蓝色
 }
 
-CATEGORY_ORDERS = {"defect_group": CONFIG['processing']['target_defect_groups']}
+
 
 # ==============================================================================
 # [修改] 自动预警展示区 - 增加正常状态提示
@@ -97,9 +94,23 @@ st.divider()
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
 
 if mwd_group_data:
+    # [修改点 3] 动态提取 Group 列表
+    # 优先从数据最全的 'monthly' 或 'daily' 中提取所有出现过的 Group
+    available_groups = []
+    
+    # 尝试从 monthly 数据中获取 Group 列表 (数据最概括)
+    ref_df = mwd_group_data.get('monthly')
+    if ref_df is not None and not ref_df.empty:
+        # 提取并排序，保证下拉框和图例顺序一致
+        available_groups = sorted(ref_df['defect_group'].unique().tolist())
+    
+    # 定义动态的图表排序规则
+    dynamic_category_orders = {"defect_group": available_groups}
+
     c1, _, _ = st.columns(3)
     with c1:
-        grp_opts = ["全部Group"] + CONFIG['processing']['target_defect_groups']
+        # 使用动态列表构建选项
+        grp_opts = ["全部Group"] + available_groups
         sel_grp_macro = st.selectbox("选择Group:", grp_opts, key="macro_group_sel")
 
     # 数据准备与切片
@@ -123,7 +134,6 @@ if mwd_group_data:
     # 绘图
     gc1, gc2, gc3 = st.columns(3)
     
-    # 统一配置三个图表的数据和参数
     chart_configs = [
         (df_m, "月度趋势", False, True, gc1),
         (df_w, "周度趋势", False, False, gc2),
@@ -134,7 +144,11 @@ if mwd_group_data:
         with col:
             if df is not None and not df.empty:
                 st.plotly_chart(
-                    create_group_trend_chart(df, title, show_slider, show_count, y_limit, COLOR_MAP, CATEGORY_ORDERS, show_input_count=True),
+                    create_group_trend_chart(
+                        df, title, show_slider, show_count, y_limit, COLOR_MAP, 
+                        dynamic_category_orders, # [修改点 4] 传入动态排序
+                        show_input_count=True
+                    ),
                     use_container_width=True
                 )
             else:
@@ -153,7 +167,6 @@ master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 # 2. 渲染筛选器 (阈值设为0，因为已经在 prepare 阶段筛选过了)
 selection = create_code_selection_ui(
     source_data=master_df,
-    target_defect_groups=CONFIG['processing']['target_defect_groups'],
     key_prefix="unified_focus",
     rate_threshold=0 # <--- 关键：信任 master_df 的筛选结果
 )

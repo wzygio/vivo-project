@@ -1,4 +1,5 @@
 import logging, os
+import numpy as np
 import pandas as pd
 import streamlit as st
 from typing import Dict, Any, List, Tuple, Optional
@@ -22,8 +23,7 @@ from vivo_project.core.sheet_lot_processor import (
 )
 from vivo_project.core.mapping_processor import prepare_mapping_data
 from vivo_project.core.defect_modifier import (
-    apply_defect_multipliers, 
-    apply_defect_dispersion
+    apply_defect_multipliers
 )
 
 class YieldAnalysisService:
@@ -66,32 +66,32 @@ class YieldAnalysisService:
         
         logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
 
+        target_defect_groups = CONFIG['data_source']['target_defect_groups']
+        prod_code = CONFIG['data_source']['product_code']
+        work_orders = CONFIG['data_source']['work_order_types']
+
         return repo.get_panel_details(
             start_date=start_date.strftime('%Y-%m-%d'),
             end_date=end_date.strftime('%Y-%m-%d'),
-            product_code=CONFIG['data_source']['product_code'],
-            work_order_types=CONFIG['data_source']['work_order_types']
+            product_code=prod_code,
+            work_order_types=work_orders,
+            target_defect_groups=target_defect_groups 
         )
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
     def get_modified_panel_details() -> pd.DataFrame:
         """[L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据"""
-        logging.info("--- [L2 Cache Miss] 计算修饰后数据... ---")
+        # [修改] 在这里读取配置，并传给 L1 Cache 方法
         
-        # 1. 获取 L1 数据
+        # 1. 获取 L1 数据 (传入配置，确保缓存正确)
         raw_df = YieldAnalysisService.get_raw_panel_details()
+        
         if raw_df.empty: return pd.DataFrame()
         
-        # 2. 应用修饰
+        # 2. 应用修饰 (不再需要再次清洗，因为 L1 已经洗过了)
         config = CONFIG.get('processing', {})
         processed_df = raw_df.copy()
-
-        # # 缺陷分散
-        # dispersion_config = config.get('dispersion_config', {})
-        # if dispersion_config.get('enable', False):
-        #     logging.info("应用缺陷分散...")
-        #     processed_df = apply_defect_dispersion(processed_df, dispersion_config)
 
         # 缺陷衰减
         multipliers_config = config.get('defect_multipliers', {})
@@ -112,8 +112,7 @@ class YieldAnalysisService:
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: return None
         
-        target_defects = CONFIG['processing']['target_defect_groups']
-        return create_mwd_trend_data(panel_details_df=panel_df, target_defects=target_defects)
+        return create_mwd_trend_data(panel_details_df=panel_df)
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
@@ -122,8 +121,7 @@ class YieldAnalysisService:
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: return None
         
-        target_defects = CONFIG['processing']['target_defect_groups']
-        return create_current_month_trend_data(panel_details_df=panel_df, target_defects=target_defects)
+        return create_current_month_trend_data(panel_details_df=panel_df)
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
@@ -152,7 +150,6 @@ class YieldAnalysisService:
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
-        target_defects = CONFIG['processing']['target_defect_groups']
 
         # [新增] 3. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines()
@@ -160,7 +157,6 @@ class YieldAnalysisService:
         # 4. 核心计算
         return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
-            target_defects=target_defects,
             array_input_times_df=array_times_df,
             mwd_code_data=mwd_code_data,
             start_date=YieldAnalysisService._start_date, # 传入类属性 start_date
@@ -183,8 +179,6 @@ class YieldAnalysisService:
 
         # 3. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
-        target_defects = CONFIG['processing']['target_defect_groups']
-
         # [新增] 4. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines()
 
@@ -193,7 +187,6 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             sheet_results=sheet_results,
             mwd_code_data=mwd_code_data,
-            target_defects=target_defects,
             start_date=YieldAnalysisService._start_date,
             warning_lines=warning_lines  # [新增] 注入
         )

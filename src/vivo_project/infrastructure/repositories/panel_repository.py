@@ -38,9 +38,11 @@ class PanelRepository:
     def get_panel_details(self, 
                           start_date: str, 
                           end_date: str, 
-                          product_code: str, 
-                          work_order_types: List[str],
-                          force_refresh: bool = False) -> pd.DataFrame:
+                          product_code: str = CONFIG['data_source']['product_code'],
+                          work_order_types: List[str] = CONFIG['data_source']['work_order_types'],
+                          target_defect_groups: List[str] = CONFIG['data_source']['target_defect_groups'],
+                          force_refresh: bool = False
+                          ) -> pd.DataFrame:
         """
         获取 Panel 级详细明细数据。
         :param force_refresh: True = 强制忽略快照，查库并更新。
@@ -125,7 +127,8 @@ class PanelRepository:
                     start_date=s_str,
                     end_date=e_str,
                     prod_code=product_code,
-                    work_order_types=work_order_types
+                    work_order_types=work_order_types,
+                    target_defect_groups=target_defect_groups
                 )
                 
                 if not df_chunk.empty:

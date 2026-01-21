@@ -1,9 +1,10 @@
 # src/data_loader.py
-import pandas as pd
-from sqlalchemy import text
 import logging
-from typing import TYPE_CHECKING, Dict, List, Optional
+import pandas as pd
+import numpy as np
+from sqlalchemy import text
 from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 # 从您的配置模块导入CONFIG
 from vivo_project.config import CONFIG, RESOURCE_DIR
@@ -17,7 +18,8 @@ def load_panel_details(
     start_date: str, 
     end_date: str, 
     prod_code: str, 
-    work_order_types: list
+    work_order_types: list,
+    target_defect_groups: List[str]
 ) -> pd.DataFrame:
     """
     (V3.1 - 纯净版)
@@ -49,9 +51,9 @@ def load_panel_details(
     left join spot_glass_batch_info sgbi on substr(dwp.panel_id, 1, 11) = substr(sgbi.glass_id, 1, 11)
     left join dwr_mes_productspec dmp on dwp.prod_id = dmp.productspecname
     left join imp_ct_dft_group icdg on icdg.defect_code = ddwd.defect_code
-    where dwp.last_flag = 'y'
+    where dwp.last_flag = 'Y'
         and dwp.first_ship_date between '{start_date_fmt}' and '{end_date_fmt}'
-        and ddwd.productcode = '{prod_code}'
+        and dmp.productcode = '{prod_code}'
         and dwp.sub_prod_type in ('{work_orders_str}')
     order by batch_no, lot_id, sheet_id, panel_id;
     """
@@ -62,59 +64,41 @@ def load_panel_details(
         
         panel_df = pd.read_sql(text(sql_query), db_manager.engine)
         panel_df.columns = panel_df.columns.str.lower()
-        logging.info(f"成功从数据库提取 {len(panel_df)} 行原始数据。")
+        raw_count = len(panel_df)
         
+        # --- [核心修改] 统一清洗层 (Sanitization Layer) ---
+        if target_defect_groups:
+            # 1. 找到所有“非目标组”且“非良品”的行
+            # 条件：(Defect Group 不在目标列表中) AND (Defect Group 不是空的)
+            # 注意：isin() 对 NaN 返回 False，所以我们要确保只处理非 NaN 的干扰项
+            mask_non_target = (
+                ~panel_df['defect_group'].isin(target_defect_groups) & 
+                panel_df['defect_group'].notna()
+            )
+            
+            cleaned_count = mask_non_target.sum()
+            
+            if cleaned_count > 0:
+                # 2. 强制抹除这些行的不良信息 (将其变为良品)
+                # 使用 numpy.nan 填充，确保与 SQL 中的 LEFT JOIN NULL 行为一致
+                cols_to_clean = ['defect_code', 'defect_desc', 'defect_group']
+                panel_df.loc[mask_non_target, cols_to_clean] = np.nan
+                
+                logging.info(
+                    f"🛡️ [数据清洗] 已抹除 {cleaned_count} 条非目标 Defect 记录 "
+                    f"(Target: {target_defect_groups})。"
+                )
+            else:
+                logging.info("🛡️ [数据清洗] 数据纯净，无需抹除。")
+                
+        logging.info(f"成功提取并清洗 {len(panel_df)} 行数据。")
         return panel_df
         
     except Exception as e:
         logging.error(f"提取Panel明细数据时发生错误: {e}")
         return pd.DataFrame()
     
-def update_sheet_array_times(
-    times_df: pd.DataFrame,
-    custom_times: Optional[Dict[str, str]] = None  # 修改类型注解
-) -> pd.DataFrame:
-    """
-    更新指定sheet的array_input_time
-    
-    Args:
-        times_df: 原始时间DataFrame
-        custom_times: sheet_id到新时间的映射字典，格式为 {'sheet_id': 'YYYYMMDD'}
-        
-    Returns:
-        更新后的DataFrame
-    """
-    if not custom_times:
-        return times_df
-        
-    logging.info(f"开始更新 {len(custom_times)} 个Sheet的自定义阵列投入时间...")
-    result_df = times_df.copy()
-    failed_updates = []
 
-    for sheet_id, new_time in custom_times.items():
-        mask = result_df['sheet_id'] == sheet_id
-        if mask.any():
-            result_df.loc[mask, 'array_input_time'] = new_time
-            logging.info(f"已更新Sheet {sheet_id} 的阵列投入时间为 {new_time}")
-        else:
-            # 如果sheet_id不存在，创建新行
-            new_row = pd.DataFrame({
-                'sheet_id': [sheet_id],
-                'array_input_time': [new_time]
-            })
-            result_df = pd.concat([result_df, new_row], ignore_index=True)
-            logging.info(f"已为Sheet {sheet_id} 创建新的阵列投入时间记录: {new_time}")
-
-    # 验证所有自定义时间是否都已应用
-    applied_times = result_df.set_index('sheet_id')['array_input_time'].to_dict()
-    missing_updates = [sid for sid in custom_times if sid not in applied_times]
-    
-    if missing_updates:
-        error_msg = f"以下Sheet的自定义时间未能成功应用: {missing_updates}"
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
-    return result_df
 
 def load_array_input_times(
     db_manager: 'DatabaseManager', 
@@ -163,7 +147,7 @@ def load_array_input_times(
         
         # 根据开关决定是否应用自定义时间
         if enable_custom_times and custom_times:
-            times_df = update_sheet_array_times(times_df, custom_times)
+            times_df = _update_sheet_array_times(times_df, custom_times)
         
         logging.info(f"成功提取 {len(times_df)} 条Sheet的阵列投入时间记录。")
         return times_df
@@ -171,6 +155,52 @@ def load_array_input_times(
     except Exception as e:
         logging.error(f"提取阵列投入时间时发生错误: {e}")
         return pd.DataFrame()
+
+def _update_sheet_array_times(
+    times_df: pd.DataFrame,
+    custom_times: Optional[Dict[str, str]] = None  # 修改类型注解
+) -> pd.DataFrame:
+    """
+    更新指定sheet的array_input_time
+    
+    Args:
+        times_df: 原始时间DataFrame
+        custom_times: sheet_id到新时间的映射字典，格式为 {'sheet_id': 'YYYYMMDD'}
+        
+    Returns:
+        更新后的DataFrame
+    """
+    if not custom_times:
+        return times_df
+        
+    logging.info(f"开始更新 {len(custom_times)} 个Sheet的自定义阵列投入时间...")
+    result_df = times_df.copy()
+    failed_updates = []
+
+    for sheet_id, new_time in custom_times.items():
+        mask = result_df['sheet_id'] == sheet_id
+        if mask.any():
+            result_df.loc[mask, 'array_input_time'] = new_time
+            logging.info(f"已更新Sheet {sheet_id} 的阵列投入时间为 {new_time}")
+        else:
+            # 如果sheet_id不存在，创建新行
+            new_row = pd.DataFrame({
+                'sheet_id': [sheet_id],
+                'array_input_time': [new_time]
+            })
+            result_df = pd.concat([result_df, new_row], ignore_index=True)
+            logging.info(f"已为Sheet {sheet_id} 创建新的阵列投入时间记录: {new_time}")
+
+    # 验证所有自定义时间是否都已应用
+    applied_times = result_df.set_index('sheet_id')['array_input_time'].to_dict()
+    missing_updates = [sid for sid in custom_times if sid not in applied_times]
+    
+    if missing_updates:
+        error_msg = f"以下Sheet的自定义时间未能成功应用: {missing_updates}"
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+    
+    return result_df
 
 def load_excel_report(file_name: str, sheet_name: str) -> pd.DataFrame | None:
     """
