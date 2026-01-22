@@ -12,7 +12,7 @@ from vivo_project.core.trend_regulator import TrendRegulator
 @staticmethod
 def create_mwd_trend_data(
     panel_details_df: pd.DataFrame, 
-    ema_span: int = 4,
+    ema_span: int = 14,
     scaling_factor: float = 1.2
 ) -> Dict[str, pd.DataFrame] | None:
     """
@@ -58,8 +58,8 @@ def create_mwd_trend_data(
 
         # 2. 生成 Wide Format 的月度/周度原始数据 (纯聚合，无修饰)
         # ------------------------------------------------------------------
-        monthly_agg = _aggregate_group_monthly_raw(daily_summary, target_defects, today)
-        weekly_agg = _aggregate_group_weekly_raw(daily_summary, target_defects, today)
+        monthly_agg = _aggregate_group_monthly_raw(daily_summary, today)
+        weekly_agg = _aggregate_group_weekly_raw(daily_summary, today)
         
         # 3. 智能调节 (Smart Regulation)
         # ------------------------------------------------------------------
@@ -80,10 +80,6 @@ def create_mwd_trend_data(
         
         # 5. 格式化输出 (Format)
         # ------------------------------------------------------------------
-        results = {}
-        rate_to_group_map = {f"{group.lower()}_rate": group for group in target_defects}
-        rate_cols = list(rate_to_group_map.keys())
-        
         # 定义内部格式化函数 (复用逻辑)
         def _format_df(agg_df, time_format_str):
             # 重算 Rate (因为 Count 可能在 Step 3 或 4 被修改了)
@@ -110,8 +106,12 @@ def create_mwd_trend_data(
             melted['defect_group'] = melted['defect_group_raw'].map(rate_to_group_map)
             return melted.sort_values(by='time_period')
 
+        results = {}
+        rate_to_group_map = {f"{group.lower()}_rate": group for group in target_defects}
+        rate_cols = list(rate_to_group_map.keys())
         results['monthly'] = _format_df(monthly_final, '%Y-%m月')
         results['weekly'] = _format_df(weekly_final, 'ISO')
+        results['daily_full'] = _format_df(daily_summary, '%Y-%m-%d')
         
         # 日度数据直接格式化 (日度通常不做手动覆盖，保持真实)
         seven_days_ago = today - relativedelta(days=6)
@@ -188,8 +188,8 @@ def _apply_manual_overrides(
 @staticmethod
 def create_code_level_mwd_trend_data(
     panel_details_df: pd.DataFrame,
-    ema_span: int = 4,          
-    scaling_factor: float = 0.8 
+    ema_span: int,          
+    scaling_factor: float
 ) -> Dict[str, pd.DataFrame] | None:
     """
     (V5.1 - 最终防线版)
@@ -268,7 +268,8 @@ def create_code_level_mwd_trend_data(
         results = {}
         results['monthly'] = _format_code_df(monthly_final, '%Y-%m月')
         results['weekly'] = _format_code_df(weekly_final, 'ISO')
-        
+        results['daily_full'] = _format_code_df(base_daily_df, '%Y-%m-%d')
+
         # 日度格式化 (过滤最近7天)
         seven_days_ago = today - relativedelta(days=6)
         daily_data_ui = base_daily_df[base_daily_df['warehousing_time'] >= seven_days_ago].copy()

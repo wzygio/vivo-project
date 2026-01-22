@@ -8,7 +8,7 @@ from pathlib import Path
 from dateutil.relativedelta import relativedelta
 
 # --- Config & Infra ---
-from vivo_project.config import CONFIG, RESOURCE_DIR
+from vivo_project.config import CONFIG, RESOURCE_DIR, PROJECT_ROOT
 from vivo_project.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
@@ -51,9 +51,30 @@ class YieldAnalysisService:
         cls._start_date = end_date - relativedelta(months=3)
         logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
 
+    # 在 YieldAnalysisService 类内部添加
+    @staticmethod
+    def _get_core_revision() -> float:
+        """
+        [热重载核心] 获取 Core 层代码的最新修改时间戳。
+        这就像给缓存加了一个“版本号”，一旦 Core 代码修改，这个值就会变。
+        """
+        try:
+            # 获取 core 目录的路径
+            core_dir = Path(PROJECT_ROOT) / "src" / "vivo_project" / "core"
+            # 获取该目录下所有 .py 文件的最大 mtime
+            max_mtime = 0.0
+            if core_dir.exists():
+                for f in core_dir.glob("*.py"):
+                    mtime = f.stat().st_mtime
+                    if mtime > max_mtime:
+                        max_mtime = mtime
+            return max_mtime
+        except Exception:
+            return 0.0
+        
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_raw_panel_details() -> pd.DataFrame:
+    def get_raw_panel_details(_core_revision: float = 0.0) -> pd.DataFrame:
         """[L1 Cache] 从数据库加载原始数据 (单一真相来源)"""
         logging.info("--- [L1 Cache Miss] 加载原始 Panel 数据... ---")
         
@@ -80,7 +101,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_modified_panel_details() -> pd.DataFrame:
+    def get_modified_panel_details(_core_revision: float = 0.0) -> pd.DataFrame:
         """[L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据"""
         # [修改] 在这里读取配置，并传给 L1 Cache 方法
         
@@ -107,7 +128,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_mwd_trend_data() -> Dict[str, pd.DataFrame] | None:
+    def get_mwd_trend_data(_core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: return None
@@ -116,7 +137,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_current_month_trend_data() -> pd.DataFrame | None:
+    def get_current_month_trend_data(_core_revision: float = 0.0) -> pd.DataFrame | None:
         """获取当月日度趋势"""
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: return None
@@ -125,20 +146,20 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_code_level_trend_data(ema_span: int = 7) -> Dict[str, pd.DataFrame] | None:
+    def get_code_level_trend_data(ema_span: int = 7, scaling_factor: float = 0.8, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
-        return create_code_level_mwd_trend_data(panel_details_df=panel_df, ema_span=ema_span)
+        return create_code_level_mwd_trend_data(panel_details_df=panel_df, ema_span=ema_span, scaling_factor=scaling_factor)
 
     # ==========================================================================
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
     # ==========================================================================
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_sheet_defect_rates() -> Dict[str, Any] | None:
+    def get_sheet_defect_rates(_core_revision: float = 0.0) -> Dict[str, Any] | None:
         """计算 Sheet 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
@@ -149,7 +170,7 @@ class YieldAnalysisService:
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
+        mwd_code_data =  YieldAnalysisService.get_code_level_trend_data(ema_span=60, scaling_factor=0.7)
 
         # [新增] 3. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines()
@@ -165,7 +186,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_lot_defect_rates() -> Dict[str, Any] | None:
+    def get_lot_defect_rates(_core_revision: float = 0.0) -> Dict[str, Any] | None:
         """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -178,7 +199,7 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(ema_span=60)
+        mwd_code_data =  YieldAnalysisService.get_code_level_trend_data(ema_span=60, scaling_factor=0.7)
         # [新增] 4. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines()
 
@@ -197,7 +218,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_mapping_data() -> pd.DataFrame:
+    def get_mapping_data(_core_revision: float = 0.0) -> pd.DataFrame:
         """准备 Mapping 数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details()
         if panel_df.empty: return pd.DataFrame()

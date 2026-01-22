@@ -1,7 +1,16 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import sys
+import sys, logging
+
+# --- [新增] 热重载机制 ---
+# 只有在开发模式下才开启，避免生产环境性能损耗
+ENABLE_HOT_RELOAD = True 
+
+if ENABLE_HOT_RELOAD:
+    # 必须在 import 业务服务之前执行清理
+    from vivo_project.utils.reloader import deep_reload_modules
+    deep_reload_modules()
 
 # --- 1. 配置与初始化 ---
 from vivo_project.config import CONFIG
@@ -39,11 +48,14 @@ render_page_header("📊 入库不良率分析看板")
 
 # --- 2 全局数据加载 ---
 with st.spinner("正在加载全维度分析数据..."):
+    current_revision = YieldAnalysisService._get_core_revision()
+
     # 并行加载所有服务数据
-    mwd_group_data = YieldAnalysisService.get_mwd_trend_data()
-    mwd_code_data = YieldAnalysisService.get_code_level_trend_data()
-    lot_data = YieldAnalysisService.get_lot_defect_rates()
-    sheet_data = YieldAnalysisService.get_sheet_defect_rates()
+    mwd_group_data = YieldAnalysisService.get_mwd_trend_data(_core_revision=current_revision)
+    mwd_code_data = YieldAnalysisService.get_code_level_trend_data(_core_revision=current_revision)
+    lot_data = YieldAnalysisService.get_lot_defect_rates(_core_revision=current_revision)
+    sheet_data = YieldAnalysisService.get_sheet_defect_rates(_core_revision=current_revision)
+
     mapping_data = YieldAnalysisService.get_mapping_data()
     warning_lines = YieldAnalysisService.load_static_warning_lines()
 

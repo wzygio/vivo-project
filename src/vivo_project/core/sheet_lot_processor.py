@@ -104,12 +104,6 @@ def calculate_sheet_defect_rates(
             desc_to_group_map=desc_map
         )
 
-        # 窗口过滤
-        start_str = (start_date + relativedelta(months=1)).strftime('%Y%m%d')
-        for grp, df in final_code_details.items():
-            if not df.empty and 'warehousing_time' in df.columns:
-                final_code_details[grp] = df[df['warehousing_time'] >= start_str].copy()
-
         # --- 7. 重聚合 (Re-aggregate) ---
         # 基于 "截断 + 覆盖" 后的 Code 数据，重新计算 Group 汇总
         base_info_reagg = raw_results['group_level_summary_for_chart']
@@ -219,12 +213,6 @@ def calculate_lot_defect_rates(
             entity_id_col='lot_id',
             desc_to_group_map=desc_map
         )
-
-        # 窗口过滤
-        start_str = (start_date + relativedelta(months=1)).strftime('%Y%m%d')
-        for grp, df in final_code_details.items():
-            if not df.empty and 'warehousing_time' in df.columns:
-                final_code_details[grp] = df[df['warehousing_time'] >= start_str].copy()
 
         # --- 7. 重聚合 ---
         base_info_reagg = raw_lot_results['group_level_summary_for_chart']

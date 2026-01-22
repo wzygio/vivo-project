@@ -15,9 +15,9 @@ data_source:
   work_order_types:
     - "ESLC" # 量产
     - "P" # 量产
-    # - "LCFG" # 量产返工
-    # - "SLCFG" # 试量产返工
-    # - "SYZLC" # 实验转量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
 
 # 本地文件读取
 paths:
@@ -60,6 +60,12 @@ processing:
       '2026-01': 0.0013
 
   group_weekly_values:
+    Array_Line:
+      '2025-W02': 0.01
+    Array_Pixel:
+      '2025-W02': 0.022
+    OLED_Mura:
+      '2025-W02': 0.0016
 
   # 2. Code 级修正配置
   code_monthly_values:
@@ -110,11 +116,11 @@ processing:
         - { type: 'col', value: ['A0', 'B0', 'S0'] }
 
   sheet_hotspot_config: 
-      enable: True,
-      random_seed: 2025,
+      enable: True
+      random_seed: 2025
       hide_hotspot_config: {
-          'fluctuation_sheet': 0.2,  
-          'fluctuation_lot': 0.1,
+          'fluctuation_sheet': 0.3,  
+          'fluctuation_lot': 0.2,
       }
 
 # UI界面相关的配置
