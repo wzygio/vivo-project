@@ -3,39 +3,54 @@ import os
 from pathlib import Path
 
 # --- 1. 初始化与配置 ---
-from vivo_project.config import CONFIG, PROJECT_ROOT # 引入 PROJECT_ROOT 用于绝对路径
-from vivo_project.utils.app_setup import AppSetup
-# 使用 cache_resource 避免重复初始化
-@st.cache_resource
-def init_global_resources():
-    AppSetup.initialize_app()
-init_global_resources()
+from vivo_project.utils.session_manager import SessionManager
+from vivo_project.config import ConfigLoader
+# 移除 AppSetup，由 SessionManager 接管配置上下文
 
 from vivo_project.application.ppt_service import PPTService
 from vivo_project.application.pdf_service import PDFService
 from vivo_project.app.components.components import render_page_header
 
+# 页面基础设置
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-render_page_header("📋 解析资料")
+
+# [Refactor] 1. 渲染侧边栏 (处理 Session 状态)
+SessionManager.render_product_selector_sidebar()
+
+# [Refactor] 2. 获取上下文
+active_config = SessionManager.get_active_config()
+project_root = ConfigLoader.get_project_root()
+# resource_dir = SessionManager.get_resource_dir() # 本页暂未使用 resource_dir，主要用 project_root
+
+# [Refactor] 3. 渲染页头 (注入 config)
+render_page_header("📋 解析资料", active_config)
 
 # --- 2. 定义常量与路径 ---
-DOC_SOURCE_DIR = "resources/analysis_files"
-IMG_OUTPUT_DIR = "data/doc_cache"
+# 定义相对于根目录的路径
+DOC_SOURCE_REL_DIR = "resources/analysis_files"
+IMG_OUTPUT_REL_DIR = "data/doc_cache"
 
-if not os.path.exists(DOC_SOURCE_DIR):
-    os.makedirs(DOC_SOURCE_DIR)
+# 构建绝对路径用于文件操作
+ABS_DOC_SOURCE_DIR = project_root / DOC_SOURCE_REL_DIR
+
+if not ABS_DOC_SOURCE_DIR.exists():
+    ABS_DOC_SOURCE_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- 3. 状态管理 ---
 if 'viewing_file' not in st.session_state:
     st.session_state.viewing_file = None
 
 # --- 辅助函数 ---
-def get_service_by_filename(filename, output_dir):
+def get_service_by_filename(filename, output_dir_name):
+    """
+    工厂函数：根据文件名后缀返回对应的 Service 实例
+    [Refactor] 注入 project_root
+    """
     ext = os.path.splitext(filename)[1].lower()
     if ext in ['.ppt', '.pptx']:
-        return PPTService(output_dir), "PPT"
+        return PPTService(output_dir_name, project_root), "PPT"
     elif ext in ['.pdf']:
-        return PDFService(output_dir), "PDF"
+        return PDFService(output_dir_name, project_root), "PDF"
     return None, None
 
 # ==============================================================================
@@ -43,14 +58,19 @@ def get_service_by_filename(filename, output_dir):
 # ==============================================================================
 st.caption("下载或在线预览服务器上的分析报告 (支持 PPTX 和 PDF)。")
 
-all_files = [f for f in os.listdir(DOC_SOURCE_DIR) if f.lower().endswith(('.pptx', '.ppt', '.pdf'))]
+# [Refactor] 使用绝对路径读取目录
+if ABS_DOC_SOURCE_DIR.exists():
+    all_files = [f for f in os.listdir(ABS_DOC_SOURCE_DIR) if f.lower().endswith(('.pptx', '.ppt', '.pdf'))]
+else:
+    all_files = []
 
 if not all_files:
-    st.warning(f"文件夹 `{DOC_SOURCE_DIR}` 为空，请上传文件。")
+    st.warning(f"文件夹 `{DOC_SOURCE_REL_DIR}` 为空，请上传文件。")
 else:
     st.markdown("### 资料列表")
     for doc_file in all_files:
-        file_path = os.path.join(DOC_SOURCE_DIR, doc_file)
+        # 绝对路径用于文件读取
+        abs_file_path = ABS_DOC_SOURCE_DIR / doc_file
         ext = os.path.splitext(doc_file)[1].lower()
         
         if ext == '.pdf':
@@ -64,7 +84,7 @@ else:
                 st.markdown(f"**{icon} {doc_file}**")
             
             with col_dl:
-                with open(file_path, "rb") as f:
+                with open(abs_file_path, "rb") as f:
                     st.download_button("⬇️ 下载", f, file_name=doc_file, mime=mime_type, key=f"dl_{doc_file}", use_container_width=True)
             
             with col_view:
@@ -72,16 +92,18 @@ else:
                 if st.button("👁️ 查看", key=f"view_{doc_file}", use_container_width=True):
                     st.session_state.viewing_file = doc_file
                     
-                    service, doc_type = get_service_by_filename(doc_file, IMG_OUTPUT_DIR)
+                    # 实例化 Service (注入相对输出路径)
+                    service, doc_type = get_service_by_filename(doc_file, IMG_OUTPUT_REL_DIR)
+                    
                     if service:
-                        rel_path = os.path.join(DOC_SOURCE_DIR, doc_file)
+                        # Service 内部使用的是相对于 project_root 的路径
+                        rel_path_str = os.path.join(DOC_SOURCE_REL_DIR, doc_file)
                         
-                        # [核心修复] Spinner 块独立
                         success = False
                         with st.spinner(f"正在启动 {doc_type} 引擎解析，请稍候..."):
-                            success = service.convert_to_images(rel_path)
+                            # 传入相对路径字符串
+                            success = service.convert_to_images(rel_path_str)
                         
-                        # [核心修复] Rerun 必须在 Spinner 上下文之外调用
                         if success:
                             st.rerun()
                         else:
@@ -105,16 +127,22 @@ if st.session_state.viewing_file:
             st.session_state.viewing_file = None
             st.rerun()
 
-    service, _ = get_service_by_filename(current_file, IMG_OUTPUT_DIR)
+    # 获取 Service 实例来读取图片
+    service, _ = get_service_by_filename(current_file, IMG_OUTPUT_REL_DIR)
     
     if service:
         images = service.get_images()
         if images:
             st.info(f"共加载 {len(images)} 页内容")
             for idx, img_path in enumerate(images):
-                # [核心优化] 使用绝对路径显示图片，防止相对路径在不同环境下解析错误
-                # 确保路径是字符串格式
-                abs_img_path = str(Path(PROJECT_ROOT) / img_path)
-                st.image(abs_img_path, caption=f"Page {idx+1}", use_container_width=True)
+                # [Refactor] 使用 project_root 构建绝对路径进行显示
+                # img_path 是相对于 output_dir 的或者包含了部分路径，get_images通常返回相对路径
+                # 假设 get_images 返回的是相对于 project_root 或者 output_dir 的部分
+                # 查看 service 实现：它返回的是 glob 结果。
+                # 如果 glob 使用的是绝对路径 (project_root / output_dir)，则返回绝对路径。
+                # 如果 Service 内部 output_dir 是 absolute Path，则 glob 返回 absolute strings。
+                # 直接使用即可。
+                # 但为了保险 (st.image 有时对路径敏感)，确保它是字符串。
+                st.image(str(img_path), caption=f"Page {idx+1}", use_container_width=True)
         else:
             st.warning("缓存目录为空，请尝试重新点击“查看”。")

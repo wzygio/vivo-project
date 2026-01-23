@@ -1,6 +1,5 @@
 # src/vivo_project/app/pages/入库不良率BySheet明细表.py
 import streamlit as st
-from vivo_project.config import CONFIG
 
 # --- 辅助函数 ---
 def filter_by_multiple_ids(df, id_column, input_text, valid_ids):

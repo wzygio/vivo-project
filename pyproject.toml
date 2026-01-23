@@ -20,6 +20,7 @@ dependencies = [
     "pyarrow>=21.0.0",       # Parquet 快照支持
     "altair>=5.5.0",         # Streamlit 辅助绘图
     "pymupdf>=1.26.7",
+    "pydantic-settings>=2.12.0",
 ]
 
 [tool.uv]

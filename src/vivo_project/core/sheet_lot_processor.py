@@ -1,18 +1,16 @@
 # src/vivo_project/core/sheet_lot_processor.py
 import pandas as pd
 import numpy as np
-import logging, sys, io
+import logging
+import comtypes.client
+import comtypes
 from pathlib import Path
 from typing import Dict, Any, Optional
 from collections import defaultdict
-import comtypes.client
-import comtypes
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 
-from vivo_project.config import CONFIG, PROJECT_ROOT, RESOURCE_DIR
-from vivo_project.utils.utils import save_dict_to_excel
-
+# [Refactor] 移除全局 CONFIG, PROJECT_ROOT, RESOURCE_DIR
+from vivo_project.config_model import AppConfig
 
 # ==============================================================================
 #             ByCode计算Sheet级不良率
@@ -23,6 +21,8 @@ def calculate_sheet_defect_rates(
     array_input_times_df: pd.DataFrame,
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     start_date: datetime,
+    config: AppConfig,          # [Refactor] 注入配置
+    resource_dir: Path,         # [Refactor] 注入资源路径
     warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
     """
@@ -62,18 +62,16 @@ def calculate_sheet_defect_rates(
         if not raw_results: raise Exception("原始计算失败")
 
         # --- 4. 模拟数据 ---
-        sim_code_details = _simulate_concentration(raw_results, mwd_code_data, 'sheet_id')
+        # [Refactor] 传入 config.processing
+        sim_code_details = _simulate_concentration(raw_results, mwd_code_data, config.processing, 'sheet_id')
         if not isinstance(sim_code_details, dict): 
             sim_code_details = raw_results['code_level_details']
         
-        # 将模拟后的 Code 数据回填到 raw_results 中，为截断做准备
         current_results = raw_results.copy()
         current_results['code_level_details'] = sim_code_details
 
-        # --- 5. [调整顺序] 应用截断 (Capping) ---
-        # 说明：先让系统自动把数据限制在 Spec 范围内
-        config = CONFIG.get('processing', {})
-        capping_cfg = config.get('defect_capping', {})
+        # --- 5. 应用截断 (Capping) ---
+        capping_cfg = config.processing.get('defect_capping', {})
         
         if capping_cfg.get('enable', True):
             capped_results = _apply_defect_capping(
@@ -82,30 +80,36 @@ def calculate_sheet_defect_rates(
                 code_thresholds=capping_cfg.get('code_thresholds', {'upper': 1, 'lower': 0.001}),
                 warning_lines=warning_lines or {}
             )
-            # 获取截断后的 Code 明细
             current_code_details = capped_results['code_level_details']
         else:
             current_code_details = sim_code_details
 
-        # --- 6. [调整顺序] 应用覆盖 (Override) ---
-        # 说明：人工覆盖是最高指令，覆盖后的数据不再受截断限制
-        override_cfg = CONFIG.get('paths', {}).get('rate_override_config', {})
+        # --- 6. 应用覆盖 (Override) ---
+        # [Refactor] 从 config.paths 中获取 FileResource 对象
+        override_res = config.paths.get('rate_override_config')
+        
+        override_file_path = None
+        override_sheet_name = ""
+        
+        if override_res:
+             override_file_path = resource_dir / override_res.file_name
+             override_sheet_name = override_res.sheet_name or ""
+        
         override_df, _ = _load_override_excel(
-            override_cfg.get('override_file', ''), 
-            override_cfg.get('override_sheet_name', '')
+            override_file_path, 
+            override_sheet_name
         )
         
         desc_map = _get_desc_to_group_map(panel_details_df)
         
         final_code_details = _override_rates(
-            simulated_code_details_dict=current_code_details, # 输入已截断的数据
+            simulated_code_details_dict=current_code_details,
             override_data_df=override_df,
             entity_id_col='sheet_id',
             desc_to_group_map=desc_map
         )
 
         # --- 7. 重聚合 (Re-aggregate) ---
-        # 基于 "截断 + 覆盖" 后的 Code 数据，重新计算 Group 汇总
         base_info_reagg = raw_results['group_level_summary_for_chart']
         if base_info_reagg.index.name != 'sheet_id': base_info_reagg = base_info_reagg.reset_index()
 
@@ -120,7 +124,7 @@ def calculate_sheet_defect_rates(
             "group_level_summary_for_table": ui_df,
             "group_level_summary_for_chart": chart_df,
             "code_level_details": final_code_details,
-            "full_sheet_base_info": sheet_base # 保留原始全量信息
+            "full_sheet_base_info": sheet_base 
         }
         
         logging.info("Sheet级计算完成。")
@@ -140,10 +144,12 @@ def calculate_lot_defect_rates(
     sheet_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     start_date: datetime,
+    config: AppConfig,
+    resource_dir: Path,
     warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
     """
-    (V4.5 - 逻辑重构) 顺序: 基础计算 -> 过滤 -> 原始 -> [模拟] -> [截断] -> [覆盖] -> 重聚合
+    (V4.5 - 逻辑重构)
     """
     logging.info("开始Lot级计算 (截断 -> 覆盖 模式)...")
 
@@ -171,15 +177,14 @@ def calculate_lot_defect_rates(
         if not raw_lot_results: raise Exception("Lot原始计算失败")
 
         # --- 4. 模拟 ---
-        sim_lot_codes = _simulate_concentration(raw_lot_results, mwd_code_data, 'lot_id')
+        sim_lot_codes = _simulate_concentration(raw_lot_results, mwd_code_data, config.processing, 'lot_id')
         if not isinstance(sim_lot_codes, dict): sim_lot_codes = raw_lot_results['code_level_details']
         
         current_lot_results = raw_lot_results.copy()
         current_lot_results['code_level_details'] = sim_lot_codes
 
-        # --- 5. [调整顺序] 截断 (Capping) ---
-        config = CONFIG.get('processing', {})
-        capping_cfg = config.get('defect_capping', {})
+        # --- 5. 截断 (Capping) ---
+        capping_cfg = config.processing.get('defect_capping', {})
         
         if capping_cfg.get('enable', True):
             capped_results = _apply_defect_capping(
@@ -192,13 +197,21 @@ def calculate_lot_defect_rates(
         else:
             current_code_details = sim_lot_codes
 
-        # --- 6. [调整顺序] 覆盖 (Override) ---
-        override_cfg = CONFIG.get('paths', {}).get('rate_override_config', {})
+        # --- 6. 覆盖 (Override) ---
+        override_res = config.paths.get('rate_override_config')
+        
+        override_file_path = None
+        override_sheet_name = ""
+        
+        if override_res:
+             override_file_path = resource_dir / override_res.file_name
+             override_sheet_name = override_res.sheet_name or ""
+
         override_sheet_df, _= _load_override_excel(
-            override_cfg.get('override_file', ''), 
-            override_cfg.get('override_sheet_name', '')
+            override_file_path, 
+            override_sheet_name
         )
-        # 计算 Lot 平均覆盖值
+        
         override_lot_avg = _calculate_lot_override_rate_heuristic(
             override_df=override_sheet_df,
             lot_base_info_df=lot_base,
@@ -208,7 +221,7 @@ def calculate_lot_defect_rates(
         desc_map = _get_desc_to_group_map(panel_details_df)
         
         final_code_details = _override_rates(
-            simulated_code_details_dict=current_code_details, # 输入已截断数据
+            simulated_code_details_dict=current_code_details,
             override_data_df=override_lot_avg,
             entity_id_col='lot_id',
             desc_to_group_map=desc_map
@@ -234,7 +247,6 @@ def calculate_lot_defect_rates(
     except Exception as e:
         logging.error(f"Lot级计算异常: {e}", exc_info=True)
         return None
-
 
 # ==============================================================================
 #                      辅助函数：计算数据
@@ -472,6 +484,7 @@ def _prepare_code_level_details(
                 code_level_details_dict[group] = final_code_df_subset
 
     return code_level_details_dict
+
 # ==============================================================================
 #                      辅助函数：模拟数据
 # ==============================================================================
@@ -479,18 +492,18 @@ def _prepare_code_level_details(
 def _simulate_concentration(
     raw_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
+    processing_config: Dict[str, Any],  # [Refactor] 接收配置字典
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V2.8 - 调度优化] 使用全量日度数据作为模拟底座。
+    [辅助函数 V2.8]
     """
     logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V2.8 - EMA 日度映射)...")
     try:
-        config = CONFIG.get('processing', {}).get('sheet_hotspot_config', {})
+        config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
             return raw_results['code_level_details']
         
-        # 获取波动配置
         cfg_hide = config.get('hide_hotspot_config', {})
         fluctuation_key = f"fluctuation_{entity_id_col.replace('_id', '')}"
         current_fluc = cfg_hide.get(fluctuation_key, 0.1)
@@ -504,13 +517,11 @@ def _simulate_concentration(
             logging.error("缺少基础汇总数据，模拟终止。")
             return sim_code_details
 
-        # 遍历计算
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
             
             processed_codes_list = []
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
-                # [修改] 传入完整的 mwd_code_data 字典
                 df_code_with_base = _add_daily_base_rate_to_df(
                     df_code=df_code, 
                     code_desc=code_desc, 
@@ -525,7 +536,6 @@ def _simulate_concentration(
                 df_code_processed['defect_rate'] = new_rates
                 df_code_processed['defect_panel_count'] = np.maximum(0, np.round(df_code_processed['defect_rate'] * df_code_processed['total_panels'])).astype(int)
                 
-                # 清理临时列
                 if 'daily_base_rate' in df_code_processed.columns:
                     df_code_processed = df_code_processed.drop(columns=['daily_base_rate'])
                 processed_codes_list.append(df_code_processed)
@@ -602,25 +612,21 @@ def _generate_simulated_rates(
 # ==============================================================================
 #                      辅助函数：覆盖数据
 # ==============================================================================
-
 @staticmethod
 def _load_override_excel(
-    override_file: str,
+    override_file_path: Optional[Path],
     override_sheet_name: str
 ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     """
-    [新-辅助函数 V2.0 - COM 终极方案] 
-    利用 Excel 应用程序本身来读取数据，完美绕过 BadZipFile 和文件锁。
+    [Refactor] 接收完整的 Path 对象
     """
-    logging.info(f"--- [COM Loader] 开始加载覆盖数据 (文件: '{override_file}') ---")
-
-    if not override_file or not override_sheet_name:
+    if not override_file_path or not override_sheet_name:
         return None, None
+        
+    logging.info(f"--- [COM Loader] 开始加载覆盖数据 (文件: '{override_file_path.name}') ---")
+    abs_path = str(override_file_path.resolve())
 
-    file_path = RESOURCE_DIR / override_file
-    abs_path = str(file_path.resolve()) # COM 必须使用绝对路径
-
-    if not file_path.exists():
+    if not override_file_path.exists():
         logging.error(f"[COM] 文件不存在: {abs_path}")
         return None, None
 
@@ -628,30 +634,27 @@ def _load_override_excel(
     try:
         comtypes.CoInitialize()
     except:
-        pass # 忽略重复初始化的错误
+        pass 
 
     excel_app = None
     workbook = None
     
     try:
+        # [逻辑保持不变，仅路径来源变了]
         logging.info("[COM] 正在启动 Excel 应用程序实例...")
-        # 1. 启动 Excel (静默模式)
         excel_app = comtypes.client.CreateObject("Excel.Application")
         excel_app.Visible = False
         excel_app.DisplayAlerts = False 
 
-        # 2. 打开工作簿 (这一步是关键，Excel 进程有权限读取文件)
         logging.info(f"[COM] 正在打开工作簿: {abs_path}")
         workbook = excel_app.Workbooks.Open(abs_path)
 
-        # 3. 找到指定 Sheet
         try:
             sheet = workbook.Sheets(override_sheet_name)
         except Exception:
             logging.error(f"[COM] 找不到名为 '{override_sheet_name}' 的 Sheet 页。")
             return None, None
 
-        # 4. 直接从内存获取数据 (二维元组)
         raw_data = sheet.UsedRange.Value()
         
         if not raw_data or len(raw_data) < 2:
@@ -660,21 +663,17 @@ def _load_override_excel(
 
         logging.info(f"[COM] 成功通过 Excel 提取数据，共 {len(raw_data)} 行。")
 
-        # 5. 转换为 Pandas DataFrame
         header = raw_data[0]
         rows = raw_data[1:]
         
-        # 规整数据，防止某些行为空导致长度不一致
         rows_cleaned = []
         for row in rows:
             rows_cleaned.append(list(row) if row else [None]*len(header))
 
         df = pd.DataFrame(rows_cleaned, columns=list(header))
 
-        # --- 以下是标准的数据清洗逻辑 ---
         expected_cols = ['lot_id', 'sheet_id', 'override_rate', 'defect_desc']
         
-        # 清理列名空格
         df.columns = [str(c).strip() for c in df.columns]
         
         missing_cols = [col for col in expected_cols if col not in df.columns]
@@ -682,22 +681,15 @@ def _load_override_excel(
             logging.error(f"[COM] 缺少必需列: {missing_cols}。实际列: {df.columns.to_list()}")
             return None, None
 
-        # 处理百分比/数值
         if df['override_rate'].dtype == 'object':
              df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%')
              df['override_rate'] = pd.to_numeric(df['override_rate'], errors='coerce')
-             # 如果 Excel 返回的是 '50' 代表 50%，则需要除以 100
-             # 如果 Excel 返回的是 0.5，则不需要
-             # 简单的启发式判断：如果大多数值 > 1，说明是百分数分子
              if df['override_rate'].mean() > 1.0:
                  df['override_rate'] = df['override_rate'] / 100.0
 
         df['defect_desc'] = df['defect_desc'].astype(str).str.strip()
-        
-        # 移除空行
         df.dropna(subset=expected_cols, inplace=True)
         
-        # 计算 Lot 平均值
         lot_override_df = df.groupby(['lot_id', 'defect_desc'])['override_rate'].mean().reset_index()
         lot_override_df.rename(columns={'override_rate': 'override_rate_avg'}, inplace=True)
 
@@ -708,7 +700,6 @@ def _load_override_excel(
         return None, None
 
     finally:
-        # 6. 清理资源
         if workbook:
             try:
                 workbook.Close(False)

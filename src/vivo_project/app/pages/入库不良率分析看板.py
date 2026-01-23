@@ -9,12 +9,17 @@ ENABLE_HOT_RELOAD = True
 
 if ENABLE_HOT_RELOAD:
     # 必须在 import 业务服务之前执行清理
-    from vivo_project.utils.reloader import deep_reload_modules
-    deep_reload_modules()
+    try:
+        from vivo_project.utils.reloader import deep_reload_modules
+        deep_reload_modules()
+    except ImportError:
+        pass
 
 # --- 1. 配置与初始化 ---
-from vivo_project.config import CONFIG
-from vivo_project.utils.app_setup import AppSetup
+# [Refactor] 移除全局 CONFIG 和 AppSetup
+from vivo_project.utils.session_manager import SessionManager
+from vivo_project.config import ConfigLoader
+
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
@@ -34,35 +39,51 @@ from vivo_project.app.charts.sheet_lot_chart import (
     parse_panel_id_to_coords
 )
 
-@st.cache_resource
-def init_global_resources():
-    AppSetup.initialize_app()
-init_global_resources()
-
-
 # ==============================================================================
 #  页面主逻辑
 # ==============================================================================
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-render_page_header("📊 入库不良率分析看板")
+
+# [Refactor] 1. 渲染侧边栏 (多产品切换入口)
+SessionManager.render_product_selector_sidebar()
+
+# [Refactor] 2. 获取上下文 (配置 & 路径)
+active_config = SessionManager.get_active_config()
+project_root = ConfigLoader.get_project_root()
+resource_dir = SessionManager.get_resource_dir()
+
+# [Refactor] 3. 渲染页头 (注入 config 用于刷新逻辑)
+render_page_header("📊 入库不良率分析看板", active_config)
 
 # --- 2 全局数据加载 ---
 with st.spinner("正在加载全维度分析数据..."):
-    current_revision = YieldAnalysisService._get_core_revision()
+    # [Refactor] 4. 获取核心版本号 (依赖注入 project_root)
+    current_revision = YieldAnalysisService._get_core_revision(project_root)
 
-    # 并行加载所有服务数据
-    mwd_group_data = YieldAnalysisService.get_mwd_trend_data(_core_revision=current_revision)
-    mwd_code_data = YieldAnalysisService.get_code_level_trend_data(_core_revision=current_revision)
-    lot_data = YieldAnalysisService.get_lot_defect_rates(_core_revision=current_revision)
-    sheet_data = YieldAnalysisService.get_sheet_defect_rates(_core_revision=current_revision)
+    # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
+    mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
+        active_config, resource_dir, _core_revision=current_revision
+    )
+    mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+        active_config, resource_dir, _core_revision=current_revision
+    )
+    lot_data = YieldAnalysisService.get_lot_defect_rates(
+        active_config, resource_dir, _core_revision=current_revision
+    )
+    sheet_data = YieldAnalysisService.get_sheet_defect_rates(
+        active_config, resource_dir, _core_revision=current_revision
+    )
 
-    mapping_data = YieldAnalysisService.get_mapping_data()
-    warning_lines = YieldAnalysisService.load_static_warning_lines()
+    mapping_data = YieldAnalysisService.get_mapping_data(
+        active_config, _core_revision=current_revision
+    )
+    warning_lines = YieldAnalysisService.load_static_warning_lines(
+        active_config, resource_dir
+    )
 
 # 基础校验
 if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
     st.error("部分核心数据加载失败 (数据为空或数据库连接异常)，请检查后台日志。")
-    # 可以在这里添加一个重试按钮或者显示具体哪个数据为空
     st.stop()
 
 # --- 常量 ---
@@ -70,34 +91,32 @@ COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
     'OLED_Mura': "#ff2828",   # Plotly默认的红色
     'Array_Pixel': "#6fb9ff",   # Plotly默认的浅蓝色
-    'array_Line_rate': "#1930ff",  # Plotly默认的蓝色
-    'oled_mura_rate': "#ff2828",   # Plotly默认的红色
-    'array_pixel_rate': "#6fb9ff"   # Plotly默认的浅蓝色
+    'array_Line_rate': "#1930ff",  
+    'oled_mura_rate': "#ff2828",   
+    'array_pixel_rate': "#6fb9ff"   
 }
 
-
-
 # ==============================================================================
-# [修改] 自动预警展示区 - 增加正常状态提示
+#  自动预警展示区
 # ==============================================================================
 with st.spinner("正在进行智能预警扫描..."):
+    # [Refactor] 6. 注入 config 到 AlertService
     alert_messages = AlertService.get_dashboard_alerts(
         mwd_group_data=mwd_group_data,
-        mwd_code_data=mwd_code_data
+        mwd_code_data=mwd_code_data,
+        config=active_config,
+        resource_dir=resource_dir
     )
 
 # 渲染结果
 if alert_messages:
-    # 有报警 -> 红色警告框
     with st.container(border=True):
         st.error(f"🚨 系统检测到 {len(alert_messages)} 项异常 (包含系统趋势 & 真实批次比对)")
         for msg in alert_messages:
             st.markdown(msg)
 else:
-    # 无报警 -> 绿色成功提示
     st.success("✅ 系统监测正常：未发现良率突变或批次异常。")
 
-# 加个分割线让视觉更清晰
 st.divider()
 
 # ==============================================================================
@@ -106,22 +125,17 @@ st.divider()
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
 
 if mwd_group_data:
-    # [修改点 3] 动态提取 Group 列表
-    # 优先从数据最全的 'monthly' 或 'daily' 中提取所有出现过的 Group
     available_groups = []
     
-    # 尝试从 monthly 数据中获取 Group 列表 (数据最概括)
+    # 尝试从 monthly 数据中获取 Group 列表
     ref_df = mwd_group_data.get('monthly')
     if ref_df is not None and not ref_df.empty:
-        # 提取并排序，保证下拉框和图例顺序一致
         available_groups = sorted(ref_df['defect_group'].unique().tolist())
     
-    # 定义动态的图表排序规则
     dynamic_category_orders = {"defect_group": available_groups}
 
     c1, _, _ = st.columns(3)
     with c1:
-        # 使用动态列表构建选项
         grp_opts = ["全部Group"] + available_groups
         sel_grp_macro = st.selectbox("选择Group:", grp_opts, key="macro_group_sel")
 
@@ -158,7 +172,7 @@ if mwd_group_data:
                 st.plotly_chart(
                     create_group_trend_chart(
                         df, title, show_slider, show_count, y_limit, COLOR_MAP, 
-                        dynamic_category_orders, # [修改点 4] 传入动态排序
+                        dynamic_category_orders, 
                         show_input_count=True
                     ),
                     use_container_width=True
@@ -176,11 +190,11 @@ st.subheader("2️⃣ 入库不良率分析 (Code Level)")
 # 1. 准备“全能候选池”
 master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 
-# 2. 渲染筛选器 (阈值设为0，因为已经在 prepare 阶段筛选过了)
+# 2. 渲染筛选器
 selection = create_code_selection_ui(
     source_data=master_df,
     key_prefix="unified_focus",
-    rate_threshold=0 # <--- 关键：信任 master_df 的筛选结果
+    rate_threshold=0 
 )
 
 # 如果没选 Code，下方不显示
@@ -201,16 +215,13 @@ st.markdown(f"### 🎯 当前分析: **{curr_code}**")
 with st.container(border=True):
     st.markdown("**A. 月周天趋势图**")
     
-    # 准备数据
     cd_m = slice_recent_data(mwd_code_data.get('monthly'), 3)
     cd_w = slice_recent_data(mwd_code_data.get('weekly'), 3)
     cd_d = slice_recent_data(mwd_code_data.get('daily'), 7)
     
-    # 过滤 Code
     filter_c = lambda df: df[df['defect_desc'] == curr_code] if df is not None else None
     cd_m, cd_w, cd_d = map(filter_c, [cd_m, cd_w, cd_d])
 
-    # 动态 Y 轴
     c_max = 0
     for df in [cd_m, cd_w, cd_d]:
         if df is not None and not df.empty:
@@ -219,7 +230,6 @@ with st.container(border=True):
 
     rc1, rc2, rc3 = st.columns(3)
 
-    # 统一配置三个图表的数据和参数
     chart_configs = [
         (cd_m, "月度", rc1),
         (cd_w, "周度", rc2),
@@ -240,9 +250,7 @@ with st.container(border=True):
 # ==============================================================================
 #  Row B: Lot 集中性 (批次维度) - 支持交互
 # ==============================================================================
-# 准备 Lot 数据
 lot_details = lot_data.get("code_level_details", {})
-# 展平并处理时间
 df_lot_all = pd.concat(lot_details.values(), ignore_index=True)
 df_lot_all['warehousing_time'] = pd.to_datetime(df_lot_all['warehousing_time'], format='%Y%m%d', errors='coerce')
 df_lot_curr = df_lot_all[df_lot_all['defect_desc'] == curr_code].copy()
@@ -256,7 +264,6 @@ df_lot_curr['month_str'] = df_lot_curr['warehousing_time'].dt.strftime('%Y-%m')
 with st.container(border=True):
     st.markdown("**B. Lot集中性 (点击蓝色柱体可查看 Sheet 分布)**")
     
-    # 筛选栏
     lc1, lc2, lc3 = st.columns(3)
     with lc1: 
         l_sort = st.selectbox("排序:", ["按入库时间(默认)", "按阵列投入时间", "按不良率(降序)"], key="u_lot_sort")
@@ -267,11 +274,9 @@ with st.container(border=True):
         l_weeks = sorted(df_lot_curr['week_label'].dropna().unique(), reverse=True)
         l_sel_w = st.selectbox("周别:", ["全部"] + l_weeks, key="u_lot_w")
 
-    # 应用筛选
     if l_sel_m != "全部": df_lot_curr = df_lot_curr[df_lot_curr['month_str'] == l_sel_m]
     if l_sel_w != "全部": df_lot_curr = df_lot_curr[df_lot_curr['week_label'] == l_sel_w]
 
-    # 应用排序
     if l_sort == "按不良率(降序)":
         df_lot_curr = df_lot_curr.sort_values('defect_rate', ascending=False)
         x_lbl = "Lot ID"
@@ -285,14 +290,11 @@ with st.container(border=True):
     if df_lot_curr.empty:
         st.warning("当前筛选条件下无 Lot 数据。")
     else:
-        # 绘图
         fig_lot = create_lot_defect_chart(
             df_lot_curr, x_lbl, df_lot_curr['lot_id'].tolist(), curr_warning
         )
-        # 交互逻辑
         event = st.plotly_chart(fig_lot, use_container_width=True, on_select="rerun", selection_mode="points")
         
-        # 捕获点击 -> 存入 Session -> 驱动下方的 Sheet 图
         if event and event.selection and event.selection["points"]: # type: ignore
             clicked_lot = event.selection["points"][0]["x"] # type: ignore
             if st.session_state.get("unified_sheet_lot_input") != clicked_lot:
@@ -308,28 +310,23 @@ with st.container(border=True):
     
     sc1, sc2, _ = st.columns([3, 3, 4])
     with sc1:
-        # 这个输入框既可以手动输，也会被上方图表点击自动填
         target_lot = st.text_input("当前分析 Lot ID:", key="unified_sheet_lot_input", help="点击上方柱图自动填充")
     
     if target_lot:
-        # 准备数据
         group_summary = sheet_data.get("group_level_summary_for_table")
         if group_summary is not None and not group_summary.empty:
-            # 简单清洗
             group_summary['warehousing_time'] = pd.to_datetime(group_summary['warehousing_time'], format='%Y%m%d', errors='coerce')
             rate_cols = [c for c in group_summary.columns if c.endswith('_rate') and c!='pass_rate']
             group_summary['total_defect_rate'] = group_summary[rate_cols].sum(axis=1)
             
-            # 筛选
             df_sheet = group_summary[group_summary['lot_id'] == target_lot]
             
             if df_sheet.empty:
                 st.warning(f"未找到 Lot '{target_lot}' 的 Sheet 数据。")
             else:
                 with sc2:
-                    # [修改] 移除 label_visibility="collapsed"，给一个正常的 label
                     s_sort = st.selectbox(
-                        "Sheet 排序规则:",  # 这里加上文字，高度自然就对齐了
+                        "Sheet 排序规则:",  
                         ["默认(投入时间)", "按不良率(降序)"], 
                         key="u_sheet_sort"
                     )
@@ -339,7 +336,6 @@ with st.container(border=True):
                 else:
                     df_sheet = df_sheet.sort_values('array_input_time')
                 
-                # 绘图
                 fig_sheet = create_sheet_stack_chart(
                     df_sheet, "Sheet ID", df_sheet['sheet_id'].tolist(), COLOR_MAP
                 )
@@ -365,8 +361,6 @@ with st.container(border=True):
             batches = sorted(df_map['batch_no'].unique())
             tabs = st.tabs([f"批次: {b}" for b in batches])
             
-            # 计算全局最大值，统一色阶
-            # 预计算所有矩阵以获取 Max
             matrices_cache = {}
             g_max = 0
             for b in batches:
@@ -379,7 +373,6 @@ with st.container(border=True):
                 matrices_cache[b] = mat
                 g_max = max(g_max, mat.max().max())
             
-            # 渲染
             for i, b in enumerate(batches):
                 with tabs[i]:
                     fig_map = create_mapping_heatmap(matrices_cache[b], f"批次 {b} 热力图", g_max)

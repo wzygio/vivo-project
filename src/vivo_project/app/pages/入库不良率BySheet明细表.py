@@ -7,13 +7,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 # --- 1. 初始化与配置 ---
-from vivo_project.config import CONFIG
-from vivo_project.utils.app_setup import AppSetup
-
-@st.cache_resource
-def init_global_resources():
-    AppSetup.initialize_app()
-init_global_resources()
+from vivo_project.utils.session_manager import SessionManager
+from vivo_project.config import ConfigLoader
 
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
@@ -21,10 +16,26 @@ from vivo_project.app.charts.sheet_details_chart import render_lot_id_filter, re
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-render_page_header("📈 入库不良率BySheet明细表")
+
+# [Refactor] 1. 渲染侧边栏
+SessionManager.render_product_selector_sidebar()
+
+# [Refactor] 2. 获取上下文
+active_config = SessionManager.get_active_config()
+project_root = ConfigLoader.get_project_root()
+resource_dir = SessionManager.get_resource_dir()
+
+# [Refactor] 3. 渲染页头 (注入 config)
+render_page_header("📈 入库不良率BySheet明细表", active_config)
 
 # --- 3. 加载数据 ---
-all_data = YieldAnalysisService.get_sheet_defect_rates()
+# [Refactor] 4. Service 注入
+core_rev = YieldAnalysisService._get_core_revision(project_root)
+all_data = YieldAnalysisService.get_sheet_defect_rates(
+    config=active_config, 
+    resource_dir=resource_dir, 
+    _core_revision=core_rev
+)
 
 # ==============================================================================
 #                      --- 模块1: Group不良率明细表 (By Sheet) ---
@@ -120,15 +131,14 @@ if all_data:
         # 1. 准备数据源
         all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
         
-        # 2. [关键] 预先筛选数据源，使其与主表保持一致
-        # 'sheet_ids' 是在模块2开头从 'final_filtered_df' 中获取的
+        # 2. 预先筛选数据源，使其与主表保持一致
         df_in_scope = all_codes_df[all_codes_df['sheet_id'].isin(sheet_ids)]
 
         # 3. 调用智能UI组件
         selected_code_info = create_code_selection_ui(
             source_data=df_in_scope,
-            key_prefix="sheet_focus",  # 唯一的key
-            rate_threshold=0.0005 # 沿用我们之前设置的阈值
+            key_prefix="sheet_focus", 
+            rate_threshold=0.0005 
         )
 
         # 4. 根据组件的选择结果进行后续操作

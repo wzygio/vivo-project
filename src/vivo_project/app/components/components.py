@@ -3,9 +3,15 @@ import pandas as pd
 import streamlit as st
 import logging, os
 from pathlib import Path
-from  vivo_project.config import CONFIG
+from typing import Dict, Any, Optional
 
-@st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
+# [Refactor] 引入配置模型
+from vivo_project.config_model import AppConfig
+
+# [Refactor] 定义默认缓存时间，替代原 CONFIG['application']['cache_ttl_hours']
+DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
+
+@st.cache_data(ttl=DEFAULT_CACHE_TTL)
 def calculate_warning_lines(mwd_code_data):
     """计算所有Code的警戒线值并缓存结果"""
     if mwd_code_data is None:
@@ -27,15 +33,18 @@ def calculate_warning_lines(mwd_code_data):
     return warning_lines
 
 
-def render_page_header(title: str):
+def render_page_header(title: str, config: AppConfig):
     """
     渲染统一的页面头部组件
-    布局：[ 标题 (Left) ] --------- [ 强制刷新按钮 (Right) ]
-    功能：点击刷新按钮会自动删除本地快照并清除 st.cache，触发重新拉取。
+    
+    Args:
+        title: 页面标题
+        config: 当前激活的配置对象 (AppConfig)，用于获取 snapshot_path
     """
     
-    # 1. 获取配置中的快照路径 (逻辑与 PanelRepository 保持一致)
-    processing_conf = CONFIG.get('processing', {})
+    # 1. 获取配置中的快照路径 (依赖注入)
+    # config.processing 是一个 Dict[str, Any]
+    processing_conf = config.processing
     snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
     snapshot_path = Path(snapshot_path_str).resolve()
 
@@ -54,7 +63,7 @@ def render_page_header(title: str):
         # B. 清除 Streamlit 内存缓存 (核心：逼迫 Service 重新运行计算逻辑)
         st.cache_data.clear()
         
-        # C. (可选) 如果使用了 st.cache_resource 也需要清除，通常 cache_data 够了
+        # C. (可选) 如果使用了 st.cache_resource 也需要清除
         st.cache_resource.clear()
         
         # D. 回调结束后，Streamlit 会自动检测到状态变化并 Rerun 整个页面
@@ -88,6 +97,9 @@ def create_code_selection_ui(
     """
     (V3.5 - 数据驱动版)
     完全基于 source_data 动态生成筛选器，不再强依赖 target_defect_groups 配置。
+    
+    [Refactor Note] 此函数逻辑主要依赖传入的 DataFrame 数据，不直接读取全局 CONFIG，
+    因此保持原样，仅增强类型提示兼容性。
     """
 
     # --- 1. 数据聚合 ---
@@ -99,16 +111,14 @@ def create_code_selection_ui(
         if all_dfs:
             processed_df = pd.concat(all_dfs, ignore_index=True)
 
-    # --- 2. [核心修改] 动态识别活跃的 Group ---
+    # --- 2. 动态识别活跃的 Group ---
     active_groups = []
     
     if processed_df is not None and not processed_df.empty:
         # 检查必要列
         if 'defect_group' in processed_df.columns and 'defect_desc' in processed_df.columns:
             # 从数据中提取存在的 Group，并排序
-            # dropna() 确保我们不处理良品或脏数据
             raw_groups = processed_df['defect_group'].dropna().unique()
-            # 过滤掉空字符串，并排序
             active_groups = sorted([g for g in raw_groups if str(g).strip() != ""])
         else:
             st.error(f"UI组件错误({key_prefix}): 数据源缺少 'defect_group' 或 'defect_desc' 列。")
@@ -148,7 +158,7 @@ def create_code_selection_ui(
                 else:
                     code_options_by_group[group_name] = ["---请选择---"]
 
-    # --- 4. [核心修改] 动态渲染 UI ---
+    # --- 4. 动态渲染 UI ---
     with st.container():
         # 标题栏：重置按钮
         header_cols = st.columns([0.95, 0.05])
@@ -161,7 +171,6 @@ def create_code_selection_ui(
                 st.rerun()
 
         # 内容栏：动态列数
-        # 如果 Group 太多 (>4)，可能需要考虑分行，这里暂时自适应
         cols_count = len(active_groups) if len(active_groups) > 0 else 1
         content_cols = st.columns(cols_count)
         

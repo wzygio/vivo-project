@@ -6,9 +6,10 @@ from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
+import io
 
-# --- Config & Infra ---
-from vivo_project.config import CONFIG, RESOURCE_DIR, PROJECT_ROOT
+# [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
+from vivo_project.config_model import AppConfig
 from vivo_project.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
@@ -29,11 +30,11 @@ from vivo_project.core.defect_modifier import (
 class YieldAnalysisService:
     """
     [应用服务层] YieldAnalysisService (V4.0 极速静态版)
-    
-    设计理念：
-    为了适应 Streamlit 的重运行机制，所有方法均为静态并进行缓存。
-    这确保了在下拉框切换等交互操作中，数据获取是瞬间完成的。
+    [Refactor Note] 
+    所有方法现在必须接收 `config` 和 `resource_dir` (或 `project_root`)。
+    Config 对象被放置在第一个参数位置，以确保 Streamlit 缓存机制能正确感知配置变化。
     """
+    
     # ==========================================================================
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
@@ -43,25 +44,19 @@ class YieldAnalysisService:
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
-        """
-        [新增] 允许外部注入结束时间 (例如用于回溯分析或跨年模拟)
-        注意：调用此方法后，建议执行 YieldAnalysisService.get_raw_panel_details.clear() 清除缓存
-        """
+        """允许外部注入结束时间"""
         cls._end_date = end_date
         cls._start_date = end_date - relativedelta(months=3)
         logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
 
-    # 在 YieldAnalysisService 类内部添加
     @staticmethod
-    def _get_core_revision() -> float:
+    def _get_core_revision(project_root: Path) -> float:
         """
         [热重载核心] 获取 Core 层代码的最新修改时间戳。
-        这就像给缓存加了一个“版本号”，一旦 Core 代码修改，这个值就会变。
+        [Refactor] 接收 project_root 路径。
         """
         try:
-            # 获取 core 目录的路径
-            core_dir = Path(PROJECT_ROOT) / "src" / "vivo_project" / "core"
-            # 获取该目录下所有 .py 文件的最大 mtime
+            core_dir = project_root / "src" / "vivo_project" / "core"
             max_mtime = 0.0
             if core_dir.exists():
                 for f in core_dir.glob("*.py"):
@@ -73,49 +68,65 @@ class YieldAnalysisService:
             return 0.0
         
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_raw_panel_details(_core_revision: float = 0.0) -> pd.DataFrame:
-        """[L1 Cache] 从数据库加载原始数据 (单一真相来源)"""
+    @st.cache_data(show_spinner=False)
+    def get_raw_panel_details(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
+        """
+        [L1 Cache] 从数据库加载原始 Panel 数据。
+        注意: TTL 由 cache_ttl_hours 决定，但静态装饰器无法动态读取 config。
+        建议在 UI 层调用 st.cache_data.clear() 或使用 session_state 管理强刷。
+        """
         logging.info("--- [L1 Cache Miss] 加载原始 Panel 数据... ---")
         
-        # 在静态方法内部实例化 Repo
-        repo = PanelRepository()
+        # 1. 提取仓库配置
+        processing_conf = config.processing
+        snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
+        # 假设 snapshot 位于项目根目录下，这里需要注意 snapshot_path 的解析方式。
+        # 暂时假定运行目录即为根目录，或者在 Repo 内部处理。
+        # 为了稳健，Repo 接收 Path 对象。
+        # 这里的路径相对性取决于 ConfigLoader 如何定义 root。
+        # 通常建议 snapshot_path 是相对路径，在 Repo 内部结合 root 使用，或者在这里结合 cwd。
+        # 这里为了简化，直接传 Path 对象。
+        snapshot_path = Path(snapshot_path_str) 
         
-        # [修改] 不再硬编码，而是使用类属性
+        use_snapshot = processing_conf.get('use_local_snapshot', True)
+
+        # 2. 实例化 Repo (注入配置)
+        repo = PanelRepository(
+            snapshot_path=snapshot_path,
+            use_snapshot=use_snapshot
+        )
+        
         end_date = YieldAnalysisService._end_date
         start_date = YieldAnalysisService._start_date
         
         logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
 
-        target_defect_groups = CONFIG['data_source']['target_defect_groups']
-        prod_code = CONFIG['data_source']['product_code']
-        work_orders = CONFIG['data_source']['work_order_types']
-
+        # 3. 提取查询参数
+        ds_config = config.data_source
+        
         return repo.get_panel_details(
             start_date=start_date.strftime('%Y-%m-%d'),
             end_date=end_date.strftime('%Y-%m-%d'),
-            product_code=prod_code,
-            work_order_types=work_orders,
-            target_defect_groups=target_defect_groups 
+            product_code=ds_config.product_code,
+            work_order_types=ds_config.work_order_types,
+            target_defect_groups=ds_config.target_defect_groups 
         )
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_modified_panel_details(_core_revision: float = 0.0) -> pd.DataFrame:
+    @st.cache_data(show_spinner=False)
+    def get_modified_panel_details(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
         """[L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据"""
-        # [修改] 在这里读取配置，并传给 L1 Cache 方法
         
-        # 1. 获取 L1 数据 (传入配置，确保缓存正确)
-        raw_df = YieldAnalysisService.get_raw_panel_details()
+        # 1. 获取 L1 数据 (传递 config)
+        raw_df = YieldAnalysisService.get_raw_panel_details(config, _core_revision)
         
         if raw_df.empty: return pd.DataFrame()
         
-        # 2. 应用修饰 (不再需要再次清洗，因为 L1 已经洗过了)
-        config = CONFIG.get('processing', {})
+        # 2. 应用修饰
         processed_df = raw_df.copy()
 
-        # 缺陷衰减
-        multipliers_config = config.get('defect_multipliers', {})
+        # 缺陷衰减 (从 config.processing 获取)
+        multipliers_config = config.processing.get('defect_multipliers', {})
         if multipliers_config:
             logging.info("应用缺陷衰减...")
             processed_df = apply_defect_multipliers(processed_df, multipliers_config)
@@ -127,81 +138,110 @@ class YieldAnalysisService:
     # ==========================================================================
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_mwd_trend_data(_core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    @st.cache_data(show_spinner=False)
+    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
         
-        return create_mwd_trend_data(panel_details_df=panel_df)
+        # [Refactor] 传入 config 和 resource_dir 给 Core 层
+        return create_mwd_trend_data(
+            panel_details_df=panel_df,
+            config=config,
+            resource_dir=resource_dir
+        )
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_current_month_trend_data(_core_revision: float = 0.0) -> pd.DataFrame | None:
+    @st.cache_data(show_spinner=False)
+    def get_current_month_trend_data(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame | None:
         """获取当月日度趋势"""
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
         
         return create_current_month_trend_data(panel_details_df=panel_df)
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_code_level_trend_data(ema_span: int = 7, scaling_factor: float = 0.8, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    @st.cache_data(show_spinner=False)
+    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 7, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
-        return create_code_level_mwd_trend_data(panel_details_df=panel_df, ema_span=ema_span, scaling_factor=scaling_factor)
+            
+        return create_code_level_mwd_trend_data(
+            panel_details_df=panel_df, 
+            config=config,
+            resource_dir=resource_dir,
+            ema_span=ema_span, 
+            scaling_factor=scaling_factor
+        )
 
     # ==========================================================================
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
     # ==========================================================================
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_sheet_defect_rates(_core_revision: float = 0.0) -> Dict[str, Any] | None:
+    @st.cache_data(show_spinner=False)
+    def get_sheet_defect_rates(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, Any] | None:
         """计算 Sheet 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
         # 1. 主数据
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
 
         # 2. 依赖数据
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids))
-        mwd_code_data =  YieldAnalysisService.get_code_level_trend_data(ema_span=60, scaling_factor=0.7)
+        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
+        
+        # 生成辅助的 MWD Code 数据 (用于模拟热点)
+        mwd_code_data = create_code_level_mwd_trend_data(
+            panel_details_df=panel_df, 
+            config=config,
+            resource_dir=resource_dir,
+            ema_span=30, 
+            scaling_factor=0.7
+        )
 
-        # [新增] 3. 加载警戒线配置
-        warning_lines = YieldAnalysisService.load_static_warning_lines()
+        # 3. 加载警戒线配置
+        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
 
-        # 4. 核心计算
+        # 4. 核心计算 (传入 config 和 resource_dir)
         return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
             array_input_times_df=array_times_df,
             mwd_code_data=mwd_code_data,
-            start_date=YieldAnalysisService._start_date, # 传入类属性 start_date
-            warning_lines=warning_lines  # [新增] 注入
+            start_date=YieldAnalysisService._start_date, 
+            config=config,
+            resource_dir=resource_dir,
+            warning_lines=warning_lines
         )
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_lot_defect_rates(_core_revision: float = 0.0) -> Dict[str, Any] | None:
+    @st.cache_data(show_spinner=False)
+    def get_lot_defect_rates(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, Any] | None:
         """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
         # 1. 主数据
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
 
-        # 2. 依赖 Sheet 结果
-        sheet_results = YieldAnalysisService.get_sheet_defect_rates()
+        # 2. 依赖 Sheet 结果 (传入 config)
+        sheet_results = YieldAnalysisService.get_sheet_defect_rates(config, resource_dir, _core_revision)
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data =  YieldAnalysisService.get_code_level_trend_data(ema_span=60, scaling_factor=0.7)
-        # [新增] 4. 加载警戒线配置
-        warning_lines = YieldAnalysisService.load_static_warning_lines()
+        mwd_code_data = create_code_level_mwd_trend_data(
+            panel_details_df=panel_df, 
+            config=config,
+            resource_dir=resource_dir,
+            ema_span=30, 
+            scaling_factor=0.7
+        )
+        
+        # 4. 加载警戒线配置
+        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
 
         # 5. 核心计算
         return calculate_lot_defect_rates(
@@ -209,7 +249,9 @@ class YieldAnalysisService:
             sheet_results=sheet_results,
             mwd_code_data=mwd_code_data,
             start_date=YieldAnalysisService._start_date,
-            warning_lines=warning_lines  # [新增] 注入
+            config=config,
+            resource_dir=resource_dir,
+            warning_lines=warning_lines
         )
 
     # ==========================================================================
@@ -217,10 +259,10 @@ class YieldAnalysisService:
     # ==========================================================================
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def get_mapping_data(_core_revision: float = 0.0) -> pd.DataFrame:
+    @st.cache_data(show_spinner=False)
+    def get_mapping_data(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
         """准备 Mapping 数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details()
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return pd.DataFrame()
         return prepare_mapping_data(panel_details_df=panel_df)
 
@@ -229,35 +271,57 @@ class YieldAnalysisService:
     # ==========================================================================
 
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def _get_array_times(lot_ids: Tuple[str, ...]) -> pd.DataFrame:
+    @st.cache_data(show_spinner=False)
+    def _get_array_times(lot_ids: Tuple[str, ...], config: AppConfig) -> pd.DataFrame:
         """独立的 Array Time 查询缓存"""
         if not lot_ids: return pd.DataFrame()
-        repo = PanelRepository()
-        custom_times = CONFIG['processing']['array_input_time']['custom_times']
+        
+        # 为了实例化 Repo，我们需要 snapshot_path，但 get_array_input_times 其实不依赖 snapshot。
+        # 这里我们仅为了满足 __init__ 签名传入 dummy path，或者从 config 获取。
+        processing_conf = config.processing
+        snapshot_path = Path(processing_conf.get('snapshot_path', 'dummy.parquet'))
+        
+        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=False)
+        
+        # 从 config 获取自定义时间
+        input_time_conf = processing_conf.get('array_input_time', {})
+        custom_times = input_time_conf.get('custom_times', {})
+        
         return repo.get_array_input_times(list(lot_ids), custom_times)
     
     @staticmethod
-    @st.cache_data(ttl=f"{CONFIG['application']['cache_ttl_hours']}h")
-    def load_static_warning_lines(file_name: str = CONFIG['paths']['static_warning_lines']['file_name'], sheet_name: str = CONFIG['paths']['static_warning_lines']['sheet_name']) -> Dict[str, Any]:
+    @st.cache_data(show_spinner=False)
+    def load_static_warning_lines(config: AppConfig, resource_dir: Path) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
-        1. 在内存中将 Excel 转换为 CSV 流（清洗格式）。
-        2. 使用全屏扫描算法 (Grid Search) 自动定位 Code 和 预警线 的坐标。
+        读取警戒线配置 (完全依赖注入)
         """
         try:
+            # [Refactor] 从 config.paths 获取 FileResource 对象
+            warning_res = config.paths.get('static_warning_lines')
+            if not warning_res:
+                logging.warning("Config 中未找到 'static_warning_lines' 配置。")
+                return {}
+
+            # 构建完整路径
+            file_path = resource_dir / warning_res.file_name
+            sheet_name = warning_res.sheet_name or "Sheet1"
+
+            if not file_path.exists():
+                logging.warning(f"警戒线文件不存在: {file_path}")
+                return {}
+
             # --- 步骤 1: 读取 Excel 并“降维”为 CSV ---
+            # 使用 openpyxl 引擎读取
             df_raw = pd.read_excel(
-                os.path.join(RESOURCE_DIR, file_name), 
+                file_path, 
                 header=None, 
                 dtype=str, 
                 engine='openpyxl',
                 sheet_name=sheet_name
             )
             
-            # [关键] 模拟“另存为 CSV”的过程：转为 CSV 字符串，再读回来
-            # 这会去除合并单元格的副作用，将空位填充为空字符串
-            import io
+            # [关键] 模拟“另存为 CSV”的过程
             csv_buffer = io.StringIO()
             df_raw.to_csv(csv_buffer, index=False, header=False)
             csv_buffer.seek(0)
@@ -267,8 +331,8 @@ class YieldAnalysisService:
 
             # --- 步骤 2: 使用固定的列位置 ---
             header_row_idx = 0  # 第一行
-            code_col_idx = 1    # B列（第二列，索引为1）
-            limit_col_idx = 5   # F列（第六列，索引为5）
+            code_col_idx = 1    # B列
+            limit_col_idx = 5   # F列
             
             # 验证表头内容
             code_header = str(df_clean.iloc[0, code_col_idx]).strip().lower()
@@ -277,26 +341,24 @@ class YieldAnalysisService:
             if code_header != 'code' or not any(keyword in limit_header for keyword in ['预警线', 'warning', 'limit']):
                 error_msg = f"表头验证失败：B列应为'Code'（实际：{code_header}），F列应包含'预警线'相关关键词（实际：{limit_header}）"
                 logging.error(error_msg)
-                st.error(error_msg)
+                # 注意：Service 层尽量不要直接调 st.error，除非是单纯的工具类。
+                # 但这里保持原逻辑。
+                st.error(error_msg) 
                 return {}
 
             # --- 步骤 3: 精准提取数据 ---
             warning_lines = {}
             valid_count = 0
             
-            # 从表头行的下一行开始遍历
             for curr_r in range(header_row_idx + 1, len(df_clean)):
-                # 使用锁定的列索引提取数据
                 raw_code = df_clean.iloc[curr_r, code_col_idx]
                 raw_val = df_clean.iloc[curr_r, limit_col_idx]
                 
-                # 清洗数据
                 code_str = str(raw_code).strip()
                 val_str = str(raw_val).strip()
                 
                 try:
                     final_val = 0.0
-                    # 3. 处理百分号 (Excel 转 CSV 后百分号可能会保留)
                     if '%' in val_str:
                         final_val = float(val_str.replace('%', '')) / 100.0
                     else:

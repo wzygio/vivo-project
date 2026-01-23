@@ -8,26 +8,35 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 # --- 1. 初始化与配置 ---
-from vivo_project.config import CONFIG
-from vivo_project.utils.app_setup import AppSetup
-# 使用 cache_resource 避免重复初始化
-@st.cache_resource
-def init_global_resources():
-    AppSetup.initialize_app()
-init_global_resources()
+from vivo_project.utils.session_manager import SessionManager
+from vivo_project.config import ConfigLoader
 
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
-# [新增] 引入筛选器辅助函数
 from vivo_project.app.charts.sheet_details_chart import render_lot_id_filter
 
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-render_page_header("📋 入库不良率ByLot明细表")
 
+# [Refactor] 1. 渲染侧边栏
+SessionManager.render_product_selector_sidebar()
+
+# [Refactor] 2. 获取上下文
+active_config = SessionManager.get_active_config()
+project_root = ConfigLoader.get_project_root()
+resource_dir = SessionManager.get_resource_dir()
+
+# [Refactor] 3. 渲染页头 (注入 config)
+render_page_header("📋 入库不良率ByLot明细表", active_config)
 
 # --- 3. 加载数据 ---
-all_data = YieldAnalysisService.get_lot_defect_rates()
+# [Refactor] 4. Service 注入
+core_rev = YieldAnalysisService._get_core_revision(project_root)
+all_data = YieldAnalysisService.get_lot_defect_rates(
+    config=active_config,
+    resource_dir=resource_dir,
+    _core_revision=core_rev
+)
 
 
 if all_data:
@@ -41,11 +50,11 @@ if all_data:
         
     group_summary_df_full['warehousing_time'] = pd.to_datetime(group_summary_df_full['warehousing_time'], format='%Y%m%d').dt.date
     
-    st.markdown("### 📅 筛选条件") # 修改标题
+    st.markdown("### 📅 筛选条件")
     today = datetime.now().date()
     three_months_ago = today - relativedelta(months=3)
 
-    col1, col2, col3 = st.columns(3) # 改为3列
+    col1, col2, col3 = st.columns(3)
     with col1:
         start_date = st.date_input("起始日期", value=three_months_ago, key="lot_start_date")
     with col2:
@@ -57,7 +66,7 @@ if all_data:
         (group_summary_df_full['warehousing_time'] <= end_date)
     ]
 
-    # 2. [新增] 再按 Lot ID 筛选
+    # 2. 再按 Lot ID 筛选
     with col3:
         # 获取当前日期范围内所有可用的 Lot ID
         lot_ids_in_range = set(filtered_group_summary_df['lot_id'].unique())
@@ -88,7 +97,7 @@ if all_data:
                 "array_line_rate": st.column_config.NumberColumn("Array_Line不良率", format="%.2f%%"),
                 "oled_mura_rate": st.column_config.NumberColumn("OLED_Mura不良率", format="%.2f%%"),
             },
-            column_order=[ # 确保时间列在前
+            column_order=[
                 "lot_id", "warehousing_time", "array_input_time", "pass_rate",
                 "array_pixel_rate", "array_line_rate", "oled_mura_rate"
             ],
@@ -107,7 +116,6 @@ if all_data:
     
     if len(lot_ids) > 0:
         default_val = lot_ids[0]
-        # [修改] 使用 text_area 支持多行输入
         selected_lots_str = st.text_area(
             "请在此输入或粘贴您想查询的Lot IDs (每行一个):",
             value=default_val,
@@ -116,10 +124,8 @@ if all_data:
         )
 
         if selected_lots_str:
-            # [新增] 解析多行输入
             input_lots = [lot.strip() for lot in selected_lots_str.split('\n') if lot.strip()]
             
-            # [新增] 校验有效性
             invalid_lots = [lot for lot in input_lots if lot not in lot_ids]
             valid_lots = [lot for lot in input_lots if lot in lot_ids]
 
@@ -140,7 +146,6 @@ if all_data:
                     detail_df = code_details_dict.get(group_name)
                     
                     if detail_df is not None and not detail_df.empty:
-                        # [修改] 使用 isin 进行多 Lot 筛选
                         filtered_df = detail_df[detail_df['lot_id'].isin(valid_lots)]
                         
                         if not filtered_df.empty:
@@ -179,14 +184,13 @@ if all_data:
         # 1. 准备数据源
         all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
         
-        # 2. [关键] 预先筛选数据源，使其与主表保持一致
-        # 'lot_ids' 是在模块2开头从 'final_filtered_df' 中获取的
+        # 2. 预先筛选数据源，使其与主表保持一致
         df_in_scope = all_codes_df[all_codes_df['lot_id'].isin(lot_ids)]
 
-        # 3. 调用智能UI组件 (传入筛选后的范围)
+        # 3. 调用智能UI组件
         selected_code_info = create_code_selection_ui(
             source_data=df_in_scope,
-            key_prefix="lot_focus_table_filtered", # 使用新key避免冲突
+            key_prefix="lot_focus_table_filtered",
             rate_threshold=0.0005 
         )
 

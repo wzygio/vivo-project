@@ -5,13 +5,17 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
+from pathlib import Path
 
-from vivo_project.config import CONFIG
+# [Refactor] 移除全局 CONFIG，引入 AppConfig
+from vivo_project.config_model import AppConfig
 from vivo_project.core.trend_regulator import TrendRegulator
 
 @staticmethod
 def create_mwd_trend_data(
     panel_details_df: pd.DataFrame, 
+    config: AppConfig,
+    resource_dir: Path,
     ema_span: int = 14,
     scaling_factor: float = 1.2
 ) -> Dict[str, pd.DataFrame] | None:
@@ -56,40 +60,40 @@ def create_mwd_trend_data(
                 daily_summary[group] = np.round(attenuated_rates * daily_summary['total_panels']).astype(int)
                 logging.info(f"成功为 Group '{group}' 计算 Shadow EMA")
 
-        # 2. 生成 Wide Format 的月度/周度原始数据 (纯聚合，无修饰)
+        # 2. 生成 Wide Format 的月度/周度原始数据
         # ------------------------------------------------------------------
         monthly_agg = _aggregate_group_monthly_raw(daily_summary, today)
         weekly_agg = _aggregate_group_weekly_raw(daily_summary, today)
         
         # 3. 智能调节 (Smart Regulation)
         # ------------------------------------------------------------------
-        # 这一步可能会压平月度数据，并回溯修改周度数据
+        # [Refactor] 传递 config 和 resource_dir
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_monthly_and_weekly(
             monthly_agg, 
-            weekly_agg
+            weekly_agg,
+            config=config,
+            resource_dir=resource_dir
         )
         
         # 4. [最后防线] 手动覆盖 (Manual Override)
         # ------------------------------------------------------------------
-        # 无论前面算法怎么算，只要 Config 里填了数，这里就会强制覆盖
-        monthly_values = CONFIG['processing'].get('group_monthly_values', {})
-        weekly_values = CONFIG['processing'].get('group_weekly_values', {})
+        # [Refactor] 从 config.processing 读取
+        monthly_values = config.processing.get('group_monthly_values', {})
+        weekly_values = config.processing.get('group_weekly_values', {})
         
         monthly_final = _apply_manual_overrides(monthly_regulated, monthly_values, target_defects, 'monthly')
         weekly_final = _apply_manual_overrides(weekly_regulated, weekly_values, target_defects, 'weekly')
         
         # 5. 格式化输出 (Format)
         # ------------------------------------------------------------------
-        # 定义内部格式化函数 (复用逻辑)
         def _format_df(agg_df, time_format_str):
-            # 重算 Rate (因为 Count 可能在 Step 3 或 4 被修改了)
+            # 重算 Rate
             for group in target_defects:
                 if group in agg_df.columns:
                     agg_df[f"{group.lower()}_rate"] = agg_df[group] / agg_df['total_panels']
                 else:
                     agg_df[f"{group.lower()}_rate"] = 0.0
             
-            # 生成时间标签
             if time_format_str == 'ISO':
                 iso_df = agg_df.index.isocalendar()
                 agg_df['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
@@ -113,7 +117,6 @@ def create_mwd_trend_data(
         results['weekly'] = _format_df(weekly_final, 'ISO')
         results['daily_full'] = _format_df(daily_summary, '%Y-%m-%d')
         
-        # 日度数据直接格式化 (日度通常不做手动覆盖，保持真实)
         seven_days_ago = today - relativedelta(days=6)
         daily_data_filtered = daily_summary[daily_summary.index >= seven_days_ago]
         results['daily'] = _format_df(daily_data_filtered, '%m-%d')
@@ -123,10 +126,8 @@ def create_mwd_trend_data(
     except Exception as e:
         logging.error(f"在执行Group级趋势聚合流程时发生错误: {e}", exc_info=True)
         return None
+    
 
-# ==============================================================================
-#  Level 1: 原始聚合函数 (只聚合，不修改)
-# ==============================================================================
 @staticmethod
 def _aggregate_group_monthly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
     """仅负责时间过滤和重采样聚合"""
@@ -141,9 +142,6 @@ def _aggregate_group_weekly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.Da
     weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
     return weekly_data_raw.resample('W').sum()
 
-# ==============================================================================
-#  Level 3: 手动覆盖函数 (最后防线)
-# ==============================================================================
 @staticmethod
 def _apply_manual_overrides(
     df: pd.DataFrame, 
@@ -185,15 +183,18 @@ def _apply_manual_overrides(
                 
     return df_mod
 
+
 @staticmethod
 def create_code_level_mwd_trend_data(
     panel_details_df: pd.DataFrame,
+    config: AppConfig,
+    resource_dir: Path,
     ema_span: int,          
     scaling_factor: float
 ) -> Dict[str, pd.DataFrame] | None:
     """
     (V5.1 - 最终防线版)
-    Code 级趋势分析：Shadow EMA -> 原始聚合 -> 智能调节 -> 手动覆盖
+    Code 级趋势分析
     """
     logging.info(f"开始聚合Code级数据 (Shadow EMA, Span={ema_span})...")
     if panel_details_df.empty: return None
@@ -201,13 +202,12 @@ def create_code_level_mwd_trend_data(
     try:
         MIN_PANEL_COUNT_FOR_TODAY = 500
         
-        # 1. Shadow EMA 计算 (生成 base_daily_df)
+        # 1. Shadow EMA 计算
         # --------------------------------------------------------------
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
         today = pd.to_datetime(dt.now().date())
 
-        # 构建基础日度汇总 (Long Format)
         daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
         daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore
         
@@ -215,7 +215,6 @@ def create_code_level_mwd_trend_data(
         base_daily_df['defect_panel_count'].fillna(0, inplace=True)
         base_daily_df['warehousing_time'] = pd.to_datetime(base_daily_df['warehousing_time'])
 
-        # 末日过滤器
         if not base_daily_df.empty:
             last_day_date = base_daily_df['warehousing_time'].max()
             last_day_panel_count = base_daily_df[base_daily_df['warehousing_time'] == last_day_date]['total_panels'].iloc[0]
@@ -226,7 +225,6 @@ def create_code_level_mwd_trend_data(
         base_daily_df['defect_group'].fillna("NoDefect", inplace=True)
         base_daily_df['defect_desc'].fillna("NoDefect", inplace=True)
 
-        # Shadow EMA 迭代
         base_daily_df['attenuated_rate'] = 0.0 
         unique_codes = base_daily_df['defect_desc'].unique()
         for code in unique_codes:
@@ -241,24 +239,26 @@ def create_code_level_mwd_trend_data(
         
         base_daily_df['defect_panel_count'] = np.round(base_daily_df['attenuated_rate'] * base_daily_df['total_panels']).astype(int)
 
-        # 2. 原始聚合 (Raw Aggregation)
+        # 2. 原始聚合
         # --------------------------------------------------------------
-        # 生成带时间戳的 Long Format 中间态
         monthly_agg = _aggregate_code_monthly_raw(base_daily_df, today)
         weekly_agg = _aggregate_code_weekly_raw(base_daily_df, today)
 
-
-        # 3. 智能调节 (Smart Regulation)
+        # 3. 智能调节
         # --------------------------------------------------------------
+        # [Refactor] 注入参数
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_code_monthly_and_weekly(
             monthly_agg,
-            weekly_agg
+            weekly_agg,
+            config=config,
+            resource_dir=resource_dir
         )
 
-        # 4. 手动覆盖 (Manual Override)
+        # 4. 手动覆盖
         # --------------------------------------------------------------
-        code_monthly_values = CONFIG['processing'].get('code_monthly_values', {})
-        code_weekly_values = CONFIG['processing'].get('code_weekly_values', {})
+        # [Refactor] 从 config.processing 读取
+        code_monthly_values = config.processing.get('code_monthly_values', {})
+        code_weekly_values = config.processing.get('code_weekly_values', {})
 
         monthly_final = _apply_code_manual_overrides(monthly_regulated, code_monthly_values, 'monthly')
         weekly_final = _apply_code_manual_overrides(weekly_regulated, code_weekly_values, 'weekly')
@@ -270,14 +270,11 @@ def create_code_level_mwd_trend_data(
         results['weekly'] = _format_code_df(weekly_final, 'ISO')
         results['daily_full'] = _format_code_df(base_daily_df, '%Y-%m-%d')
 
-        # 日度格式化 (过滤最近7天)
         seven_days_ago = today - relativedelta(days=6)
         daily_data_ui = base_daily_df[base_daily_df['warehousing_time'] >= seven_days_ago].copy()
         if not daily_data_ui.empty:
-            # 剔除 NoDefect 用于展示
             daily_data_ui = daily_data_ui[daily_data_ui['defect_group'] != 'NoDefect']
             daily_data_ui['time_period'] = daily_data_ui['warehousing_time'].dt.strftime('%m-%d') # type: ignore
-            # 补全 defect_rate 列
             daily_data_ui['defect_rate'] = daily_data_ui['defect_panel_count'] / daily_data_ui['total_panels']
             results['daily'] = daily_data_ui
 
@@ -287,7 +284,7 @@ def create_code_level_mwd_trend_data(
     except Exception as e:
         logging.error(f"在聚合Code级趋势数据时发生错误: {e}", exc_info=True)
         return None
-
+    
 # --- Code 级 Helper 函数 ---
 @staticmethod
 def _aggregate_code_monthly_raw(base_daily_df: pd.DataFrame, today: dt) -> pd.DataFrame:
@@ -448,6 +445,7 @@ def _calculate_adaptive_shadow_ema(daily_counts: np.ndarray, daily_totals: np.nd
     """
     [算法核心] 自适应影子 EMA (Adaptive Shadow EMA)
     实现了"显示值"与"基准值"的分离，从根本上解决异常值拖尾问题。
+    [修改版] 优化了初始化逻辑，使用全局平均率作为锚点，消除起始阶段的趋势偏置。
     """
     n = len(daily_counts)
     if n == 0: return []
@@ -455,26 +453,40 @@ def _calculate_adaptive_shadow_ema(daily_counts: np.ndarray, daily_totals: np.nd
     alpha = 2 / (span + 1)
     smoothed_rates = []
     
-    # 状态变量初始化
-    trend_n = daily_counts[0]
-    trend_d = daily_totals[0]
+    # --- [核心修改] 优化初始化 ---
+    # 计算全局累计值，获取长期平均水平作为初始"心理锚点"
+    # 避免因第一天样本不足(如只入库几片且有不良)导致的初始值虚高
+    global_n = np.sum(daily_counts)
+    global_d = np.sum(daily_totals)
     
-    first_rate = trend_n / trend_d if trend_d > 0 else 0.0
-    smoothed_rates.append(first_rate)
+    # 1. 计算全局平均良率
+    initial_base_rate = global_n / global_d if global_d > 0 else 0.0
+    
+    # 2. 状态变量初始化
+    # 我们让趋势的"记忆"从全局平均水平开始，而不是第一天的随机波动
+    trend_d = daily_totals[0]
+    trend_n = trend_d * initial_base_rate 
+    
+    # 3. 计算第一天的输出值
+    # 采用 "50% 全局预期 + 50% 当日实况" 的软着陆策略
+    # 既防止第一天被异常拉飞，又保留一部分真实反馈
+    actual_first_rate = (daily_counts[0] / daily_totals[0]) if daily_totals[0] > 0 else 0.0
+    start_rate = 0.5 * initial_base_rate + 0.5 * actual_first_rate
+    smoothed_rates.append(start_rate)
     
     for i in range(1, n):
         raw_n = daily_counts[i]
         raw_d = daily_totals[i]
         
         if raw_d == 0:
-            smoothed_rates.append(0.0)
+            smoothed_rates.append(smoothed_rates[-1]) # 保持上一日水平
             continue
             
         raw_rate = raw_n / raw_d
         prev_base_rate = trend_n / trend_d if trend_d > 0 else 0.0
         
-        # 判定 Spike: 3倍暴涨 且 绝对值增加 > 2%
-        is_spike = (raw_rate > prev_base_rate * 3.0) and (raw_rate - prev_base_rate > 0.02)
+        # 判定 Spike: (保留您的特定逻辑: 3倍暴涨 OR 绝对值增加 > 4%)
+        is_spike = (raw_rate > prev_base_rate * 3.0) or (raw_rate - prev_base_rate > 0.04)
         
         if is_spike:
             # 分支 A: 发生异常 -> 激进显示，保守记忆

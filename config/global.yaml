@@ -1,0 +1,38 @@
+# 应用程序级别的设置
+application:
+  cache_ttl_hours: 4 # 缓存时间（小时）
+
+# 数据加载相关的参数
+data_source:
+  product_code: "M678"
+
+  # 4. defect_group
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "OLED_Mura"
+    
+  work_order_types:
+    - "ESLC" # 量产
+    - "P" # 量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
+
+# UI界面相关的配置
+ui:
+  icons:
+    home: "🏠"
+    dashboard: "📊"
+    chart_up: "📈"
+    chart_down: "📉"
+    report: "📋"
+    datasheet: "📄"
+    arrow_right: "➡️"
+    rocket: "🚀"
+    refresh: "🔄"
+    settings: "⚙️"
+    success: "✅"
+    error: "❌"
+    warning: "⚠️"
+    info: "ℹ️"
