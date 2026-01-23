@@ -1,10 +1,9 @@
 # src/handler/db_handler.py
 # (或者你最终确定的路径，例如 src/database_handler.py)
 import pandas as pd
-import os
-import logging
+import os, logging
 from urllib.parse import quote_plus
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 # 注意：load_dotenv 不再需要在这里导入
 
 class DatabaseManager:

@@ -18,6 +18,7 @@ if ENABLE_HOT_RELOAD:
 # --- 1. 配置与初始化 ---
 from vivo_project.utils.session_manager import SessionManager
 from vivo_project.config import ConfigLoader
+from vivo_project.utils.app_setup import AppSetup
 
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
@@ -42,6 +43,8 @@ from vivo_project.app.charts.sheet_lot_chart import (
 #  页面主逻辑
 # ==============================================================================
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
+
+AppSetup.initialize_app()
 
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
