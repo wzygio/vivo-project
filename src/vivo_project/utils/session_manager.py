@@ -18,7 +18,7 @@ class SessionManager:
     KEY_CONFIG_MTIME = "config_file_mtime" # 记录配置文件的最后修改时间
     
     # 定义可用产品列表
-    AVAILABLE_PRODUCTS = ["M678", "C472"] 
+    AVAILABLE_PRODUCTS = ConfigLoader.get_enabled_products()
 
     @staticmethod
     def get_active_config() -> AppConfig:

@@ -1,21 +1,39 @@
+# 数据加载相关的参数
+data_source:
+  product_code: "M678"
+
+  # 4. defect_group
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "OLED_Mura"
+    
+  work_order_types:
+    - "ESLC" # 量产
+    - "P" # 量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
+
 # 本地文件读取
 paths:
   static_warning_lines: 
-    file_name: 'M678入库不良率规格-old.xlsx'
-    sheet_name: 'M678入库不良率规格'  
-
-  benchmark_report_config: 
-    file_name: 'V3良率及不良率By批次汇总报表.xlsx'
-    sheet_name: 'CT'
+    file_name: 'M678_入库不良率规格.xlsx'
+    sheet_name: 'Sheet1'
 
   rate_override_config:
-    file_name: "override_rates.xlsx"
-    sheet_name: "Overrides"
+    file_name: "M678_override_rates.xlsx"
+    sheet_name: "Sheet1"
+
+  benchmark_report_config: 
+    file_name: 'M678_V3良率及不良率By批次汇总报表.xlsx'
+    sheet_name: 'CT'
+  
 
 # 数据处理相关的参数
 processing:
   use_local_snapshot: True
-  snapshot_path: 'data/panel_details_snapshot.parquet'
+  snapshot_path: 'data/snapshot_M678.parquet'
   
   defect_capping:
     enable: True

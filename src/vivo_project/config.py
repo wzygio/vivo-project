@@ -2,7 +2,7 @@
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
 # 引入我们定义的 Pydantic 模型
@@ -15,6 +15,32 @@ class ConfigLoader:
     不持有任何状态，不创建全局单例。
     """
 
+    @classmethod
+    def get_enabled_products(cls) -> List[str]:
+        """
+        [新增] 从 global.yaml 读取启用的产品列表。
+        这成为了系统产品列表的唯一真理来源。
+        """
+        root_dir = cls.get_project_root()
+        global_yaml_path = root_dir / "config" / "global.yaml"
+        
+        try:
+            global_conf = cls._load_yaml(global_yaml_path)
+            
+            # 读取 product_registry.enabled_products
+            registry = global_conf.get('product_registry', {})
+            products = registry.get('enabled_products', [])
+            
+            if not products:
+                logging.warning(f"⚠️ global.yaml 中未找到有效的 enabled_products 列表，将回退到默认 ['M678']。")
+                return ["M678"]
+                
+            return products
+            
+        except Exception as e:
+            logging.error(f"❌ 读取全局产品列表失败: {e}")
+            return ["M678"] # 最后的防线
+        
     @staticmethod
     def get_project_root() -> Path:
         """
@@ -74,7 +100,7 @@ class ConfigLoader:
         
         # 1. 路径组装
         global_yaml_path = config_dir / "global.yaml"
-        product_yaml_path = config_dir / f"{product_code}.yaml"
+        product_yaml_path = config_dir / "products" / f"{product_code}.yaml"
         env_path = root_dir / ".env"
 
         logging.info(f"正在构建配置对象 (Product: {product_code})...")

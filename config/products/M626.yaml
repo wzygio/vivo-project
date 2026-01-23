@@ -1,0 +1,71 @@
+# 数据加载相关的参数
+data_source:
+  product_code: "M626"
+
+  # 4. defect_group
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "OLED_Mura"
+    
+  work_order_types:
+    - "ESLC" # 量产
+    - "P" # 量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
+
+# 本地文件读取
+paths:
+  static_warning_lines: 
+    file_name: 'M626_入库不良率规格.xlsx'
+    sheet_name: 'Sheet1'
+
+  rate_override_config:
+    file_name: "M626_override_rates.xlsx"
+    sheet_name: "Sheet1"
+
+  benchmark_report_config: 
+    file_name: 'M626_V3良率及不良率By批次汇总报表.xlsx'
+    sheet_name: 'CT'
+  
+
+# 数据处理相关的参数
+processing:
+  use_local_snapshot: True
+  snapshot_path: 'data/snapshot_M626.parquet'
+  
+  defect_capping:
+    enable: True
+
+  # 1. Group 级修正配置
+  group_monthly_values:
+
+
+  group_weekly_values:
+
+
+  # 2. Code 级修正配置
+  code_monthly_values:
+
+  code_weekly_values:
+  
+  # 3. lot阵列投入时间
+  array_input_time:
+    custom_times:
+
+
+  # 5. defect_code倍率调节
+  defect_multipliers:
+
+  # 6. Mapping集中性调节
+  mapping_hotspot_script:
+
+  # 7. sheet/lot波动调节
+  sheet_hotspot_config: 
+    enable: True
+    random_seed: 2025
+    hide_hotspot_config: {
+        'fluctuation_sheet': 0.3,  
+        'fluctuation_lot': 0.2,
+    }

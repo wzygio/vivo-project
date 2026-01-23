@@ -1,7 +1,9 @@
 # src/vivo_project/core/mapping_processor.py
 import numpy as np
 import pandas as pd
-import logging, re
+import logging
+import re
+from vivo_project.core.batch_statistics import BatchStatistics
 
 # ==============================================================================
 #                      ByCode计算Mapping集中性
@@ -9,99 +11,77 @@ import logging, re
 @staticmethod
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
-    min_panel_threshold: int = 50000  # [修改] 默认阈值降为 50，适应小批次或测试数据
+    min_panel_threshold: int = 50000 
 ) -> pd.DataFrame:
     """
-    [V1.5 - 强力清洗版] 为Mapping图准备数据。
-    1. 支持中文混杂的批次号解析 (如 "25/11/21蒸镀批")。
-    2. 支持 2位/4位年份自动兼容。
-    3. 参数化数量阈值。
+    [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
+    1. 使用 BatchStatistics 获取准确的入库基数。
+    2. [核心升级] 级联衰减算法从“绝对值截断”改为“不良率(Rate)截断”。
+       解决小批量新批次被错误压缩的问题。
+    3. 输出结果携带 batch_total_input 元数据供前端展示。
     """
-    logging.info(f"开始为Mapping图准备数据 (阈值={min_panel_threshold})...")
+    logging.info(f"开始为Mapping图准备数据 (Rate-Based Mode, 阈值={min_panel_threshold})...")
     if panel_details_df.empty: return pd.DataFrame()
     
     try:
-        FIRST_REDUCTION_FACTOR = 0.8
-        SECOND_REDUCTION_FACTOR = 0.95
+        FIRST_REDUCTION_FACTOR = 0.7
+        SECOND_REDUCTION_FACTOR = 0.9
         SEED = 42
 
         # --- 步骤1: 筛选有效批次 ---
         df = panel_details_df.copy()
         
+        # [修改] 调用 Core 处理器获取基数
+        batch_totals = BatchStatistics.get_batch_input_counts(df)
+        
         # 1.1 数量筛选
-        panel_counts_per_batch = df.groupby('batch_no')['panel_id'].nunique()
-        valid_batches_by_count = panel_counts_per_batch[
-            panel_counts_per_batch >= min_panel_threshold
-        ].index.tolist()
+        valid_batches_by_count = batch_totals[batch_totals >= min_panel_threshold].index.tolist()
         
         if not valid_batches_by_count: 
-            logging.warning(f"没有批次达到最小数量阈值 ({min_panel_threshold})，最大批次量: {panel_counts_per_batch.max() if not panel_counts_per_batch.empty else 0}")
+            max_count = batch_totals.max() if not batch_totals.empty else 0
+            logging.warning(f"没有批次达到最小数量阈值 ({min_panel_threshold})，当前最大批次量: {max_count}")
             return pd.DataFrame()
             
         df_filtered = df[df['batch_no'].isin(valid_batches_by_count)].copy()
 
-        # 1.2 [核心修复] 智能批次日期解析
-        # 原始数据可能是 "25/11/21蒸镀批" 或 "2025/11/21"
-        # 策略：使用正则提取开头的 "数字/数字/数字" 模式
-        
-        # 定义辅助函数：清洗批次号
+        # 1.2 智能批次日期解析 (保持不变)
         def _clean_batch_date(batch_str):
             if not isinstance(batch_str, str): return str(batch_str)
-            # 提取形如 xx/xx/xx 的日期部分
             match = re.search(r'(\d{2,4}/\d{1,2}/\d{1,2})', batch_str)
             return match.group(1) if match else batch_str
 
-        # 创建临时列用于排序
         unique_batches = df_filtered['batch_no'].unique()
         batch_map = pd.DataFrame({'original_batch': unique_batches})
-        
-        # 应用清洗
         batch_map['clean_batch'] = batch_map['original_batch'].apply(_clean_batch_date)
-        
-        # 尝试转换为日期 (支持 2位年份)
-        # dayfirst=False, yearfirst=True 是根据您 "25/11/21" (YY/MM/DD) 的推测
         batch_map['batch_date'] = pd.to_datetime(
-            batch_map['clean_batch'], 
-            yearfirst=True, 
-            dayfirst=False, 
-            errors='coerce'
+            batch_map['clean_batch'], yearfirst=True, dayfirst=False, errors='coerce'
         )
         
-        # 过滤掉无法解析日期的批次
+        # 1.3 排序 (Old -> New)
         valid_dates_df = batch_map.dropna(subset=['batch_date']).sort_values('batch_date', ascending=False)
         
         if valid_dates_df.empty:
-            logging.error("所有批次号均无法解析为日期，无法确定最新批次！(Mapping空)")
-            # 降级策略：如果日期解析全挂了，就按字符串排序取前3个
-            latest_three_batches = sorted(unique_batches, reverse=True)[:5]
+            logging.error("批次日期解析失败，回退到字符串排序")
+            target_batches = sorted(unique_batches, reverse=True)[:5]
+            sorted_batches = sorted(target_batches) 
         else:
-            # 取最新的 5 个日期对应的原始批次号
-            latest_three_batches = valid_dates_df['original_batch'].head(5).tolist()
+            # 取最新的 5 个，然后按 Old -> New 排序
+            latest_n_df = valid_dates_df.head(5)
+            sorted_batches = latest_n_df.sort_values('batch_date', ascending=True)['original_batch'].tolist()
 
-        logging.info(f"选定的最新批次: {latest_three_batches}")
+        logging.info(f"处理批次顺序 (Old->New): {sorted_batches}")
 
-        # 1.3 最终过滤
+        # 1.4 最终过滤
         df_defective_panels = df_filtered[
-            (df_filtered['batch_no'].isin(latest_three_batches)) & 
+            (df_filtered['batch_no'].isin(sorted_batches)) & 
             (df_filtered['defect_desc'].notna())
         ].copy()
 
         if df_defective_panels.empty: return pd.DataFrame()
 
-        # 为了保证处理顺序一致性，按之前解析的日期排序
-        # 创建排序映射
-        sort_order = {b: i for i, b in enumerate(latest_three_batches)}
-        sorted_batches = sorted(latest_three_batches, key=lambda x: sort_order.get(x, 999), reverse=True) # 这里 reverse=True 是因为后续逻辑是从旧到新处理? 
-        # 原逻辑是 sorted_batches = sorted(..., reverse=False) (旧 -> 新)
-        # 我们这里 valid_dates_df 是从新到旧。所以要反转回来。
-        sorted_batches = sorted_batches[::-1] # 变为 旧 -> 新
-
-        # ... (后续步骤 2: 位置随机化 & 步骤 3: 级联衰减 保持不变) ...
-        # 请确保将后续代码中的 sorted_batches 变量直接对接这里
-        
-        # --- 接续原有逻辑 (为了完整性，这里简写后续部分，请保留您文件原有的这部分) ---
+        # --- 步骤2: 位置随机化 (保持不变) ---
         batches_after_pos_modification = []
-        for i, batch_no in enumerate(sorted_batches):
+        for batch_no in sorted_batches:
             df_current_batch = df_defective_panels[df_defective_panels['batch_no'] == batch_no].copy()
             df_current_batch['panel_id'] = df_current_batch.apply(
                 lambda row: _get_deterministically_modified_panel_id(row['panel_id'], row['batch_no']),
@@ -111,33 +91,65 @@ def prepare_mapping_data(
         
         df_defective_panels_modified = pd.concat(batches_after_pos_modification)
         
-        logging.info("应用“级联衰减”抽样算法...")
-        max_allowed_counts = {}
+        # --- 步骤3: Rate-Based 级联衰减 (核心逻辑重写) ---
+        # 逻辑：LimitRate_Next = Rate_Prev * 0.95
+        #      MaxCount_Next = LimitRate_Next * TotalInput_Next
+        
+        max_allowed_rates = {} # 存储每个 Code 允许的最大不良率 (Rate)
         processed_dfs = []
 
         for batch_no in sorted_batches:
-            # 从【已被修改过】的DF中提取当前批次
             df_current_batch = df_defective_panels_modified[df_defective_panels_modified['batch_no'] == batch_no]
             if df_current_batch.empty: continue
+            
+            # [关键] 获取当前批次的真实入库总数 (分母)
+            current_batch_total = batch_totals.get(batch_no, 50000) # Fallback safe value
 
             processed_codes_in_batch = []
+            
             for code_desc, df_code_group in df_current_batch.groupby('defect_desc'): # type: ignore
                 current_count = len(df_code_group)
-                prev_max_count = max_allowed_counts.get(code_desc, float('inf'))
-                if prev_max_count == float('inf'):
-                    target_count = int(current_count * FIRST_REDUCTION_FACTOR)
+                # 计算当前原始不良率
+                current_rate = current_count / current_batch_total
+                
+                prev_max_rate = max_allowed_rates.get(code_desc, float('inf'))
+                
+                # 计算目标良率 (Rate)
+                if prev_max_rate == float('inf'):
+                    target_rate = current_rate * FIRST_REDUCTION_FACTOR
                 else:
-                    target_count = int(min(current_count, prev_max_count) * SECOND_REDUCTION_FACTOR)
+                    # 比较的是 Rate，不再是 Count
+                    target_rate = min(current_rate, prev_max_rate) * SECOND_REDUCTION_FACTOR
+                
+                # 将目标良率转换回目标数量 (Count)
+                target_count = int(target_rate * current_batch_total)
+                
+                # 确保至少保留 1 个 (如果原本有的话)，且不超过实际数量
+                target_count = max(1, min(target_count, current_count)) if current_count > 0 else 0
+
+                # 执行抽样
                 if target_count < current_count:
                     df_processed_code = df_code_group.sample(n=target_count, random_state=SEED)
                 else:
                     df_processed_code = df_code_group
-                max_allowed_counts[code_desc] = len(df_processed_code)
+                
+                # 更新允许的最大良率 (作为下一个批次的天花板)
+                # 注意：这里记录的是衰减后的 Rate
+                actual_processed_rate = len(df_processed_code) / current_batch_total
+                max_allowed_rates[code_desc] = actual_processed_rate
+                
                 processed_codes_in_batch.append(df_processed_code)
+            
             if processed_codes_in_batch:
                 processed_dfs.append(pd.concat(processed_codes_in_batch))
 
         final_df = pd.concat(processed_dfs) if processed_dfs else pd.DataFrame()
+        
+        # --- [步骤4] 注入元数据供前端展示 ---
+        if not final_df.empty:
+            # 将 batch_totals 映射到结果中
+            final_df['batch_total_input'] = final_df['batch_no'].map(batch_totals).fillna(0).astype(int)
+            
         return final_df
 
     except Exception as e:
