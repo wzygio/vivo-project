@@ -1,6 +1,6 @@
 # src/vivo_project/config_model.py
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # ==============================================================================
 # 1. 基础原子模型 (Building Blocks)
@@ -13,7 +13,7 @@ class FileResource(BaseModel):
     """
     file_name: str = Field(..., description="文件名，需位于 resources 目录下")
     sheet_name: Optional[str] = Field(None, description="Excel Sheet名称，可选")
-
+    
 # ==============================================================================
 # 2. 核心严格模型 (Core Strict Sections)
 #    这些配置是所有产品都必须有的，否则程序无法启动。
@@ -28,9 +28,7 @@ class DataSourceConfig(BaseModel):
     target_defect_groups: List[str] = Field(default_factory=list)
     work_order_types: List[str] = Field(default_factory=list)
     
-    # 允许在此处添加额外的、非标准的数据源参数
-    class Config:
-        extra = "allow" 
+    model_config = ConfigDict(extra="allow")
 
 class UIConfig(BaseModel):
     icons: Dict[str, str] = Field(default_factory=dict)
@@ -59,6 +57,4 @@ class AppConfig(BaseModel):
     # 只要符合 JSON/YAML 结构即可。
     processing: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        # 允许 YAML 根目录下存在其他未定义的 Section（如 'logging' 等）
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")

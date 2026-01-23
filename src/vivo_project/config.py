@@ -74,7 +74,7 @@ class ConfigLoader:
         
         # 1. 路径组装
         global_yaml_path = config_dir / "global.yaml"
-        product_yaml_path = config_dir / "products" / f"{product_code}.yaml"
+        product_yaml_path = config_dir / f"{product_code}.yaml"
         env_path = root_dir / ".env"
 
         logging.info(f"正在构建配置对象 (Product: {product_code})...")

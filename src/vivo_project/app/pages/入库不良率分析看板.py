@@ -16,7 +16,6 @@ if ENABLE_HOT_RELOAD:
         pass
 
 # --- 1. 配置与初始化 ---
-# [Refactor] 移除全局 CONFIG 和 AppSetup
 from vivo_project.utils.session_manager import SessionManager
 from vivo_project.config import ConfigLoader
 
@@ -43,9 +42,6 @@ from vivo_project.app.charts.sheet_lot_chart import (
 #  页面主逻辑
 # ==============================================================================
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-
-# [Refactor] 1. 渲染侧边栏 (多产品切换入口)
-SessionManager.render_product_selector_sidebar()
 
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
@@ -348,6 +344,42 @@ with st.container(border=True):
 # ==============================================================================
 with st.container(border=True):
     st.markdown("**D. Mapping集中性**")
+    
+    # --- [新增] 🔍 前端数据“活体切片”诊断 ---
+    with st.expander("🕵️‍♂️ 调试模式：Mapping 数据透视", expanded=False):
+        # 1. 检查源数据是否到底了
+        if mapping_data is None:
+            st.error("❌ 严重：mapping_data 是 None！Service 层未返回任何对象。")
+        elif mapping_data.empty:
+            st.warning("⚠️ 警告：mapping_data 是空的 DataFrame (0 行)。")
+        else:
+            st.success(f"✅ 源数据正常：共 {len(mapping_data)} 行")
+            st.write("数据快照 (前3行):", mapping_data.head(3))
+            
+            # 2. 检查筛选键的匹配情况
+            st.markdown("#### 🔑 匹配诊断")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info(f"前端当前选择 (UI Selection):\n- Group: `{curr_group}`\n- Code: `{curr_code}`")
+            with col2:
+                # 检查数据里到底有没有这个 Group/Code
+                has_group = curr_group in mapping_data['defect_group'].values
+                has_code = curr_code in mapping_data['defect_desc'].values
+                
+                st.write(f"- 数据中包含 Group '{curr_group}'? {'✅ 是' if has_group else '❌ 否'}")
+                st.write(f"- 数据中包含 Code '{curr_code}'? {'✅ 是' if has_code else '❌ 否'}")
+                
+            # 3. 打印数据中实际存在的 Code 列表 (看看是不是有空格或乱码)
+            if not has_code:
+                st.warning(f"数据中实际存在的 Code 列表 (Top 10): {mapping_data['defect_desc'].unique()[:10]}")
+
+            # 4. 模拟筛选结果
+            debug_filter = mapping_data[
+                (mapping_data['defect_group'] == curr_group) & 
+                (mapping_data['defect_desc'] == curr_code)
+            ]
+            st.write(f"📊 最终筛选结果行数: **{len(debug_filter)}**")
+    # ----------------------------------------------------
     
     if mapping_data is not None and not mapping_data.empty:
         df_map = mapping_data[

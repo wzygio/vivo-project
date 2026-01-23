@@ -8,10 +8,6 @@ paths:
     file_name: 'V3良率及不良率By批次汇总报表.xlsx'
     sheet_name: 'CT'
 
-  rate_override_config:
-    file_name: "override_rates.xlsx"
-    sheet_name: "Overrides"
-
 # 数据处理相关的参数
 processing:
   use_local_snapshot: True

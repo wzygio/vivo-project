@@ -18,9 +18,6 @@ from vivo_project.app.charts.sheet_details_chart import render_lot_id_filter
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
-# [Refactor] 1. 渲染侧边栏
-SessionManager.render_product_selector_sidebar()
-
 # [Refactor] 2. 获取上下文
 active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()

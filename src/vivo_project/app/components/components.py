@@ -3,10 +3,10 @@ import pandas as pd
 import streamlit as st
 import logging, os
 from pathlib import Path
-from typing import Dict, Any, Optional
 
 # [Refactor] 引入配置模型
 from vivo_project.config_model import AppConfig
+from vivo_project.utils.session_manager import SessionManager
 
 # [Refactor] 定义默认缓存时间，替代原 CONFIG['application']['cache_ttl_hours']
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
@@ -35,57 +35,85 @@ def calculate_warning_lines(mwd_code_data):
 
 def render_page_header(title: str, config: AppConfig):
     """
-    渲染统一的页面头部组件
-    
-    Args:
-        title: 页面标题
-        config: 当前激活的配置对象 (AppConfig)，用于获取 snapshot_path
+    [企业级 Header V2.0]
+    集成：标题、产品切换上下文、数据刷新、缓存清理。
+    布局：顶部标题 -> 下方控制栏 (Toolbar)
     """
     
-    # 1. 获取配置中的快照路径 (依赖注入)
-    # config.processing 是一个 Dict[str, Any]
+    # --- 1. 渲染主标题 ---
+    st.title(title)
+    
+    # --- 2. 准备逻辑与路径 ---
     processing_conf = config.processing
     snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
     snapshot_path = Path(snapshot_path_str).resolve()
-
-    # 2. 定义刷新回调函数
-    def _global_refresh_callback():
-        # A. 删除本地快照文件 (核心：逼迫 Repository 发现文件缺失而去查库)
+    
+    # 定义刷新回调 (仅刷新数据)
+    def _refresh_data_callback():
         if snapshot_path.exists():
             try:
                 os.remove(snapshot_path)
-                logging.info(f"🗑️ [UI] 用户触发强制刷新，本地快照已删除: {snapshot_path}")
+                logging.info(f"🗑️ [UI] 本地快照已删除: {snapshot_path}")
             except Exception as e:
                 logging.error(f"❌ 删除快照失败: {e}")
-        else:
-            logging.info("ℹ️ [UI] 本地快照不存在，无需删除。")
-        
-        # B. 清除 Streamlit 内存缓存 (核心：逼迫 Service 重新运行计算逻辑)
         st.cache_data.clear()
-        
-        # C. (可选) 如果使用了 st.cache_resource 也需要清除
-        st.cache_resource.clear()
-        
-        # D. 回调结束后，Streamlit 会自动检测到状态变化并 Rerun 整个页面
+        # 注意：这里不清除 Session State 中的配置，只清除数据缓存
 
-    # 3. 布局渲染
-    # 左侧标题占大头(5)，右侧按钮占小头(1)
-    c_title, c_btn = st.columns([5, 1])
-    
-    with c_title:
-        st.title(title)
-        
-    with c_btn:
-        # 增加垂直间距，让按钮在视觉上与标题对齐
-        st.write("") 
-        st.write("")
-        st.button(
-            "🔄 刷新数据(10min)", 
-            key=f"btn_refresh_{title}", # 使用标题作为 key 的一部分，防止不同页面冲突
-            on_click=_global_refresh_callback, 
-            use_container_width=True,
-            help="点击此按钮将删除本地快照缓存，并强制从数据库获取最新数据。"
-        )
+    # 定义暴力清除回调 (清除所有)
+    def _hard_reset_callback():
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        logging.warning("🧨 用户触发暴力缓存清除")
+
+    # --- 3. 渲染控制栏 (Control Toolbar) ---
+    # 使用灰色背景容器包裹，形成“工具栏”的视觉效果
+    with st.container(border=True):
+        # 布局：[产品选择 (2)] [空白占位 (4)] [刷新按钮 (1)] [清除缓存 (1)]
+        # 这种比例可以把按钮挤到最右边，产品选择在最左边
+        c_prod, c_space, c_refresh, c_clear = st.columns([2, 4, 1.2, 1.2])
+
+        # A. 左侧：产品选择器 (全局上下文)
+        with c_prod:
+            current_prod = config.data_source.product_code
+            available_prods = SessionManager.AVAILABLE_PRODUCTS
+            
+            # 使用 session state 里的 key 绑定，确保状态同步
+            selected_prod = st.selectbox(
+                "📦 当前产品型号",
+                options=available_prods,
+                index=available_prods.index(current_prod) if current_prod in available_prods else 0,
+                key=f"header_prod_sel_{title}", # 唯一Key防止冲突
+                label_visibility="collapsed" # 隐藏Label，更像工具栏
+            )
+            
+            # 监听切换
+            if selected_prod != current_prod:
+                SessionManager.load_and_set_config(selected_prod)
+                st.rerun()
+
+        # B. 中间：显示当前产品状态 (可选，这里用作占位)
+        with c_space:
+             # 可以显示最后更新时间，或者单纯留白
+             st.write("") 
+
+        # C. 右侧：功能按钮区
+        with c_refresh:
+            st.button(
+                "🔄 刷新数据",
+                key=f"btn_refresh_{title}",
+                on_click=_refresh_data_callback,
+                use_container_width=True,
+                help="删除本地快照并重新从数据库拉取数据 (10min)"
+            )
+            
+        with c_clear:
+            st.button(
+                "🧹 清除缓存",
+                key=f"btn_clear_{title}",
+                on_click=_hard_reset_callback,
+                use_container_width=True,
+                help="清除所有内存缓存和资源缓存 (用于Debug配置不生效等问题)"
+            )
 
 def create_code_selection_ui(
     source_data: pd.DataFrame | dict,
@@ -144,7 +172,7 @@ def create_code_selection_ui(
         elif filter_by == 'occurrence':
             metrics = processed_df.groupby(['defect_group', 'defect_desc']).size()
             eligible_series = metrics[metrics > count_threshold]
-
+    
         # 生成选项
         if not eligible_series.empty:
             sorted_series = eligible_series.sort_values(ascending=False)
