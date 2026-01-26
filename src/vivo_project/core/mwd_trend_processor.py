@@ -27,23 +27,24 @@ def create_mwd_trend_data(
     if panel_details_df.empty: return None
     
     try:
-        MIN_PANEL_COUNT_FOR_TODAY = 5000
-        
         # 1. 数据预处理 & 日度汇总 (Shadow EMA)
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        today = df['warehousing_time'].max()
+        max_date = df['warehousing_time'].max()
+        yesterday = max_date - relativedelta(days=1)
+
         
         daily_summary = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame(name='total_panels') # type: ignore
         daily_defect_counts = df.groupby([df['warehousing_time'].dt.date, 'defect_group'])['panel_id'].nunique().unstack(level='defect_group').fillna(0) # type: ignore
         daily_summary = pd.concat([daily_summary, daily_defect_counts], axis=1).fillna(0)
         daily_summary.index = pd.to_datetime(daily_summary.index)
         
-        # 末日过滤
+        # 无条件去除最后一天，确保展示的是完整周期的历史数据
         if not daily_summary.empty:
             last_day_date = daily_summary.index.max()
-            if daily_summary.loc[last_day_date, 'total_panels'] < MIN_PANEL_COUNT_FOR_TODAY: # type: ignore
-                daily_summary = daily_summary[daily_summary.index < last_day_date]
+            daily_summary = daily_summary[daily_summary.index < last_day_date]
+            logging.info(f"已执行T-1策略，剔除不完整末日数据: {last_day_date.strftime('%Y-%m-%d')}")
+            
         if daily_summary.empty: return None
         
         target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
@@ -65,8 +66,8 @@ def create_mwd_trend_data(
         logging.info("已注入随机噪声以打破EMA平滑趋势。")
 
         # 3. 生成 Wide Format 的月度/周度原始数据
-        monthly_agg = _aggregate_group_monthly_raw(daily_summary, today)
-        weekly_agg = _aggregate_group_weekly_raw(daily_summary, today)
+        monthly_agg = _aggregate_group_monthly_raw(daily_summary, yesterday)
+        weekly_agg = _aggregate_group_weekly_raw(daily_summary, yesterday)
         
         # 4. 智能调节 (Smart Regulation)
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_monthly_and_weekly(
@@ -115,8 +116,9 @@ def create_mwd_trend_data(
         results['weekly'] = _format_df(weekly_final, 'ISO')
         results['daily_full'] = _format_df(daily_summary, '%Y-%m-%d')
         
-        seven_days_ago = today - relativedelta(days=6)
-        daily_data_filtered = daily_summary[daily_summary.index >= seven_days_ago]
+        # 从昨天往前推7天的数据展示
+        seven_days_ago = yesterday - relativedelta(days=6)
+        daily_data_filtered = daily_summary[(daily_summary.index >= seven_days_ago) & (daily_summary.index <= yesterday)]
         results['daily'] = _format_df(daily_data_filtered, '%m-%d')
 
         return results
@@ -124,7 +126,6 @@ def create_mwd_trend_data(
     except Exception as e:
         logging.error(f"在执行Group级趋势聚合流程时发生错误: {e}", exc_info=True)
         return None
-    
 
 @staticmethod
 def create_code_level_mwd_trend_data(
@@ -142,12 +143,11 @@ def create_code_level_mwd_trend_data(
     if panel_details_df.empty: return None
     
     try:
-        MIN_PANEL_COUNT_FOR_TODAY = 500
-        
         # 1. Shadow EMA 计算
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-        today = pd.to_datetime(dt.now().date())
+        max_date = df['warehousing_time'].max()
+        yesterday = max_date - relativedelta(days=1)
 
         daily_total_panels = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
         daily_code_defects = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore
@@ -156,11 +156,11 @@ def create_code_level_mwd_trend_data(
         base_daily_df['defect_panel_count'].fillna(0, inplace=True)
         base_daily_df['warehousing_time'] = pd.to_datetime(base_daily_df['warehousing_time'])
 
+        # [修改] 稳定末日过滤 (T-1 Strategy)
         if not base_daily_df.empty:
             last_day_date = base_daily_df['warehousing_time'].max()
-            last_day_panel_count = base_daily_df[base_daily_df['warehousing_time'] == last_day_date]['total_panels'].iloc[0]
-            if last_day_panel_count < MIN_PANEL_COUNT_FOR_TODAY:
-                base_daily_df = base_daily_df[base_daily_df['warehousing_time'] < last_day_date]
+            base_daily_df = base_daily_df[base_daily_df['warehousing_time'] < last_day_date]
+            
         if base_daily_df.empty: return None
 
         base_daily_df['defect_group'].fillna("NoDefect", inplace=True)
@@ -188,8 +188,8 @@ def create_code_level_mwd_trend_data(
         base_daily_df = _inject_deterministic_noise_code_level(base_daily_df)
 
         # 3. 原始聚合
-        monthly_agg = _aggregate_code_monthly_raw(base_daily_df, today)
-        weekly_agg = _aggregate_code_weekly_raw(base_daily_df, today)
+        monthly_agg = _aggregate_group_monthly_raw(base_daily_df, yesterday)
+        weekly_agg = _aggregate_group_weekly_raw(base_daily_df, yesterday)
 
         # 4. 智能调节
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_code_monthly_and_weekly(
@@ -212,8 +212,8 @@ def create_code_level_mwd_trend_data(
         results['weekly'] = _format_code_df(weekly_final, 'ISO')
         results['daily_full'] = _format_code_df(base_daily_df, '%Y-%m-%d')
 
-        seven_days_ago = today - relativedelta(days=6)
-        daily_data_ui = base_daily_df[base_daily_df['warehousing_time'] >= seven_days_ago].copy()
+        seven_days_ago = yesterday - relativedelta(days=6)
+        daily_data_ui = base_daily_df[(base_daily_df.index >= seven_days_ago) & (base_daily_df.index <= yesterday)]
         if not daily_data_ui.empty:
             daily_data_ui = daily_data_ui[daily_data_ui['defect_group'] != 'NoDefect']
             daily_data_ui['time_period'] = daily_data_ui['warehousing_time'].dt.strftime('%m-%d') # type: ignore

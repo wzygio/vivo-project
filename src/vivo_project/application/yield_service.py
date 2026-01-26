@@ -15,8 +15,7 @@ from vivo_project.infrastructure.repositories.panel_repository import PanelRepos
 # --- Core (Processors) ---
 from vivo_project.core.mwd_trend_processor import (
     create_mwd_trend_data, 
-    create_code_level_mwd_trend_data, 
-    create_current_month_trend_data
+    create_code_level_mwd_trend_data
 )
 from vivo_project.core.sheet_lot_processor import (
     calculate_lot_defect_rates, 
@@ -39,7 +38,7 @@ class YieldAnalysisService:
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
 
-    _end_date: datetime = datetime.now()
+    _end_date: datetime = datetime.now() - relativedelta(days=1)
     _start_date: datetime = _end_date - relativedelta(months=3)
 
     @classmethod
@@ -152,15 +151,6 @@ class YieldAnalysisService:
             ema_span=ema_span,
             scaling_factor=scaling_factor
         )
-
-    @staticmethod
-    @st.cache_data(show_spinner=False)
-    def get_current_month_trend_data(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame | None:
-        """获取当月日度趋势"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
-        if panel_df.empty: return None
-        
-        return create_current_month_trend_data(panel_details_df=panel_df)
 
     @staticmethod
     @st.cache_data(show_spinner=False)
