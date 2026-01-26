@@ -38,7 +38,7 @@ class YieldAnalysisService:
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
 
-    _end_date: datetime = datetime.now() - relativedelta(days=1)
+    _end_date: datetime = datetime.now()
     _start_date: datetime = _end_date - relativedelta(months=3)
 
     @classmethod

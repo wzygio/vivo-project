@@ -188,8 +188,8 @@ def create_code_level_mwd_trend_data(
         base_daily_df = _inject_deterministic_noise_code_level(base_daily_df)
 
         # 3. 原始聚合
-        monthly_agg = _aggregate_group_monthly_raw(base_daily_df, yesterday)
-        weekly_agg = _aggregate_group_weekly_raw(base_daily_df, yesterday)
+        monthly_agg = _aggregate_code_monthly_raw(base_daily_df, yesterday)
+        weekly_agg = _aggregate_code_weekly_raw(base_daily_df, yesterday)
 
         # 4. 智能调节
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_code_monthly_and_weekly(
