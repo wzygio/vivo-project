@@ -11,7 +11,7 @@ from vivo_project.core.batch_statistics import BatchStatistics
 @staticmethod
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
-    min_panel_threshold: int = 50000 
+    min_panel_threshold: int = 10000 
 ) -> pd.DataFrame:
     """
     [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
@@ -25,7 +25,7 @@ def prepare_mapping_data(
     
     try:
         FIRST_REDUCTION_FACTOR = 0.7
-        SECOND_REDUCTION_FACTOR = 0.9
+        SECOND_REDUCTION_FACTOR = 0.8
         SEED = 42
 
         # --- 步骤1: 筛选有效批次 ---

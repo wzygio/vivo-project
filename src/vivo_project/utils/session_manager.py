@@ -95,24 +95,6 @@ class SessionManager:
             st.error(f"加载产品 {product_code} 配置失败: {e}")
             st.stop()
 
-    @staticmethod
-    def render_product_selector_sidebar():
-        """
-        在侧边栏渲染产品切换器。
-        """
-        current_prod = st.session_state.get(SessionManager.KEY_PRODUCT, SessionManager.AVAILABLE_PRODUCTS[0])
-        
-        selected_prod = st.sidebar.selectbox(
-            "📦 选择产品型号",
-            options=SessionManager.AVAILABLE_PRODUCTS,
-            index=SessionManager.AVAILABLE_PRODUCTS.index(current_prod)
-        )
-        
-        # 如果用户切换了产品，重新加载配置并刷新页面
-        if selected_prod != current_prod:
-            SessionManager.load_and_set_config(selected_prod)
-            st.cache_data.clear() # 切换产品时，清除所有数据缓存是安全的
-            st.rerun()
             
     @staticmethod
     def get_resource_dir() -> Path:

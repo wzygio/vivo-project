@@ -16,12 +16,12 @@ def create_mwd_trend_data(
     panel_details_df: pd.DataFrame, 
     config: AppConfig,
     resource_dir: Path,
-    ema_span: int = 14,
-    scaling_factor: float = 1.2
+    ema_span: int,
+    scaling_factor: float
 ) -> Dict[str, pd.DataFrame] | None:
     """
-    (V5.1 - 最终防线版)
-    流程：Shadow EMA -> 原始聚合 -> 智能调节 -> [最后]手动覆盖
+    (V5.3 - 随机噪声版)
+    流程：Shadow EMA -> [新增]随机噪声注入 -> 原始聚合 -> 智能调节 -> 手动覆盖
     """
     logging.info(f"开始为Group级执行'Shadow EMA'抗噪处理 (Span={ema_span}, Scale={scaling_factor})...")
     if panel_details_df.empty: return None
@@ -30,7 +30,6 @@ def create_mwd_trend_data(
         MIN_PANEL_COUNT_FOR_TODAY = 5000
         
         # 1. 数据预处理 & 日度汇总 (Shadow EMA)
-        # ------------------------------------------------------------------
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
         today = df['warehousing_time'].max()
@@ -48,6 +47,7 @@ def create_mwd_trend_data(
         if daily_summary.empty: return None
         
         target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
+        
         # Shadow EMA 计算
         for group in target_defects:
             if group in daily_summary.columns:
@@ -58,16 +58,17 @@ def create_mwd_trend_data(
                 )
                 attenuated_rates = np.array(smoothed_rates) * scaling_factor
                 daily_summary[group] = np.round(attenuated_rates * daily_summary['total_panels']).astype(int)
-                logging.info(f"成功为 Group '{group}' 计算 Shadow EMA")
 
-        # 2. 生成 Wide Format 的月度/周度原始数据
-        # ------------------------------------------------------------------
+        # === [新增] 2. 注入确定性随机噪声 (打破平滑拖尾) ===
+        # 波动幅度默认 ±10% (0.1)，可根据需要调整
+        daily_summary = _inject_deterministic_noise(daily_summary, target_defects)
+        logging.info("已注入随机噪声以打破EMA平滑趋势。")
+
+        # 3. 生成 Wide Format 的月度/周度原始数据
         monthly_agg = _aggregate_group_monthly_raw(daily_summary, today)
         weekly_agg = _aggregate_group_weekly_raw(daily_summary, today)
         
-        # 3. 智能调节 (Smart Regulation)
-        # ------------------------------------------------------------------
-        # [Refactor] 传递 config 和 resource_dir
+        # 4. 智能调节 (Smart Regulation)
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_monthly_and_weekly(
             monthly_agg, 
             weekly_agg,
@@ -75,17 +76,14 @@ def create_mwd_trend_data(
             resource_dir=resource_dir
         )
         
-        # 4. [最后防线] 手动覆盖 (Manual Override)
-        # ------------------------------------------------------------------
-        # [Refactor] 从 config.processing 读取
+        # 5. 手动覆盖 (Manual Override)
         monthly_values = config.processing.get('group_monthly_values', {})
         weekly_values = config.processing.get('group_weekly_values', {})
         
         monthly_final = _apply_manual_overrides(monthly_regulated, monthly_values, target_defects, 'monthly')
         weekly_final = _apply_manual_overrides(weekly_regulated, weekly_values, target_defects, 'weekly')
         
-        # 5. 格式化输出 (Format)
-        # ------------------------------------------------------------------
+        # 6. 格式化输出 (Format)
         def _format_df(agg_df, time_format_str):
             # 重算 Rate
             for group in target_defects:
@@ -129,62 +127,6 @@ def create_mwd_trend_data(
     
 
 @staticmethod
-def _aggregate_group_monthly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
-    """仅负责时间过滤和重采样聚合"""
-    two_months_ago = today - relativedelta(months=3)
-    monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
-    return monthly_data_raw.resample('M').sum()
-
-@staticmethod
-def _aggregate_group_weekly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
-    """仅负责时间过滤和重采样聚合"""
-    three_weeks_ago = today - relativedelta(weeks=2)
-    weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
-    return weekly_data_raw.resample('W').sum()
-
-@staticmethod
-def _apply_manual_overrides(
-    df: pd.DataFrame, 
-    override_values: dict, 
-    target_defects: list, 
-    period_type: str
-) -> pd.DataFrame:
-    """
-    应用 Config 中的手动数值。此操作优先级最高，会覆盖之前所有的计算结果。
-    """
-    if not override_values or df.empty:
-        return df
-        
-    df_mod = df.copy()
-    
-    for group in target_defects:
-        if group not in df_mod.columns: continue
-        if group not in override_values: continue
-        
-        # 遍历时间索引，查找配置
-        for date_idx in df_mod.index:
-            # 根据类型生成 Key (YYYY-MM 或 YYYY-Wxx)
-            if period_type == 'monthly':
-                time_key = date_idx.strftime('%Y-%m')
-            else: # weekly
-                iso_year, iso_week, _ = date_idx.isocalendar()
-                time_key = f"{iso_year}-W{iso_week:02d}"
-            
-            # 检查是否有配置
-            specified_val = override_values[group].get(time_key)
-            
-            if specified_val is not None:
-                # 覆盖逻辑：Count = Rate * Total
-                total = df_mod.loc[date_idx, 'total_panels']
-                new_count = int(np.round(specified_val * total))
-                df_mod.loc[date_idx, group] = new_count
-                # [修改后] 极简日志
-                logging.warning(f"[手动覆盖-Group] {group} ({time_key}): {specified_val:.2%}")
-                
-    return df_mod
-
-
-@staticmethod
 def create_code_level_mwd_trend_data(
     panel_details_df: pd.DataFrame,
     config: AppConfig,
@@ -193,7 +135,7 @@ def create_code_level_mwd_trend_data(
     scaling_factor: float
 ) -> Dict[str, pd.DataFrame] | None:
     """
-    (V5.1 - 最终防线版)
+    (V5.3 - 随机噪声版)
     Code 级趋势分析
     """
     logging.info(f"开始聚合Code级数据 (Shadow EMA, Span={ema_span})...")
@@ -203,7 +145,6 @@ def create_code_level_mwd_trend_data(
         MIN_PANEL_COUNT_FOR_TODAY = 500
         
         # 1. Shadow EMA 计算
-        # --------------------------------------------------------------
         df = panel_details_df.copy()
         df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
         today = pd.to_datetime(dt.now().date())
@@ -227,6 +168,9 @@ def create_code_level_mwd_trend_data(
 
         base_daily_df['attenuated_rate'] = 0.0 
         unique_codes = base_daily_df['defect_desc'].unique()
+        
+        # 这里的 Wide Format 转换稍微复杂一点，我们直接在 Long Format 上操作
+        # 先计算 EMA
         for code in unique_codes:
             if code == "NoDefect": continue
             mask = base_daily_df['defect_desc'] == code
@@ -239,14 +183,15 @@ def create_code_level_mwd_trend_data(
         
         base_daily_df['defect_panel_count'] = np.round(base_daily_df['attenuated_rate'] * base_daily_df['total_panels']).astype(int)
 
-        # 2. 原始聚合
-        # --------------------------------------------------------------
+        # === [新增] 2. 注入确定性随机噪声 ===
+        # Code 级数据是 Long Format，需要特殊处理
+        base_daily_df = _inject_deterministic_noise_code_level(base_daily_df)
+
+        # 3. 原始聚合
         monthly_agg = _aggregate_code_monthly_raw(base_daily_df, today)
         weekly_agg = _aggregate_code_weekly_raw(base_daily_df, today)
 
-        # 3. 智能调节
-        # --------------------------------------------------------------
-        # [Refactor] 注入参数
+        # 4. 智能调节
         monthly_regulated, weekly_regulated = TrendRegulator.regulate_code_monthly_and_weekly(
             monthly_agg,
             weekly_agg,
@@ -254,17 +199,14 @@ def create_code_level_mwd_trend_data(
             resource_dir=resource_dir
         )
 
-        # 4. 手动覆盖
-        # --------------------------------------------------------------
-        # [Refactor] 从 config.processing 读取
+        # 5. 手动覆盖
         code_monthly_values = config.processing.get('code_monthly_values', {})
         code_weekly_values = config.processing.get('code_weekly_values', {})
 
         monthly_final = _apply_code_manual_overrides(monthly_regulated, code_monthly_values, 'monthly')
         weekly_final = _apply_code_manual_overrides(weekly_regulated, code_weekly_values, 'weekly')
 
-        # 5. 格式化输出
-        # --------------------------------------------------------------
+        # 6. 格式化输出
         results = {}
         results['monthly'] = _format_code_df(monthly_final, '%Y-%m月')
         results['weekly'] = _format_code_df(weekly_final, 'ISO')
@@ -278,103 +220,18 @@ def create_code_level_mwd_trend_data(
             daily_data_ui['defect_rate'] = daily_data_ui['defect_panel_count'] / daily_data_ui['total_panels']
             results['daily'] = daily_data_ui
 
-        logging.info("成功聚合Code级趋势数据 (Shadow EMA + Smart Regulation)。")
+        logging.info("成功聚合Code级趋势数据 (Shadow EMA + Smart Regulation + Noise)。")
         return results
 
     except Exception as e:
         logging.error(f"在聚合Code级趋势数据时发生错误: {e}", exc_info=True)
         return None
     
-# --- Code 级 Helper 函数 ---
-@staticmethod
-def _aggregate_code_monthly_raw(base_daily_df: pd.DataFrame, today: dt) -> pd.DataFrame:
-    """Code 级月度原始聚合 (保留 warehousing_time 为 Timestamp 用于调节)"""
-    two_months_ago = today - relativedelta(months=3)
-    # 筛选时间
-    mask = base_daily_df['warehousing_time'].dt.to_period('M') >= pd.Period(two_months_ago, 'M') # type: ignore
-    raw = base_daily_df[mask].copy()
-    if raw.empty: return pd.DataFrame()
-    
-    # 按月 + Code 聚合
-    # 为了保留时间戳以便 regulate，我们将时间归一化为该月第一天或最后一天
-    # 这里使用 Grouper 按月聚合
-    agg = raw.groupby([pd.Grouper(key='warehousing_time', freq='M'), 'defect_group', 'defect_desc']).agg(
-        defect_panel_count=('defect_panel_count', 'sum'),
-        total_panels=('total_panels', 'sum')
-    ).reset_index()
-    return agg
-
-@staticmethod
-def _aggregate_code_weekly_raw(base_daily_df: pd.DataFrame, today: dt) -> pd.DataFrame:
-    """Code 级周度原始聚合"""
-    three_weeks_ago = today - relativedelta(weeks=2)
-    mask = base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W') # type: ignore
-    raw = base_daily_df[mask].copy()
-    if raw.empty: return pd.DataFrame()
-    
-    # 按周 + Code 聚合
-    agg = raw.groupby([pd.Grouper(key='warehousing_time', freq='W'), 'defect_group', 'defect_desc']).agg(
-        defect_panel_count=('defect_panel_count', 'sum'),
-        total_panels=('total_panels', 'sum')
-    ).reset_index()
-    return agg
-
-@staticmethod
-def _apply_code_manual_overrides(df: pd.DataFrame, override_values: dict, period_type: str) -> pd.DataFrame:
-    """Code 级手动覆盖 (Long Format)"""
-    if not override_values or df.empty: return df
-    df_mod = df.copy()
-    
-    # 遍历每一行进行检查 (由于 Long Format 行数多，也可以优化为遍历 Config，但遍历行逻辑更简单)
-    # 优化策略：只遍历 Config 中存在的 Code
-    for code, time_map in override_values.items():
-        mask_code = df_mod['defect_desc'] == code
-        if not mask_code.any(): continue
-        
-        # 对该 Code 的数据应用时间映射
-        for idx in df_mod[mask_code].index:
-            date_val = df_mod.loc[idx, 'warehousing_time']
-            
-            # 生成 Time Key
-            if period_type == 'monthly':
-                time_key = date_val.strftime('%Y-%m') # type: ignore
-            else:
-                iso_year, iso_week, _ = date_val.isocalendar() # type: ignore
-                time_key = f"{iso_year}-W{iso_week:02d}"
-            
-            if time_key in time_map:
-                spec_val = time_map[time_key]
-                total = df_mod.loc[idx, 'total_panels']
-                df_mod.loc[idx, 'defect_panel_count'] = int(np.round(spec_val * total))
-                logging.warning(f"[手动覆盖-Code] {code} ({time_key}): {spec_val:.2%}")
-
-    return df_mod
-
-@staticmethod
-def _format_code_df(df: pd.DataFrame, time_format_str: str) -> pd.DataFrame:
-    """Code 级格式化输出"""
-    if df.empty: return pd.DataFrame()
-    df_out = df.copy()
-    
-    # 生成展示用的 time_period 字符串
-    if time_format_str == 'ISO':
-        iso_df = df_out['warehousing_time'].dt.isocalendar() # type: ignore
-        df_out['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
-    else:
-        df_out['time_period'] = df_out['warehousing_time'].dt.strftime(time_format_str) # type: ignore
-        
-    # 计算 Rate
-    df_out['defect_rate'] = df_out['defect_panel_count'] / df_out['total_panels']
-    
-    # 剔除 NoDefect
-    return df_out[df_out['defect_desc'] != 'NoDefect']
-
-
 @staticmethod
 def create_current_month_trend_data(panel_details_df: pd.DataFrame) -> pd.DataFrame | None:
     """
     (V5.0 - Shadow EMA 抗噪版)
-    本月至今趋势：全面升级为使用 _calculate_adaptive_shadow_ema。
+    本月至今趋势
     """
     logging.info("开始为“本月至今”日度趋势图准备数据 (Shadow EMA)...")
     if panel_details_df.empty: return None
@@ -439,37 +296,198 @@ def create_current_month_trend_data(panel_details_df: pd.DataFrame) -> pd.DataFr
 
 
 # ==============================================================================
-#  核心算法实现：Shadow EMA (请保留在文件末尾或模块级)
+#  Helper Functions
 # ==============================================================================
+
+def _aggregate_group_monthly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
+    """仅负责时间过滤和重采样聚合"""
+    two_months_ago = today - relativedelta(months=3)
+    monthly_data_raw = daily_summary[daily_summary.index.to_period('M') >= pd.Period(two_months_ago, 'M')] # type: ignore
+    return monthly_data_raw.resample('M').sum()
+
+def _aggregate_group_weekly_raw(daily_summary: pd.DataFrame, today: dt) -> pd.DataFrame:
+    """仅负责时间过滤和重采样聚合"""
+    three_weeks_ago = today - relativedelta(weeks=2)
+    weekly_data_raw = daily_summary[daily_summary.index.to_period('W') >= pd.Period(three_weeks_ago, 'W')] # type: ignore
+    return weekly_data_raw.resample('W').sum()
+
+def _aggregate_code_monthly_raw(base_daily_df: pd.DataFrame, today: dt) -> pd.DataFrame:
+    """Code 级月度原始聚合"""
+    two_months_ago = today - relativedelta(months=3)
+    mask = base_daily_df['warehousing_time'].dt.to_period('M') >= pd.Period(two_months_ago, 'M') # type: ignore
+    raw = base_daily_df[mask].copy()
+    if raw.empty: return pd.DataFrame()
+    
+    agg = raw.groupby([pd.Grouper(key='warehousing_time', freq='M'), 'defect_group', 'defect_desc']).agg(
+        defect_panel_count=('defect_panel_count', 'sum'),
+        total_panels=('total_panels', 'sum')
+    ).reset_index()
+    return agg
+
+def _aggregate_code_weekly_raw(base_daily_df: pd.DataFrame, today: dt) -> pd.DataFrame:
+    """Code 级周度原始聚合"""
+    three_weeks_ago = today - relativedelta(weeks=2)
+    mask = base_daily_df['warehousing_time'].dt.to_period('W') >= pd.Period(three_weeks_ago, 'W') # type: ignore
+    raw = base_daily_df[mask].copy()
+    if raw.empty: return pd.DataFrame()
+    
+    agg = raw.groupby([pd.Grouper(key='warehousing_time', freq='W'), 'defect_group', 'defect_desc']).agg(
+        defect_panel_count=('defect_panel_count', 'sum'),
+        total_panels=('total_panels', 'sum')
+    ).reset_index()
+    return agg
+
+def _apply_manual_overrides(
+    df: pd.DataFrame, 
+    override_values: dict, 
+    target_defects: list, 
+    period_type: str
+) -> pd.DataFrame:
+    """
+    应用 Config 中的手动数值 (Monthly/Weekly)。
+    """
+    if not override_values or df.empty:
+        return df
+        
+    df_mod = df.copy()
+    
+    for group in target_defects:
+        if group not in df_mod.columns: continue
+        if group not in override_values: continue
+        
+        for date_idx in df_mod.index:
+            if period_type == 'monthly':
+                time_key = date_idx.strftime('%Y-%m')
+            else: 
+                iso_year, iso_week, _ = date_idx.isocalendar()
+                time_key = f"{iso_year}-W{iso_week:02d}"
+            
+            specified_val = override_values[group].get(time_key)
+            if specified_val is not None:
+                total = df_mod.loc[date_idx, 'total_panels']
+                new_count = int(np.round(specified_val * total))
+                df_mod.loc[date_idx, group] = new_count
+                logging.warning(f"[手动覆盖-Group] {group} ({time_key}): {specified_val:.2%}")
+                
+    return df_mod
+
+# [新增] Group 级日度覆盖
+def _apply_daily_manual_overrides(
+    daily_summary: pd.DataFrame,
+    override_values: dict,
+    target_defects: list
+) -> pd.DataFrame:
+    """
+    [新增] 应用 Group 级日度手动数值 (YYYY-MM-DD)。
+    解决 EMA 拖尾问题的终极手段。
+    """
+    if not override_values or daily_summary.empty:
+        return daily_summary
+        
+    df_mod = daily_summary.copy()
+    
+    for group in target_defects:
+        if group not in df_mod.columns: continue
+        if group not in override_values: continue
+        
+        # override_values 结构: {'Array_Line': {'2026-01-26': 0.05, ...}}
+        date_map = override_values[group]
+        
+        for date_str, specified_val in date_map.items():
+            try:
+                # 将配置的字符串日期转为 Timestamp 以便索引
+                target_ts = pd.Timestamp(date_str)
+                if target_ts in df_mod.index:
+                    total = df_mod.loc[target_ts, 'total_panels']
+                    new_count = int(np.round(specified_val * total))
+                    df_mod.loc[target_ts, group] = new_count
+                    logging.warning(f"[手动覆盖-Daily] {group} ({date_str}): {specified_val:.2%}")
+            except Exception as e:
+                logging.warning(f"日度覆盖日期解析失败 {date_str}: {e}")
+                
+    return df_mod
+
+def _apply_code_manual_overrides(df: pd.DataFrame, override_values: dict, period_type: str) -> pd.DataFrame:
+    """Code 级手动覆盖 (Long Format - Monthly/Weekly)"""
+    if not override_values or df.empty: return df
+    df_mod = df.copy()
+    
+    for code, time_map in override_values.items():
+        mask_code = df_mod['defect_desc'] == code
+        if not mask_code.any(): continue
+        
+        for idx in df_mod[mask_code].index:
+            date_val = df_mod.loc[idx, 'warehousing_time']
+            if period_type == 'monthly':
+                time_key = date_val.strftime('%Y-%m') # type: ignore
+            else:
+                iso_year, iso_week, _ = date_val.isocalendar() # type: ignore
+                time_key = f"{iso_year}-W{iso_week:02d}"
+            
+            if time_key in time_map:
+                spec_val = time_map[time_key]
+                total = df_mod.loc[idx, 'total_panels']
+                df_mod.loc[idx, 'defect_panel_count'] = int(np.round(spec_val * total))
+                logging.warning(f"[手动覆盖-Code] {code} ({time_key}): {spec_val:.2%}")
+
+    return df_mod
+
+# [新增] Code 级日度覆盖
+def _apply_code_daily_manual_overrides(base_daily_df: pd.DataFrame, override_values: dict) -> pd.DataFrame:
+    """
+    [新增] Code 级日度手动覆盖 (Long Format - YYYY-MM-DD)。
+    """
+    if not override_values or base_daily_df.empty: return base_daily_df
+    df_mod = base_daily_df.copy()
+    
+    for code, date_map in override_values.items():
+        mask_code = df_mod['defect_desc'] == code
+        if not mask_code.any(): continue
+        
+        for date_str, spec_val in date_map.items():
+            try:
+                # 转换日期字符串
+                target_date = pd.to_datetime(date_str).date()
+                
+                # 在 DataFrame 中定位 (Code + Date)
+                # base_daily_df 中的 warehousing_time 是 datetime64[ns]，需要 .dt.date 比较
+                mask_target = (df_mod['defect_desc'] == code) & (df_mod['warehousing_time'].dt.date == target_date) # type: ignore
+                
+                if mask_target.any():
+                    # 应该只有一行
+                    idx = df_mod[mask_target].index[0]
+                    total = df_mod.loc[idx, 'total_panels']
+                    df_mod.loc[idx, 'defect_panel_count'] = int(np.round(spec_val * total))
+                    logging.warning(f"[手动覆盖-Code-Daily] {code} ({date_str}): {spec_val:.2%}")
+                    
+            except Exception as e:
+                logging.warning(f"Code级日度覆盖失败 {code} @ {date_str}: {e}")
+
+    return df_mod
+
+def _format_code_df(df: pd.DataFrame, time_format_str: str) -> pd.DataFrame:
+    """Code 级格式化输出"""
+    if df.empty: return pd.DataFrame()
+    df_out = df.copy()
+    if time_format_str == 'ISO':
+        iso_df = df_out['warehousing_time'].dt.isocalendar() # type: ignore
+        df_out['time_period'] = iso_df.year.astype(str) + '-W' + iso_df.week.map('{:02d}'.format)
+    else:
+        df_out['time_period'] = df_out['warehousing_time'].dt.strftime(time_format_str) # type: ignore
+    df_out['defect_rate'] = df_out['defect_panel_count'] / df_out['total_panels']
+    return df_out[df_out['defect_desc'] != 'NoDefect']
+
 def _calculate_adaptive_shadow_ema(daily_counts: np.ndarray, daily_totals: np.ndarray, span: int) -> List[float]:
-    """
-    [算法核心] 自适应影子 EMA (Adaptive Shadow EMA)
-    实现了"显示值"与"基准值"的分离，从根本上解决异常值拖尾问题。
-    [修改版] 优化了初始化逻辑，使用全局平均率作为锚点，消除起始阶段的趋势偏置。
-    """
+    """[算法核心] 自适应影子 EMA"""
     n = len(daily_counts)
     if n == 0: return []
-    
     alpha = 2 / (span + 1)
     smoothed_rates = []
-    
-    # --- [核心修改] 优化初始化 ---
-    # 计算全局累计值，获取长期平均水平作为初始"心理锚点"
-    # 避免因第一天样本不足(如只入库几片且有不良)导致的初始值虚高
     global_n = np.sum(daily_counts)
     global_d = np.sum(daily_totals)
-    
-    # 1. 计算全局平均良率
     initial_base_rate = global_n / global_d if global_d > 0 else 0.0
-    
-    # 2. 状态变量初始化
-    # 我们让趋势的"记忆"从全局平均水平开始，而不是第一天的随机波动
     trend_d = daily_totals[0]
     trend_n = trend_d * initial_base_rate 
-    
-    # 3. 计算第一天的输出值
-    # 采用 "50% 全局预期 + 50% 当日实况" 的软着陆策略
-    # 既防止第一天被异常拉飞，又保留一部分真实反馈
     actual_first_rate = (daily_counts[0] / daily_totals[0]) if daily_totals[0] > 0 else 0.0
     start_rate = 0.5 * initial_base_rate + 0.5 * actual_first_rate
     smoothed_rates.append(start_rate)
@@ -477,36 +495,90 @@ def _calculate_adaptive_shadow_ema(daily_counts: np.ndarray, daily_totals: np.nd
     for i in range(1, n):
         raw_n = daily_counts[i]
         raw_d = daily_totals[i]
-        
         if raw_d == 0:
-            smoothed_rates.append(smoothed_rates[-1]) # 保持上一日水平
+            smoothed_rates.append(smoothed_rates[-1])
             continue
-            
         raw_rate = raw_n / raw_d
         prev_base_rate = trend_n / trend_d if trend_d > 0 else 0.0
-        
-        # 判定 Spike: (保留您的特定逻辑: 3倍暴涨 OR 绝对值增加 > 4%)
         is_spike = (raw_rate > prev_base_rate * 3.0) or (raw_rate - prev_base_rate > 0.04)
-        
         if is_spike:
-            # 分支 A: 发生异常 -> 激进显示，保守记忆
             display_n = alpha * raw_n + (1 - alpha) * trend_n
             display_d = alpha * raw_d + (1 - alpha) * trend_d
             display_rate = display_n / display_d if display_d > 0 else 0.0
-            
             smoothed_rates.append(display_rate)
-            
-            # 基准更新：假装良率正常
             clamped_n = prev_base_rate * raw_d
             trend_n = alpha * clamped_n + (1 - alpha) * trend_n
             trend_d = alpha * raw_d     + (1 - alpha) * trend_d
-            
         else:
-            # 分支 B: 正常波动 -> 正常更新
             trend_n = alpha * raw_n + (1 - alpha) * trend_n
             trend_d = alpha * raw_d + (1 - alpha) * trend_d
-            
             current_rate = trend_n / trend_d if trend_d > 0 else 0.0
             smoothed_rates.append(current_rate)
-            
     return smoothed_rates
+
+
+def _inject_deterministic_noise(
+    daily_summary: pd.DataFrame, 
+    target_cols: list, 
+    volatility: float = 0.1
+) -> pd.DataFrame:
+    """
+    [算法] 确定性随机噪声注入 (Group级 - Wide Format)
+    打破 EMA 带来的连续多日平滑趋势。
+    使用 sin(timestamp) 模拟伪随机，确保刷新页面时数据不会跳变。
+    """
+    df_noisy = daily_summary.copy()
+    
+    # 将日期转换为整数作为随机种子源
+    # dates_int = df_noisy.index.astype(np.int64) // 10**9 // 86400
+    # 为了兼容性，使用 enumerate
+    
+    for col in target_cols:
+        if col not in df_noisy.columns: continue
+        
+        # 遍历每一天
+        for idx, date_val in enumerate(df_noisy.index):
+            original_val = df_noisy.loc[date_val, col]
+            if original_val == 0: continue  # type: ignore
+            
+            # 构造确定性随机因子
+            # 使用日期索引 + 列名长度作为"种子"
+            # sin 函数在大量数据下表现出良好的伪随机性
+            # magic_number 12.345 是随意选的，只要固定就行
+            pseudo_seed = idx * 12.345 + len(col) * 6.78
+            noise_factor = np.sin(pseudo_seed) * volatility # range: [-vol, +vol]
+            
+            # 应用噪声: New = Old * (1 + noise)
+            new_val = original_val * (1 + noise_factor)
+            df_noisy.loc[date_val, col] = int(max(0, new_val)) # 确保非负整数
+            
+    return df_noisy
+
+def _inject_deterministic_noise_code_level(
+    base_daily_df: pd.DataFrame, 
+    volatility: float = 0.1
+) -> pd.DataFrame:
+    """
+    [算法] 确定性随机噪声注入 (Code级 - Long Format)
+    """
+    df_noisy = base_daily_df.copy()
+    
+    # 增加一列用于计算
+    # 使用 timestamp 的哈希值 + defect_desc 的哈希值
+    
+    def apply_noise(row):
+        val = row['defect_panel_count']
+        if val == 0: return 0
+        
+        # 构造种子: 日期整数 + Code 字符串的哈希
+        # 这是一个极简的伪随机哈希
+        date_int = int(row['warehousing_time'].timestamp())
+        code_hash = hash(row['defect_desc']) % 1000
+        
+        pseudo_seed = date_int + code_hash
+        noise_factor = np.sin(pseudo_seed) * volatility
+        
+        return int(max(0, val * (1 + noise_factor)))
+
+    df_noisy['defect_panel_count'] = df_noisy.apply(apply_noise, axis=1)
+    return df_noisy

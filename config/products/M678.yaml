@@ -67,11 +67,15 @@ processing:
       '2026-W02': 0.0016
       '2026-W03': 0.0013
 
+  group_daily_values:
+
   # 2. Code 级修正配置
   code_monthly_values:
 
   code_weekly_values:
   
+  code_daily_values:
+
   # 3. lot阵列投入时间
   array_input_time:
     custom_times:

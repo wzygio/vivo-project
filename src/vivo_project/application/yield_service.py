@@ -139,7 +139,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 14, scaling_factor: float = 1, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
@@ -148,7 +148,9 @@ class YieldAnalysisService:
         return create_mwd_trend_data(
             panel_details_df=panel_df,
             config=config,
-            resource_dir=resource_dir
+            resource_dir=resource_dir,
+            ema_span=ema_span,
+            scaling_factor=scaling_factor
         )
 
     @staticmethod
@@ -162,7 +164,7 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 7, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 14, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: 

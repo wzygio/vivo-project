@@ -5,8 +5,7 @@ application:
 product_registry:
   enabled_products:
     - "M678"
-    - "C472"
-    # - "M626" (注释掉代表下线)
+    # - "M626"
     
 # UI界面相关的配置
 ui:
