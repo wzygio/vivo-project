@@ -13,10 +13,7 @@ from vivo_project.config_model import AppConfig
 from vivo_project.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
-from vivo_project.core.mwd_trend_processor import (
-    create_mwd_trend_data, 
-    create_code_level_mwd_trend_data
-)
+from vivo_project.core.mwd_trend_processor import MWDTrendProcessor
 from vivo_project.core.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
@@ -138,35 +135,31 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 14, scaling_factor: float = 1, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
         
         # [Refactor] 传入 config 和 resource_dir 给 Core 层
-        return create_mwd_trend_data(
+        return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             config=config,
-            resource_dir=resource_dir,
-            ema_span=ema_span,
-            scaling_factor=scaling_factor
+            resource_dir=resource_dir
         )
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, ema_span: int = 14, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
             
-        return create_code_level_mwd_trend_data(
+        return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            resource_dir=resource_dir,
-            ema_span=ema_span, 
-            scaling_factor=scaling_factor
+            resource_dir=resource_dir
         )
 
     # ==========================================================================
@@ -187,12 +180,10 @@ class YieldAnalysisService:
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
         
         # 生成辅助的 MWD Code 数据 (用于模拟热点)
-        mwd_code_data = create_code_level_mwd_trend_data(
+        mwd_code_data = MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            resource_dir=resource_dir,
-            ema_span=30, 
-            scaling_factor=0.7
+            resource_dir=resource_dir
         )
 
         # 3. 加载警戒线配置
@@ -224,12 +215,10 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = create_code_level_mwd_trend_data(
+        mwd_code_data = MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            resource_dir=resource_dir,
-            ema_span=30, 
-            scaling_factor=0.7
+            resource_dir=resource_dir
         )
         
         # 4. 加载警戒线配置

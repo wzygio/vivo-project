@@ -34,7 +34,7 @@ def setup_logging(log_filename: str = "app.log"):
 
     # 3. [双保险 2] 强制使用 mode='a' (追加模式)
     try:
-        file_handler = logging.FileHandler(log_filepath, mode='a', encoding='utf-8')
+        file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8')
         file_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
         root_logger.addHandler(file_handler)
     except Exception as e:

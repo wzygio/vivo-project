@@ -61,7 +61,7 @@ with st.spinner("正在加载全维度分析数据..."):
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-        active_config, resource_dir, ema_span=1, scaling_factor=1, _core_revision=current_revision
+        active_config, resource_dir, _core_revision=current_revision
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config, resource_dir, _core_revision=current_revision
@@ -172,7 +172,7 @@ if mwd_group_data:
                     create_group_trend_chart(
                         df, title, show_slider, show_count, y_limit, COLOR_MAP, 
                         dynamic_category_orders, 
-                        show_input_count=False
+                        show_input_count=True
                     ),
                     use_container_width=True
                 )

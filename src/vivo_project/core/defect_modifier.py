@@ -3,53 +3,6 @@ import pandas as pd
 from typing import Dict
 
 @staticmethod
-def apply_defect_dispersion(panel_df: pd.DataFrame, config: dict) -> pd.DataFrame:
-    """
-    [新功能 - V2.0] 缺陷分散引擎。
-    通过确定性的加权随机映射，修改不良Panel的Lot/Sheet归属。
-    """
-    logging.info("开始执行缺陷分散 (Panel ID 重映射)...")
-    try:
-        # 1. 分离良品与不良品
-        df_defective = panel_df[panel_df['defect_desc'].notna()].copy()
-        df_unaffected = panel_df[panel_df['defect_desc'].isna()]
-
-        if df_defective.empty:
-            return panel_df # 没有不良品，无需处理
-
-        # 2. 构建“宇宙”
-        all_lot_ids = panel_df['lot_id'].unique().tolist()
-        lot_to_sheets_map = panel_df.groupby('lot_id')['sheet_id'].unique().to_dict()
-        safe_lot_map = {lot: all_lot_ids for lot in all_lot_ids}
-
-        # 3. 构建“概率转盘”
-        weight_maps = _build_weight_maps(
-            all_lot_ids, 
-            config.get('code_specific_lot_weights', {}), 
-            config.get('default_lot_weight', 1)
-        )
-
-        # 4. [核心修正] 执行重映射，并【同时覆盖】三个关键列
-        new_cols = ['panel_id', 'lot_id', 'sheet_id']
-        df_defective[new_cols] = df_defective.apply(
-            _get_dispersion_target,
-            axis=1,
-            context={
-                'lot_to_sheets_map': lot_to_sheets_map,
-                'safe_lot_map': safe_lot_map,
-                'weight_maps': weight_maps,
-                'salt': config.get('random_seed_salt', "")
-            }
-        )
-        
-        # 5. [核心修正] 直接合并，无需重命名
-        return pd.concat([df_unaffected, df_defective], ignore_index=True)
-
-    except Exception as e:
-        logging.error(f"缺陷分散(apply_defect_dispersion)时发生错误: {e}", exc_info=True)
-        return panel_df
-
-@staticmethod
 def apply_defect_multipliers(panel_df: pd.DataFrame, multipliers: Dict[str, float]) -> pd.DataFrame:
     """
     [新增工具函数] 根据给定的倍率字典，通过随机抽样减少特定defect_desc的不良Panel数量。
