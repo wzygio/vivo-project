@@ -76,8 +76,8 @@ processing:
       target_code: '彩斑Mura'       
       target_batch_index: 'oldest'    
       mode: 'multiplicative'          
-      hotspot_multiplier: 0.3
-      normal_multiplier: 1
+      hotspot_multiplier: 0.5
+      normal_multiplier: 2
       hotspot_rules:
         - { type: 'row', value: ['1E','2A','2B'] }  
 

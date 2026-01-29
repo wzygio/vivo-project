@@ -24,6 +24,7 @@ from vivo_project.utils.reloader import get_project_revision
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
+from vivo_project.core.mapping_processor import apply_hotspot_modification_to_matrix
 
 # 引入图表组件
 from vivo_project.app.charts.mwd_chart import (
@@ -415,20 +416,48 @@ with st.container(border=True):
                 
             tabs = st.tabs(tab_labels) # 使用新标签
             
+           # [新增] 获取热区修改脚本配置
+            hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
+
             matrices_cache = {}
             g_max = 0
-            for b in batches:
+            
+            # [修改] 使用 enumerate 获取索引，以便判断 oldest/latest
+            for i, b in enumerate(batches):
                 d = df_map[df_map['batch_no'] == b]
                 coords = d['panel_id'].apply(parse_panel_id_to_coords)
                 d_c = d.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r','c'])
                 d_c[['r','c']] = d_c[['r','c']].astype(int)
+                
+                # 1. 生成原始矩阵
                 mat = pd.pivot_table(d_c, values='panel_id', index='r', columns='c', aggfunc='count', fill_value=0)
                 mat = mat.reindex(index=range(10), columns=range(19), fill_value=0)
+                
+                # 2. [插入] 应用热区修改逻辑
+                # 确定当前批次的身份
+                if i == 0:
+                    b_idx = 'oldest'
+                elif i == len(batches) - 1:
+                    b_idx = 'latest'
+                else:
+                    b_idx = 'middle'
+                
+                # 调用处理器函数 (它会自动搜索匹配的脚本并应用，如果没有匹配则原样返回)
+                mat = apply_hotspot_modification_to_matrix(
+                    heatmap_matrix=mat,
+                    batch_no=b,
+                    code_desc=curr_code,     # 当前选中的 Code
+                    batch_index=b_idx,       # 'oldest' / 'latest' / 'middle'
+                    script_config_list=hotspot_scripts  # 传入配置列表
+                )
+
+                # 3. 存入缓存 (后续绘图使用修改后的 mat)
                 matrices_cache[b] = mat
                 g_max = max(g_max, mat.max().max())
             
             for i, b in enumerate(batches):
                 with tabs[i]:
+                    # 绘图逻辑保持不变，使用的是已经修改过的 matrices_cache
                     fig_map = create_mapping_heatmap(matrices_cache[b], f"批次 {b} 热力图", g_max)
                     st.plotly_chart(fig_map, use_container_width=True)
     else:
