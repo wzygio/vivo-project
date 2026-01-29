@@ -32,18 +32,6 @@ class TrendRegulator:
             return monthly_df, weekly_df
 
         logging.info("启动智能趋势调节器 (Smart Alignment)...")
-        
-        # 1. 准备基准数据
-        # [Refactor] 从 config.processing 获取配置
-        bench_cfg = config.processing.get('benchmark_report_config', {})
-        file_name = bench_cfg.get('file_name')
-        sheet_name = bench_cfg.get('sheet_name', 'CT')
-        
-        raw_benchmark_df = None
-        if file_name:
-            # [Refactor] 显式构建路径
-            file_path = resource_dir / file_name
-            raw_benchmark_df = load_excel_report(file_path, sheet_name)
 
         # 2. 定位需要检查的月份 (最后一行)
         last_month_idx = monthly_df.index[-1] # Timestamp
@@ -88,15 +76,6 @@ class TrendRegulator:
                 if not AbnormalDetector.is_value_trend_abnormal(curr_rate, prev_rate):
                     continue 
 
-                # C. Step 2: 外部仲裁
-                is_real_issue = False
-                if raw_benchmark_df is not None:
-                    is_real_issue = AbnormalDetector.is_benchmark_abnormal(raw_benchmark_df, group)
-                
-                if is_real_issue:
-                    logging.info(f"[{group}] 系统报警且外部基准确认异常 -> 维持原状 (真实恶化)。")
-                    continue
-
                 # D. Step 3: 逆向压制
                 logging.warning(f"[{group}] 系统报警但外部基准稳定 -> 触发智能调节。")
                 
@@ -136,17 +115,6 @@ class TrendRegulator:
             return monthly_df, weekly_df
 
         logging.info("启动 Code 级智能趋势调节器...")
-
-        # 1. 准备基准数据
-        # [Refactor] 依赖注入
-        bench_cfg = config.processing.get('benchmark_report_config', {})
-        file_name = bench_cfg.get('file_name')
-        sheet_name = bench_cfg.get('sheet_name', 'CT')
-        
-        raw_benchmark_df = None
-        if file_name:
-            file_path = resource_dir / file_name
-            raw_benchmark_df = load_excel_report(file_path, sheet_name)
 
         # 2. 遍历每个 Code
         monthly_regulated = monthly_df.copy()
@@ -191,15 +159,7 @@ class TrendRegulator:
                 # B. Step 1: 内部自查
                 if not AbnormalDetector.is_value_trend_abnormal(curr_rate, prev_rate):
                     continue 
-
-                # C. Step 2: 外部仲裁
-                is_real_issue = False
-                if raw_benchmark_df is not None:
-                    is_real_issue = AbnormalDetector.is_benchmark_abnormal(raw_benchmark_df, code)
                 
-                if is_real_issue:
-                    continue
-
                 # D. Step 3: 逆向压制
                 safe_delta = AbnormalDetector.THRESHOLD_SURGE_DELTA - 0.0001
                 target_rate = prev_rate + safe_delta

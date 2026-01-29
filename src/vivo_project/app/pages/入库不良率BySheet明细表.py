@@ -9,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 # --- 1. 初始化与配置 ---
 from vivo_project.utils.session_manager import SessionManager
 from vivo_project.config import ConfigLoader
+from vivo_project.utils.reloader import get_project_revision
 
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.app.components.components import create_code_selection_ui, render_page_header
@@ -27,7 +28,7 @@ render_page_header("📈 入库不良率BySheet明细表", active_config)
 
 # --- 3. 加载数据 ---
 # [Refactor] 4. Service 注入
-core_rev = YieldAnalysisService._get_core_revision(project_root)
+core_rev = get_project_revision(project_root)
 all_data = YieldAnalysisService.get_sheet_defect_rates(
     config=active_config, 
     resource_dir=resource_dir, 

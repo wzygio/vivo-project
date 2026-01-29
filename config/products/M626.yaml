@@ -20,7 +20,6 @@ paths:
   static_warning_lines: 
     file_name: 'M626_入库不良率规格.xlsx'
     sheet_name: 'Sheet1'
-  
 
 # 数据处理相关的参数
 processing:
@@ -32,10 +31,29 @@ processing:
 
   # 1. Group 级修正配置
   group_monthly_values:
-
+    OLED_Mura:
+      "2026-01": 0.0021
 
   group_weekly_values:
+    Array_Pixel:  
+      "2026-W04": 0
+    OLED_Mura:
+      "2026-W04": 0
+      "2026-W05": 0.0035
 
+  group_daily_values:
+    Array_Pixel:
+      '2026-01-22': 0
+      '2026-01-23': 0
+      '2026-01-24': 0
+      '2026-01-25': 0
+    OLED_Mura:
+      '2026-01-22': 0
+      '2026-01-23': 0
+      '2026-01-24': 0
+      '2026-01-25': 0
+      '2026-01-26': 0.0036
+      '2026-01-27': 0.0033
 
   # 2. Code 级修正配置
   code_monthly_values:
@@ -49,15 +67,25 @@ processing:
 
   # 5. defect_code倍率调节
   defect_multipliers:
+    '彩斑Mura': 0.3
+    'S向棱形彩色带状Mura': 0.3
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:
+    - enable: true
+      target_code: '彩斑Mura'       
+      target_batch_index: 'oldest'    
+      mode: 'multiplicative'          
+      hotspot_multiplier: 0.3
+      normal_multiplier: 1
+      hotspot_rules:
+        - { type: 'row', value: ['1E','2A','2B'] }  
 
   # 7. sheet/lot波动调节
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025
     hide_hotspot_config: {
-        'fluctuation_sheet': 0.3,  
+        'fluctuation_sheet': 0.2,  
         'fluctuation_lot': 0.2,
     }

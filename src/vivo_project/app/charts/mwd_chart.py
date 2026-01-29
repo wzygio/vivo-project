@@ -157,18 +157,28 @@ def create_code_trend_chart(
     )
     
     # 3. 添加spec
-    if warning_line_value is not None and warning_line_value > 0:
+    if warning_line_value is not None:  # 去掉 >0 的硬性限制
         fig.add_hline(
             y=warning_line_value, line_dash="dash", line_color="red", line_width=2,
             annotation_text=f"spec: {warning_line_value:.2%}", 
             annotation_position="bottom right", annotation_font_color="red"
         )
     
+    # --- [关键修改] 动态调整 Y 轴范围 ---
+    # 确保 Y 轴上限至少能覆盖规格线的 1.1 倍，防止标签被切掉
+    final_y_max = y_range[1]
+    if warning_line_value is not None:
+        final_y_max = max(final_y_max, warning_line_value * 1.1)
+
     # 4. 布局调整
     fig.update_traces(hovertemplate='<b>%{x}</b><br>不良率: %{y:.2%}', marker_color='#54a24b')
     fig.update_layout(
-        yaxis_range=y_range, yaxis_tickformat='.2%', showlegend=False,
-        xaxis_title=None, yaxis_title=None, title_font_size=16
+        yaxis_range=[0, final_y_max],  # 使用计算后的范围
+        yaxis_tickformat='.2%', 
+        showlegend=False,
+        xaxis_title=None, 
+        yaxis_title=None, 
+        title_font_size=16
     )
     fig.update_xaxes(type='category', tickangle=-45 if "日度" in title else 0)
     

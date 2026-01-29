@@ -19,6 +19,7 @@ if ENABLE_HOT_RELOAD:
 from vivo_project.utils.session_manager import SessionManager
 from vivo_project.config import ConfigLoader
 from vivo_project.utils.app_setup import AppSetup
+from vivo_project.utils.reloader import get_project_revision
 
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
@@ -57,14 +58,54 @@ render_page_header("📊 入库不良率分析看板", active_config)
 # --- 2 全局数据加载 ---
 with st.spinner("正在加载全维度分析数据..."):
     # [Refactor] 4. 获取核心版本号 (依赖注入 project_root)
-    current_revision = YieldAnalysisService._get_core_revision(project_root)
+    current_revision = get_project_revision(project_root)
+    
+    # 1. 获取当前产品代号
+    current_product = st.session_state.get(SessionManager.KEY_PRODUCT, "Unknown")
+    
+    # 2. 定义默认参数 (兜底)
+    # Group 级默认参数
+    group_ema_span = 14
+    group_scale = 1.0
+    # Code 级默认参数
+    code_ema_span = 30
+    code_scale = 0.7
+
+    # 3. 针对特定产品进行参数微调 (Hardcode 模式)
+    if current_product == "M678":
+        group_ema_span = 14
+        group_scale = 1
+        
+        code_ema_span = 14
+        code_scale = 0.7
+
+        USE_TOP_DOWN_STRATEGY = False
+        
+    elif current_product == "M626":
+        group_ema_span = 1
+        group_scale = 1
+        
+        code_ema_span = 1
+        code_scale = 0.7
+
+        USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-        active_config, resource_dir, _core_revision=current_revision
+        active_config, 
+        resource_dir, 
+        _core_revision=current_revision, 
+        ema_span=group_ema_span, 
+        scaling_factor=group_scale, 
+        use_top_down=USE_TOP_DOWN_STRATEGY
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-        active_config, resource_dir, _core_revision=current_revision
+        active_config, 
+        resource_dir, 
+        _core_revision=current_revision, 
+        ema_span=code_ema_span, 
+        scaling_factor=code_scale, 
+        use_top_down=USE_TOP_DOWN_STRATEGY
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config, resource_dir, _core_revision=current_revision

@@ -45,23 +45,7 @@ class YieldAnalysisService:
         cls._start_date = end_date - relativedelta(months=3)
         logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
 
-    @staticmethod
-    def _get_core_revision(project_root: Path) -> float:
-        """
-        [热重载核心] 获取 Core 层代码的最新修改时间戳。
-        [Refactor] 接收 project_root 路径。
-        """
-        try:
-            core_dir = project_root / "src" / "vivo_project" / "core"
-            max_mtime = 0.0
-            if core_dir.exists():
-                for f in core_dir.glob("*.py"):
-                    mtime = f.stat().st_mtime
-                    if mtime > max_mtime:
-                        max_mtime = mtime
-            return max_mtime
-        except Exception:
-            return 0.0
+    
         
     @staticmethod
     @st.cache_data(show_spinner=False)
@@ -135,7 +119,14 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mwd_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_mwd_trend_data(
+        config: AppConfig, 
+        resource_dir: Path, 
+        _core_revision: float = 0.0, 
+        ema_span: int = 14, 
+        scaling_factor: float = 1.0,
+        use_top_down: bool = False
+        ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
@@ -144,12 +135,22 @@ class YieldAnalysisService:
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             config=config,
-            resource_dir=resource_dir
+            resource_dir=resource_dir,
+            ema_span=ema_span,
+            scaling_factor=scaling_factor,
+            USE_TOP_DOWN_STRATEGY=use_top_down
         )
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_code_level_trend_data(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, pd.DataFrame] | None:
+    def get_code_level_trend_data(
+        config: AppConfig, 
+        resource_dir: Path, 
+        _core_revision: float = 0, 
+        ema_span: int = 14, 
+        scaling_factor: float = 0.7,
+        use_top_down: bool = False
+        ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: 
@@ -159,7 +160,10 @@ class YieldAnalysisService:
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            resource_dir=resource_dir
+            resource_dir=resource_dir,
+            ema_span=ema_span,
+            scaling_factor=scaling_factor,
+            USE_TOP_DOWN_STRATEGY=use_top_down
         )
 
     # ==========================================================================
@@ -167,7 +171,12 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_sheet_defect_rates(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, Any] | None:
+    def get_sheet_defect_rates(
+        config: AppConfig, 
+        resource_dir: Path, 
+        _core_revision: float = 0.0,
+        ema_span: int = 30,
+        scaling_factor: float = 0.7) -> Dict[str, Any] | None:
         """计算 Sheet 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
@@ -180,11 +189,7 @@ class YieldAnalysisService:
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
         
         # 生成辅助的 MWD Code 数据 (用于模拟热点)
-        mwd_code_data = MWDTrendProcessor.create_code_level_mwd_trend_data(
-            panel_details_df=panel_df, 
-            config=config,
-            resource_dir=resource_dir
-        )
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor)
 
         # 3. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
@@ -202,7 +207,12 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_lot_defect_rates(config: AppConfig, resource_dir: Path, _core_revision: float = 0.0) -> Dict[str, Any] | None:
+    def get_lot_defect_rates(
+        config: AppConfig, 
+        resource_dir: Path, 
+        _core_revision: float = 0.0,
+        ema_span: int = 30,
+        scaling_factor: float = 0.7) -> Dict[str, Any] | None:
         """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -215,11 +225,7 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = MWDTrendProcessor.create_code_level_mwd_trend_data(
-            panel_details_df=panel_df, 
-            config=config,
-            resource_dir=resource_dir
-        )
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor)
         
         # 4. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)

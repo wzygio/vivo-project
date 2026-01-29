@@ -33,54 +33,11 @@ class AbnormalDetector:
     @classmethod
     def is_benchmark_abnormal(cls, raw_df: pd.DataFrame, target_group_or_code: str) -> bool:
         """
-        判断外部报表中，指定 Group/Code 的最新两个批次是否异常。
-        True = 外部也崩了 (确实有事)
-        False = 外部很稳 (可能是系统误报)
+        [已优化] 不再执行复杂的外部报表比对逻辑。
+        直接返回 True，确保系统检测到的异常会立即触发 TrendRegulator 的调节。
         """
-        if raw_df is None or raw_df.empty:
-            return False # 没数据默认当做没异常，或者保守策略
-
-        try:
-            # 1. 定位批次产出率行
-            mask_yield = raw_df[2].astype(str).str.strip() == "批次产出率"
-            if not mask_yield.any(): return False
-            yield_row_idx = int(mask_yield.idxmax())
-
-            # 2. 筛选有效列 (最新两个 >20% 的批次)
-            valid_cols = []
-            for col_idx in range(raw_df.shape[1] - 1, 4, -1):
-                try:
-                    val = float(raw_df.iloc[yield_row_idx, col_idx]) # type: ignore
-                    if val > 0.2:
-                        valid_cols.append(col_idx)
-                        if len(valid_cols) == 2: break
-                except (ValueError, TypeError):
-                    continue
-            
-            if len(valid_cols) < 2: return False
-            col_curr, col_prev = valid_cols[0], valid_cols[1]
-
-            # 3. 定位目标行
-            target_row_idx = None
-            # C列是 Group, D列是 Code
-            for r in range(yield_row_idx + 1, len(raw_df)):
-                g_val = str(raw_df.iloc[r, 2]).strip()
-                c_val = str(raw_df.iloc[r, 3]).strip()
-                if g_val == target_group_or_code or c_val == target_group_or_code:
-                    target_row_idx = r
-                    break
-            
-            if target_row_idx is None: return False
-
-            # 4. 执行数值比对
-            v_c = float(raw_df.iloc[target_row_idx, col_curr]) # type: ignore
-            v_p = float(raw_df.iloc[target_row_idx, col_prev]) # type: ignore
-            
-            return cls.is_value_trend_abnormal(v_c, v_p)
-
-        except Exception as e:
-            logging.error(f"基准比对布尔检查出错: {e}")
-            return False
+        # logging.info(f"跳过外部基准比对，直接对 {target_group_or_code} 开启数据调节模式")
+        return True
         
     # ==========================================================================
     #  逻辑 B: 系统内部月度趋势检测 (迁移自前端)

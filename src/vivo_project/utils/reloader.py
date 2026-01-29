@@ -1,7 +1,9 @@
 # src/vivo_project/utils/reloader.py
-import sys
+import sys, os
 import importlib
 import logging
+import hashlib
+from pathlib import Path
 
 def deep_reload_modules(root_package_name="vivo_project"):
     """
@@ -30,3 +32,30 @@ def deep_reload_modules(root_package_name="vivo_project"):
             
     if unloaded_count > 0:
         logging.info(f"🔥 [Hot Reload] 已强制卸载 {unloaded_count} 个后端模块，下次 import 将读取最新代码。")
+
+def get_project_revision(project_root: Path) -> str:
+        """
+        计算整个项目的代码指纹。
+        扫描 core, application, config 等所有关键目录。
+        """
+        hash_md5 = hashlib.md5()
+        # 监控这些关键目录
+        target_dirs = ["core", "application", "config", "app", "infrastructure"]
+        
+        src_path = project_root / "src" / "vivo_project"
+        
+        for subdir in target_dirs:
+            target_path = src_path / subdir
+            if not target_path.exists(): continue
+            
+            # 遍历目录下所有 .py 和 .yaml 文件
+            for root, _, files in os.walk(target_path):
+                for file in sorted(files):  # 排序保证顺序一致
+                    if file.endswith(".py") or file.endswith(".yaml"):
+                        file_path = os.path.join(root, file)
+                        # 获取修改时间戳
+                        mtime = os.path.getmtime(file_path)
+                        # 将文件名和时间戳加入哈希计算
+                        hash_md5.update(f"{file}_{mtime}".encode('utf-8'))
+                        
+        return hash_md5.hexdigest()
