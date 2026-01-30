@@ -45,7 +45,7 @@ def calculate_sheet_defect_rates(
             sheet_base['array_input_time'] = pd.NaT
 
         # --- 2. 过货率过滤 ---
-        sheet_base_filtered = _filter_by_pass_rate(sheet_base.copy(), 190, 0.2, "sheet")
+        sheet_base_filtered = _filter_by_pass_rate(sheet_base.copy(), 190, 0, "sheet")
         if sheet_base_filtered.empty: return None
         
         valid_ids = sheet_base_filtered['sheet_id'].unique()

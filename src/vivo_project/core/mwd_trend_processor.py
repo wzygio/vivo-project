@@ -33,6 +33,10 @@ class MWDTrendProcessor:
             raw_daily, today, target_defects = _prepare_group_raw_data(panel_details_df)
             if raw_daily is None: return None
 
+            # 定义 Group 级的月/周聚合 lambda
+            agg_m = lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=True)
+            agg_w = lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=True)
+
             # 2. 准备配置参数
             m_vals = config.processing.get('group_monthly_values', {})
             w_vals = config.processing.get('group_weekly_values', {})
@@ -43,15 +47,16 @@ class MWDTrendProcessor:
                 monthly, weekly, daily = _execute_top_down_pipeline(
                     raw_daily_df=raw_daily,
                     today=today,
-                    agg_funcs=(_aggregate_group_monthly_raw, _aggregate_group_weekly_raw),
+                    agg_funcs=(agg_m, agg_w),
                     reg_func=TrendRegulator.regulate_monthly_and_weekly,
                     override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
                     override_vals=(m_vals, w_vals),
-                    gen_func=_generate_daily_from_monthly_baseline,
+                    gen_func=_generate_daily_from_weekly_baseline,
                     config=config,
                     resource_dir=resource_dir,
                     # Kwargs for generator/overrides
                     target_defects=target_defects,
+                    scaling_factor=scaling_factor,
                     volatility=0.1
                 )
             else:
@@ -98,14 +103,9 @@ class MWDTrendProcessor:
             raw_daily, today = _prepare_code_raw_data(panel_details_df)
             if raw_daily is None: return None
 
-            # ======================================================================
-            # [核心修复] 定义“全局分母”聚合函数
-            # 解决稀疏 Code 在聚合时因行缺失导致 Total Panels 偏小（良率翻倍）的问题
-            # ======================================================================
-
-            # 定义具体的聚合 Lambda (Month & Week)
-            agg_monthly_func = lambda d, t: _safe_code_aggregator(d, t, 'M')
-            agg_weekly_func  = lambda d, t: _safe_code_aggregator(d, t, 'W')
+            # [修改后] 统一使用具备“全局分母对齐”能力的通用聚合器
+            agg_monthly_func = lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=False)
+            agg_weekly_func  = lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=False)
 
             # ======================================================================
 
@@ -123,9 +123,10 @@ class MWDTrendProcessor:
                     reg_func=TrendRegulator.regulate_code_monthly_and_weekly,
                     override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
                     override_vals=(m_vals, w_vals),
-                    gen_func=_generate_code_daily_from_monthly_baseline,
+                    gen_func=_generate_code_daily_from_weekly_baseline,
                     config=config,
                     resource_dir=resource_dir,
+                    scaling_factor=scaling_factor,
                     volatility=0.1
                 )
             else:
@@ -153,34 +154,69 @@ class MWDTrendProcessor:
 # ==============================================================================
 #  核心策略流水线 (Generic Pipelines)
 # ==============================================================================
-def _safe_code_aggregator(df, anchor_date, freq):
+def _safe_trend_aggregator(df: pd.DataFrame, anchor_date: dt, freq: str, is_group_level: bool = False):
+    """
+    [通用升级版] 安全趋势聚合器
+    支持 Group 级 (Wide) 和 Code 级 (Long)，彻底解决分母萎缩与索引冲突问题。
+    """
     if df.empty: return pd.DataFrame()
     
-    # 1. 计算【全局】投入量 (True Denominator)
-    # 仅提取 [日期, total_panels] 并根据日期去重，确保每一天的投入量只被计算一次
-    daily_globals = df[['warehousing_time', 'total_panels']].drop_duplicates(subset=['warehousing_time'])
+    # 1. 统一转换：确保时间维度是“列”且名为 warehousing_time
+    working_df = df.copy()
+    if 'warehousing_time' not in working_df.columns:
+        # 如果在 Index 里，则转出来
+        working_df = working_df.reset_index()
+        # 兼容处理：Pandas reset_index 默认可能叫 'index' 或 'level_0'
+        if 'index' in working_df.columns:
+            working_df = working_df.rename(columns={'index': 'warehousing_time'})
+        elif 'level_0' in working_df.columns:
+            working_df = working_df.rename(columns={'level_0': 'warehousing_time'})
+
+    # 2. 执行时间窗口过滤 (3个月或2周)
+    if freq == 'M':
+        start = anchor_date - relativedelta(months=3)
+        mask = working_df['warehousing_time'].dt.to_period('M') >= pd.Period(start, 'M') # type: ignore
+    else:
+        start = anchor_date - relativedelta(weeks=2)
+        mask = working_df['warehousing_time'].dt.to_period('W') >= pd.Period(start, 'W') # type: ignore
     
-    # 按频率聚合全局投入量
-    grouper_global = pd.Grouper(key='warehousing_time', freq=freq)
-    global_totals = daily_globals.groupby(grouper_global)['total_panels'].sum()
+    working_df = working_df[mask].copy()
+    if working_df.empty: return pd.DataFrame()
+
+    # 3. 计算【全局】分母 (True Denominator)
+    # 取出所有日期和对应的总投入，去重（防止同一天多行 Code 导致分母重复累加）
+    daily_globals = working_df[['warehousing_time', 'total_panels']].drop_duplicates(subset=['warehousing_time'])
+    global_totals = daily_globals.set_index('warehousing_time').resample(freq)['total_panels'].sum()
     
-    # 2. 计算【各Code】不良数 (Numerator)
-    # 仅对 defect_panel_count 进行分组求和，忽略其自带的 total_panels
-    grouper_code = pd.Grouper(key='warehousing_time', freq=freq)
-    code_defects = df.groupby([
-        grouper_code, 'defect_group', 'defect_desc'
-    ])['defect_panel_count'].sum().reset_index()
-    
-    # 3. 将全局分母 Merge 回去
-    # 将 code_defects 的时间列对齐到 global_totals 的索引
-    code_defects = code_defects.set_index('warehousing_time')
-    merged = code_defects.join(global_totals, how='left')
-    
-    # 4. 恢复 total_panels 列并处理 NaN
-    # Join 后的 total_panels 来自 global_totals，这是正确的全量分母
-    merged['total_panels'] = merged['total_panels'].fillna(0)
-    
-    return merged.reset_index()
+    # 4. 计算【分子】并合并
+    if is_group_level:
+        # --- Group 级处理 (Wide Format) ---
+        # 排除非数据列，剩下的全是 Group 列（如 Array_Line, Array_Pixel...）
+        exclude = ['warehousing_time', 'total_panels', 'month_period']
+        group_cols = [c for c in working_df.columns if c not in exclude]
+        
+        # 聚合各列分子
+        numerator_df = working_df.set_index('warehousing_time').resample(freq)[group_cols].sum()
+        
+        # 合并全局分母
+        merged = numerator_df.join(global_totals)
+        return merged # 返回 Wide 格式以保持向下兼容
+    else:
+        # --- Code 级处理 (Long Format) ---
+        numerator_df = working_df.groupby([
+            pd.Grouper(key='warehousing_time', freq=freq),
+            'defect_group', 'defect_desc'
+        ])['defect_panel_count'].sum().reset_index()
+        
+        # 合并全局分母
+        numerator_df = numerator_df.set_index('warehousing_time')
+        merged = numerator_df.join(global_totals, rsuffix='_global', how='left')
+        
+        if 'total_panels_global' in merged.columns:
+            merged['total_panels'] = merged['total_panels_global']
+            merged.drop(columns=['total_panels_global'], inplace=True)
+            
+        return merged.reset_index()
 
 def _execute_top_down_pipeline(
     raw_daily_df: pd.DataFrame,
@@ -209,17 +245,26 @@ def _execute_top_down_pipeline(
     monthly_agg = agg_monthly(raw_daily_df, today)
     weekly_agg = agg_weekly(raw_daily_df, today)
 
+    # =========================================================
+    # [核心修复] 在此处统一应用 Scaling Factor
+    # 这样月度、周度以及后续基于周度生成的日度数据，都会同步缩放
+    # =========================================================
+    factor = kwargs.get('scaling_factor', 1.0)
+    if factor != 1.0:
+        monthly_agg = _apply_scaling(monthly_agg, factor)
+        weekly_agg = _apply_scaling(weekly_agg, factor)
+    # =========================================================
+
     # 2. 调节 (Regulate)
     monthly_reg, weekly_reg = reg_func(monthly_agg, weekly_agg, config, resource_dir)
 
     # 3. 覆盖 (Override)
     ov_func_m, ov_func_w = override_funcs
     val_m, val_w = override_vals
-    # 注意：Group级覆盖需要 target_defects，Code级不需要。通过 kwargs 传递。
+    
     period_kw_m = {'period_type': 'monthly'}
     period_kw_w = {'period_type': 'weekly'}
     
-    # 将 kwargs 中的特定参数传给 override 函数 (如 target_defects)
     valid_ov_keys = ['target_defects'] 
     extra_ov_args = {k: v for k, v in kwargs.items() if k in valid_ov_keys}
     
@@ -228,15 +273,16 @@ def _execute_top_down_pipeline(
 
     # 4. 生成 (Generate Daily)
     # -------------------------------------------------------------
-    # [核心修复] 骨架构造逻辑优化
-    # 必须优先检查是否为 Long Format (Code Level)，因为它依赖 warehousing_time 列
     if 'warehousing_time' in df_processing.columns:
-        # Code Level: 保留时间列 + 总数列，并去重（因为同一天有多行Defect数据）
+        # Code Level: 保留时间列 + 总数列，并去重
         daily_skeleton = df_processing[['warehousing_time', 'total_panels']].drop_duplicates()
     else:
-        # Group Level: 时间在索引中 (Wide Format)，只需提取 total_panels
+        # Group Level: 时间在索引中
         daily_skeleton = df_processing[['total_panels']].copy()
-    daily_final = gen_func(daily_skeleton, monthly_final, **kwargs)
+
+    # [核心修复] 将第二个参数从 monthly_final 改为 weekly_final
+    # 因为您现在的 gen_func 是基于周度数据的生成器
+    daily_final = gen_func(daily_skeleton, weekly_final, **kwargs)
 
     return monthly_final, weekly_final, daily_final
 
@@ -295,7 +341,7 @@ def _execute_ema_pipeline(
 def _apply_t1_filtering(
     df: pd.DataFrame, 
     today: dt | None, 
-    conditional_filter: bool = True  # 新增参数: 'strict' (默认) 或 'conditional'
+    conditional_filter: bool = True  
 ) -> Tuple[pd.DataFrame, dt | None]:
     """
     [通用复用函数] 执行 T-1 末日过滤策略。
@@ -333,7 +379,7 @@ def _apply_t1_filtering(
     
     if conditional_filter:
         # 如果入库量足够大（>1000），则认为是可信数据，不执行过滤
-        if isinstance(last_day_volume, (int, float)) and last_day_volume > 1000:
+        if last_day_volume > 1000: # type: ignore
             logging.info(f"T-1 豁免：末日 ({actual_last_date.strftime('%Y-%m-%d')}) 入库量 {last_day_volume} > 1000，保留数据。")
             should_filter = False
         else:
@@ -511,101 +557,134 @@ def _format_code_results(monthly, weekly, daily, today):
 # ==============================================================================
 #  底层逻辑 (Generators, Noise, EMA) - 保持不变
 # ==============================================================================
-def _generate_daily_from_monthly_baseline(daily_skeleton, monthly_final, target_defects, volatility=0.1):
+def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_defects, volatility=0.1, **kwargs):
+    """
+    [策略 A] Group 级日度数据生成器
+    修改：基准从月度改为周度 (Weekly Baseline)，以获得更灵敏的趋势响应。
+    """
     df_gen = daily_skeleton.copy()
-    df_gen['month_period'] = df_gen.index.to_period('M') # type: ignore
+    # 使用 'W-SUN' 确保与 resample('W') 生成的周日锚点对齐
+    df_gen['week_period'] = df_gen.index.to_period('W-SUN') # type: ignore
+    
+    # 预先处理 weekly_final 的索引
+    weekly_lookup = weekly_final.copy()
+    weekly_lookup.index = weekly_lookup.index.to_period('W-SUN')
+
     for group in target_defects:
-        if group not in monthly_final.columns: continue
+        if group not in weekly_lookup.columns: continue
         df_gen[group] = 0
-        for month_idx in monthly_final.index:
-            m_count = monthly_final.loc[month_idx, group]
-            m_total = monthly_final.loc[month_idx, 'total_panels']
-            if m_total == 0: continue
-            base_rate = m_count / m_total
-            mask = df_gen['month_period'] == month_idx.to_period('M')
-            days_in_month = df_gen[mask]
-            for day_idx in days_in_month.index:
+        
+        for week_idx in weekly_lookup.index:
+            w_count = weekly_lookup.loc[week_idx, group]
+            w_total = weekly_lookup.loc[week_idx, 'total_panels']
+            
+            if w_total == 0: continue
+            
+            # [核心修改] 应用缩放因子到基准率
+            base_rate = w_count / w_total
+            
+            # 找到属于该周的所有日期
+            mask = df_gen['week_period'] == week_idx
+            days_in_week = df_gen[mask]
+            
+            for day_idx in days_in_week.index:
                 day_total = df_gen.loc[day_idx, 'total_panels']
                 if day_total == 0: continue
+                
+                # 注入确定性噪声
                 ts_seed = int(day_idx.timestamp() / 86400) # type: ignore
                 noise = np.sin(ts_seed + len(group)*99) * volatility
+                
+                # 计算最终数量
                 final = int(np.round(base_rate * (1 + noise) * day_total))
                 df_gen.loc[day_idx, group] = final
-    df_gen.drop(columns=['month_period'], inplace=True)
+                
+    df_gen.drop(columns=['week_period'], inplace=True)
     return df_gen
 
-def _generate_code_daily_from_monthly_baseline(daily_skeleton, monthly_final, volatility=0.1):
+def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility=0.1,  **kwargs):
     """
     [性能优化版] Code 级日度数据生成器
-    改动：使用 Cross Join + Vectorization 替代双重循环，性能提升约 100 倍。
+    修改：基准从月度改为周度 (Weekly Baseline)。
     """
-    if daily_skeleton.empty or monthly_final.empty:
+    if daily_skeleton.empty or weekly_final.empty:
         return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
 
-    # 1. 准备月度基准率表 (Lookup Table)
-    # 计算每个月、每个 Code 的基准良率
-    monthly_data = monthly_final.copy()
-    monthly_data['month_period'] = monthly_data['warehousing_time'].dt.to_period('M')
-    # 避免除以零
-    monthly_data['base_rate'] = monthly_data['defect_panel_count'] / monthly_data['total_panels'].replace(0, 1)
+    # 1. 准备周度基准率表
+    weekly_data = weekly_final.copy()
+    # 统一转换为周周期，确保 merge 时的 Key 匹配
+    weekly_data['week_period'] = weekly_data['warehousing_time'].dt.to_period('W-SUN')
+    weekly_data['base_rate'] = weekly_data['defect_panel_count'] / weekly_data['total_panels'].replace(0, 1)
     
-    # 提取所有出现过的 Code 及其所属 Group (用于构建笛卡尔积)
-    # 结构: [defect_group, defect_desc]
-    unique_codes = monthly_data[['defect_group', 'defect_desc']].drop_duplicates()
+    # 提取 Code 映射
+    unique_codes = weekly_data[['defect_group', 'defect_desc']].drop_duplicates()
 
-    # 2. 构建 "日期 x Code" 的全量骨架 (Cross Join)
-    # 给两边都加上临时 key=1 进行合并，生成 (天数 * Code数) 行的大表
+    # 2. 构建 "日期 x Code" 笛卡尔积
     daily_skeleton_tmp = daily_skeleton.copy()
     daily_skeleton_tmp['_key'] = 1
     unique_codes_tmp = unique_codes.copy()
     unique_codes_tmp['_key'] = 1
     
-    # full_grid 包含了每一天、每一个 Code 的组合
     full_grid = pd.merge(daily_skeleton_tmp, unique_codes_tmp, on='_key').drop(columns='_key')
     
-    # 3. 关联月度基准率
-    full_grid['month_period'] = full_grid['warehousing_time'].dt.to_period('M') # type: ignore
+    # 3. 关联周度基准率
+    full_grid['week_period'] = full_grid['warehousing_time'].dt.to_period('W-SUN') # type: ignore
     
-    # 将月度良率 merge 进来
-    # 注意：如果某个月某个 Code 没有记录，merge 后 base_rate 会是 NaN，填充为 0 即可
+    # 将周度良率 merge 进来
     merged = pd.merge(
         full_grid, 
-        monthly_data[['month_period', 'defect_desc', 'base_rate']], 
-        on=['month_period', 'defect_desc'], 
+        weekly_data[['week_period', 'defect_desc', 'base_rate']], 
+        on=['week_period', 'defect_desc'], 
         how='left'
     )
     merged['base_rate'] = merged['base_rate'].fillna(0)
     
-    # 过滤掉基准率为 0 的行，减少后续计算量
+    # 过滤无效数据
     merged = merged[merged['base_rate'] > 0].copy()
-    
     if merged.empty:
         return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
 
-    # 4. 向量化计算噪声与最终数量
-    # 模拟原逻辑: ts_seed = int(timestamp / 86400)
-    # 注意: numpy 处理 timestamp 需要转为 int64 (纳秒) -> 秒 -> 天
+    # 4. 向量化噪声计算
     ts_seed = (merged['warehousing_time'].astype('int64') // 10**9 // 86400).astype(int)
-    
-    # 模拟原逻辑: hash(code) % 1000
-    # 使用 map(hash) 保持与原 Python 逻辑一致的随机性
     code_hash = merged['defect_desc'].map(hash) % 1000
-    
-    # 向量化计算 sin 噪声
-    # noise = sin(ts + hash) * volatility
     noise = np.sin(ts_seed + code_hash) * volatility
     
-    # 计算最终数量: count = total * rate * (1 + noise)
+    # 计算最终数量
     calculated_counts = merged['total_panels'] * merged['base_rate'] * (1 + noise)
     merged['defect_panel_count'] = np.round(calculated_counts).astype(int)
     
-    # 5. 最终清理
-    # 过滤掉数量 <= 0 的行
+    # 5. 结果清理
     final_df = merged[merged['defect_panel_count'] > 0][
         ['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count']
     ]
     
     return final_df
+
+def _apply_scaling(df: pd.DataFrame, factor: float) -> pd.DataFrame:
+    """
+    [通用] 对聚合后的数据应用缩放因子
+    自动识别 Group级(宽表) 和 Code级(长表)
+    """
+    if df.empty or factor == 1.0: return df
+    df = df.copy()
+    
+    # --- Case A: Code 级 (Long Format) ---
+    if 'defect_panel_count' in df.columns:
+        df['defect_panel_count'] = np.round(df['defect_panel_count'] * factor).astype(int)
+    
+    # --- Case B: Group 级 (Wide Format) ---
+    else:
+        # 排除非良损列
+        exclude_cols = ['total_panels', 'warehousing_time', 'time_period', 'month_period', 'week_period']
+        target_cols = [c for c in df.columns if c not in exclude_cols]
+        
+        for col in target_cols:
+            # 仅对数值类型的列（即各 Group 的不良数）进行缩放
+            if pd.api.types.is_numeric_dtype(df[col]):
+                 df[col] = np.round(df[col] * factor).astype(int)
+                 
+    return df
+
 def _inject_deterministic_noise(df, cols, volatility=0.1):
     df = df.copy()
     for col in cols:
@@ -705,30 +784,13 @@ def _aggregate_group_weekly_raw(df, today):
     返回:
         周度聚合后的 DataFrame
     """
-    logging.info(f"[周度聚合] 开始处理...")
-    logging.info(f"[周度聚合] 输入数据形状: {df.shape}, 时间范围: {df.index.min()} ~ {df.index.max()}")
-    logging.info(f"[周度聚合] 时间锚点 (today): {today}")
-
     start = today - relativedelta(weeks=2)
-    logging.info(f"[周度聚合] 计算的起始日期 (today - 2周): {start}")
-
     # 转换为 Period 进行比较
-    df_period = df.index.to_period('W')
-    start_period = pd.Period(start, 'W')
-    logging.info(f"[周度聚合] 数据周期范围: {df_period.min()} ~ {df_period.max()}")
-    logging.info(f"[周度聚合] 起始周期阈值: {start_period}")
-
     sub = df[df.index.to_period('W') >= pd.Period(start, 'W')] # type: ignore
-    logging.info(f"[周度聚合] 过滤后数据形状: {sub.shape}, 时间范围: {sub.index.min() if not sub.empty else '空'} ~ {sub.index.max() if not sub.empty else '空'}")
-
     if sub.empty:
         logging.warning(f"[周度聚合] ⚠️ 过滤后数据为空，无法进行周度聚合")
         return pd.DataFrame()
-
     result = sub.resample('W').sum()
-    logging.info(f"[周度聚合] 聚合结果形状: {result.shape}, 时间范围: {result.index.min()} ~ {result.index.max()}")
-    logging.info(f"[周度聚合] 聚合结果列名: {result.columns.tolist()}")
-
     return result
 
 def _aggregate_code_monthly_raw(df, today):

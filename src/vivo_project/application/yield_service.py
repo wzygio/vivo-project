@@ -176,7 +176,8 @@ class YieldAnalysisService:
         resource_dir: Path, 
         _core_revision: float = 0.0,
         ema_span: int = 30,
-        scaling_factor: float = 0.7) -> Dict[str, Any] | None:
+        scaling_factor: float = 0.7, 
+        use_top_down: bool = False) -> Dict[str, Any] | None:
         """计算 Sheet 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
@@ -189,7 +190,7 @@ class YieldAnalysisService:
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
         
         # 生成辅助的 MWD Code 数据 (用于模拟热点)
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor)
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down)
 
         # 3. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
@@ -212,7 +213,8 @@ class YieldAnalysisService:
         resource_dir: Path, 
         _core_revision: float = 0.0,
         ema_span: int = 30,
-        scaling_factor: float = 0.7) -> Dict[str, Any] | None:
+        scaling_factor: float = 0.7,
+        use_top_down: bool = False) -> Dict[str, Any] | None:
         """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -225,7 +227,7 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor)
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down)
         
         # 4. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)

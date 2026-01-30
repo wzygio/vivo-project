@@ -4,7 +4,6 @@ import numpy as np
 import sys, logging
 
 # --- [新增] 热重载机制 ---
-# 只有在开发模式下才开启，避免生产环境性能损耗
 ENABLE_HOT_RELOAD = True
 
 if ENABLE_HOT_RELOAD:
@@ -23,8 +22,8 @@ from vivo_project.utils.reloader import get_project_revision
 
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
-from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 from vivo_project.core.mapping_processor import apply_hotspot_modification_to_matrix
+from vivo_project.app.components.components import create_code_selection_ui, render_page_header
 
 # 引入图表组件
 from vivo_project.app.charts.mwd_chart import (
@@ -74,21 +73,10 @@ with st.spinner("正在加载全维度分析数据..."):
 
     # 3. 针对特定产品进行参数微调 (Hardcode 模式)
     if current_product == "M678":
-        group_ema_span = 14
-        group_scale = 1
-        
-        code_ema_span = 14
-        code_scale = 0.7
-
         USE_TOP_DOWN_STRATEGY = False
         
     elif current_product == "M626":
-        group_ema_span = 1
-        group_scale = 1
-        
-        code_ema_span = 1
-        code_scale = 0.7
-
+        group_scale = 0.7
         USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
@@ -109,10 +97,18 @@ with st.spinner("正在加载全维度分析数据..."):
         use_top_down=USE_TOP_DOWN_STRATEGY
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
-        active_config, resource_dir, _core_revision=current_revision
+        active_config, 
+        resource_dir, 
+        _core_revision=current_revision, 
+        scaling_factor=code_scale,
+        use_top_down=USE_TOP_DOWN_STRATEGY
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
-        active_config, resource_dir, _core_revision=current_revision
+        active_config, 
+        resource_dir, 
+        _core_revision=current_revision, 
+        scaling_factor=code_scale,
+        use_top_down=USE_TOP_DOWN_STRATEGY
     )
 
     mapping_data = YieldAnalysisService.get_mapping_data(

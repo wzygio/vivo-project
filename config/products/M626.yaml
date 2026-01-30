@@ -31,15 +31,15 @@ processing:
 
   # 1. Group 级修正配置
   group_monthly_values:
-    OLED_Mura:
-      "2026-01": 0.0021
+    Array_Line:
+      "2026-01": 0.0116
 
   group_weekly_values:
-    Array_Pixel:  
-      "2026-W04": 0
+    Array_Line:
+      "2026-W04": 0.0105
+      "2026-W05": 0.0121
     OLED_Mura:
-      "2026-W04": 0
-      "2026-W05": 0.0035
+      "2026-W05": 0.0033
 
   group_daily_values:
     Array_Pixel:
@@ -59,6 +59,8 @@ processing:
   code_monthly_values:
 
   code_weekly_values:
+    "暗点":
+      "2026-W05": 0.0022
   
   # 3. lot阵列投入时间
   array_input_time:
@@ -76,8 +78,8 @@ processing:
       target_code: '彩斑Mura'       
       target_batch_index: 'oldest'    
       mode: 'multiplicative'          
-      hotspot_multiplier: 0.5
-      normal_multiplier: 2
+      hotspot_multiplier: 0.3
+      normal_multiplier: 1.5
       hotspot_rules:
         - { type: 'row', value: ['1E','2A','2B'] }  
 
