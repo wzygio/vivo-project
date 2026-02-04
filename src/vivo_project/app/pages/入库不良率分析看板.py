@@ -73,7 +73,7 @@ with st.spinner("正在加载全维度分析数据..."):
 
     # 3. 针对特定产品进行参数微调 (Hardcode 模式)
     if current_product == "M678":
-        USE_TOP_DOWN_STRATEGY = False
+        USE_TOP_DOWN_STRATEGY = True
         
     elif current_product == "M626":
         group_scale = 0.7

@@ -29,15 +29,6 @@ class AbnormalDetector:
         is_surged = (curr_val - prev_val > cls.THRESHOLD_SURGE_DELTA)
         
         return is_doubled or is_surged
-
-    @classmethod
-    def is_benchmark_abnormal(cls, raw_df: pd.DataFrame, target_group_or_code: str) -> bool:
-        """
-        [已优化] 不再执行复杂的外部报表比对逻辑。
-        直接返回 True，确保系统检测到的异常会立即触发 TrendRegulator 的调节。
-        """
-        # logging.info(f"跳过外部基准比对，直接对 {target_group_or_code} 开启数据调节模式")
-        return True
         
     # ==========================================================================
     #  逻辑 B: 系统内部月度趋势检测 (迁移自前端)

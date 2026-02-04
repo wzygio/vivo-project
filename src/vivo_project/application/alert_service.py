@@ -54,7 +54,34 @@ class AlertService:
         )
         all_alerts.extend(system_alerts)
         
-        # 2. 获取外部基准报表的批次预警
+        # --- 2. [新增] 周度趋势预警 ---
+        group_weekly = mwd_group_data.get('weekly')
+        code_weekly = mwd_code_data.get('weekly')
+
+        # A. 清洗 Group 周度数据
+        valid_group_weekly = pd.DataFrame()
+        if group_weekly is not None and not group_weekly.empty:
+            valid_group_weekly = group_weekly[
+                group_weekly['defect_group'].isin(target_defect_groups)
+            ]
+            
+        # B. 清洗 Code 周度数据
+        valid_code_weekly = pd.DataFrame()
+        if code_weekly is not None and not code_weekly.empty:
+            valid_code_weekly = code_weekly[
+                code_weekly['defect_group'].isin(target_defect_groups)
+            ]
+
+        # C. 调用检测器 (复用 detect_system_trend_alerts 逻辑，它也适用于周度数据的结构)
+        # 注意：检测器内部生成的文案可能不包含“周度”字样，取决于 time_period 格式(如 2026-W05)
+        # 如果需要区分，用户可以通过时间格式辨别，或者您可以扩展 detect_system_trend_alerts 的参数
+        system_alerts_weekly = AbnormalDetector.detect_system_trend_alerts(
+            valid_group_weekly,
+            valid_code_weekly
+        )
+        all_alerts.extend(system_alerts_weekly)
+
+        # 3. 获取外部基准报表的批次预警
         # ----------------------------------------------------
         # [Refactor] 从 config.processing 获取字典
         bench_cfg = config.processing.get('benchmark_report_config', {})

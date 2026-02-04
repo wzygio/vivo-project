@@ -66,7 +66,7 @@ def prepare_mapping_data(
             sorted_batches = sorted(target_batches) 
         else:
             # 取最新的 5 个，然后按 Old -> New 排序
-            latest_n_df = valid_dates_df.head(5)
+            latest_n_df = valid_dates_df.head(4)
             sorted_batches = latest_n_df.sort_values('batch_date', ascending=True)['original_batch'].tolist()
 
         logging.info(f"处理批次顺序 (Old->New): {sorted_batches}")

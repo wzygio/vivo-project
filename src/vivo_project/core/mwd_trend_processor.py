@@ -22,7 +22,8 @@ class MWDTrendProcessor:
         resource_dir: Path,
         ema_span: int,
         scaling_factor: float,
-        USE_TOP_DOWN_STRATEGY
+        USE_TOP_DOWN_STRATEGY,
+        volatility: float = 0.1
     ) -> Dict[str, pd.DataFrame] | None:
         
         logging.info(f"Group级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
@@ -57,20 +58,20 @@ class MWDTrendProcessor:
                     # Kwargs for generator/overrides
                     target_defects=target_defects,
                     scaling_factor=scaling_factor,
-                    volatility=0.1
+                    volatility=volatility
                 )
             else:
                 monthly, weekly, daily = _execute_ema_pipeline(
                     raw_daily_df=raw_daily,
                     today=today,
-                    calc_daily_func=lambda df: _calc_group_ema_noise(df, target_defects, ema_span, scaling_factor),
+                    calc_daily_func=lambda df: _calc_group_ema_noise(df, target_defects, ema_span, scaling_factor, volatility),
                     agg_funcs=(_aggregate_group_monthly_raw, _aggregate_group_weekly_raw),
                     reg_func=TrendRegulator.regulate_monthly_and_weekly,
                     override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
                     override_vals=(m_vals, w_vals),
                     config=config,
                     resource_dir=resource_dir,
-                    target_defects=target_defects # for override func
+                    target_defects=target_defects
                 )
 
             # 4. 通用后处理 (日度覆盖 & 格式化)
@@ -92,7 +93,8 @@ class MWDTrendProcessor:
         resource_dir: Path,
         ema_span: int,          
         scaling_factor: float,
-        USE_TOP_DOWN_STRATEGY
+        USE_TOP_DOWN_STRATEGY,
+        volatility: float = 0.1
     ) -> Dict[str, pd.DataFrame] | None:    
         
         logging.info(f"Code级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
@@ -133,7 +135,7 @@ class MWDTrendProcessor:
                 monthly, weekly, daily = _execute_ema_pipeline(
                     raw_daily_df=raw_daily,
                     today=today,
-                    calc_daily_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor),
+                    calc_daily_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility),
                     agg_funcs=(agg_monthly_func, agg_weekly_func), # <--- 使用修复后的聚合函数
                     reg_func=TrendRegulator.regulate_code_monthly_and_weekly,
                     override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
@@ -407,7 +409,8 @@ def _calc_group_ema_noise(
     raw_df: pd.DataFrame, 
     target_defects: list | None, 
     span: int, 
-    scale: float
+    scale: float,
+    volatility: float
 ) -> pd.DataFrame:
     """Group 级 EMA 计算 + 噪声注入"""
     # 添加类型检查
@@ -421,12 +424,13 @@ def _calc_group_ema_noise(
                 df_ema[group].values, df_ema['total_panels'].values, span
             )
             df_ema[group] = np.round(np.array(smoothed) * scale * df_ema['total_panels']).astype(int)
-    return _inject_deterministic_noise(df_ema, target_defects, volatility=0.1)
+    return _inject_deterministic_noise(df_ema, target_defects, volatility)
 
 def _calc_code_ema_noise(
     raw_df: pd.DataFrame, 
     span: int, 
-    scale: float
+    scale: float,
+    volatility: float
 ) -> pd.DataFrame:
     """Code 级 EMA 计算 + 噪声注入"""
     ema_df = raw_df.copy()
@@ -443,7 +447,7 @@ def _calc_code_ema_noise(
         ema_df.loc[sub.index, 'attenuated_rate'] = np.array(smooth) * scale
     
     ema_df['defect_panel_count'] = np.round(ema_df['attenuated_rate'] * ema_df['total_panels']).astype(int)
-    return _inject_deterministic_noise_code_level(ema_df, volatility=0.1)
+    return _inject_deterministic_noise_code_level(ema_df, volatility)
 
 
 # ==============================================================================
@@ -557,7 +561,7 @@ def _format_code_results(monthly, weekly, daily, today):
 # ==============================================================================
 #  底层逻辑 (Generators, Noise, EMA) - 保持不变
 # ==============================================================================
-def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_defects, volatility=0.1, **kwargs):
+def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_defects, volatility, **kwargs):
     """
     [策略 A] Group 级日度数据生成器
     修改：基准从月度改为周度 (Weekly Baseline)，以获得更灵敏的趋势响应。
@@ -582,6 +586,7 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
             
             # [核心修改] 应用缩放因子到基准率
             base_rate = w_count / w_total
+            logging.info(f"基础良损 for {group} in {week_idx}: {base_rate:.2%}")
             
             # 找到属于该周的所有日期
             mask = df_gen['week_period'] == week_idx
@@ -602,7 +607,7 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
     df_gen.drop(columns=['week_period'], inplace=True)
     return df_gen
 
-def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility=0.1,  **kwargs):
+def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility,  **kwargs):
     """
     [性能优化版] Code 级日度数据生成器
     修改：基准从月度改为周度 (Weekly Baseline)。
@@ -826,12 +831,6 @@ def _apply_manual_overrides(df, ovs, period_type, **kwargs):
 
     df = df.copy()
     targets = kwargs.get('target_defects', [])
-
-    logging.info(f"[覆盖逻辑] 开始应用 {period_type} 覆盖")
-    logging.info(f"[覆盖逻辑] 目标缺陷组: {targets}")
-    logging.info(f"[覆盖逻辑] 覆盖配置: {ovs}")
-    logging.info(f"[覆盖逻辑] 输入数据形状: {df.shape}, 时间范围: {df.index.min()} ~ {df.index.max()}")
-
     applied_count = 0
     for g in targets:
         if g not in df.columns:
@@ -840,9 +839,6 @@ def _apply_manual_overrides(df, ovs, period_type, **kwargs):
         if g not in ovs:
             logging.info(f"[覆盖逻辑] 缺陷组 '{g}' 没有覆盖配置")
             continue
-
-        logging.info(f"[覆盖逻辑] 处理缺陷组: {g}, 覆盖值: {ovs[g]}")
-
         for idx in df.index:
             k = idx.strftime('%Y-%m') if period_type=='monthly' else f"{idx.isocalendar()[0]}-W{idx.isocalendar()[1]:02d}"
             v = ovs[g].get(k)
@@ -850,9 +846,7 @@ def _apply_manual_overrides(df, ovs, period_type, **kwargs):
                 old_val = df.loc[idx, g]
                 df.loc[idx, g] = int(np.round(v * df.loc[idx, 'total_panels']))
                 applied_count += 1
-                logging.info(f"[覆盖逻辑] ✓ 应用覆盖: {g} @ {k}: {old_val} -> {df.loc[idx, g]} (rate: {v})")
-
-    logging.info(f"[覆盖逻辑] 完成，共应用 {applied_count} 个覆盖值")
+                logging.info(f"[覆盖逻辑] ✓ 应用覆盖: {g} @ {k}: rate: {v}")
     return df
 
 def _apply_daily_manual_overrides(df, ovs, target_defects):

@@ -32,28 +32,18 @@ processing:
   # 1. Group 级修正配置
   group_monthly_values:
     Array_Line:
-      "2026-01": 0.0116
+      "2026-02": 0.0083
+    Array_Pixel:
+      "2026-02": 0.0083
 
   group_weekly_values:
     Array_Line:
       "2026-W04": 0.0105
-      "2026-W05": 0.0121
+      "2026-W05": 0.0090
     OLED_Mura:
       "2026-W05": 0.0033
 
   group_daily_values:
-    Array_Pixel:
-      '2026-01-22': 0
-      '2026-01-23': 0
-      '2026-01-24': 0
-      '2026-01-25': 0
-    OLED_Mura:
-      '2026-01-22': 0
-      '2026-01-23': 0
-      '2026-01-24': 0
-      '2026-01-25': 0
-      '2026-01-26': 0.0036
-      '2026-01-27': 0.0033
 
   # 2. Code 级修正配置
   code_monthly_values:
