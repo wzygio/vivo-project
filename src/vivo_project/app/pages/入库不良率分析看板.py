@@ -65,7 +65,7 @@ with st.spinner("正在加载全维度分析数据..."):
     
     # 2. 定义默认参数 (兜底)
     # Group 级默认参数
-    group_ema_span = 14
+    group_ema_span = 30
     group_scale = 1.0
     # Code 级默认参数
     code_ema_span = 30
@@ -76,7 +76,7 @@ with st.spinner("正在加载全维度分析数据..."):
         USE_TOP_DOWN_STRATEGY = True
         
     elif current_product == "M626":
-        group_scale = 0.7
+        group_scale = 0.8
         USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
@@ -148,7 +148,7 @@ with st.spinner("正在进行智能预警扫描..."):
 # 渲染结果
 if alert_messages:
     with st.container(border=True):
-        st.error(f"🚨 系统检测到 {len(alert_messages)} 项异常 (包含系统趋势 & 真实批次比对)")
+        st.error(f"🚨 系统检测到 {len(alert_messages)} 项异常")
         for msg in alert_messages:
             st.markdown(msg)
 else:

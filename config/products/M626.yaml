@@ -31,17 +31,13 @@ processing:
 
   # 1. Group 级修正配置
   group_monthly_values:
-    Array_Line:
-      "2026-02": 0.0083
-    Array_Pixel:
-      "2026-02": 0.0083
 
   group_weekly_values:
     Array_Line:
       "2026-W04": 0.0105
-      "2026-W05": 0.0090
+      "2026-W05": 0.0092
     OLED_Mura:
-      "2026-W05": 0.0033
+      "2026-W05": 0.0037
 
   group_daily_values:
 
@@ -49,18 +45,16 @@ processing:
   code_monthly_values:
 
   code_weekly_values:
-    "暗点":
-      "2026-W05": 0.0022
   
   # 3. lot阵列投入时间
   array_input_time:
     custom_times:
 
-
   # 5. defect_code倍率调节
   defect_multipliers:
     '彩斑Mura': 0.3
     'S向棱形彩色带状Mura': 0.3
+    '暗点': 0.5
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:

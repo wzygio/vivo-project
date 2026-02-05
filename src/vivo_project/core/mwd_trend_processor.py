@@ -220,6 +220,7 @@ def _safe_trend_aggregator(df: pd.DataFrame, anchor_date: dt, freq: str, is_grou
             
         return merged.reset_index()
 
+# src/vivo_project/core/mwd_trend_processor.py
 def _execute_top_down_pipeline(
     raw_daily_df: pd.DataFrame,
     today: dt | None,
@@ -233,61 +234,79 @@ def _execute_top_down_pipeline(
     **kwargs
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    [策略 A] Top-Down 模式通用流水线
-    逻辑：Raw -> Aggregate -> Regulate -> Override -> Generate Daily
+    [策略 A] Top-Down 模式通用流水线 (V2.0 - 串行一致性版)
+    逻辑流：Raw -> Weekly -> Daily (Generated) -> Monthly (Re-aggregated)
+    解决月度与周度/日度数据因统计周期错位导致的逻辑割裂问题。
     """
-    # 0. 调用复用函数执行过滤
+    # 0. T-1 过滤
     df_processing, today = _apply_t1_filtering(raw_daily_df, today)
     
     if df_processing.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     
-    # 1. 聚合 (Aggregate)
-    agg_monthly, agg_weekly = agg_funcs
-    monthly_agg = agg_monthly(raw_daily_df, today)
-    weekly_agg = agg_weekly(raw_daily_df, today)
+    agg_monthly_func, agg_weekly_func = agg_funcs
+    
+    # ==========================================================================
+    # Phase 1: 确立周度基准 (The Baseline)
+    # ==========================================================================
+    
+    # 1.1 聚合出原始周度数据 (同时聚合月度仅供 Regulator 参考)
+    raw_monthly = agg_monthly_func(df_processing, today)
+    raw_weekly = agg_weekly_func(df_processing, today)
 
-    # =========================================================
-    # [核心修复] 在此处统一应用 Scaling Factor
-    # 这样月度、周度以及后续基于周度生成的日度数据，都会同步缩放
-    # =========================================================
+    # 1.2 应用缩放 (Scaling)
     factor = kwargs.get('scaling_factor', 1.0)
     if factor != 1.0:
-        monthly_agg = _apply_scaling(monthly_agg, factor)
-        weekly_agg = _apply_scaling(weekly_agg, factor)
-    # =========================================================
+        raw_monthly = _apply_scaling(raw_monthly, factor)
+        raw_weekly = _apply_scaling(raw_weekly, factor)
 
-    # 2. 调节 (Regulate)
-    monthly_reg, weekly_reg = reg_func(monthly_agg, weekly_agg, config, resource_dir)
+    # 1.3 智能调节 (Regulation)
+    # 注意：reg_func 内部会对比 monthly 和 weekly 的趋势
+    # 但我们后续只使用 regulated_weekly 作为生成源
+    _, regulated_weekly = reg_func(raw_monthly, raw_weekly, config, resource_dir)
 
-    # 3. 覆盖 (Override)
+    # 1.4 人工覆盖 (Override - Weekly)
     ov_func_m, ov_func_w = override_funcs
     val_m, val_w = override_vals
     
-    period_kw_m = {'period_type': 'monthly'}
     period_kw_w = {'period_type': 'weekly'}
-    
     valid_ov_keys = ['target_defects'] 
     extra_ov_args = {k: v for k, v in kwargs.items() if k in valid_ov_keys}
     
-    monthly_final = ov_func_m(monthly_reg, val_m, **period_kw_m, **extra_ov_args)
-    weekly_final = ov_func_w(weekly_reg, val_w, **period_kw_w, **extra_ov_args)
+    # 得到【最终周度数据】(这是整个链路的 Source of Truth)
+    final_weekly = ov_func_w(regulated_weekly, val_w, **period_kw_w, **extra_ov_args)
 
-    # 4. 生成 (Generate Daily)
-    # -------------------------------------------------------------
+    # ==========================================================================
+    # Phase 2: 生成日度数据 (Generation)
+    # ==========================================================================
+    
+    # 构造日度骨架
     if 'warehousing_time' in df_processing.columns:
         # Code Level: 保留时间列 + 总数列，并去重
         daily_skeleton = df_processing[['warehousing_time', 'total_panels']].drop_duplicates()
     else:
         # Group Level: 时间在索引中
         daily_skeleton = df_processing[['total_panels']].copy()
+    
+    # 基于【最终周度】生成【最终日度】
+    # 此时生成的日度数据已经平滑了尖峰，且包含了缩放和调节效果
+    final_daily = gen_func(daily_skeleton, final_weekly, **kwargs)
 
-    # [核心修复] 将第二个参数从 monthly_final 改为 weekly_final
-    # 因为您现在的 gen_func 是基于周度数据的生成器
-    daily_final = gen_func(daily_skeleton, weekly_final, **kwargs)
+    # ==========================================================================
+    # Phase 3: 重构月度数据 (Re-aggregation)
+    # ==========================================================================
+    
+    # 3.1 基于生成的日度数据，重新聚合出月度数据
+    # 注意：agg_monthly_func 内部会执行 filtering (last 3 months)，这与我们的预期一致
+    reaggregated_monthly = agg_monthly_func(final_daily, today)
+    
+    # 3.2 人工覆盖 (Override - Monthly)
+    # 允许用户在最后环节强行修正月度数据 (Override 优先级最高)
+    period_kw_m = {'period_type': 'monthly'}
+    
+    final_monthly = ov_func_m(reaggregated_monthly, val_m, **period_kw_m, **extra_ov_args)
 
-    return monthly_final, weekly_final, daily_final
-
+    return final_monthly, final_weekly, final_daily
 
 def _execute_ema_pipeline(
     raw_daily_df: pd.DataFrame,
@@ -335,7 +354,6 @@ def _execute_ema_pipeline(
     weekly_final = ov_func_w(weekly_reg, val_w, **period_kw_w, **extra_ov_args)
 
     return monthly_final, weekly_final, daily_processed
-
 
 # ==============================================================================
 #  具体实现逻辑 (Implementations)
@@ -564,13 +582,11 @@ def _format_code_results(monthly, weekly, daily, today):
 def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_defects, volatility, **kwargs):
     """
     [策略 A] Group 级日度数据生成器
-    修改：基准从月度改为周度 (Weekly Baseline)，以获得更灵敏的趋势响应。
+    修改：增加随机种子扰动因子，解决 sin 函数周期性导致的“伪趋势”问题。
     """
     df_gen = daily_skeleton.copy()
-    # 使用 'W-SUN' 确保与 resample('W') 生成的周日锚点对齐
     df_gen['week_period'] = df_gen.index.to_period('W-SUN') # type: ignore
     
-    # 预先处理 weekly_final 的索引
     weekly_lookup = weekly_final.copy()
     weekly_lookup.index = weekly_lookup.index.to_period('W-SUN')
 
@@ -581,14 +597,11 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
         for week_idx in weekly_lookup.index:
             w_count = weekly_lookup.loc[week_idx, group]
             w_total = weekly_lookup.loc[week_idx, 'total_panels']
-            
             if w_total == 0: continue
             
-            # [核心修改] 应用缩放因子到基准率
+            # 直接计算基准率
             base_rate = w_count / w_total
-            logging.info(f"基础良损 for {group} in {week_idx}: {base_rate:.2%}")
             
-            # 找到属于该周的所有日期
             mask = df_gen['week_period'] == week_idx
             days_in_week = df_gen[mask]
             
@@ -596,9 +609,17 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
                 day_total = df_gen.loc[day_idx, 'total_panels']
                 if day_total == 0: continue
                 
-                # 注入确定性噪声
+                # [Fix] 确定性白噪声生成
+                # 原逻辑: ts_seed 连续递增导致 sin 呈现平滑波浪趋势
+                # 新逻辑: 引入大质数乘法因子(1234567)，将连续的时间打散，实现“相邻两天不相关”
                 ts_seed = int(day_idx.timestamp() / 86400) # type: ignore
-                noise = np.sin(ts_seed + len(group)*99) * volatility
+                
+                # 伪随机哈希算法: sin(time * Large_Prime + Group_Hash)
+                scramble_factor = 1234567 
+                noise_seed = (ts_seed * scramble_factor) + (hash(group) % 9999)
+                
+                # 这样生成的 noise 就是围绕 0 上下剧烈跳动的，而非平滑过渡
+                noise = np.sin(noise_seed) * volatility
                 
                 # 计算最终数量
                 final = int(np.round(base_rate * (1 + noise) * day_total))
@@ -607,21 +628,19 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
     df_gen.drop(columns=['week_period'], inplace=True)
     return df_gen
 
-def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility,  **kwargs):
+def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility, **kwargs):
     """
     [性能优化版] Code 级日度数据生成器
-    修改：基准从月度改为周度 (Weekly Baseline)。
+    修改：增加随机种子扰动因子，解决 sin 函数周期性导致的“伪趋势”问题。
     """
     if daily_skeleton.empty or weekly_final.empty:
         return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
 
-    # 1. 准备周度基准率表
     weekly_data = weekly_final.copy()
-    # 统一转换为周周期，确保 merge 时的 Key 匹配
     weekly_data['week_period'] = weekly_data['warehousing_time'].dt.to_period('W-SUN')
+    
     weekly_data['base_rate'] = weekly_data['defect_panel_count'] / weekly_data['total_panels'].replace(0, 1)
     
-    # 提取 Code 映射
     unique_codes = weekly_data[['defect_group', 'defect_desc']].drop_duplicates()
 
     # 2. 构建 "日期 x Code" 笛卡尔积
@@ -635,7 +654,6 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
     # 3. 关联周度基准率
     full_grid['week_period'] = full_grid['warehousing_time'].dt.to_period('W-SUN') # type: ignore
     
-    # 将周度良率 merge 进来
     merged = pd.merge(
         full_grid, 
         weekly_data[['week_period', 'defect_desc', 'base_rate']], 
@@ -643,16 +661,22 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
         how='left'
     )
     merged['base_rate'] = merged['base_rate'].fillna(0)
-    
-    # 过滤无效数据
     merged = merged[merged['base_rate'] > 0].copy()
+    
     if merged.empty:
         return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
 
-    # 4. 向量化噪声计算
-    ts_seed = (merged['warehousing_time'].astype('int64') // 10**9 // 86400).astype(int)
-    code_hash = merged['defect_desc'].map(hash) % 1000
-    noise = np.sin(ts_seed + code_hash) * volatility
+    # 4. [Fix] 向量化噪声计算 (高频扰动)
+    # 同样引入大数乘法，打散时间连续性
+    ts_vector = (merged['warehousing_time'].astype('int64') // 10**9 // 86400).astype(int)
+    scramble_factor = 999983 # 大质数
+    
+    code_hash = merged['defect_desc'].map(hash) % 10000
+    
+    # 公式: sin(Time * Large_Prime + Code_Hash)
+    # 这确保了同一 Code 在相邻两天的 noise 是完全随机独立的
+    phase = (ts_vector * scramble_factor) + code_hash
+    noise = np.sin(phase) * volatility
     
     # 计算最终数量
     calculated_counts = merged['total_panels'] * merged['base_rate'] * (1 + noise)
@@ -735,44 +759,67 @@ def _inject_deterministic_noise_code_level(df, volatility=0.1):
     
     return df_out
 
-def _calculate_adaptive_shadow_ema(counts, totals, span):
+def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
+    """
+    自适应 EMA 计算函数
+    :param span: 平滑窗口大小
+    :param use_global_init: 
+        True  -> 使用全局均值 Base 初始化 (平滑性更好，但可能导致未来数据泄露)
+        False -> 使用首日数据初始化 (反应更真实，无未来数据泄露)
+    """
     n = len(counts)
     if n == 0: return []
     alpha = 2/(span+1)
     res = []
+    
+    # 计算全局均值 (仅在 use_global_init=True 时真正发挥作用，但为了防止除0错误保留计算)
     g_n, g_d = np.sum(counts), np.sum(totals)
     base = g_n/g_d if g_d>0 else 0
-    t_d = totals[0]
-    # =========== [开始修改区域] ===========
     
-    # [原逻辑: 暂时注释] 依赖全局均值 base，会导致未来高良率“泄露”到前面
-    # t_n = t_d * base
-    # first = (counts[0]/totals[0]) if totals[0]>0 else 0
-    # res.append(0.5*base + 0.5*first)
+    t_d = totals[0]
+    
+    # =========== [修改区域：初始化逻辑分支] ===========
+    first_rate = (counts[0]/totals[0]) if totals[0]>0 else 0
+    
+    if use_global_init:
+        # [逻辑 1] 使用全局 Base 均值混合初始化：优点：抗首日噪点干扰，曲线起步更稳；缺点：存在"未来数据泄露" (Base 包含了未来的数据)
+        t_n = t_d * base
+        # 初始值取 "全局均值" 和 "首日真实值" 的加权平均 (0.5:0.5)
+        res.append(0.5 * base + 0.5 * first_rate)
+    else:
+        # [逻辑 2] 仅使用首日数据初始化：优点：逻辑严谨，完全无未来数据干扰；缺点：如果首日数据是异常值，会导致曲线初期波动剧烈
+        t_n = t_d * first_rate
+        res.append(first_rate)
+    # ================================================
 
-    # [新逻辑: 当前生效] 仅依赖首日数据，彻底阻断未来数据影响
-    first = (counts[0]/totals[0]) if totals[0]>0 else 0
-    t_n = t_d * first   # 动量初始化：使用第一天真实良率，而非全局均值
-    res.append(first)   # 起点初始化：直接使用第一天真实良率
-
-    # =========== [结束修改区域] ===========
     for i in range(1, n):
         rn, rd = counts[i], totals[i]
         if rd == 0: res.append(res[-1]); continue
+        
         rr = rn/rd
         p_base = t_n/t_d if t_d>0 else 0
+        
+        # 尖峰检测 (Spike Detection)
         spike = (rr > p_base*3) or (rr - p_base > 0.04)
+        
         if spike:
+            # 遇到尖峰：当前点弱更新 (alpha)，动量强保持 (1-alpha)
+            # 目的：不让 EMA 均线被单日尖峰瞬间拉高
             dn = alpha*rn + (1-alpha)*t_n
             dd = alpha*rd + (1-alpha)*t_d
             res.append(dn/dd if dd>0 else 0)
-            cn = p_base*rd
+            
+            # 动量更新：仅吸收部分当前尖峰，大部分维持原动量
+            # 这里的逻辑比较激进：为了防止动量被污染，使用了 p_base*rd (即认为当前如果是尖峰，就用旧均值代替当前值进入动量)
+            cn = p_base*rd 
             t_n = alpha*cn + (1-alpha)*t_n
             t_d = alpha*rd + (1-alpha)*t_d
         else:
+            # 正常波动：正常 EMA 更新
             t_n = alpha*rn + (1-alpha)*t_n
             t_d = alpha*rd + (1-alpha)*t_d
             res.append(t_n/t_d if t_d>0 else 0)
+            
     return res
 
 def _aggregate_group_monthly_raw(df, today):
