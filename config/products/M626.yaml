@@ -31,11 +31,17 @@ processing:
 
   # 1. Group 级修正配置
   group_monthly_values:
+    Array_Line:
+      "2026-01": 0.0096
 
   group_weekly_values:
     Array_Line:
       "2026-W04": 0.0105
       "2026-W05": 0.0092
+      "2026-W06": 0.0104
+    Array_Pixel:
+      "2026-W05": 0.0107
+      "2026-W06": 0.0116
     OLED_Mura:
       "2026-W05": 0.0037
 
@@ -45,6 +51,8 @@ processing:
   code_monthly_values:
 
   code_weekly_values:
+    "暗点":
+      "2026-W05": 0.0021
   
   # 3. lot阵列投入时间
   array_input_time:
@@ -54,7 +62,6 @@ processing:
   defect_multipliers:
     '彩斑Mura': 0.3
     'S向棱形彩色带状Mura': 0.3
-    '暗点': 0.5
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:
@@ -65,7 +72,24 @@ processing:
       hotspot_multiplier: 0.3
       normal_multiplier: 1.5
       hotspot_rules:
-        - { type: 'row', value: ['1E','2A','2B'] }  
+        - { type: 'row', value: ['1E','2A','2B'] } 
+
+    - enable: true
+      target_code: 'S向边缘Mura'
+      target_batch_index: 'oldest'
+      mode: 'additive' 
+      hotspot_adder: 2
+      normal_multiplier_in_add_mode: 0
+      hotspot_rules:
+        - { 
+            type: 'position', 
+            value: [
+              ['1A', 'J0'], ['1A', 'K0'], ['1A', 'L0'], ['1B', 'J0'],
+              ['1B', 'K0'], ['1B', 'L0'], ['2B', 'F0'], ['2B', 'G0'],
+              ['1B', 'P0'], ['1B', 'S0'], ['1D', 'A0'], ['2B', 'B0'],
+              ['1A', 'S0'], ['2B', 'A0']
+            ]
+          }
 
   # 7. sheet/lot波动调节
   sheet_hotspot_config: 

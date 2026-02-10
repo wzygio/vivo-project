@@ -84,7 +84,7 @@ processing:
     '群暗点':
       '2026-W05': 0.0034
     '暗点':
-      '2026-W05': 0.0034
+      '2026-W05': 0.0021
   
   code_daily_values:
 
@@ -106,22 +106,6 @@ processing:
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:
-    - enable: true
-      target_code: '彩斑Mura'
-      target_batch_index: 'oldest'
-      mode: 'additive' 
-      hotspot_adder: 40
-      normal_multiplier_in_add_mode: 0.2
-      hotspot_rules:
-        - { 
-            type: 'position', 
-            value: [
-              ['1E', 'F0'], ['2A', 'F0'], ['2B', 'F0'], ['2C', 'F0'],
-              ['2D', 'F0'], ['2E', 'F0'], ['1E', 'M0'], ['1E', 'N0'],
-              ['1C', 'R0'], ['1E', 'R0']
-            ] 
-          }
-
     - enable: true
       target_code: 'S向单暗线'       
       target_batch_index: 'oldest'    

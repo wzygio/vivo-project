@@ -22,7 +22,7 @@ class MWDTrendProcessor:
         resource_dir: Path,
         ema_span: int,
         scaling_factor: float,
-        USE_TOP_DOWN_STRATEGY,
+        USE_TOP_DOWN_STRATEGY: bool,
         volatility: float = 0.1
     ) -> Dict[str, pd.DataFrame] | None:
         
@@ -93,7 +93,7 @@ class MWDTrendProcessor:
         resource_dir: Path,
         ema_span: int,          
         scaling_factor: float,
-        USE_TOP_DOWN_STRATEGY,
+        USE_TOP_DOWN_STRATEGY: bool,
         volatility: float = 0.1
     ) -> Dict[str, pd.DataFrame] | None:    
         
@@ -574,7 +574,6 @@ def _format_code_results(monthly, weekly, daily, today):
         daily_ui['defect_rate'] = daily_ui['defect_panel_count'] / daily_ui['total_panels']
         res['daily'] = daily_ui
     return res
-
 
 # ==============================================================================
 #  底层逻辑 (Generators, Noise, EMA) - 保持不变

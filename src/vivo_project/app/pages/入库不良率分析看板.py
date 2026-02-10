@@ -76,7 +76,7 @@ with st.spinner("正在加载全维度分析数据..."):
         USE_TOP_DOWN_STRATEGY = True
         
     elif current_product == "M626":
-        group_scale = 0.8
+        group_scale = 1
         USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
