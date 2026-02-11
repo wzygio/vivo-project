@@ -32,9 +32,14 @@ processing:
   # 1. Group 级修正配置
   group_monthly_values:
     Array_Line:
-      "2026-01": 0.0096
+      "2026-01": 0.0103
+      "2026-02": 0.0095
     Array_Pixel:
+      "2026-01": 0.0059
       "2026-02": 0.0106
+    OLED_Mura:
+      "2026-01": 0.0033
+      "2026-02": 0.0027
 
   group_weekly_values:
     Array_Line:

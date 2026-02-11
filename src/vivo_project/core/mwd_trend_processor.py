@@ -23,7 +23,8 @@ class MWDTrendProcessor:
         ema_span: int,
         scaling_factor: float,
         USE_TOP_DOWN_STRATEGY: bool,
-        volatility: float = 0.2
+        volatility: float = 0.1,
+        volatility_ema: float = 0.3
     ) -> Dict[str, pd.DataFrame] | None:
         
         logging.info(f"Group级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
@@ -64,7 +65,7 @@ class MWDTrendProcessor:
                 monthly, weekly, daily = _execute_ema_pipeline(
                     raw_daily_df=raw_daily,
                     today=today,
-                    calc_daily_func=lambda df: _calc_group_ema_noise(df, target_defects, ema_span, scaling_factor, volatility),
+                    calc_daily_func=lambda df: _calc_group_ema_noise(df, target_defects, ema_span, scaling_factor, volatility_ema),
                     agg_funcs=(_aggregate_group_monthly_raw, _aggregate_group_weekly_raw),
                     reg_func=TrendRegulator.regulate_monthly_and_weekly,
                     override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
@@ -713,7 +714,7 @@ def _apply_scaling(df: pd.DataFrame, factor: float) -> pd.DataFrame:
                  
     return df
 
-def _inject_deterministic_noise(df, cols, volatility=0.1):
+def _inject_deterministic_noise(df, cols, volatility):
     df = df.copy()
     for col in cols:
         if col not in df: continue
@@ -725,7 +726,7 @@ def _inject_deterministic_noise(df, cols, volatility=0.1):
             df.loc[idx, col] = int(max(0, val * (1 + noise)))
     return df
 
-def _inject_deterministic_noise_code_level(df, volatility=0.1):
+def _inject_deterministic_noise_code_level(df, volatility):
     """
     [性能优化版] Code 级噪声注入 (EMA 模式专用)
     改动：使用 Numpy 向量化计算替代 DataFrame.apply，性能提升约 50 倍。
@@ -760,37 +761,31 @@ def _inject_deterministic_noise_code_level(df, volatility=0.1):
 
 def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
     """
-    自适应 EMA 计算函数
+    自适应 EMA 计算函数 (V2.0 - 双向稳态控制版)
     :param span: 平滑窗口大小
-    :param use_global_init: 
-        True  -> 使用全局均值 Base 初始化 (平滑性更好，但可能导致未来数据泄露)
-        False -> 使用首日数据初始化 (反应更真实，无未来数据泄露)
+    :param use_global_init: 是否使用全局均值初始化
     """
     n = len(counts)
     if n == 0: return []
     alpha = 2/(span+1)
     res = []
     
-    # 计算全局均值 (仅在 use_global_init=True 时真正发挥作用，但为了防止除0错误保留计算)
+    # 计算全局均值
     g_n, g_d = np.sum(counts), np.sum(totals)
     base = g_n/g_d if g_d>0 else 0
     
     t_d = totals[0]
     
-    # =========== [修改区域：初始化逻辑分支] ===========
+    # 1. 初始化逻辑
     first_rate = (counts[0]/totals[0]) if totals[0]>0 else 0
-    
     if use_global_init:
-        # [逻辑 1] 使用全局 Base 均值混合初始化：优点：抗首日噪点干扰，曲线起步更稳；缺点：存在"未来数据泄露" (Base 包含了未来的数据)
         t_n = t_d * base
-        # 初始值取 "全局均值" 和 "首日真实值" 的加权平均 (0.5:0.5)
         res.append(0.5 * base + 0.5 * first_rate)
     else:
-        # [逻辑 2] 仅使用首日数据初始化：优点：逻辑严谨，完全无未来数据干扰；缺点：如果首日数据是异常值，会导致曲线初期波动剧烈
         t_n = t_d * first_rate
         res.append(first_rate)
-    # ================================================
 
+    # 2. 迭代计算
     for i in range(1, n):
         rn, rd = counts[i], totals[i]
         if rd == 0: res.append(res[-1]); continue
@@ -798,25 +793,37 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
         rr = rn/rd
         p_base = t_n/t_d if t_d>0 else 0
         
-        # 尖峰检测 (Spike Detection)
-        spike = (rr > p_base*3) or (rr - p_base > 0.04)
+        # ======================================================================
+        # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)
+        # ======================================================================
         
-        if spike:
-            # 遇到尖峰：当前点弱更新 (alpha)，动量强保持 (1-alpha)
-            # 目的：不让 EMA 均线被单日尖峰瞬间拉高
-            dn = alpha*rn + (1-alpha)*t_n
-            dd = alpha*rd + (1-alpha)*t_d
+        # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
+        is_surge_abs = abs(rr - p_base) > 0.02
+        is_surge_ratio = (rr > p_base * 3.0)
+        is_plunge_ratio = (rr < p_base / 3.0) or (rr < 1e-4) 
+
+        is_abnormal = is_surge_abs or is_surge_ratio or is_plunge_ratio
+        
+        if is_abnormal:
+            # [异常处理] 
+            # 遇到暴涨或暴跌：
+            # 1. 动量 (t_n, t_d) 强保持：只吸收极少量的当前数据 (alpha * p_base * rd)
+            #    这相当于假设"真实情况"依然维持在 p_base 水平
+            cn = p_base * rd 
+            t_n = alpha * cn + (1-alpha) * t_n
+            t_d = alpha * rd + (1-alpha) * t_d
+            
+            # 2. 输出值 (res) 弱跟随：允许显示一点点波动，避免线条完全死掉，
+            #    但幅度会被 alpha (约0.1~0.3) 大幅削弱
+            dn = alpha * rn + (1-alpha) * t_n
+            dd = alpha * rd + (1-alpha) * t_d
             res.append(dn/dd if dd>0 else 0)
             
-            # 动量更新：仅吸收部分当前尖峰，大部分维持原动量
-            # 这里的逻辑比较激进：为了防止动量被污染，使用了 p_base*rd (即认为当前如果是尖峰，就用旧均值代替当前值进入动量)
-            cn = p_base*rd 
-            t_n = alpha*cn + (1-alpha)*t_n
-            t_d = alpha*rd + (1-alpha)*t_d
         else:
-            # 正常波动：正常 EMA 更新
-            t_n = alpha*rn + (1-alpha)*t_n
-            t_d = alpha*rd + (1-alpha)*t_d
+            # [正常处理]
+            # 正常更新 EMA
+            t_n = alpha * rn + (1-alpha) * t_n
+            t_d = alpha * rd + (1-alpha) * t_d
             res.append(t_n/t_d if t_d>0 else 0)
             
     return res

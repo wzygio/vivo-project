@@ -52,26 +52,33 @@ class TrendRegulator:
     ) -> Optional[int]:
         """
         [Helper] 核心调节逻辑：检测异常 -> 计算压制后的目标数量。
-        返回: target_count (int) 或 None (无需调节)
+        新规则：如果前值为 0，则跳过调整（保留原值），因为 0 不具备参考意义。
         """
+        # [核心改动] 前值为 0 时认为基准无效，直接跳过调整，保留原始数据
+        if prev_rate <= 0:
+            return None
+
         # 1. 内部自查 (Abnormal Check)
         if not AbnormalDetector.is_value_trend_abnormal(curr_rate, prev_rate):
             return None
 
         # 2. 计算压制目标 (Regulation Calculation)
-        # 目标：平滑过渡，不允许激增或翻倍
+        # 目标 A: 激增压制 (防止超过前值 + 0.2%)
         safe_delta = AbnormalDetector.THRESHOLD_SURGE_DELTA - 0.0001
         target_rate_surge = prev_rate + safe_delta
         
+        # 目标 B: 翻倍压制 (防止超过前值 * 2)
         target_rate_doubling = (prev_rate * AbnormalDetector.THRESHOLD_DOUBLING_RATIO) - 0.0001
         
         # 取两者中更严格（更小）的那个作为目标良率
         target_rate = min(target_rate_surge, target_rate_doubling)
         
+        # 兜底保护：防止由于减法操作在极小值情况下产生负数
+        target_rate = max(0.0, target_rate)
+        
         target_count = int(target_rate * curr_panels)
         
-        # 3. 修正因子检查 (Correction Factor Check)
-        # 确保我们是在“压低”数据，而不是意外地调高了它
+        # 3. 修正因子检查 (确保是向下压低数据)
         if curr_count > 0:
             correction_factor = target_count / curr_count
             if correction_factor >= 1.0:
@@ -80,7 +87,6 @@ class TrendRegulator:
             return None
 
         return target_count
-
     # ==========================================================================
     #  Main Functions
     # ==========================================================================

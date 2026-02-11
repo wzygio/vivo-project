@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import sys, logging
 
 # --- [新增] 热重载机制 ---
 ENABLE_HOT_RELOAD = True
@@ -73,10 +72,9 @@ with st.spinner("正在加载全维度分析数据..."):
 
     # 3. 针对特定产品进行参数微调 (Hardcode 模式)
     if current_product == "M678":
-        USE_TOP_DOWN_STRATEGY = True
+        USE_TOP_DOWN_STRATEGY = False
         
     elif current_product == "M626":
-        group_scale = 1
         USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据 (全部注入 active_config 和 resource_dir)
