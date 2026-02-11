@@ -23,7 +23,7 @@ class MWDTrendProcessor:
         ema_span: int,
         scaling_factor: float,
         USE_TOP_DOWN_STRATEGY: bool,
-        volatility: float = 0.1
+        volatility: float = 0.2
     ) -> Dict[str, pd.DataFrame] | None:
         
         logging.info(f"Group级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
@@ -94,7 +94,7 @@ class MWDTrendProcessor:
         ema_span: int,          
         scaling_factor: float,
         USE_TOP_DOWN_STRATEGY: bool,
-        volatility: float = 0.1
+        volatility: float = 0.2
     ) -> Dict[str, pd.DataFrame] | None:    
         
         logging.info(f"Code级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
@@ -129,7 +129,7 @@ class MWDTrendProcessor:
                     config=config,
                     resource_dir=resource_dir,
                     scaling_factor=scaling_factor,
-                    volatility=0.1
+                    volatility=volatility
                 )
             else:
                 monthly, weekly, daily = _execute_ema_pipeline(
@@ -156,70 +156,6 @@ class MWDTrendProcessor:
 # ==============================================================================
 #  核心策略流水线 (Generic Pipelines)
 # ==============================================================================
-def _safe_trend_aggregator(df: pd.DataFrame, anchor_date: dt, freq: str, is_group_level: bool = False):
-    """
-    [通用升级版] 安全趋势聚合器
-    支持 Group 级 (Wide) 和 Code 级 (Long)，彻底解决分母萎缩与索引冲突问题。
-    """
-    if df.empty: return pd.DataFrame()
-    
-    # 1. 统一转换：确保时间维度是“列”且名为 warehousing_time
-    working_df = df.copy()
-    if 'warehousing_time' not in working_df.columns:
-        # 如果在 Index 里，则转出来
-        working_df = working_df.reset_index()
-        # 兼容处理：Pandas reset_index 默认可能叫 'index' 或 'level_0'
-        if 'index' in working_df.columns:
-            working_df = working_df.rename(columns={'index': 'warehousing_time'})
-        elif 'level_0' in working_df.columns:
-            working_df = working_df.rename(columns={'level_0': 'warehousing_time'})
-
-    # 2. 执行时间窗口过滤 (3个月或2周)
-    if freq == 'M':
-        start = anchor_date - relativedelta(months=3)
-        mask = working_df['warehousing_time'].dt.to_period('M') >= pd.Period(start, 'M') # type: ignore
-    else:
-        start = anchor_date - relativedelta(weeks=2)
-        mask = working_df['warehousing_time'].dt.to_period('W') >= pd.Period(start, 'W') # type: ignore
-    
-    working_df = working_df[mask].copy()
-    if working_df.empty: return pd.DataFrame()
-
-    # 3. 计算【全局】分母 (True Denominator)
-    # 取出所有日期和对应的总投入，去重（防止同一天多行 Code 导致分母重复累加）
-    daily_globals = working_df[['warehousing_time', 'total_panels']].drop_duplicates(subset=['warehousing_time'])
-    global_totals = daily_globals.set_index('warehousing_time').resample(freq)['total_panels'].sum()
-    
-    # 4. 计算【分子】并合并
-    if is_group_level:
-        # --- Group 级处理 (Wide Format) ---
-        # 排除非数据列，剩下的全是 Group 列（如 Array_Line, Array_Pixel...）
-        exclude = ['warehousing_time', 'total_panels', 'month_period']
-        group_cols = [c for c in working_df.columns if c not in exclude]
-        
-        # 聚合各列分子
-        numerator_df = working_df.set_index('warehousing_time').resample(freq)[group_cols].sum()
-        
-        # 合并全局分母
-        merged = numerator_df.join(global_totals)
-        return merged # 返回 Wide 格式以保持向下兼容
-    else:
-        # --- Code 级处理 (Long Format) ---
-        numerator_df = working_df.groupby([
-            pd.Grouper(key='warehousing_time', freq=freq),
-            'defect_group', 'defect_desc'
-        ])['defect_panel_count'].sum().reset_index()
-        
-        # 合并全局分母
-        numerator_df = numerator_df.set_index('warehousing_time')
-        merged = numerator_df.join(global_totals, rsuffix='_global', how='left')
-        
-        if 'total_panels_global' in merged.columns:
-            merged['total_panels'] = merged['total_panels_global']
-            merged.drop(columns=['total_panels_global'], inplace=True)
-            
-        return merged.reset_index()
-
 # src/vivo_project/core/mwd_trend_processor.py
 def _execute_top_down_pipeline(
     raw_daily_df: pd.DataFrame,
@@ -358,6 +294,70 @@ def _execute_ema_pipeline(
 # ==============================================================================
 #  具体实现逻辑 (Implementations)
 # ==============================================================================
+def _safe_trend_aggregator(df: pd.DataFrame, anchor_date: dt, freq: str, is_group_level: bool = False):
+    """
+    [通用升级版] 安全趋势聚合器
+    支持 Group 级 (Wide) 和 Code 级 (Long)，彻底解决分母萎缩与索引冲突问题。
+    """
+    if df.empty: return pd.DataFrame()
+    
+    # 1. 统一转换：确保时间维度是“列”且名为 warehousing_time
+    working_df = df.copy()
+    if 'warehousing_time' not in working_df.columns:
+        # 如果在 Index 里，则转出来
+        working_df = working_df.reset_index()
+        # 兼容处理：Pandas reset_index 默认可能叫 'index' 或 'level_0'
+        if 'index' in working_df.columns:
+            working_df = working_df.rename(columns={'index': 'warehousing_time'})
+        elif 'level_0' in working_df.columns:
+            working_df = working_df.rename(columns={'level_0': 'warehousing_time'})
+
+    # 2. 执行时间窗口过滤 (3个月或2周)
+    if freq == 'M':
+        start = anchor_date - relativedelta(months=3)
+        mask = working_df['warehousing_time'].dt.to_period('M') >= pd.Period(start, 'M') # type: ignore
+    else:
+        start = anchor_date - relativedelta(weeks=2)
+        mask = working_df['warehousing_time'].dt.to_period('W') >= pd.Period(start, 'W') # type: ignore
+    
+    working_df = working_df[mask].copy()
+    if working_df.empty: return pd.DataFrame()
+
+    # 3. 计算【全局】分母 (True Denominator)
+    # 取出所有日期和对应的总投入，去重（防止同一天多行 Code 导致分母重复累加）
+    daily_globals = working_df[['warehousing_time', 'total_panels']].drop_duplicates(subset=['warehousing_time'])
+    global_totals = daily_globals.set_index('warehousing_time').resample(freq)['total_panels'].sum()
+    
+    # 4. 计算【分子】并合并
+    if is_group_level:
+        # --- Group 级处理 (Wide Format) ---
+        # 排除非数据列，剩下的全是 Group 列（如 Array_Line, Array_Pixel...）
+        exclude = ['warehousing_time', 'total_panels', 'month_period']
+        group_cols = [c for c in working_df.columns if c not in exclude]
+        
+        # 聚合各列分子
+        numerator_df = working_df.set_index('warehousing_time').resample(freq)[group_cols].sum()
+        
+        # 合并全局分母
+        merged = numerator_df.join(global_totals)
+        return merged # 返回 Wide 格式以保持向下兼容
+    else:
+        # --- Code 级处理 (Long Format) ---
+        numerator_df = working_df.groupby([
+            pd.Grouper(key='warehousing_time', freq=freq),
+            'defect_group', 'defect_desc'
+        ])['defect_panel_count'].sum().reset_index()
+        
+        # 合并全局分母
+        numerator_df = numerator_df.set_index('warehousing_time')
+        merged = numerator_df.join(global_totals, rsuffix='_global', how='left')
+        
+        if 'total_panels_global' in merged.columns:
+            merged['total_panels'] = merged['total_panels_global']
+            merged.drop(columns=['total_panels_global'], inplace=True)
+            
+        return merged.reset_index()
+    
 def _apply_t1_filtering(
     df: pd.DataFrame, 
     today: dt | None, 

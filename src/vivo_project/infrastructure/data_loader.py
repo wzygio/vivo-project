@@ -6,9 +6,6 @@ from sqlalchemy import text
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-# [Refactor] 移除了全局 CONFIG 和 RESOURCE_DIR 引用
-# 保持该层为纯函数，不持有任何应用状态
-
 if TYPE_CHECKING:
     from vivo_project.infrastructure.db_handler import DatabaseManager
 
@@ -56,17 +53,26 @@ def load_panel_details(
         and dwp.first_ship_date between '{start_date_fmt}' and '{end_date_fmt}'
         and dmp.productcode = '{prod_code}'
         and dwp.sub_prod_type in ('{work_orders_str}')
-    order by batch_no, lot_id, sheet_id, panel_id;
     """
-    
+    # 注意：上面的 SQL 中去掉了 order by batch_no, lot_id, sheet_id, panel_id; 数据库只负责“拿数据”，不要让它负责“排数据”，尤其是跨表大查询时
+
     try:
         if db_manager.engine is None:
             raise Exception("数据库引擎未初始化。")
         
+        logging.info("正在执行SQL查询 (已移除DB端排序)...")
         panel_df = pd.read_sql(text(sql_query), db_manager.engine)
         panel_df.columns = panel_df.columns.str.lower()
         
-        # --- [核心修改] 统一清洗层 (Sanitization Layer) ---
+        # 1. 在 Pandas 中进行排序：此时数据已经到了本地内存，Pandas 排序非常快且不会导致数据库连接超时
+        if not panel_df.empty:
+            panel_df.sort_values(
+                by=['batch_no', 'lot_id', 'sheet_id', 'panel_id'], 
+                ascending=[True, True, True, True], 
+                inplace=True
+            )
+        
+        # 2. 统一清洗层 (Sanitization Layer)
         if target_defect_groups:
             # 1. 找到所有“非目标组”且“非良品”的行
             mask_non_target = (
