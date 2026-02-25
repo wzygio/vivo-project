@@ -227,7 +227,14 @@ class YieldAnalysisService:
         if not sheet_results: return None
 
         # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down)
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+            config, 
+            resource_dir, 
+            _core_revision, 
+            ema_span, 
+            scaling_factor, 
+            use_top_down
+        )
         
         # 4. 加载警戒线配置
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)

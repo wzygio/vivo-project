@@ -70,8 +70,16 @@ def create_group_trend_chart(
                 x=df_panels['time_period'], 
                 y=df_panels['total_panels'],
                 name='入库数',
-                mode='lines+markers',
-                yaxis='y2', # 关键：指定右轴
+                # [修改点 1] 模式增加 'text'，表示要显示文本
+                mode='lines+markers+text',
+                # [修改点 2] 指定要显示的文本内容（直接绑定入库数列）
+                text=df_panels['total_panels'],
+                # [修改点 3] 文本显示位置（top center 表示显示在数据点上方，避免遮挡线条）
+                textposition='top center',
+                # [修改点 4] (可选) 文本格式模板，例如只显示数字，或者加单位
+                # texttemplate='%{y}', 
+                
+                yaxis='y2', # 保持右轴逻辑不变
                 line=dict(color='#7f7f7f', width=1.5, dash='dot'),
                 marker=dict(symbol='circle', size=5, color='#7f7f7f'),
                 hovertemplate='入库数: %{y}<extra></extra>',

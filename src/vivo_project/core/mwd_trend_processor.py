@@ -182,7 +182,7 @@ def _execute_top_down_pipeline(
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     
     agg_monthly_func, agg_weekly_func = agg_funcs
-    
+
     # ==========================================================================
     # Phase 1: 确立周度基准 (The Baseline)
     # ==========================================================================
@@ -226,7 +226,6 @@ def _execute_top_down_pipeline(
         daily_skeleton = df_processing[['total_panels']].copy()
     
     # 基于【最终周度】生成【最终日度】
-    # 此时生成的日度数据已经平滑了尖峰，且包含了缩放和调节效果
     final_daily = gen_func(daily_skeleton, final_weekly, **kwargs)
 
     # ==========================================================================
@@ -284,7 +283,7 @@ def _execute_ema_pipeline(
     
     period_kw_m = {'period_type': 'monthly'}
     period_kw_w = {'period_type': 'weekly'}
-    valid_ov_keys = ['target_defects'] 
+    valid_ov_keys = ['target_defects']      
     extra_ov_args = {k: v for k, v in kwargs.items() if k in valid_ov_keys}
 
     monthly_final = ov_func_m(monthly_reg, val_m, **period_kw_m, **extra_ov_args)
@@ -797,10 +796,10 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
         # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)
         # ======================================================================
         
-        # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
-        is_surge_abs = abs(rr - p_base) > 0.02
-        is_surge_ratio = (rr > p_base * 3.0)
-        is_plunge_ratio = (rr < p_base / 3.0) or (rr < 1e-4) 
+        
+        is_surge_abs = abs(rr - p_base) > 0.02 # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
+        is_surge_ratio = (rr > p_base * 3.0) # B. 相对值容差检测: 波动幅度不能超过 3 倍
+        is_plunge_ratio = (rr < p_base / 3.0) or (rr < 1e-4) # C. 相对值容差检测: 波动幅度不能超过 1/3 倍 或 非常小 (1e-4)
 
         is_abnormal = is_surge_abs or is_surge_ratio or is_plunge_ratio
         

@@ -120,7 +120,7 @@ def create_code_selection_ui(
     key_prefix: str,
     filter_by: str = 'rate',
     rate_threshold: float = 0.0005,
-    count_threshold: int = 10
+    count_threshold: int = 20
 ) -> dict:
     """
     (V3.5 - 数据驱动版)
