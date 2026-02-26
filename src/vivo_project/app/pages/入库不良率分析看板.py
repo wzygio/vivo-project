@@ -6,10 +6,24 @@ import numpy as np
 ENABLE_HOT_RELOAD = True
 
 if ENABLE_HOT_RELOAD:
-    # 必须在 import 业务服务之前执行清理
     try:
-        from vivo_project.utils.reloader import deep_reload_modules
-        deep_reload_modules()
+        from vivo_project.utils.reloader import deep_reload_modules, get_project_revision
+        from vivo_project.config import ConfigLoader
+        
+        # 1. 计算当前代码目录的真实哈希指纹
+        project_root = ConfigLoader.get_project_root()
+        current_rev = get_project_revision(project_root)
+        
+        # 2. 从 session_state 获取上一次的指纹
+        last_rev = st.session_state.get('last_code_revision')
+        
+        # 3. 只有当代码指纹发生变化时，才执行暴力的模块卸载
+        if last_rev is not None and last_rev != current_rev:
+            deep_reload_modules()
+            
+        # 4. 更新指纹
+        st.session_state['last_code_revision'] = current_rev
+        
     except ImportError:
         pass
 

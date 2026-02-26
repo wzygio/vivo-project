@@ -71,12 +71,26 @@ class PanelRepository:
                 else:
                     logging.info(f"⏰ [Repo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
 
-                # 1.3 只有在 (有效且不强制刷新) 或者 (需要基于旧数据做增量) 时才读取
-                # 这里为了简单，总是先读出来
+                # 1.3 无论是否新鲜，先读取缓存内容
                 df_cache = pd.read_parquet(self.snapshot_path)
                 if not df_cache.empty and 'warehousing_time' in df_cache.columns:
                     df_cache['warehousing_time'] = pd.to_datetime(df_cache['warehousing_time'])
                     cache_exists = True
+
+                    # ====================================================================
+                    # ✅ [新增] 核心修复：数据边界校验 (Date-Aware Check)
+                    # 如果缓存里存在的最晚日期，早于请求的 end_date，说明缺少最新数据
+                    # 此时强制将缓存标记为“不新鲜”，从而触发下方的“增量更新 (Phase 2 场景B)”
+                    # ====================================================================
+                    max_cached_date = df_cache['warehousing_time'].max()
+                    if max_cached_date < req_end_dt:
+                        is_cache_fresh = False
+                        logging.info(
+                            f"⏰ [Repo] 缓存虽未过12h，但缺少目标尾部数据 "
+                            f"(缓存最晚: {max_cached_date.strftime('%Y-%m-%d')} < "
+                            f"请求最晚: {req_end_dt.strftime('%Y-%m-%d')})，强制触发增量拉取！"
+                        )
+                    # ====================================================================
                     
             except Exception as e:
                 logging.warning(f"⚠️ 缓存读取失败: {e}")

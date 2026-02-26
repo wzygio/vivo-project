@@ -94,8 +94,7 @@ class TrendRegulator:
     def regulate_monthly_and_weekly(
         monthly_df: pd.DataFrame, 
         weekly_df: pd.DataFrame,
-        config: AppConfig,
-        resource_dir: Path
+        **kwargs
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Group 级智能调节 (Monthly & Weekly)
@@ -183,103 +182,75 @@ class TrendRegulator:
     def regulate_code_monthly_and_weekly(
         monthly_df: pd.DataFrame, 
         weekly_df: pd.DataFrame,
-        config: AppConfig,
-        resource_dir: Path
+        **kwargs
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Code 级智能调节 (Monthly & Weekly)
+        Code 级智能调节 (V2.0 - 全局规格线截断模式)
+        核心逻辑：不再对比前值，直接对全局所有超出 Spec 规格线的周期进行确定性软截断。
         """
         if monthly_df.empty and weekly_df.empty:
             return monthly_df, weekly_df
 
-        logging.info("启动 Code 级智能趋势调节器...")
+        logging.info("启动 Code 级智能趋势调节器 (全局 Spec 截断模式)...")
 
         monthly_regulated = monthly_df.copy()
         weekly_regulated = weekly_df.copy()
         
-        # --- 1. 月度调节 ---
-        if not monthly_df.empty:
-            unique_codes = monthly_regulated['defect_desc'].unique()
-            dates = monthly_regulated['warehousing_time'].sort_values().unique()
-            
-            if len(dates) >= 2:
-                last_date = dates[-1]
-                prev_date = dates[-2]
+        # 提取传入的规格线字典
+        warning_lines = kwargs.get('warning_lines', {})
+        if not warning_lines:
+            logging.warning("未获取到 warning_lines 规格线，Code 级截断被跳过。")
+            return monthly_regulated, weekly_regulated
 
-                for code in unique_codes:
-                    if code == 'NoDefect': continue
-                    try:
-                        mask_curr = (monthly_regulated['defect_desc'] == code) & (monthly_regulated['warehousing_time'] == last_date)
-                        mask_prev = (monthly_regulated['defect_desc'] == code) & (monthly_regulated['warehousing_time'] == prev_date)
-                        
-                        if not mask_curr.any() or not mask_prev.any(): continue
-                        
-                        # 提取 (Code级数据需要先 .values[0] 取出标量)
-                        # 使用 getattr/item 等方式确保取出的是标量，或者直接依赖 _parse_metrics 的强转能力
-                        # 这里为了安全，显式取 .iloc[0]
-                        metrics = TrendRegulator._parse_metrics(
-                            monthly_regulated.loc[mask_curr, 'total_panels'].iloc[0], # type: ignore
-                            monthly_regulated.loc[mask_prev, 'total_panels'].iloc[0], # type: ignore
-                            monthly_regulated.loc[mask_curr, 'defect_panel_count'].iloc[0], # type: ignore
-                            monthly_regulated.loc[mask_prev, 'defect_panel_count'].iloc[0] # type: ignore
-                        )
-                        if not metrics: continue
-                        
-                        curr_panels, _, curr_count, _, curr_rate, prev_rate = metrics
-                        
-                        # 计算
-                        target_count = TrendRegulator._calculate_regulated_target(
-                            curr_rate, prev_rate, curr_panels, curr_count
-                        )
-                        
-                        # 应用
-                        if target_count is not None:
-                            logging.info(f"[智能调节-Code月度]{code}: {curr_rate:.2%} -> {(target_count/curr_panels):.2%}")
-                            monthly_regulated.loc[mask_curr, 'defect_panel_count'] = target_count
-                            
-                    except Exception as e:
-                        continue
-
-        # --- 2. 周度调节 ---
-        if not weekly_df.empty:
-            unique_codes = weekly_regulated['defect_desc'].unique()
-            weeks = weekly_regulated['warehousing_time'].sort_values().unique()
+        def _apply_spec_capping(df: pd.DataFrame, freq_name: str) -> pd.DataFrame:
+            if df.empty: return df
+            df_out = df.copy()
             
-            if len(weeks) >= 2:
-                last_date = weeks[-1]
-                prev_date = weeks[-2]
+            capping_count = 0
+            # 全局遍历每一行 (涵盖所有历史周期)
+            for idx in df_out.index:
+                code = str(df_out.loc[idx, 'defect_desc']).strip()
                 
-                for code in unique_codes:
-                    if code == 'NoDefect': continue
-                    try:
-                        mask_curr = (weekly_regulated['defect_desc'] == code) & (weekly_regulated['warehousing_time'] == last_date)
-                        mask_prev = (weekly_regulated['defect_desc'] == code) & (weekly_regulated['warehousing_time'] == prev_date)
+                # 如果该 Code 不在规格线列表中，直接豁免 (无下限，无兜底上限)
+                if code == 'NoDefect' or code not in warning_lines:
+                    continue
+                    
+                spec_limit = warning_lines[code]
+                panels = df_out.loc[idx, 'total_panels']
+                if panels <= 0: continue # type: ignore
+                    
+                count = df_out.loc[idx, 'defect_panel_count']
+                rate = count / panels # type: ignore
+                
+                # 如果超标，触发确定性软截断 (Deterministic Soft Capping)
+                if rate > spec_limit:
+                    # [核心机制]：利用 Hash 生成确定性随机数，避免 UI 刷新时柱子抖动
+                    t_val = df_out.loc[idx, 'warehousing_time']
+                    t_str = t_val.strftime('%Y%m%d') if pd.notnull(t_val) else str(idx) # type: ignore
+                    
+                    # 生成唯一种子 (如 "暗点_20260225_weekly")
+                    hash_str = f"{code}_{t_str}_{freq_name}"
+                    # 计算 0 ~ 1 之间的伪随机系数
+                    hash_val = (hash(hash_str) % 10000) / 10000.0 
+                    
+                    # 软截断区间: Spec 的 80% ~ 95% 之间
+                    safe_rate = (spec_limit * 0.8) + (hash_val * (spec_limit * 0.15))
+                    
+                    # 反推安全不良数
+                    new_count = int(np.round(safe_rate * panels))
+                    
+                    # 确保是压低操作
+                    if new_count < count: # type: ignore
+                        df_out.loc[idx, 'defect_panel_count'] = new_count
+                        capping_count += 1
                         
-                        if not mask_curr.any() or not mask_prev.any(): continue
-                        
-                        # 提取
-                        metrics = TrendRegulator._parse_metrics(
-                            weekly_regulated.loc[mask_curr, 'total_panels'].iloc[0], # type: ignore
-                            weekly_regulated.loc[mask_prev, 'total_panels'].iloc[0], # type: ignore
-                            weekly_regulated.loc[mask_curr, 'defect_panel_count'].iloc[0], # type: ignore
-                            weekly_regulated.loc[mask_prev, 'defect_panel_count'].iloc[0] # type: ignore
-                        )
-                        if not metrics: continue
-                        
-                        curr_panels, _, curr_count, _, curr_rate, prev_rate = metrics
-                        
-                        # 计算
-                        target_count = TrendRegulator._calculate_regulated_target(
-                            curr_rate, prev_rate, curr_panels, curr_count
-                        )
-                        
-                        # 应用
-                        if target_count is not None:
-                            weekly_regulated.loc[mask_curr, 'defect_panel_count'] = target_count
-                            logging.info(f"[智能调节-Code周度] {code}: {curr_rate:.2%} -> {target_count/curr_panels:.2%}")
+            if capping_count > 0:
+                logging.info(f"[{freq_name} 维度] 成功应用全局 Spec 截断，共压制 {capping_count} 处异常。")
+                
+            return df_out
 
-                    except Exception as e:
-                        logging.error(f"调节周度 Code {code} 时出错: {e}")
-                        continue
-
+        # 分别对月度、周度执行压制
+        monthly_regulated = _apply_spec_capping(monthly_regulated, 'monthly')
+        weekly_regulated = _apply_spec_capping(weekly_regulated, 'weekly')
+        
         return monthly_regulated, weekly_regulated

@@ -59,13 +59,8 @@ class YieldAnalysisService:
         
         # 1. 提取仓库配置
         processing_conf = config.processing
-        snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
-        # 假设 snapshot 位于项目根目录下，这里需要注意 snapshot_path 的解析方式。
-        # 暂时假定运行目录即为根目录，或者在 Repo 内部处理。
-        # 为了稳健，Repo 接收 Path 对象。
-        # 这里的路径相对性取决于 ConfigLoader 如何定义 root。
-        # 通常建议 snapshot_path 是相对路径，在 Repo 内部结合 root 使用，或者在这里结合 cwd。
-        # 这里为了简化，直接传 Path 对象。
+        # 这里的路径相对性取决于 ConfigLoader 如何定义 root
+        snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet') 
         snapshot_path = Path(snapshot_path_str) 
         
         use_snapshot = processing_conf.get('use_local_snapshot', True)
@@ -135,7 +130,6 @@ class YieldAnalysisService:
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             config=config,
-            resource_dir=resource_dir,
             ema_span=ema_span,
             scaling_factor=scaling_factor,
             USE_TOP_DOWN_STRATEGY=use_top_down
@@ -156,14 +150,17 @@ class YieldAnalysisService:
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
-            
+        
+        # [新增] 提前加载警戒线配置，准备下发给底层调节器
+        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
+
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            resource_dir=resource_dir,
             ema_span=ema_span,
             scaling_factor=scaling_factor,
-            USE_TOP_DOWN_STRATEGY=use_top_down
+            USE_TOP_DOWN_STRATEGY=use_top_down,
+            warning_lines=warning_lines
         )
 
     # ==========================================================================

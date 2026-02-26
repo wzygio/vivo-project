@@ -5,6 +5,78 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Optional
+from datetime import datetime, timedelta
+
+
+# -----------------------------------------------------------------------------
+#  绘图辅助函数
+# -----------------------------------------------------------------------------
+# --- [新增] 图表数据空洞补齐函数 ---
+def pad_chart_dataframe(df: pd.DataFrame, title: str, group_col: str = None) -> pd.DataFrame: # type: ignore
+    """
+    智能推断并补齐 DataFrame 中缺失的时间周期，填充 0 值。
+    解决“入库为0的日期在图表中被跳过而不是下沉为0”的问题。
+    """
+    if df is None or df.empty:
+        return df
+    
+    df_padded = df.copy()
+    periods = df_padded['time_period'].unique()
+    if len(periods) <= 1:
+        return df_padded
+        
+    full_periods = []
+    
+    try:
+        if "日度" in title:
+            # 解析 %m-%d 格式
+            year = datetime.now().year
+            dates = [datetime.strptime(f"{year}-{p}", "%Y-%m-%d") for p in periods]
+            min_d, max_d = min(dates), max(dates)
+            while min_d <= max_d:
+                full_periods.append(min_d.strftime("%m-%d"))
+                min_d += timedelta(days=1)
+                
+        elif "月度" in title:
+            # 解析 YYYY-MM月 格式
+            dates = [datetime.strptime(p, "%Y-%m月") for p in periods]
+            min_d, max_d = min(dates), max(dates)
+            while min_d <= max_d:
+                full_periods.append(min_d.strftime("%Y-%m月"))
+                # 月份加1
+                if min_d.month == 12:
+                    min_d = min_d.replace(year=min_d.year+1, month=1)
+                else:
+                    min_d = min_d.replace(month=min_d.month+1)
+        else:
+            return df_padded # 周度补齐涉及跨年 ISO 历法，保持现状较安全
+        
+        # 找出缺失的 periods
+        missing_periods = [p for p in full_periods if p not in periods]
+        if not missing_periods:
+            return df_padded
+            
+        new_rows = []
+        groups = df_padded[group_col].unique() if group_col and group_col in df_padded.columns else [None]
+        
+        # 填充 0 值行
+        for p in missing_periods:
+            for g in groups:
+                row = {'time_period': p, 'defect_rate': 0.0, 'total_panels': 0}
+                if g is not None:
+                    row[group_col] = g
+                new_rows.append(row)
+                
+        if new_rows:
+            df_padded = pd.concat([df_padded, pd.DataFrame(new_rows)], ignore_index=True)
+            # ✅ [关键修复] 必须进行物理排序，否则 Plotly 的折线会来回乱穿插
+            df_padded = df_padded.sort_values(by='time_period').reset_index(drop=True)
+            
+    except Exception as e:
+        # 解析失败则退回原状，不影响页面渲染
+        pass
+        
+    return df_padded
 
 # --- [新增] 辅助函数：截取最近N个周期 ---
 def slice_recent_data(df, n_recent=3, time_col='time_period'):
@@ -40,6 +112,7 @@ def create_group_trend_chart(
         return None
 
     # 确保排序正确
+    df = pad_chart_dataframe(df, title, group_col='defect_group')
     df = df.copy()
     df['time_period'] = pd.Categorical(df['time_period'], categories=sorted(df['time_period'].unique()), ordered=True)
     
@@ -147,6 +220,7 @@ def create_code_trend_chart(
         st.info(f"无 {title.replace('趋势','')} 数据。")
         return None
     
+    df = pad_chart_dataframe(df, title, group_col='defect_group')
     df = df.copy()
     df['time_period'] = pd.Categorical(df['time_period'], categories=sorted(df['time_period'].unique()), ordered=True)
 
