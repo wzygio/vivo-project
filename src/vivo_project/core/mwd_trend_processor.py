@@ -15,70 +15,132 @@ class MWDTrendProcessor:
     # ==========================================================================
     #  主入口 1: Group 级趋势分析
     # ==========================================================================
+    # ==========================================================================
+    #  主入口 1: Group 级趋势分析 (V3.1 - Code 注入 & 完整流水线保留)
+    # ==========================================================================
     @staticmethod
     def create_mwd_trend_data(
         panel_details_df: pd.DataFrame, 
+        mwd_code_data: Dict[str, pd.DataFrame] | None,
         config: AppConfig,
-        ema_span: int,
         scaling_factor: float,
         USE_TOP_DOWN_STRATEGY: bool,
         volatility: float = 0.1,
-        volatility_ema: float = 0.3
     ) -> Dict[str, pd.DataFrame] | None:
         
-        logging.info(f"Group级趋势分析 (模式: {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA+Noise'})...")
-        if panel_details_df.empty: return None
+        logging.info(f"Group级趋势分析 (模式: Code源注入 -> {'Top-Down' if USE_TOP_DOWN_STRATEGY else 'EMA'})...")
+        if panel_details_df.empty or not mwd_code_data: return None
         
         try:
-            # 1. 准备 Raw Data
+            # 0. 准备真实的每日 total_panels 骨架，并获取 target_defects
             raw_daily, today, target_defects = _prepare_group_raw_data(panel_details_df)
             if raw_daily is None: return None
+            
+            # T-1 过滤 (保留末日剔除能力)
+            df_processing, today = _apply_t1_filtering(raw_daily, today)
+            if df_processing.empty: return None
 
-            # 定义 Group 级的月/周聚合 lambda
-            agg_m = lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=True)
-            agg_w = lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=True)
-
-            # 2. 准备配置参数
             m_vals = config.processing.get('group_monthly_values', {})
             w_vals = config.processing.get('group_weekly_values', {})
             d_vals = config.processing.get('group_daily_values', {})
 
-            # 3. 执行策略流水线
+            # ------------------------------------------------------------------
+            # [核心逻辑]: 将 Code 级长表聚合后，注入到 Group 级宽表骨架中
+            # 这替代了图1中的 “步骤1: 聚合出原始数据”
+            # ------------------------------------------------------------------
+            def _inject_code_to_skeleton(freq: str, code_df_key: str):
+                # 借助原始聚合器生成带有正确时间索引 (DatetimeIndex/PeriodIndex) 的空骨架
+                skeleton = _safe_trend_aggregator(df_processing, today, freq, is_group_level=True) # type: ignore
+                code_df = mwd_code_data.get(code_df_key)
+                
+                if skeleton.empty or code_df is None or code_df.empty: 
+                    return skeleton
+                
+                res = skeleton.copy()
+                # 遍历真实存在的时间周期，从 Code 聚合表里捞取不良数覆盖
+                for idx in res.index:
+                    if freq == 'W':
+                        iso = idx.isocalendar() # type: ignore
+                        k = f"{iso[0]}-W{iso[1]:02d}"
+                    else:
+                        k = idx.strftime('%Y-%m月') # type: ignore
+                        
+                    sub = code_df[code_df['time_period'] == k]
+                    for g in target_defects:
+                        if g in res.columns:
+                            # 累加该 Group 下所有 Code 的不良数
+                            val = sub[sub['defect_group'] == g]['defect_panel_count'].sum()
+                            res.loc[idx, g] = val
+                return res
+
             if USE_TOP_DOWN_STRATEGY:
-                monthly, weekly, daily = _execute_top_down_pipeline(
-                    raw_daily_df=raw_daily,
-                    today=today,
-                    agg_funcs=(agg_m, agg_w),
-                    reg_func=TrendRegulator.regulate_monthly_and_weekly,
-                    override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
-                    override_vals=(m_vals, w_vals),
-                    gen_func=_generate_daily_from_weekly_baseline,
-                    # Kwargs for generator/overrides
-                    target_defects=target_defects,
-                    scaling_factor=scaling_factor,
-                    volatility=volatility
-                )
-            else:
-                monthly, weekly, daily = _execute_ema_pipeline(
-                    raw_daily_df=raw_daily,
-                    today=today,
-                    calc_daily_func=lambda df: _calc_group_ema_noise(df, target_defects, ema_span, scaling_factor, volatility_ema),
-                    agg_funcs=(_aggregate_group_monthly_raw, _aggregate_group_weekly_raw),
-                    reg_func=TrendRegulator.regulate_monthly_and_weekly,
-                    override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
-                    override_vals=(m_vals, w_vals),
-                    target_defects=target_defects
+                # 【图1 - Step 1】: 获取注入了 Code 数据的月/周基准 (Source of Truth)
+                raw_monthly = _inject_code_to_skeleton('M', 'monthly')
+                raw_weekly = _inject_code_to_skeleton('W', 'weekly')
+
+                # 【图1 - Step 2】: 倍率缩放 (如配置为1.0则相当于不缩放)
+                if scaling_factor != 1.0:
+                    raw_monthly = _apply_scaling(raw_monthly, scaling_factor)
+                    raw_weekly = _apply_scaling(raw_weekly, scaling_factor)
+
+                # 【图1 - Step 3】: 智能调节 (兜底压制异常波动)
+                reg_m, reg_w = TrendRegulator.regulate_monthly_and_weekly(
+                    raw_monthly, raw_weekly
                 )
 
-            # 4. 通用后处理 (日度覆盖 & 格式化)
+                # 【图1 - Step 4】: 周度数据覆盖 (来自 YAML)
+                final_weekly = _apply_manual_overrides(reg_w, w_vals, 'weekly', target_defects=target_defects)
+
+                # 【图1 - Step 5】: 生成日度数据 (基于周度)
+                daily_skeleton = df_processing[['total_panels']].copy()
+                final_daily = _generate_daily_from_weekly_baseline(
+                    daily_skeleton, final_weekly, target_defects, volatility
+                )
+
+                # 【图1 - Step 6】: 生成月度数据 (基于生成的日度数据重聚合，保证数学自洽)
+                reaggregated_monthly = _safe_trend_aggregator(final_daily, today, 'M', is_group_level=True) # type: ignore
+
+                # 【图1 - Step 7】: 月度数据覆盖 (来自 YAML)
+                final_monthly = _apply_manual_overrides(reaggregated_monthly, m_vals, 'monthly', target_defects=target_defects)
+
+                monthly, weekly, daily = final_monthly, final_weekly, final_daily
+
+            else:
+                # [EMA 模式兼容处理]
+                def _inject_code_daily():
+                    skeleton = df_processing[['total_panels']].copy()
+                    code_daily = mwd_code_data.get('daily_full')
+                    if skeleton.empty or code_daily is None or code_daily.empty: return skeleton
+                    res = skeleton.copy()
+                    for g in target_defects: res[g] = 0
+                    for idx in res.index:
+                        k = idx.strftime('%Y-%m-%d')
+                        sub = code_daily[code_daily['time_period'] == k]
+                        for g in target_defects:
+                            res.loc[idx, g] = sub[sub['defect_group'] == g]['defect_panel_count'].sum()
+                    return res
+                
+                daily_processed = _inject_code_daily()
+                monthly_agg = _aggregate_group_monthly_raw(daily_processed, today)
+                weekly_agg = _aggregate_group_weekly_raw(daily_processed, today)
+
+                monthly_reg, weekly_reg = TrendRegulator.regulate_monthly_and_weekly(
+                    monthly_agg, weekly_agg
+                )
+
+                monthly_final = _apply_manual_overrides(monthly_reg, m_vals, 'monthly', target_defects=target_defects)
+                weekly_final = _apply_manual_overrides(weekly_reg, w_vals, 'weekly', target_defects=target_defects)
+
+                monthly, weekly, daily = monthly_final, weekly_final, daily_processed
+
+            # 最终格式化 (完美保留 7 天视图补全逻辑)
             daily = _apply_daily_manual_overrides(daily, d_vals, target_defects)
-            
             return _format_group_results(monthly, weekly, daily, target_defects, today)
             
         except Exception as e:
             logging.error(f"Group趋势分析出错: {e}", exc_info=True)
             return None
-
+        
     # ==========================================================================
     #  主入口 2: Code 级趋势分析
     # ==========================================================================

@@ -68,12 +68,6 @@ processing:
   code_monthly_values:
 
   code_weekly_values:
-    "彩斑Mura":
-      "2026-W05": 0.0015
-    "S向棱形彩色带状Mura":
-      "2026-W05": 0.0008
-    "暗点":
-      "2026-W05": 0.0021
   
   # 3. lot阵列投入时间
   array_input_time:

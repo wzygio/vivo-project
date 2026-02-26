@@ -126,11 +126,16 @@ class YieldAnalysisService:
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
         
+        # 1. 强制依赖 Code 级结果作为数据源头
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+        )
+
         # [Refactor] 传入 config 和 resource_dir 给 Core 层
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
+            mwd_code_data=mwd_code_data,  # 传入 Code 数据
             config=config,
-            ema_span=ema_span,
             scaling_factor=scaling_factor,
             USE_TOP_DOWN_STRATEGY=use_top_down
         )

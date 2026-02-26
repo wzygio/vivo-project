@@ -27,43 +27,37 @@ st.set_page_config(
 )
 
 # ==============================================================================
-#  核心魔法：CSS 样式注入 (去除 Streamlit 所有原生 UI，实现伪全屏)
+#  核心魔法：CSS 样式注入 (去除 Streamlit 所有原生 UI，实现真·全屏)
 # ==============================================================================
 FULL_SCREEN_CSS = """
 <style>
-    /* 1. 隐藏顶部 Header (包括 Deploy 按钮、汉堡菜单、Running 动画) */
-    header[data-testid="stHeader"] {
-        display: none;
+    /* 1. 隐藏顶部 Header 和 侧边栏 */
+    header[data-testid="stHeader"], [data-testid="stSidebar"], footer {
+        display: none !important;
     }
     
-    /* 2. 隐藏底部 Footer */
-    footer {
-        display: none;
+    /* 2. 彻底干掉父页面的滚动条，禁止页面滚动 */
+    body, .stApp {
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
     
-    /* 3. 移除主内容区域的默认内边距 (Padding) */
+    /* 3. 移除主内容区域的所有内边距 */
     .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 0rem !important;
-        padding-right: 0rem !important;
+        padding: 0rem !important;
         max-width: 100% !important;
     }
     
-    /* 4. 移除顶部空白间隙 */
-    .main > div {
-        padding-top: 0rem !important;
-    }
-    
-    /* 5. 强制 iframe 填满视口高度 (防止双滚动条) */
+    /* 4. 终极杀招：绝对定位 iframe，脱离文档流，强行铺满整个屏幕 */
     iframe {
-        height: 100vh !important; /* 强制占满 100% 视口高度 */
-        display: block;
-    }
-    
-    /* 6. 隐藏侧边栏本身 (防止鼠标误触边缘滑出) */
-    [data-testid="stSidebar"] {
-        display: none;
+        position: fixed !important; /* 关键：固定定位 */
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important; /* 强制 100% 视口宽度 */
+        height: 100vh !important; /* 强制 100% 视口高度 */
+        border: none !important;
+        z-index: 99999 !important; /* 确保置于最顶层 */
     }
 </style>
 """
