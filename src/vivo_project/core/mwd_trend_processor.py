@@ -151,7 +151,7 @@ class MWDTrendProcessor:
         ema_span: int,          
         scaling_factor: float,
         USE_TOP_DOWN_STRATEGY: bool,
-        volatility: float = 0.2,
+        volatility: float = 0.1,
         warning_lines: dict = None  # type: ignore
     ) -> Dict[str, pd.DataFrame] | None:    
         
@@ -498,19 +498,73 @@ def _calc_code_ema_noise(
     scale: float,
     volatility: float
 ) -> pd.DataFrame:
-    """Code 级 EMA 计算 + 噪声注入"""
+    """Code 级 EMA 计算 + 噪声注入 (带 DEBUG 拦截器)"""
     ema_df = raw_df.copy()
     ema_df['attenuated_rate'] = 0.0
     unique_codes = ema_df['defect_desc'].unique()
+    
+    # [新增] 用于收集所有 Code 的 EMA 调试数据
+    debug_frames = []
     
     for code in unique_codes:
         if code == "NoDefect": continue
         mask = ema_df['defect_desc'] == code
         sub = ema_df[mask].sort_values('warehousing_time')
+        
+        # 核心算法调用
         smooth = _calculate_adaptive_shadow_ema(
             sub['defect_panel_count'].values, sub['total_panels'].values, span
         )
+        
+        # =====================================================================
+        # 🛑 [DEBUG 数据收集拦截器]
+        # =====================================================================
+        try:
+            # 防御性计算真实的 Raw Rate (避免分母为0)
+            safe_totals = np.where(sub['total_panels'].values == 0, 1, sub['total_panels'].values)
+            raw_rates = sub['defect_panel_count'].values / safe_totals
+            
+            temp_debug = pd.DataFrame({
+                'Code': code,
+                'Date': sub['warehousing_time'].dt.strftime('%Y-%m-%d'),
+                'Total_Panels': sub['total_panels'].values,
+                'Raw_Count': sub['defect_panel_count'].values,
+                'Raw_Rate': raw_rates,
+                'EMA_Rate': smooth,
+            })
+            debug_frames.append(temp_debug)
+        except Exception:
+            pass
+        # =====================================================================
+
         ema_df.loc[sub.index, 'attenuated_rate'] = np.array(smooth) * scale
+        
+    # =========================================================================
+    # 🛑 [DEBUG 日志与 CSV 导出]
+    # =========================================================================
+    if debug_frames:
+        try:
+            debug_df = pd.concat(debug_frames, ignore_index=True)
+            
+            # 1. 导出完整数据到 CSV，方便您在 Excel 中插入折线图进行直观对比
+            out_path = Path("logs/debug_ema_rates.csv")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # 将浮点数格式化为百分比字符串，提升 Excel 阅读体验
+            export_df = debug_df.copy()
+            export_df['Raw_Rate'] = export_df['Raw_Rate'].apply(lambda x: f"{x:.4%}")
+            export_df['EMA_Rate'] = export_df['EMA_Rate'].apply(lambda x: f"{x:.4%}")
+            export_df.to_csv(out_path, index=False, encoding='utf-8-sig')
+            
+            logging.info(f"✅ [DEBUG] EMA 算法明细已导出至: {out_path.absolute()}")
+            
+            # 2. 挑一个有数据的 Code，在控制台快速预览前 10 天的数据
+            sample_code = debug_df['Code'].iloc[0]
+            sample_df = export_df[export_df['Code'] == sample_code].head(10)
+            logging.info(f"--- [DEBUG] EMA 抽样展示 (Code: {sample_code}, Span: {span}) ---\n{sample_df.to_string(index=False)}")
+        except Exception as e:
+            logging.error(f"导出 EMA debug 数据失败: {e}")
+    # =========================================================================
     
     ema_df['defect_panel_count'] = np.round(ema_df['attenuated_rate'] * ema_df['total_panels']).astype(int)
     return _inject_deterministic_noise_code_level(ema_df, volatility)

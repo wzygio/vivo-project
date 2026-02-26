@@ -78,10 +78,10 @@ with st.spinner("正在加载全维度分析数据..."):
     
     # 2. 定义默认参数 (兜底)
     # Group 级默认参数
-    group_ema_span = 30
+    group_ema_span = 60
     group_scale = 1.0
     # Code 级默认参数
-    code_ema_span = 30
+    code_ema_span = 60
     code_scale = 0.7
 
     # 3. 针对特定产品进行参数微调 (Hardcode 模式)
