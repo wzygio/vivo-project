@@ -52,7 +52,7 @@ from vivo_project.app.charts.mwd_chart import (
 )
 from vivo_project.app.charts.sheet_lot_chart import (
     create_lot_defect_chart, 
-    create_sheet_stack_chart,
+    create_sheet_defect_chart,
     create_mapping_heatmap,
     parse_panel_id_to_coords
 )
@@ -350,7 +350,7 @@ with st.container(border=True):
                 st.rerun()
 
 # ==============================================================================
-#  Row C: Sheet 分布 (单片维度) - 接收 Lot 点击
+#  Row C: Sheet 分布 (单片维度) - 接收 Lot 点击，展示当前 Code (含 0 良损)
 # ==============================================================================
 with st.container(border=True):
     st.markdown("**C. 单片分布 (By Sheet)**")
@@ -360,17 +360,38 @@ with st.container(border=True):
         target_lot = st.text_input("当前分析 Lot ID:", key="unified_sheet_lot_input", help="点击上方柱图自动填充")
     
     if target_lot:
-        group_summary = sheet_data.get("group_level_summary_for_table")
-        if group_summary is not None and not group_summary.empty:
-            group_summary['warehousing_time'] = pd.to_datetime(group_summary['warehousing_time'], format='%Y%m%d', errors='coerce')
-            rate_cols = [c for c in group_summary.columns if c.endswith('_rate') and c!='pass_rate']
-            group_summary['total_defect_rate'] = group_summary[rate_cols].sum(axis=1)
+        # [修改点 1]: 从 group_summary 提取该 Lot 下【所有】的 Sheet (建立完整的 Sheet 骨架)
+        group_summary = sheet_data.get("group_level_summary_for_table", pd.DataFrame())
+        
+        if not group_summary.empty and 'lot_id' in group_summary.columns:
+            # 捞出当前 Lot 的所有 Sheet 基础信息
+            df_base_sheets = group_summary[group_summary['lot_id'] == target_lot][
+                ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time']
+            ].copy()
             
-            df_sheet = group_summary[group_summary['lot_id'] == target_lot]
-            
-            if df_sheet.empty:
-                st.warning(f"未找到 Lot '{target_lot}' 的 Sheet 数据。")
+            if df_base_sheets.empty:
+                st.warning(f"分析报告：未找到 Lot '{target_lot}' 的任何 Sheet 基础数据。")
             else:
+                # [修改点 2]: 从 code_level_details 中提取有真实不良发生的记录
+                sheet_details_dict = sheet_data.get("code_level_details", {})
+                df_sheet_all = sheet_details_dict.get(curr_group, pd.DataFrame())
+                
+                if not df_sheet_all.empty:
+                    df_defect_only = df_sheet_all[
+                        (df_sheet_all['lot_id'] == target_lot) & 
+                        (df_sheet_all['defect_desc'] == curr_code)
+                    ][['sheet_id', 'defect_rate', 'defect_panel_count']]
+                else:
+                    df_defect_only = pd.DataFrame(columns=['sheet_id', 'defect_rate', 'defect_panel_count'])
+                
+                # [修改点 3]: 左连接 (Left Join) - 将不良率挂载到全量 Sheet 骨架上
+                df_sheet = pd.merge(df_base_sheets, df_defect_only, on='sheet_id', how='left')
+                
+                # 把没有匹配到不良的 Sheet 的数据填补为 0
+                df_sheet['defect_rate'] = df_sheet['defect_rate'].fillna(0.0)
+                df_sheet['defect_panel_count'] = df_sheet['defect_panel_count'].fillna(0).astype(int)
+                df_sheet['warehousing_time'] = pd.to_datetime(df_sheet['warehousing_time'], format='%Y%m%d', errors='coerce')
+                
                 with sc2:
                     s_sort = st.selectbox(
                         "Sheet 排序规则:",  
@@ -378,15 +399,22 @@ with st.container(border=True):
                         key="u_sheet_sort"
                     )
                 
+                # 排序逻辑
                 if s_sort == "按不良率(降序)":
-                    df_sheet = df_sheet.sort_values('total_defect_rate', ascending=False)
+                    # 加入 array_input_time 作为第二排序条件，保证同为 0% 的 Sheet 按时间排好
+                    df_sheet = df_sheet.sort_values(['defect_rate', 'array_input_time'], ascending=[False, True])
                 else:
                     df_sheet = df_sheet.sort_values('array_input_time')
                 
-                fig_sheet = create_sheet_stack_chart(
-                    df_sheet, "Sheet ID", df_sheet['sheet_id'].tolist(), COLOR_MAP
+                # [修改点 4]: 调用新的绘图函数 (已移除 curr_warning 参数)
+                fig_sheet = create_sheet_defect_chart(
+                    df=df_sheet, 
+                    xaxis_label="Sheet ID", 
+                    sorted_sheet_ids=df_sheet['sheet_id'].tolist()
                 )
                 st.plotly_chart(fig_sheet, use_container_width=True)
+        else:
+            st.warning("暂无 Sheet 级明细数据。")
     else:
         st.info("等待输入 Lot ID 或点击上方图表...")
 

@@ -458,11 +458,11 @@ def _distribute_sheet_from_lot(
     processing_config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V5.0 - Lot向下发牌模型]
-    将 Lot 级已确定的不良整数，利用多项式分布随机投递到其名下的 Sheet 中。
-    保证了 Sheet 级数据的物质守恒，且呈现高度真实的离散性。
+    [辅助函数 V5.1 - Lot向下发牌模型 (均匀无放回版)]
+    将 Lot 级已确定的不良整数，利用无放回抽样(Without Replacement)均匀地投递到名下的 Sheet 中。
+    确保微小的不良量能被打散到尽可能多的 Sheet 中，避免极端聚集。
     """
-    logging.info("开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 随机局域分派)...")
+    logging.info("开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 均匀平铺分派)...")
     config = processing_config.get('sheet_hotspot_config', {})
     if not config.get('enable', False):
         return sheet_raw_results['code_level_details']
@@ -511,18 +511,38 @@ def _distribute_sheet_from_lot(
                 # 如果该 Lot 下 Sheet 的总物理容量为 0，没法分发，直接跳过
                 if group_df['total_panels'].sum() <= 0: continue
                 
-                # 开始发牌: 权重由 Sheet 的容量和随机波动因子决定
+                # 开始发牌: 基础权重由 Sheet 的容量和随机波动因子决定
                 entity_capacities = group_df['total_panels'].values
                 random_factors = rng.uniform(1 - current_fluc, 1 + current_fluc, size=len(group_df))
                 weights = entity_capacities * random_factors
                 
-                weight_sum = weights.sum()
-                probs = weights / weight_sum if weight_sum > 0 else np.ones(len(group_df)) / len(group_df)
+                # 🎲 核心投递：无放回轮询抽样 (Round-Robin without replacement)
+                allocated_counts = np.zeros(len(group_df), dtype=int)
+                remaining_tokens = token_count
                 
-                # 🎲 核心投递：多项式分布
-                allocated_counts = rng.multinomial(token_count, probs)
-                # 物理兜底，确保分到的不良不超过其总片数
-                allocated_counts = np.minimum(allocated_counts, entity_capacities)
+                while remaining_tokens > 0:
+                    # 找出还没装满的 Sheet 索引
+                    available_indices = np.where(allocated_counts < entity_capacities)[0]
+                    if len(available_indices) == 0:
+                        break # 所有 Sheet 都装满了，强制退出
+                        
+                    # 这一轮最多能发的牌数（不能超过剩余牌数，也不能超过还有空位的 Sheet 数）
+                    num_to_distribute = min(remaining_tokens, len(available_indices))
+                    
+                    # 计算这些存活 Sheet 的抽取权重
+                    curr_weights = weights[available_indices]
+                    weight_sum = curr_weights.sum()
+                    if weight_sum > 0:
+                        curr_probs = curr_weights / weight_sum
+                    else:
+                        curr_probs = np.ones(len(available_indices)) / len(available_indices)
+                        
+                    # 无放回抽样：确保这一轮里，挑出来的 Sheet 互不相同（绝对均匀平铺）
+                    chosen_indices = rng.choice(available_indices, size=num_to_distribute, replace=False, p=curr_probs)
+                    
+                    # 给挑中的 Sheet 每人发 1 个不良
+                    allocated_counts[chosen_indices] += 1
+                    remaining_tokens -= num_to_distribute
                 
                 # 写回 DataFrame
                 df_sheet_mod.loc[group_df.index, 'defect_panel_count'] = allocated_counts
@@ -539,7 +559,6 @@ def _distribute_sheet_from_lot(
             sim_sheet_codes[group] = pd.concat(processed_codes_list, ignore_index=True)
             
     return sim_sheet_codes
-
 # ==============================================================================
 #                      辅助函数：模拟数据
 # ==============================================================================

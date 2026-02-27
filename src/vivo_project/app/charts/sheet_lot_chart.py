@@ -54,8 +54,65 @@ def create_lot_defect_chart(df, xaxis_label, sorted_lot_ids, warning_line_value=
 
 
 # -----------------------------------------------------------------------------
-#  Sheet 级图表 (ByLot 查询 Sheet 堆叠图)
+#  Sheet 级图表 (ByCode 查询的单维度柱状图 - 支持全量 Sheet 展示)
 # -----------------------------------------------------------------------------
+def create_sheet_defect_chart(
+    df: pd.DataFrame, 
+    xaxis_label: str, 
+    sorted_sheet_ids: list
+) -> go.Figure:
+    """
+    接收 Sheet 级 Code 明细数据，绘制指定缺陷的不良率柱状图。
+    已去除警戒线，并对 0% 的标签进行了视觉优化。
+    """
+    fig = px.bar(
+        df, x='sheet_id', y='defect_rate',
+        labels={
+            'sheet_id': xaxis_label,
+            'defect_rate': '不良率',
+            'array_input_time': '阵列投入时间',
+            'warehousing_time': '入库时间',
+            'defect_panel_count': '不良panel数'
+        },
+        hover_data={
+            "warehousing_time": "|%Y/%m/%d",
+            "array_input_time": "|%Y/%m/%d %H:%M",
+            "defect_panel_count": True,
+            "defect_rate": ":.2%"
+        },
+        height=600,
+        category_orders={"sheet_id": sorted_sheet_ids}
+    )
+    
+    fig.update_traces(marker_color='#6fb9ff')
+    
+    # [修改点]: 去除 add_hline 警戒线逻辑
+    
+    # 添加数值标签
+    # 优化：如果是 0%，我们显示淡灰色的 "0%" 或者直接空着，避免画面太乱，非 0 则显示具体数值
+    text_labels = [f'{r:.2%}' if r > 0 else '0%' for r in df['defect_rate']]
+    text_colors = ['black' if r > 0 else 'lightgray' for r in df['defect_rate']]
+    
+    fig.add_trace(
+        go.Scatter(
+            x=df['sheet_id'], 
+            y=df['defect_rate'],
+            mode='text', 
+            text=text_labels,
+            textposition='top center', 
+            textfont=dict(color=text_colors, size=10), 
+            showlegend=False,
+            hoverinfo='skip' # 防止标签遮挡原生 tooltip
+        )
+    )
+
+    fig.update_layout(
+        yaxis_tickformat='.2%', 
+        xaxis_tickangle=-45,
+        clickmode='event+select'
+    )
+    return fig
+
 def create_sheet_stack_chart(
     df_wide: pd.DataFrame, 
     xaxis_label: str, 
