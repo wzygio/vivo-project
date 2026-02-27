@@ -36,14 +36,13 @@ from vivo_project.utils.reloader import get_project_revision
 from vivo_project.application.alert_service import AlertService
 from vivo_project.application.yield_service import YieldAnalysisService
 from vivo_project.core.mapping_processor import apply_hotspot_modification_to_matrix
-from vivo_project.app.components.components import create_code_selection_ui, render_page_header
+from vivo_project.app.components.components import create_code_selection_ui, render_page_header, COLOR_MAP
 
 # 引入图表组件
 from vivo_project.app.charts.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
     slice_recent_data,
-    detect_abnormal_fluctuations,
     prepare_union_data_for_filter
 )
 from vivo_project.app.charts.sheet_lot_chart import (
@@ -54,7 +53,7 @@ from vivo_project.app.charts.sheet_lot_chart import (
 )
 
 # ==============================================================================
-#  页面主逻辑
+#  数据加载
 # ==============================================================================
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
@@ -78,10 +77,10 @@ with st.spinner("正在加载全维度分析数据..."):
     
     # 2. 定义默认参数 (兜底)
     # Group 级默认参数
-    group_ema_span = 60
+    group_ema_span = 30
     group_scale = 1.0
     # Code 级默认参数
-    code_ema_span = 60
+    code_ema_span = 30
     code_scale = 0.7
 
     # 3. 针对特定产品进行参数微调 (Hardcode 模式)
@@ -112,15 +111,13 @@ with st.spinner("正在加载全维度分析数据..."):
         active_config, 
         resource_dir, 
         _core_revision=current_revision, 
-        scaling_factor=code_scale,
-        use_top_down=USE_TOP_DOWN_STRATEGY
+        scaling_factor=code_scale
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
         active_config, 
         resource_dir, 
         _core_revision=current_revision, 
-        scaling_factor=code_scale,
-        use_top_down=USE_TOP_DOWN_STRATEGY
+        scaling_factor=code_scale
     )
 
     mapping_data = YieldAnalysisService.get_mapping_data(
@@ -135,15 +132,7 @@ if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
     st.error("部分核心数据加载失败 (数据为空或数据库连接异常)，请检查后台日志。")
     st.stop()
 
-# --- 常量 ---
-COLOR_MAP = {
-    'Array_Line': "#1930ff",  # Plotly默认的蓝色
-    'OLED_Mura': "#ff2828",   # Plotly默认的红色
-    'Array_Pixel': "#6fb9ff",   # Plotly默认的浅蓝色
-    'array_Line_rate': "#1930ff",  
-    'oled_mura_rate': "#ff2828",   
-    'array_pixel_rate': "#6fb9ff"   
-}
+
 
 # ==============================================================================
 #  🚨 智能预警中心 (Intelligent Alert Center)
@@ -191,9 +180,7 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         else:
             st.success("✅ 系统监测正常：未发现月周天良率异常。")
         
-    # [B] 规格(Spec)监控区 (永远显示为“安全”，但通过丰富的数据展示“监控正在运行”)
-    # 即使上面报错了，这里也要显示 Spec 是安全的，以此体现“虽然有波动，但未击穿底线”
-    
+    # [B] lot级良损(Spec)监控区
     # 构造一个看起来很正式的监控摘要表
     monitor_summary = pd.DataFrame([
         {

@@ -202,7 +202,6 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             array_input_times_df=array_times_df,
             mwd_code_data=mwd_code_data,
-            start_date=YieldAnalysisService._start_date, 
             config=config,
             resource_dir=resource_dir,
             warning_lines=warning_lines
@@ -214,8 +213,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         resource_dir: Path, 
         _core_revision: float = 0.0,
-        ema_span: int = 30,
         scaling_factor: float = 0.7,
+        ema_span: int = 30,
         use_top_down: bool = False) -> Dict[str, Any] | None:
         """计算 Lot 级良率 (注入警戒线)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
@@ -246,7 +245,6 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             sheet_results=sheet_results,
             mwd_code_data=mwd_code_data,
-            start_date=YieldAnalysisService._start_date,
             config=config,
             resource_dir=resource_dir,
             warning_lines=warning_lines

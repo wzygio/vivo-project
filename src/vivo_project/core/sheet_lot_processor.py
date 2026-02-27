@@ -20,7 +20,6 @@ def calculate_sheet_defect_rates(
     panel_details_df: pd.DataFrame,
     array_input_times_df: pd.DataFrame,
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    start_date: datetime,
     config: AppConfig,          # [Refactor] 注入配置
     resource_dir: Path,         # [Refactor] 注入资源路径
     warning_lines: Optional[Dict[str, float]] = None
@@ -67,22 +66,9 @@ def calculate_sheet_defect_rates(
         if not isinstance(sim_code_details, dict): 
             sim_code_details = raw_results['code_level_details']
         
-        current_results = raw_results.copy()
-        current_results['code_level_details'] = sim_code_details
-
-        # --- 5. 应用截断 (Capping) ---
-        capping_cfg = config.processing.get('defect_capping', {})
-        
-        if capping_cfg.get('enable', True):
-            capped_results = _apply_defect_capping(
-                results_dict=current_results,
-                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 1, 'lower': 0.005}),
-                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 1, 'lower': 0.001}),
-                warning_lines=warning_lines or {}
-            )
-            current_code_details = capped_results['code_level_details']
-        else:
-            current_code_details = sim_code_details
+        # --- 5. 取消应用截断 (Capping) ---
+        # 理由：日度基准数据 (mwd_code_data) 已经过全局截断，Sheet 层二次截断会导致 Lot 级汇总值人为偏低
+        current_code_details = sim_code_details
 
         # --- 6. 应用覆盖 (Override) ---
         # [Refactor] 从 config.paths 中获取 FileResource 对象
@@ -143,7 +129,6 @@ def calculate_lot_defect_rates(
     panel_details_df: pd.DataFrame,
     sheet_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    start_date: datetime,
     config: AppConfig,
     resource_dir: Path,
     warning_lines: Optional[Dict[str, float]] = None
@@ -176,12 +161,14 @@ def calculate_lot_defect_rates(
         )
         if not raw_lot_results: raise Exception("Lot原始计算失败")
 
-        # --- 4. 模拟 ---
-        sim_lot_codes = _simulate_concentration(raw_lot_results, mwd_code_data, config.processing, 'lot_id')
-        if not isinstance(sim_lot_codes, dict): sim_lot_codes = raw_lot_results['code_level_details']
-        
-        current_lot_results = raw_lot_results.copy()
-        current_lot_results['code_level_details'] = sim_lot_codes
+        # --- 4. 模拟 (改为从 Sheet 级数据严格向上聚合) ---
+        current_lot_results = _aggregate_lot_from_sheet_data(
+            sheet_results=sheet_results,
+            raw_lot_results=raw_lot_results,
+            target_defects=target_defects,
+            valid_lots=valid_lots,
+            lot_base_filtered=lot_base_filtered
+        )
 
         # --- 5. 截断 (Capping) ---
         capping_cfg = config.processing.get('defect_capping', {})
@@ -195,7 +182,7 @@ def calculate_lot_defect_rates(
             )
             current_code_details = capped_results['code_level_details']
         else:
-            current_code_details = sim_lot_codes
+            current_code_details = current_lot_results
 
         # --- 6. 覆盖 (Override) ---
         override_res = config.paths.get('rate_override_config')
@@ -485,6 +472,67 @@ def _prepare_code_level_details(
 
     return code_level_details_dict
 
+@staticmethod
+def _aggregate_lot_from_sheet_data(
+    sheet_results: Dict[str, Any],
+    raw_lot_results: Dict[str, Any],
+    target_defects: list,
+    valid_lots: list | np.ndarray | pd.Series,
+    lot_base_filtered: pd.DataFrame
+) -> Dict[str, Any]:
+    """
+    [辅助函数] 将 Sheet 级的不良数据向上精确聚合为 Lot 级数据，保证物质守恒。
+    """
+    logging.info("开始执行 lot_id 级不良率数据生成 (通过 Sheet 级数据向上聚合)...")
+    sim_lot_codes = {}
+    sheet_code_details = sheet_results.get('code_level_details', {})
+    
+    for group in target_defects:
+        # 提取 raw_lot_results 中的对应 group DataFrame，作为结构模板，保证列齐全
+        raw_template = raw_lot_results['code_level_details'].get(group, pd.DataFrame())
+        
+        df_sheet = sheet_code_details.get(group, pd.DataFrame())
+        
+        # 如果 Sheet 级没有该 Group 的不良数据
+        if df_sheet.empty:
+            sim_lot_codes[group] = raw_template.iloc[0:0].copy() if not raw_template.empty else pd.DataFrame()
+            continue
+            
+        # 过滤：仅保留通过了 Lot 级过货率筛选的 lot_id (防止把过滤掉的废片 Lot 重新带入)
+        df_sheet_valid = df_sheet[df_sheet['lot_id'].isin(valid_lots)]
+        if df_sheet_valid.empty:
+            sim_lot_codes[group] = raw_template.iloc[0:0].copy() if not raw_template.empty else pd.DataFrame()
+            continue
+            
+        # 🚀 核心聚合：按 lot_id, defect_group, defect_desc 汇总不良面板数 (物质守恒)
+        agg_df = df_sheet_valid.groupby(['lot_id', 'defect_group', 'defect_desc'])['defect_panel_count'].sum().reset_index()
+        
+        # 关联 Lot 基础信息以获取真实的 total_panels, warehousing_time 等
+        base_info_for_merge = lot_base_filtered.reset_index() if lot_base_filtered.index.name == 'lot_id' else lot_base_filtered.copy()
+        merged_df = pd.merge(agg_df, base_info_for_merge, on='lot_id', how='left')
+        
+        # 重新计算 Lot 级的良损率 (Lot级不良数 / Lot级总入库数)
+        merged_df['total_panels'] = merged_df['total_panels'].fillna(0)
+        merged_df['defect_rate'] = np.where(
+            merged_df['total_panels'] > 0,
+            merged_df['defect_panel_count'] / merged_df['total_panels'],
+            0.0
+        )
+        
+        # 补齐所有必要的列，并对齐顺序 (兼容下游的格式化操作)
+        if not raw_template.empty:
+            for col in raw_template.columns:
+                if col not in merged_df.columns:
+                    merged_df[col] = np.nan
+            merged_df = merged_df[raw_template.columns]
+            
+        sim_lot_codes[group] = merged_df
+        
+    current_lot_results = raw_lot_results.copy()
+    current_lot_results['code_level_details'] = sim_lot_codes
+    
+    return current_lot_results
+
 # ==============================================================================
 #                      辅助函数：模拟数据
 # ==============================================================================
@@ -584,10 +632,15 @@ def _add_daily_base_rate_to_df(
                 
             lot_date_map = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
             
-            # 3. 映射基准值 (精确到天)
-            # lot_dates 会得到一系列如 '20251216' 的字符串
-            lot_dates = df_code_with_base[entity_id_col].map(lot_date_map)
-            df_code_with_base['daily_base_rate'] = lot_dates.map(lookup_dict).fillna(0)
+            # 3. 提取原始日期序列
+            raw_dates = df_code_with_base[entity_id_col].map(lot_date_map)
+            
+            # [✅核心修复]: 强制转换与格式化！
+            # 不管 raw_dates 里是 Timestamp、'2026-02-25' 还是 '20260225'，统统强转为规范的 'YYYYMMDD'
+            standardized_dates = pd.to_datetime(raw_dates, errors='coerce').dt.strftime('%Y%m%d')
+            
+            # 4. 安全映射
+            df_code_with_base['daily_base_rate'] = standardized_dates.map(lookup_dict).fillna(0)
             
         except Exception as e:
             logging.error(f"为 Code '{code_desc}' 进行日度基准映射时出错: {e}")

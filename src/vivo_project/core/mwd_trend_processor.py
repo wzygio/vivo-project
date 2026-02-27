@@ -15,9 +15,6 @@ class MWDTrendProcessor:
     # ==========================================================================
     #  主入口 1: Group 级趋势分析
     # ==========================================================================
-    # ==========================================================================
-    #  主入口 1: Group 级趋势分析 (V3.1 - Code 注入 & 完整流水线保留)
-    # ==========================================================================
     @staticmethod
     def create_mwd_trend_data(
         panel_details_df: pd.DataFrame, 
@@ -967,33 +964,32 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
     alpha = 2/(span+1)
     res = []
     
-    # 计算全局均值
+    # 计算全局平均良损
     g_n, g_d = np.sum(counts), np.sum(totals)
     base = g_n/g_d if g_d>0 else 0
     
     t_d = totals[0]
     
     # 1. 初始化逻辑
-    first_rate = (counts[0]/totals[0]) if totals[0]>0 else 0
-    if use_global_init:
+    first_rate = (counts[0]/totals[0]) if totals[0]>0 else 0 # 计算第一天的良损
+    if use_global_init: # 使用平均良损计算初始动量
         t_n = t_d * base
         res.append(0.5 * base + 0.5 * first_rate)
-    else:
+    else: # 使用第一天的良损计算初始动量(原始方法)
         t_n = t_d * first_rate
         res.append(first_rate)
 
     # 2. 迭代计算
     for i in range(1, n):
-        rn, rd = counts[i], totals[i]
+        rn, rd = counts[i], totals[i] # rn为当日真实不良数，rd为当日真实入库数
         if rd == 0: res.append(res[-1]); continue
         
-        rr = rn/rd
-        p_base = t_n/t_d if t_d>0 else 0
+        rr = rn/rd # 当日真实良损
+        p_base = t_n/t_d if t_d>0 else 0 # 昨日良损(根据昨日动量计算)
         
         # ======================================================================
         # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)
         # ======================================================================
-        
         
         is_surge_abs = abs(rr - p_base) > 0.02 # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
         is_surge_ratio = (rr > p_base * 3.0) # B. 相对值容差检测: 波动幅度不能超过 3 倍
@@ -1006,12 +1002,11 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
             # 遇到暴涨或暴跌：
             # 1. 动量 (t_n, t_d) 强保持：只吸收极少量的当前数据 (alpha * p_base * rd)
             #    这相当于假设"真实情况"依然维持在 p_base 水平
-            cn = p_base * rd 
-            t_n = alpha * cn + (1-alpha) * t_n
-            t_d = alpha * rd + (1-alpha) * t_d
+            cn = p_base * rd # 使用昨日不良数(根据昨日动量计算)
+            t_n = alpha * cn + (1-alpha) * t_n # 历史不良动量(不良数)
+            t_d = alpha * rd + (1-alpha) * t_d # 历史入库动量(入库数)
             
-            # 2. 输出值 (res) 弱跟随：允许显示一点点波动，避免线条完全死掉，
-            #    但幅度会被 alpha (约0.1~0.3) 大幅削弱
+            # 2. 输出值 (res) 依旧使用真实值计算
             dn = alpha * rn + (1-alpha) * t_n
             dd = alpha * rd + (1-alpha) * t_d
             res.append(dn/dd if dd>0 else 0)

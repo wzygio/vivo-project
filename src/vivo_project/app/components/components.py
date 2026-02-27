@@ -11,6 +11,16 @@ from vivo_project.utils.session_manager import SessionManager
 # [Refactor] 定义默认缓存时间，替代原 CONFIG['application']['cache_ttl_hours']
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
 
+# --- 常量 ---
+COLOR_MAP = {
+    'Array_Line': "#1930ff",  # Plotly默认的蓝色
+    'OLED_Mura': "#ff2828",   # Plotly默认的红色
+    'Array_Pixel': "#6fb9ff",   # Plotly默认的浅蓝色
+    'array_Line_rate': "#1930ff",  
+    'oled_mura_rate': "#ff2828",   
+    'array_pixel_rate': "#6fb9ff"   
+}
+
 @st.cache_data(ttl=DEFAULT_CACHE_TTL)
 def calculate_warning_lines(mwd_code_data):
     """计算所有Code的警戒线值并缓存结果"""
