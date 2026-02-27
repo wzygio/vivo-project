@@ -19,23 +19,18 @@ from vivo_project.config_model import AppConfig
 def calculate_sheet_defect_rates(
     panel_details_df: pd.DataFrame,
     array_input_times_df: pd.DataFrame,
-    mwd_code_data: Dict[str, pd.DataFrame] | None,
-    config: AppConfig,          # [Refactor] 注入配置
-    resource_dir: Path,         # [Refactor] 注入资源路径
+    lot_results: Dict[str, Any], # 接收 Lot 结果
+    config: AppConfig,          
+    resource_dir: Path,         
     warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
-    """
-    (V4.1 - 逻辑重构) 顺序: 基础聚合 -> 过滤 -> 原始计算 -> [模拟] -> [截断] -> [覆盖] -> 重聚合
-    """
-    logging.info("开始Sheet级计算 (截断 -> 覆盖 模式)...")
-    
+    """(V5.0) Sheet 级完全听命于 Lot 发牌"""
+    logging.info("开始Sheet级计算 (Lot局域分发 -> 覆盖 模式)...")
     try:
-        # --- 1. 基础信息聚合 ---
+        # 1. 基础信息聚合 
         agg_rules = {'panel_id': 'nunique', 'lot_id': 'first', 'warehousing_time': 'first'}
         sheet_base = panel_details_df.groupby('sheet_id').agg(agg_rules).rename(columns={'panel_id': 'total_panels'})
-        
-        if sheet_base.index.name == 'sheet_id': 
-            sheet_base = sheet_base.reset_index()
+        if sheet_base.index.name == 'sheet_id': sheet_base = sheet_base.reset_index()
 
         if not array_input_times_df.empty:
             if sheet_base.index.name == 'sheet_id': sheet_base = sheet_base.reset_index()
@@ -43,14 +38,14 @@ def calculate_sheet_defect_rates(
         else:
             sheet_base['array_input_time'] = pd.NaT
 
-        # --- 2. 过货率过滤 ---
+        # 2. 过滤 
         sheet_base_filtered = _filter_by_pass_rate(sheet_base.copy(), 190, 0, "sheet")
         if sheet_base_filtered.empty: return None
         
         valid_ids = sheet_base_filtered['sheet_id'].unique()
         panel_df_filtered = panel_details_df[panel_details_df['sheet_id'].isin(valid_ids)]
 
-        # --- 3. 计算原始不良率 ---
+        # 3. 原始计算
         target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         raw_results = _calculate_raw_rates(
             panel_details_df_filtered=panel_df_filtered,
@@ -58,16 +53,16 @@ def calculate_sheet_defect_rates(
             target_defects=target_defects,
             entity_id_col='sheet_id'
         )
-        if not raw_results: raise Exception("原始计算失败")
+        if not raw_results: return None
 
-        # --- 4. 模拟数据 ---
-        # [Refactor] 传入 config.processing
-        sim_code_details = _simulate_concentration(raw_results, mwd_code_data, config.processing, 'sheet_id')
-        if not isinstance(sim_code_details, dict): 
-            sim_code_details = raw_results['code_level_details']
+        # 🚀 4. 分发数据 (核心变动：彻底取代 _simulate_concentration)
+        sim_code_details = _distribute_sheet_from_lot(
+            sheet_raw_results=raw_results, 
+            lot_results=lot_results, 
+            processing_config=config.processing
+        )
         
-        # --- 5. 取消应用截断 (Capping) ---
-        # 理由：日度基准数据 (mwd_code_data) 已经过全局截断，Sheet 层二次截断会导致 Lot 级汇总值人为偏低
+        # 此时的 current_code_details 已经是完美的、且截断过的数据
         current_code_details = sim_code_details
 
         # --- 6. 应用覆盖 (Override) ---
@@ -127,32 +122,24 @@ def calculate_sheet_defect_rates(
 @staticmethod
 def calculate_lot_defect_rates(
     panel_details_df: pd.DataFrame,
-    sheet_results: Dict[str, Any],
+    array_input_times_df: pd.DataFrame, # 接收时间表
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     config: AppConfig,
     resource_dir: Path,
-    warning_lines: Optional[Dict[str, float]] = None,
-    aggregate_from_sheet: bool = False  # [新增] 切换 Flag：True为向上聚合，False为独立模拟
+    warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
-    """
-    (V4.6 - 增加聚合/模拟切换 Flag)
-    """
-    logging.info(f"开始Lot级计算 (模式: {'Sheet聚合' if aggregate_from_sheet else '独立模拟'} -> 截断 -> 覆盖)...")
-
+    """(V5.0) 独立执行 Lot 级数据模拟"""
+    logging.info("开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...")
     try:
-        # --- 1. Lot 基础信息 ---
-        full_sheet_info = sheet_results.get("full_sheet_base_info")
-        lot_base = _calculate_lot_base_info_with_median_time(panel_details_df, full_sheet_info)
+        lot_base = _calculate_lot_base_info_with_median_time(panel_details_df, array_input_times_df)
         if lot_base.empty: return None
 
-        # --- 2. 过滤 ---
         lot_base_filtered = _filter_by_pass_rate(lot_base.copy(), 190 * 30, 0.2, "Lot")
         if lot_base_filtered.empty: return None
         
         valid_lots = lot_base_filtered['lot_id'].unique()
         panel_df_lot = panel_details_df[panel_details_df['lot_id'].isin(valid_lots)]
 
-        # --- 3. 原始计算 ---
         target_defects = sorted(panel_details_df['defect_group'].dropna().unique().tolist())
         raw_lot_results = _calculate_raw_rates(
             panel_details_df_filtered=panel_df_lot,
@@ -160,31 +147,20 @@ def calculate_lot_defect_rates(
             target_defects=target_defects,
             entity_id_col='lot_id'
         )
-        if not raw_lot_results: raise Exception("Lot原始计算失败")
+        if not raw_lot_results: return None
 
-        # --- 4. 模拟 / 聚合 (根据 Flag 切换分支) ---
-        if aggregate_from_sheet:
-            logging.info("  >> 触发分支: 执行 lot_id 级不良率数据生成 (通过 Sheet 级数据严格向上聚合)...")
-            current_lot_results = _aggregate_lot_from_sheet_data(
-                sheet_results=sheet_results,
-                raw_lot_results=raw_lot_results,
-                target_defects=target_defects,
-                valid_lots=valid_lots,
-                lot_base_filtered=lot_base_filtered
-            )
-        else:
-            logging.info("  >> 触发分支: 执行 lot_id 级不良率数据生成 (使用 EMA 日度映射独立模拟)...")
-            sim_lot_codes = _simulate_concentration(
-                raw_results=raw_lot_results, 
-                mwd_code_data=mwd_code_data, 
-                processing_config=config.processing, 
-                entity_id_col='lot_id'
-            )
-            if not isinstance(sim_lot_codes, dict): 
-                sim_lot_codes = raw_lot_results['code_level_details']
-            
-            current_lot_results = raw_lot_results.copy()
-            current_lot_results['code_level_details'] = sim_lot_codes
+        # 🚀 4. 模拟 (直接调用上一轮为您写的离散Token分配版 _simulate_concentration)
+        # 它在大容器 Lot 级会非常稳定，因为四舍五入的损耗极小
+        sim_lot_codes = _simulate_concentration(
+            raw_results=raw_lot_results, 
+            mwd_code_data=mwd_code_data, 
+            processing_config=config.processing, 
+            entity_id_col='lot_id'
+        )
+        if not isinstance(sim_lot_codes, dict): sim_lot_codes = raw_lot_results['code_level_details']
+        
+        current_lot_results = raw_lot_results.copy()
+        current_lot_results['code_level_details'] = sim_lot_codes
 
         # --- 5. 截断 (Capping) ---
         capping_cfg = config.processing.get('defect_capping', {})
@@ -255,54 +231,40 @@ def calculate_lot_defect_rates(
 # ==============================================================================
 #                      辅助函数：计算数据
 # ==============================================================================
-# --- 基础信息计算 ---
 @staticmethod
 def _calculate_lot_base_info_with_median_time(
     panel_details_df: pd.DataFrame,
-    full_sheet_base_info: pd.DataFrame | None
+    array_input_times_df: pd.DataFrame | None  # 不再接收 full_sheet_info
 ) -> pd.DataFrame:
-    """
-    [辅助函数 V1.1 - 增加 array_input_time] 从 Panel 和 Sheet 数据聚合 Lot 基础信息。
-    """
-    if panel_details_df.empty:
-        logging.warning("无法计算 Lot 基础信息(Panel)，因为输入的 Panel 数据为空。")
-        return pd.DataFrame()
+    if panel_details_df.empty: return pd.DataFrame()
     try:
         panel_df_with_dt = panel_details_df.copy()
         panel_df_with_dt['warehousing_datetime'] = pd.to_datetime(
             panel_df_with_dt['warehousing_time'], format='%Y%m%d', errors='coerce'
         )
         panel_df_with_dt.dropna(subset=['warehousing_datetime'], inplace=True)
-        if panel_df_with_dt.empty:
-                logging.warning("转换 warehousing_time 为日期后，没有剩余的 Panel 数据用于 Lot 聚合。")
-                return pd.DataFrame()
+        if panel_df_with_dt.empty: return pd.DataFrame()
+        
         lot_base_agg = panel_df_with_dt.groupby('lot_id').agg(
-            total_panels=('panel_id', 'nunique'), # 计算lot总数：传入的 panel_details_df 中，该 Lot ID 下有多少个唯一的 Panel ID
+            total_panels=('panel_id', 'nunique'), 
             warehousing_time_median=('warehousing_datetime', lambda x: x.quantile(0.75))
         ).reset_index()
         lot_base_agg['warehousing_time'] = lot_base_agg['warehousing_time_median'].dt.strftime('%Y%m%d').fillna('') # type: ignore
         lot_base_info_df = lot_base_agg[['lot_id', 'total_panels', 'warehousing_time']]
+        
+        # [独立提取时间] 直接从原生 array_times_df 中提取
         lot_array_times = None
-        if full_sheet_base_info is not None and not full_sheet_base_info.empty:
-            if 'lot_id' not in full_sheet_base_info.columns:
-                    if full_sheet_base_info.index.name == 'lot_id':
-                        full_sheet_base_info_reset = full_sheet_base_info.reset_index()
-                    else:
-                        logging.warning("Sheet 基础信息缺少 'lot_id' 列，无法聚合 array_input_time。")
-                        full_sheet_base_info_reset = None
-            else:
-                    full_sheet_base_info_reset = full_sheet_base_info
-            if full_sheet_base_info_reset is not None and 'array_input_time' in full_sheet_base_info_reset.columns:
-                lot_array_times = full_sheet_base_info_reset.groupby('lot_id')['array_input_time'].max().reset_index()
-            else:
-                if full_sheet_base_info_reset is not None:
-                        logging.warning("Sheet 基础信息缺少 'array_input_time' 列。")
-        else:
-            logging.warning("Sheet 基础信息 (full_sheet_base_info) 不可用或为空，无法聚合 array_input_time。")
+        if array_input_times_df is not None and not array_input_times_df.empty:
+            temp_df = array_input_times_df.copy()
+            # 截取前9位得到 lot_id
+            temp_df['lot_id'] = temp_df['sheet_id'].astype(str).str[:9]
+            lot_array_times = temp_df.groupby('lot_id')['array_input_time'].max().reset_index()
+            
         if lot_array_times is not None:
             lot_base_info_df = pd.merge(lot_base_info_df, lot_array_times, on='lot_id', how='left')
         else:
             lot_base_info_df['array_input_time'] = pd.NaT
+            
         logging.info(f"成功聚合了 {len(lot_base_info_df)} 个 Lot 的基础信息 (含 array_input_time)。")
         return lot_base_info_df
     except Exception as e:
@@ -490,65 +452,93 @@ def _prepare_code_level_details(
     return code_level_details_dict
 
 @staticmethod
-def _aggregate_lot_from_sheet_data(
-    sheet_results: Dict[str, Any],
-    raw_lot_results: Dict[str, Any],
-    target_defects: list,
-    valid_lots: list | np.ndarray | pd.Series,
-    lot_base_filtered: pd.DataFrame
+def _distribute_sheet_from_lot(
+    sheet_raw_results: Dict[str, Any],
+    lot_results: Dict[str, Any],
+    processing_config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    [辅助函数] 将 Sheet 级的不良数据向上精确聚合为 Lot 级数据，保证物质守恒。
+    [辅助函数 V5.0 - Lot向下发牌模型]
+    将 Lot 级已确定的不良整数，利用多项式分布随机投递到其名下的 Sheet 中。
+    保证了 Sheet 级数据的物质守恒，且呈现高度真实的离散性。
     """
-    logging.info("开始执行 lot_id 级不良率数据生成 (通过 Sheet 级数据向上聚合)...")
-    sim_lot_codes = {}
-    sheet_code_details = sheet_results.get('code_level_details', {})
+    logging.info("开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 随机局域分派)...")
+    config = processing_config.get('sheet_hotspot_config', {})
+    if not config.get('enable', False):
+        return sheet_raw_results['code_level_details']
     
-    for group in target_defects:
-        # 提取 raw_lot_results 中的对应 group DataFrame，作为结构模板，保证列齐全
-        raw_template = raw_lot_results['code_level_details'].get(group, pd.DataFrame())
+    cfg_hide = config.get('hide_hotspot_config', {})
+    current_fluc = cfg_hide.get("fluctuation_sheet", 0.1)
+    
+    sim_sheet_codes = sheet_raw_results["code_level_details"].copy()
+    seed = config.get('random_seed', 2025)
+    rng = np.random.default_rng(seed)
+    
+    lot_code_details = lot_results.get("code_level_details", {})
+    
+    for group, df_sheet_raw in sim_sheet_codes.items():
+        if df_sheet_raw.empty: continue
         
-        df_sheet = sheet_code_details.get(group, pd.DataFrame())
-        
-        # 如果 Sheet 级没有该 Group 的不良数据
-        if df_sheet.empty:
-            sim_lot_codes[group] = raw_template.iloc[0:0].copy() if not raw_template.empty else pd.DataFrame()
+        df_lot = lot_code_details.get(group)
+        if df_lot is None or df_lot.empty:
+            # 如果 Lot 级没有这个 group 的数据，名下的 Sheet 也必须全军覆没 (置0)
+            df_sheet_mod = df_sheet_raw.copy()
+            df_sheet_mod['defect_panel_count'] = 0
+            df_sheet_mod['defect_rate'] = 0.0
+            sim_sheet_codes[group] = df_sheet_mod
             continue
             
-        # 过滤：仅保留通过了 Lot 级过货率筛选的 lot_id (防止把过滤掉的废片 Lot 重新带入)
-        df_sheet_valid = df_sheet[df_sheet['lot_id'].isin(valid_lots)]
-        if df_sheet_valid.empty:
-            sim_lot_codes[group] = raw_template.iloc[0:0].copy() if not raw_template.empty else pd.DataFrame()
-            continue
+        processed_codes_list = []
+        for code_desc, df_sheet_code in df_sheet_raw.groupby('defect_desc'):
+            df_sheet_mod = df_sheet_code.copy()
+            df_sheet_mod['defect_panel_count'] = 0 # 默认洗白为0
             
-        # 🚀 核心聚合：按 lot_id, defect_group, defect_desc 汇总不良面板数 (物质守恒)
-        agg_df = df_sheet_valid.groupby(['lot_id', 'defect_group', 'defect_desc'])['defect_panel_count'].sum().reset_index()
-        
-        # 关联 Lot 基础信息以获取真实的 total_panels, warehousing_time 等
-        base_info_for_merge = lot_base_filtered.reset_index() if lot_base_filtered.index.name == 'lot_id' else lot_base_filtered.copy()
-        merged_df = pd.merge(agg_df, base_info_for_merge, on='lot_id', how='left')
-        
-        # 重新计算 Lot 级的良损率 (Lot级不良数 / Lot级总入库数)
-        merged_df['total_panels'] = merged_df['total_panels'].fillna(0)
-        merged_df['defect_rate'] = np.where(
-            merged_df['total_panels'] > 0,
-            merged_df['defect_panel_count'] / merged_df['total_panels'],
-            0.0
-        )
-        
-        # 补齐所有必要的列，并对齐顺序 (兼容下游的格式化操作)
-        if not raw_template.empty:
-            for col in raw_template.columns:
-                if col not in merged_df.columns:
-                    merged_df[col] = np.nan
-            merged_df = merged_df[raw_template.columns]
+            # 找到对应的 Lot 级 Code 数据
+            df_lot_code = df_lot[df_lot['defect_desc'] == code_desc]
+            if df_lot_code.empty:
+                df_sheet_mod['defect_rate'] = 0.0
+                processed_codes_list.append(df_sheet_mod)
+                continue
+                
+            # 将 Lot 的不良数转成字典 {lot_id: token_count}
+            lot_token_dict = df_lot_code.set_index('lot_id')['defect_panel_count'].to_dict()
             
-        sim_lot_codes[group] = merged_df
-        
-    current_lot_results = raw_lot_results.copy()
-    current_lot_results['code_level_details'] = sim_lot_codes
-    
-    return current_lot_results
+            # 按 lot_id 进行局部分发
+            for lot_id, group_df in df_sheet_mod.groupby('lot_id'):
+                token_count = lot_token_dict.get(lot_id, 0)
+                if token_count <= 0: continue # 这个 Lot 没有不良，其名下 Sheet 全为 0
+                    
+                # 如果该 Lot 下 Sheet 的总物理容量为 0，没法分发，直接跳过
+                if group_df['total_panels'].sum() <= 0: continue
+                
+                # 开始发牌: 权重由 Sheet 的容量和随机波动因子决定
+                entity_capacities = group_df['total_panels'].values
+                random_factors = rng.uniform(1 - current_fluc, 1 + current_fluc, size=len(group_df))
+                weights = entity_capacities * random_factors
+                
+                weight_sum = weights.sum()
+                probs = weights / weight_sum if weight_sum > 0 else np.ones(len(group_df)) / len(group_df)
+                
+                # 🎲 核心投递：多项式分布
+                allocated_counts = rng.multinomial(token_count, probs)
+                # 物理兜底，确保分到的不良不超过其总片数
+                allocated_counts = np.minimum(allocated_counts, entity_capacities)
+                
+                # 写回 DataFrame
+                df_sheet_mod.loc[group_df.index, 'defect_panel_count'] = allocated_counts
+                
+            # 重新计算良率
+            df_sheet_mod['defect_rate'] = np.where(
+                df_sheet_mod['total_panels'] > 0,
+                df_sheet_mod['defect_panel_count'] / df_sheet_mod['total_panels'],
+                0.0
+            )
+            processed_codes_list.append(df_sheet_mod)
+            
+        if processed_codes_list:
+            sim_sheet_codes[group] = pd.concat(processed_codes_list, ignore_index=True)
+            
+    return sim_sheet_codes
 
 # ==============================================================================
 #                      辅助函数：模拟数据
@@ -557,13 +547,17 @@ def _aggregate_lot_from_sheet_data(
 def _simulate_concentration(
     raw_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
-    processing_config: Dict[str, Any],  # [Refactor] 接收配置字典
+    processing_config: Dict[str, Any],
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V2.8]
+    [核心重构 V3.0 - 离散 Token 分配算法]
+    解决“极低频缺陷在小容量容器(Sheet)中因小数取整而被系统性抹除”的陷阱。
+    逻辑：
+    1. 算总账：站在日度总入库的宏观视角，计算当天绝对产生的整数不良片数 (Token)。
+    2. 掷骰子：引入多项式分布 (Multinomial Distribution)，将这些 Token 随机且离散地投递到各个 Sheet/Lot 桶中。
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V2.8 - EMA 日度映射)...")
+    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V3.0 - 离散Token分配)...")
     try:
         config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
@@ -582,33 +576,87 @@ def _simulate_concentration(
             logging.error("缺少基础汇总数据，模拟终止。")
             return sim_code_details
 
+        # --- 0. 预先构建日期映射表 (Entity ID -> DateString) ---
+        if entity_id_col not in base_info_df.columns and base_info_df.index.name == entity_id_col:
+            base_info_temp = base_info_df.reset_index()
+        else:
+            base_info_temp = base_info_df
+        
+        date_map_raw = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
+        # 强转为规范的 YYYYMMDD
+        date_map_str = pd.to_datetime(date_map_raw, errors='coerce').dt.strftime('%Y%m%d')
+
+        df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
+
+        # --- 1. 开始遍历分配 ---
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
             
             processed_codes_list = []
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
-                df_code_with_base = _add_daily_base_rate_to_df(
-                    df_code=df_code, 
-                    code_desc=code_desc, 
-                    entity_id_col=entity_id_col,
-                    base_info_df=base_info_df, 
-                    mwd_code_data=mwd_code_data
+                df_code_mod = df_code.copy()
+                
+                # 映射实体的基准日期，并初始化不良数为 0
+                df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
+                df_code_mod['defect_panel_count'] = 0 
+                
+                # 建立该 Code 的日度查找字典 {DateString -> Rate}
+                lookup_dict = {}
+                if df_daily_ema is not None:
+                    code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
+                    code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d') # type: ignore
+                    lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
+
+                # 🚀 核心：按日期分组，执行“离散 Token 分配”
+                for date_key, group_df in df_code_mod.groupby('date_key'):
+                    daily_base_rate = lookup_dict.get(date_key, 0.0)
+                    if daily_base_rate <= 0: continue
+                        
+                    # 算总账：该日期下，本次循环范围内的所有 Entity 的总入库容量
+                    daily_total_panels = group_df['total_panels'].sum()
+                    if daily_total_panels <= 0: continue
+                    
+                    # 生成离散 Token：四舍五入仅在“宏观总量”这一步发生，最大程度保全了极低频不良物质
+                    target_defect_count = int(np.round(daily_total_panels * daily_base_rate))
+                    if target_defect_count <= 0: continue
+                        
+                    # 准备抽样概率分布：(Entity容量 * 随机波动权重)
+                    entity_capacities = group_df['total_panels'].values
+                    random_factors = rng.uniform(1 - current_fluc, 1 + current_fluc, size=len(group_df))
+                    weights = entity_capacities * random_factors
+                    
+                    # 归一化为概率占比
+                    weight_sum = weights.sum()
+                    if weight_sum > 0:
+                        probs = weights / weight_sum
+                    else:
+                        probs = np.ones(len(group_df)) / len(group_df) # 均分保底
+                        
+                    # 🎲 掷骰子：多项式分布 (将 target_defect_count 个不良随机投入各个 Entity 桶里)
+                    allocated_counts = rng.multinomial(target_defect_count, probs)
+                    
+                    # 物理兜底：防止极端热点导致分配给某个 Entity 的不良数超过了其本身的物理入库容量
+                    allocated_counts = np.minimum(allocated_counts, entity_capacities)
+                    
+                    # 回填分配结果
+                    df_code_mod.loc[group_df.index, 'defect_panel_count'] = allocated_counts
+                
+                # --- 2. 基于重新分配的不良整数，反向计算最终良率 ---
+                df_code_mod['defect_rate'] = np.where(
+                    df_code_mod['total_panels'] > 0,
+                    df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
+                    0.0
                 )
                 
-                new_rates = _generate_simulated_rates(df_code_with_base, rng, current_fluc)
-                
-                df_code_processed = df_code_with_base.copy()
-                df_code_processed['defect_rate'] = new_rates
-                df_code_processed['defect_panel_count'] = np.maximum(0, np.round(df_code_processed['defect_rate'] * df_code_processed['total_panels'])).astype(int)
-                
-                if 'daily_base_rate' in df_code_processed.columns:
-                    df_code_processed = df_code_processed.drop(columns=['daily_base_rate'])
-                processed_codes_list.append(df_code_processed)
+                # 清理并保存
+                df_code_mod.drop(columns=['date_key'], inplace=True, errors='ignore')
+                processed_codes_list.append(df_code_mod)
             
             if processed_codes_list:
                 sim_code_details[group] = pd.concat(processed_codes_list, ignore_index=True)
                 
         return sim_code_details
+        
     except Exception as e:
         logging.error(f"模拟调度失败: {e}", exc_info=True)
         return raw_results.get('code_level_details', {})

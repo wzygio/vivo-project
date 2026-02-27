@@ -11,6 +11,7 @@ from vivo_project.core.batch_statistics import BatchStatistics
 @staticmethod
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
+    scaling_factor: float = 0.7,
     min_panel_threshold: int = 10000 
 ) -> pd.DataFrame:
     """
@@ -24,8 +25,8 @@ def prepare_mapping_data(
     if panel_details_df.empty: return pd.DataFrame()
     
     try:
-        FIRST_REDUCTION_FACTOR = 0.7
-        SECOND_REDUCTION_FACTOR = 0.8
+        FIRST_REDUCTION_FACTOR = scaling_factor
+        SECOND_REDUCTION_FACTOR = 0.95
         SEED = 42
 
         # --- 步骤1: 筛选有效批次 ---

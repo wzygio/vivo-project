@@ -21,6 +21,7 @@ COLOR_MAP = {
     'array_pixel_rate': "#6fb9ff"   
 }
 
+
 @st.cache_data(ttl=DEFAULT_CACHE_TTL)
 def calculate_warning_lines(mwd_code_data):
     """计算所有Code的警戒线值并缓存结果"""
@@ -42,6 +43,113 @@ def calculate_warning_lines(mwd_code_data):
     
     return warning_lines
 
+def render_lot_spec_alert(lot_data: dict, warning_lines: dict, time_period: int = 30):
+    """
+    [企业级预警组件 V3.0] 扫描并展示近 30 天内良损超规的 Lot，包含多维度追溯明细表。
+    
+    :param lot_data: YieldAnalysisService 返回的 lot 级数据字典
+    :param warning_lines: {code_desc: upper_limit} 的警戒线字典
+    """
+    total_recent_lots = 0
+    oos_records = [] # 用于存储超规明细列表
+    
+    if lot_data and 'code_level_details' in lot_data:
+        # 1. 提取所有 Code 级明细并合并
+        all_dfs = []
+        for df in lot_data['code_level_details'].values():
+            if not df.empty and 'lot_id' in df.columns and 'warehousing_time' in df.columns:
+                all_dfs.append(df)
+        
+        if all_dfs:
+            combined_df = pd.concat(all_dfs, ignore_index=True)
+            
+            # 2. 时间过滤 (近 30 天)
+            # 注意：这里的 warehousing_time 被转为了 datetime 对象
+            combined_df['warehousing_time'] = pd.to_datetime(
+                combined_df['warehousing_time'], format='%Y%m%d', errors='coerce'
+            )
+            max_date = combined_df['warehousing_time'].max()
+            
+            if pd.notna(max_date):
+                threshold_date = max_date - pd.Timedelta(days=time_period)
+                recent_df = combined_df[combined_df['warehousing_time'] >= threshold_date].copy()
+                
+                # 3. 统计近 30 天总 Lot 数
+                total_recent_lots = recent_df['lot_id'].nunique()
+                
+                # 4. 核心逻辑：遍历并收集超规明细 (新增时间与数量字段)
+                for _, row in recent_df.iterrows():
+                    code = str(row.get('defect_desc', '')).strip()
+                    rate = row.get('defect_rate', 0.0)
+                    spec_limit = warning_lines.get(code, 1.0) 
+                    
+                    if rate > spec_limit:
+                        # 处理入库时间格式化 (之前已被转为 datetime 对象)
+                        w_time = row.get('warehousing_time')
+                        w_time_str = w_time.strftime('%Y/%m/%d') if pd.notna(w_time) else "-"
+                        
+                        # 处理阵列投入时间格式化 (安全转换并格式化)
+                        a_time = pd.to_datetime(row.get('array_input_time'), errors='coerce')
+                        a_time_str = a_time.strftime('%Y/%m/%d') if pd.notna(a_time) else "-"
+                        
+                        # 获取不良 panel 数 (安全转为整数)
+                        defect_count = int(row.get('defect_panel_count', 0)) if pd.notna(row.get('defect_panel_count')) else 0
+
+                        oos_records.append({
+                            "超规 Lot ID": row.get('lot_id', 'Unknown'),
+                            "异常 Code": code,
+                            "管控规格线": f"{spec_limit * 100:.2f}%" if spec_limit < 1.0 else "无限制",
+                            "实际不良率": f"{rate * 100:.2f}%",
+                            "不良panel数": defect_count,
+                            "入库时间": w_time_str,
+                            "阵列投入时间": a_time_str,
+                        })
+
+    # --- 数据计算完毕，开始渲染 UI ---
+    
+    oos_df = pd.DataFrame(oos_records)
+    oos_count = oos_df['超规 Lot ID'].nunique() if not oos_df.empty else 0
+    oos_rate = f"{(oos_count / total_recent_lots * 100):.1f}%" if total_recent_lots > 0 else "0.0%"
+    has_alert = oos_count > 0
+    
+    with st.expander(f"🛡️ Lot级良损超规预警（近{time_period}天）", expanded=has_alert):
+        if has_alert:
+            st.error(f"⚠️ 发现 {oos_count} 个近期 Lot 存在至少一项缺陷超规！")
+        else:
+            st.success("✅ 系统监测正常：近一个月未发现超规 Lot。")
+
+        # 1. 渲染顶部核心指标
+        c1, c2, c3 = st.columns(3)
+        c1.metric(f"Lot 总数（近{time_period}天）", f"{total_recent_lots}")
+        c2.metric(
+            "超规个数(Out of Spec)", 
+            f"{oos_count}", 
+        )
+        c3.metric(
+            "超规率", 
+            oos_rate, 
+        )
+        
+        # 2. 渲染底部独立明细表 (含新字段)
+        if has_alert:
+            st.divider()
+            st.markdown("##### 🚨 异常 Lot 追溯明细")
+            
+            st.dataframe(
+                oos_df,
+                use_container_width=True, # 关键：让表格拉伸至容器总宽度
+                hide_index=True,
+                # 列配置：移除 width 参数，释放宽度锁定，让算法自动平摊宽度
+                column_config={
+                    "超规 Lot ID": st.column_config.TextColumn("超规 Lot ID"),
+                    "入库时间": st.column_config.TextColumn("入库时间"),
+                    "阵列投入时间": st.column_config.TextColumn("阵列投入时间"),
+                    "异常 Code": st.column_config.TextColumn("异常 Code"),
+                    "不良panel数": st.column_config.NumberColumn("不良panel数", format="%d"),
+                    "管控规格线": st.column_config.TextColumn("管控规格线"),
+                    "实际不良率": st.column_config.TextColumn("实际不良率"),
+                }
+            )
 
 def render_page_header(title: str, config: AppConfig):
     """

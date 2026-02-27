@@ -173,34 +173,33 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_sheet_defect_rates(
+    def get_lot_defect_rates(
         config: AppConfig, 
         resource_dir: Path, 
         _core_revision: float = 0.0,
         ema_span: int = 30,
-        scaling_factor: float = 0.7, 
+        scaling_factor: float = 0.7,
         use_top_down: bool = False) -> Dict[str, Any] | None:
-        """计算 Sheet 级良率 (注入警戒线)"""
-        logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
-        
-        # 1. 主数据
+        """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
+        logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
+
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
 
-        # 2. 依赖数据
+        # 1. 独立获取 Array Time (不再依赖 Sheet 结果)
         lot_ids = panel_df['lot_id'].unique().tolist()
         array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
-        
-        # 生成辅助的 MWD Code 数据 (用于模拟热点)
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down)
 
-        # 3. 加载警戒线配置
+        # 2. 依赖 MWD 数据
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+        )
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
 
-        # 4. 核心计算 (传入 config 和 resource_dir)
-        return calculate_sheet_defect_rates(
+        # 3. 核心计算
+        return calculate_lot_defect_rates(
             panel_details_df=panel_df,
-            array_input_times_df=array_times_df,
+            array_input_times_df=array_times_df, # 传入原生时间表
             mwd_code_data=mwd_code_data,
             config=config,
             resource_dir=resource_dir,
@@ -209,42 +208,34 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_lot_defect_rates(
+    def get_sheet_defect_rates(
         config: AppConfig, 
         resource_dir: Path, 
         _core_revision: float = 0.0,
-        scaling_factor: float = 0.7,
         ema_span: int = 30,
+        scaling_factor: float = 0.7, 
         use_top_down: bool = False) -> Dict[str, Any] | None:
-        """计算 Lot 级良率 (注入警戒线)"""
-        logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
-
-        # 1. 主数据
+        """[重构] 计算 Sheet 级良率 (听命于 Lot 级数据)"""
+        logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
+        
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
 
-        # 2. 依赖 Sheet 结果 (传入 config)
-        sheet_results = YieldAnalysisService.get_sheet_defect_rates(config, resource_dir, _core_revision)
-        if not sheet_results: return None
-
-        # 3. 依赖 MWD 数据
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, 
-            resource_dir, 
-            _core_revision, 
-            ema_span, 
-            scaling_factor, 
-            use_top_down
-        )
+        lot_ids = panel_df['lot_id'].unique().tolist()
+        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
         
-        # 4. 加载警戒线配置
+        # [核心变动]：先拿 Lot 结果作为“发牌官”
+        lot_results = YieldAnalysisService.get_lot_defect_rates(
+            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+        )
+        if not lot_results: return None
+
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
 
-        # 5. 核心计算
-        return calculate_lot_defect_rates(
+        return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
-            sheet_results=sheet_results,
-            mwd_code_data=mwd_code_data,
+            array_input_times_df=array_times_df,
+            lot_results=lot_results, # 注入 Lot 结果
             config=config,
             resource_dir=resource_dir,
             warning_lines=warning_lines
@@ -256,11 +247,11 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_mapping_data(config: AppConfig, scaling_factor, _core_revision: float = 0.0) -> pd.DataFrame:
         """准备 Mapping 数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return pd.DataFrame()
-        return prepare_mapping_data(panel_details_df=panel_df)
+        return prepare_mapping_data(panel_details_df=panel_df, scaling_factor=scaling_factor)
 
     # ==========================================================================
     #  内部辅助方法 (依然需要缓存)
