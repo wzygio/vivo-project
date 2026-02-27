@@ -131,12 +131,13 @@ def calculate_lot_defect_rates(
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     config: AppConfig,
     resource_dir: Path,
-    warning_lines: Optional[Dict[str, float]] = None
+    warning_lines: Optional[Dict[str, float]] = None,
+    aggregate_from_sheet: bool = False  # [新增] 切换 Flag：True为向上聚合，False为独立模拟
 ) -> Dict[str, Any] | None:
     """
-    (V4.5 - 逻辑重构)
+    (V4.6 - 增加聚合/模拟切换 Flag)
     """
-    logging.info("开始Lot级计算 (截断 -> 覆盖 模式)...")
+    logging.info(f"开始Lot级计算 (模式: {'Sheet聚合' if aggregate_from_sheet else '独立模拟'} -> 截断 -> 覆盖)...")
 
     try:
         # --- 1. Lot 基础信息 ---
@@ -161,14 +162,29 @@ def calculate_lot_defect_rates(
         )
         if not raw_lot_results: raise Exception("Lot原始计算失败")
 
-        # --- 4. 模拟 (改为从 Sheet 级数据严格向上聚合) ---
-        current_lot_results = _aggregate_lot_from_sheet_data(
-            sheet_results=sheet_results,
-            raw_lot_results=raw_lot_results,
-            target_defects=target_defects,
-            valid_lots=valid_lots,
-            lot_base_filtered=lot_base_filtered
-        )
+        # --- 4. 模拟 / 聚合 (根据 Flag 切换分支) ---
+        if aggregate_from_sheet:
+            logging.info("  >> 触发分支: 执行 lot_id 级不良率数据生成 (通过 Sheet 级数据严格向上聚合)...")
+            current_lot_results = _aggregate_lot_from_sheet_data(
+                sheet_results=sheet_results,
+                raw_lot_results=raw_lot_results,
+                target_defects=target_defects,
+                valid_lots=valid_lots,
+                lot_base_filtered=lot_base_filtered
+            )
+        else:
+            logging.info("  >> 触发分支: 执行 lot_id 级不良率数据生成 (使用 EMA 日度映射独立模拟)...")
+            sim_lot_codes = _simulate_concentration(
+                raw_results=raw_lot_results, 
+                mwd_code_data=mwd_code_data, 
+                processing_config=config.processing, 
+                entity_id_col='lot_id'
+            )
+            if not isinstance(sim_lot_codes, dict): 
+                sim_lot_codes = raw_lot_results['code_level_details']
+            
+            current_lot_results = raw_lot_results.copy()
+            current_lot_results['code_level_details'] = sim_lot_codes
 
         # --- 5. 截断 (Capping) ---
         capping_cfg = config.processing.get('defect_capping', {})
@@ -182,7 +198,8 @@ def calculate_lot_defect_rates(
             )
             current_code_details = capped_results['code_level_details']
         else:
-            current_code_details = current_lot_results
+            # [修复]: 原代码这里少写了 ['code_level_details']，已补充
+            current_code_details = current_lot_results['code_level_details']
 
         # --- 6. 覆盖 (Override) ---
         override_res = config.paths.get('rate_override_config')
@@ -191,8 +208,8 @@ def calculate_lot_defect_rates(
         override_sheet_name = ""
         
         if override_res:
-             override_file_path = resource_dir / override_res.file_name
-             override_sheet_name = override_res.sheet_name or ""
+                override_file_path = resource_dir / override_res.file_name
+                override_sheet_name = override_res.sheet_name or ""
 
         override_sheet_df, _= _load_override_excel(
             override_file_path, 
