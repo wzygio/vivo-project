@@ -78,16 +78,24 @@ def pad_chart_dataframe(df: pd.DataFrame, title: str, group_col: str = None) -> 
         
     return df_padded
 
-# --- [新增] 辅助函数：截取最近N个周期 ---
 def slice_recent_data(df, n_recent=3, time_col='time_period'):
     """保留 DataFrame 中 time_col 列最近的 n_recent 个唯一值对应的数据"""
     if df is None or df.empty:
         return df
-    unique_periods = sorted(df[time_col].unique())
+        
+    # [核心修复 1]：剔除缺失值 (NaN)，防止其作为 float 与 str 混合排序时引发 TypeError
+    df_clean = df.dropna(subset=[time_col]).copy()
+    if df_clean.empty:
+        return df_clean
+        
+    # [核心修复 2]：强制转为字符串并排序，提供双重类型保险
+    unique_periods = sorted(df_clean[time_col].astype(str).unique())
+    
     if len(unique_periods) > n_recent:
         recent_periods = unique_periods[-n_recent:]
-        return df[df[time_col].isin(recent_periods)]
-    return df
+        return df_clean[df_clean[time_col].astype(str).isin(recent_periods)]
+        
+    return df_clean
 
 # -----------------------------------------------------------------------------
 #  Group 级图表绘制

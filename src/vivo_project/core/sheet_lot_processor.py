@@ -148,8 +148,7 @@ def calculate_lot_defect_rates(
         )
         if not raw_lot_results: return None
 
-        # 🚀 4. 模拟 (直接调用上一轮为您写的离散Token分配版 _simulate_concentration)
-        # 它在大容器 Lot 级会非常稳定，因为四舍五入的损耗极小
+        # 🚀 4. 模拟 (离散Token分配版 _simulate_concentration，它在大容器 Lot 级会非常稳定，因为四舍五入的损耗极小）
         sim_lot_codes = _simulate_concentration(
             raw_results=raw_lot_results, 
             mwd_code_data=mwd_code_data, 
@@ -569,25 +568,17 @@ def _simulate_concentration(
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [核心重构 V3.0 - 离散 Token 分配算法]
-    解决“极低频缺陷在小容量容器(Sheet)中因小数取整而被系统性抹除”的陷阱。
-    逻辑：
-    1. 算总账：站在日度总入库的宏观视角，计算当天绝对产生的整数不良片数 (Token)。
-    2. 掷骰子：引入多项式分布 (Multinomial Distribution)，将这些 Token 随机且离散地投递到各个 Sheet/Lot 桶中。
+    [核心重构 V4.1 - 极简直接乘法]
+    大道至简：直接使用 Lot 的容量乘以当日 EMA 良损率，四舍五入。
+    接受极微小的单日总账偏差，换取代码的极致清晰和极高的运行效率。
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V3.0 - 离散Token分配)...")
+    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.1 - 极简直接乘法)...")
     try:
         config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
             return raw_results['code_level_details']
         
-        cfg_hide = config.get('hide_hotspot_config', {})
-        fluctuation_key = f"fluctuation_{entity_id_col.replace('_id', '')}"
-        current_fluc = cfg_hide.get(fluctuation_key, 0.1)
-        
         sim_code_details = raw_results["code_level_details"].copy()
-        seed = config.get('random_seed', 2025)
-        rng = np.random.default_rng(seed)
         base_info_df = raw_results.get("group_level_summary_for_chart")
         
         if base_info_df is None:
@@ -601,12 +592,11 @@ def _simulate_concentration(
             base_info_temp = base_info_df
         
         date_map_raw = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
-        # 强转为规范的 YYYYMMDD
         date_map_str = pd.to_datetime(date_map_raw, errors='coerce').dt.strftime('%Y%m%d')
 
         df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
 
-        # --- 1. 开始遍历分配 ---
+        # --- 1. 开始遍历计算 ---
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
             
@@ -614,60 +604,39 @@ def _simulate_concentration(
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
                 df_code_mod = df_code.copy()
                 
-                # 映射实体的基准日期，并初始化不良数为 0
+                # 1. 映射实体的基准日期
                 df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
-                df_code_mod['defect_panel_count'] = 0 
                 
-                # 建立该 Code 的日度查找字典 {DateString -> Rate}
+                # 2. 建立该 Code 的日度查找字典 {DateString -> Rate}
                 lookup_dict = {}
                 if df_daily_ema is not None:
                     code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
                     code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d') # type: ignore
                     lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
 
-                # 🚀 核心：按日期分组，执行“离散 Token 分配”
-                for date_key, group_df in df_code_mod.groupby('date_key'):
-                    daily_base_rate = lookup_dict.get(date_key, 0.0)
-                    if daily_base_rate <= 0: continue
-                        
-                    # 算总账：该日期下，本次循环范围内的所有 Entity 的总入库容量
-                    daily_total_panels = group_df['total_panels'].sum()
-                    if daily_total_panels <= 0: continue
-                    
-                    # 生成离散 Token：四舍五入仅在“宏观总量”这一步发生，最大程度保全了极低频不良物质
-                    target_defect_count = int(np.round(daily_total_panels * daily_base_rate))
-                    if target_defect_count <= 0: continue
-                        
-                    # 准备抽样概率分布：(Entity容量 * 随机波动权重)
-                    entity_capacities = group_df['total_panels'].values
-                    random_factors = rng.uniform(1 - current_fluc, 1 + current_fluc, size=len(group_df))
-                    weights = entity_capacities * random_factors
-                    
-                    # 归一化为概率占比
-                    weight_sum = weights.sum()
-                    if weight_sum > 0:
-                        probs = weights / weight_sum
-                    else:
-                        probs = np.ones(len(group_df)) / len(group_df) # 均分保底
-                        
-                    # 🎲 掷骰子：多项式分布 (将 target_defect_count 个不良随机投入各个 Entity 桶里)
-                    allocated_counts = rng.multinomial(target_defect_count, probs)
-                    
-                    # 物理兜底：防止极端热点导致分配给某个 Entity 的不良数超过了其本身的物理入库容量
-                    allocated_counts = np.minimum(allocated_counts, entity_capacities)
-                    
-                    # 回填分配结果
-                    df_code_mod.loc[group_df.index, 'defect_panel_count'] = allocated_counts
+                # 🚀 3. 核心：大道至简，直接映射并相乘
+                df_code_mod['daily_base_rate'] = df_code_mod['date_key'].map(lookup_dict).fillna(0.0)
                 
-                # --- 2. 基于重新分配的不良整数，反向计算最终良率 ---
+                # 容量 * 日度率 -> 四舍五入取整
+                df_code_mod['defect_panel_count'] = np.round(
+                    df_code_mod['total_panels'] * df_code_mod['daily_base_rate']
+                ).astype(int)
+                
+                # 物理兜底：不良数绝对不能超过该 Lot 的总容量
+                df_code_mod['defect_panel_count'] = np.minimum(
+                    df_code_mod['defect_panel_count'], 
+                    df_code_mod['total_panels']
+                )
+                
+                # 4. 反向计算最终事实良率
                 df_code_mod['defect_rate'] = np.where(
                     df_code_mod['total_panels'] > 0,
                     df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
                     0.0
                 )
                 
-                # 清理并保存
-                df_code_mod.drop(columns=['date_key'], inplace=True, errors='ignore')
+                # 清理无用列并保存
+                df_code_mod.drop(columns=['date_key', 'daily_base_rate'], inplace=True, errors='ignore')
                 processed_codes_list.append(df_code_mod)
             
             if processed_codes_list:
@@ -678,73 +647,7 @@ def _simulate_concentration(
     except Exception as e:
         logging.error(f"模拟调度失败: {e}", exc_info=True)
         return raw_results.get('code_level_details', {})
-
-@staticmethod
-def _add_daily_base_rate_to_df(
-    df_code: pd.DataFrame, 
-    code_desc: str, 
-    entity_id_col: str,
-    base_info_df: pd.DataFrame | None, 
-    mwd_code_data: Dict[str, pd.DataFrame] | None # 现在接收整个字典
-) -> pd.DataFrame:
-    """
-    [辅助函数 V1.3 - 日度丝滑映射]
-    放弃查找月份，改为根据 Lot 日期查找 EMA 平滑后的日度值。
-    1. 解决了“阶梯状”断层问题。
-    2. 配合中值钳制，解决了“小样本/集中入库”偏置问题。
-    """
-    df_code_with_base = df_code.copy()
-    df_code_with_base['daily_base_rate'] = 0.0 # 保持列名兼容，实际是日度基准
     
-    # 提取全量日度 EMA 数据源
-    df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
-    
-    if df_daily_ema is not None and base_info_df is not None:
-        try:
-            # 1. 建立当前 Code 的日期查找表: {DateString -> Rate}
-            code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
-            code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d') # type: ignore
-            lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
-
-            # 2. 获取当前待模拟 Lot 对应的入库日期
-            # 需要先从 base_info_df 中捞出 Lot 对应的 warehousing_time
-            if entity_id_col not in base_info_df.columns and base_info_df.index.name == entity_id_col:
-                base_info_temp = base_info_df.reset_index()
-            else:
-                base_info_temp = base_info_df
-                
-            lot_date_map = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
-            
-            # 3. 提取原始日期序列
-            raw_dates = df_code_with_base[entity_id_col].map(lot_date_map)
-            
-            # [✅核心修复]: 强制转换与格式化！
-            # 不管 raw_dates 里是 Timestamp、'2026-02-25' 还是 '20260225'，统统强转为规范的 'YYYYMMDD'
-            standardized_dates = pd.to_datetime(raw_dates, errors='coerce').dt.strftime('%Y%m%d')
-            
-            # 4. 安全映射
-            df_code_with_base['daily_base_rate'] = standardized_dates.map(lookup_dict).fillna(0)
-            
-        except Exception as e:
-            logging.error(f"为 Code '{code_desc}' 进行日度基准映射时出错: {e}")
-            
-    return df_code_with_base
-
-@staticmethod
-def _generate_simulated_rates(
-    df_code_with_base_rate: pd.DataFrame, rng: np.random.Generator, fluc: float
-) -> np.ndarray:
-    """
-    [辅助函数 V2.2 - 分层波动，无钳制] 生成模拟率。
-    """
-    num_sheets = len(df_code_with_base_rate)
-    if num_sheets == 0: return np.array([])
-    base_rates_series = df_code_with_base_rate['daily_base_rate']
-    random_factors = rng.uniform(1 - fluc, 1 + fluc, size=num_sheets)
-    initial_rates = base_rates_series.values * random_factors # type: ignore
-    final_rates = np.maximum(0, initial_rates)
-    return final_rates
-
 # ==============================================================================
 #                      辅助函数：覆盖数据
 # ==============================================================================

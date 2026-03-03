@@ -234,7 +234,7 @@ class TrendRegulator:
                     hash_val = (hash(hash_str) % 10000) / 10000.0 
                     
                     # 软截断区间: Spec 的 80% ~ 95% 之间
-                    safe_rate = (spec_limit * 0.8) + (hash_val * (spec_limit * 0.15))
+                    safe_rate = (spec_limit * 0.8) + (hash_val * (spec_limit * 0.1))
                     
                     # 反推安全不良数
                     new_count = int(np.round(safe_rate * panels))
