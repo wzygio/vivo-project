@@ -158,7 +158,7 @@ class ExcelService:
             return overrides
 
         try:
-            xls = pd.read_excel(excel_path, sheet_name=None)
+            xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
             
             def _parse_sheet(df, level_prefix):
                 if df.empty: return

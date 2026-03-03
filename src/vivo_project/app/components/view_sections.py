@@ -227,7 +227,7 @@ def render_sheet_distribution_section(sheet_data: dict, target_lot: str, curr_gr
             df=df_sheet, xaxis_label="Sheet ID", sorted_sheet_ids=df_sheet['sheet_id'].tolist()
         )
         st.plotly_chart(fig_sheet, use_container_width=True)
-
+ 
 # ==============================================================================
 #  5. Mapping (Row D: 空间维度)
 # ==============================================================================

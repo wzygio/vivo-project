@@ -355,7 +355,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
         if not override_res:
             st.warning("当前产品尚未在 YAML 中配置 `mwd_override_config`，无法使用上传功能。")
             return
-            
+        
         file_name = override_res.file_name
         target_path = product_dir / file_name
 
@@ -363,15 +363,16 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
         
         with col1:
             st.markdown("#### 📥 步骤 1: 下载配置表")
-            st.caption("您可以下载当前的配置表进行修改。如果当前无配置，将下载空白模板。")
+            st.caption("您可以下载当前的配置表进行修改。如果当前无配置，将下载空白模板。")  
             
             # 动态生成 Excel 文件流提供下载
+            logging.info(f"正在尝试加载覆盖文件，目标绝对路径: {target_path.resolve()}")
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 if target_path.exists():
                     try:
                         # 如果服务器已有文件，直接提供现有文件供下载修改
-                        existing_xls = pd.read_excel(target_path, sheet_name=None)
+                        existing_xls = pd.read_excel(target_path, sheet_name=None, engine='openpyxl')
                         for sheet_name, df in existing_xls.items():
                             df.to_excel(writer, index=False, sheet_name=sheet_name)
                     except Exception as e:
@@ -379,7 +380,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
                         return
                 else:
                     # 如果服务器没有文件，生成标准的空白模板
-                    df_template = pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率', '备注'])
+                    df_template = pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率'])
                     df_template.to_excel(writer, index=False, sheet_name='Group级')
                     df_template.to_excel(writer, index=False, sheet_name='Code级')
             
@@ -397,13 +398,27 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
             if uploaded_file is not None:
                 if st.button("🚀 确认覆盖并刷新看板", type="primary", use_container_width=True):
                     try:
-                        # 保存文件到 resources 目录
+                        # 1. 确保产品的专属文件夹存在
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # 2. 【核心修复】如果存在旧文件，先物理删除，防止覆盖写入导致底层 ZIP 损坏
+                        if target_path.exists():
+                            try:
+                                target_path.unlink()  # 相当于 os.remove()
+                                logging.info(f"已成功删除旧的配置文件: {target_path.name}")
+                            except PermissionError:
+                                st.error("❌ 无法删除旧文件，它可能正被其他程序（如 Excel）打开，请关闭后重试。")
+                                return
+                        
+                        # 3. 写入全新的文件
                         with open(target_path, "wb") as f:
                             f.write(uploaded_file.getbuffer())
                         
                         st.success(f"✅ 成功覆盖文件: {file_name}")
-                        # 【核心】清空缓存并重新执行页面，使新配置立刻生效
+                        
+                        # 4. 清空缓存并重新执行页面
                         st.cache_data.clear()
                         st.rerun()
+                        
                     except Exception as e:
                         st.error(f"保存文件失败: {e}")

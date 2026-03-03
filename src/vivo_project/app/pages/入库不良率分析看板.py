@@ -63,7 +63,7 @@ st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 AppSetup.initialize_app()
 
-# [Refactor] 2. 获取上下文 (配置 & 路径)
+# [Refactor] 2. 获取3上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 product_dir = SessionManager.get_product_dir()
