@@ -584,11 +584,6 @@ def _prepare_group_raw_data(df: pd.DataFrame):
         logging.info(f"提取的数据总行数: {len(df)}")
         logging.info(f"数据源中【实际存在的最后日期】: {today.strftime('%Y-%m-%d')}")
         logging.info(f"数据源中最近的 5 个有效日期: {sorted(dates_in_df)[-5:]}")
-        if '2026-02-26' not in dates_in_df:
-            logging.warning("⚠️ 铁证: 数据库查询虽然截至今日本应包含 2-26，但返回的 Panel 明细数据中【完全没有】 2-26 的入库记录！")
-        else:
-            logging.info("结论: 存在 2-26 的数据。请检查后续过滤逻辑。")
-        logging.info(f"=================================================")
     except: pass
     # ---------------------------------------------
 

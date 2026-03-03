@@ -36,6 +36,10 @@ class YieldAnalysisService:
 
     _end_date: datetime = datetime.now()
     _start_date: datetime = _end_date - relativedelta(months=3)
+    group_scale: float = 1.0
+    code_scale: float = 0.7
+    group_ema_span: int = 60
+    code_ema_span: int = 60
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
@@ -117,8 +121,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path, 
         _core_revision: float = 0.0, 
-        ema_span: int = 14, 
-        scaling_factor: float = 1.0,
+        ema_span: int = group_ema_span, 
+        scaling_factor: float = group_scale,
         use_top_down: bool = False
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
@@ -145,8 +149,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path,
         _core_revision: float = 0, 
-        ema_span: int = 14, 
-        scaling_factor: float = 0.7,
+        ema_span: int = code_ema_span, 
+        scaling_factor: float = code_scale,
         use_top_down: bool = False
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
@@ -176,8 +180,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path,
         _core_revision: float = 0.0,
-        ema_span: int = 30,
-        scaling_factor: float = 0.7,
+        ema_span: int = code_ema_span,
+        scaling_factor: float = code_scale,
         use_top_down: bool = False) -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
@@ -210,10 +214,7 @@ class YieldAnalysisService:
     def get_sheet_defect_rates(
         config: AppConfig, 
         product_dir: Path,
-        _core_revision: float = 0.0,
-        ema_span: int = 30,
-        scaling_factor: float = 0.7, 
-        use_top_down: bool = False) -> Dict[str, Any] | None:
+        _core_revision: float = 0.0) -> Dict[str, Any] | None:
         """[重构] 计算 Sheet 级良率 (听命于 Lot 级数据)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
@@ -225,7 +226,7 @@ class YieldAnalysisService:
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
-            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision
         )
         if not lot_results: return None
 
@@ -242,7 +243,7 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_mapping_data(config: AppConfig, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> pd.DataFrame:
         """准备 Mapping 数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return pd.DataFrame()

@@ -21,7 +21,6 @@ COLOR_MAP = {
     'array_pixel_rate': "#6fb9ff"   
 }
 
-
 @st.cache_data(ttl=DEFAULT_CACHE_TTL)
 def calculate_warning_lines(mwd_code_data):
     """计算所有Code的警戒线值并缓存结果"""
@@ -349,7 +348,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     """
     渲染趋势图人工修正配置的上传/下载组件。
     """
-    with st.expander("🛠️ 高级选项：趋势图人工修正配置 (Excel 上传)", expanded=False):
+    with st.expander("🛠️ 趋势图人工修正配置 (上传Excel文件)", expanded=False):
         override_res = config.paths.get('mwd_override_config')
         
         if not override_res:

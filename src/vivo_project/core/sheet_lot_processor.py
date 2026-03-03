@@ -1187,6 +1187,8 @@ def _reaggregate_groups_from_codes(
                     
                     # 提取元数据列 (在 _override_rates 中我们已经确保新行包含这些列)
                     meta_cols = [entity_id_col, 'total_panels', 'pass_rate', 'warehousing_time', 'lot_id', 'array_input_time']
+                    meta_cols = list(dict.fromkeys(meta_cols)) # [新增修复]：强制去重，防止 entity_id_col 和 lot_id 重复！
+                    
                     # 只提取存在的列
                     available_meta_cols = [c for c in meta_cols if c in all_simulated_entities.columns]
                     
