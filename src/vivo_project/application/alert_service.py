@@ -14,7 +14,7 @@ class AlertService:
         mwd_group_data: Dict[str, pd.DataFrame],
         mwd_code_data: Dict[str, pd.DataFrame],
         config: AppConfig,        # [Inject] 注入配置对象
-        resource_dir: Path        # [Inject] 注入资源目录
+        product_dir: Path        # [Inject] 注入资源目录
     ) -> List[str]:
         """
         获取所有看板相关的预警信息（系统计算 + 真实报表比对）。
@@ -91,7 +91,7 @@ class AlertService:
         if file_name:
             # A. 加载外部文件
             # [Refactor] 显式构建完整路径
-            file_path = resource_dir / file_name
+            file_path = product_dir / file_name
             raw_report_df = load_excel_report(file_path, sheet_name)
             
             if raw_report_df is not None:

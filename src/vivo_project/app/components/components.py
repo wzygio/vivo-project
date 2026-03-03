@@ -1,7 +1,7 @@
 # src/vivo_project/app/components/components.py
 import pandas as pd
 import streamlit as st
-import logging, os
+import logging, os, io
 from pathlib import Path
 
 # [Refactor] 引入配置模型
@@ -344,3 +344,66 @@ def create_code_selection_ui(
             return {"group": group_name, "code": st.session_state[key]}
 
     return {"group": None, "code": None}
+
+def render_trend_override_uploader(config: AppConfig, product_dir: Path):
+    """
+    渲染趋势图人工修正配置的上传/下载组件。
+    """
+    with st.expander("🛠️ 高级选项：趋势图人工修正配置 (Excel 上传)", expanded=False):
+        override_res = config.paths.get('mwd_override_config')
+        
+        if not override_res:
+            st.warning("当前产品尚未在 YAML 中配置 `mwd_override_config`，无法使用上传功能。")
+            return
+            
+        file_name = override_res.file_name
+        target_path = product_dir / file_name
+
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown("#### 📥 步骤 1: 下载配置表")
+            st.caption("您可以下载当前的配置表进行修改。如果当前无配置，将下载空白模板。")
+            
+            # 动态生成 Excel 文件流提供下载
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                if target_path.exists():
+                    try:
+                        # 如果服务器已有文件，直接提供现有文件供下载修改
+                        existing_xls = pd.read_excel(target_path, sheet_name=None)
+                        for sheet_name, df in existing_xls.items():
+                            df.to_excel(writer, index=False, sheet_name=sheet_name)
+                    except Exception as e:
+                        st.error(f"读取现有配置文件失败: {e}")
+                        return
+                else:
+                    # 如果服务器没有文件，生成标准的空白模板
+                    df_template = pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率', '备注'])
+                    df_template.to_excel(writer, index=False, sheet_name='Group级')
+                    df_template.to_excel(writer, index=False, sheet_name='Code级')
+            
+            st.download_button(
+                label=f"⬇️ 下载 {file_name}",
+                data=output.getvalue(),
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+        with col2:
+            st.markdown("#### 📤 步骤 2: 上传覆盖文件")
+            uploaded_file = st.file_uploader("请上传填好的 Excel 文件", type=['xlsx'], key="trend_override_uploader")
+            
+            if uploaded_file is not None:
+                if st.button("🚀 确认覆盖并刷新看板", type="primary", use_container_width=True):
+                    try:
+                        # 保存文件到 resources 目录
+                        with open(target_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        
+                        st.success(f"✅ 成功覆盖文件: {file_name}")
+                        # 【核心】清空缓存并重新执行页面，使新配置立刻生效
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"保存文件失败: {e}")

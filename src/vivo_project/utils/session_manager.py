@@ -100,3 +100,8 @@ class SessionManager:
     def get_resource_dir() -> Path:
         """获取资源目录路径"""
         return ConfigLoader.get_project_root() / "resources"
+    
+    @staticmethod
+    def get_product_dir() -> Path:
+        """获取当前选中的产品代码"""
+        return ConfigLoader.get_project_root() / "resources" / st.session_state[SessionManager.KEY_PRODUCT]

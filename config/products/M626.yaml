@@ -20,6 +20,13 @@ paths:
   static_warning_lines: 
     file_name: 'M626_入库不良率规格.xlsx'
     sheet_name: 'Sheet1'
+  
+  rate_override_config:
+    file_name: "M626_override_rates.xlsx"
+    sheet_name: "Sheet1"
+    
+  mwd_override_config:
+    file_name: "M626_趋势图人工修正.xlsx"
 
 # 数据处理相关的参数
 processing:

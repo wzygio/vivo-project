@@ -1,5 +1,4 @@
-import logging, os
-import numpy as np
+import logging
 import pandas as pd
 import streamlit as st
 from typing import Dict, Any, List, Tuple, Optional
@@ -116,7 +115,7 @@ class YieldAnalysisService:
     @st.cache_data(show_spinner=False)
     def get_mwd_trend_data(
         config: AppConfig, 
-        resource_dir: Path, 
+        product_dir: Path, 
         _core_revision: float = 0.0, 
         ema_span: int = 14, 
         scaling_factor: float = 1.0,
@@ -128,7 +127,7 @@ class YieldAnalysisService:
         
         # 1. 强制依赖 Code 级结果作为数据源头
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
         )
 
         # [Refactor] 传入 config 和 resource_dir 给 Core 层
@@ -144,7 +143,7 @@ class YieldAnalysisService:
     @st.cache_data(show_spinner=False)
     def get_code_level_trend_data(
         config: AppConfig, 
-        resource_dir: Path, 
+        product_dir: Path,
         _core_revision: float = 0, 
         ema_span: int = 14, 
         scaling_factor: float = 0.7,
@@ -157,7 +156,7 @@ class YieldAnalysisService:
             return None
         
         # [新增] 提前加载警戒线配置，准备下发给底层调节器
-        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
+        warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
@@ -175,7 +174,7 @@ class YieldAnalysisService:
     @st.cache_data(show_spinner=False)
     def get_lot_defect_rates(
         config: AppConfig, 
-        resource_dir: Path, 
+        product_dir: Path,
         _core_revision: float = 0.0,
         ema_span: int = 30,
         scaling_factor: float = 0.7,
@@ -192,9 +191,9 @@ class YieldAnalysisService:
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
         )
-        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
+        warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
 
         # 3. 核心计算
         return calculate_lot_defect_rates(
@@ -202,7 +201,7 @@ class YieldAnalysisService:
             array_input_times_df=array_times_df, # 传入原生时间表
             mwd_code_data=mwd_code_data,
             config=config,
-            resource_dir=resource_dir,
+            product_dir=product_dir,
             warning_lines=warning_lines
         )
 
@@ -210,7 +209,7 @@ class YieldAnalysisService:
     @st.cache_data(show_spinner=False)
     def get_sheet_defect_rates(
         config: AppConfig, 
-        resource_dir: Path, 
+        product_dir: Path,
         _core_revision: float = 0.0,
         ema_span: int = 30,
         scaling_factor: float = 0.7, 
@@ -226,25 +225,21 @@ class YieldAnalysisService:
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
-            config, resource_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
         )
         if not lot_results: return None
-
-        warning_lines = YieldAnalysisService.load_static_warning_lines(config, resource_dir)
 
         return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
             array_input_times_df=array_times_df,
             lot_results=lot_results, # 注入 Lot 结果
             config=config,
-            resource_dir=resource_dir,
-            warning_lines=warning_lines
+            product_dir=product_dir
         )
 
     # ==========================================================================
     #  4. Mapping 业务
     # ==========================================================================
-
     @staticmethod
     @st.cache_data(show_spinner=False)
     def get_mapping_data(config: AppConfig, scaling_factor, _core_revision: float = 0.0) -> pd.DataFrame:
@@ -256,7 +251,6 @@ class YieldAnalysisService:
     # ==========================================================================
     #  内部辅助方法 (依然需要缓存)
     # ==========================================================================
-
     @staticmethod
     @st.cache_data(show_spinner=False)
     def _get_array_times(lot_ids: Tuple[str, ...], config: AppConfig) -> pd.DataFrame:
@@ -278,7 +272,7 @@ class YieldAnalysisService:
     
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def load_static_warning_lines(config: AppConfig, resource_dir: Path) -> Dict[str, Any]:
+    def load_static_warning_lines(config: AppConfig, product_dir: Path) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
         读取警戒线配置 (完全依赖注入)
@@ -291,7 +285,7 @@ class YieldAnalysisService:
                 return {}
 
             # 构建完整路径
-            file_path = resource_dir / warning_res.file_name
+            file_path = product_dir /warning_res.file_name
             sheet_name = warning_res.sheet_name or "Sheet1"
 
             if not file_path.exists():
@@ -307,7 +301,7 @@ class YieldAnalysisService:
                 engine='openpyxl',
                 sheet_name=sheet_name
             )
-            
+
             # [关键] 模拟“另存为 CSV”的过程
             csv_buffer = io.StringIO()
             df_raw.to_csv(csv_buffer, index=False, header=False)

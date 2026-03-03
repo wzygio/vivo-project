@@ -1,9 +1,10 @@
-import pandas as pd  # 导入 pandas 数据处理库
-import os  # 导入 os 模块用于文件路径操作
-import logging  # 导入日志模块
+import pandas as pd
+import os, logging, time  # 导入日志模块
 import streamlit as st  # 导入 streamlit 库
-import time  # 导入 time 模块用于时间操作
-from datetime import datetime  # 导入 datetime 模块
+from pathlib import Path
+from typing import Dict
+
+from vivo_project.config_model import AppConfig
 
 class ExcelService:
     @staticmethod
@@ -82,8 +83,6 @@ class ExcelService:
             return 'background-color: #c8e6c9; color: #1b5e20; font-weight: bold'
         return ''
 
-    # --- 以下为新增功能：并发安全保存支持 ---
-
     @staticmethod
     def get_file_timestamp(file_path: str) -> float:
         """获取文件的最后修改时间戳"""
@@ -144,3 +143,76 @@ class ExcelService:
                     os.remove(lock_file)
                 except Exception as e:
                     logging.error(f"无法移除锁文件: {e}")
+
+    # ==============================================================================
+    #                      Excel 覆盖适配器 (Adapter)
+    # ==============================================================================
+    @staticmethod
+    def _parse_override_excel(excel_path: Path) -> Dict[str, Dict[str, Dict[str, float]]]:
+        """解析双Sheet页的覆盖配置Excel为嵌套字典格式"""
+        overrides = {
+            'group_monthly_values': {}, 'group_weekly_values': {}, 'group_daily_values': {},
+            'code_monthly_values': {}, 'code_weekly_values': {}, 'code_daily_values': {}
+        }
+        if not excel_path.exists():
+            return overrides
+
+        try:
+            xls = pd.read_excel(excel_path, sheet_name=None)
+            
+            def _parse_sheet(df, level_prefix):
+                if df.empty: return
+                for _, row in df.iterrows():
+                    target = str(row.get('目标名称', '')).strip()
+                    period_cn = str(row.get('周期类型', '')).strip()
+                    time_key = str(row.get('时间标签', '')).strip()
+                    rate_val = row.get('期望不良率', 0.0)
+                    
+                    if not target or target == 'nan' or not period_cn or not time_key or pd.isna(rate_val):
+                        continue
+                        
+                    # 智能兼容百分比字符串 (如 "1.03%") 和 小数 (如 0.0103)
+                    if isinstance(rate_val, str) and '%' in rate_val:
+                        rate_val = float(rate_val.replace('%', '')) / 100.0
+                    else:
+                        rate_val = float(rate_val)
+                        # 防呆设计：如果业务人员手滑输入了 1.5 但没加 %，强制转换为 0.015
+                        if rate_val > 1.0: 
+                            rate_val = rate_val / 100.0
+
+                    period_map = {'月度': 'monthly', '周度': 'weekly', '日度': 'daily'}
+                    period_en = period_map.get(period_cn)
+                    if not period_en: continue
+                    
+                    dict_key = f"{level_prefix}_{period_en}_values"
+                    if target not in overrides[dict_key]:
+                        overrides[dict_key][target] = {}
+                    overrides[dict_key][target][time_key] = rate_val
+
+            if 'Group级' in xls:
+                _parse_sheet(xls['Group级'], 'group')
+            if 'Code级' in xls:
+                _parse_sheet(xls['Code级'], 'code')
+                
+        except Exception as e:
+            logging.error(f"解析覆盖Excel失败: {e}", exc_info=True)
+            
+        return overrides
+
+    @staticmethod
+    def inject_excel_overrides_to_config(config: AppConfig, product_dir: Path):
+        """
+        [核心] 在数据进入底层运算前，拦截并用 Excel 的数据覆盖 YAML 的配置。
+        底层 mwd_trend_processor.py 完全无感知。
+        """
+        override_res = config.paths.get('mwd_override_config')
+        if not override_res: 
+            return
+        
+        excel_path = product_dir / override_res.file_name
+        excel_overrides = ExcelService._parse_override_excel(excel_path)
+        
+        # 将解析出的字典注入到 config.processing 中，完美替换原有的 YAML 节点
+        for key, value_dict in excel_overrides.items():
+            if value_dict:  # 如果 Excel 中有配置，则覆盖
+                config.processing[key] = value_dict

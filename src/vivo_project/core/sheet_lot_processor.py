@@ -21,8 +21,7 @@ def calculate_sheet_defect_rates(
     array_input_times_df: pd.DataFrame,
     lot_results: Dict[str, Any], # 接收 Lot 结果
     config: AppConfig,          
-    resource_dir: Path,         
-    warning_lines: Optional[Dict[str, float]] = None
+    product_dir: Path,         
 ) -> Dict[str, Any] | None:
     """(V5.0) Sheet 级完全听命于 Lot 发牌"""
     logging.info("开始Sheet级计算 (Lot局域分发 -> 覆盖 模式)...")
@@ -73,7 +72,7 @@ def calculate_sheet_defect_rates(
         override_sheet_name = ""
         
         if override_res:
-             override_file_path = resource_dir / override_res.file_name
+             override_file_path = product_dir / override_res.file_name
              override_sheet_name = override_res.sheet_name or ""
         
         override_df, _ = _load_override_excel(
@@ -125,7 +124,7 @@ def calculate_lot_defect_rates(
     array_input_times_df: pd.DataFrame, # 接收时间表
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     config: AppConfig,
-    resource_dir: Path,
+    product_dir: Path,
     warning_lines: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any] | None:
     """(V5.0) 独立执行 Lot 级数据模拟"""
@@ -184,7 +183,7 @@ def calculate_lot_defect_rates(
         override_sheet_name = ""
         
         if override_res:
-                override_file_path = resource_dir / override_res.file_name
+                override_file_path = product_dir / override_res.file_name
                 override_sheet_name = override_res.sheet_name or ""
 
         override_sheet_df, _= _load_override_excel(
