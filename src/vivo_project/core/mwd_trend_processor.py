@@ -157,12 +157,8 @@ def _execute_unified_pipeline(
     **kwargs
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    [重构 V3.0] 大一统混合流水线 (Unified Hybrid Pipeline)
-    业务逻辑：
-    1. EMA 洗底 (Base Smoothing): 借助 EMA 算法清洗掉极端的异常点，获得保真且稳定的底层日度数据。
-    2. 向上聚合 (Upward Aggregation): 将洗底后的日度数据汇总出真实的周度/月度基准。
-    3. 人工定调 (Manual Override): 根据业务要求，强制覆盖并锁死周度/月度数据。
-    4. 降维重塑 (Downward Generation): 丢弃 EMA 日度，利用带确定性噪声的正弦波基于周度重新生成日度，消灭EMA的拖尾效应，实现 100% 穿透！
+    [重构 V3.2] 大一统混合流水线 (Unified Hybrid Pipeline)
+    包含智能旁路与防黑洞机制。
     """
     # 0. T-1 过滤
     df_processing, last_day = _apply_t1_filtering(raw_daily_df, last_day)
@@ -194,36 +190,45 @@ def _execute_unified_pipeline(
     
     final_weekly = ov_func_w(reg_weekly, val_w, **period_kw_w, **extra_ov_args)
     
-    # --- Step 4: 降维重塑 (利用周度重新生成日度) ---
+    # --- Step 4: 降维重塑 (带精确旁路与防丢失拼接) ---
     final_daily = ema_daily_base.copy() # 默认保留纯净的 EMA 数据
     
-    # 提取覆盖配置 (提取字典里的值)
-    is_overridden = False
-    if val_w: # val_w 是传入的周度覆盖配置字典
-        is_overridden = True
+    if val_w: # 检测到覆盖配置
+        overridden_keys = list(val_w.keys())
+        logging.info(f"检测到人工覆盖指令，仅对以下目标启动重塑: {overridden_keys}")
         
-    if is_overridden:
-        logging.info("检测到周度人工覆盖指令，启动正弦波重塑机制下发覆盖率...")
         if 'warehousing_time' in df_processing.columns:
+            # ================= [Code 级逻辑 (长表)] =================
             daily_skeleton = df_processing[['warehousing_time', 'total_panels']].drop_duplicates()
+            
+            # [核心修复 1] 连坐阻断：只截取被覆盖的 Code 送去重塑
+            weekly_to_rebuild = final_weekly[final_weekly['defect_desc'].isin(overridden_keys)].copy()
+            
+            if not weekly_to_rebuild.empty:
+                generated_daily = gen_daily_func(daily_skeleton, weekly_to_rebuild, **kwargs)
+                
+                if not generated_daily.empty:
+                    # [核心修复 2] 黑洞阻断：彻底放弃 update()，改用物理剔除 + 物理追加 (concat)
+                    # 先将旧的 EMA 大盘中被覆盖的 Code 连根拔起
+                    final_daily = final_daily[~final_daily['defect_desc'].isin(overridden_keys)].copy()
+                    # 再把重塑出来的（包含新增日期行）的完整新数据追加进去
+                    final_daily = pd.concat([final_daily, generated_daily], ignore_index=True)
+                    
         else:
+            # ================= [Group 级逻辑 (宽表)] =================
             daily_skeleton = df_processing[['total_panels']].copy()
-        
-        # 只针对被覆盖的 Code 执行重塑，没被覆盖的 Code 依然保留 EMA 曲线
-        # [进阶逻辑实现]
-        generated_daily = gen_daily_func(daily_skeleton, final_weekly, **kwargs)
-        
-        # 将重塑后的日度数据，安全地更新回原本的 EMA 日度大盘中
-        if not generated_daily.empty:
-            if 'warehousing_time' in generated_daily.columns:
-                # Code 级长表合并
-                final_daily.set_index(['warehousing_time', 'defect_group', 'defect_desc'], inplace=True)
-                generated_daily.set_index(['warehousing_time', 'defect_group', 'defect_desc'], inplace=True)
-                final_daily.update(generated_daily)
-                final_daily.reset_index(inplace=True)
-            else:
-                # Group 级宽表合并
-                final_daily.update(generated_daily)
+            
+            # [核心修复 1] 连坐阻断：动态修改目标参数，让正弦波只重塑被覆盖的 Group 列
+            kwargs_for_group = kwargs.copy()
+            kwargs_for_group['target_defects'] = overridden_keys 
+            
+            generated_daily = gen_daily_func(daily_skeleton, final_weekly, **kwargs_for_group)
+            
+            if not generated_daily.empty:
+                # [核心修复 2] 宽表直接按列暴力覆盖，不存在黑洞问题
+                for g in overridden_keys:
+                    if g in generated_daily.columns:
+                        final_daily[g] = generated_daily[g]
     else:
         logging.info("未检测到覆盖指令，完美保留纯净 EMA 日度曲线。")
     
@@ -942,8 +947,8 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
         # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)
         # ======================================================================
         
-        is_surge_abs = abs(rr - p_base) > 0.02 # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
-        is_surge_ratio = (rr > p_base * 3.0) # B. 相对值容差检测: 波动幅度不能超过 3 倍
+        is_surge_abs = abs(rr - p_base) > 0.05 # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
+        is_surge_ratio = (rr > p_base * 5.0) # B. 相对值容差检测: 波动幅度不能超过 3 倍
         is_plunge_ratio = (rr < p_base / 3.0) or (rr < 1e-4) # C. 相对值容差检测: 波动幅度不能超过 1/3 倍 或 非常小 (1e-4)
 
         is_abnormal = is_surge_abs or is_surge_ratio or is_plunge_ratio

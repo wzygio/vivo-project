@@ -49,7 +49,7 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     '暗点': 0.7
-    '彩斑Mura': 0.3
+    '彩斑Mura': 0.5
     'G3亮点': 0.5
 
   # 6. Mapping集中性调节
