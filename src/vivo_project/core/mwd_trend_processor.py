@@ -856,7 +856,9 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
                 
                 # 伪随机哈希算法: sin(time * Large_Prime + Group_Hash)
                 scramble_factor = 1234567 
-                noise_seed = (ts_seed * scramble_factor) + (hash(group) % 9999)
+                # 替换为绝对稳定的字符 ASCII 求和：
+                stable_group_hash = sum(ord(c) for c in str(group))
+                noise_seed = (ts_seed * scramble_factor) + (stable_group_hash % 9999)
                 
                 # 这样生成的 noise 就是围绕 0 上下剧烈跳动的，而非平滑过渡
                 noise = np.sin(noise_seed) * volatility
@@ -911,7 +913,9 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
     ts_vector = (merged['warehousing_time'].astype('int64') // 10**9 // 86400).astype(int)
     scramble_factor = 999983 # 大质数
     
-    code_hash = merged['defect_desc'].map(hash) % 10000
+    # ✅ 替换为稳定哈希：
+    def _stable_hash(s): return sum(ord(c) for c in str(s))
+    code_hash = merged['defect_desc'].map(_stable_hash) % 10000
     
     # 公式: sin(Time * Large_Prime + Code_Hash)
     # 这确保了同一 Code 在相邻两天的 noise 是完全随机独立的
@@ -982,7 +986,9 @@ def _inject_deterministic_noise_code_level(df, volatility):
     # Code Hash
     # 注意：如果 defect_desc 有空值，hash 会报错，需填充
     code_series = df_out['defect_desc'].fillna('NoDefect')
-    code_hash = code_series.map(hash) % 1000
+    # ✅ 替换为稳定哈希：
+    def _stable_hash(s): return sum(ord(c) for c in str(s))
+    code_hash = code_series.map(_stable_hash) % 1000
     
     # 2. 向量化计算噪声
     # noise = sin(ts + hash) * volatility

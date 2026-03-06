@@ -37,7 +37,7 @@ class YieldAnalysisService:
     _end_date: datetime = datetime.now()
     _start_date: datetime = _end_date - relativedelta(months=3)
     group_scale: float = 1.0
-    code_scale: float = 0.7
+    code_scale: float = 1.0
     group_ema_span: int = 30
     code_ema_span: int = 30
 
