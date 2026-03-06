@@ -568,11 +568,9 @@ def _simulate_concentration(
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [核心重构 V4.1 - 极简直接乘法]
-    大道至简：直接使用 Lot 的容量乘以当日 EMA 良损率，四舍五入。
-    接受极微小的单日总账偏差，换取代码的极致清晰和极高的运行效率。
+    [核心重构 V4.2 - 带深度调试导出]
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.1 - 极简直接乘法)...")
+    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.2 - 极简直接乘法 + Debug导出)...")
     try:
         config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
@@ -585,7 +583,7 @@ def _simulate_concentration(
             logging.error("缺少基础汇总数据，模拟终止。")
             return sim_code_details
 
-        # --- 0. 预先构建日期映射表 (Entity ID -> DateString) ---
+        # --- 0. 预先构建日期映射表 ---
         if entity_id_col not in base_info_df.columns and base_info_df.index.name == entity_id_col:
             base_info_temp = base_info_df.reset_index()
         else:
@@ -596,6 +594,9 @@ def _simulate_concentration(
 
         df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
 
+        # [新增] 调试数据收集器
+        debug_lot_frames = []
+
         # --- 1. 开始遍历计算 ---
         for group, df_all_codes_in_group in sim_code_details.items():
             if df_all_codes_in_group.empty: continue
@@ -604,43 +605,66 @@ def _simulate_concentration(
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
                 df_code_mod = df_code.copy()
                 
-                # 1. 映射实体的基准日期
                 df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
                 
-                # 2. 建立该 Code 的日度查找字典 {DateString -> Rate}
                 lookup_dict = {}
                 if df_daily_ema is not None:
                     code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
-                    code_ema_data['date_key'] = code_ema_data['warehousing_time'].dt.strftime('%Y%m%d') # type: ignore
+                    code_ema_data['date_key'] = code_ema_data['time_period'].astype(str).str.replace('-', '')
                     lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
 
-                # 🚀 3. 核心：大道至简，直接映射并相乘
+                # 🚀 核心映射
                 df_code_mod['daily_base_rate'] = df_code_mod['date_key'].map(lookup_dict).fillna(0.0)
                 
-                # 容量 * 日度率 -> 四舍五入取整
                 df_code_mod['defect_panel_count'] = np.round(
                     df_code_mod['total_panels'] * df_code_mod['daily_base_rate']
                 ).astype(int)
                 
-                # 物理兜底：不良数绝对不能超过该 Lot 的总容量
                 df_code_mod['defect_panel_count'] = np.minimum(
                     df_code_mod['defect_panel_count'], 
                     df_code_mod['total_panels']
                 )
                 
-                # 4. 反向计算最终事实良率
                 df_code_mod['defect_rate'] = np.where(
                     df_code_mod['total_panels'] > 0,
                     df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
                     0.0
                 )
                 
-                # 清理无用列并保存
+                # =========================================================
+                # 🛑 [DEBUG 收集器] 收集当前 Code 的模拟明细
+                # =========================================================
+                if entity_id_col == 'lot_id':
+                    debug_df = df_code_mod[[
+                        'lot_id', 'defect_desc', 'date_key', 'total_panels', 
+                        'daily_base_rate', 'defect_panel_count', 'defect_rate'
+                    ]].copy()
+                    debug_lot_frames.append(debug_df)
+                # =========================================================
+                
                 df_code_mod.drop(columns=['date_key', 'daily_base_rate'], inplace=True, errors='ignore')
                 processed_codes_list.append(df_code_mod)
             
             if processed_codes_list:
                 sim_code_details[group] = pd.concat(processed_codes_list, ignore_index=True)
+                
+        # =================================================================
+        # 🛑 [DEBUG 导出]
+        # =================================================================
+        if debug_lot_frames and entity_id_col == 'lot_id':
+            try:
+                final_debug_df = pd.concat(debug_lot_frames, ignore_index=True)
+                # 转为易读格式
+                final_debug_df['daily_base_rate'] = final_debug_df['daily_base_rate'].apply(lambda x: f"{x:.5%}")
+                final_debug_df['defect_rate'] = final_debug_df['defect_rate'].apply(lambda x: f"{x:.5%}")
+                
+                out_path = Path("logs/debug_lot_simulation.csv")
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                final_debug_df.to_csv(out_path, index=False, encoding='utf-8-sig')
+                logging.info(f"✅ [DEBUG] Lot 模拟分配明细已导出至: {out_path.absolute()}")
+            except Exception as e:
+                logging.error(f"导出 Lot 模拟 debug 数据失败: {e}")
+        # =================================================================
                 
         return sim_code_details
         

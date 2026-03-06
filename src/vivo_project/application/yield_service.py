@@ -47,8 +47,6 @@ class YieldAnalysisService:
         cls._end_date = end_date
         cls._start_date = end_date - relativedelta(months=3)
         logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
-
-    
         
     @staticmethod
     @st.cache_data(show_spinner=False)
@@ -123,7 +121,6 @@ class YieldAnalysisService:
         _core_revision: float = 0.0, 
         ema_span: int = group_ema_span, 
         scaling_factor: float = group_scale,
-        use_top_down: bool = False
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
@@ -131,7 +128,7 @@ class YieldAnalysisService:
         
         # 1. 强制依赖 Code 级结果作为数据源头
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision, ema_span, scaling_factor
         )
 
         # [Refactor] 传入 config 和 resource_dir 给 Core 层
@@ -139,8 +136,7 @@ class YieldAnalysisService:
             panel_details_df=panel_df,
             mwd_code_data=mwd_code_data,  # 传入 Code 数据
             config=config,
-            scaling_factor=scaling_factor,
-            USE_TOP_DOWN_STRATEGY=use_top_down
+            scaling_factor=scaling_factor
         )
 
     @staticmethod
@@ -151,7 +147,6 @@ class YieldAnalysisService:
         _core_revision: float = 0, 
         ema_span: int = code_ema_span, 
         scaling_factor: float = code_scale,
-        use_top_down: bool = False
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
@@ -167,7 +162,6 @@ class YieldAnalysisService:
             config=config,
             ema_span=ema_span,
             scaling_factor=scaling_factor,
-            USE_TOP_DOWN_STRATEGY=use_top_down,
             warning_lines=warning_lines
         )
 
@@ -181,8 +175,7 @@ class YieldAnalysisService:
         product_dir: Path,
         _core_revision: float = 0.0,
         ema_span: int = code_ema_span,
-        scaling_factor: float = code_scale,
-        use_top_down: bool = False) -> Dict[str, Any] | None:
+        scaling_factor: float = code_scale) -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -195,7 +188,7 @@ class YieldAnalysisService:
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _core_revision, ema_span, scaling_factor, use_top_down
+            config, product_dir, _core_revision, ema_span, scaling_factor
         )
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
 

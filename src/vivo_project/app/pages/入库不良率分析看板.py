@@ -84,27 +84,17 @@ with st.spinner("正在加载全维度分析数据..."):
     current_product = st.session_state.get(SessionManager.KEY_PRODUCT, "Unknown")
     
     # 2. 定义默认参数 (兜底)
-    
-
-    # 3. 针对特定产品进行参数微调 (Hardcode 模式)
-    if current_product == "M678":
-        USE_TOP_DOWN_STRATEGY = True
-        
-    elif current_product == "M626":
-        USE_TOP_DOWN_STRATEGY = True
 
     # [Refactor] 5. 并行加载所有服务数据
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
         active_config, 
         product_dir, 
-        _core_revision=current_revision,
-        use_top_down=USE_TOP_DOWN_STRATEGY
+        _core_revision=current_revision
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config, 
         product_dir, 
-        _core_revision=current_revision, 
-        use_top_down=USE_TOP_DOWN_STRATEGY
+        _core_revision=current_revision
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config, 
