@@ -124,7 +124,7 @@ class MWDTrendProcessor:
                 last_day=last_day,
                 calc_daily_ema_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility),
                 agg_funcs=(agg_monthly_func, agg_weekly_func),
-                reg_func=TrendRegulator.regulate_code_monthly_and_weekly,
+                reg_func=TrendRegulator.regulate_code_mwd,
                 override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
                 override_vals=(m_vals, w_vals),
                 gen_daily_func=_generate_code_daily_from_weekly_baseline,
@@ -181,7 +181,8 @@ def _execute_unified_pipeline(
         raw_monthly = _apply_scaling(raw_monthly, factor)
         raw_weekly = _apply_scaling(raw_weekly, factor)
         
-    reg_monthly, reg_weekly = reg_func(raw_monthly, raw_weekly, **kwargs)
+    # 👇 [修改此处 1]：增加接收 reg_daily，并将 ema_daily_base 传入截断器
+    reg_monthly, reg_weekly, reg_daily = reg_func(raw_monthly, raw_weekly, ema_daily_base, **kwargs)
     
     # --- Step 3: 人工定调 (周度为主控) ---
     period_kw_w = {'period_type': 'weekly'}
@@ -191,7 +192,7 @@ def _execute_unified_pipeline(
     final_weekly = ov_func_w(reg_weekly, val_w, **period_kw_w, **extra_ov_args)
     
     # --- Step 4: 降维重塑 (带精确旁路与防丢失拼接) ---
-    final_daily = ema_daily_base.copy() # 默认保留纯净的 EMA 数据
+    final_daily = reg_daily.copy()
     
     if val_w: # 检测到覆盖配置
         overridden_keys = list(val_w.keys())

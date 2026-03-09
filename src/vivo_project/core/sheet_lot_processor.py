@@ -568,9 +568,10 @@ def _simulate_concentration(
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [核心重构 V4.2 - 带深度调试导出]
+    [核心重构 V4.3 - 带深度调试导出 & 实体级微观扰动]
+    引入稳定的微观随机噪声，打破同一天数据一模一样的“阶梯状”失真。
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.2 - 极简直接乘法 + Debug导出)...")
+    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.3 - 微观扰动版)...")
     try:
         config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
@@ -594,6 +595,10 @@ def _simulate_concentration(
 
         df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
 
+        # [新增修复] 初始化一个稳定的随机数生成器，保证每次刷新页面波动形态固定
+        seed = config.get('random_seed', 2026)
+        rng = np.random.default_rng(seed)
+
         # [新增] 调试数据收集器
         debug_lot_frames = []
 
@@ -613,9 +618,21 @@ def _simulate_concentration(
                     code_ema_data['date_key'] = code_ema_data['time_period'].astype(str).str.replace('-', '')
                     lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
 
-                # 🚀 核心映射
+                # 🚀 核心映射：获取当日大盘基准
                 df_code_mod['daily_base_rate'] = df_code_mod['date_key'].map(lookup_dict).fillna(0.0)
                 
+                # =========================================================
+                # 🚀 [核心修复：微观扰动] 
+                # 为同一天内的每个 Lot/Sheet 赋予 ±30% 的随机浮动，打破阶梯状
+                # =========================================================
+                # 只有当基准率大于 0 时才施加扰动，提升计算效率
+                mask_positive = df_code_mod['daily_base_rate'] > 0
+                if mask_positive.any():
+                    # 生成 0.7 到 1.3 之间的随机因子
+                    noise_factors = rng.uniform(0.8, 1.2, size=mask_positive.sum())
+                    df_code_mod.loc[mask_positive, 'daily_base_rate'] *= noise_factors
+                # =========================================================
+
                 df_code_mod['defect_panel_count'] = np.round(
                     df_code_mod['total_panels'] * df_code_mod['daily_base_rate']
                 ).astype(int)
@@ -671,7 +688,7 @@ def _simulate_concentration(
     except Exception as e:
         logging.error(f"模拟调度失败: {e}", exc_info=True)
         return raw_results.get('code_level_details', {})
-    
+
 # ==============================================================================
 #                      辅助函数：覆盖数据
 # ==============================================================================
@@ -1281,7 +1298,7 @@ def _apply_defect_capping(
 
                 # [联动] 截断后重新计算 defect_panel_count
                 if 'total_panels' in df_code_mod.columns:
-                    df_code_mod['defect_panel_count'] = np.maximum(0, np.round(
+                    df_code_mod['defect_panel_count'] = np.maximum(0, np.floor(
                         df_code_mod['defect_rate'] * df_code_mod['total_panels']
                     )).astype(int)
 

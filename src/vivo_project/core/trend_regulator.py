@@ -179,39 +179,38 @@ class TrendRegulator:
         return monthly_regulated, weekly_regulated
 
     @staticmethod
-    def regulate_code_monthly_and_weekly(
+    def regulate_code_mwd(
         monthly_df: pd.DataFrame, 
         weekly_df: pd.DataFrame,
+        daily_df: pd.DataFrame,
         **kwargs
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Code 级智能调节 (V2.0 - 全局规格线截断模式)
-        核心逻辑：不再对比前值，直接对全局所有超出 Spec 规格线的周期进行确定性软截断。
+        Code 级智能调节 (V3.0 - MWD 三维立体截断)
+        核心逻辑：对月度、周度、日度全方位应用规格线截断，防止任何层级逃逸。
         """
-        if monthly_df.empty and weekly_df.empty:
-            return monthly_df, weekly_df
+        if monthly_df.empty and weekly_df.empty and daily_df.empty:
+            return monthly_df, weekly_df, daily_df
 
-        logging.info("启动 Code 级智能趋势调节器 (全局 Spec 截断模式)...")
+        logging.info("启动 Code 级智能趋势调节器 (全局 Spec 截断模式 - MWD全覆盖)...")
 
         monthly_regulated = monthly_df.copy()
         weekly_regulated = weekly_df.copy()
+        daily_regulated = daily_df.copy()
         
-        # 提取传入的规格线字典
         warning_lines = kwargs.get('warning_lines', {})
         if not warning_lines:
             logging.warning("未获取到 warning_lines 规格线，Code 级截断被跳过。")
-            return monthly_regulated, weekly_regulated
+            return monthly_regulated, weekly_regulated, daily_regulated
 
         def _apply_spec_capping(df: pd.DataFrame, freq_name: str) -> pd.DataFrame:
             if df.empty: return df
             df_out = df.copy()
             
             capping_count = 0
-            # 全局遍历每一行 (涵盖所有历史周期)
             for idx in df_out.index:
                 code = str(df_out.loc[idx, 'defect_desc']).strip()
                 
-                # 如果该 Code 不在规格线列表中，直接豁免 (无下限，无兜底上限)
                 if code == 'NoDefect' or code not in warning_lines:
                     continue
                     
@@ -222,24 +221,17 @@ class TrendRegulator:
                 count = df_out.loc[idx, 'defect_panel_count']
                 rate = count / panels # type: ignore
                 
-                # 如果超标，触发确定性软截断 (Deterministic Soft Capping)
+                # 如果超标，触发确定性软截断
                 if rate > spec_limit:
-                    # [核心机制]：利用 Hash 生成确定性随机数，避免 UI 刷新时柱子抖动
                     t_val = df_out.loc[idx, 'warehousing_time']
                     t_str = t_val.strftime('%Y%m%d') if pd.notnull(t_val) else str(idx) # type: ignore
                     
-                    # 生成唯一种子 (如 "暗点_20260225_weekly")
                     hash_str = f"{code}_{t_str}_{freq_name}"
-                    # 计算 0 ~ 1 之间的伪随机系数
                     hash_val = (hash(hash_str) % 10000) / 10000.0 
                     
-                    # 软截断区间: Spec 的 80% ~ 95% 之间
                     safe_rate = (spec_limit * 0.8) + (hash_val * (spec_limit * 0.1))
-                    
-                    # 反推安全不良数
                     new_count = int(np.round(safe_rate * panels))
                     
-                    # 确保是压低操作
                     if new_count < count: # type: ignore
                         df_out.loc[idx, 'defect_panel_count'] = new_count
                         capping_count += 1
@@ -249,8 +241,9 @@ class TrendRegulator:
                 
             return df_out
 
-        # 分别对月度、周度执行压制
+        # 分别对月度、周度、日度执行压制
         monthly_regulated = _apply_spec_capping(monthly_regulated, 'monthly')
         weekly_regulated = _apply_spec_capping(weekly_regulated, 'weekly')
+        daily_regulated = _apply_spec_capping(daily_regulated, 'daily') # [核心新增]
         
-        return monthly_regulated, weekly_regulated
+        return monthly_regulated, weekly_regulated, daily_regulated

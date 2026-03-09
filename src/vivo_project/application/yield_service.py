@@ -34,8 +34,8 @@ class YieldAnalysisService:
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
 
-    _end_date: datetime = datetime.now()
-    _start_date: datetime = _end_date - relativedelta(months=3)
+    # [核心修复]: 废弃静态的时间化石，改为仅记录“人工锁定的时间”
+    _custom_end_date: Optional[datetime] = None
     group_scale: float = 1.0
     code_scale: float = 1.0
     group_ema_span: int = 30
@@ -43,10 +43,18 @@ class YieldAnalysisService:
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
-        """允许外部注入结束时间"""
-        cls._end_date = end_date
-        cls._start_date = end_date - relativedelta(months=3)
-        logging.info(f"分析时间窗口已更新: {cls._start_date.date()} -> {cls._end_date.date()}")
+        """允许外部注入并锁定结束时间"""
+        cls._custom_end_date = end_date
+        start_date = end_date - relativedelta(months=3)
+        logging.info(f"分析时间窗口已人工锁定: {start_date.date()} -> {end_date.date()}")
+
+    @classmethod
+    def get_time_window(cls) -> Tuple[datetime, datetime]:
+        """动态获取当前的时间窗口 (打破'时间化石'魔咒)"""
+        # 如果外部没有人工锁定时间，就实时获取现实世界中的此时此刻
+        current_end = cls._custom_end_date or datetime.now()
+        current_start = current_end - relativedelta(months=3)
+        return current_start, current_end
         
     @staticmethod
     @st.cache_data(show_spinner=False)
@@ -72,8 +80,8 @@ class YieldAnalysisService:
             use_snapshot=use_snapshot
         )
         
-        end_date = YieldAnalysisService._end_date
-        start_date = YieldAnalysisService._start_date
+        # [核心修复]: 每次调用时，动态获取真实的、流动的时间窗口
+        start_date, end_date = YieldAnalysisService.get_time_window()
         
         logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
 
