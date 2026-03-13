@@ -31,18 +31,16 @@ class MWDTrendProcessor:
             # 0. 准备真实的每日 total_panels 骨架，并获取 target_defects
             raw_daily, last_day, target_defects = _prepare_group_raw_data(panel_details_df)
             if raw_daily is None: return None
-            
-            # T-1 过滤
-            df_processing, last_day = _apply_t1_filtering(raw_daily, last_day)
-            if df_processing.empty: return None
 
             m_vals = config.processing.get('group_monthly_values', {})
             w_vals = config.processing.get('group_weekly_values', {})
             d_vals = config.processing.get('group_daily_values', {})
 
-            # --- Step 1: EMA 洗底 (直接提取已洗底且包含确定性噪声的 Code 级大盘) ---
-            def _inject_code_daily():
-                skeleton = df_processing[['total_panels']].copy()
+            # =================================================================
+            # 💉 注入函数 1: Group 级的特殊 Step 1 (从 Code 级大盘注入)
+            # =================================================================
+            def _inject_code_daily_as_base(df_proc: pd.DataFrame) -> pd.DataFrame:
+                skeleton = df_proc[['total_panels']].copy()
                 code_daily = mwd_code_data.get('daily_full')
                 if skeleton.empty or code_daily is None or code_daily.empty: return skeleton
                 res = skeleton.copy()
@@ -54,34 +52,33 @@ class MWDTrendProcessor:
                         res.loc[idx, g] = sub[sub['defect_group'] == g]['defect_panel_count'].sum()
                 return res
 
-            daily_base = _inject_code_daily()
+            # =================================================================
+            # 💉 注入函数 2: 适配器 (解决 Group 截断器只有 2 个返回值的问题)
+            # =================================================================
+            def _group_regulator_adapter(m_df, w_df, d_df, **kw):
+                rm, rw = TrendRegulator.regulate_monthly_and_weekly(m_df, w_df, **kw)
+                # Group 级不需要日度截断，所以原样透传 d_df 满足流水线的 3 返回值要求
+                return rm, rw, d_df
 
-            # --- Step 2: 向上聚合 (汇总出真实的周度/月度基准) ---
-            raw_monthly = _safe_trend_aggregator(daily_base, last_day, 'M', is_group_level=True) # type: ignore
-            raw_weekly = _safe_trend_aggregator(daily_base, last_day, 'W', is_group_level=True)  # type: ignore
-
-            if scaling_factor != 1.0:
-                raw_monthly = _apply_scaling(raw_monthly, scaling_factor)
-                raw_weekly = _apply_scaling(raw_weekly, scaling_factor)
-
-            reg_m, reg_w = TrendRegulator.regulate_monthly_and_weekly(
-                raw_monthly, raw_weekly
+            # 🚀 统一执行大一统混合流水线
+            final_monthly, final_weekly, final_daily = _execute_unified_pipeline(
+                raw_daily_df=raw_daily,
+                last_day=last_day,
+                calc_daily_ema_func=_inject_code_daily_as_base, # 注入特殊的基底生成器
+                agg_funcs=(
+                    lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=True),
+                    lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=True)
+                ),
+                reg_func=_group_regulator_adapter,              # 注入调节器适配器
+                override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
+                override_vals=(m_vals, w_vals),
+                gen_daily_func=_generate_daily_from_weekly_baseline,
+                scaling_factor=scaling_factor,
+                volatility=volatility,
+                target_defects=target_defects                   # 透传关键参数给生成器
             )
 
-            # --- Step 3: 人工定调 (强行覆盖周度数据) ---
-            final_weekly = _apply_manual_overrides(reg_w, w_vals, 'weekly', target_defects=target_defects)
-
-            # --- Step 4: 降维重塑 (基于周度，重新生成无拖尾的日度数据) ---
-            daily_skeleton = df_processing[['total_panels']].copy()
-            final_daily = _generate_daily_from_weekly_baseline(
-                daily_skeleton, final_weekly, target_defects, volatility
-            )
-
-            # --- Step 5: 月度重构与定调 ---
-            reaggregated_monthly = _safe_trend_aggregator(final_daily, last_day, 'M', is_group_level=True) # type: ignore
-            final_monthly = _apply_manual_overrides(reaggregated_monthly, m_vals, 'monthly', target_defects=target_defects)
-
-            # 最终格式化
+            # 最终格式化与日度覆盖
             daily = _apply_daily_manual_overrides(final_daily, d_vals, target_defects)
             return _format_group_results(final_monthly, final_weekly, daily, target_defects)
             
@@ -165,16 +162,24 @@ def _execute_unified_pipeline(
     if df_processing.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     
-    agg_monthly_func, agg_weekly_func = agg_funcs
-    ov_func_m, ov_func_w = override_funcs
-    val_m, val_w = override_vals
+    # 🚀 0.5 骨架对齐到今天 (底层彻底解决缺失数据问题)
+    is_group = 'defect_desc' not in df_processing.columns
+    df_processing = _pad_daily_data_to_today(df_processing, is_group)
+    
+    # ⚠️ 关键修正：将后续聚合的锚点强制修改为今天，保证最近的空周/月也被正确纳入聚合
+    eval_last_day = pd.to_datetime(dt.now().date())
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
     
     # --- Step 2: 向上聚合 ---
-    raw_monthly = agg_monthly_func(ema_daily_base, last_day)
-    raw_weekly = agg_weekly_func(ema_daily_base, last_day)
+    agg_monthly_func, agg_weekly_func = agg_funcs
+    ov_func_m, ov_func_w = override_funcs
+    val_m, val_w = override_vals
+
+    # --- Step 2: 向上聚合 ---
+    raw_monthly = agg_monthly_func(ema_daily_base, eval_last_day) # <-- 使用新的锚点
+    raw_weekly = agg_weekly_func(ema_daily_base, eval_last_day)   # <-- 使用新的锚点
     
     factor = kwargs.get('scaling_factor', 1.0)
     if factor != 1.0:
@@ -320,7 +325,8 @@ def _apply_t1_filtering(
     # 获取数据源中实际的最后一天日期
     if 'warehousing_time' in df_filtered.columns:
         actual_last_date = df_filtered['warehousing_time'].max()
-        last_day_volume = df_filtered[df_filtered['warehousing_time'] == actual_last_date]['total_panels'].sum()
+        # [Bug Fix] 防止 Code 级长表中的 total_panels 被错误累加，直接取单行的值即可
+        last_day_volume = df_filtered[df_filtered['warehousing_time'] == actual_last_date]['total_panels'].iloc[0] 
     else:
         actual_last_date = df_filtered.index.max()
         if isinstance(df_filtered, pd.Series):
@@ -328,7 +334,8 @@ def _apply_t1_filtering(
         elif 'total_panels' in df_filtered.columns:
             last_day_volume = df_filtered.loc[actual_last_date, 'total_panels']
             if isinstance(last_day_volume, pd.Series): 
-                last_day_volume = last_day_volume.sum() # type: ignore
+                # [Bug Fix] 针对宽表如果有重复索引防呆，取第一个有效值
+                last_day_volume = last_day_volume.iloc[0] 
         else:
             last_day_volume = 0
 
@@ -336,21 +343,20 @@ def _apply_t1_filtering(
     should_filter = True
     
     # -------------------------------------------------------------------------
-    # ✅ [新增逻辑]：时间距离防呆校验：判断 actual_last_date 距离现实世界中的“今天”过了多久
-    # 如果已经超过 1 天，说明这一天早就结束了，不管入库多少片，都是既定事实，绝不能剔除！
+    # ✅ [修复逻辑]：时间距离防呆校验
     # -------------------------------------------------------------------------
     real_last_day = pd.to_datetime(dt.now().date())
-    # 确保 actual_last_date 是 datetime 类型以计算差值
     target_date = pd.to_datetime(actual_last_date)
     days_diff = (real_last_day - target_date).days
     
-    if days_diff > 1: # 如果是两天前或更早的数据，直接豁免
+    # [架构铁律修复]：如果 days_diff > 0，说明 actual_last_date 是昨天或更早。
+    # 只要不是现实世界的今天，该日期的产出就是闭合的既定事实，无条件豁免，绝不剔除！
+    if days_diff > 0: 
         should_filter = False
     elif conditional_filter and last_day_volume > 1000: # type: ignore
         should_filter = False
     else:
         logging.info(f"T-1 执行：末日 ({actual_last_date.strftime('%Y-%m-%d')}) 入库量 {last_day_volume} <= 1000，视为不稳定数据剔除。")
-        
     # 执行过滤
     if should_filter:
         if 'warehousing_time' in df_filtered.columns:
@@ -368,6 +374,57 @@ def _apply_t1_filtering(
 
     return df_filtered, new_anchor
 
+def _pad_daily_data_to_today(df: pd.DataFrame, is_group_level: bool) -> pd.DataFrame:
+    """
+    [核心新增] 在进入计算流水线前，将日期网格强行对齐到现实世界中的"今天"。
+    保证 EMA 动量传递和向上聚合(周/月)在数学上的绝对连续性。
+    """
+    if df.empty: return df
+    df_out = df.copy()
+    real_today = pd.to_datetime(dt.now().date())
+
+    if is_group_level:
+        # --- Group Level (宽表补齐) ---
+        has_dt_index = isinstance(df_out.index, pd.DatetimeIndex)
+        if not has_dt_index:
+            if 'warehousing_time' in df_out.columns:
+                df_out.set_index('warehousing_time', inplace=True)
+        
+        min_date = df_out.index.min()
+        full_dates = pd.date_range(start=min_date, end=real_today, freq='D')
+        
+        # 强行拉伸索引并用 0 填充没产出的日子
+        df_out = df_out.reindex(full_dates).fillna(0)
+        df_out.index.name = 'warehousing_time'
+        return df_out
+    else:
+        # --- Code Level (长表笛卡尔积补齐) ---
+        min_date = df_out['warehousing_time'].min()
+        full_dates = pd.date_range(start=min_date, end=real_today, freq='D')
+
+        # 提取当前数据中的所有 Code
+        unique_codes = df_out[['defect_group', 'defect_desc']].drop_duplicates()
+        
+        # 构建连续的每日真实总产出 (没数据的日子补为0)
+        daily_totals = df_out[['warehousing_time', 'total_panels']].drop_duplicates().set_index('warehousing_time')
+        daily_totals = daily_totals.reindex(full_dates).fillna(0).reset_index()
+        daily_totals.columns = ['warehousing_time', 'total_panels']
+
+        # 构造笛卡尔积网格：每一天都包含所有的 Code
+        daily_totals['_key'] = 1
+        unique_codes['_key'] = 1
+        full_grid = pd.merge(daily_totals, unique_codes, on='_key').drop(columns=['_key'])
+
+        # 将真实数据 Merge 回网格
+        merged = pd.merge(
+            full_grid,
+            df_out[['warehousing_time', 'defect_desc', 'defect_panel_count']],
+            on=['warehousing_time', 'defect_desc'],
+            how='left'
+        )
+        merged['defect_panel_count'] = merged['defect_panel_count'].fillna(0).astype(int)
+        return merged
+    
 def _calc_group_ema_noise(
     raw_df: pd.DataFrame, 
     target_defects: list | None, 
@@ -519,207 +576,88 @@ def _prepare_code_raw_data(df: pd.DataFrame):
     return raw_daily, last_day
 
 def _format_group_results(monthly, weekly, daily, target_defects):
-    """
-    [重构版] 统一数据格式化与补全 (锚定现实世界今天)
-    解决数据源停滞导致图表 X 轴缺失的问题。永远补齐最新的 3个月/3周/7天。
-    """
-    # 【核心修正】：强制将时间锚点锁定为现实世界中的“今天”
-    real_last_day = pd.to_datetime(dt.now().date())
-    
-    def _fmt(agg_df, fmt):
+    """(V3 极简版) 仅负责 UI 格式化与尾部切片，不再做合成补齐"""
+    def _fmt(agg_df, fmt, n_tail):
+        if agg_df.empty: return pd.DataFrame()
+        df = agg_df.copy()
+        
+        # 确保时间维度作为列
+        if 'warehousing_time' not in df.columns:
+            df = df.reset_index()
+            if 'index' in df.columns: df.rename(columns={'index': 'warehousing_time'}, inplace=True)
+            elif 'level_0' in df.columns: df.rename(columns={'level_0': 'warehousing_time'}, inplace=True)
+
         for group in target_defects:
-            if group in agg_df.columns:
-                agg_df[f"{group.lower()}_rate"] = np.where(agg_df['total_panels'] > 0, agg_df[group] / agg_df['total_panels'], 0.0)
+            if group in df.columns:
+                df[f"{group.lower()}_rate"] = np.where(df['total_panels'] > 0, df[group] / df['total_panels'], 0.0)
             else:
-                agg_df[f"{group.lower()}_rate"] = 0.0
+                df[f"{group.lower()}_rate"] = 0.0
+                df[group] = 0 # 防御性填充，防止 melt 失败
         
         if fmt == 'ISO':
-            iso = agg_df.index.isocalendar()
-            agg_df['time_period'] = iso.year.astype(str) + '-W' + iso.week.map('{:02d}'.format)
+            iso = df['warehousing_time'].dt.isocalendar()
+            df['time_period'] = iso.year.astype(str) + '-W' + iso.week.map('{:02d}'.format)
         else:
-            agg_df['time_period'] = agg_df.index.strftime(fmt)
+            df['time_period'] = df['warehousing_time'].dt.strftime(fmt)
         
         rmap = {f"{g.lower()}_rate": g for g in target_defects}
-        melted = agg_df.reset_index().melt(
+        melted = df.melt(
             id_vars=['time_period', 'total_panels'],
             value_vars=list(rmap.keys()),
             var_name='defect_group_raw',
             value_name='defect_rate'
         )
         melted['defect_group'] = melted['defect_group_raw'].map(rmap)
-        return melted.sort_values(by='time_period')
+        
+        # =========================================================================
+        # 🛑 [核心修复 1] 时间切片截取逻辑重构
+        # =========================================================================
+        # 依赖原始的物理时间列(warehousing_time) 进行排序，然后提取去重后的时段字符串，
+        # 彻底解决跨年时 '%m-%d' 字符串字典序（如 12-31 > 03-13）导致的截取错误。
+        ordered_periods = df.sort_values('warehousing_time')['time_period'].drop_duplicates().tolist()
+        target_periods = ordered_periods[-n_tail:] if len(ordered_periods) > n_tail else ordered_periods
+        
+        melted = melted[melted['time_period'].isin(target_periods)]
+        melted['time_period'] = pd.Categorical(melted['time_period'], categories=target_periods, ordered=True)
+        return melted.sort_values(by=['time_period', 'defect_group']).reset_index(drop=True)
 
-    res = {}
-    
-    # =========================================================================
-    # 1. Monthly (补齐最近 3 个月)
-    # =========================================================================
-    m_df = _fmt(monthly, '%Y-%m月')
-    target_months = sorted([(real_last_day - relativedelta(months=i)).strftime('%Y-%m月') for i in range(3)])
-    
-    raw_m = monthly.copy()
-    raw_m['time_period'] = raw_m.index.strftime('%Y-%m月')
-    m_totals = raw_m.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
-    
-    new_m = []
-    for m in target_months:
-        for g in target_defects:
-            if m_df.empty or not ((m_df['time_period'] == m) & (m_df['defect_group'] == g)).any():
-                new_m.append({'time_period': m, 'total_panels': m_totals.get(m, 0), 'defect_group_raw': f"{g.lower()}_rate", 'defect_rate': 0.0, 'defect_group': g})
-    if new_m:
-        m_df = pd.concat([m_df, pd.DataFrame(new_m)], ignore_index=True)
-        m_df['time_period'] = pd.Categorical(m_df['time_period'], categories=target_months, ordered=True)
-        m_df = m_df.sort_values(by=['time_period', 'defect_group']).reset_index(drop=True)
-    res['monthly'] = m_df
-
-    # =========================================================================
-    # 2. Weekly (补齐最近 3 周)
-    # =========================================================================
-    w_df = _fmt(weekly, 'ISO')
-    target_weeks = sorted([f"{(real_last_day - relativedelta(weeks=i)).isocalendar()[0]}-W{(real_last_day - relativedelta(weeks=i)).isocalendar()[1]:02d}" for i in range(3)])
-    
-    raw_w = weekly.copy()
-    iso_raw = raw_w.index.isocalendar()
-    raw_w['time_period'] = iso_raw.year.astype(str) + '-W' + iso_raw.week.map('{:02d}'.format)
-    w_totals = raw_w.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
-    
-    new_w = []
-    for w in target_weeks:
-        for g in target_defects:
-            if w_df.empty or not ((w_df['time_period'] == w) & (w_df['defect_group'] == g)).any():
-                new_w.append({'time_period': w, 'total_panels': w_totals.get(w, 0), 'defect_group_raw': f"{g.lower()}_rate", 'defect_rate': 0.0, 'defect_group': g})
-    if new_w:
-        w_df = pd.concat([w_df, pd.DataFrame(new_w)], ignore_index=True)
-        w_df['time_period'] = pd.Categorical(w_df['time_period'], categories=target_weeks, ordered=True)
-        w_df = w_df.sort_values(by=['time_period', 'defect_group']).reset_index(drop=True)
-    res['weekly'] = w_df
-
-    # =========================================================================
-    # 3. Daily (补齐最近 7 天)
-    # =========================================================================
-    res['daily_full'] = _fmt(daily, '%Y-%m-%d')
-    
-    seven_days = real_last_day - relativedelta(days=6)
-    target_days = [(seven_days + relativedelta(days=i)).strftime('%m-%d') for i in range(7)]
-    
-    daily_ui = daily[daily.index >= seven_days].copy()
-    d_df = _fmt(daily_ui, '%m-%d')
-    
-    raw_d = daily_ui.copy()
-    raw_d['time_period'] = raw_d.index.strftime('%m-%d')
-    d_totals = raw_d.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
-    
-    new_d = []
-    for d in target_days:
-        for g in target_defects:
-            if d_df.empty or not ((d_df['time_period'] == d) & (d_df['defect_group'] == g)).any():
-                # 按照要求，无数据时 total_panels 用 0 补，defect_rate 填 0
-                new_d.append({'time_period': d, 'total_panels': d_totals.get(d, 0), 'defect_group_raw': f"{g.lower()}_rate", 'defect_rate': 0.0, 'defect_group': g})
-    if new_d:
-        d_df = pd.concat([d_df, pd.DataFrame(new_d)], ignore_index=True)
-        d_df['time_period'] = pd.Categorical(d_df['time_period'], categories=target_days, ordered=True)
-        d_df = d_df.sort_values(by=['time_period', 'defect_group']).reset_index(drop=True)
-    res['daily'] = d_df
-    
-    return res
-
+    return {
+        'monthly': _fmt(monthly, '%Y-%m月', 3),
+        'weekly': _fmt(weekly, 'ISO', 3),
+        'daily_full': _fmt(daily, '%Y-%m-%d', 9999), 
+        'daily': _fmt(daily, '%m-%d', 7)
+    }
 
 def _format_code_results(monthly, weekly, daily):
-    """
-    [重构版] Code 级统一数据格式化与补全 (锚定现实世界今天)
-    强制保证 Code 级下探到最新的一周与七天。
-    """
-    real_last_day = pd.to_datetime(dt.now().date())
-    
-    def _fmt(df, fmt):
+    """(V3 极简版) 仅负责 UI 格式化与尾部切片"""
+    def _fmt(df, fmt, n_tail):
         if df.empty: return pd.DataFrame()
         df_out = df.copy()
         if fmt == 'ISO':
-            iso = df_out['warehousing_time'].dt.isocalendar() # type: ignore
+            iso = df_out['warehousing_time'].dt.isocalendar()
             df_out['time_period'] = iso.year.astype(str) + '-W' + iso.week.map('{:02d}'.format)
         else:
-            df_out['time_period'] = df_out['warehousing_time'].dt.strftime(fmt) # type: ignore
+            df_out['time_period'] = df_out['warehousing_time'].dt.strftime(fmt)
+            
         df_out['defect_rate'] = np.where(df_out['total_panels'] > 0, df_out['defect_panel_count'] / df_out['total_panels'], 0.0)
-        return df_out[df_out['defect_desc'] != 'NoDefect']
+        df_out = df_out[df_out['defect_desc'] != 'NoDefect']
 
-    res = {}
-    
-    # --- 1. Monthly 处理 ---
-    m_df = _fmt(monthly, '%Y-%m月')
-    if not m_df.empty:
-        target_months = sorted([(real_last_day - relativedelta(months=i)).strftime('%Y-%m月') for i in range(3)])
-        valid_codes = m_df[['defect_group', 'defect_desc']].drop_duplicates()
-        
-        raw_m = monthly.copy()
-        raw_m['time_period'] = raw_m['warehousing_time'].dt.strftime('%Y-%m月')
-        m_totals = raw_m.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
-        
-        new_m = []
-        for m in target_months:
-            for _, r in valid_codes.iterrows():
-                grp, desc = r['defect_group'], r['defect_desc']
-                if not ((m_df['time_period'] == m) & (m_df['defect_desc'] == desc)).any():
-                    new_m.append({'time_period': m, 'defect_group': grp, 'defect_desc': desc, 'total_panels': m_totals.get(m, 0), 'defect_panel_count': 0, 'defect_rate': 0.0, 'warehousing_time': pd.NaT})
-        if new_m:
-            m_df = pd.concat([m_df, pd.DataFrame(new_m)], ignore_index=True)
-            m_df['time_period'] = pd.Categorical(m_df['time_period'], categories=target_months, ordered=True)
-            m_df = m_df.sort_values(by=['time_period', 'defect_group', 'defect_desc']).reset_index(drop=True)
-    res['monthly'] = m_df
-    
-    # --- 2. Weekly 补全 (沿用升级版) ---
-    w_df = _fmt(weekly, 'ISO')
-    if not w_df.empty:
-        target_weeks = sorted([f"{(real_last_day - relativedelta(weeks=i)).isocalendar()[0]}-W{(real_last_day - relativedelta(weeks=i)).isocalendar()[1]:02d}" for i in range(3)])
-        valid_codes = w_df[['defect_group', 'defect_desc']].drop_duplicates()
-        
-        raw_w = weekly.copy()
-        iso_raw = raw_w['warehousing_time'].dt.isocalendar()
-        raw_w['time_period'] = iso_raw.year.astype(str) + '-W' + iso_raw.week.map('{:02d}'.format)
-        weekly_totals = raw_w.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
+        # =========================================================================
+        # 🛑 [核心修复 2] Code 级同步修复时间切片逻辑
+        # =========================================================================
+        ordered_periods = df_out.sort_values('warehousing_time')['time_period'].drop_duplicates().tolist()
+        target_periods = ordered_periods[-n_tail:] if len(ordered_periods) > n_tail else ordered_periods
 
-        new_w = []
-        for w in target_weeks:
-            for _, r in valid_codes.iterrows():
-                grp, desc = r['defect_group'], r['defect_desc']
-                if not ((w_df['time_period'] == w) & (w_df['defect_desc'] == desc)).any():
-                    new_w.append({'time_period': w, 'defect_group': grp, 'defect_desc': desc, 'total_panels': weekly_totals.get(w, 0), 'defect_panel_count': 0, 'defect_rate': 0.0, 'warehousing_time': pd.NaT})
-        if new_w:
-            w_df = pd.concat([w_df, pd.DataFrame(new_w)], ignore_index=True)
-            w_df['time_period'] = pd.Categorical(w_df['time_period'], categories=target_weeks, ordered=True)
-            w_df = w_df.sort_values(by=['time_period', 'defect_group', 'defect_desc']).reset_index(drop=True)
-    res['weekly'] = w_df
+        df_out = df_out[df_out['time_period'].isin(target_periods)]
+        df_out['time_period'] = pd.Categorical(df_out['time_period'], categories=target_periods, ordered=True)
+        return df_out.sort_values(by=['time_period', 'defect_group', 'defect_desc']).reset_index(drop=True)
 
-    # --- 3. Daily 补全 (核心修复点) ---
-    res['daily_full'] = _fmt(daily, '%Y-%m-%d')
-    
-    seven_days = real_last_day - relativedelta(days=6)
-    target_days_ui = [(seven_days + relativedelta(days=i)).strftime('%m-%d') for i in range(7)]
-    
-    daily_ui = daily[daily['warehousing_time'] >= seven_days].copy()
-    d_df = _fmt(daily_ui, '%m-%d')
-    
-    if not m_df.empty: valid_codes = m_df[['defect_group', 'defect_desc']].drop_duplicates()
-    elif not w_df.empty: valid_codes = w_df[['defect_group', 'defect_desc']].drop_duplicates()
-    else: valid_codes = pd.DataFrame(columns=['defect_group', 'defect_desc'])
-
-    raw_d = daily.copy()
-    raw_d['time_period'] = raw_d['warehousing_time'].dt.strftime('%m-%d')
-    d_totals = raw_d.drop_duplicates('time_period').set_index('time_period')['total_panels'].to_dict()
-    
-    new_d = []
-    for d_ui in target_days_ui:
-        for _, r in valid_codes.iterrows():
-            grp, desc = r['defect_group'], r['defect_desc']
-            if d_df.empty or not ((d_df['time_period'] == d_ui) & (d_df['defect_desc'] == desc)).any():
-                new_d.append({'time_period': d_ui, 'defect_group': grp, 'defect_desc': desc, 'total_panels': d_totals.get(d_ui, 0), 'defect_panel_count': 0, 'defect_rate': 0.0, 'warehousing_time': pd.NaT})
-    if new_d:
-        d_df = pd.concat([d_df, pd.DataFrame(new_d)], ignore_index=True)
-        # 强制将列标记为有序分类变量，这样画图时 x 轴就会完美按照时间升序排列！
-        d_df['time_period'] = pd.Categorical(d_df['time_period'], categories=target_days_ui, ordered=True)
-        d_df = d_df.sort_values(by=['time_period', 'defect_group', 'defect_desc']).reset_index(drop=True)
-        
-    res['daily'] = d_df
-    return res
+    return {
+        'monthly': _fmt(monthly, '%Y-%m月', 3),
+        'weekly': _fmt(weekly, 'ISO', 3),
+        'daily_full': _fmt(daily, '%Y-%m-%d', 9999),
+        'daily': _fmt(daily, '%m-%d', 7)
+    }
 
 # ==============================================================================
 #  底层逻辑 (Generators, Noise, EMA) - 保持不变
@@ -831,12 +769,11 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
     calculated_counts = merged['total_panels'] * merged['base_rate'] * (1 + noise)
     merged['defect_panel_count'] = np.round(calculated_counts).astype(int)
     
-    # 5. 结果清理
-    final_df = merged[merged['defect_panel_count'] > 0][
-        ['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count']
-    ]
+    # 5. 结果清理：不再剔除 0 产量的数据，保证数学网格完整
+    final_df = merged[['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count']]
     
     return final_df
+
 
 def _apply_scaling(df: pd.DataFrame, factor: float) -> pd.DataFrame:
     """
@@ -979,21 +916,7 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
 
 def _apply_manual_overrides(df, ovs, period_type, **kwargs):
     """
-    应用手动覆盖值到聚合数据
-    
-    【核心逻辑说明】：
-    虽然用户在配置文件 (ovs) 中输入的是“期望的覆盖不良率 (Rate)”，
-    但为了保持整个流水线数据的“物质守恒”，本函数会将用户输入的“率”
-    反向计算为具体的“不良数 (Count)”，并覆盖掉原有的不良数。
-
-    参数:
-        df: 聚合后的 DataFrame (内部包含 'total_panels' 列和各 Group 的不良数 列)
-        ovs: 覆盖值字典 {group: {period: rate}} (用户配置的覆盖率)
-        period_type: 'monthly' 或 'weekly' (用于决定时间Key的格式)
-        **kwargs: 包含 target_defects 等参数
-
-    返回:
-        应用覆盖后的 DataFrame：df 中各 Group 列的数据依然被强制更新为**不良数**，而非不良率。
+    应用手动覆盖值到聚合数据 (兼容用户不带前导零的输入)
     """
     if not ovs or df.empty:
         logging.info(f"[覆盖逻辑] 跳过覆盖: ovs={'存在' if ovs else '不存在'}, df={'非空' if not df.empty else '空'}")
@@ -1003,7 +926,7 @@ def _apply_manual_overrides(df, ovs, period_type, **kwargs):
     targets = kwargs.get('target_defects', [])
     applied_count = 0
     
-    # 遍历需要处理的缺陷组 (如 Array_Line, OLED_Mura)
+    # 遍历需要处理的缺陷组
     for g in targets:
         if g not in df.columns:
             logging.warning(f"[覆盖逻辑] ⚠️ 缺陷组 '{g}' 不在 DataFrame 列中")
@@ -1012,23 +935,28 @@ def _apply_manual_overrides(df, ovs, period_type, **kwargs):
             logging.info(f"[覆盖逻辑] 缺陷组 '{g}' 没有覆盖配置")
             continue
             
-        # 遍历 DataFrame 中的每一行（每个时间周期）
+        # 遍历 DataFrame 中的每一行
         for idx in df.index:
-            # 1. 构造用于匹配字典的 Time Key (如 '2026-02' 或 '2026-W05')
-            k = idx.strftime('%Y-%m') if period_type=='monthly' else f"{idx.isocalendar()[0]}-W{idx.isocalendar()[1]:02d}"
+            # 1. 构造用于匹配的 Time Key (支持标准填充格式与业务常用缩写格式) # 兼容 '2026-1' 与 '2026-01'
+            if period_type == 'monthly':
+                k_padded = idx.strftime('%Y-%m')             # 格式: '2026-01'
+                k_unpadded = f"{idx.year}-{idx.month}"       # 格式: '2026-1'
+            else:
+                year, week, _ = idx.isocalendar()
+                k_padded = f"{year}-W{week:02d}"             # 格式: '2026-W04'
+                k_unpadded = f"{year}-W{week}"               # 格式: '2026-W4'
             
-            # 2. 从用户的配置字典中尝试获取该周期的期望不良率
-            v = ovs[g].get(k)
+            # 2. 尝试获取期望不良率 (优先匹配标准格式，如果找不到再尝试匹配不带前导零的格式)
+            v = ovs[g].get(k_padded)
+            if v is None:
+                v = ovs[g].get(k_unpadded)
             
             # 3. 如果找到了覆盖率，执行核心的【率转数】逻辑
             if v is not None:
                 old_val = df.loc[idx, g]
-                
-                # 【关键点】: 覆盖数 = 期望不良率(v) * 当期实际入库数(total_panels)，并四舍五入取整
                 df.loc[idx, g] = int(np.round(v * df.loc[idx, 'total_panels']))
-                
                 applied_count += 1
-                logging.info(f"[覆盖逻辑] ✓ 应用覆盖: {g} @ {k}: rate: {v}")
+                logging.info(f"[覆盖逻辑] ✓ 应用覆盖: {g} @ {k_padded}: rate: {v}")
                 
     return df
 
@@ -1052,9 +980,22 @@ def _apply_code_manual_overrides(df, ovs, period_type, **kwargs):
         if not mask.any(): continue
         for idx in df[mask].index:
             d_val = df.loc[idx, 'warehousing_time']
-            k = d_val.strftime('%Y-%m') if period_type=='monthly' else f"{d_val.isocalendar()[0]}-W{d_val.isocalendar()[1]:02d}" # type: ignore
-            v = map_t.get(k)
-            if v is not None: df.loc[idx, 'defect_panel_count'] = int(np.round(v * df.loc[idx, 'total_panels']))
+            
+            # 同样在 Code 级防呆处理前导零问题 # 同步修改以防御未来 Code 级长表的 Excel 错误
+            if period_type == 'monthly':
+                k_padded = d_val.strftime('%Y-%m')
+                k_unpadded = f"{d_val.year}-{d_val.month}"
+            else:
+                year, week, _ = d_val.isocalendar()
+                k_padded = f"{year}-W{week:02d}"
+                k_unpadded = f"{year}-W{week}"
+                
+            v = map_t.get(k_padded)
+            if v is None: 
+                v = map_t.get(k_unpadded)
+                
+            if v is not None: 
+                df.loc[idx, 'defect_panel_count'] = int(np.round(v * df.loc[idx, 'total_panels']))
     return df
 
 def _apply_code_daily_manual_overrides(df, ovs):

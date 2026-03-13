@@ -43,7 +43,7 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.4
+    'S向亮线': 0.5
     # OLED_Mura
     '彩斑Mura': 0.3
 

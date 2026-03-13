@@ -12,7 +12,8 @@ from vivo_project.app.charts.sheet_lot_chart import (
     create_lot_defect_chart, 
     create_sheet_defect_chart,
     create_mapping_heatmap,
-    parse_panel_id_to_coords
+    parse_panel_id_to_coords,
+    create_sheet_stack_chart
 )
 from vivo_project.app.components.components import COLOR_MAP
 from vivo_project.core.mapping_processor import apply_hotspot_modification_to_matrix

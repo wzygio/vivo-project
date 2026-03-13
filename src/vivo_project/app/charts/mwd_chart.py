@@ -14,69 +14,12 @@ from datetime import datetime, timedelta
 # --- [新增] 图表数据空洞补齐函数 ---
 def pad_chart_dataframe(df: pd.DataFrame, title: str, group_col: str = None) -> pd.DataFrame: # type: ignore
     """
-    智能推断并补齐 DataFrame 中缺失的时间周期，填充 0 值。
-    解决“入库为0的日期在图表中被跳过而不是下沉为0”的问题。
+    [重构] 前端补齐逻辑已废弃。
+    原因：底层架构的 _pad_daily_data_to_today 已在进入计算流水线前，
+    实现了基于真实 datetime 的绝对数学连续性网格对齐。
+    此处强行按 string 推断会在跨年时引发严重的字典序与年份解析 Bug，因此直接透传即可。
     """
-    if df is None or df.empty:
-        return df
-    
-    df_padded = df.copy()
-    periods = df_padded['time_period'].unique()
-    if len(periods) <= 1:
-        return df_padded
-        
-    full_periods = []
-    
-    try:
-        if "日度" in title:
-            # 解析 %m-%d 格式
-            year = datetime.now().year
-            dates = [datetime.strptime(f"{year}-{p}", "%Y-%m-%d") for p in periods]
-            min_d, max_d = min(dates), max(dates)
-            while min_d <= max_d:
-                full_periods.append(min_d.strftime("%m-%d"))
-                min_d += timedelta(days=1)
-                
-        elif "月度" in title:
-            # 解析 YYYY-MM月 格式
-            dates = [datetime.strptime(p, "%Y-%m月") for p in periods]
-            min_d, max_d = min(dates), max(dates)
-            while min_d <= max_d:
-                full_periods.append(min_d.strftime("%Y-%m月"))
-                # 月份加1
-                if min_d.month == 12:
-                    min_d = min_d.replace(year=min_d.year+1, month=1)
-                else:
-                    min_d = min_d.replace(month=min_d.month+1)
-        else:
-            return df_padded # 周度补齐涉及跨年 ISO 历法，保持现状较安全
-        
-        # 找出缺失的 periods
-        missing_periods = [p for p in full_periods if p not in periods]
-        if not missing_periods:
-            return df_padded
-            
-        new_rows = []
-        groups = df_padded[group_col].unique() if group_col and group_col in df_padded.columns else [None]
-        
-        # 填充 0 值行
-        for p in missing_periods:
-            for g in groups:
-                row = {'time_period': p, 'defect_rate': 0.0, 'total_panels': 0}
-                if g is not None:
-                    row[group_col] = g
-                new_rows.append(row)
-                
-        if new_rows:
-            df_padded = pd.concat([df_padded, pd.DataFrame(new_rows)], ignore_index=True)
-            # ✅ [关键修复] 必须进行物理排序，否则 Plotly 的折线会来回乱穿插
-            df_padded = df_padded.sort_values(by='time_period').reset_index(drop=True)
-            
-    except Exception as e:
-        # 解析失败则退回原状，不影响页面渲染
-        pass
-        
-    return df_padded
+    return df
 
 def slice_recent_data(df, n_recent=3, time_col='time_period'):
     """保留 DataFrame 中 time_col 列最近的 n_recent 个唯一值对应的数据"""
@@ -230,7 +173,8 @@ def create_code_trend_chart(
     
     df = pad_chart_dataframe(df, title, group_col='defect_group')
     df = df.copy()
-    df['time_period'] = pd.Categorical(df['time_period'], categories=sorted(df['time_period'].unique()), ordered=True)
+    # [核心修复 2] 同步移除 Code 级的 sorted() 越权排序
+    df['time_period'] = pd.Categorical(df['time_period'], categories=df['time_period'].unique(), ordered=True)
 
     # 1. 基础柱状图
     fig = px.bar(
@@ -281,7 +225,8 @@ def create_and_update_chart(df, title, show_legend, show_yticklabels, y_range, c
         st.info(f"无 {title.replace('趋势','')} 数据。")
         return None
 
-    df['time_period'] = pd.Categorical(df['time_period'], categories=sorted(df['time_period'].unique()), ordered=True)
+    # [核心修复 3] 移除 sorted()
+    df['time_period'] = pd.Categorical(df['time_period'], categories=df['time_period'].unique(), ordered=True)
     total_rates = df.groupby('time_period', observed=False)['defect_rate'].sum().reset_index()
     total_rates.rename(columns={'defect_rate': 'total_defect_rate'}, inplace=True)
 
@@ -323,7 +268,8 @@ def create_single_trend_chart(df, title, y_range, warning_line_value=None):
         st.info(f"无 {title.replace('趋势','')} 数据。")
         return None
     
-    df['time_period'] = pd.Categorical(df['time_period'], categories=sorted(df['time_period'].unique()), ordered=True)
+    # [核心修复 4] 移除 sorted()
+    df['time_period'] = pd.Categorical(df['time_period'], categories=df['time_period'].unique(), ordered=True)
 
     fig = px.bar(
         df, x='time_period', y='defect_rate', title=title,

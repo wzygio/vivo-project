@@ -1296,7 +1296,7 @@ def _apply_defect_capping(
                 # 应用截断
                 df_code_mod['defect_rate'] = df_code_mod.apply(_row_capper, axis=1)
 
-                # [联动] 截断后重新计算 defect_panel_count
+                # [联动] 截断后重新计算 defect_panel_count（向下取整）
                 if 'total_panels' in df_code_mod.columns:
                     df_code_mod['defect_panel_count'] = np.maximum(0, np.floor(
                         df_code_mod['defect_rate'] * df_code_mod['total_panels']

@@ -134,15 +134,15 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
     
     has_trend_alerts = len(trend_alerts) > 0
     
-    # # [A] 趋势异常通报区
-    # with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
-    #     if has_trend_alerts:
-    #         with st.container(border=True):
-    #             st.error(f"🚨 趋势监测发现 {len(trend_alerts)} 项异常波动 (需关注)")
-    #             for msg in trend_alerts:
-    #                 st.markdown(msg)
-    #     else:
-    #         st.success("✅ 系统监测正常：未发现月周天良率异常。")
+    # [A] 趋势异常通报区
+    with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
+        if has_trend_alerts:
+            with st.container(border=True):
+                st.error(f"🚨 趋势监测发现 {len(trend_alerts)} 项异常波动 (需关注)")
+                for msg in trend_alerts:
+                    st.markdown(msg)
+        else:
+            st.success("✅ 系统监测正常：未发现月周天良率异常。")
 
     # [B] Lot 级良损(Spec)监控区 (只需一行调用！)
     render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
