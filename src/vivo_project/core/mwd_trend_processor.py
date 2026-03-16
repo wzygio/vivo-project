@@ -28,7 +28,6 @@ class MWDTrendProcessor:
         if panel_details_df.empty or not mwd_code_data: return None
         
         try:
-            # 0. 准备真实的每日 total_panels 骨架，并获取 target_defects
             raw_daily, last_day, target_defects = _prepare_group_raw_data(panel_details_df)
             if raw_daily is None: return None
 
@@ -36,9 +35,6 @@ class MWDTrendProcessor:
             w_vals = config.processing.get('group_weekly_values', {})
             d_vals = config.processing.get('group_daily_values', {})
 
-            # =================================================================
-            # 💉 注入函数 1: Group 级的特殊 Step 1 (从 Code 级大盘注入)
-            # =================================================================
             def _inject_code_daily_as_base(df_proc: pd.DataFrame) -> pd.DataFrame:
                 skeleton = df_proc[['total_panels']].copy()
                 code_daily = mwd_code_data.get('daily_full')
@@ -52,33 +48,24 @@ class MWDTrendProcessor:
                         res.loc[idx, g] = sub[sub['defect_group'] == g]['defect_panel_count'].sum()
                 return res
 
-            # =================================================================
-            # 💉 注入函数 2: 适配器 (解决 Group 截断器只有 2 个返回值的问题)
-            # =================================================================
-            def _group_regulator_adapter(m_df, w_df, d_df, **kw):
-                rm, rw = TrendRegulator.regulate_monthly_and_weekly(m_df, w_df, **kw)
-                # Group 级不需要日度截断，所以原样透传 d_df 满足流水线的 3 返回值要求
-                return rm, rw, d_df
-
-            # 🚀 统一执行大一统混合流水线
+            # [架构精简] 彻底废弃 Group 级趋势调节器适配器
             final_monthly, final_weekly, final_daily = _execute_unified_pipeline(
                 raw_daily_df=raw_daily,
                 last_day=last_day,
-                calc_daily_ema_func=_inject_code_daily_as_base, # 注入特殊的基底生成器
+                calc_daily_ema_func=_inject_code_daily_as_base,
                 agg_funcs=(
                     lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=True),
                     lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=True)
                 ),
-                reg_func=_group_regulator_adapter,              # 注入调节器适配器
+                reg_func=lambda d, **kw: d,                     
                 override_funcs=(_apply_manual_overrides, _apply_manual_overrides),
                 override_vals=(m_vals, w_vals),
                 gen_daily_func=_generate_daily_from_weekly_baseline,
                 scaling_factor=scaling_factor,
                 volatility=volatility,
-                target_defects=target_defects                   # 透传关键参数给生成器
+                target_defects=target_defects                   
             )
 
-            # 最终格式化与日度覆盖
             daily = _apply_daily_manual_overrides(final_daily, d_vals, target_defects)
             return _format_group_results(final_monthly, final_weekly, daily, target_defects)
             
@@ -103,36 +90,31 @@ class MWDTrendProcessor:
         if panel_details_df.empty: return None
         
         try:
-            # 1. 准备 Raw Data
             raw_daily, last_day = _prepare_code_raw_data(panel_details_df)
             if raw_daily is None: return None
 
             agg_monthly_func = lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=False)
             agg_weekly_func  = lambda d, t: _safe_trend_aggregator(d, t, 'W', is_group_level=False)
 
-            # 2. 准备配置参数
             m_vals = config.processing.get('code_monthly_values', {})
             w_vals = config.processing.get('code_weekly_values', {})
             d_vals = config.processing.get('code_daily_values', {})
 
-            # 3. 统一执行大一统混合流水线
             monthly, weekly, daily = _execute_unified_pipeline(
                 raw_daily_df=raw_daily,
                 last_day=last_day,
                 calc_daily_ema_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility),
                 agg_funcs=(agg_monthly_func, agg_weekly_func),
-                reg_func=TrendRegulator.regulate_code_mwd,
+                reg_func=TrendRegulator.regulate_code_daily_base,
                 override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
                 override_vals=(m_vals, w_vals),
                 gen_daily_func=_generate_code_daily_from_weekly_baseline,
-                scaling_factor=1.0, # EMA底层已进行过倍率缩放，为防止双重缩放，此处传1.0
+                scaling_factor=1.0, 
                 volatility=volatility,
                 warning_lines=warning_lines
             )
 
-            # 4. 通用后处理
             daily = _apply_code_daily_manual_overrides(daily, d_vals)
-
             return _format_code_results(monthly, weekly, daily)
 
         except Exception as e:
@@ -154,41 +136,41 @@ def _execute_unified_pipeline(
     **kwargs
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    [重构 V3.2] 大一统混合流水线 (Unified Hybrid Pipeline)
-    包含智能旁路与防黑洞机制。
+    [重构 V4.0] 大一统混合流水线 (Unified Hybrid Pipeline)
+    执行顺序翻转：EMA 洗底 -> 底层物理截断 -> 向上聚合 W/M -> 宏观定调与重塑
     """
-    # 0. T-1 过滤
     df_processing, last_day = _apply_t1_filtering(raw_daily_df, last_day)
     if df_processing.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     
-    # 🚀 0.5 骨架对齐到今天 (底层彻底解决缺失数据问题)
     is_group = 'defect_desc' not in df_processing.columns
     df_processing = _pad_daily_data_to_today(df_processing, is_group)
     
-    # ⚠️ 关键修正：将后续聚合的锚点强制修改为今天，保证最近的空周/月也被正确纳入聚合
     eval_last_day = pd.to_datetime(dt.now().date())
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
     
-    # --- Step 2: 向上聚合 ---
+    # =========================================================================
+    # 🛑 [核心重构] 先截断，再聚合
+    # =========================================================================
+    # --- Step 1.5: 底层数据软截断 (Regulation) ---
+    reg_daily = reg_func(ema_daily_base, **kwargs) # 仅针对底层日度基底拦截压制
+    
+    # --- Step 2: 严格向上聚合 ---
     agg_monthly_func, agg_weekly_func = agg_funcs
     ov_func_m, ov_func_w = override_funcs
     val_m, val_w = override_vals
-
-    # --- Step 2: 向上聚合 ---
-    raw_monthly = agg_monthly_func(ema_daily_base, eval_last_day) # <-- 使用新的锚点
-    raw_weekly = agg_weekly_func(ema_daily_base, eval_last_day)   # <-- 使用新的锚点
+    
+    # [物理定律保障]: 现在的 W 和 M 完全是由经过 Spec 截断的安全日度数据累加而成，杜绝数据倒挂
+    reg_monthly = agg_monthly_func(reg_daily, eval_last_day) 
+    reg_weekly = agg_weekly_func(reg_daily, eval_last_day)   
     
     factor = kwargs.get('scaling_factor', 1.0)
     if factor != 1.0:
-        raw_monthly = _apply_scaling(raw_monthly, factor)
-        raw_weekly = _apply_scaling(raw_weekly, factor)
+        reg_monthly = _apply_scaling(reg_monthly, factor)
+        reg_weekly = _apply_scaling(reg_weekly, factor)
         
-    # 👇 [修改此处 1]：增加接收 reg_daily，并将 ema_daily_base 传入截断器
-    reg_monthly, reg_weekly, reg_daily = reg_func(raw_monthly, raw_weekly, ema_daily_base, **kwargs)
-    
     # --- Step 3: 人工定调 (周度为主控) ---
     period_kw_w = {'period_type': 'weekly'}
     valid_ov_keys = ['target_defects']
@@ -425,26 +407,6 @@ def _pad_daily_data_to_today(df: pd.DataFrame, is_group_level: bool) -> pd.DataF
         merged['defect_panel_count'] = merged['defect_panel_count'].fillna(0).astype(int)
         return merged
     
-def _calc_group_ema_noise(
-    raw_df: pd.DataFrame, 
-    target_defects: list | None, 
-    span: int, 
-    scale: float,
-    volatility: float
-) -> pd.DataFrame:
-    """Group 级 EMA 计算 + 噪声注入"""
-    # 添加类型检查
-    if target_defects is None:
-        return raw_df.copy()
-    
-    df_ema = raw_df.copy()
-    for group in target_defects:
-        if group in df_ema.columns:
-            smoothed = _calculate_adaptive_shadow_ema(
-                df_ema[group].values, df_ema['total_panels'].values, span
-            )
-            df_ema[group] = np.round(np.array(smoothed) * scale * df_ema['total_panels']).astype(int)
-    return _inject_deterministic_noise(df_ema, target_defects, volatility)
 
 def _calc_code_ema_noise(
     raw_df: pd.DataFrame, 
@@ -527,7 +489,6 @@ def _calc_code_ema_noise(
     
     ema_df['defect_panel_count'] = np.round(ema_df['attenuated_rate'] * ema_df['total_panels']).astype(int)
     return _inject_deterministic_noise_code_level(ema_df, volatility)
-
 
 # ==============================================================================
 #  数据准备与格式化 (Helpers)
@@ -707,7 +668,7 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
                 noise = np.sin(noise_seed) * volatility
                 
                 # 计算最终数量
-                final = int(np.round(base_rate * (1 + noise) * day_total))
+                final = int(np.floor(base_rate * (1 + noise) * day_total))
                 df_gen.loc[day_idx, group] = final
                 
     df_gen.drop(columns=['week_period'], inplace=True)
@@ -760,20 +721,18 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
     def _stable_hash(s): return sum(ord(c) for c in str(s))
     code_hash = merged['defect_desc'].map(_stable_hash) % 10000
     
-    # 公式: sin(Time * Large_Prime + Code_Hash)
-    # 这确保了同一 Code 在相邻两天的 noise 是完全随机独立的
+    # 公式: sin(Time * Large_Prime + Code_Hash)。这确保了同一 Code 在相邻两天的 noise 是完全随机独立的
     phase = (ts_vector * scramble_factor) + code_hash
     noise = np.sin(phase) * volatility
     
     # 计算最终数量
     calculated_counts = merged['total_panels'] * merged['base_rate'] * (1 + noise)
-    merged['defect_panel_count'] = np.round(calculated_counts).astype(int)
+    merged['defect_panel_count'] = np.floor(calculated_counts).astype(int)
     
     # 5. 结果清理：不再剔除 0 产量的数据，保证数学网格完整
     final_df = merged[['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count']]
     
     return final_df
-
 
 def _apply_scaling(df: pd.DataFrame, factor: float) -> pd.DataFrame:
     """
@@ -884,7 +843,6 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
         # ======================================================================
         # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)
         # ======================================================================
-        
         is_surge_abs = abs(rr - p_base) > 0.05 # A. 绝对值容差检测: 波动幅度不能超过 ±0.02 (2%)
         is_surge_ratio = (rr > p_base * 5.0) # B. 相对值容差检测: 波动幅度不能超过 3 倍
         is_plunge_ratio = (rr < p_base / 3.0) or (rr < 1e-4) # C. 相对值容差检测: 波动幅度不能超过 1/3 倍 或 非常小 (1e-4)
@@ -893,21 +851,13 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
         
         if is_abnormal:
             # [异常处理] 
-            # 遇到暴涨或暴跌：
-            # 1. 动量 (t_n, t_d) 强保持：只吸收极少量的当前数据 (alpha * p_base * rd)
-            #    这相当于假设"真实情况"依然维持在 p_base 水平
             cn = p_base * rd # 使用昨日不良数(根据昨日动量计算)
             t_n = alpha * cn + (1-alpha) * t_n # 历史不良动量(不良数)
             t_d = alpha * rd + (1-alpha) * t_d # 历史入库动量(入库数)
-            
-            # 2. 输出值 (res) 依旧使用真实值计算
-            dn = alpha * rn + (1-alpha) * t_n
-            dd = alpha * rd + (1-alpha) * t_d
-            res.append(dn/dd if dd>0 else 0)
+            res.append(t_n/t_d if t_d>0 else 0)
             
         else:
             # [正常处理]
-            # 正常更新 EMA
             t_n = alpha * rn + (1-alpha) * t_n
             t_d = alpha * rd + (1-alpha) * t_d
             res.append(t_n/t_d if t_d>0 else 0)

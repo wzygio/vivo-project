@@ -122,7 +122,7 @@ def render_lot_top20_section(all_data: dict, valid_lot_ids: list):
     all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
     df_in_scope = all_codes_df[all_codes_df['lot_id'].isin(valid_lot_ids)]
 
-    selected_code_info = create_code_selection_ui(source_data=df_in_scope, key_prefix="lot_focus_table_filtered", rate_threshold=0.0005)
+    selected_code_info = create_code_selection_ui(source_data=df_in_scope, key_prefix="lot_focus_table_filtered")
 
     if selected_code_info.get("code"):
         group, code = selected_code_info["group"], selected_code_info["code"]
@@ -227,7 +227,7 @@ def render_sheet_top20_section(all_data: dict, valid_sheet_ids: list):
     all_codes_df = pd.concat(code_details_dict.values(), ignore_index=True)
     df_in_scope = all_codes_df[all_codes_df['sheet_id'].isin(valid_sheet_ids)]
 
-    selected_code_info = create_code_selection_ui(source_data=df_in_scope, key_prefix="sheet_focus", rate_threshold=0.0005)
+    selected_code_info = create_code_selection_ui(source_data=df_in_scope, key_prefix="sheet_focus")
 
     if selected_code_info.get("code"):
         group, code = selected_code_info["group"], selected_code_info["code"]

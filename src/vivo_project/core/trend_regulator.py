@@ -179,71 +179,63 @@ class TrendRegulator:
         return monthly_regulated, weekly_regulated
 
     @staticmethod
-    def regulate_code_mwd(
-        monthly_df: pd.DataFrame, 
-        weekly_df: pd.DataFrame,
+    def regulate_code_daily_base(
         daily_df: pd.DataFrame,
         **kwargs
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> pd.DataFrame:
         """
-        Code 级智能调节 (V3.0 - MWD 三维立体截断)
-        核心逻辑：对月度、周度、日度全方位应用规格线截断，防止任何层级逃逸。
+        Code 级智能调节 (V4.1 - 纯粹底层截断)
+        核心逻辑：剥离了所有聚合职责，仅专注对底层的日度 EMA 数据应用向量化规格线截断。
         """
-        if monthly_df.empty and weekly_df.empty and daily_df.empty:
-            return monthly_df, weekly_df, daily_df
+        if daily_df.empty:
+            return daily_df
 
-        logging.info("启动 Code 级智能趋势调节器 (全局 Spec 截断模式 - MWD全覆盖)...")
+        logging.info("启动 Code 级智能趋势调节器 (单一职责：底层向量化单点截断)...")
 
-        monthly_regulated = monthly_df.copy()
-        weekly_regulated = weekly_df.copy()
-        daily_regulated = daily_df.copy()
-        
         warning_lines = kwargs.get('warning_lines', {})
         if not warning_lines:
             logging.warning("未获取到 warning_lines 规格线，Code 级截断被跳过。")
-            return monthly_regulated, weekly_regulated, daily_regulated
+            return daily_df
 
-        def _apply_spec_capping(df: pd.DataFrame, freq_name: str) -> pd.DataFrame:
-            if df.empty: return df
-            df_out = df.copy()
-            
-            capping_count = 0
-            for idx in df_out.index:
-                code = str(df_out.loc[idx, 'defect_desc']).strip()
-                
-                if code == 'NoDefect' or code not in warning_lines:
-                    continue
-                    
-                spec_limit = warning_lines[code]
-                panels = df_out.loc[idx, 'total_panels']
-                if panels <= 0: continue # type: ignore
-                    
-                count = df_out.loc[idx, 'defect_panel_count']
-                rate = count / panels # type: ignore
-                
-                # 如果超标，触发确定性软截断
-                if rate > spec_limit:
-                    t_val = df_out.loc[idx, 'warehousing_time']
-                    t_str = t_val.strftime('%Y%m%d') if pd.notnull(t_val) else str(idx) # type: ignore
-                    
-                    hash_str = f"{code}_{t_str}_{freq_name}"
-                    hash_val = (hash(hash_str) % 10000) / 10000.0 
-                    
-                    safe_rate = (spec_limit * 0.8) + (hash_val * (spec_limit * 0.1))
-                    new_count = int(np.round(safe_rate * panels))
-                    
-                    if new_count < count: # type: ignore
-                        df_out.loc[idx, 'defect_panel_count'] = new_count
-                        capping_count += 1
-                        
-            if capping_count > 0:
-                logging.info(f"[{freq_name} 维度] 成功应用全局 Spec 截断，共压制 {capping_count} 处异常。")
-                
-            return df_out
-
-        # 分别对月度、周度、日度执行压制
-        monthly_regulated = _apply_spec_capping(monthly_regulated, 'monthly')
-        weekly_regulated = _apply_spec_capping(weekly_regulated, 'weekly')
-        daily_regulated = _apply_spec_capping(daily_regulated, 'daily') # [核心新增]
+        # =====================================================================
+        # 🚀 向量化底层截断 (Vectorized Daily Capping)
+        # =====================================================================
+        daily_regulated = daily_df.copy()
         
-        return monthly_regulated, weekly_regulated, daily_regulated
+        # 1. 映射 warning_lines 到 DataFrame
+        daily_regulated['spec_limit'] = daily_regulated['defect_desc'].map(warning_lines).fillna(1.0)
+        
+        # 2. 计算当前良率并定位超标行
+        daily_regulated['current_rate'] = np.where(
+            daily_regulated['total_panels'] > 0, 
+            daily_regulated['defect_panel_count'] / daily_regulated['total_panels'], 
+            0.0
+        )
+        mask_exceed = daily_regulated['current_rate'] > daily_regulated['spec_limit']
+        
+        capping_count = mask_exceed.sum()
+        
+        if capping_count > 0:
+            exceed_df = daily_regulated[mask_exceed].copy()
+            
+            # 向量化哈希生成防呆随机抖动
+            ts_vec = (exceed_df['warehousing_time'].astype('int64') // 10**9).astype(int)
+            def _stable_hash(s): return sum(ord(c) for c in str(s))
+            code_hash_vec = exceed_df['defect_desc'].map(_stable_hash)
+            
+            hash_val = ((ts_vec + code_hash_vec) % 10000) / 10000.0
+            safe_rates = exceed_df['spec_limit'] * 0.8 + (hash_val * exceed_df['spec_limit'] * 0.1)
+            
+            # 3. 计算压制后的 count 并安全覆盖
+            new_counts = np.floor(safe_rates * exceed_df['total_panels']).astype(int)
+            final_counts = np.minimum(new_counts, exceed_df['defect_panel_count'])
+            daily_regulated.loc[mask_exceed, 'defect_panel_count'] = final_counts
+            
+            logging.info(f"[daily 维度] 成功应用高性能向量化 Spec 截断，共压制 {capping_count} 处异常。")
+        else:
+            logging.info(f"[daily 维度] 底层数据安全，无需截断。")
+            
+        # 清理临时计算列
+        daily_regulated.drop(columns=['spec_limit', 'current_rate'], inplace=True)
+
+        return daily_regulated

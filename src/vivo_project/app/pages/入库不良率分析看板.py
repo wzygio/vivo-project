@@ -72,7 +72,9 @@ product_dir = SessionManager.get_product_dir()
 render_page_header("📊 入库不良率分析看板", active_config)
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件 (注入 config 用于刷新逻辑)
-render_trend_override_uploader(active_config, product_dir)
+query_params = st.query_params
+if query_params.get("admin") == "true":
+    render_trend_override_uploader(active_config, product_dir)
 ExcelService.inject_excel_overrides_to_config(active_config, product_dir)
 
 # --- 2 全局数据加载 ---
@@ -134,15 +136,16 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
     
     has_trend_alerts = len(trend_alerts) > 0
     
-    # [A] 趋势异常通报区
-    with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
-        if has_trend_alerts:
-            with st.container(border=True):
-                st.error(f"🚨 趋势监测发现 {len(trend_alerts)} 项异常波动 (需关注)")
-                for msg in trend_alerts:
-                    st.markdown(msg)
-        else:
-            st.success("✅ 系统监测正常：未发现月周天良率异常。")
+    if query_params.get("admin") == "true":
+        # [A] 趋势异常通报区
+        with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
+            if has_trend_alerts:
+                with st.container(border=True):
+                    st.error(f"🚨 趋势监测发现 {len(trend_alerts)} 项异常波动 (需关注)")
+                    for msg in trend_alerts:
+                        st.markdown(msg)
+            else:
+                st.success("✅ 系统监测正常：未发现月周天良率异常。")
 
     # [B] Lot 级良损(Spec)监控区 (只需一行调用！)
     render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
@@ -166,8 +169,7 @@ master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 # 2. 渲染筛选器
 selection = create_code_selection_ui(
     source_data=master_df,
-    key_prefix="unified_focus",
-    rate_threshold=0 
+    key_prefix="unified_focus"
 )
 
 # 如果没选 Code，下方不显示

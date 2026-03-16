@@ -319,7 +319,6 @@ def prepare_union_data_for_filter(
         if not trend_df.empty:
             # 按 Code 分组取最大不良率
             valid_trend = trend_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
-            valid_trend = valid_trend[valid_trend > 0.0001] # 0.01%
             for (grp, code), rate in valid_trend.items():
                 candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
 
@@ -331,7 +330,6 @@ def prepare_union_data_for_filter(
             lot_full = pd.concat(lot_dfs, ignore_index=True)
             if not lot_full.empty:
                 valid_lot = lot_full.groupby(['defect_group', 'defect_desc'])['defect_rate'].max()
-                valid_lot = valid_lot[valid_lot > 0.0002] # 0.02%
                 for (grp, code), rate in valid_lot.items():
                     candidates[(grp, code)] = max(candidates.get((grp, code), 0), rate)
 
@@ -339,7 +337,7 @@ def prepare_union_data_for_filter(
     if mapping_data is not None and not mapping_data.empty:
         # Mapping 只有 count，没有 rate
         counts = mapping_data.groupby(['defect_group', 'defect_desc']).size()
-        valid_map = counts[counts > 10]
+        valid_map = counts
         for (grp, code), _ in valid_map.items(): # type: ignore
             # 如果该 Code 仅在 Mapping 中出现，给一个默认权重以便排序
             # 如果它也在 Trend/Lot 中，保留原有的 rate

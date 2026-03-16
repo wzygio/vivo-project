@@ -54,6 +54,23 @@ def calculate_sheet_defect_rates(
         )
         if not raw_results: return None
 
+        # =====================================================================
+        # 🛑 [DEBUG] 奉命行事：核查 L3MR5C037 的真实 Sheet 存活情况
+        # =====================================================================
+        target_lot = "L3MR5C037"
+        if target_lot in sheet_base_filtered['lot_id'].values:
+            base_sheets = sheet_base_filtered[sheet_base_filtered['lot_id'] == target_lot]['sheet_id'].tolist()
+            logging.warning(f"🔍 [追踪验证] 基础花名册中 '{target_lot}' 共有 {len(base_sheets)} 张物理 Sheet: {base_sheets}")
+
+            # 检查这批 Sheet 在 raw_results['code_level_details'] 里的存活情况 (即 V5.1 的发牌名单)
+            survivors = set()
+            for g, df_code in raw_results['code_level_details'].items():
+                if not df_code.empty and 'lot_id' in df_code.columns:
+                    survivors.update(df_code[df_code['lot_id'] == target_lot]['sheet_id'].tolist())
+            logging.warning(f"🔍 [追踪验证] 经历了左连接后，该 Lot 在原始缺陷表中存活的 Sheet 仅有 {len(survivors)} 张: {list(survivors)}")
+            logging.warning(f"🔍 [结论推导] 如果运行 V5.1，不良将被全部砸在这 {len(survivors)} 张 Sheet 上。")
+        # =====================================================================
+        
         # 🚀 4. 分发数据 (核心变动：彻底取代 _simulate_concentration)
         sim_code_details = _distribute_sheet_from_lot(
             sheet_raw_results=raw_results, 
@@ -103,8 +120,7 @@ def calculate_sheet_defect_rates(
         final_results = {
             "group_level_summary_for_table": ui_df,
             "group_level_summary_for_chart": chart_df,
-            "code_level_details": final_code_details,
-            "full_sheet_base_info": sheet_base 
+            "code_level_details": final_code_details
         }
         
         logging.info("Sheet级计算完成。")
@@ -456,105 +472,118 @@ def _distribute_sheet_from_lot(
     processing_config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V5.1 - Lot向下发牌模型 (均匀无放回版)]
-    将 Lot 级已确定的不良整数，利用无放回抽样(Without Replacement)均匀地投递到名下的 Sheet 中。
-    确保微小的不良量能被打散到尽可能多的 Sheet 中，避免极端聚集。
+    [辅助函数 V5.3 - 泊松/多项式散布 + 软熔断版]
+    利用多项式分布自然散布不良，并设定单卡最高不良率熔断线。
+    完美兼顾自然的参差波动与“物理常识防呆”，杜绝平头哥与超高柱。
     """
-    logging.info("开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 均匀平铺分派)...")
+    logging.info("开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 泊松自然散布 V5.3)...")
     config = processing_config.get('sheet_hotspot_config', {})
     if not config.get('enable', False):
         return sheet_raw_results['code_level_details']
     
-    cfg_hide = config.get('hide_hotspot_config', {})
-    current_fluc = cfg_hide.get("fluctuation_sheet", 0.1)
-    
-    sim_sheet_codes = sheet_raw_results["code_level_details"].copy()
-    seed = config.get('random_seed', 2025)
+    seed = config.get('random_seed', 2026)
     rng = np.random.default_rng(seed)
     
+    # 1. 获取全局花名册
+    base_info = sheet_raw_results.get("group_level_summary_for_chart") 
+    if base_info is None:
+        return sheet_raw_results['code_level_details']
+        
+    if base_info.index.name == 'sheet_id':
+        base_info = base_info.reset_index()
+        
+    req_cols = ['sheet_id', 'lot_id', 'total_panels', 'warehousing_time']
+    if 'array_input_time' in base_info.columns: req_cols.append('array_input_time') 
+    if 'pass_rate' in base_info.columns: req_cols.append('pass_rate')               
+    sheet_roster = base_info[req_cols].copy()
+    
+    sim_sheet_codes = {}
     lot_code_details = lot_results.get("code_level_details", {})
     
-    for group, df_sheet_raw in sim_sheet_codes.items():
-        if df_sheet_raw.empty: continue
-        
-        df_lot = lot_code_details.get(group)
+    # 2. 遍历真理来源
+    for group, df_lot in lot_code_details.items():
         if df_lot is None or df_lot.empty:
-            # 如果 Lot 级没有这个 group 的数据，名下的 Sheet 也必须全军覆没 (置0)
-            df_sheet_mod = df_sheet_raw.copy()
-            df_sheet_mod['defect_panel_count'] = 0
-            df_sheet_mod['defect_rate'] = 0.0
-            sim_sheet_codes[group] = df_sheet_mod
+            sim_sheet_codes[group] = pd.DataFrame() 
             continue
             
         processed_codes_list = []
-        for code_desc, df_sheet_code in df_sheet_raw.groupby('defect_desc'):
-            df_sheet_mod = df_sheet_code.copy()
-            df_sheet_mod['defect_panel_count'] = 0 # 默认洗白为0
+        
+        for code_desc, df_lot_code in df_lot.groupby('defect_desc'):
+            lot_tokens = df_lot_code[['lot_id', 'defect_panel_count', 'defect_group', 'defect_desc']]
+            df_sheet_mod = pd.merge(sheet_roster, lot_tokens, on='lot_id', how='inner', suffixes=('', '_lot')) 
             
-            # 找到对应的 Lot 级 Code 数据
-            df_lot_code = df_lot[df_lot['defect_desc'] == code_desc]
-            if df_lot_code.empty:
-                df_sheet_mod['defect_rate'] = 0.0
-                processed_codes_list.append(df_sheet_mod)
-                continue
+            if df_sheet_mod.empty: continue
                 
-            # 将 Lot 的不良数转成字典 {lot_id: token_count}
-            lot_token_dict = df_lot_code.set_index('lot_id')['defect_panel_count'].to_dict()
+            df_sheet_mod.rename(columns={'defect_panel_count': 'lot_token_count'}, inplace=True)
+            df_sheet_mod['defect_panel_count'] = 0 
             
-            # 按 lot_id 进行局部分发
+            # =================================================================
+            # 🎲 [核心算法：多项式散布 + 软熔断]
+            # =================================================================
             for lot_id, group_df in df_sheet_mod.groupby('lot_id'):
-                token_count = lot_token_dict.get(lot_id, 0)
-                if token_count <= 0: continue # 这个 Lot 没有不良，其名下 Sheet 全为 0
-                    
-                # 如果该 Lot 下 Sheet 的总物理容量为 0，没法分发，直接跳过
-                if group_df['total_panels'].sum() <= 0: continue
+                token_count = group_df['lot_token_count'].iloc[0]
+                if token_count <= 0: continue
                 
-                # 开始发牌: 基础权重由 Sheet 的容量和随机波动因子决定
+                total_capacity = group_df['total_panels'].sum()
+                if total_capacity <= 0: continue
+                
+                # A. 计算软熔断上限 (Soft Cap)
+                # 设定单卡极限为平均良率的 2.5 倍 (或者至少允许 1 个，最多不超过自身容量)
+                avg_rate = token_count / total_capacity
+                cap_rate = min(avg_rate * 2.5, 1.0) 
+                
                 entity_capacities = group_df['total_panels'].values
-                random_factors = rng.uniform(1 - current_fluc, 1 + current_fluc, size=len(group_df))
-                weights = entity_capacities * random_factors
+                max_allowed = np.ceil(entity_capacities * cap_rate).astype(int)
+                max_allowed = np.clip(max_allowed, 1, entity_capacities) # type: ignore
                 
-                # 🎲 核心投递：无放回轮询抽样 (Round-Robin without replacement)
                 allocated_counts = np.zeros(len(group_df), dtype=int)
-                remaining_tokens = token_count
+                remaining_tokens = int(token_count)
                 
+                # B. 散布与溢出重分配 (Scatter & Re-distribute)
                 while remaining_tokens > 0:
-                    # 找出还没装满的 Sheet 索引
-                    available_indices = np.where(allocated_counts < entity_capacities)[0]
-                    if len(available_indices) == 0:
-                        break # 所有 Sheet 都装满了，强制退出
-                        
-                    # 这一轮最多能发的牌数（不能超过剩余牌数，也不能超过还有空位的 Sheet 数）
-                    num_to_distribute = min(remaining_tokens, len(available_indices))
+                    # 找出还没爆满的 Sheet
+                    valid_mask = allocated_counts < max_allowed
+                    valid_indices = np.where(valid_mask)[0]
                     
-                    # 计算这些存活 Sheet 的抽取权重
-                    curr_weights = weights[available_indices]
-                    weight_sum = curr_weights.sum()
-                    if weight_sum > 0:
-                        curr_probs = curr_weights / weight_sum
+                    if len(valid_indices) == 0: break # 全满了，强制停止
+                        
+                    # 按照剩余容量计算每次接球的概率
+                    rem_capacities = max_allowed[valid_indices] - allocated_counts[valid_indices]
+                    probs = rem_capacities / rem_capacities.sum()
+                    
+                    # 核心：多项式扔骰子 (一次性把剩下的不良按概率扔进篮子里)
+                    draws = rng.multinomial(remaining_tokens, probs)
+                    allocated_counts[valid_indices] += draws
+                    
+                    # C. 熔断截断：收回溢出的不良，下一轮重新发
+                    overflow = allocated_counts - max_allowed
+                    overflow_mask = overflow > 0
+                    
+                    if overflow_mask.any():
+                        remaining_tokens = overflow[overflow_mask].sum() # 收回溢出
+                        allocated_counts[overflow_mask] = max_allowed[overflow_mask] # 削平超高柱
                     else:
-                        curr_probs = np.ones(len(available_indices)) / len(available_indices)
-                        
-                    # 无放回抽样：确保这一轮里，挑出来的 Sheet 互不相同（绝对均匀平铺）
-                    chosen_indices = rng.choice(available_indices, size=num_to_distribute, replace=False, p=curr_probs)
-                    
-                    # 给挑中的 Sheet 每人发 1 个不良
-                    allocated_counts[chosen_indices] += 1
-                    remaining_tokens -= num_to_distribute
+                        remaining_tokens = 0 # 完美发完
                 
-                # 写回 DataFrame
                 df_sheet_mod.loc[group_df.index, 'defect_panel_count'] = allocated_counts
-                
-            # 重新计算良率
+            # =================================================================
+            
             df_sheet_mod['defect_rate'] = np.where(
                 df_sheet_mod['total_panels'] > 0,
                 df_sheet_mod['defect_panel_count'] / df_sheet_mod['total_panels'],
                 0.0
             )
-            processed_codes_list.append(df_sheet_mod)
             
+            final_cols = ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time', 'defect_group', 'defect_desc', 'defect_panel_count', 'defect_rate', 'total_panels', 'pass_rate']
+            final_cols = [c for c in final_cols if c in df_sheet_mod.columns]
+            
+            if not df_sheet_mod.empty:
+                processed_codes_list.append(df_sheet_mod[final_cols])
+        
         if processed_codes_list:
             sim_sheet_codes[group] = pd.concat(processed_codes_list, ignore_index=True)
+        else:
+            sim_sheet_codes[group] = pd.DataFrame()
             
     return sim_sheet_codes
 # ==============================================================================
@@ -880,8 +909,8 @@ def _override_rates(
         desc_to_group_map: dict
     ) -> Dict[str, pd.DataFrame]:
         """
-        [核心函数 V1.7 - 增加覆盖审计与追踪] 使用外部数据覆盖模拟的不良率。
-        增加了针对特定丢失 ID 的调试追踪和最终的未命中报告。
+        [核心函数 V1.8 - 物理常识防呆版] 使用外部数据覆盖模拟的不良率。
+        彻底移除了无脑的“暴力插入”。现在系统会严格审查实体是否在当前时间窗口的物理基座中存活。
         """
         if override_data_df is None or override_data_df.empty:
             logging.info(f"无覆盖数据提供 ({entity_id_col} 级别)，跳过覆盖步骤。")
@@ -898,28 +927,28 @@ def _override_rates(
             logging.error(f"覆盖数据 DataFrame ({entity_id_col}) 缺少必需列: {missing_cols}，无法执行覆盖。")
             return simulated_code_details_dict
 
-        logging.info(f"开始使用外部数据覆盖 {entity_id_col} 级别的不良率 (替换+插入)...")
+        logging.info(f"开始使用外部数据覆盖 {entity_id_col} 级别的不良率 (严格审查模式)...")
         
         # --- [审计准备] ---
-        # 1. 记录 Excel 中所有的 ID，用于最后对比
         all_config_ids = set(override_data_df[entity_id_col].astype(str).str.strip().unique())
-        # 2. 记录成功处理（替换或插入）的 ID
         processed_ids = set()
-        # 3. 定义“重点嫌疑人”列表 (根据您的反馈)
         watchlist = ['L3MR5A0B023', 'L3MR5A0B026']
 
-        # 复制副本
         final_results_dict = {group: df.copy() for group, df in simulated_code_details_dict.items() if df is not None}
         total_replaced_count = 0
         total_inserted_count = 0
 
-        # --- 准备模板 ---
+        # --- 准备模板与物理花名册 ---
         all_sim_df_list = [df for df in final_results_dict.values() if not df.empty]
         if not all_sim_df_list:
-            logging.error("无法执行插入，因为模拟数据中没有任何可用的模板行。")
+            logging.error("无法执行任何操作，因为当前时间窗口内无任何物理基底数据。")
             return simulated_code_details_dict
         
         all_sim_df = pd.concat(all_sim_df_list, ignore_index=True)
+        
+        # 🛑 [核心防御: 提取当前时间窗口的合法实体名册]
+        valid_entity_ids = set(all_sim_df[entity_id_col].astype(str).str.strip().unique())
+        
         generic_template_row = all_sim_df.iloc[0]
         lot_specific_templates = all_sim_df.drop_duplicates(subset=['lot_id']).set_index('lot_id')
         
@@ -929,43 +958,39 @@ def _override_rates(
         # --- 遍历覆盖 DataFrame ---
         for index, override_row in override_data_df.iterrows():
             target_desc = str(override_row['defect_desc']).strip()
-            # 确保 ID 转字符串并去空格，防止 "ID " != "ID"
             target_entity_id = str(override_row[entity_id_col]).strip() 
             target_lot_id = override_row['lot_id']
             override_rate = override_row[rate_col_name]
 
-            # --- [调试追踪] 如果是嫌疑人，打印详细路径 ---
             is_target_trace = target_entity_id in watchlist
             if is_target_trace:
-                logging.warning(f"!!! [追踪] 发现目标 ID: {target_entity_id}")
+                logging.warning(f"!!! [追踪] 发现 Excel 指令 ID: {target_entity_id}")
                 logging.warning(f"    - 缺陷描述: '{target_desc}'")
+
+            # =================================================================
+            # 🛑 [防呆拦截拦截机制生效]
+            # 拒绝跨时空的幽灵实体插入，捍卫物质守恒定律！
+            # =================================================================
+            if target_entity_id not in valid_entity_ids:
+                if is_target_trace:
+                    logging.error(f"    -> [拦截] 实体 '{target_entity_id}' 在当前数据底座中物理不存在！拒绝凭空捏造。")
+                else:
+                    logging.debug(f"跳过覆盖: 实体 '{target_entity_id}' 在当前窗口内不存在或已被过滤。")
+                continue # 直接跳过，不计入 processed_ids
 
             # 1. 查找目标 Group
             target_group = desc_to_group_map.get(target_desc)
             if not target_group:
-                if is_target_trace:
-                    logging.error(f"    -> [失败] 映射失败！'{target_desc}' 未在 desc_to_group_map 中找到对应的 Group。")
-                    logging.error(f"    -> 当前可用映射 keys (前10个): {list(desc_to_group_map.keys())[:10]}")
-                else:
-                    logging.debug(f"跳过匹配：未找到缺陷描述 '{target_desc}' 对应的 Group。")
                 continue
-
-            if is_target_trace:
-                logging.warning(f"    - 映射 Group: '{target_group}'")
 
             # 2. 查找目标 Group 的 DataFrame
             target_df = final_results_dict.get(target_group)
             if target_df is None:
-                if is_target_trace:
-                    logging.error(f"    -> [失败] Group '{target_group}' 在 simulated_code_details_dict 中不存在 Key。")
-                else:
-                    logging.warning(f"跳过匹配：Group '{target_group}' DataFrame 不存在。")
                 continue 
 
             # 3. 匹配行
             match_mask = pd.Series(False, index=target_df.index)
             if not target_df.empty:
-                # 确保 target_df 中的 ID 也转为 string 对比
                 match_mask = (target_df[entity_id_col].astype(str).str.strip() == target_entity_id) & \
                              (target_df['defect_desc'] == target_desc)
 
@@ -974,7 +999,7 @@ def _override_rates(
             # 4. 执行
             if not matched_indices.empty:
                 # --- 替换 ---
-                if is_target_trace: logging.warning(f"    -> [动作] 找到匹配行，执行替换。")
+                if is_target_trace: logging.warning(f"    -> [动作] 找到匹配缺陷记录，执行替换。")
                 target_df.loc[matched_indices, 'defect_rate'] = override_rate
                 if 'total_panels' in target_df.columns:
                     panels = target_df.loc[matched_indices, 'total_panels']
@@ -983,11 +1008,16 @@ def _override_rates(
                     if index not in processed_indices:
                         total_replaced_count += len(matched_indices)
                         processed_indices.add(index)
-                        processed_ids.add(target_entity_id) # 记录成功
+                        processed_ids.add(target_entity_id) 
             else:
-                # --- 插入 ---
-                if is_target_trace: logging.warning(f"    -> [动作] 未找到匹配行，准备插入。")
-                if target_lot_id in lot_specific_templates.index:
+                # --- 插入 (仅针对合法存在的实体插入它原先没有的缺陷) ---
+                if is_target_trace: logging.warning(f"    -> [动作] 该合法实体未包含该缺陷，准备插入新缺陷记录。")
+                
+                # [优化]: 寻找最精确的模板行，优先抓取该实体自身的物理基础信息(如时间、过货率)
+                entity_rows = all_sim_df[all_sim_df[entity_id_col].astype(str).str.strip() == target_entity_id]
+                if not entity_rows.empty:
+                    template_row = entity_rows.iloc[0]
+                elif target_lot_id in lot_specific_templates.index:
                     template_row = lot_specific_templates.loc[target_lot_id]
                 else:
                     template_row = generic_template_row
@@ -1011,7 +1041,6 @@ def _override_rates(
                     
                     if entity_id_col == 'lot_id': new_row['lot_id'] = target_entity_id 
                     
-                    # 动态列对齐
                     target_df_cols = target_df.columns.to_list()
                     if not target_df_cols and (target_group not in new_rows_to_add_by_group): 
                          target_df_cols = [col for col in ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time', 'defect_group', 'defect_desc', 'defect_panel_count', 'defect_rate', 'total_panels', 'pass_rate'] if col in new_row]
@@ -1024,7 +1053,7 @@ def _override_rates(
                     if index not in processed_indices:
                         total_inserted_count += 1
                         processed_indices.add(index)
-                        processed_ids.add(target_entity_id) # 记录成功
+                        processed_ids.add(target_entity_id) 
                         
                 except Exception as insert_err:
                     logging.error(f"构建插入行失败 (ID: {target_entity_id}): {insert_err}", exc_info=True)
@@ -1039,23 +1068,15 @@ def _override_rates(
                     final_results_dict[group] = pd.concat([target_df, df_new], ignore_index=True).where(pd.notna, None) # type: ignore
 
         # --- [最终审计报告] ---
-        # 计算未命中的 ID
         failed_ids = all_config_ids - processed_ids
         
-        logging.info(f"覆盖审计完成: Excel中共配置 {len(all_config_ids)} 个ID，成功应用 {len(processed_ids)} 个，失败 {len(failed_ids)} 个。")
+        logging.info(f"覆盖审计完成: Excel中共配置 {len(all_config_ids)} 个ID，成功应用 {len(processed_ids)} 个，拦截防呆 {len(failed_ids)} 个。")
         
         if failed_ids:
-            # 转换为 list 并排序以便查看，只打印前 20 个避免刷屏
             failed_list = sorted(list(failed_ids))
-            logging.error("========== [覆盖失败名单 (前20个)] ==========")
-            logging.error(f"以下 ID 在配置文件中存在，但未被替换或插入: {failed_list[:20]}")
-            logging.error("可能原因: 1. 缺陷描述无法映射到 Group; 2. 格式/空格问题; 3. Group DataFrame 初始化失败。")
-            
-            # 如果您的目标 ID 在失败名单中，再次显式警告
-            for watch_id in watchlist:
-                if watch_id in failed_ids:
-                    logging.error(f">>> 警告: 目标 ID '{watch_id}' 确认覆盖失败！请检查上方追踪日志。")
-            logging.error("===========================================")
+            logging.warning("========== [物理防呆拦截名单] ==========")
+            logging.warning(f"以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: {failed_list[:20]}")
+            logging.warning("=======================================")
 
         return final_results_dict
 
