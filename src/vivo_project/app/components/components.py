@@ -3,6 +3,7 @@ import pandas as pd
 import streamlit as st
 import logging, os, io
 from pathlib import Path
+from typing import Dict
 
 # [Refactor] 引入配置模型
 from vivo_project.config_model import AppConfig
@@ -21,28 +22,8 @@ COLOR_MAP = {
     'array_pixel_rate': "#6fb9ff"   
 }
 
-@st.cache_data(ttl=DEFAULT_CACHE_TTL)
-def calculate_warning_lines(mwd_code_data):
-    """计算所有Code的警戒线值并缓存结果"""
-    if mwd_code_data is None:
-        return {}
-    
-    monthly_data = mwd_code_data.get('monthly')
-    if monthly_data is None or (isinstance(monthly_data, pd.DataFrame) and monthly_data.empty):
-        return {}
-    
-    warning_lines = {}
-    
-    # 按Code分组计算警戒线
-    for code in monthly_data['defect_desc'].unique():
-        code_monthly = monthly_data[monthly_data['defect_desc'] == code]
-        monthly_rates = code_monthly.groupby('time_period')['defect_rate'].sum()
-        max_monthly_rate = monthly_rates.max()
-        warning_lines[code] = max_monthly_rate * 1.35 if max_monthly_rate > 0 else None
-    
-    return warning_lines
 
-def render_lot_spec_alert(lot_data: dict, warning_lines: dict, time_period: int = 30):
+def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_period: int = 30):
     """
     [企业级预警组件 V3.0] 扫描并展示近 30 天内良损超规的 Lot，包含多维度追溯明细表。
     
@@ -80,7 +61,14 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: dict, time_period: int 
                 for _, row in recent_df.iterrows():
                     code = str(row.get('defect_desc', '')).strip()
                     rate = row.get('defect_rate', 0.0)
-                    spec_limit = warning_lines.get(code, 1.0) 
+                    
+                    # [防呆修复] 安全获取警戒线字典
+                    spec_dict = warning_lines.get(code)
+                    if not spec_dict:
+                        continue
+                        
+                    # 安全提取上限，如果配置缺失默认 1.0 (100%)
+                    spec_limit = spec_dict.get('upper', 1.0)
                     
                     if rate > spec_limit:
                         # 处理入库时间格式化 (之前已被转为 datetime 对象)
@@ -346,78 +334,118 @@ def create_code_selection_ui(
 
 def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     """
-    渲染趋势图人工修正配置的上传/下载组件。
+    [企业级后台组件] 渲染开发者专属的配置文件与覆盖数据管理中心。
+    使用 st.tabs 支持多个 YAML 配置文件的上传与无缝重载。
     """
-    with st.expander("🛠️ 趋势图人工修正配置 (上传Excel文件)", expanded=False):
-        override_res = config.paths.get('mwd_override_config')
+    with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=True):
         
-        if not override_res:
-            st.warning("当前产品尚未在 YAML 中配置 `mwd_override_config`，无法使用上传功能。")
-            return
+        # 建立多标签页视图
+        tab1, tab2, tab3 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Lot不良覆写配置"])
         
-        file_name = override_res.file_name
-        target_path = product_dir / file_name
-
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.markdown("#### 📥 步骤 1: 下载配置表")
-            st.caption("您可以下载当前的配置表进行修改。如果当前无配置，将下载空白模板。")  
-            
-            # 动态生成 Excel 文件流提供下载
-            logging.info(f"正在尝试加载覆盖文件，目标绝对路径: {target_path.resolve()}")
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                if target_path.exists():
-                    try:
-                        # 如果服务器已有文件，直接提供现有文件供下载修改
-                        existing_xls = pd.read_excel(target_path, sheet_name=None, engine='openpyxl')
-                        for sheet_name, df in existing_xls.items():
-                            df.to_excel(writer, index=False, sheet_name=sheet_name)
-                    except Exception as e:
-                        st.error(f"读取现有配置文件失败: {e}")
-                        return
-                else:
-                    # 如果服务器没有文件，生成标准的空白模板
-                    df_template = pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率'])
-                    df_template.to_excel(writer, index=False, sheet_name='Group级')
-                    df_template.to_excel(writer, index=False, sheet_name='Code级')
-            
-            st.download_button(
-                label=f"⬇️ 下载 {file_name}",
-                data=output.getvalue(),
-                file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # --- Tab 1: 趋势图人工修正 ---
+        with tab1:
+            _render_file_manager_tab(
+                config=config, 
+                product_dir=product_dir, 
+                config_key='mwd_override_config',
+                template_dfs={
+                    'Group级': pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率']),
+                    'Code级': pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率'])
+                }
             )
             
-        with col2:
-            st.markdown("#### 📤 步骤 2: 上传覆盖文件")
-            uploaded_file = st.file_uploader("请上传填好的 Excel 文件", type=['xlsx'], key="trend_override_uploader")
+        # --- Tab 2: 预警规格线 ---
+        with tab2:
+            # 根据 yield_service.py 解析要求，B列(索引1)是Code，F列(索引5)是预警线
+            _render_file_manager_tab(
+                config=config, 
+                product_dir=product_dir, 
+                config_key='static_warning_lines',
+                template_dfs={
+                    'Sheet1': pd.DataFrame(columns=['序号', 'Code', '缺陷大类', '工段', '机台', '预警线'])
+                }
+            )
             
-            if uploaded_file is not None:
-                if st.button("🚀 确认覆盖并刷新看板", type="primary", use_container_width=True):
-                    try:
-                        # 1. 确保产品的专属文件夹存在
-                        target_path.parent.mkdir(parents=True, exist_ok=True)
-                        
-                        # 2. 【核心修复】如果存在旧文件，先物理删除，防止覆盖写入导致底层 ZIP 损坏
-                        if target_path.exists():
-                            try:
-                                target_path.unlink()  # 相当于 os.remove()
-                                logging.info(f"已成功删除旧的配置文件: {target_path.name}")
-                            except PermissionError:
-                                st.error("❌ 无法删除旧文件，它可能正被其他程序（如 Excel）打开，请关闭后重试。")
-                                return
-                        
-                        # 3. 写入全新的文件
-                        with open(target_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        
-                        st.success(f"✅ 成功覆盖文件: {file_name}")
-                        
-                        # 4. 清空缓存并重新执行页面
-                        st.cache_data.clear()
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"保存文件失败: {e}")
+        # --- Tab 3: Lot 级覆盖数据 ---
+        with tab3:
+            _render_file_manager_tab(
+                config=config, 
+                product_dir=product_dir, 
+                config_key='rate_override_config',
+                template_dfs={
+                    'Sheet1': pd.DataFrame(columns=['lot_id', 'sheet_id', 'override_rate', 'defect_desc'])
+                }
+            )
+
+def _render_file_manager_tab(config: AppConfig, product_dir: Path, config_key: str, template_dfs: dict):
+    """
+    内部子组件：处理单一配置文件的下载、生成、覆写和缓存清除流水线。
+    """
+    override_res = config.paths.get(config_key)
+    
+    if not override_res:
+        st.warning(f"当前产品尚未在 YAML 中配置 `{config_key}`，无法使用此管理功能。")
+        return
+    
+    file_name = override_res.file_name
+    target_path = product_dir / file_name
+
+    col1, col2 = st.columns([1, 1])
+    
+    # ---------------- 📥 步骤 1: 下载逻辑 ----------------
+    with col1:
+        st.markdown(f"#### 📥 步骤 1: 下载配置表")
+        st.caption("您可以下载当前的配置表进行修改。如果服务器当前无配置，将下载标准模板。")  
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            if target_path.exists():
+                try:
+                    # 如果已有文件，提供现存文件下载
+                    existing_xls = pd.read_excel(target_path, sheet_name=None, engine='openpyxl')
+                    for sheet_name, df in existing_xls.items():
+                        df.to_excel(writer, index=False, sheet_name=sheet_name)
+                except Exception as e:
+                    st.error(f"读取现有配置文件失败: {e}")
+                    return
+            else:
+                # 针对不同的 Key 下发对应的智能模板
+                for sheet_name, df_template in template_dfs.items():
+                    df_template.to_excel(writer, index=False, sheet_name=sheet_name)
+        
+        st.download_button(
+            label=f"⬇️ 下载 {file_name}",
+            data=output.getvalue(),
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"dl_{config_key}" # 必须加前缀保证不同 Tab 间 Key 唯一
+        )
+        
+    # ---------------- 📤 步骤 2: 上传覆写逻辑 ----------------
+    with col2:
+        st.markdown("#### 📤 步骤 2: 上传覆盖文件")
+        uploaded_file = st.file_uploader(f"请上传填好的 Excel 文件", type=['xlsx'], key=f"up_{config_key}")
+        
+        if uploaded_file is not None:
+            if st.button(f"🚀 确认覆盖并刷新 ({file_name})", type="primary", use_container_width=True, key=f"btn_{config_key}"):
+                try:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    if target_path.exists():
+                        try:
+                            target_path.unlink()  
+                            logging.info(f"已成功删除旧的配置文件: {target_path.name}")
+                        except PermissionError:
+                            st.error("❌ 无法删除旧文件，它可能正被其他程序（如 Excel）打开，请关闭后重试。")
+                            return
+                    
+                    with open(target_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    st.success(f"✅ 成功覆盖文件: {file_name}")
+                    
+                    st.cache_data.clear()
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"保存文件失败: {e}")

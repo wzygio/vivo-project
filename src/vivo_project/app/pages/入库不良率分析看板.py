@@ -125,18 +125,18 @@ if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
 # ==============================================================================
 #  🚨 智能预警中心 (Intelligent Alert Center)
 # ==============================================================================
-with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦截)..."):
-    # 1. 趋势预警
-    trend_alerts = AlertService.get_dashboard_alerts(
-        mwd_group_data=mwd_group_data,
-        mwd_code_data=mwd_code_data,
-        config=active_config,
-        product_dir=product_dir
-    )
-    
-    has_trend_alerts = len(trend_alerts) > 0
-    
-    if query_params.get("admin") == "true":
+if query_params.get("admin") == "true":
+    with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦截)..."):
+        # 1. 趋势预警
+        trend_alerts = AlertService.get_dashboard_alerts(
+            mwd_group_data=mwd_group_data,
+            mwd_code_data=mwd_code_data,
+            config=active_config,
+            product_dir=product_dir
+        )
+        
+        has_trend_alerts = len(trend_alerts) > 0
+        
         # [A] 趋势异常通报区
         with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
             if has_trend_alerts:
@@ -147,12 +147,10 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
             else:
                 st.success("✅ 系统监测正常：未发现月周天良率异常。")
 
-    # [B] Lot 级良损(Spec)监控区 (只需一行调用！)
-    render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
-
 # ==============================================================================
 #  第一部分: 宏观监控 (Group级趋势)
 # ==============================================================================
+render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
 render_macro_trend_section(mwd_group_data)
 
@@ -189,10 +187,10 @@ st.markdown(f"### 🎯 当前分析: **{curr_code}**")
 # ==============================================================================
 
 # Row A: 时间趋势
-render_micro_trend_section(mwd_code_data, curr_code, curr_warning)
+render_micro_trend_section(mwd_code_data, curr_code, curr_warning['upper'])
 
 # Row B: 批次分布 (返回被点击选中的 Lot)
-target_lot = render_lot_distribution_section(lot_data, curr_code, curr_warning)
+target_lot = render_lot_distribution_section(lot_data, curr_code, curr_warning['upper'])
 
 # Row C: 单片分布 (监听 Lot 点击状态)
 render_sheet_distribution_section(sheet_data, target_lot, curr_group, curr_code)

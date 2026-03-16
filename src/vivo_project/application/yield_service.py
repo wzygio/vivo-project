@@ -277,7 +277,7 @@ class YieldAnalysisService:
     def load_static_warning_lines(config: AppConfig, product_dir: Path) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
-        读取警戒线配置 (完全依赖注入)
+        读取警戒线配置 (完全依赖注入，重构为高内聚的列提取逻辑)
         """
         try:
             # [Refactor] 从 config.paths 获取 FileResource 对象
@@ -287,7 +287,7 @@ class YieldAnalysisService:
                 return {}
 
             # 构建完整路径
-            file_path = product_dir /warning_res.file_name
+            file_path = product_dir / warning_res.file_name
             sheet_name = warning_res.sheet_name or "Sheet1"
 
             if not file_path.exists():
@@ -295,16 +295,9 @@ class YieldAnalysisService:
                 return {}
 
             # --- 步骤 1: 读取 Excel 并“降维”为 CSV ---
-            # 使用 openpyxl 引擎读取
             df_raw = pd.read_excel(
-                file_path, 
-                header=None, 
-                dtype=str, 
-                engine='openpyxl',
-                sheet_name=sheet_name
+                file_path, header=None, dtype=str, engine='openpyxl', sheet_name=sheet_name
             )
-
-            # [关键] 模拟“另存为 CSV”的过程
             csv_buffer = io.StringIO()
             df_raw.to_csv(csv_buffer, index=False, header=False)
             csv_buffer.seek(0)
@@ -312,48 +305,69 @@ class YieldAnalysisService:
             
             logging.info(f"Excel 已在内存中清洗为纯文本矩阵，形状: {df_clean.shape}")
 
-            # --- 步骤 2: 使用固定的列位置 ---
-            header_row_idx = 0  # 第一行
-            code_col_idx = 1    # B列
-            limit_col_idx = 5   # F列
+            # =================================================================
+            # 🛠️ 步骤 2: 定义通用提取器 (DRY 原则重构)
+            # =================================================================
+            header_row = df_clean.iloc[0]
             
-            # 验证表头内容
-            code_header = str(df_clean.iloc[0, code_col_idx]).strip().lower()
-            limit_header = str(df_clean.iloc[0, limit_col_idx]).strip().lower()
-            
-            if code_header != 'code' or not any(keyword in limit_header for keyword in ['预警线', 'warning', 'limit']):
-                error_msg = f"表头验证失败：B列应为'Code'（实际：{code_header}），F列应包含'预警线'相关关键词（实际：{limit_header}）"
+            def _get_col_index(keywords: list) -> int:
+                """根据关键词列表动态寻找列索引"""
+                for idx, val in enumerate(header_row):
+                    val_str = str(val).strip().lower()
+                    if any(k in val_str for k in keywords):
+                        return idx
+                return -1
+
+            def _parse_rate(val_raw) -> float | None:
+                """统一的数值解析器：处理百分号、空值与浮点数转换"""
+                v_str = str(val_raw).strip()
+                if not v_str: return None
+                try:
+                    return float(v_str.replace('%', '')) / 100.0 if '%' in v_str else float(v_str)
+                except ValueError:
+                    return None
+
+            # 动态获取所有必需和非必需列的索引
+            code_col_idx = _get_col_index(['code'])
+            upper_col_idx = _get_col_index(['预警线', 'warning', 'limit'])
+            lower_col_idx = _get_col_index(['下限'])
+
+            # 核心防呆校验
+            if code_col_idx == -1 or upper_col_idx == -1:
+                error_msg = f"表头验证失败：未找到包含 'Code' 或 '预警线/Limit' 的必需列。"
                 logging.error(error_msg)
-                # 注意：Service 层尽量不要直接调 st.error，除非是单纯的工具类。
-                # 但这里保持原逻辑。
                 st.error(error_msg) 
                 return {}
 
-            # --- 步骤 3: 精准提取数据 ---
+            # =================================================================
+            # 🚀 步骤 3: 遍历提取数据 (双轨结构)
+            # =================================================================
             warning_lines = {}
             valid_count = 0
             
-            for curr_r in range(header_row_idx + 1, len(df_clean)):
-                raw_code = df_clean.iloc[curr_r, code_col_idx]
-                raw_val = df_clean.iloc[curr_r, limit_col_idx]
+            for curr_r in range(1, len(df_clean)):
+                code_str = str(df_clean.iloc[curr_r, code_col_idx]).strip()
+                if not code_str: continue
                 
-                code_str = str(raw_code).strip()
-                val_str = str(raw_val).strip()
+                # 极简复用：提取上限
+                upper_val = _parse_rate(df_clean.iloc[curr_r, upper_col_idx])
+                if upper_val is None: continue # 上限是核心，没有上限则此行无效
                 
-                try:
-                    final_val = 0.0
-                    if '%' in val_str:
-                        final_val = float(val_str.replace('%', '')) / 100.0
-                    else:
-                        final_val = float(val_str)
-                    
-                    warning_lines[code_str] = final_val
-                    valid_count += 1
-                    
-                except ValueError:
-                    continue
+                # 极简复用：提取下限 (允许不存在，默认 0.0)
+                lower_val = 0.0
+                if lower_col_idx != -1:
+                    parsed_lower = _parse_rate(df_clean.iloc[curr_r, lower_col_idx])
+                    if parsed_lower is not None:
+                        lower_val = parsed_lower
+                
+                # 装载到字典
+                warning_lines[code_str] = {
+                    'upper': upper_val,
+                    'lower': lower_val
+                }
+                valid_count += 1
 
-            logging.info(f"✅ 警戒线加载成功，共提取 {valid_count} 条配置。")
+            logging.info(f"✅ 警戒线加载成功，共提取 {valid_count} 条配置 (含上下限)。")
             return warning_lines
 
         except Exception as e:

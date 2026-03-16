@@ -141,7 +141,7 @@ def calculate_lot_defect_rates(
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     config: AppConfig,
     product_dir: Path,
-    warning_lines: Optional[Dict[str, float]] = None
+    warning_lines: Optional[Dict[str, dict]] = None
 ) -> Dict[str, Any] | None:
     """(V5.0) 独立执行 Lot 级数据模拟"""
     logging.info("开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...")
@@ -182,8 +182,6 @@ def calculate_lot_defect_rates(
         if capping_cfg.get('enable', True):
             capped_results = _apply_defect_capping(
                 results_dict=current_lot_results,
-                group_thresholds=capping_cfg.get('group_thresholds', {'upper': 1, 'lower': 0.003}),
-                code_thresholds=capping_cfg.get('code_thresholds', {'upper': 1, 'lower': 0.0001}),
                 warning_lines=warning_lines or {}
             )
             current_code_details = capped_results['code_level_details']
@@ -1249,51 +1247,26 @@ def _filter_by_pass_rate(
 @staticmethod
 def _apply_defect_capping(
     results_dict: Dict[str, Any],
-    group_thresholds: dict,
-    code_thresholds: dict,
-    warning_lines: Optional[Dict[str, float]] = None  # 修改此处
+    warning_lines: Optional[Dict[str, dict]] = None
 ) -> Dict[str, Any]:
     """
-    [辅助函数 V2.0 - 精确 Spec 截断] 
-    根据 warning_lines 对每个 Code 应用专属的上限截断。
+    [辅助函数 V3.0 - 单一职责：Code级精准截断] 
+    仅对 Code 级数据应用专属的 Spec 区间截断。
+    彻底抛弃 Group 级数据的同步截断，Group 数据将在后续通过严密的向上聚合得出，以捍卫物质守恒。
     """
-    logging.info("开始对不良率进行可配置的随机截断处理 (支持 Spec 精确截断)...")
+    logging.info("开始对 Code 级不良率进行精准 Spec 截断处理...")
     
-    # 输入检查
-    if not isinstance(results_dict, dict):
-        logging.error("传递给 _apply_defect_capping 的输入不是字典，无法截断。")
-        return results_dict
-    if "group_level_summary_for_chart" not in results_dict or \
-        "code_level_details" not in results_dict:
+    if not isinstance(results_dict, dict) or "code_level_details" not in results_dict:
+        logging.error("传递给 _apply_defect_capping 的输入不包含 code_level_details，无法截断。")
         return results_dict
 
-    warning_lines = warning_lines or {} # 确保不为 None
+    warning_lines = warning_lines or {}
     base_seed = 101
     
     try:
-        # 1. 截断 Group 级数据 (保持原有逻辑，使用全局配置)
-        df_group_chart = results_dict["group_level_summary_for_chart"].copy()
-        rate_cols = [col for col in df_group_chart.columns if col.endswith('_rate')]
-        
-        for i, col_name in enumerate(rate_cols):
-            rng_capping = np.random.default_rng(base_seed + i)
-            # Group 级依然使用配置文件中的通用阈值
-            df_group_chart[col_name] = df_group_chart[col_name].apply(
-                lambda rate: _apply_random_cap_and_floor(
-                    rate,
-                    upper_threshold=group_thresholds['upper'],
-                    lower_threshold=group_thresholds['lower'],
-                    rng=rng_capping
-                )
-            )
-
-        # 2. [核心升级] 截断 Code 级数据 (应用专属 Spec)
+        # [核心重构] 我们只关心 Code 级数据，无视并抛弃原有的 Group 级视图
         dict_code_details = results_dict["code_level_details"].copy()
         rng_capping_code = np.random.default_rng(base_seed + 99)
-        
-        # 默认上限 (兜底用)
-        fallback_upper = code_thresholds['upper']
-        fallback_lower = code_thresholds['lower']
 
         for group, df_code in dict_code_details.items():
             if df_code is not None and not df_code.empty and 'defect_rate' in df_code.columns:
@@ -1301,47 +1274,55 @@ def _apply_defect_capping(
                 
                 # 定义行级处理函数：动态查找 Spec
                 def _row_capper(row):
-                    # 1. 查找专属 Spec
                     code_name = str(row.get('defect_desc', '')).strip()
-                    # 优先使用 warning_lines 中的值，找不到则用 fallback_upper
-                    spec_limit = warning_lines.get(code_name, fallback_upper)
                     
-                    # 2. 执行软截断
+                    # 1. 安全提取字典：如果找不到该 Code，返回空字典 {} 阻断 NoneType 异常
+                    spec_dict = warning_lines.get(code_name) or {}
+                    
+                    # 2. 安全提取上下限：没配置预警线的缺陷，默认上限 100% (1.0)，下限 0% (0.0)
+                    spec_upper = spec_dict.get('upper', 1.0)
+                    spec_lower = spec_dict.get('lower', 0.0)
+                    
+                    # 3. 执行软截断
                     return _apply_random_cap_and_floor(
                         rate=row['defect_rate'],
-                        upper_threshold=spec_limit,   # <--- 使用专属 Spec
-                        lower_threshold=fallback_lower,
+                        upper_threshold=spec_upper,
+                        lower_threshold=spec_lower,
                         rng=rng_capping_code
                     )
 
                 # 应用截断
                 df_code_mod['defect_rate'] = df_code_mod.apply(_row_capper, axis=1)
 
-                # [联动] 截断后重新计算 defect_panel_count（向下取整）
+                # [联动与守恒] 截断后重新计算 defect_panel_count
                 if 'total_panels' in df_code_mod.columns:
                     df_code_mod['defect_panel_count'] = np.maximum(0, np.floor(
                         df_code_mod['defect_rate'] * df_code_mod['total_panels']
                     )).astype(int)
+                    
+                    # 物理铁律：根据向下取整后的真实 Panel 数量，反推最终的微观 Rate
+                    df_code_mod['defect_rate'] = np.where(
+                        df_code_mod['total_panels'] > 0,
+                        df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
+                        0.0
+                    )
 
                 dict_code_details[group] = df_code_mod
 
-        # 3. 重新准备 UI 汇总表
-        final_ui_columns = list(results_dict.get("group_level_summary_for_table", pd.DataFrame()).columns)
-        if not final_ui_columns and not df_group_chart.empty:
-            final_ui_columns = df_group_chart.columns.tolist()
-        group_level_for_ui = df_group_chart.reindex(columns=final_ui_columns).fillna(0) if final_ui_columns else df_group_chart
+        logging.info("Code 级不良率精准截断处理完成。")
 
-        logging.info("不良率精确截断处理完成。")
-
-        # 4. 返回结果
+        # 封装结果
         final_capped_results = results_dict.copy()
-        final_capped_results["group_level_summary_for_table"] = group_level_for_ui
-        final_capped_results["group_level_summary_for_chart"] = df_group_chart
         final_capped_results["code_level_details"] = dict_code_details
+        
+        # 🛑 [架构防御] 强行删除旧的 Group 数据，逼迫主流水线使用 _reaggregate_groups_from_codes
+        final_capped_results.pop("group_level_summary_for_table", None)
+        final_capped_results.pop("group_level_summary_for_chart", None)
+        
         return final_capped_results
 
     except Exception as e:
-        logging.error(f"在应用截断时发生错误: {e}", exc_info=True)
+        logging.error(f"在应用 Code 级截断时发生错误: {e}", exc_info=True)
         return results_dict
 
 @staticmethod
