@@ -15,7 +15,7 @@ __pycache__/
 .idea/
 
 # 敏感信息
-.env
+# .env
 
 # 临时数据
 data/
@@ -24,4 +24,6 @@ data/
 docs/
 
 # 数据源
-resources/
+# resources/
+
+
