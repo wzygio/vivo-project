@@ -337,7 +337,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     [企业级后台组件] 渲染开发者专属的配置文件与覆盖数据管理中心。
     使用 st.tabs 支持多个 YAML 配置文件的上传与无缝重载。
     """
-    with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=True):
+    with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=False):
         
         # 建立多标签页视图
         tab1, tab2, tab3 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Lot不良覆写配置"])

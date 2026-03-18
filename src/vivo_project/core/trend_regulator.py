@@ -105,7 +105,7 @@ class TrendRegulator:
             hash_val_l = ((ts_vec_l * 7 + code_hash_vec_l) % 10000) / 10000.0 
             
             # 托底保护：在 [Lower * 0.8, Lower * 1.2] 区间内自然波动
-            safe_rates_l = below_df['spec_limit_lower'] * 0.8 + (hash_val_l * below_df['spec_limit_lower'] * 0.4)
+            safe_rates_l = below_df['spec_limit_lower'] * 1.0 + (hash_val_l * below_df['spec_limit_lower'] * 0.2)
             
             # 向上看齐，取 ceil 保证至少补充到位
             new_counts_l = np.ceil(safe_rates_l * below_df['total_panels']).astype(int)

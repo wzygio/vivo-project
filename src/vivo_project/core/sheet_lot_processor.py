@@ -1272,44 +1272,35 @@ def _apply_defect_capping(
             if df_code is not None and not df_code.empty and 'defect_rate' in df_code.columns:
                 df_code_mod = df_code.copy()
                 
-                # 定义行级处理函数：动态查找 Spec
+                # 定义行级处理函数：直接计算最终数量
                 def _row_capper(row):
                     code_name = str(row.get('defect_desc', '')).strip()
-                    
-                    # 1. 安全提取字典：如果找不到该 Code，返回空字典 {} 阻断 NoneType 异常
                     spec_dict = warning_lines.get(code_name) or {}
-                    
-                    # 2. 安全提取上下限：没配置预警线的缺陷，默认上限 100% (1.0)，下限 0% (0.0)
                     spec_upper = spec_dict.get('upper', 1.0)
                     spec_lower = spec_dict.get('lower', 0.0)
                     
-                    # 3. 执行软截断
                     return _apply_random_cap_and_floor(
                         rate=row['defect_rate'],
+                        panels=row.get('total_panels', 0.0),
+                        current_count=row.get('defect_panel_count', 0),
                         upper_threshold=spec_upper,
                         lower_threshold=spec_lower,
                         rng=rng_capping_code
                     )
 
-                # 应用截断
-                df_code_mod['defect_rate'] = df_code_mod.apply(_row_capper, axis=1)
+                # 🛑 核心修复：直接把函数结果赋值给不良数量列
+                df_code_mod['defect_panel_count'] = df_code_mod.apply(_row_capper, axis=1)
 
-                # [联动与守恒] 截断后重新计算 defect_panel_count
-                if 'total_panels' in df_code_mod.columns:
-                    df_code_mod['defect_panel_count'] = np.maximum(0, np.floor(
-                        df_code_mod['defect_rate'] * df_code_mod['total_panels']
-                    )).astype(int)
-                    
-                    # 物理铁律：根据向下取整后的真实 Panel 数量，反推最终的微观 Rate
-                    df_code_mod['defect_rate'] = np.where(
-                        df_code_mod['total_panels'] > 0,
-                        df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
-                        0.0
-                    )
+                # 🛑 物理铁律：根据截断/托底后的真实整数 Panel 数量，反推最终的微观 Rate
+                df_code_mod['defect_rate'] = np.where(
+                    df_code_mod['total_panels'] > 0,
+                    df_code_mod['defect_panel_count'] / df_code_mod['total_panels'],
+                    0.0
+                )
 
                 dict_code_details[group] = df_code_mod
 
-        logging.info("Code 级不良率精准截断处理完成。")
+        logging.info("Code 级不良率精准截断/托底处理完成。")
 
         # 封装结果
         final_capped_results = results_dict.copy()
@@ -1328,28 +1319,27 @@ def _apply_defect_capping(
 @staticmethod
 def _apply_random_cap_and_floor(
     rate: float,
+    panels: int,
+    current_count: int,
     upper_threshold: float,
     lower_threshold: float,
     rng: np.random.Generator
-) -> float:
+) -> int:
     """
     [辅助函数 V2.0 - 软截断] 
     当 rate 超标时，返回 [Limit * 0.8, Limit] 之间的随机值，
     确保截断后的数据依然呈现自然的随机波动，而非死板的直线。
     """
     if rate > upper_threshold:
-        # [核心逻辑] 软截断：在 Spec 的 80% ~ 95% 之间随机浮动
-        # 这样每个超标 Lot 的最终值都会略有不同，消除“人工痕迹”
+        # 上限保护：在 Spec 的 80% ~ 95% 之间随机浮动
         safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold * 0.9)
-        return safe_rate
+        new_count = int(np.floor(safe_rate * panels))
+        return min(new_count, int(current_count)) # 物理铁律：压制后的数量绝不能比原来更高
         
-    elif 0 < rate < lower_threshold:
-        # 下限保护 (保持不变)
-        low_bound = max(0, lower_threshold * 0.8)
-        high_bound = lower_threshold * 1.2
-        if low_bound >= high_bound:
-            return low_bound
-        return rng.uniform(low_bound, high_bound)
-        
+    # elif 0 < rate < lower_threshold:
+    #     # 下限保护 (保持不变)
+    #     safe_rate = max(0, rng.uniform(lower_threshold * 1.1, lower_threshold * 1.2))
+    #     new_count = int(np.ceil(safe_rate * panels))
+    #     return max(new_count, int(current_count))
     else:
-        return rate
+        return int(current_count)
