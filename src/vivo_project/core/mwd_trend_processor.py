@@ -625,8 +625,9 @@ def _format_code_results(monthly, weekly, daily):
 # ==============================================================================
 def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_defects, volatility, **kwargs):
     """
-    [策略 A] Group 级日度数据生成器
-    修改：增加随机种子扰动因子，解决 sin 函数周期性导致的“伪趋势”问题。
+    [策略 A] Group 级日度数据生成器 (V4.1 - 绝对守恒版)
+    引入“最大余额法 (Largest Remainder Method)”，确保每日随机波动的不良数之和，
+    绝对等于当周的总不良数。
     """
     df_gen = daily_skeleton.copy()
     df_gen['week_period'] = df_gen.index.to_period('W-SUN') # type: ignore
@@ -639,45 +640,58 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
         df_gen[group] = 0
         
         for week_idx in weekly_lookup.index:
+            # [核心修正] 直接提取周目标数量，而不是基准率
             w_count = weekly_lookup.loc[week_idx, group]
-            w_total = weekly_lookup.loc[week_idx, 'total_panels']
-            if w_total == 0: continue
-            
-            # 直接计算基准率
-            base_rate = w_count / w_total
             
             mask = df_gen['week_period'] == week_idx
             days_in_week = df_gen[mask]
+            if days_in_week.empty: continue
             
-            for day_idx in days_in_week.index:
-                day_total = df_gen.loc[day_idx, 'total_panels']
-                if day_total == 0: continue
+            day_indices = days_in_week.index
+            panels = days_in_week['total_panels'].values
+            
+            # 如果当周目标为0，或当周无产出，直接赋0跳过
+            if w_count <= 0 or panels.sum() <= 0:
+                df_gen.loc[day_indices, group] = 0
+                continue
+            
+            # 1. 计算伪随机波动权重
+            ts_seeds = np.array([int(d.timestamp() / 86400) for d in day_indices])
+            scramble_factor = 1234567 
+            stable_group_hash = sum(ord(c) for c in str(group))
+            noise_seeds = (ts_seeds * scramble_factor) + (stable_group_hash % 9999)
+            noises = np.sin(noise_seeds) * volatility
+            
+            # 2. 计算加权权重并归一化
+            raw_weights = np.maximum(0, panels * (1 + noises))
+            weight_sum = raw_weights.sum()
+            
+            if weight_sum > 0:
+                norm_weights = raw_weights / weight_sum
+            else:
+                norm_weights = panels / panels.sum()
                 
-                # [Fix] 确定性白噪声生成
-                # 原逻辑: ts_seed 连续递增导致 sin 呈现平滑波浪趋势
-                # 新逻辑: 引入大质数乘法因子(1234567)，将连续的时间打散，实现“相邻两天不相关”
-                ts_seed = int(day_idx.timestamp() / 86400) # type: ignore
+            # 3. 🎯 最大余额法分配 (确保总和绝对等于 w_count)
+            exact_alloc = w_count * norm_weights
+            int_alloc = np.floor(exact_alloc).astype(int)
+            rem = int(w_count - int_alloc.sum())
+            
+            if rem > 0:
+                frac = exact_alloc - int_alloc
+                # 找出小数部分最大的前 rem 个元素的索引
+                top_indices = np.argsort(frac)[-rem:]
+                int_alloc[top_indices] += 1
                 
-                # 伪随机哈希算法: sin(time * Large_Prime + Group_Hash)
-                scramble_factor = 1234567 
-                # 替换为绝对稳定的字符 ASCII 求和：
-                stable_group_hash = sum(ord(c) for c in str(group))
-                noise_seed = (ts_seed * scramble_factor) + (stable_group_hash % 9999)
-                
-                # 这样生成的 noise 就是围绕 0 上下剧烈跳动的，而非平滑过渡
-                noise = np.sin(noise_seed) * volatility
-                
-                # 计算最终数量
-                final = int(np.floor(base_rate * (1 + noise) * day_total))
-                df_gen.loc[day_idx, group] = final
-                
+            df_gen.loc[day_indices, group] = int_alloc
+            
     df_gen.drop(columns=['week_period'], inplace=True)
     return df_gen
 
 def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, volatility, **kwargs):
     """
-    [性能优化版] Code 级日度数据生成器
-    修改：增加随机种子扰动因子，解决 sin 函数周期性导致的“伪趋势”问题。
+    [性能优化版] Code 级日度数据生成器 (V4.1 - 绝对守恒版)
+    使用全向量化的“最大余额法”，在保持百万级数据处理性能的同时，
+    确保单日数据之和与周度总基准绝对闭环对齐。
     """
     if daily_skeleton.empty or weekly_final.empty:
         return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
@@ -685,53 +699,65 @@ def _generate_code_daily_from_weekly_baseline(daily_skeleton, weekly_final, vola
     weekly_data = weekly_final.copy()
     weekly_data['week_period'] = weekly_data['warehousing_time'].dt.to_period('W-SUN')
     
-    weekly_data['base_rate'] = weekly_data['defect_panel_count'] / weekly_data['total_panels'].replace(0, 1)
-    
     unique_codes = weekly_data[['defect_group', 'defect_desc']].drop_duplicates()
 
-    # 2. 构建 "日期 x Code" 笛卡尔积
+    # 1. 构建 "日期 x Code" 笛卡尔积
     daily_skeleton_tmp = daily_skeleton.copy()
     daily_skeleton_tmp['_key'] = 1
     unique_codes_tmp = unique_codes.copy()
     unique_codes_tmp['_key'] = 1
     
     full_grid = pd.merge(daily_skeleton_tmp, unique_codes_tmp, on='_key').drop(columns='_key')
-    
-    # 3. 关联周度基准率
     full_grid['week_period'] = full_grid['warehousing_time'].dt.to_period('W-SUN') # type: ignore
     
-    merged = pd.merge(
-        full_grid, 
-        weekly_data[['week_period', 'defect_desc', 'base_rate']], 
-        on=['week_period', 'defect_desc'], 
-        how='left'
+    # 2. [核心修正] 合并周度目标绝对数量，而不是单纯的率
+    weekly_targets = weekly_data[['week_period', 'defect_desc', 'defect_panel_count']].rename(
+        columns={'defect_panel_count': 'target_w_count'}
     )
-    merged['base_rate'] = merged['base_rate'].fillna(0)
-    merged = merged[merged['base_rate'] > 0].copy()
     
-    if merged.empty:
-        return pd.DataFrame(columns=['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count'])
-
-    # 4. [Fix] 向量化噪声计算 (高频扰动)
-    # 同样引入大数乘法，打散时间连续性
+    merged = pd.merge(full_grid, weekly_targets, on=['week_period', 'defect_desc'], how='left')
+    merged['target_w_count'] = merged['target_w_count'].fillna(0)
+    
+    # 3. 向量化噪声计算
     ts_vector = (merged['warehousing_time'].astype('int64') // 10**9 // 86400).astype(int)
-    scramble_factor = 999983 # 大质数
-    
-    # ✅ 替换为稳定哈希：
+    scramble_factor = 999983 
     def _stable_hash(s): return sum(ord(c) for c in str(s))
     code_hash = merged['defect_desc'].map(_stable_hash) % 10000
-    
-    # 公式: sin(Time * Large_Prime + Code_Hash)。这确保了同一 Code 在相邻两天的 noise 是完全随机独立的
     phase = (ts_vector * scramble_factor) + code_hash
     noise = np.sin(phase) * volatility
     
-    # 计算最终数量
-    calculated_counts = merged['total_panels'] * merged['base_rate'] * (1 + noise)
-    merged['defect_panel_count'] = np.floor(calculated_counts).astype(int)
+    # 4. 计算分配权重
+    merged['raw_weight'] = np.maximum(0, merged['total_panels'] * (1 + noise))
+    weight_sums = merged.groupby(['week_period', 'defect_desc'])['raw_weight'].transform('sum')
+    panel_sums = merged.groupby(['week_period', 'defect_desc'])['total_panels'].transform('sum')
     
-    # 5. 结果清理：不再剔除 0 产量的数据，保证数学网格完整
+    merged['norm_weight'] = np.where(
+        weight_sums > 0, 
+        merged['raw_weight'] / weight_sums,
+        np.where(
+            panel_sums > 0,
+            merged['total_panels'] / panel_sums,
+            0.0
+        )
+    )
+    
+    # 5. 🎯 [核心修正] 向量化最大余额法 (Vectorized Largest Remainder)
+    merged['exact_alloc'] = merged['target_w_count'] * merged['norm_weight']
+    merged['int_alloc'] = np.floor(merged['exact_alloc']).astype(int)
+    merged['frac'] = merged['exact_alloc'] - merged['int_alloc']
+    
+    # 计算每个分组需要补齐的余数 (必定是 >= 0 的整数)
+    rem_series = merged['target_w_count'] - merged.groupby(['week_period', 'defect_desc'])['int_alloc'].transform('sum')
+    merged['rem'] = rem_series.astype(int)
+    
+    # 对每个分组内的小数部分进行降序排名 (遇到相同值时按出现顺序排)
+    merged['frac_rank'] = merged.groupby(['week_period', 'defect_desc'])['frac'].rank(method='first', ascending=False)
+    
+    # 如果排名 <= 余数，则该天分得 1 个补偿不良数
+    merged['defect_panel_count'] = merged['int_alloc'] + np.where(merged['frac_rank'] <= merged['rem'], 1, 0)
+    
+    # 6. 结果清理
     final_df = merged[['warehousing_time', 'total_panels', 'defect_group', 'defect_desc', 'defect_panel_count']]
-    
     return final_df
 
 def _apply_scaling(df: pd.DataFrame, factor: float) -> pd.DataFrame:
