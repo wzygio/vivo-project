@@ -8,13 +8,11 @@ primaryColor = "#0ea5e9"
 
 # 3. 背景颜色 (Background Color)
 # 对应 HTML 背景的淡蓝色 (#f0f9ff - Sky-50) 或白色
-# Streamlit不支持渐变背景，我们选一个非常淡的蓝色让它不刺眼且融合
-backgroundColor = "#f8fafc" 
+backgroundColor = "#f8fafc"
 
 # 4. 侧边栏背景颜色 (Secondary Background Color)
-# 对应 HTML 侧边栏的深色 (#0f172a - Slate-900)
-# 这样 Streamlit 的侧边栏也会变成深色，和你的主界面侧边栏风格一致！
-secondaryBackgroundColor = "#0f172a"
+# 这样不仅侧边栏会有淡淡的区分度，下拉框也会恢复清爽的浅色！
+secondaryBackgroundColor = "#f1f5f9"
 
 # 5. 文本颜色 (Text Color)
 # 对应 HTML 中的 Slate-700 (#334155)

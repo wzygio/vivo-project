@@ -6,7 +6,7 @@ from pathlib import Path
 
 # 引入项目模块
 from app.utils.logger_setup import setup_logging
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 
 def test_logging():
     print("="*60)

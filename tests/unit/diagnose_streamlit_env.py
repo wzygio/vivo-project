@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 # 引入项目配置
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from app.utils.logger_setup import setup_logging
 
 st.set_page_config(page_title="🔍 日志环境显影剂", layout="wide")

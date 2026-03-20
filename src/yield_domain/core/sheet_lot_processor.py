@@ -530,7 +530,7 @@ def _distribute_sheet_from_lot(
                 avg_rate = token_count / total_capacity
                 cap_rate = min(avg_rate * 2.5, 1.0) 
                 
-                entity_capacities = group_df['total_panels'].values
+                entity_capacities = group_df['total_panels'].to_numpy(dtype=float)
                 max_allowed = np.ceil(entity_capacities * cap_rate).astype(int)
                 max_allowed = np.clip(max_allowed, 1, entity_capacities) # type: ignore
                 

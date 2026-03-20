@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
 # 引入我们定义的 Pydantic 模型
-from config_model import AppConfig
+from src.shared_kernel.config_model import AppConfig
 
 class ConfigLoader:
     """

@@ -8,7 +8,7 @@ ENABLE_HOT_RELOAD = True
 if ENABLE_HOT_RELOAD:
     try:
         from app.utils.reloader import deep_reload_modules, get_project_revision
-        from config import ConfigLoader
+        from src.shared_kernel.config import ConfigLoader
         
         # 1. 计算当前代码目录的真实哈希指纹
         project_root = ConfigLoader.get_project_root()
@@ -29,7 +29,7 @@ if ENABLE_HOT_RELOAD:
 
 # --- 1. 配置与初始化 ---
 from app.utils.session_manager import SessionManager
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from app.utils.app_setup import AppSetup
 from app.utils.reloader import get_project_revision
 

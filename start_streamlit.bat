@@ -25,7 +25,7 @@ REM ========================================================
 REM 3. 启动 Streamlit (使用 pythonw)
 REM ========================================================
 ECHO [INFO] Step 2: Starting Integrated Portal on Port 8503...
-uv run streamlit run src/vivo_project/app/Home.py --server.headless true --server.port 8503
+uv run streamlit run app/Home.py --server.headless true --server.port 8503
 
 ECHO [INFO] Step 3: Waiting for services to initialize...
 REM 加载 HTML/JS 资源可能需要一点时间，保持 5 秒等待

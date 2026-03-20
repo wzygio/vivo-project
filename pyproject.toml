@@ -45,6 +45,7 @@ packages = ["src/vivo_project"]
 venvPath = "."
 venv = ".venv"
 # 强制屏蔽所有繁琐的类型匹配和属性找不到的噪音
+typeCheckingMode = "basic"
 reportArgumentType = "none"
 reportAttributeAccessIssue = "none"
 reportGeneralTypeIssues = "none"
