@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 # 引入项目模块
-from vivo_project.utils.utils import setup_logging
-from vivo_project.config import ConfigLoader
+from yield_domain.utils.utils import setup_logging
+from config import ConfigLoader
 
 def test_logging():
     print("="*60)

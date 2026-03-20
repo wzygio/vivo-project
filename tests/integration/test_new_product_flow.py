@@ -5,9 +5,9 @@ from pathlib import Path
 import pandas as pd
 
 # 引入核心组件
-from vivo_project.config import ConfigLoader
-from vivo_project.utils.session_manager import SessionManager
-from vivo_project.application.yield_service import YieldAnalysisService
+from config import ConfigLoader
+from yield_domain.utils.session_manager import SessionManager
+from yield_domain.application.yield_service import YieldAnalysisService
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(message)s')

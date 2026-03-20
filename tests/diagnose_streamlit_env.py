@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 
 # 引入项目配置
-from vivo_project.config import ConfigLoader
-from vivo_project.utils.utils import setup_logging
+from config import ConfigLoader
+from yield_domain.utils.utils import setup_logging
 
 st.set_page_config(page_title="🔍 日志环境显影剂", layout="wide")
 

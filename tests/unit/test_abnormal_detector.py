@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import numpy as np
 import logging
-from vivo_project.core.abnormal_detector import AbnormalDetector
+from yield_domain.core.abnormal_detector import AbnormalDetector
 
 # ==============================================================================
 #  测试 1: 系统内部月度趋势检测 (detect_system_trend_alerts)

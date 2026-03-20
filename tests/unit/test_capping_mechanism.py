@@ -3,7 +3,7 @@ import numpy as np
 import logging
 # 请确保引用路径正确，根据之前的上下文，类名应为 SheetLotProcessor
 # 如果代码不在类里，请去掉前面的类名直接引用函数
-from vivo_project.core.sheet_lot_processor import _apply_random_cap_and_floor
+from yield_domain.core.sheet_lot_processor import _apply_random_cap_and_floor
 
 class TestCappingMechanism:
     """
