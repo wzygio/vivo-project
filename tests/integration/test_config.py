@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 print(f"📂 项目根目录检测为: {project_root}")
 
 try:
-    from config import ConfigLoader
+    from src.shared_kernel.config import ConfigLoader
     # 模拟 mwd_trend_processor 中的覆盖函数逻辑
     # 为了避免依赖过多，我们直接把该函数的逻辑复制过来测试，或者导入它
     from yield_domain.core.mwd_trend_processor import _apply_manual_overrides

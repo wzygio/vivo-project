@@ -2,7 +2,7 @@
 import pandas as pd
 import sys
 import logging
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.yield_service import YieldAnalysisService
 
 # 为了测试私有方法，我们需要一些 Hack

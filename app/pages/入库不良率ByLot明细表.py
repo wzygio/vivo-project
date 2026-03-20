@@ -3,7 +3,7 @@ import streamlit as st
 
 # --- 1. 初始化与配置 ---
 from app.utils.session_manager import SessionManager
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from app.utils.reloader import get_project_revision
 
 from yield_domain.application.yield_service import YieldAnalysisService

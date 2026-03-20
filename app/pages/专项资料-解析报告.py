@@ -6,7 +6,7 @@ from pathlib import Path
 
 # --- 1. 初始化与配置 ---
 from app.utils.session_manager import SessionManager
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.ppt_service import PPTService
 from yield_domain.application.pdf_service import PDFService
 from app.components.components import render_page_header

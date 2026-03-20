@@ -8,7 +8,7 @@ import time
 
 # --- 1. 基础配置与导入 ---
 from app.utils.session_manager import SessionManager
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 from app.components.components import render_page_header
 from yield_domain.application.file_manager_service import FileManagerService
 from yield_domain.application.excel_service import ExcelService

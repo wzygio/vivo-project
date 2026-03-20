@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import streamlit as st  # [新增] 引入 streamlit
 
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 
 # [双保险 1] 使用 @st.cache_resource 确保 Handler 永驻内存，且全生命周期只初始化一次
 @st.cache_resource

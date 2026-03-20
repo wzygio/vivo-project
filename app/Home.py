@@ -1,20 +1,45 @@
 import sys
 import os
 from pathlib import Path
-
-# 仅在 "入口文件" (被直接运行的文件) 中写这段代码，其他被 import 的业务文件里一行都不要写
-current_file = Path(__file__).resolve()
-src_root = current_file.parent.parent.parent 
-
-if str(src_root) not in sys.path:
-    sys.path.insert(0, str(src_root))
-# ------------------------------------
-
 import streamlit as st
 import streamlit.components.v1 as components
-from pathlib import Path
+
+# =====================================================================
+# 1. 动态锚定项目根目录与环境变量注入 (SOTA 架构基石)
+# =====================================================================
+def _inject_project_roots():
+    """
+    智能寻址算法：向上寻找 pyproject.toml 锚点，并注册 sys.path。
+    确保项目具有极强的可移植性，无论在何处运行都能正确解析包名。
+    """
+    current_dir = Path(__file__).resolve().parent
+    project_root = None
+    
+    # 向上回溯寻找项目身份证
+    for parent in [current_dir] + list(current_dir.parents):
+        if (parent / "pyproject.toml").exists():
+            project_root = parent
+            break
+            
+    if not project_root:
+        project_root = Path.cwd() # 兜底策略
+        
+    root_str = str(project_root)
+    src_str = str(project_root / "src")
+    
+    # 🚨 注入 1：项目根目录 (支撑 'from app.utils import...' 与 'from shared_kernel import...')
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+        
+    # 🚨 注入 2：后端业务包目录 (支撑 'from yield_domain.core import...')
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+
+# 在任何其它 import 发生之前，必须先执行环境注入
+_inject_project_roots()
 
 from app.utils.app_setup import AppSetup
+from src.shared_kernel.config import ConfigLoader
 
 @st.cache_resource
 def init_portal_resources():
@@ -69,11 +94,8 @@ st.markdown(FULL_SCREEN_CSS, unsafe_allow_html=True)
 # ==============================================================================
 def load_resource(filename):
     """读取 resources/static 下的文件内容"""
-    current_dir = Path(__file__).parent.resolve()
-    # 路径回溯：src/vivo_project/app -> src/vivo_project -> src -> (Root) -> resources
-    project_root = current_dir.parent.parent.parent
+    project_root = ConfigLoader.get_project_root()
     static_dir = project_root / "resources" / "static"
-    
     file_path = static_dir / filename
     
     if not file_path.exists():

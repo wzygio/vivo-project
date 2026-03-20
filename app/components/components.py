@@ -34,7 +34,7 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_p
     
     if lot_data and 'code_level_details' in lot_data:
         # 1. 提取所有 Code 级明细并合并
-        all_dfs = []
+        all_dfs: list[pd.DataFrame] = []
         for df in lot_data['code_level_details'].values():
             if not df.empty and 'lot_id' in df.columns and 'warehousing_time' in df.columns:
                 all_dfs.append(df)
@@ -84,8 +84,8 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_p
                         oos_records.append({
                             "超规 Lot ID": row.get('lot_id', 'Unknown'),
                             "异常 Code": code,
-                            "管控规格线": f"{spec_limit * 100:.2f}%" if spec_limit < 1.0 else "无限制",
-                            "实际不良率": f"{rate * 100:.2f}%",
+                            "管控规格线": f"{(spec_limit or 0) * 100:.2f}%" if spec_limit < 1.0 else "无限制",
+                            "实际不良率": f"{(rate or 0) * 100:.2f}%",
                             "不良panel数": defect_count,
                             "入库时间": w_time_str,
                             "阵列投入时间": a_time_str,

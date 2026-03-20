@@ -4,7 +4,7 @@ import streamlit as st  # 导入 streamlit 库
 from pathlib import Path
 from typing import Dict
 
-from config_model import AppConfig
+from src.shared_kernel.config_model import AppConfig
 
 class ExcelService:
     @staticmethod

@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import streamlit as st  # [新增] 引入 streamlit
 
-from config import ConfigLoader
+from src.shared_kernel.config import ConfigLoader
 
 
 def save_dict_to_excel(data_dict: dict, output_dir: Path, filename: str):

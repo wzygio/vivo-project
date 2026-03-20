@@ -81,7 +81,7 @@ def prepare_mapping_data(
         if df_defective_panels.empty: return pd.DataFrame()
 
         # --- 步骤2: 位置随机化 (保持不变) ---
-        batches_after_pos_modification = []
+        batches_after_pos_modification: list[pd.DataFrame] = []
         for batch_no in sorted_batches:
             df_current_batch = df_defective_panels[df_defective_panels['batch_no'] == batch_no].copy()
             df_current_batch['panel_id'] = df_current_batch.apply(
@@ -90,12 +90,14 @@ def prepare_mapping_data(
             )
             batches_after_pos_modification.append(df_current_batch) 
         
+        if not batches_after_pos_modification:
+            return pd.DataFrame()
+
         df_defective_panels_modified = pd.concat(batches_after_pos_modification)
         
         # --- 步骤3: Rate-Based 级联衰减 (核心逻辑重写) ---
         # 逻辑：LimitRate_Next = Rate_Prev * 0.95
         #      MaxCount_Next = LimitRate_Next * TotalInput_Next
-        
         max_allowed_rates = {} # 存储每个 Code 允许的最大不良率 (Rate)
         processed_dfs = []
 
@@ -111,7 +113,7 @@ def prepare_mapping_data(
             for code_desc, df_code_group in df_current_batch.groupby('defect_desc'): # type: ignore
                 current_count = len(df_code_group)
                 # 计算当前原始不良率
-                current_rate = current_count / current_batch_total
+                current_rate = current_count / (current_batch_total or 1)
                 
                 prev_max_rate = max_allowed_rates.get(code_desc, float('inf'))
                 
@@ -123,7 +125,7 @@ def prepare_mapping_data(
                     target_rate = min(current_rate, prev_max_rate) * SECOND_REDUCTION_FACTOR
                 
                 # 将目标良率转换回目标数量 (Count)
-                target_count = int(target_rate * current_batch_total)
+                target_count = int((target_rate or 0) * (current_batch_total or 0))
                 
                 # 确保至少保留 1 个 (如果原本有的话)，且不超过实际数量
                 target_count = max(1, min(target_count, current_count)) if current_count > 0 else 0
@@ -136,7 +138,7 @@ def prepare_mapping_data(
                 
                 # 更新允许的最大良率 (作为下一个批次的天花板)
                 # 注意：这里记录的是衰减后的 Rate
-                actual_processed_rate = len(df_processed_code) / current_batch_total
+                actual_processed_rate = len(df_processed_code) / (current_batch_total or 1)
                 max_allowed_rates[code_desc] = actual_processed_rate
                 
                 processed_codes_in_batch.append(df_processed_code)
