@@ -2,15 +2,15 @@
 import streamlit as st
 
 # --- 1. 初始化与配置 ---
-from yield_domain.utils.session_manager import SessionManager
+from app.utils.session_manager import SessionManager
 from config import ConfigLoader
-from yield_domain.utils.reloader import get_project_revision
+from app.utils.reloader import get_project_revision
 
 from yield_domain.application.yield_service import YieldAnalysisService
-from yield_domain.app.components.components import render_page_header
+from app.components.components import render_page_header
 
 # 引入区块渲染组件
-from yield_domain.app.components.table_sections import (
+from app.components.table_sections import (
     render_sheet_group_summary_section,
     render_sheet_code_details_section,
     render_sheet_top20_section

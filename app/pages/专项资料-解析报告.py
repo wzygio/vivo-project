@@ -5,11 +5,11 @@ import time
 from pathlib import Path
 
 # --- 1. 初始化与配置 ---
-from yield_domain.utils.session_manager import SessionManager
+from app.utils.session_manager import SessionManager
 from config import ConfigLoader
 from yield_domain.application.ppt_service import PPTService
 from yield_domain.application.pdf_service import PDFService
-from yield_domain.app.components.components import render_page_header
+from app.components.components import render_page_header
 
 # 页面基础设置
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")

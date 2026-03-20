@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from yield_domain.app.components.components import create_code_selection_ui
-from yield_domain.app.charts.sheet_details_chart import render_lot_id_filter, render_sheet_id_query
+from app.components.components import create_code_selection_ui
+from app.charts.sheet_details_chart import render_lot_id_filter, render_sheet_id_query
 
 # ==============================================================================
 #  Lot 级明细区块 (For ByLot明细表)

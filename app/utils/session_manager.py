@@ -3,8 +3,8 @@ import streamlit as st
 import logging
 from pathlib import Path
 import time
-from config import ConfigLoader
-from config_model import AppConfig
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.config_model import AppConfig
 
 class SessionManager:
     """

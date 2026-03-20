@@ -7,7 +7,7 @@ from pathlib import Path
 
 # 引入项目配置
 from config import ConfigLoader
-from yield_domain.utils.utils import setup_logging
+from app.utils.logger_setup import setup_logging
 
 st.set_page_config(page_title="🔍 日志环境显影剂", layout="wide")
 

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 
 # [Refactor] 移除全局 CONFIG, PROJECT_ROOT, RESOURCE_DIR
-from config_model import AppConfig
+from src.shared_kernel.config_model import AppConfig
 
 # ==============================================================================
 #             ByCode计算Sheet级不良率

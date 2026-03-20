@@ -2,14 +2,6 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import Tuple, Any, cast, Optional
-from datetime import datetime as dt
-from pathlib import Path
-from pandas import Series
-
-from config_model import AppConfig
-from vivo_project.core.abnormal_detector import AbnormalDetector
-from vivo_project.infrastructure.data_loader import load_excel_report
 
 class TrendRegulator:
     """

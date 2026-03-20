@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
-from yield_domain.config_model import AppConfig
+from shared_kernel.config_model import AppConfig
 from yield_domain.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
