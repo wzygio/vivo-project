@@ -16,10 +16,10 @@ logging.basicConfig(level=logging.INFO, format='%(message)s')
 print(f"📂 项目根目录检测为: {project_root}")
 
 try:
-    from vivo_project.config import ConfigLoader
+    from config import ConfigLoader
     # 模拟 mwd_trend_processor 中的覆盖函数逻辑
     # 为了避免依赖过多，我们直接把该函数的逻辑复制过来测试，或者导入它
-    from vivo_project.core.mwd_trend_processor import _apply_manual_overrides
+    from yield_domain.core.mwd_trend_processor import _apply_manual_overrides
 except ImportError as e:
     print(f"❌ 导入失败，请检查环境: {e}")
     sys.exit(1)

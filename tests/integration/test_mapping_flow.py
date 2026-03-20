@@ -2,11 +2,11 @@
 import pandas as pd
 import sys
 import logging
-from vivo_project.config import ConfigLoader
-from vivo_project.application.yield_service import YieldAnalysisService
+from config import ConfigLoader
+from yield_domain.application.yield_service import YieldAnalysisService
 
 # 为了测试私有方法，我们需要一些 Hack
-from vivo_project.core.mapping_processor import (
+from yield_domain.core.mapping_processor import (
     prepare_mapping_data, 
     _parse_panel_id_to_coords
 )

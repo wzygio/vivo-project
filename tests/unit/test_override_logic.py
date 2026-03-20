@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
-from vivo_project.config import ConfigLoader
-from vivo_project.core.mwd_trend_processor import create_mwd_trend_data
+from config import ConfigLoader
+from yield_domain.core.mwd_trend_processor import create_mwd_trend_data
 
 # 1. 模拟输入数据 (Panel Level)
 @pytest.fixture

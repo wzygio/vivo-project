@@ -3,7 +3,7 @@ import numpy as np
 import logging
 # 请根据实际项目结构导入函数
 # 假设该函数位于 vivo_project.core.mwd_trend_processor 模块中
-from vivo_project.core.mwd_trend_processor import _calculate_adaptive_shadow_ema
+from yield_domain.core.mwd_trend_processor import _calculate_adaptive_shadow_ema
 
 class TestShadowEMA:
     """
