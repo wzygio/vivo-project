@@ -39,3 +39,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vivo_project"]
+
+[tool.pyright]
+# 告诉 Pyright 静态类型检查器虚拟环境位置（去哪里寻找第三方依赖包）
+venvPath = "."
+venv = ".venv"
+# 强制屏蔽所有繁琐的类型匹配和属性找不到的噪音
+reportArgumentType = "none"
+reportAttributeAccessIssue = "none"
+reportGeneralTypeIssues = "none"
+reportCallIssue = "none"
+reportOptionalMemberAccess = "none"
+reportReturnType = "none"

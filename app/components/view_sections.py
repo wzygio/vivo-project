@@ -3,19 +3,19 @@ import streamlit as st
 import pandas as pd
 
 # 引入现有的绘图函数
-from yield_domain.app.charts.mwd_chart import (
+from app.charts.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
     slice_recent_data
 )
-from yield_domain.app.charts.sheet_lot_chart import (
+from app.charts.sheet_lot_chart import (
     create_lot_defect_chart, 
     create_sheet_defect_chart,
     create_mapping_heatmap,
     parse_panel_id_to_coords,
     create_sheet_stack_chart
 )
-from yield_domain.app.components.components import COLOR_MAP
+from app.components.components import COLOR_MAP
 from yield_domain.core.mapping_processor import apply_hotspot_modification_to_matrix
 
 # ==============================================================================

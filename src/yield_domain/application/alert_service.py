@@ -4,9 +4,9 @@ import pandas as pd
 from pathlib import Path
 
 # [Refactor] 引入配置模型，移除全局 CONFIG
-from config_model import AppConfig
-from vivo_project.infrastructure.data_loader import load_excel_report
-from vivo_project.core.abnormal_detector import AbnormalDetector
+from src.shared_kernel.config_model import AppConfig
+from yield_domain.infrastructure.data_loader import load_excel_report
+from yield_domain.core.abnormal_detector import AbnormalDetector
 
 class AlertService:
     @staticmethod

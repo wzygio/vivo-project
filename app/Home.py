@@ -14,7 +14,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
 
-from yield_domain.utils.app_setup import AppSetup
+from app.utils.app_setup import AppSetup
+
 @st.cache_resource
 def init_portal_resources():
     AppSetup.initialize_app(log_name="portal_main.log")

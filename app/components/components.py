@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Dict
 
 # [Refactor] 引入配置模型
-from yield_domain.config_model import AppConfig
-from yield_domain.utils.session_manager import SessionManager
+from src.shared_kernel.config_model import AppConfig
+from app.utils.session_manager import SessionManager
 
 # [Refactor] 定义默认缓存时间，替代原 CONFIG['application']['cache_ttl_hours']
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
@@ -21,7 +21,6 @@ COLOR_MAP = {
     'oled_mura_rate': "#ff2828",   
     'array_pixel_rate': "#6fb9ff"   
 }
-
 
 def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_period: int = 30):
     """
@@ -92,8 +91,7 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_p
                             "阵列投入时间": a_time_str,
                         })
 
-    # --- 数据计算完毕，开始渲染 UI ---
-    
+    # --- 数据计算完毕，开始渲染 U
     oos_df = pd.DataFrame(oos_records)
     oos_count = oos_df['超规 Lot ID'].nunique() if not oos_df.empty else 0
     oos_rate = f"{(oos_count / total_recent_lots * 100):.1f}%" if total_recent_lots > 0 else "0.0%"

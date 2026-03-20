@@ -6,7 +6,7 @@ import pandas as pd
 
 # 引入核心组件
 from config import ConfigLoader
-from yield_domain.utils.session_manager import SessionManager
+from app.utils.session_manager import SessionManager
 from yield_domain.application.yield_service import YieldAnalysisService
 
 # 配置日志

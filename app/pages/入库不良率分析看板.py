@@ -7,7 +7,7 @@ ENABLE_HOT_RELOAD = True
 
 if ENABLE_HOT_RELOAD:
     try:
-        from yield_domain.utils.reloader import deep_reload_modules, get_project_revision
+        from app.utils.reloader import deep_reload_modules, get_project_revision
         from config import ConfigLoader
         
         # 1. 计算当前代码目录的真实哈希指纹
@@ -28,27 +28,27 @@ if ENABLE_HOT_RELOAD:
         pass
 
 # --- 1. 配置与初始化 ---
-from yield_domain.utils.session_manager import SessionManager
+from app.utils.session_manager import SessionManager
 from config import ConfigLoader
-from yield_domain.utils.app_setup import AppSetup
-from yield_domain.utils.reloader import get_project_revision
+from app.utils.app_setup import AppSetup
+from app.utils.reloader import get_project_revision
 
 from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
 from yield_domain.application.excel_service import ExcelService
 
 # 引入图表组件
-from yield_domain.app.components.components import (
+from app.components.components import (
     create_code_selection_ui, 
     render_page_header, 
     render_lot_spec_alert,
     render_trend_override_uploader
 )
-from yield_domain.app.charts.mwd_chart import (
+from app.charts.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]
-from yield_domain.app.components.view_sections import (
+from app.components.view_sections import (
     render_macro_trend_section,
     render_micro_trend_section,
     render_lot_distribution_section,
