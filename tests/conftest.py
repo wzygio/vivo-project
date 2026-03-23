@@ -5,7 +5,7 @@ from pathlib import Path
 
 # [Refactor] 引入新的配置加载器
 from src.shared_kernel.config import ConfigLoader
-from shared_kernel.config_model import AppConfig
+from src.shared_kernel.config_model import AppConfig
 from tests.factories import DataFactory
 
 @pytest.fixture(scope="session")

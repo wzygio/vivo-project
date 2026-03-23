@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
-from shared_kernel.config_model import AppConfig
+from src.shared_kernel.config_model import AppConfig
 from yield_domain.infrastructure.repositories.panel_repository import PanelRepository
 
 # --- Core (Processors) ---
@@ -66,11 +66,23 @@ class YieldAnalysisService:
         """
         logging.info("--- [L1 Cache Miss] 加载原始 Panel 数据... ---")
         
+        # 提取查询参数 (提前提取，用于获取动态路由所需的产品代码)
+        ds_config = config.data_source
+        prod_code = ds_config.product_code
+        
         # 1. 提取仓库配置
         processing_conf = config.processing
-        # 这里的路径相对性取决于 ConfigLoader 如何定义 root
-        snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet') 
+        
+        # =========================================================================
+        # [核心修正]: 文件名规范由 yield_panel_snapshot 变更为 snapshot_{prod_code}
+        # =========================================================================
+        default_snapshot_name = f"snapshot_{prod_code}.parquet"
+        default_snapshot_path = Path("data") / prod_code / default_snapshot_name
+        
+        snapshot_path_str = processing_conf.get('snapshot_path', str(default_snapshot_path)) 
         snapshot_path = Path(snapshot_path_str) 
+        
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         
         use_snapshot = processing_conf.get('use_local_snapshot', True)
 
@@ -80,18 +92,15 @@ class YieldAnalysisService:
             use_snapshot=use_snapshot
         )
         
-        # [核心修复]: 每次调用时，动态获取真实的、流动的时间窗口
+        # 每次调用时，动态获取真实的、流动的时间窗口
         start_date, end_date = YieldAnalysisService.get_time_window()
         
         logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
 
-        # 3. 提取查询参数
-        ds_config = config.data_source
-        
         return repo.get_panel_details(
             start_date=start_date.strftime('%Y-%m-%d'),
             end_date=end_date.strftime('%Y-%m-%d'),
-            product_code=ds_config.product_code,
+            product_code=prod_code,
             work_order_types=ds_config.work_order_types,
             target_defect_groups=ds_config.target_defect_groups 
         )
