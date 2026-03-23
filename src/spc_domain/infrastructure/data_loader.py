@@ -21,42 +21,45 @@ class SpcQueryConfig(BaseModel):
 
 def load_spc_measurements(
     db_manager: 'DatabaseManager', 
-    start_str: str, # [架构调整] 剥离 config 强耦合，直接接收标量参数
+    start_str: str, 
     end_str: str,
     prod_code: str
 ) -> pd.DataFrame:
     """
     [纯粹的数据访问对象 DAO]
-    无视具体的站点/参数过滤要求，强制全量拉取该产品在指定时间段内的三厂全部原始量测数据。
+    处理多厂别分表逻辑，解决 sheet_id/glass_id 及时间戳列名不一致的问题，
+    并关联 MES 字典表翻译产品名称。
     """
-    logging.info(f"==> [DAO] 开始从底层数据库全量抽取产品 {prod_code} 的 SPC 数据 ({start_str} 至 {end_str})...")
+    logging.info(f"==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 {prod_code} 的 SPC 数据...")
     
     start_time_fmt = f"{start_str} 00:00:00"
     end_time_fmt = f"{end_str} 23:59:59"
 
+    # [架构升级] 三元组映射字典：(物理表名, ID列名, 时间戳列名)
     factory_meta = {
-        'ARRAY': ('SPC_TZBJX_ARRAY', 'sheet_id'),
-        'OLED': ('SPC_TZBJX_OLED', 'glass_id'),
-        'TP': ('SPC_TZBJX_TSP', 'glass_id')
+        'ARRAY': ('spc_tzbjx_array', 'sheet_id', 'sheet_start_time'),
+        'OLED': ('spc_tzbjx_oled', 'glass_id', 'glass_start_time'),
+        'TP': ('spc_tzbjx_tsp', 'glass_id', 'glass_start_time')
     }
 
     sql_queries = []
     
-    # 无差别构建全量 UNION ALL 语句
-    for fac, (table_name, id_col) in factory_meta.items():
+    # 动态构建包含 Schema 路由、列名抹平、和字典表 JOIN 的大一统 SQL
+    for fac, (table_name, id_col, time_col) in factory_meta.items():
         q = f"""
         SELECT 
             '{fac}' AS factory,
-            prod_code, 
-            sheet_start_time, 
-            {id_col} AS sheet_id, 
-            step_id, 
-            param_name, 
-            param_value
-        FROM {table_name}
-        WHERE sheet_start_time >= '{start_time_fmt}' 
-          AND sheet_start_time <= '{end_time_fmt}' 
-          AND prod_code = '{prod_code}'
+            P.PRODUCTCODE AS prod_code, 
+            T.{time_col} AS sheet_start_time, 
+            T.{id_col} AS sheet_id, 
+            T.step_id, 
+            T.param_name, 
+            T.param_value
+        FROM eda.{table_name} T
+        JOIN DWR_MES_PRODUCTSPEC P ON T.product_spec = P.PRODUCTSPECNAME
+        WHERE T.{time_col} >= '{start_time_fmt}' 
+          AND T.{time_col} <= '{end_time_fmt}' 
+          AND P.PRODUCTCODE = '{prod_code}'
         """
         sql_queries.append(q)
 
@@ -66,7 +69,7 @@ def load_spc_measurements(
         if db_manager.engine is None:
             raise ValueError("数据库引擎未初始化。")
 
-        logging.info("执行大一统多厂别 UNION SPC 明细 SQL 查询...")
+        logging.info("执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...")
         measure_df = pd.read_sql(text(final_sql_query), db_manager.engine)
         measure_df.columns = measure_df.columns.str.lower() 
         
@@ -80,7 +83,7 @@ def load_spc_measurements(
     except Exception as e:
         logging.error(f"[DAO] 提取 SPC 底层量测数据失败: {e}")
         return pd.DataFrame()
-
+    
 def load_spc_spec_limits(
     db_manager: 'DatabaseManager', 
     prod_code: str

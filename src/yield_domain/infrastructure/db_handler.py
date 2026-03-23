@@ -55,7 +55,11 @@ class DatabaseManager:
             )
             
             # 创建引擎
-            engine = create_engine(db_uri)
+            engine = create_engine(
+                db_uri,
+                pool_pre_ping=True,  # 每次执行 SQL 前，先发个 PING 探测连接是否还活着。死了就自动重连。
+                pool_recycle=3600    # 每小时强制回收重建一次连接池，防止数据库端掐断长时间休眠的连接。
+            )
             
             # 测试连接 (可选，但在初始化时做一次检查是好习惯)
             with engine.connect() as connection:

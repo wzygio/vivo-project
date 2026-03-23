@@ -48,7 +48,7 @@ from app.charts.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]
-from app.components.view_sections import (
+from app.components.yield_sections import (
     render_macro_trend_section,
     render_micro_trend_section,
     render_lot_distribution_section,
