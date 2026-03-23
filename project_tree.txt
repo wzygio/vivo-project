@@ -1,0 +1,145 @@
+【Project Architecture Context】
+以下是当前项目的完整代码结构树，请依据此结构理解各个模块的职责与物理位置：
+
+vivo-project/
+├── app
+│   ├── charts
+│   │   ├── __init__.py
+│   │   ├── mwd_chart.py
+│   │   ├── sheet_details_chart.py
+│   │   └── sheet_lot_chart.py
+│   ├── components
+│   │   ├── __init__.py
+│   │   ├── components.py
+│   │   ├── table_sections.py
+│   │   └── view_sections.py
+│   ├── pages
+│   │   ├── 专项资料-台账周报.py
+│   │   ├── 专项资料-解析报告.py
+│   │   ├── 入库不良率ByLot明细表.py
+│   │   ├── 入库不良率BySheet明细表.py
+│   │   └── 入库不良率分析看板.py
+│   ├── utils
+│   │   ├── __init__.py
+│   │   ├── app_setup.py
+│   │   ├── logger_setup.py
+│   │   ├── reloader.py
+│   │   └── session_manager.py
+│   ├── __init__.py
+│   └── Home.py
+├── config
+│   ├── products
+│   │   ├── M626.yaml
+│   │   └── M678.yaml
+│   └── global.yaml
+├── docs
+│   ├── 报表文件
+│   │   ├── DB22_Search_RUKU_Defect_Total.cpt
+│   │   ├── DB92.IMP_RS_DELETE_ID.cpt
+│   │   ├── H048_Search_Warehousing_Defect_By_BATCH.cpt
+│   │   ├── spc.sql
+│   │   └── Z084_Search_SPCTX_ByFactory.cpt
+│   ├── post-receive
+│   ├── Project_Gantt.html
+│   └── vivo-报表系统.xmind
+├── resources
+│   ├── M626
+│   │   ├── analysis_files
+│   │   └── project_files
+│   ├── M678
+│   │   ├── analysis_files
+│   │   │   ├── CPD2455 SV4整机组装检出点状白斑不良分析报告20251113.pdf
+│   │   │   ├── M678 2nit发红色不均不良调查报告B -0918.pptx
+│   │   │   ├── M678 SV2客诉亮点报告-20250904.pptx
+│   │   │   ├── M678 SV3-2 客户端 整机组装前 边缘黑斑_FA Report_20251024.pdf
+│   │   │   └── 北极星-M678产品FIB确认-10月.pptx
+│   │   └── project_files
+│   ├── project_files
+│   │   ├── 北极星周报-WK41-解密版.pptx
+│   │   ├── 北极星周报-WK42.pptx
+│   │   ├── 北极星周报-WK44.pptx
+│   │   ├── 北极星周报-WK45.pptx
+│   │   ├── 北极星周报-WK46.pptx
+│   │   ├── 北极星周报-WK47(1).pptx
+│   │   └── 北极星月报M11.pptx
+│   └── static
+│       ├── config.js
+│       ├── index.html
+│       ├── script.js
+│       └── style.css
+├── scripts
+│   ├── fix_imports.py
+│   ├── generate_tree.py
+│   └── scaffold_generator.py
+├── src
+│   ├── shared_kernel
+│   │   ├── utils
+│   │   │   ├── __init__.py
+│   │   │   └── excel_tools.py
+│   │   ├── __init__.py
+│   │   ├── config.py
+│   │   └── config_model.py
+│   ├── spc_domain
+│   │   ├── application
+│   │   │   ├── __init__.py
+│   │   │   └── spc_service.py
+│   │   ├── core
+│   │   │   ├── __init__.py
+│   │   │   └── spc_calculator.py
+│   │   ├── infrastructure
+│   │   │   ├── repositories
+│   │   │   │   └── spc_repository.py
+│   │   │   ├── __init__.py
+│   │   │   └── data_loader.py
+│   │   └── __init__.py
+│   └── yield_domain
+│       ├── application
+│       │   ├── __init__.py
+│       │   ├── alert_service.py
+│       │   ├── excel_service.py
+│       │   ├── file_manager_service.py
+│       │   ├── pdf_service.py
+│       │   ├── ppt_service.py
+│       │   └── yield_service.py
+│       ├── core
+│       │   ├── __init__.py
+│       │   ├── abnormal_detector.py
+│       │   ├── batch_statistics.py
+│       │   ├── defect_modifier.py
+│       │   ├── mapping_processor.py
+│       │   ├── mwd_trend_processor.py
+│       │   ├── sheet_lot_processor.py
+│       │   └── trend_regulator.py
+│       ├── infrastructure
+│       │   ├── repositories
+│       │   │   ├── __init__.py
+│       │   │   └── panel_repository.py
+│       │   ├── __init__.py
+│       │   ├── data_loader.py
+│       │   └── db_handler.py
+│       └── __init__.py
+├── tests
+│   ├── integration
+│   │   ├── test_config.py
+│   │   ├── test_mapping_flow.py
+│   │   └── test_new_product_flow.py
+│   ├── unit
+│   │   ├── diagnose_streamlit_env.py
+│   │   ├── test_abnormal_detector.py
+│   │   ├── test_capping_mechanism.py
+│   │   ├── test_logging.py
+│   │   ├── test_override_logic.py
+│   │   └── test_shadow_ema.py
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── diagnose_streamlit_env.py
+│   └── factories.py
+├── .env
+├── .gitignore
+├── .python-version
+├── pyproject.toml
+├── README.md
+├── requirements_locked.txt
+├── run_hidden.vbs
+├── start_streamlit.bat
+└── uv.lock

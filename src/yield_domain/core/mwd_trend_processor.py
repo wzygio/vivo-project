@@ -659,7 +659,7 @@ def _generate_daily_from_weekly_baseline(daily_skeleton, weekly_final, target_de
             ts_seeds = np.array([int(d.timestamp() / 86400) for d in day_indices])
             scramble_factor = 1234567 
             stable_group_hash = sum(ord(c) for c in str(group))
-            noise_seeds = (ts_seeds * scramble_factor) + (stable_group_hash % 9999)
+            noise_seeds = (ts_seeds * scramble_factor) + (stable_group_hash % 9999) # type: ignore
             noises = np.sin(noise_seeds) * volatility
             
             # 2. 计算加权权重并归一化
