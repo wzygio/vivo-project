@@ -2,10 +2,16 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- 1. 引入项目架构规范的全局组件 ---
+# ==============================================================================
+#  配置与初始化
+# ==============================================================================
 from app.utils.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
-from app.components.components import render_page_header
+from app.components.components import (
+    render_page_header, 
+    extract_cached_funcs,
+    setup_hot_reload
+)
 from app.components.spc_sections import (
     render_spc_control_panel,
     render_spc_summary_section,
@@ -17,25 +23,26 @@ from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.yield_domain.infrastructure.db_handler import DatabaseManager
 
-# --------------------------------------------------------------------------
-# 页面主控制器 (Thin Page Controller)
-# --------------------------------------------------------------------------
-st.set_page_config(page_title="SPC 报警报表", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
+setup_hot_reload(enable=True)
 
+st.title("自动预警看板")
+with st.expander("数据刷新"):
+    # [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
+    active_config = SessionManager.get_active_config()
+    funcs_to_clear = extract_cached_funcs(SpcAnalysisService)
+    render_page_header(
+        config=active_config,
+        cached_funcs=funcs_to_clear
+    )
 
-# 2. 渲染页面标题
-st.title("📈 SPC特性报警率By工厂一级报表 V1.0")
-
-# --------------------------------------------------------------------------
-# 数据请求层 (Data Fetching) - 适配后端 V4.2 智能扫描版本
-# --------------------------------------------------------------------------
-with st.spinner("正在全量抽取 SPC 多维视图模型 (全产品自动扫描中)..."):
+# ==============================================================================
+#  数据加载
+# ==============================================================================
+with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
     try:
         # A. 实例化数据库管理器
         db_manager = DatabaseManager() 
-        
-        # [架构调整] B. 不再在前端构建路径！后端现在会自动扫描 data/ 目录。
-        # 因此，我们直接跳过路径创建逻辑，保持前端“薄如蝉翼”。
         
         # C. 获取后端统一定义的时间窗口
         start_dt, end_dt = SpcAnalysisService.get_time_window()
@@ -74,8 +81,6 @@ st.divider()
 
 # 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
 render_spc_summary_section(view_model.global_summary_df)
-
-st.divider()
 
 # 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
 render_spc_detail_section(view_model.detail_df, filter_state)

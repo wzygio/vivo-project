@@ -2,32 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# --- [新增] 热重载机制 ---
-ENABLE_HOT_RELOAD = True
-
-if ENABLE_HOT_RELOAD:
-    try:
-        from app.utils.reloader import deep_reload_modules, get_project_revision
-        from src.shared_kernel.config import ConfigLoader
-        
-        # 1. 计算当前代码目录的真实哈希指纹
-        project_root = ConfigLoader.get_project_root()
-        current_rev = get_project_revision(project_root)
-        
-        # 2. 从 session_state 获取上一次的指纹
-        last_rev = st.session_state.get('last_code_revision')
-        
-        # 3. 只有当代码指纹发生变化时，才执行暴力的模块卸载
-        if last_rev is not None and last_rev != current_rev:
-            deep_reload_modules()
-            
-        # 4. 更新指纹
-        st.session_state['last_code_revision'] = current_rev
-        
-    except ImportError:
-        pass
-
-# --- 1. 配置与初始化 ---
+# ==============================================================================
+#  配置与初始化
+# ==============================================================================
 from app.utils.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from app.utils.app_setup import AppSetup
@@ -42,7 +19,9 @@ from app.components.components import (
     create_code_selection_ui, 
     render_page_header, 
     render_lot_spec_alert,
-    render_trend_override_uploader
+    render_trend_override_uploader,
+    extract_cached_funcs,
+    setup_hot_reload
 )
 from app.charts.mwd_chart import (
     prepare_union_data_for_filter
@@ -56,11 +35,8 @@ from app.components.yield_sections import (
     render_mapping_section
 )
 
-# ==============================================================================
-#  数据加载
-# ==============================================================================
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-
+setup_hot_reload(enable=True)
 AppSetup.initialize_app()
 
 # [Refactor] 2. 获取3上下文 (配置 & 路径)
@@ -68,8 +44,13 @@ active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 product_dir = SessionManager.get_product_dir()
 
-# [Refactor] 3. 渲染页头 (注入 config 用于刷新逻辑)
-render_page_header("📊 入库不良率分析看板", active_config)
+# [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
+funcs_to_clear = extract_cached_funcs(YieldAnalysisService)
+render_page_header(
+    title="📊 入库不良率分析看板", 
+    config=active_config,
+    cached_funcs=funcs_to_clear
+)
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件 (注入 config 用于刷新逻辑)
 query_params = st.query_params
@@ -77,7 +58,9 @@ if query_params.get("admin") == "true":
     render_trend_override_uploader(active_config, product_dir)
 ExcelService.inject_excel_overrides_to_config(active_config, product_dir)
 
-# --- 2 全局数据加载 ---
+# ==============================================================================
+#  数据加载
+# ==============================================================================
 with st.spinner("正在加载全维度分析数据..."):
     # [Refactor] 4. 获取核心版本号 (依赖注入 project_root)
     current_revision = get_project_revision(project_root)
@@ -120,7 +103,6 @@ with st.spinner("正在加载全维度分析数据..."):
 if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
     st.error("部分核心数据加载失败 (数据为空或数据库连接异常)，请检查后台日志。")
     st.stop()
-
 
 # ==============================================================================
 #  🚨 智能预警中心 (Intelligent Alert Center)

@@ -46,20 +46,25 @@ class SpcAnalysisService:
 
     @staticmethod
     def _apply_time_bucket_mapping(df: pd.DataFrame, time_type: str, end_dt: datetime) -> pd.DataFrame:
+        """
+        [内部辅助] 极速时间桶映射引擎
+        V4.4 架构级重构：支持“重叠数据魔方 (Overlapping Data Cubes)”。
+        """
         if df.empty or 'sheet_start_time' not in df.columns:
             return df
+            
+        df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce') 
         
-        # 确保时间列格式正确
-        df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce')
-        
+        # 预计算各维度的基础格式
         day_str = df['sheet_start_time'].dt.strftime('%Y%m%d')
         month_str = df['sheet_start_time'].dt.strftime('%Y') + 'M' + df['sheet_start_time'].dt.strftime('%m')
         iso_cal = df['sheet_start_time'].dt.isocalendar()
         week_str = iso_cal.year.astype(str) + 'W' + iso_cal.week.astype(str).str.zfill(2)
 
-        day_sort = df['sheet_start_time'].dt.normalize()
-        week_sort = df['sheet_start_time'].dt.to_period('W').dt.start_time
-        month_sort = df['sheet_start_time'].dt.to_period('M').dt.start_time
+        # 构建防呆的绝对排序基准 (利用 1_, 2_, 3_ 强制保证 月->周->天 的 X 轴顺序)
+        day_sort = "3_" + day_str
+        week_sort = "2_" + week_str
+        month_sort = "1_" + month_str
         
         if time_type == 'DAY':
             df['time_group'], df['sort_index'] = day_str, day_sort
@@ -68,17 +73,51 @@ class SpcAnalysisService:
         elif time_type == 'MONTH':
             df['time_group'], df['sort_index'] = month_str, month_sort
         elif time_type == 'MIXED':
-            end_dt_normalized = pd.to_datetime(end_dt).normalize()
-            day_bound = end_dt_normalized - pd.Timedelta(days=6)
-            week_bound = day_bound - pd.Timedelta(days=21)
+            end_dt_ts = pd.to_datetime(end_dt).normalize()
+            
+            # 1. 天级数据桶 (最近 7 天)
+            day_bound = end_dt_ts - pd.Timedelta(days=6)
+            mask_day = df['sheet_start_time'] >= day_bound
+            df_day = df[mask_day].copy()
+            df_day['time_group'] = day_str[mask_day]
+            df_day['sort_index'] = day_sort[mask_day]
+            
+            # 2. 周级数据桶 (最近 3 个完整自然周，包含天级数据，打破互斥)
+            w0_iso = end_dt_ts.isocalendar()
+            w1_iso = (end_dt_ts - pd.Timedelta(days=7)).isocalendar()
+            w2_iso = (end_dt_ts - pd.Timedelta(days=14)).isocalendar()
+            # 稳健提取年份与周数 (索引 [0] 是年, [1] 是周)
+            target_weeks = [
+                f"{w0_iso[0]}W{str(w0_iso[1]).zfill(2)}",
+                f"{w1_iso[0]}W{str(w1_iso[1]).zfill(2)}",
+                f"{w2_iso[0]}W{str(w2_iso[1]).zfill(2)}"
+            ]
+            mask_week = week_str.isin(target_weeks)
+            df_week = df[mask_week].copy()
+            df_week['time_group'] = week_str[mask_week]
+            df_week['sort_index'] = week_sort[mask_week]
+            
+            # 3. 月级数据桶 (最近 3 个完整自然月，强制抛弃如 12月 等多余数据)
+            m0 = end_dt_ts
+            m1 = m0 - pd.DateOffset(months=1)
+            m2 = m0 - pd.DateOffset(months=2)
+            target_months = [
+                m0.strftime('%YM%m'),
+                m1.strftime('%YM%m'),
+                m2.strftime('%YM%m')
+            ]
+            mask_month = month_str.isin(target_months)
+            df_month = df[mask_month].copy()
+            df_month['time_group'] = month_str[mask_month]
+            df_month['sort_index'] = month_sort[mask_month]
+            
+            # 物理堆叠重叠的数据桶
+            df = pd.concat([df_month, df_week, df_day], ignore_index=True)
 
-            cond_day = df['sheet_start_time'] >= day_bound
-            cond_week = (df['sheet_start_time'] >= week_bound) & (df['sheet_start_time'] < day_bound)
-            cond_month = df['sheet_start_time'] < week_bound
+        else:
+            logging.warning(f"未知的时间颗粒度: {time_type}，降级为按日(DAY)聚合。")
+            df['time_group'], df['sort_index'] = day_str, day_sort
 
-            df['time_group'] = np.select([cond_day, cond_week, cond_month], [day_str, week_str, month_str], default=day_str)
-            df['sort_index'] = np.select([cond_day, cond_week, cond_month], [day_sort, week_sort, month_sort], default=day_sort)
-        
         return df
 
     @staticmethod
