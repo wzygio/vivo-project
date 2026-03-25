@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime, timedelta
 
-from yield_domain.infrastructure.db_handler import DatabaseManager
+from shared_kernel.infrastructure.db_handler import DatabaseManager
 from yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
 
 class PanelRepository:
@@ -48,7 +48,7 @@ class PanelRepository:
     ) -> pd.DataFrame:
         """
         获取 Panel 数据 (TTL 保护 + 增量更新)。
-        包含基于业务的安全去重逻辑。
+        包含基于业务的安全去重逻辑、强刷指令拦截与数据库容灾降级。
         """
         req_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
         req_end_dt = datetime.strptime(end_date, "%Y-%m-%d")
@@ -57,52 +57,52 @@ class PanelRepository:
         cache_exists = False
         is_cache_fresh = False  
 
-        # --- Phase 1: 加载缓存 & 检查 TTL ---
+        # --- Phase 1: 加载缓存 & 检查 TTL (注入强刷拦截) ---
         if self.use_snapshot and self.snapshot_path.exists():
             try:
                 stat = self.snapshot_path.stat()
                 mtime = datetime.fromtimestamp(stat.st_mtime)
                 age_hours = (datetime.now() - mtime).total_seconds() / 3600
-                
-                if age_hours < self.SNAPSHOT_TTL_HOURS:
-                    is_cache_fresh = True
-                    logging.info(f"⏱️ [Repo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h)。")
-                else:
-                    logging.info(f"⏰ [Repo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
 
                 df_cache = pd.read_parquet(self.snapshot_path)
                 if not df_cache.empty and 'warehousing_time' in df_cache.columns:
                     df_cache['warehousing_time'] = pd.to_datetime(df_cache['warehousing_time'])
                     cache_exists = True
 
-                    max_cached_date = df_cache['warehousing_time'].max()
-                    if max_cached_date < req_end_dt:
+                    # [核心升级] 拦截强刷指令
+                    if force_refresh:
+                        logging.info("⚡ [YieldRepo] 收到强刷指令，强制标记快照为过期，准备安全覆写！")
                         is_cache_fresh = False
-                        logging.info(
-                            f"⏰ [Repo] 缓存虽未过12h，但缺少目标尾部数据，强制触发增量拉取！"
-                        )
+                    else:
+                        if age_hours < self.SNAPSHOT_TTL_HOURS:
+                            max_cached_date = df_cache['warehousing_time'].max()
+                            if max_cached_date >= req_end_dt:
+                                is_cache_fresh = True
+                                logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h)。")
+                            else:
+                                logging.info("⏰ [YieldRepo] 缓存虽未过12h，但缺少目标尾部数据，触发增量拉取！")
+                        else:
+                            logging.info(f"⏰ [YieldRepo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
             except Exception as e:
                 logging.warning(f"⚠️ 缓存读取失败: {e}")
                 cache_exists = False
 
-        # --- Phase 2: 决策逻辑 ---
+        # --- Phase 2: 决策逻辑与数据库容灾降级 ---
         df_final = pd.DataFrame()
         need_save = False
 
-        if cache_exists and is_cache_fresh and not force_refresh:
-            logging.info("🚀 [Repo] 命中缓存，跳过数据库查询。")
+        if cache_exists and is_cache_fresh:
+            logging.info("🚀 [YieldRepo] 命中有效缓存，跳过数据库查询。")
             df_final = df_cache
+        elif cache_exists and not df_cache.empty:
+            # === 增量更新模式 ===
+            logging.info("🔄 [YieldRepo] 执行增量更新 (Safe Overwrite)...")
+            max_cached_date = df_cache['warehousing_time'].max()
+            delta_start_dt = max_cached_date - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
             
-        else:
-            if cache_exists and not df_cache.empty:
-                # === 增量更新模式 ===
-                logging.info("🔄 [Repo] 执行增量更新 (Incremental Update)...")
-                
-                max_cached_date = df_cache['warehousing_time'].max()
-                delta_start_dt = max_cached_date - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
-                
-                if delta_start_dt < req_end_dt:
-                    delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
+            if delta_start_dt < req_end_dt:
+                delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
+                try:
                     df_delta = self._fetch_from_db_in_chunks(
                         delta_s_str, end_date, 
                         product_code, work_order_types, target_defect_groups
@@ -111,11 +111,8 @@ class PanelRepository:
                     if not df_delta.empty:
                         df_delta['warehousing_time'] = pd.to_datetime(df_delta['warehousing_time'])
                         logging.info(f"   >> 合并: 缓存({len(df_cache)}) + 增量({len(df_delta)})")
-                        
                         df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
                         
-                        # [修复严重Bug] 之前直接使用了 drop_duplicates(subset=['panel_id'])，会导致多不良记录丢失
-                        # 现在改为使用 ['panel_id', 'defect_desc'] 组合去重
                         if 'defect_desc' in df_combined.columns:
                             df_combined.drop_duplicates(subset=['panel_id', 'defect_desc'], keep='last', inplace=True)
                         else:
@@ -126,12 +123,16 @@ class PanelRepository:
                     else:
                         logging.info("   >> 增量查询为空，沿用旧缓存。")
                         df_final = df_cache
-                        need_save = True 
-                else:
+                except Exception as e:
+                    # [容灾防线 1] 增量拉取挂掉，无损回退旧快照
+                    logging.warning(f"🚨 数据库增量拉取失败 ({e})，安全回退至陈旧快照！")
                     df_final = df_cache
             else:
-                # === 全量刷新模式 ===
-                logging.info("🆕 [Repo] 执行全量刷新 (Full Refresh)...")
+                df_final = df_cache
+        else:
+            # === 全量刷新模式 ===
+            logging.info("🆕 [YieldRepo] 执行全量刷新 (Full Refresh)...")
+            try:
                 df_final = self._fetch_from_db_in_chunks(
                     start_date, end_date, 
                     product_code, work_order_types, target_defect_groups
@@ -139,6 +140,16 @@ class PanelRepository:
                 if not df_final.empty:
                     df_final['warehousing_time'] = pd.to_datetime(df_final['warehousing_time'])
                     need_save = True
+                elif cache_exists and not df_cache.empty:
+                    # [容灾防线 2] 数据库假死返回空，无损回退
+                    logging.warning("🚨 数据库全量拉取返回空数据，安全回退至陈旧快照！")
+                    df_final = df_cache
+            except Exception as e:
+                # [容灾防线 3] 彻底断连，无损回退
+                logging.error(f"❌ 数据库全量拉取崩溃 ({e})")
+                if cache_exists and not df_cache.empty:
+                    logging.warning("🚨 触发极端容灾降级，强行启用本地历史快照续命！")
+                    df_final = df_cache
 
         # --- Phase 3: 全局安全去重、滚动裁剪 & 持久化 ---
         if not df_final.empty:

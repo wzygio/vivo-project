@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 import logging, os, io
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Callable, List
 
 # [Refactor] 引入配置模型
 from src.shared_kernel.config_model import AppConfig
@@ -136,89 +136,83 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_p
                 }
             )
 
-def render_page_header(title: Optional[str] = None, config: AppConfig = None, cached_funcs: list = None):
-    """
-    [企业级 Header V2.0]
-    集成：标题、产品切换上下文、数据刷新、缓存清理。
-    布局：顶部标题 -> 下方控制栏 (Toolbar)
-    """
-    
-    # --- 1. 渲染主标题 ---
+def render_page_header(
+    title: Optional[str] = None, 
+    config: AppConfig = None, 
+    cached_funcs: list = None,
+    refresh_handlers: list = None # [重构] 接收无参闭包，期待返回 bool
+):
     if title:
         st.title(title)
     
-    # --- 2. 准备逻辑与路径 ---
-    processing_conf = config.processing
-    snapshot_path_str = processing_conf.get('snapshot_path', 'data/panel_details_snapshot.parquet')
-    snapshot_path = Path(snapshot_path_str).resolve()
-    
-    # 定义刷新回调 (仅刷新数据)
+    # [重构] 具备失败拦截与安全回退的刷新回调
     def _refresh_data_callback():
-        if snapshot_path.exists():
-            try:
-                os.remove(snapshot_path)
-                logging.info(f"🗑️ [UI] 本地快照已删除: {snapshot_path}")
-            except Exception as e:
-                logging.error(f"❌ 删除快照失败: {e}")
-        st.cache_data.clear()
-        # 注意：这里不清除 Session State 中的配置，只清除数据缓存
+        all_success = True
+        
+        if refresh_handlers:
+            for handler in refresh_handlers:
+                if callable(handler):
+                    # 尝试执行后端的安全刷新动作
+                    is_success = handler()
+                    # 如果后端明确返回 False，说明该模块更新失败
+                    if is_success is False:
+                        all_success = False
+                        
+            # [核心容错逻辑] 如果任何一个服务更新失败
+            if not all_success:
+                st.toast("❌ 数据库连接或快照更新失败，已为您保留旧版本数据。", icon="🚨")
+                # 关键：直接 Return，绝对不执行下方的 clear()，保护当前内存里的旧数据依然可用
+                return 
 
-    # [重写] 定义精准清除回调
+        # 只有在全部更新成功的情况下，才清空内存并重载
+        if cached_funcs:
+            for func in cached_funcs:
+                if hasattr(func, "clear"):
+                    func.clear()
+            st.toast("✅ 数据刷新成功，已加载最新快照！", icon="🎉")
+            logging.info("🔄 [UI] 单页数据刷新完毕")
+        else:
+            st.cache_data.clear()
+
+    # [保留] 精准清除内存回调 (纯清内存，不动硬盘)
     def _hard_reset_callback():
         if cached_funcs:
             for func in cached_funcs:
-                # 再次防御：确认有 clear 方法才调用
                 if hasattr(func, "clear"):
                     func.clear()
-            
-            # [修复] 使用 getattr 提供默认值 'Unknown'，防止任何没有 __name__ 的对象引发崩溃
-            cleared_names = [getattr(f, '__name__', 'Unknown') for f in cached_funcs]
-            logging.info(f"🧹 用户触发单页缓存清除: {cleared_names}")
+            st.toast("🧹 内存缓存已清除", icon="✅")
         else:
-            # 兼容老页面
             st.cache_data.clear()
             st.cache_resource.clear()
-            logging.warning("🧨 用户触发全局暴力缓存清除")
 
-    # --- 3. 渲染控制栏 (Control Toolbar) ---
-    # 使用灰色背景容器包裹，形成“工具栏”的视觉效果
+    # --- 渲染控制栏 (UI 保持不变) ---
     with st.container(border=True):
-        # 布局：[产品选择 (2)] [空白占位 (4)] [刷新按钮 (1)] [清除缓存 (1)]
-        # 这种比例可以把按钮挤到最右边，产品选择在最左边
         c_prod, c_space, c_refresh, c_clear = st.columns([2, 4, 1.2, 1.2])
 
-        # A. 左侧：产品选择器 (全局上下文)
         with c_prod:
             current_prod = config.data_source.product_code
             available_prods = SessionManager.AVAILABLE_PRODUCTS
-            
-            # 使用 session state 里的 key 绑定，确保状态同步
             selected_prod = st.selectbox(
                 "📦 当前产品型号",
                 options=available_prods,
                 index=available_prods.index(current_prod) if current_prod in available_prods else 0,
-                key=f"header_prod_sel_{title}", # 唯一Key防止冲突
-                label_visibility="collapsed" # 隐藏Label，更像工具栏
+                key=f"header_prod_sel_{title}", 
+                label_visibility="collapsed" 
             )
-            
-            # 监听切换
             if selected_prod != current_prod:
                 SessionManager.load_and_set_config(selected_prod)
                 st.rerun()
 
-        # B. 中间：显示当前产品状态 (可选，这里用作占位)
         with c_space:
-             # 可以显示最后更新时间，或者单纯留白
              st.write("") 
 
-        # C. 右侧：功能按钮区
         with c_refresh:
             st.button(
                 "🔄 刷新数据",
                 key=f"btn_refresh_{title}",
                 on_click=_refresh_data_callback,
                 use_container_width=True,
-                help="删除本地快照并重新从数据库拉取数据 (10min)"
+                help="强制从数据库获取最新数据。若失败则自动回退并保留当前视图。"
             )
             
         with c_clear:
@@ -227,7 +221,7 @@ def render_page_header(title: Optional[str] = None, config: AppConfig = None, ca
                 key=f"btn_clear_{title}",
                 on_click=_hard_reset_callback,
                 use_container_width=True,
-                help="清除所有内存缓存和资源缓存 (用于Debug配置不生效等问题)"
+                help="仅清除当前报表的内存缓存 (极速重载视图)"
             )
 
 def extract_cached_funcs(*services) -> list:

@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from spc_domain.infrastructure.data_loader import load_spc_measurements, load_spc_spec_limits, SpcQueryConfig
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from yield_domain.infrastructure.db_handler import DatabaseManager
+    from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 class SpcRepository:
     """
@@ -40,15 +40,13 @@ class SpcRepository:
     # ==========================================
     # 🔄 优化接口：量测明细拉取 (强制 3 个月看板逻辑)
     # ==========================================
-    def get_spc_measurements(self, config: SpcQueryConfig) -> pd.DataFrame:
+    # [架构升级] 新增 force_refresh 强刷参数
+    def get_spc_measurements(self, config: SpcQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         """
         获取量测数据，处理增量更新。
-        [业务锁定]：报表为看板性质，强制保证数据池涵盖截止日期往前推算 3 个月的数据。
+        包含: 强刷指令拦截 (Safe Overwrite) 与 数据库防断连容灾降级。
         """
-        # 1. 解析时间，严格执行“前三个月”的时间窗逻辑
         req_end_dt = datetime.strptime(config.end_date, "%Y-%m-%d")
-        
-        # [防呆] 无论前端/Service传什么，底层仓储强制以 end_date 往前推 3 个月作为物理数据的底座起点
         req_start_dt = req_end_dt - relativedelta(months=3) 
         actual_start_str = req_start_dt.strftime("%Y-%m-%d")
 
@@ -56,28 +54,30 @@ class SpcRepository:
         df_cache = pd.DataFrame()
         cache_exists, is_cache_fresh = False, False
 
-        # --- Phase 1: 加载快照 ---
+        # --- Phase 1: 加载快照与指令拦截 ---
         if self.use_snapshot and snapshot_path.exists():
             try:
                 stat = snapshot_path.stat()
                 age_hours = (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).total_seconds() / 3600
-                
-                if age_hours < self.SNAPSHOT_TTL_HOURS:
-                    is_cache_fresh = True
                 
                 df_cache = pd.read_parquet(snapshot_path)
                 if not df_cache.empty and 'sheet_start_time' in df_cache.columns:
                     df_cache['sheet_start_time'] = pd.to_datetime(df_cache['sheet_start_time'])
                     cache_exists = True
 
-                    # 判断缓存的尾部是否到达了看板要求的 end_date
-                    if df_cache['sheet_start_time'].max() < req_end_dt:
+                    # [核心] 拦截强刷指令
+                    if force_refresh:
+                        logging.info(f"⚡ [SpcRepo] 收到强刷指令，强制标记快照为过期，准备安全覆写！")
                         is_cache_fresh = False
+                    else:
+                        if age_hours < self.SNAPSHOT_TTL_HOURS:
+                            if df_cache['sheet_start_time'].max() >= req_end_dt:
+                                is_cache_fresh = True
             except Exception as e:
                 logging.warning(f"⚠️ 读取 SPC 快照失败: {e}")
                 cache_exists = False
 
-        # --- Phase 2: 智能路由 ---
+        # --- Phase 2: 智能路由与容灾降级 ---
         df_final = pd.DataFrame()
         need_save = False
 
@@ -85,47 +85,62 @@ class SpcRepository:
             logging.info("🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。")
             df_final = df_cache
         elif cache_exists and not df_cache.empty:
-            logging.info("🔄 [SpcRepo] 执行增量更新...")
+            logging.info("🔄 [SpcRepo] 执行增量更新 (Safe Overwrite 模式)...")
             delta_start_dt = df_cache['sheet_start_time'].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
             
             if delta_start_dt < req_end_dt:
-                df_delta = load_spc_measurements(self.db, delta_start_dt.strftime("%Y-%m-%d"), config.end_date, config.prod_code)
-                if not df_delta.empty:
-                    df_delta['sheet_start_time'] = pd.to_datetime(df_delta['sheet_start_time'])
-                    df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
-                    df_combined = df_combined.sort_values(by='sheet_start_time', ascending=True)
-                    df_combined.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
-                    df_final = df_combined
-                    need_save = True
-                else:
+                try:
+                    df_delta = load_spc_measurements(self.db, delta_start_dt.strftime("%Y-%m-%d"), config.end_date, config.prod_code)
+                    if not df_delta.empty:
+                        df_delta['sheet_start_time'] = pd.to_datetime(df_delta['sheet_start_time'])
+                        df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
+                        df_combined = df_combined.sort_values(by='sheet_start_time', ascending=True)
+                        df_combined.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
+                        df_final = df_combined
+                        need_save = True
+                    else:
+                        df_final = df_cache
+                except Exception as e:
+                    # [容灾防线 1] 增量拉取挂掉，无损回退旧快照
+                    logging.warning(f"🚨 数据库增量拉取失败 ({e})，安全回退至陈旧快照！")
                     df_final = df_cache
             else:
                 df_final = df_cache
         else:
             logging.info(f"🆕 [SpcRepo] 执行全量刷新 ({actual_start_str} 至 {config.end_date})")
-            df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
-            if not df_final.empty:
-                df_final['sheet_start_time'] = pd.to_datetime(df_final['sheet_start_time'])
-                df_final.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
-                need_save = True
+            try:
+                df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
+                if not df_final.empty:
+                    df_final['sheet_start_time'] = pd.to_datetime(df_final['sheet_start_time'])
+                    df_final.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
+                    need_save = True
+                elif cache_exists and not df_cache.empty:
+                    # [容灾防线 2] 数据库假死返回空，无损回退
+                    logging.warning("🚨 数据库全量拉取返回空数据，安全回退至陈旧快照！")
+                    df_final = df_cache
+            except Exception as e:
+                # [容灾防线 3] 彻底断连，无损回退
+                logging.error(f"❌ 数据库全量拉取崩溃 ({e})")
+                if cache_exists and not df_cache.empty:
+                    logging.warning("🚨 触发极端容灾降级，强行启用本地历史快照续命！")
+                    df_final = df_cache
 
         # --- Phase 3: 持久化与内存过滤 ---
         if not df_final.empty:
             if need_save and self.use_snapshot:
-                # 滚动抛弃：只保留 req_start_dt 之后的三个月数据写入硬盘，节约存储空间！
                 df_to_save = df_final[df_final['sheet_start_time'] >= req_start_dt]
                 try:
                     self.snapshot_dir.mkdir(parents=True, exist_ok=True)
                     df_to_save.to_parquet(snapshot_path, index=False)
+                    if force_refresh:
+                        logging.info("✅ [SpcRepo] 安全覆写 (Safe Overwrite) 完成！")
                 except Exception as e:
-                    logging.error(f"❌ 快照保存失败: {e}")
+                    logging.error(f"❌ 快照覆写保存失败: {e}")
                 df_final = df_to_save
 
-            # 基于看板配置的 3 个月边界执行内存截断
             mask_time = (df_final['sheet_start_time'] >= req_start_dt) & (df_final['sheet_start_time'] <= req_end_dt)
             df_filtered = df_final[mask_time]
 
-            # 执行内存维度过滤
             if config.factory:
                 df_filtered = df_filtered[df_filtered['factory'] == config.factory.upper()]
             if config.step_id:

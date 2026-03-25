@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from yield_domain.infrastructure.db_handler import DatabaseManager
+    from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 def load_panel_details(
     db_manager: 'DatabaseManager', 

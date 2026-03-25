@@ -21,20 +21,13 @@ from app.components.spc_sections import (
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
-from src.yield_domain.infrastructure.db_handler import DatabaseManager
+from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 setup_hot_reload(enable=True)
 
 st.title("自动预警看板")
-with st.expander("数据刷新"):
-    # [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
-    active_config = SessionManager.get_active_config()
-    funcs_to_clear = extract_cached_funcs(SpcAnalysisService)
-    render_page_header(
-        config=active_config,
-        cached_funcs=funcs_to_clear
-    )
+
 
 # ==============================================================================
 #  数据加载
@@ -66,7 +59,30 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
         # 如果依然报错，此处会打印出最真实的错误堆栈
         st.error(f"❌ 调用后端 SPC Service 失败: {str(e)}")
         st.stop()
-        
+
+with st.expander("数据刷新"):
+    # [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
+    active_config = SessionManager.get_active_config()
+    funcs_to_clear = extract_cached_funcs(SpcAnalysisService)
+    
+    # 1. 构建后端需要的 Pydantic 参数对象
+    query_config = SpcQueryConfig(
+        prod_code="ALL", 
+        start_date=start_dt.strftime("%Y-%m-%d"),
+        end_date=end_dt.strftime("%Y-%m-%d")
+    )
+
+    # 2. [核心修复] 利用 Lambda 闭包，将参数包裹后传给 Header
+    handlers = [
+        lambda: SpcAnalysisService.safe_refresh_snapshots(query_config.model_dump_json())
+    ]
+
+    # 3. 渲染 Header
+    render_page_header(
+        config=active_config,
+        cached_funcs=funcs_to_clear,
+        refresh_handlers=handlers  # 注入闭包
+    )
 # --------------------------------------------------------------------------
 # 页面积木组装层 (UI Assembly)
 # --------------------------------------------------------------------------
@@ -77,10 +93,10 @@ available_factories = view_model.detail_df['factory'].unique().tolist() if not v
 # 4. 组装积木: 渲染控制台
 filter_state = render_spc_control_panel(available_products, available_factories)
 
-st.divider()
+with st.expander("SPC自动预警", expanded=True):
 
-# 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
-render_spc_summary_section(view_model.global_summary_df)
+    # 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
+    render_spc_summary_section(view_model.global_summary_df)
 
-# 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
-render_spc_detail_section(view_model.detail_df, filter_state)
+    # 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
+    render_spc_detail_section(view_model.detail_df, filter_state)

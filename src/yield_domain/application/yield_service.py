@@ -9,7 +9,7 @@ import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
-from yield_domain.infrastructure.repositories.panel_repository import PanelRepository
+from yield_domain.infrastructure.repositories.yield_repository import PanelRepository
 
 # --- Core (Processors) ---
 from yield_domain.core.mwd_trend_processor import MWDTrendProcessor
@@ -382,3 +382,54 @@ class YieldAnalysisService:
         except Exception as e:
             logging.error(f"读取警戒线配置失败: {e}", exc_info=True)
             return {}
+        
+    @staticmethod
+    def safe_refresh_snapshots(config: 'AppConfig') -> bool:
+        """
+        [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
+        返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
+        """
+        import logging
+        from pathlib import Path
+        
+        try:
+            ds_config = config.data_source
+            prod_code = ds_config.product_code
+            processing_conf = config.processing
+            
+            # 动态构建隔离路径
+            default_snapshot_name = f"snapshot_{prod_code}.parquet"
+            default_snapshot_path = Path("data") / prod_code / default_snapshot_name
+            
+            snapshot_path_str = processing_conf.get('snapshot_path', str(default_snapshot_path)) 
+            snapshot_path = Path(snapshot_path_str) 
+            
+            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            repo = PanelRepository(
+                snapshot_path=snapshot_path,
+                use_snapshot=True
+            )
+            
+            start_date, end_date = YieldAnalysisService.get_time_window()
+            
+            logging.info(f"🔄 [YieldService] 向底层下发 {prod_code} 强刷指令 (Force Refresh)...")
+            
+            # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖
+            df = repo.get_panel_details(
+                start_date=start_date.strftime('%Y-%m-%d'),
+                end_date=end_date.strftime('%Y-%m-%d'),
+                product_code=prod_code,
+                work_order_types=ds_config.work_order_types,
+                target_defect_groups=ds_config.target_defect_groups,
+                force_refresh=True
+            )
+            
+            if df.empty:
+                return False
+                
+            return True
+            
+        except Exception as e:
+            logging.error(f"❌ Yield 快照安全覆写代理调度失败: {e}")
+            return False
