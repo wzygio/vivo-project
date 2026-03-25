@@ -15,7 +15,7 @@ sys.path.insert(0, str(project_root))
 env_path = project_root / ".env"
 load_dotenv(dotenv_path=env_path)
 
-from src.yield_domain.infrastructure.db_handler import DatabaseManager
+from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 def test_spc_database_queries():
     """

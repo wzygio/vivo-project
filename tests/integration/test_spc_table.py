@@ -9,7 +9,7 @@ from sqlalchemy import text
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.yield_domain.infrastructure.db_handler import DatabaseManager
+from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 def run_diagnostics():
     print("="*50)

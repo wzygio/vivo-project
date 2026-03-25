@@ -12,6 +12,7 @@ from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, ConfigDict
 
 # 引入底层配置与仓储层
+from src.shared_kernel.config_model import AppConfig
 from spc_domain.infrastructure.data_loader import SpcQueryConfig
 from spc_domain.infrastructure.repositories.spc_repository import SpcRepository
 
@@ -23,7 +24,7 @@ from spc_domain.core.spc_calculator import (
 )
 
 if TYPE_CHECKING:
-    from yield_domain.infrastructure.db_handler import DatabaseManager
+    from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 class SpcDashboardViewModel(BaseModel):
     """SPC 看板视图模型"""
@@ -48,76 +49,112 @@ class SpcAnalysisService:
     def _apply_time_bucket_mapping(df: pd.DataFrame, time_type: str, end_dt: datetime) -> pd.DataFrame:
         """
         [内部辅助] 极速时间桶映射引擎
-        V4.4 架构级重构：支持“重叠数据魔方 (Overlapping Data Cubes)”。
+        V4.6 终极版：重叠数据魔方 + 强力防呆补0基座 + 自定义工厂自然周(周三至周三)
         """
-        if df.empty or 'sheet_start_time' not in df.columns:
-            return df
-            
-        df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce') 
-        
-        # 预计算各维度的基础格式
-        day_str = df['sheet_start_time'].dt.strftime('%Y%m%d')
-        month_str = df['sheet_start_time'].dt.strftime('%Y') + 'M' + df['sheet_start_time'].dt.strftime('%m')
-        iso_cal = df['sheet_start_time'].dt.isocalendar()
-        week_str = iso_cal.year.astype(str) + 'W' + iso_cal.week.astype(str).str.zfill(2)
+        if not df.empty and 'sheet_start_time' in df.columns:
+            df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce') 
 
-        # 构建防呆的绝对排序基准 (利用 1_, 2_, 3_ 强制保证 月->周->天 的 X 轴顺序)
-        day_sort = "3_" + day_str
-        week_sort = "2_" + week_str
-        month_sort = "1_" + month_str
-        
-        if time_type == 'DAY':
+        # 非混合模式的快速降级兜底
+        if time_type != 'MIXED':
+            if df.empty or 'sheet_start_time' not in df.columns:
+                return df
+            day_str = df['sheet_start_time'].dt.strftime('%Y%m%d')
+            day_sort = "3_" + day_str
             df['time_group'], df['sort_index'] = day_str, day_sort
-        elif time_type == 'WEEK':
-            df['time_group'], df['sort_index'] = week_str, week_sort
-        elif time_type == 'MONTH':
-            df['time_group'], df['sort_index'] = month_str, month_sort
-        elif time_type == 'MIXED':
+            return df
+
+        if time_type == 'MIXED':
+            # 绝对锚点：永远以请求看板的 end_dt(今天) 为准
             end_dt_ts = pd.to_datetime(end_dt).normalize()
             
-            # 1. 天级数据桶 (最近 7 天)
-            day_bound = end_dt_ts - pd.Timedelta(days=6)
-            mask_day = df['sheet_start_time'] >= day_bound
-            df_day = df[mask_day].copy()
-            df_day['time_group'] = day_str[mask_day]
-            df_day['sort_index'] = day_sort[mask_day]
-            
-            # 2. 周级数据桶 (最近 3 个完整自然周，包含天级数据，打破互斥)
-            w0_iso = end_dt_ts.isocalendar()
-            w1_iso = (end_dt_ts - pd.Timedelta(days=7)).isocalendar()
-            w2_iso = (end_dt_ts - pd.Timedelta(days=14)).isocalendar()
-            # 稳健提取年份与周数 (索引 [0] 是年, [1] 是周)
-            target_weeks = [
-                f"{w0_iso[0]}W{str(w0_iso[1]).zfill(2)}",
-                f"{w1_iso[0]}W{str(w1_iso[1]).zfill(2)}",
-                f"{w2_iso[0]}W{str(w2_iso[1]).zfill(2)}"
-            ]
-            mask_week = week_str.isin(target_weeks)
-            df_week = df[mask_week].copy()
-            df_week['time_group'] = week_str[mask_week]
-            df_week['sort_index'] = week_sort[mask_week]
-            
-            # 3. 月级数据桶 (最近 3 个完整自然月，强制抛弃如 12月 等多余数据)
+            # =======================================================
+            # 步骤 1：定义目标时间桶的绝对标签 (即前端 X 轴必然显示的坐标)
+            # =======================================================
+            # 1.1 天级 (今日及往前6天，共7天)
+            target_days = [(end_dt_ts - pd.Timedelta(days=i)) for i in range(7)]
+            target_days_strs = [d.strftime('%Y%m%d') for d in target_days]
+            target_days_sorts = ["3_" + d for d in target_days_strs]
+
+            # 1.2 周级 (工厂自定义：倒推2天使得周三变为周一，从而完美借用 iso 标准提取3周)
+            shifted_end = end_dt_ts - pd.Timedelta(days=2)
+            w0_iso = shifted_end.isocalendar()
+            w1_iso = (shifted_end - pd.Timedelta(days=7)).isocalendar()
+            w2_iso = (shifted_end - pd.Timedelta(days=14)).isocalendar()
+
+            def format_factory_week(iso):
+                return f"{iso[0]}W{str(iso[1]).zfill(2)}(周三)"
+
+            target_weeks_strs = [format_factory_week(w0_iso), format_factory_week(w1_iso), format_factory_week(w2_iso)]
+            target_weeks_sorts = ["2_" + w for w in target_weeks_strs]
+
+            # 1.3 月级 (最近3个月)
             m0 = end_dt_ts
             m1 = m0 - pd.DateOffset(months=1)
             m2 = m0 - pd.DateOffset(months=2)
-            target_months = [
-                m0.strftime('%YM%m'),
-                m1.strftime('%YM%m'),
-                m2.strftime('%YM%m')
-            ]
-            mask_month = month_str.isin(target_months)
-            df_month = df[mask_month].copy()
-            df_month['time_group'] = month_str[mask_month]
-            df_month['sort_index'] = month_sort[mask_month]
+            target_months_strs = [m0.strftime('%YM%m'), m1.strftime('%YM%m'), m2.strftime('%YM%m')]
+            target_months_sorts = ["1_" + m for m in target_months_strs]
+
+            all_time_groups = target_months_strs + target_weeks_strs + target_days_strs
+            all_sort_indices = target_months_sorts + target_weeks_sorts + target_days_sorts
+
+            # =======================================================
+            # 步骤 2：切分真实的业务数据 (如果数据库有数据的话)
+            # =======================================================
+            df_real = pd.DataFrame()
+            if not df.empty and 'sheet_start_time' in df.columns:
+                # 真实天级
+                day_bound = target_days[-1]
+                mask_day = df['sheet_start_time'] >= day_bound
+                df_day = df[mask_day].copy()
+                df_day['time_group'] = df_day['sheet_start_time'].dt.strftime('%Y%m%d')
+                df_day['sort_index'] = "3_" + df_day['time_group']
+
+                # 真实周级 (对齐工厂自定义周，全量减2天以匹配前方的 target_weeks)
+                df_shifted = df['sheet_start_time'] - pd.Timedelta(days=2)
+                df_iso = df_shifted.dt.isocalendar()
+                df_week_str = df_iso.year.astype(str) + "W" + df_iso.week.astype(str).str.zfill(2) + "(周三)"
+                mask_week = df_week_str.isin(target_weeks_strs)
+                df_week = df[mask_week].copy()
+                df_week['time_group'] = df_week_str[mask_week]
+                df_week['sort_index'] = "2_" + df_week['time_group']
+
+                # 真实月级
+                df_month_str = df['sheet_start_time'].dt.strftime('%Y') + 'M' + df['sheet_start_time'].dt.strftime('%m')
+                mask_month = df_month_str.isin(target_months_strs)
+                df_month = df[mask_month].copy()
+                df_month['time_group'] = df_month_str[mask_month]
+                df_month['sort_index'] = "1_" + df_month['time_group']
+
+                df_real = pd.concat([df_month, df_week, df_day], ignore_index=True)
+
+            # =======================================================
+            # 步骤 3：构建强力防呆补 0 基座 (Scaffolding)
+            # (无论真实数据有没有，我们强行注入这些维度，保证前端一定有空柱子)
+            # =======================================================
+            if not df.empty and 'prod_code' in df.columns and 'factory' in df.columns:
+                unique_dims = df[['prod_code', 'factory']].drop_duplicates()
+            else:
+                unique_dims = pd.DataFrame([{'prod_code': 'UNKNOWN', 'factory': 'UNKNOWN'}])
+
+            dummy_dfs = []
+            for tg, si in zip(all_time_groups, all_sort_indices):
+                temp_dummy = unique_dims.copy()
+                temp_dummy['time_group'] = tg
+                temp_dummy['sort_index'] = si
+                
+                # [核心技巧]：强行注入的假行，把核心统计字段全设为空
+                # 这样 Pandas 聚合时 .nunique() 会自动忽略它，分母分子均为 0！
+                temp_dummy['sheet_id'] = None 
+                temp_dummy['param_value'] = np.nan
+                temp_dummy['spc_status'] = None
+                dummy_dfs.append(temp_dummy)
+
+            df_dummy = pd.concat(dummy_dfs, ignore_index=True)
+
+            # 虚实结合：真实的明细 + 用于占位的空壳维度
+            df_final = pd.concat([df_real, df_dummy], ignore_index=True)
+            return df_final
             
-            # 物理堆叠重叠的数据桶
-            df = pd.concat([df_month, df_week, df_day], ignore_index=True)
-
-        else:
-            logging.warning(f"未知的时间颗粒度: {time_type}，降级为按日(DAY)聚合。")
-            df['time_group'], df['sort_index'] = day_str, day_sort
-
         return df
 
     @staticmethod
@@ -207,3 +244,151 @@ class SpcAnalysisService:
             detail_df = detail_df.sort_values(['sort_index', 'factory']).drop(columns=['sort_index'])
 
         return SpcDashboardViewModel(global_summary_df=global_summary_df, detail_df=detail_df)
+
+    @staticmethod
+    def get_spc_defect_details(
+        _db_manager: 'DatabaseManager', 
+        query_config_json: str, 
+        time_group: str, 
+        defect_type: str,
+        time_type: str = 'MIXED'
+    ) -> pd.DataFrame:
+        """
+        [企业级下钻 API] 针对前端大盘数字点击事件，提供精准的明细级数据下钻。
+        利用 Parquet 缓存极速响应，避免回表查询导致的性能损耗。
+        
+        :param time_group: 目标时间组 (如 '2026M01', '2026W11', '20260319')
+        :param defect_type: 报警类型 (如 'OOS', 'SOOS', 'OOC')
+        """
+        logging.info(f"==> [Drill-down API] 开始钻取明细 | 时间节点: {time_group} | 类型: {defect_type} <==")
+        
+        try:
+            config_instance = SpcQueryConfig.model_validate_json(query_config_json)
+        except Exception as e:
+            logging.error(f"Config 解析失败: {e}")
+            return pd.DataFrame()
+
+        target_prod = config_instance.prod_code
+        start_dt, end_dt = SpcAnalysisService.get_time_window()
+        
+        # 1. 智能探测产品目录 (复用 ALL 模式的探测逻辑)
+        search_prods: List[str] = []
+        data_root = Path("data")
+        
+        if target_prod.upper() == "ALL":
+            if data_root.exists():
+                for d in data_root.iterdir():
+                    if d.is_dir() and (d / f"spc_snapshot_{d.name}.parquet").exists():
+                        search_prods.append(d.name)
+        else:
+            search_prods = [target_prod]
+
+        all_status_dfs = []
+
+        # 2. 从本地缓存极速加载数据并还原状态
+        for prod in search_prods:
+            prod_snapshot_dir = data_root / prod 
+            
+            # 使用 use_snapshot=True 强制走缓存，保护数据库
+            repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+            
+            current_fetch_config = config_instance.model_copy()
+            current_fetch_config.prod_code = prod
+            current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")
+            current_fetch_config.end_date = end_dt.strftime("%Y-%m-%d")
+
+            m_df = repo.get_spc_measurements(current_fetch_config)
+            s_df = repo.get_spc_spec_limits(prod)
+            
+            if not m_df.empty:
+                features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
+                status = apply_spc_rules(sheet_features=features)
+                all_status_dfs.append(status)
+
+        if not all_status_dfs:
+            logging.warning("下钻查询未命中任何底层数据。")
+            return pd.DataFrame()
+
+        # 3. 合并全量数据并应用相同的重叠魔方时间切割规则
+        full_status_df = pd.concat(all_status_dfs, ignore_index=True)
+        full_status_df = SpcAnalysisService._apply_time_bucket_mapping(full_status_df, time_type.upper(), end_dt)
+
+        # 4. 精准拦截过滤
+        # 过滤时间节点 (严格匹配用户点击的列名，如 2026M01)
+        filtered_df = full_status_df[full_status_df['time_group'] == time_group].copy()
+        
+        if filtered_df.empty:
+            return pd.DataFrame()
+
+        # 过滤缺陷类型 (兼容 Core 层状态字段可能的不同命名体系)
+        # 这里假设您的规则引擎核心层输出的状态列名叫 'spc_status' 或 'status'
+        if 'spc_status' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['spc_status'] == defect_type]
+        elif 'status' in filtered_df.columns:
+            filtered_df = filtered_df[filtered_df['status'] == defect_type]
+        else:
+            # 兼容布尔值标记的情况 (如 is_oos == True)
+            bool_col = f"is_{defect_type.lower()}"
+            if bool_col in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df[bool_col] == True]
+            else:
+                logging.warning(f"无法在数据集中找到与 {defect_type} 对应的状态列，返回全量时间片数据。")
+
+        # 5. 清理供聚合使用的内部计算列，保持明细表纯净
+        columns_to_drop = ['sort_index', 'time_group']
+        filtered_df = filtered_df.drop(columns=[c for c in columns_to_drop if c in filtered_df.columns])
+
+        logging.info(f"钻取成功，共捕获 {len(filtered_df)} 条明细数据。")
+        return filtered_df
+    
+
+    @staticmethod
+    def safe_refresh_snapshots(_db_manager: 'DatabaseManager', query_config_json: str) -> bool:
+        """
+        [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
+        返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
+        """
+        import logging
+        from pathlib import Path
+        from spc_domain.infrastructure.data_loader import SpcQueryConfig
+
+        try:
+            config_instance = SpcQueryConfig.model_validate_json(query_config_json)
+            target_prod = config_instance.prod_code
+            data_root = Path("data")
+
+            search_prods = []
+            if target_prod.upper() == "ALL":
+                if data_root.exists():
+                    for d in data_root.iterdir():
+                        if d.is_dir() and (d / f"spc_snapshot_{d.name}.parquet").exists():
+                            search_prods.append(d.name)
+            else:
+                search_prods = [target_prod]
+
+            start_dt, end_dt = SpcAnalysisService.get_time_window()
+            success_flag = True
+
+            for prod in search_prods:
+                prod_snapshot_dir = data_root / prod
+                # 实例化仓储
+                repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+
+                current_fetch_config = config_instance.model_copy()
+                current_fetch_config.prod_code = prod
+                current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")
+                current_fetch_config.end_date = end_dt.strftime("%Y-%m-%d")
+
+                logging.info(f"🔄 [Service] 向底层下发 {prod} 强刷指令 (Force Refresh)...")
+                
+                # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖
+                df = repo.get_spc_measurements(current_fetch_config, force_refresh=True)
+
+                if df.empty:
+                    success_flag = False
+
+            return success_flag
+            
+        except Exception as e:
+            logging.error(f"❌ 安全覆写代理调度失败: {e}")
+            return False

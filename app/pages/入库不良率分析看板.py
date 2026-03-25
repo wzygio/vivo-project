@@ -49,7 +49,8 @@ funcs_to_clear = extract_cached_funcs(YieldAnalysisService)
 render_page_header(
     title="📊 入库不良率分析看板", 
     config=active_config,
-    cached_funcs=funcs_to_clear
+    cached_funcs=funcs_to_clear,
+    refresh_handlers=[YieldAnalysisService.safe_refresh_snapshots]
 )
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件 (注入 config 用于刷新逻辑)

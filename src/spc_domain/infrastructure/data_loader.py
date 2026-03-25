@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 # 仅在类型检查时导入，避免运行时产生循环依赖或强耦合 yield_domain
 if TYPE_CHECKING:
     # 假设使用已存在的 DB Manager，实际传入的只要带有 .engine 属性的实例即可
-    from yield_domain.infrastructure.db_handler import DatabaseManager
+    from shared_kernel.infrastructure.db_handler import DatabaseManager
 
 class SpcQueryConfig(BaseModel):
     """SPC 报表查询的强类型配置模型，用于控制数据提取范围"""
