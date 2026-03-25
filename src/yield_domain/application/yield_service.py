@@ -76,7 +76,7 @@ class YieldAnalysisService:
         # =========================================================================
         # [核心修正]: 文件名规范由 yield_panel_snapshot 变更为 snapshot_{prod_code}
         # =========================================================================
-        default_snapshot_name = f"snapshot_{prod_code}.parquet"
+        default_snapshot_name = f"yield_snapshot_{prod_code}.parquet"
         default_snapshot_path = Path("data") / prod_code / default_snapshot_name
         
         snapshot_path_str = processing_conf.get('snapshot_path', str(default_snapshot_path)) 

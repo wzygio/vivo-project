@@ -124,7 +124,17 @@ function render() {
     `;
     // ===============================================
 
-    coreNode.onclick = (e) => { e.stopPropagation(); resetCamera(); };
+    // [修改点]：为核心节点添加读取配置并跳转的逻辑
+    coreNode.onclick = (e) => { 
+        e.stopPropagation(); 
+        resetCamera(); // 保持原有的视角重置动画
+        
+        // 读取配置中的核心节点链接并执行跳转
+        if (APP_CONFIG.coreUrl && APP_CONFIG.coreUrl !== "#") {
+            window.open(APP_CONFIG.coreUrl, '_blank'); 
+            // 注意：如果你希望在当前页面直接跳转而不是打开新标签页，可以将 '_blank' 改为 '_self'
+        }
+    };
     coreLayer.appendChild(coreNode);
 
     // 主节点

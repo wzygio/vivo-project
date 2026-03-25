@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit as st
 import logging, os, io
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 # [Refactor] 引入配置模型
 from src.shared_kernel.config_model import AppConfig
@@ -136,7 +136,7 @@ def render_lot_spec_alert(lot_data: dict, warning_lines: Dict[str, dict], time_p
                 }
             )
 
-def render_page_header(title: str, config: AppConfig):
+def render_page_header(title: Optional[str] = None, config: AppConfig = None, cached_funcs: list = None):
     """
     [企业级 Header V2.0]
     集成：标题、产品切换上下文、数据刷新、缓存清理。
@@ -144,7 +144,8 @@ def render_page_header(title: str, config: AppConfig):
     """
     
     # --- 1. 渲染主标题 ---
-    st.title(title)
+    if title:
+        st.title(title)
     
     # --- 2. 准备逻辑与路径 ---
     processing_conf = config.processing
@@ -162,11 +163,22 @@ def render_page_header(title: str, config: AppConfig):
         st.cache_data.clear()
         # 注意：这里不清除 Session State 中的配置，只清除数据缓存
 
-    # 定义暴力清除回调 (清除所有)
+    # [重写] 定义精准清除回调
     def _hard_reset_callback():
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        logging.warning("🧨 用户触发暴力缓存清除")
+        if cached_funcs:
+            for func in cached_funcs:
+                # 再次防御：确认有 clear 方法才调用
+                if hasattr(func, "clear"):
+                    func.clear()
+            
+            # [修复] 使用 getattr 提供默认值 'Unknown'，防止任何没有 __name__ 的对象引发崩溃
+            cleared_names = [getattr(f, '__name__', 'Unknown') for f in cached_funcs]
+            logging.info(f"🧹 用户触发单页缓存清除: {cleared_names}")
+        else:
+            # 兼容老页面
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            logging.warning("🧨 用户触发全局暴力缓存清除")
 
     # --- 3. 渲染控制栏 (Control Toolbar) ---
     # 使用灰色背景容器包裹，形成“工具栏”的视觉效果
@@ -217,6 +229,64 @@ def render_page_header(title: str, config: AppConfig):
                 use_container_width=True,
                 help="清除所有内存缓存和资源缓存 (用于Debug配置不生效等问题)"
             )
+
+def extract_cached_funcs(*services) -> list:
+    """
+    [企业级工具] 自动探测并提取传入的 Service 类中所有的 Streamlit 缓存函数。
+    支持传入多个 Service 类，合并返回。
+    """
+    auto_cached_funcs = []
+    
+    for service in services:
+        for attr_name in dir(service):
+            # 1. 过滤掉 Python 的内置双下划线属性和私有方法
+            if attr_name.startswith("_"):
+                continue
+                
+            attr = getattr(service, attr_name)
+            
+            # 2. 严格三重校验
+            if hasattr(attr, "clear") and callable(attr) and hasattr(attr, "__name__"):
+                auto_cached_funcs.append(attr)
+                
+    return auto_cached_funcs
+
+def setup_hot_reload(enable: bool = True):
+    """
+    [企业级工具] 底层代码热重载守卫。
+    用于在开发态下监控深层依赖模块的变化，一旦发现代码哈希变动，
+    立即强制清空 sys.modules，实现后端代码修改后的无缝热生效。
+    """
+    if not enable:
+        return
+
+    try:
+        from app.utils.reloader import deep_reload_modules, get_project_revision
+        from src.shared_kernel.config import ConfigLoader
+        
+        # 1. 计算当前代码目录的真实哈希指纹
+        project_root = ConfigLoader.get_project_root()
+        current_rev = get_project_revision(project_root)
+        
+        # 2. 从 session_state 获取上一次的指纹
+        last_rev = st.session_state.get('last_code_revision')
+        
+        # 3. 只有当代码指纹发生变化时，才执行暴力的模块卸载
+        if last_rev is not None and last_rev != current_rev:
+            import logging
+            logging.info("♻️ 探测到后端底层代码库变更，触发 Deep Reload...")
+            deep_reload_modules()
+            
+            # [关键联动]：代码都变了，旧的代码生成的缓存数据大概率也不能用了，直接顺手清空数据缓存！
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            
+        # 4. 更新指纹
+        st.session_state['last_code_revision'] = current_rev
+        
+    except ImportError as e:
+        import logging
+        logging.warning(f"⚠️ 热重载模块依赖缺失，已跳过: {e}")
 
 def create_code_selection_ui(
     source_data: pd.DataFrame | dict,
