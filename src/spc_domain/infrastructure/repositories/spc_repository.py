@@ -149,15 +149,28 @@ class SpcRepository:
             df_filtered = df_final[mask_time].copy() 
 
             # =================================================================
-            # [核心新增] 动态内存过滤：去数据库要一份白名单，仅放行 SPC 相关的参数
+            # [核心修复] 动态内存过滤：索要当前产品的专属白名单
             # =================================================================
-            valid_params = load_valid_spc_params(self.db)
-            if valid_params:
-                df_filtered = df_filtered[df_filtered['param_name'].isin(valid_params)]
-                logging.info(f"[SpcRepo] 内存级参数过滤完成，仅向 Service 层下发 {len(valid_params)} 种 SPC 专属参数。")
+            # 传入了 config.prod_code 
+            valid_params = load_valid_spc_params(self.db, config.prod_code)
+            
+            if valid_params is not None:
+                if len(valid_params) > 0:
+                    # 统一转大写比较，极其安全
+                    df_filtered = df_filtered[df_filtered['param_name'].str.upper().isin(valid_params)]
+                    logging.info(f"[SpcRepo] 内存过滤完成，拦截非 SPC 数据，下发 {len(valid_params)} 种专属参数。")
+                else:
+                    logging.warning(f"[SpcRepo] 警告：产品 {config.prod_code} 查无 SPC 参数白名单！已清空本批次数据。")
+                    df_filtered = df_filtered.iloc[0:0] # 查无白名单，强制清空，不准放行
             else:
-                logging.warning("[SpcRepo] 警告：未能获取到 SPC 参数白名单，将下发全量参数。")
+                logging.error("[SpcRepo] 严重警告：拉取 SPC 参数白名单 SQL 执行失败，为防止页面崩溃，暂时下发全量参数。")
 
+            # --- 🎯 满足您的监控需求：TDSUM 专属雷达探测 ---
+            if 'TDSUM' in df_filtered['param_name'].str.upper().values:
+                logging.warning("🚨 [DEBUG 探测仪] 发现 TDSUM 依然存活在过滤后的数据中！说明白名单中竟然有它，请检查配置表。")
+            else:
+                logging.info("✅ [DEBUG 探测仪] TDSUM 已被成功消灭！它不在 SPC 白名单中。")
+                
             # 原有的维度过滤
             if config.factory:
                 df_filtered = df_filtered[df_filtered['factory'] == config.factory.upper()]

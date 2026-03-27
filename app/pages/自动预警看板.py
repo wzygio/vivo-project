@@ -26,6 +26,14 @@ from shared_kernel.infrastructure.db_handler import DatabaseManager
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 setup_hot_reload(enable=True)
 
+# =========================================================================
+# [新增] 路由硬拦截 (Route Guard)
+# =========================================================================
+if st.query_params.get("admin") != "true":
+    st.error("🚧 核心功能研发中 / Core Module Under Construction")
+    st.info("该模块正在进行最终的数据接入测试，敬请期待。")
+    st.stop()  # 拦截器：在此处彻底停止下方所有代码的执行！
+    
 st.title("自动预警看板")
 
 # ==============================================================================

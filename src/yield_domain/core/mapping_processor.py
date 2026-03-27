@@ -11,8 +11,8 @@ from yield_domain.core.batch_statistics import BatchStatistics
 @staticmethod
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
-    scaling_factor: float = 0.7,
-    min_panel_threshold: int = 10000 
+    scaling_factor: float,
+    min_panel_threshold: int = 2000
 ) -> pd.DataFrame:
     """
     [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
@@ -26,7 +26,7 @@ def prepare_mapping_data(
     
     try:
         FIRST_REDUCTION_FACTOR = scaling_factor
-        SECOND_REDUCTION_FACTOR = 0.95
+        SECOND_REDUCTION_FACTOR = 1
         SEED = 42
 
         # --- 步骤1: 筛选有效批次 ---

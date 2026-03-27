@@ -249,7 +249,7 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor: float = 0.7, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_mapping_data(config: AppConfig, scaling_factor: float = group_scale, _core_revision: float = 0.0) -> pd.DataFrame:
         """准备 Mapping 数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return pd.DataFrame()
