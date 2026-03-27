@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
-from pydantic import BaseModel, ConfigDict
+from dataclasses import dataclass
 
 # 引入底层配置与仓储层
 from src.shared_kernel.config_model import AppConfig
@@ -26,9 +26,12 @@ from spc_domain.core.spc_calculator import (
 if TYPE_CHECKING:
     from shared_kernel.infrastructure.db_handler import DatabaseManager
 
-class SpcDashboardViewModel(BaseModel):
-    """SPC 看板视图模型"""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+# =========================================================================
+# [核心修复] 将 Pydantic 的 BaseModel 替换为标准库的 @dataclass
+# =========================================================================
+@dataclass
+class SpcDashboardViewModel:
+    """SPC 看板视图模型 (支持 st.cache_data 原生序列化)"""
     global_summary_df: pd.DataFrame
     detail_df: pd.DataFrame
 

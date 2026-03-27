@@ -129,3 +129,20 @@ def load_spc_spec_limits(
     except Exception as e:
         logging.error(f"提取管控规格基准数据失败: {e}")
         return pd.DataFrame()
+
+def load_valid_spc_params(db_manager: 'DatabaseManager') -> list:
+    """
+    提取 IMP_SPC_TZBJX 表中 date_type 为 'SPC' 的参数名列表。
+    """
+    sql_query = "SELECT parmatername FROM IMP_SPC_TZBJX WHERE date_type = 'SPC'"
+    try:
+        if db_manager.engine is None:
+            raise ValueError("数据库引擎未初始化。")
+        df = pd.read_sql(text(sql_query), db_manager.engine)
+        if not df.empty:
+            # 清洗首尾可能存在的空格，确保准确匹配
+            return df['parmatername'].astype(str).str.strip().tolist()
+        return []
+    except Exception as e:
+        logging.error(f"提取 SPC 专属参数列表失败: {e}")
+        return []

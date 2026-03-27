@@ -24,3 +24,9 @@ font = "sans serif"
 [server]
 # 禁止 Streamlit 自动打开浏览器 (因为我们要让脚本打开门户页面)
 headless = true
+
+[client]
+# 强制开启开发者工具栏 (恢复 Rerun 按钮)
+toolbarMode = "developer"
+# 允许在前端显示详细的错误堆栈
+showErrorDetails = true
