@@ -136,7 +136,7 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
 ) -> pd.DataFrame: # 返回：严格包含前端报表所需所有中英文列名的最终汇总表
     """
     [Phase 3] 报表颗粒度聚合与复合指标计算 (Report Aggregation & Metric Calculation)
-    按时间桶折叠数据，计算过货量分母与各报警分子，并安全推演复合报警率。
+    按时间桶折叠数据，计算抽检数分母与各报警分子，并安全推演复合报警率。
     """
     logging.info(f"开始执行 [Phase 3] 报表指标聚合 (按维度: {time_group_col})...") # 记录聚合启动
 
@@ -147,7 +147,7 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
     try: # 开启防宕机聚合计算块
         # 1. 核心折叠逻辑：定义聚合策略字典
         agg_funcs = { # 构造字典以指导 Pandas 的列级聚合行为
-            'sheet_id': 'nunique', # 分母防线：统计去重后的独特 Panel 数量，作为真实的“抽检/过货量”
+            'sheet_id': 'nunique', # 分母防线：统计去重后的独特 Panel 数量，作为真实的“抽检/抽检数”
             'is_oos': 'sum',       # 分子 1：对 OOS 的独热列求和，得出 OOS 总片数
             'is_soos': 'sum',      # 分子 2：对 SOOS 的独热列求和，得出 SOOS 总片数
             'is_ooc': 'sum'        # 分子 3：对 OOC 的独热列求和，得出 OOC 总片数
@@ -158,7 +158,7 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
 
         # 3. 字段映射：重命名为前端严格要求的报表字段
         rename_map = { # 建立从底层列名到业务指标列名的映射关系
-            'sheet_id': '过货量', # 映射分母列
+            'sheet_id': '抽检数', # 映射分母列
             'is_oos': 'OOS片数', # 映射 OOS 报警数量
             'is_soos': 'SOOS片数', # 映射 SOOS 报警数量
             'is_ooc': 'OOC片数' # 映射 OOC 报警数量
@@ -166,9 +166,9 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
         report_df.rename(columns=rename_map, inplace=True) # 原地更新列名，节省内存切片操作
 
         # 4. 复合比率运算与物理底线防御 (Zero-Division Protection)
-        total = report_df['过货量'] # 提取分母列引用，提高代码可读性与后续运算速度
+        total = report_df['抽检数'] # 提取分母列引用，提高代码可读性与后续运算速度
 
-        # 基础报警率计算：利用 np.where 拦截除零错误。如果过货量为0，强制返回纯净的 np.nan
+        # 基础报警率计算：利用 np.where 拦截除零错误。如果抽检数为0，强制返回纯净的 np.nan
         report_df['OOS'] = np.where(total == 0, np.nan, report_df['OOS片数'] / total) # 向量化计算 OOS 率
         report_df['SOOS'] = np.where(total == 0, np.nan, report_df['SOOS片数'] / total) # 向量化计算 SOOS 率
         report_df['OOC'] = np.where(total == 0, np.nan, report_df['OOC片数'] / total) # 向量化计算 OOC 率

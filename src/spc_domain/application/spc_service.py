@@ -132,7 +132,6 @@ class SpcAnalysisService:
 
             # =======================================================
             # 步骤 3：构建强力防呆补 0 基座 (Scaffolding)
-            # (无论真实数据有没有，我们强行注入这些维度，保证前端一定有空柱子)
             # =======================================================
             if not df.empty and 'prod_code' in df.columns and 'factory' in df.columns:
                 unique_dims = df[['prod_code', 'factory']].drop_duplicates()
@@ -145,10 +144,9 @@ class SpcAnalysisService:
                 temp_dummy['time_group'] = tg
                 temp_dummy['sort_index'] = si
                 
-                # [核心技巧]：强行注入的假行，把核心统计字段全设为空
-                # 这样 Pandas 聚合时 .nunique() 会自动忽略它，分母分子均为 0！
                 temp_dummy['sheet_id'] = None 
-                temp_dummy['param_value'] = np.nan
+                # [遵照 UI 指示]：移除 param_value = np.nan，替换为 data_type
+                temp_dummy['data_type'] = None
                 temp_dummy['spc_status'] = None
                 dummy_dfs.append(temp_dummy)
 
@@ -166,7 +164,7 @@ class SpcAnalysisService:
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
         time_type: str = 'MIXED'
-    ) -> SpcDashboardViewModel:
+    ) -> dict:
         """
         [企业级 V4.2] 修复 Pydantic 赋值异常与目录自动扫描逻辑
         """
@@ -175,8 +173,8 @@ class SpcAnalysisService:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
         except Exception as e:
             logging.error(f"Config 解析失败: {e}")
-            return SpcDashboardViewModel(global_summary_df=pd.DataFrame(), detail_df=pd.DataFrame())
-
+            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame()}
+        
         target_prod = config_instance.prod_code
         start_dt, end_dt = SpcAnalysisService.get_time_window()
         
@@ -184,13 +182,11 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
-        # =======================================================
-        # [核心修复 1] 破除死锁：不再强制依赖 parquet 文件是否存在
-        # =======================================================
+        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
         if target_prod.upper() == "ALL":
             if data_root.exists():
                 for d in data_root.iterdir():
-                    if d.is_dir() and not d.name.startswith(('.', '__')):
+                    if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
                         search_prods.append(d.name)
         else:
             search_prods = [target_prod]
@@ -221,7 +217,7 @@ class SpcAnalysisService:
                 all_status_dfs.append(status)
 
         if not all_status_dfs:
-            return SpcDashboardViewModel(global_summary_df=pd.DataFrame(), detail_df=pd.DataFrame())
+            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame()}
 
         # 4. 合并并贴上时间标签
         full_status_df = pd.concat(all_status_dfs, ignore_index=True)
@@ -246,7 +242,10 @@ class SpcAnalysisService:
         if not detail_df.empty:
             detail_df = detail_df.sort_values(['sort_index', 'factory']).drop(columns=['sort_index'])
 
-        return SpcDashboardViewModel(global_summary_df=global_summary_df, detail_df=detail_df)
+        return {
+            "global_summary_df": global_summary_df, 
+            "detail_df": detail_df
+        }
 
     @staticmethod
     def get_spc_defect_details(
@@ -278,13 +277,11 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
-        # =======================================================
-        # [核心修复 2] 破除死锁：不再强制依赖 parquet 文件是否存在
-        # =======================================================
+        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
         if target_prod.upper() == "ALL":
             if data_root.exists():
                 for d in data_root.iterdir():
-                    if d.is_dir() and not d.name.startswith(('.', '__')):
+                    if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
                         search_prods.append(d.name)
         else:
             search_prods = [target_prod]
@@ -340,8 +337,8 @@ class SpcAnalysisService:
             else:
                 logging.warning(f"无法在数据集中找到与 {defect_type} 对应的状态列，返回全量时间片数据。")
 
-        # 5. 清理供聚合使用的内部计算列，保持明细表纯净
-        columns_to_drop = ['sort_index', 'time_group']
+        # 5. [核心修改] 清理内部计算列，保持明细表纯净
+        columns_to_drop = ['sort_index', 'time_group', 'param_value']
         filtered_df = filtered_df.drop(columns=[c for c in columns_to_drop if c in filtered_df.columns])
 
         logging.info(f"钻取成功，共捕获 {len(filtered_df)} 条明细数据。")
@@ -360,13 +357,12 @@ class SpcAnalysisService:
             data_root = Path("data")
 
             search_prods = []
-            # =======================================================
-            # [核心修复 3] 破除死锁：不再强制依赖 parquet 文件是否存在
-            # =======================================================
+            
+            ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
             if target_prod.upper() == "ALL":
                 if data_root.exists():
                     for d in data_root.iterdir():
-                        if d.is_dir() and not d.name.startswith(('.', '__')):
+                        if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
                             search_prods.append(d.name)
             else:
                 search_prods = [target_prod]
@@ -388,9 +384,6 @@ class SpcAnalysisService:
                 
                 # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖
                 df = repo.get_spc_measurements(current_fetch_config, force_refresh=True)
-
-                if df.empty:
-                    success_flag = False
 
             return success_flag
             

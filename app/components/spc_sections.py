@@ -138,8 +138,8 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
 
     ordered_time_groups = detail_df['time_group'].unique().tolist()
     view_df['time_group'] = pd.Categorical(view_df['time_group'], categories=ordered_time_groups, ordered=True)
-    # ordered_metrics = ['过货量', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
-    ordered_metrics = ['过货量', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
+    # ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+    ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
 
     pivot_df = view_df.pivot_table(index=['prod_code', 'factory'], columns=['time_group'], values=ordered_metrics, aggfunc=lambda x: x.iloc[0], observed=False)
     stacked_df = pivot_df.stack(level=0, dropna=False)

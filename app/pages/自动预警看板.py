@@ -97,17 +97,19 @@ with st.expander("数据刷新"):
 # --------------------------------------------------------------------------
 # 页面积木组装层 (UI Assembly)
 # --------------------------------------------------------------------------
+detail_df = view_model.get("detail_df", pd.DataFrame())
+global_summary_df = view_model.get("global_summary_df", pd.DataFrame())
+
 # 3. 提取所有可用的维度供前端过滤使用 (防呆处理：如果为空则返回空列表)
-available_products = view_model.detail_df['prod_code'].unique().tolist() if not view_model.detail_df.empty else []
-available_factories = view_model.detail_df['factory'].unique().tolist() if not view_model.detail_df.empty else []
+available_products = detail_df['prod_code'].unique().tolist() if not detail_df.empty else []
+available_factories = detail_df['factory'].unique().tolist() if not detail_df.empty else []
 
 # 4. 组装积木: 渲染控制台
 filter_state = render_spc_control_panel(available_products, available_factories)
 
 with st.expander("SPC自动预警", expanded=True):
-
     # 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
-    render_spc_summary_section(view_model.global_summary_df)
+    render_spc_summary_section(global_summary_df)
 
     # 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
-    render_spc_detail_section(view_model.detail_df, filter_state)
+    render_spc_detail_section(detail_df, filter_state)
