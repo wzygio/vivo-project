@@ -37,8 +37,12 @@ def render_spc_summary_chart(summary_df: pd.DataFrame):
     if summary_df.empty:
         st.warning("暂无全局汇总数据")
         return
-    st.markdown("#### SPC报警率汇总图")
-    echarts_option = get_spc_summary_echarts_option(summary_df)
+    st.markdown("#### 📊 SPC报警率汇总图")
+    
+    # [核心修改]: 强制将 NaN 和 Inf 替换为 0，逼迫 Echarts 绘制出 0% 的点和柱子
+    plot_df = summary_df.copy().fillna(0).replace([np.inf, -np.inf], 0)
+    
+    echarts_option = get_spc_summary_echarts_option(plot_df)
     st_echarts(options=echarts_option, height="450px")
 
 # =========================================================================

@@ -120,7 +120,7 @@ function render() {
                 <path d="M16,2 L19.8,11.3 L29.5,12.1 L22.1,18.5 L24.4,28 L16,22.8 L7.6,28 L9.9,18.5 L2.5,12.1 L12.2,11.3 L16,2 Z" transform="translate(1, 1) scale(0.94)"/>
             </svg>
         </div>
-        <div class="node-label" style="margin-top: 15px; font-size: 15px; font-weight: 600;">V3北极星自动预警</div>
+        <div class="node-label" style="margin-top: 15px; font-size: 15px; font-weight: 600;">V3北极星专项报表</div>
     `;
     // ===============================================
 

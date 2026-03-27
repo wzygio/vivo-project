@@ -82,7 +82,7 @@ class SpcAnalysisService:
             w2_iso = (shifted_end - pd.Timedelta(days=14)).isocalendar()
 
             def format_factory_week(iso):
-                return f"{iso[0]}W{str(iso[1]).zfill(2)}(周三)"
+                return f"{iso[0]}W{str(iso[1]).zfill(2)}"
 
             target_weeks_strs = [format_factory_week(w0_iso), format_factory_week(w1_iso), format_factory_week(w2_iso)]
             target_weeks_sorts = ["2_" + w for w in target_weeks_strs]
@@ -112,7 +112,7 @@ class SpcAnalysisService:
                 # 真实周级 (对齐工厂自定义周，全量减2天以匹配前方的 target_weeks)
                 df_shifted = df['sheet_start_time'] - pd.Timedelta(days=2)
                 df_iso = df_shifted.dt.isocalendar()
-                df_week_str = df_iso.year.astype(str) + "W" + df_iso.week.astype(str).str.zfill(2) + "(周三)"
+                df_week_str = df_iso.year.astype(str) + "W" + df_iso.week.astype(str).str.zfill(2)
                 mask_week = df_week_str.isin(target_weeks_strs)
                 df_week = df[mask_week].copy()
                 df_week['time_group'] = df_week_str[mask_week]
@@ -181,14 +181,14 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
+        # =======================================================
+        # [核心修复 1] 破除死锁：不再强制依赖 parquet 文件是否存在
+        # =======================================================
         if target_prod.upper() == "ALL":
             if data_root.exists():
-                # [核心修复]: 探测 data/{prod}/ 目录下直接存放了 spc_snapshot_{prod}.parquet 的文件夹
                 for d in data_root.iterdir():
-                    if d.is_dir():
-                        # 检查该目录下是否存在符合命名的 SPC 缓存文件
-                        if (d / f"spc_snapshot_{d.name}.parquet").exists():
-                            search_prods.append(d.name)
+                    if d.is_dir() and not d.name.startswith(('.', '__')):
+                        search_prods.append(d.name)
         else:
             search_prods = [target_prod]
 
@@ -275,10 +275,13 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
+        # =======================================================
+        # [核心修复 2] 破除死锁：不再强制依赖 parquet 文件是否存在
+        # =======================================================
         if target_prod.upper() == "ALL":
             if data_root.exists():
                 for d in data_root.iterdir():
-                    if d.is_dir() and (d / f"spc_snapshot_{d.name}.parquet").exists():
+                    if d.is_dir() and not d.name.startswith(('.', '__')):
                         search_prods.append(d.name)
         else:
             search_prods = [target_prod]
@@ -348,20 +351,19 @@ class SpcAnalysisService:
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
         返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
         """
-        import logging
-        from pathlib import Path
-        from spc_domain.infrastructure.data_loader import SpcQueryConfig
-
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
             target_prod = config_instance.prod_code
             data_root = Path("data")
 
             search_prods = []
+            # =======================================================
+            # [核心修复 3] 破除死锁：不再强制依赖 parquet 文件是否存在
+            # =======================================================
             if target_prod.upper() == "ALL":
                 if data_root.exists():
                     for d in data_root.iterdir():
-                        if d.is_dir() and (d / f"spc_snapshot_{d.name}.parquet").exists():
+                        if d.is_dir() and not d.name.startswith(('.', '__')):
                             search_prods.append(d.name)
             else:
                 search_prods = [target_prod]

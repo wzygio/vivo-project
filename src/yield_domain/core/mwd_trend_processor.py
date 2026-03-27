@@ -139,7 +139,8 @@ def _execute_unified_pipeline(
     [重构 V4.0] 大一统混合流水线 (Unified Hybrid Pipeline)
     执行顺序翻转：EMA 洗底 -> 底层物理截断 -> 向上聚合 W/M -> 宏观定调与重塑
     """
-    df_processing, last_day = _apply_t1_filtering(raw_daily_df, last_day)
+    # df_processing, last_day = _apply_t1_filtering(raw_daily_df, last_day)
+    df_processing, last_day = raw_daily_df, last_day
     if df_processing.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     

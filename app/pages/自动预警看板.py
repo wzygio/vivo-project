@@ -72,9 +72,12 @@ with st.expander("数据刷新"):
         end_date=end_dt.strftime("%Y-%m-%d")
     )
 
-    # 2. [核心修复] 利用 Lambda 闭包，将参数包裹后传给 Header
+    # 2. [核心修复] 利用 Lambda 闭包，将 db_manager 和 json 参数一并安全包裹
     handlers = [
-        lambda: SpcAnalysisService.safe_refresh_snapshots(query_config.model_dump_json())
+        lambda: SpcAnalysisService.safe_refresh_snapshots(
+            _db_manager=db_manager, 
+            query_config_json=query_config.model_dump_json()
+        )
     ]
 
     # 3. 渲染 Header
