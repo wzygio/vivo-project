@@ -142,6 +142,25 @@ def render_page_header(
     cached_funcs: list = None,
     refresh_handlers: list = None # [重构] 接收无参闭包，期待返回 bool
 ):
+    # =========================================================================
+    # [新增] Admin 隐身模式 (Stealth Mode)
+    # =========================================================================
+    # 只要 URL 中没有 ?admin=true，就利用 CSS 抹除侧边栏中的特定页面
+    if st.query_params.get("admin") != "true":
+        st.markdown(
+            """
+            <style>
+            /* 使用属性选择器精准狙击 href 包含特定名称的 <a> 标签 */
+            /* 兼容明文中文和 URL Encode 编码格式 */
+            [data-testid="stSidebarNav"] a[href*=""],
+            [data-testid="stSidebarNav"] a[href*="%E8%87%AA%E5%8A%A8%E9%A2%84%E8%AD%A6%E7%9C%8B%E6%9D%BF"] {
+                display: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
     if title:
         st.title(title)
     
