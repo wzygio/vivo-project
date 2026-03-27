@@ -18,6 +18,7 @@ const LINKS = {
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
     SPC_AOI: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Yield_Monitoring%252FDefect_Monitoring%252FDB107.SPC_AOI_TDSUM_Analyze_for_BJX_Report.cpt&ref_t=design&ref_c=273d9530-1b98-4bbe-9c39-dd79889a6e16",
+    CTQ: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/6883bfc0-b11b-4548-8e78-3b6a3474f0d0?preview=true",
     QTIME: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Test%252FQTIME_TZBJX.cpt&ref_t=design&ref_c=273d9530-1b98-4bbe-9c39-dd79889a6e16",
     IQC: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Quality_Monitoring%252FPQC%252FI03_Search_TianZhu_IQC_Mateial_OKNG_Ratel.cpt&ref_t=design&op=view&ref_c=4b854cd4-c836-4724-ba9d-0ad9a72584e5"
 };
@@ -54,6 +55,7 @@ const APP_CONFIG = {
             children: [
                 { name: "SPC AOI", url: LINKS.SPC_AOI },
                 { name: "SPC", url: LINKS.SPC },
+                { name: "CTQ", url: LINKS.CTQ },
             ]
         },
         {
@@ -97,6 +99,7 @@ const APP_CONFIG = {
             subs: [ 
                 {l:'', v:'SPC AOI', url: LINKS.SPC_AOI } ,
                 {l:'', v:'SPC', url: LINKS.SPC }, 
+                {l:'', v:'CTQ', url: LINKS.CTQ },
             ]
         },
         { 

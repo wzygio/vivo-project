@@ -54,6 +54,13 @@ def render_spc_summary_table(summary_df: pd.DataFrame):
     st.markdown("#### SPC报警汇总表")
     
     view_df = summary_df.copy().set_index('time_group').T
+
+    # ==========================================================
+    # [新增前端屏蔽]: 在转置后，把这两行数据从 view_df 中丢弃
+    # ==========================================================
+    hidden_metrics = ['OOS+SOOS', 'OOS+SOOS+OOC']
+    view_df = view_df.drop(index=[m for m in hidden_metrics if m in view_df.index])
+
     def safe_format(val, is_rate=False):
         if pd.isna(val): return "/"
         if is_rate: return f"{val * 100:.2f}%"
@@ -131,7 +138,8 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
 
     ordered_time_groups = detail_df['time_group'].unique().tolist()
     view_df['time_group'] = pd.Categorical(view_df['time_group'], categories=ordered_time_groups, ordered=True)
-    ordered_metrics = ['过货量', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+    # ordered_metrics = ['过货量', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+    ordered_metrics = ['过货量', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
 
     pivot_df = view_df.pivot_table(index=['prod_code', 'factory'], columns=['time_group'], values=ordered_metrics, aggfunc=lambda x: x.iloc[0], observed=False)
     stacked_df = pivot_df.stack(level=0, dropna=False)

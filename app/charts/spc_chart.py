@@ -97,19 +97,18 @@ def get_spc_summary_echarts_option(df: pd.DataFrame) -> Dict[str, Any]:
             {"name": "OOS", "type": "line", "yAxisIndex": 1, "data": oos_rate, "symbol": "circle", "tooltip": {"valueFormatter": js_percent_formatter}},
             {"name": "SOOS", "type": "line", "yAxisIndex": 1, "data": soos_rate, "symbol": "circle", "tooltip": {"valueFormatter": js_percent_formatter}},
             {"name": "OOC", "type": "line", "yAxisIndex": 1, "data": ooc_rate, "symbol": "circle", "tooltip": {"valueFormatter": js_percent_formatter}},
-            {"name": "OOS+SOOS", "type": "line", "yAxisIndex": 1, "data": oos_soos_rate, "symbol": "circle", "tooltip": {"valueFormatter": js_percent_formatter}},
             
-            # 主力指标特殊处理 (挂载 Label + Formatter)
-            {
-                "name": "OOS+SOOS+OOC", 
-                "type": "line", 
-                "yAxisIndex": 1, 
-                "data": total_rate, 
-                "symbol": "circle", 
-                "itemStyle": {"color": "#ED7D31"}, 
-                "tooltip": {"valueFormatter": js_percent_formatter},
-                "label": {"show": True, "formatter": "{c}%"} # 折线上的直接显示文字保留 Echarts 内置标签模板
-            }
+            # {"name": "OOS+SOOS", "type": "line", "yAxisIndex": 1, "data": oos_soos_rate, "symbol": "circle", "tooltip": {"valueFormatter": js_percent_formatter}},
+            # {
+            #     "name": "OOS+SOOS+OOC", 
+            #     "type": "line", 
+            #     "yAxisIndex": 1, 
+            #     "data": total_rate, 
+            #     "symbol": "circle", 
+            #     "itemStyle": {"color": "#ED7D31"}, 
+            #     "tooltip": {"valueFormatter": js_percent_formatter},
+            #     "label": {"show": True, "formatter": "{c}%"} # 折线上的直接显示文字保留 Echarts 内置标签模板
+            # }
         ]
     }
     return option

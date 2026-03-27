@@ -5,7 +5,11 @@ from typing import Optional
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
-from spc_domain.infrastructure.data_loader import load_spc_measurements, load_spc_spec_limits, SpcQueryConfig
+from spc_domain.infrastructure.data_loader import(
+    load_spc_measurements, 
+    load_spc_spec_limits, 
+    load_valid_spc_params
+)
 from spc_domain.application.dtos import SpcQueryConfig
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -129,6 +133,7 @@ class SpcRepository:
         # --- Phase 3: 持久化与内存过滤 ---
         if not df_final.empty:
             if need_save and self.use_snapshot:
+                # 滚动抛弃：只保留 req_start_dt 之后的三个月数据写入硬盘（⚠️ 此处写入的是不挑参数的全量数据！）
                 df_to_save = df_final[df_final['sheet_start_time'] >= req_start_dt]
                 try:
                     self.snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -140,8 +145,20 @@ class SpcRepository:
                 df_final = df_to_save
 
             mask_time = (df_final['sheet_start_time'] >= req_start_dt) & (df_final['sheet_start_time'] <= req_end_dt)
-            df_filtered = df_final[mask_time]
+            # 引入 copy() 防止后续赋值触发 Pandas 的 SettingWithCopyWarning
+            df_filtered = df_final[mask_time].copy() 
 
+            # =================================================================
+            # [核心新增] 动态内存过滤：去数据库要一份白名单，仅放行 SPC 相关的参数
+            # =================================================================
+            valid_params = load_valid_spc_params(self.db)
+            if valid_params:
+                df_filtered = df_filtered[df_filtered['param_name'].isin(valid_params)]
+                logging.info(f"[SpcRepo] 内存级参数过滤完成，仅向 Service 层下发 {len(valid_params)} 种 SPC 专属参数。")
+            else:
+                logging.warning("[SpcRepo] 警告：未能获取到 SPC 参数白名单，将下发全量参数。")
+
+            # 原有的维度过滤
             if config.factory:
                 df_filtered = df_filtered[df_filtered['factory'] == config.factory.upper()]
             if config.step_id:
