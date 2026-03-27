@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 from spc_domain.infrastructure.data_loader import load_spc_measurements, load_spc_spec_limits, SpcQueryConfig
+from spc_domain.application.dtos import SpcQueryConfig
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from shared_kernel.infrastructure.db_handler import DatabaseManager

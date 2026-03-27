@@ -10,6 +10,7 @@ import io
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
 from yield_domain.infrastructure.repositories.yield_repository import PanelRepository
+from yield_domain.application.dtos import YieldQueryConfig
 
 # --- Core (Processors) ---
 from yield_domain.core.mwd_trend_processor import MWDTrendProcessor
@@ -58,62 +59,52 @@ class YieldAnalysisService:
         
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_raw_panel_details(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_raw_panel_details(query_config_json: str, _core_revision: float = 0.0) -> pd.DataFrame:
         """
         [L1 Cache] 从数据库加载原始 Panel 数据。
-        注意: TTL 由 cache_ttl_hours 决定，但静态装饰器无法动态读取 config。
-        建议在 UI 层调用 st.cache_data.clear() 或使用 session_state 管理强刷。
+        基于 JSON 序列化的 DTO 进行缓存追踪。
         """
         logging.info("--- [L1 Cache Miss] 加载原始 Panel 数据... ---")
         
-        # 提取查询参数 (提前提取，用于获取动态路由所需的产品代码)
-        ds_config = config.data_source
-        prod_code = ds_config.product_code
+        # 1. 严格实例化 DTO
+        query = YieldQueryConfig.model_validate_json(query_config_json)
         
-        # 1. 提取仓库配置
-        processing_conf = config.processing
-        
-        # =========================================================================
-        # [核心修正]: 文件名规范由 yield_panel_snapshot 变更为 snapshot_{prod_code}
-        # =========================================================================
-        default_snapshot_name = f"yield_snapshot_{prod_code}.parquet"
-        default_snapshot_path = Path("data") / prod_code / default_snapshot_name
-        
-        snapshot_path_str = processing_conf.get('snapshot_path', str(default_snapshot_path)) 
-        snapshot_path = Path(snapshot_path_str) 
-        
+        # 2. 动态路由隔离路径 (Service 层自己决定存哪，不再依赖 AppConfig)
+        snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         
-        use_snapshot = processing_conf.get('use_local_snapshot', True)
-
-        # 2. 实例化 Repo (注入配置)
-        repo = PanelRepository(
-            snapshot_path=snapshot_path,
-            use_snapshot=use_snapshot
-        )
+        # 3. 实例化 Repo 并透传 DTO
+        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True)
         
-        # 每次调用时，动态获取真实的、流动的时间窗口
-        start_date, end_date = YieldAnalysisService.get_time_window()
-        
-        logging.info(f"当前查询时间窗口: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
-
-        return repo.get_panel_details(
-            start_date=start_date.strftime('%Y-%m-%d'),
-            end_date=end_date.strftime('%Y-%m-%d'),
-            product_code=prod_code,
-            work_order_types=ds_config.work_order_types,
-            target_defect_groups=ds_config.target_defect_groups 
-        )
+        return repo.get_panel_details(query=query)
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_modified_panel_details(config: AppConfig, _core_revision: float = 0.0) -> pd.DataFrame:
-        """[L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据"""
+    def get_modified_panel_details(config: 'AppConfig', _core_revision: float = 0.0) -> pd.DataFrame:
+        """
+        [L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据
+        """
+        import logging
+        import pandas as pd
+        from yield_domain.application.dtos import YieldQueryConfig
         
-        # 1. 获取 L1 数据 (传递 config)
-        raw_df = YieldAnalysisService.get_raw_panel_details(config, _core_revision)
+        # [核心修复]：从全局 config 中剥离出底层所需的参数，组装成标准的 DTO
+        start_dt, end_dt = YieldAnalysisService.get_time_window()
         
-        if raw_df.empty: return pd.DataFrame()
+        query = YieldQueryConfig(
+            start_date=start_dt.strftime("%Y-%m-%d"),
+            end_date=end_dt.strftime("%Y-%m-%d"),
+            product_code=config.data_source.product_code,
+            # 补齐前端代码中遗漏的工单类型和特定不良组过滤参数
+            work_order_types=config.data_source.work_order_types,
+            target_defect_groups=config.data_source.target_defect_groups
+        )
+        
+        # 1. 获取 L1 数据 (向下传递严格序列化后的 JSON 字符串)
+        raw_df = YieldAnalysisService.get_raw_panel_details(query.model_dump_json(), _core_revision)
+        
+        if raw_df.empty: 
+            return pd.DataFrame()
         
         # 2. 应用修饰
         processed_df = raw_df.copy()
@@ -122,8 +113,13 @@ class YieldAnalysisService:
         multipliers_config = config.processing.get('defect_multipliers', {})
         if multipliers_config:
             logging.info("应用缺陷衰减...")
-            processed_df = apply_defect_multipliers(processed_df, multipliers_config)
-            
+            try:
+                # 假设 apply_defect_multipliers 在 core 层，按需调整引入路径
+                from yield_domain.core.defect_modifier import apply_defect_multipliers
+                processed_df = apply_defect_multipliers(processed_df, multipliers_config)
+            except Exception as e:
+                logging.error(f"应用缺陷衰减失败: {e}")
+                
         return processed_df
 
     # ==========================================================================
@@ -384,51 +380,27 @@ class YieldAnalysisService:
             return {}
         
     @staticmethod
-    def safe_refresh_snapshots(config: 'AppConfig') -> bool:
+    def safe_refresh_snapshots(query_config_json: str) -> bool:
         """
-        [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
-        返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
+        [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写。
         """
         import logging
         from pathlib import Path
         
         try:
-            ds_config = config.data_source
-            prod_code = ds_config.product_code
-            processing_conf = config.processing
+            query = YieldQueryConfig.model_validate_json(query_config_json)
             
-            # 动态构建隔离路径
-            default_snapshot_name = f"snapshot_{prod_code}.parquet"
-            default_snapshot_path = Path("data") / prod_code / default_snapshot_name
-            
-            snapshot_path_str = processing_conf.get('snapshot_path', str(default_snapshot_path)) 
-            snapshot_path = Path(snapshot_path_str) 
-            
+            snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             
-            repo = PanelRepository(
-                snapshot_path=snapshot_path,
-                use_snapshot=True
-            )
+            repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True)
             
-            start_date, end_date = YieldAnalysisService.get_time_window()
+            logging.info(f"🔄 [YieldService] 向底层下发 {query.product_code} 强刷指令 (Force Refresh)...")
             
-            logging.info(f"🔄 [YieldService] 向底层下发 {prod_code} 强刷指令 (Force Refresh)...")
+            # 穿透强刷指令
+            df = repo.get_panel_details(query=query, force_refresh=True)
             
-            # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖
-            df = repo.get_panel_details(
-                start_date=start_date.strftime('%Y-%m-%d'),
-                end_date=end_date.strftime('%Y-%m-%d'),
-                product_code=prod_code,
-                work_order_types=ds_config.work_order_types,
-                target_defect_groups=ds_config.target_defect_groups,
-                force_refresh=True
-            )
-            
-            if df.empty:
-                return False
-                
-            return True
+            return not df.empty
             
         except Exception as e:
             logging.error(f"❌ Yield 快照安全覆写代理调度失败: {e}")

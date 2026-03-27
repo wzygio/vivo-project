@@ -13,6 +13,7 @@ from app.utils.reloader import get_project_revision
 from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
 from yield_domain.application.excel_service import ExcelService
+from yield_domain.application.dtos import YieldQueryConfig
 
 # 引入图表组件
 from app.components.components import (
@@ -44,13 +45,42 @@ active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 product_dir = SessionManager.get_product_dir()
 
-# [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
+# ==============================================================================
+# [核心修复] 构造后端需要的 Query JSON 并使用 Lambda 包裹 (完全对齐业务参数)
+# ==============================================================================
+current_product = active_config.data_source.product_code
+start_dt, end_dt = YieldAnalysisService.get_time_window()
+
+# 1. [新增] 安全提取底层的业务过滤参数 (兼容字典和对象模式)
+# 提取工单类型
+wo_types = getattr(active_config.data_source, 'work_order_types', [])
+# 提取目标缺陷组
+if isinstance(active_config.processing, dict):
+    defect_groups = active_config.processing.get('target_defect_groups', [])
+else:
+    defect_groups = getattr(active_config.processing, 'target_defect_groups', [])
+
+# 2. 实例化后端的 DTO，补齐核心过滤参数，确保刷新拉取的数据与常规查询 100% 严格一致
+yield_query_config = YieldQueryConfig(
+    product_code=current_product,
+    start_date=start_dt.strftime("%Y-%m-%d"),
+    end_date=end_dt.strftime("%Y-%m-%d"),
+    work_order_types=wo_types,
+    target_defect_groups=defect_groups
+)
+
+# 3. 利用闭包，安全地将带有参数的函数传给 Header
+handlers = [
+    lambda: YieldAnalysisService.safe_refresh_snapshots(yield_query_config.model_dump_json())
+]
+
+# [Refactor] 3. 渲染页头
 funcs_to_clear = extract_cached_funcs(YieldAnalysisService)
 render_page_header(
     title="📊 入库不良率分析看板", 
     config=active_config,
     cached_funcs=funcs_to_clear,
-    refresh_handlers=[YieldAnalysisService.safe_refresh_snapshots]
+    refresh_handlers=handlers  # 注入携带了全量参数的闭包
 )
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件 (注入 config 用于刷新逻辑)

@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 
 from shared_kernel.infrastructure.db_handler import DatabaseManager
+from yield_domain.application.dtos import YieldQueryConfig
 from yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
 
 class PanelRepository:
@@ -37,21 +38,13 @@ class PanelRepository:
         self.snapshot_path = snapshot_path
         self.use_snapshot = use_snapshot
 
-    def get_panel_details(
-        self, 
-        start_date: str, 
-        end_date: str, 
-        product_code: str,
-        work_order_types: List[str],
-        target_defect_groups: List[str],
-        force_refresh: bool = False
-    ) -> pd.DataFrame:
+    def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         """
         获取 Panel 数据 (TTL 保护 + 增量更新)。
         包含基于业务的安全去重逻辑、强刷指令拦截与数据库容灾降级。
         """
-        req_start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-        req_end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        req_start_dt = datetime.strptime(query.start_date, "%Y-%m-%d")
+        req_end_dt = datetime.strptime(query.end_date, "%Y-%m-%d")
 
         df_cache = pd.DataFrame()
         cache_exists = False
@@ -104,8 +97,8 @@ class PanelRepository:
                 delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
                 try:
                     df_delta = self._fetch_from_db_in_chunks(
-                        delta_s_str, end_date, 
-                        product_code, work_order_types, target_defect_groups
+                        delta_s_str, query.end_date, 
+                        query.product_code, query.work_order_types, query.target_defect_groups
                     )
                     
                     if not df_delta.empty:
@@ -134,8 +127,8 @@ class PanelRepository:
             logging.info("🆕 [YieldRepo] 执行全量刷新 (Full Refresh)...")
             try:
                 df_final = self._fetch_from_db_in_chunks(
-                    start_date, end_date, 
-                    product_code, work_order_types, target_defect_groups
+                    query.start_date, query.end_date, 
+                    query.product_code, query.work_order_types, query.target_defect_groups
                 )
                 if not df_final.empty:
                     df_final['warehousing_time'] = pd.to_datetime(df_final['warehousing_time'])
