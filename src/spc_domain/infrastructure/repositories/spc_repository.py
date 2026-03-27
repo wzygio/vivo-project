@@ -151,26 +151,38 @@ class SpcRepository:
             # =================================================================
             # [核心修复] 动态内存过滤：索要当前产品的专属白名单
             # =================================================================
-            # 传入了 config.prod_code 
-            valid_params = load_valid_spc_params(self.db, config.prod_code)
+            valid_params_df = load_valid_spc_params(self.db, config.prod_code)
             
-            if valid_params is not None:
-                if len(valid_params) > 0:
-                    # 统一转大写比较，极其安全
-                    df_filtered = df_filtered[df_filtered['param_name'].str.upper().isin(valid_params)]
-                    logging.info(f"[SpcRepo] 内存过滤完成，拦截非 SPC 数据，下发 {len(valid_params)} 种专属参数。")
+            if valid_params_df is not None:
+                if not valid_params_df.empty:
+                    # 1. 统一转大写建立连接键
+                    df_filtered['param_name_upper'] = df_filtered['param_name'].str.upper()
+                    
+                    # 2. 内连接：既过滤了不合规的参数，又顺路带回了 data_type 列
+                    df_filtered = df_filtered.merge(
+                        valid_params_df,
+                        left_on='param_name_upper',
+                        right_on='ref_param_name',
+                        how='inner'
+                    )
+                    
+                    # 3. 清理联结产生的临时字段
+                    df_filtered = df_filtered.drop(columns=['param_name_upper', 'ref_param_name'])
+                    
+                    logging.info(f"[SpcRepo] 内存过滤与 data_type 注入完成，下发 {len(valid_params_df)} 种专属参数。")
                 else:
                     logging.warning(f"[SpcRepo] 警告：产品 {config.prod_code} 查无 SPC 参数白名单！已清空本批次数据。")
-                    df_filtered = df_filtered.iloc[0:0] # 查无白名单，强制清空，不准放行
+                    df_filtered = df_filtered.iloc[0:0] 
             else:
-                logging.error("[SpcRepo] 严重警告：拉取 SPC 参数白名单 SQL 执行失败，为防止页面崩溃，暂时下发全量参数。")
+                logging.error("[SpcRepo] 严重警告：拉取 SPC 参数白名单失败，下发全量参数并标记未知类型。")
+                df_filtered['data_type'] = 'UNKNOWN'
 
             # --- 🎯 满足您的监控需求：TDSUM 专属雷达探测 ---
             if 'TDSUM' in df_filtered['param_name'].str.upper().values:
                 logging.warning("🚨 [DEBUG 探测仪] 发现 TDSUM 依然存活在过滤后的数据中！说明白名单中竟然有它，请检查配置表。")
             else:
                 logging.info("✅ [DEBUG 探测仪] TDSUM 已被成功消灭！它不在 SPC 白名单中。")
-                
+
             # 原有的维度过滤
             if config.factory:
                 df_filtered = df_filtered[df_filtered['factory'] == config.factory.upper()]

@@ -130,14 +130,17 @@ def load_spc_spec_limits(
         logging.error(f"提取管控规格基准数据失败: {e}")
         return pd.DataFrame()
 
-def load_valid_spc_params(db_manager: 'DatabaseManager', prod_code: str) -> Optional[list]:
+
+def load_valid_spc_params(db_manager: 'DatabaseManager', prod_code: str) -> Optional[pd.DataFrame]:
     """
-    提取 IMP_SPC_TZBJX 表中 data_type 为 'SPC' 的参数名列表。
+    提取 IMP_SPC_TZBJX 表中 data_type 为 'SPC' 的参数名与类型映射表。
     通过 DWR_MES_PRODUCTSPEC 关联，精准定位当前产品的白名单。
     """
-    # [核心修复] 修正了表头拼写: parmtername, data_type，并加入 prod_code 过滤
+    # [核心修改] 提取 data_type，并为 parmtername 设置防冲突别名 ref_param_name
     sql_query = f"""
-    SELECT DISTINCT T1.parmtername 
+    SELECT DISTINCT 
+        T1.parmtername AS ref_param_name, 
+        T1.data_type 
     FROM eda.IMP_SPC_TZBJX T1
     JOIN DWR_MES_PRODUCTSPEC T2 ON T1.productspecname = T2.PRODUCTSPECNAME
     WHERE T1.data_type = 'SPC'
@@ -148,9 +151,11 @@ def load_valid_spc_params(db_manager: 'DatabaseManager', prod_code: str) -> Opti
             raise ValueError("数据库引擎未初始化。")
         df = pd.read_sql(text(sql_query), db_manager.engine)
         if not df.empty:
-            # 清洗首尾空格，并统一转大写，防止后续比较时遭遇大小写暗坑
-            return df['parmtername'].astype(str).str.strip().str.upper().tolist()
-        return []
+            # 清洗首尾空格，并统一转大写，防止后续 merge 时遭遇大小写暗坑
+            df['ref_param_name'] = df['ref_param_name'].astype(str).str.strip().str.upper()
+            return df
+        return pd.DataFrame()
     except Exception as e:
-        logging.error(f"提取 SPC 专属参数列表失败: {e}")
-        return None  # 返回 None 表示查询异常，与“查成功了但是真的为空(返回[])”区分开
+        import logging
+        logging.error(f"提取 SPC 专属参数映射表失败: {e}")
+        return None
