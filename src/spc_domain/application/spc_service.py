@@ -20,7 +20,8 @@ from spc_domain.infrastructure.repositories.spc_repository import SpcRepository
 from spc_domain.core.spc_calculator import (
     preprocess_sheet_features, 
     apply_spc_rules, 
-    aggregate_spc_metrics
+    aggregate_spc_metrics,
+    sanitize_to_compliant
 )
 
 if TYPE_CHECKING:
@@ -163,7 +164,8 @@ class SpcAnalysisService:
     def get_spc_dashboard_data(
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
-        time_type: str = 'MIXED'
+        time_type: str = 'MIXED',
+        force_compliant: bool = False
     ) -> dict:
         """
         [企业级 V4.2] 修复 Pydantic 赋值异常与目录自动扫描逻辑
@@ -214,6 +216,9 @@ class SpcAnalysisService:
                 # 立即降维判定，减少内存占用
                 features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
                 status = apply_spc_rules(sheet_features=features)
+                # [可选] 合规修饰：强制所有 Sheet 状态为 OK
+                if force_compliant:
+                    status = sanitize_to_compliant(status)
                 all_status_dfs.append(status)
 
         if not all_status_dfs:
@@ -253,7 +258,8 @@ class SpcAnalysisService:
         query_config_json: str, 
         time_group: str, 
         defect_type: str,
-        time_type: str = 'MIXED'
+        time_type: str = 'MIXED',
+        force_compliant: bool = False
     ) -> pd.DataFrame:
         """
         [企业级下钻 API] 针对前端大盘数字点击事件，提供精准的明细级数据下钻。
@@ -306,6 +312,9 @@ class SpcAnalysisService:
             if not m_df.empty:
                 features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
                 status = apply_spc_rules(sheet_features=features)
+                # [可选] 合规修饰
+                if force_compliant:
+                    status = sanitize_to_compliant(status)
                 all_status_dfs.append(status)
 
         if not all_status_dfs:

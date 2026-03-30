@@ -8,7 +8,7 @@ def deep_reload_modules(root_package_names=("src", "app", "spc_domain", "yield_d
     [V2.0 DDD 适配版] 强制热重载指定包名下的所有子模块。
     允许传入元组，覆盖 sys.modules 中可能出现的所有顶层包名。
     """
-    unloaded_count = 0
+    unloaded_count = 0  # 用于统计被卸载模块的数量
     
     # 遍历当前内存中已加载的所有模块
     for module_name in list(sys.modules.keys()):
