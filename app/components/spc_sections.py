@@ -203,6 +203,11 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
 @st.dialog("🔍 SPC报警明细表", width="large")
 def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_times: list):
     
+    # [权限控制] 检测 URL 参数，只有 admin=true 时显示真实数据
+    query_params = st.query_params
+    is_admin = query_params.get("admin") == "true"
+    force_compliant = not is_admin  # 非管理员强制显示修饰数据
+    
     selected_time = st.segmented_control(
         "选择追溯时间段:",
         options=available_times,
@@ -227,12 +232,14 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 )
                 db_manager = DatabaseManager()
 
+                # [权限控制] 根据 URL 参数决定是否强制合规
                 real_df = SpcAnalysisService.get_spc_defect_details(
                     _db_manager=db_manager,
                     query_config_json=query_config.model_dump_json(),
                     time_group=selected_time,
                     defect_type=core_defect_type,
-                    time_type='MIXED'
+                    time_type='MIXED',
+                    force_compliant=force_compliant
                 )
 
                 if real_df.empty:

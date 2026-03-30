@@ -26,14 +26,11 @@ from shared_kernel.infrastructure.db_handler import DatabaseManager
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 setup_hot_reload(enable=True)
 
-# =========================================================================
-# [新增] 路由硬拦截 (Route Guard)
-# =========================================================================
-if st.query_params.get("admin") != "true":
-    st.error("🚧 核心功能研发中 / Core Module Under Construction")
-    st.info("该模块正在进行最终的数据接入测试，敬请期待。")
-    st.stop()  # 拦截器：在此处彻底停止下方所有代码的执行！
-    
+# [权限控制] 检测 URL 参数，只有 admin=true 时显示真实数据
+query_params = st.query_params
+is_admin = query_params.get("admin") == "true"
+force_compliant = not is_admin  # 非管理员强制显示修饰数据
+
 st.title("自动预警看板")
 
 # ==============================================================================
@@ -57,10 +54,12 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
         
         # E. 发起真实的服务层调用 (严格对齐后端 3 参数签名)
         # 删除了 snapshot_dir_str 参数，由后端 Service 内部自理
+        # [权限控制] 根据 URL 参数决定是否强制合规
         view_model = SpcAnalysisService.get_spc_dashboard_data(
             _db_manager=db_manager,
             query_config_json=query_config.model_dump_json(),
-            time_type='MIXED'
+            time_type='MIXED',
+            force_compliant=force_compliant
         )
     except Exception as e:
         # 如果依然报错，此处会打印出最真实的错误堆栈
