@@ -200,10 +200,13 @@ class SpcRepository:
     
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
         """
-        [物理级拦截器] 读取 Excel 规则，剔除点位级别 (site_name) 的极端脏数据。
-        支持产品通配符 (ALL) 与动态逻辑运算符 (<=, <, >=, >)。
+        [物理级拦截器] 根据 Excel 预设的数字边界剔除异常点位 (site_name)。
+        逻辑：value <= lower_col 或 value >= upper_col 的数据将被物理剔除。
         """
-        # [核心修复 2] 绝对路径锁定：利用 ConfigLoader 动态获取根目录
+        import io
+        from src.shared_kernel.config import ConfigLoader
+
+        # 1. 路径锁定
         project_root = ConfigLoader.get_project_root()
         rule_file = project_root / "resources" / "spc_outlier_filters.xlsx"
         
@@ -211,75 +214,76 @@ class SpcRepository:
             return df
 
         try:
-            # 1. 加载规则表
-            rules_df = pd.read_excel(rule_file, dtype=str).fillna("")
-            
-            # [核心修复 1] 移除冗余映射，直接实施强表头校验
-            required_cols = ['step_col', 'param_col']
-            if not all(k in rules_df.columns for k in required_cols):
-                logging.warning("⚠️ [SpcRepo] 异常过滤规则表头缺失核心字段(step_col/param_col)，跳过物理过滤。")
+            # 2. 降维读取：Excel -> CSV Buffer -> DataFrame (免疫格式干扰) 
+            df_raw = pd.read_excel(rule_file, header=None, dtype=str, engine='openpyxl')
+            csv_buffer = io.StringIO()
+            df_raw.to_csv(csv_buffer, index=False, header=False)
+            csv_buffer.seek(0)
+            df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
+
+            if len(df_clean) < 2:
                 return df
 
-            # 2. 初始化掩码与辅助解析器
-            outlier_mask = pd.Series(False, index=df.index)
-            df_vals = pd.to_numeric(df['param_value'], errors='coerce')
+            # 3. 提取表头索引 (严格匹配您提供的列名)
+            header_row = df_clean.iloc[0].astype(str).str.strip()
+            col_indices = {col_name: idx for idx, col_name in enumerate(header_row)}
 
-            def parse_condition(cond_str):
-                if not cond_str: return None, None
-                match = re.match(r'(<=|>=|<|>|=)?\s*([+-]?\d+\.?\d*)', str(cond_str).strip())
-                if match:
-                    return match.group(1) or '=', float(match.group(2))
-                return None, None
+            # 核心校验
+            if not all(k in col_indices for k in ['step_col', 'param_col']):
+                logging.warning(f"⚠️ [SpcRepo] 过滤规则表头缺失核心字段。提取到的表头: {header_row.tolist()}")
+                return df
+
+            # 4. 初始化掩码与数值准备
+            outlier_mask = pd.Series(False, index=df.index)
+            # 统一转为数字类型以便对比 [cite: 11]
+            df_vals = pd.to_numeric(df['param_value'], errors='coerce')
 
             applied_count = 0
 
-            # 3. 遍历规则库执行靶向捕获
-            for _, rule in rules_df.iterrows():
-                r_prod = str(rule.get('prod_col', '')).strip().upper()
-                r_step = str(rule['step_col']).strip()
-                r_param = str(rule['param_col']).strip()
+            # 5. 遍历规则行
+            for curr_r in range(1, len(df_clean)):
+                rule = df_clean.iloc[curr_r]
+                
+                r_prod = str(rule[col_indices['prod_col']]).strip().upper() if 'prod_col' in col_indices else 'ALL'
+                r_step = str(rule[col_indices['step_col']]).strip()
+                r_param = str(rule[col_indices['param_col']]).strip()
 
-                # 产品白名单过滤
+                if not r_step or not r_param: continue
+
+                # 产品匹配
                 if r_prod and r_prod != 'ALL' and r_prod != prod_code.upper():
                     continue
 
-                # 锁定靶向数据范围
+                # 锁定靶向范围
                 target_mask = (df['step_id'] == r_step) & (df['param_name'].str.upper() == r_param.upper())
                 if not target_mask.any():
                     continue
 
-                # 获取严格列名下的限制值
-                lower_op, lower_val = parse_condition(rule.get('lower_col', ''))
-                upper_op, upper_val = parse_condition(rule.get('upper_col', ''))
+                # --- [极简逻辑实现] ---
+                # 提取下限值：如果数据 <= 该值，则标记为异常
+                if 'lower_col' in col_indices:
+                    l_val = pd.to_numeric(rule[col_indices['lower_col']], errors='coerce')
+                    if not pd.isna(l_val):
+                        outlier_mask |= (target_mask & (df_vals <= l_val))
 
-                # 执行下限捕获
-                if lower_val is not None:
-                    if lower_op == '<=': outlier_mask |= (target_mask & (df_vals <= lower_val))
-                    elif lower_op == '<': outlier_mask |= (target_mask & (df_vals < lower_val))
-                    elif lower_op == '>=': outlier_mask |= (target_mask & (df_vals >= lower_val))
-                    elif lower_op == '>': outlier_mask |= (target_mask & (df_vals > lower_val))
-                    elif lower_op == '=': outlier_mask |= (target_mask & (df_vals == lower_val))
-
-                # 执行上限捕获
-                if upper_val is not None:
-                    if upper_op == '<=': outlier_mask |= (target_mask & (df_vals <= upper_val))
-                    elif upper_op == '<': outlier_mask |= (target_mask & (df_vals < upper_val))
-                    elif upper_op == '>=': outlier_mask |= (target_mask & (df_vals >= upper_val))
-                    elif upper_op == '>': outlier_mask |= (target_mask & (df_vals > upper_val))
-                    elif upper_op == '=': outlier_mask |= (target_mask & (df_vals == upper_val))
+                # 提取上限值：如果数据 >= 该值，则标记为异常
+                if 'upper_col' in col_indices:
+                    u_val = pd.to_numeric(rule[col_indices['upper_col']], errors='coerce')
+                    if not pd.isna(u_val):
+                        outlier_mask |= (target_mask & (df_vals >= u_val))
 
                 applied_count += 1
 
-            # 4. 执行物理剔除
+            # 6. 执行剔除
             if outlier_mask.any():
                 drop_count = outlier_mask.sum()
                 df = df[~outlier_mask].copy()
-                logging.info(f"🛡️ [SpcRepo] 物理防线触发：根据 {applied_count} 条规则，成功剔除了 {drop_count} 个异常量测点！")
+                logging.info(f"🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 {drop_count} 个异常测量点。")
             else:
-                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕：检查了 {applied_count} 条规则，未发现异常点。")
+                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕，未发现越界点。")
 
             return df
 
         except Exception as e:
-            logging.error(f"❌ [SpcRepo] 应用点位异常过滤规则时崩溃: {e}")
+            logging.error(f"❌ [SpcRepo] 物理过滤执行失败: {e}")
             return df
