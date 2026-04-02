@@ -45,21 +45,41 @@ def load_spc_measurements(
     sql_queries = []
     
     # 动态构建包含 Schema 路由、列名抹平、和字典表 JOIN 的大一统 SQL
+    # [优化] 使用窗口函数在SQL层完成去重：每组保留最新 sheet_start_time 的记录
+    group_columns = ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+    
     for fac, (table_name, id_col, time_col) in factory_meta.items():
         q = f"""
         SELECT 
-            '{fac}' AS factory,
-            P.PRODUCTCODE AS prod_code, 
-            T.{time_col} AS sheet_start_time, 
-            T.{id_col} AS sheet_id, 
-            T.step_id, 
-            T.param_name, 
-            T.param_value
-        FROM eda.{table_name} T
-        JOIN DWR_MES_PRODUCTSPEC P ON T.product_spec = P.PRODUCTSPECNAME
-        WHERE T.{time_col} >= '{start_time_fmt}' 
-          AND T.{time_col} <= '{end_time_fmt}' 
-          AND P.PRODUCTCODE = '{prod_code}'
+            factory,
+            prod_code,
+            sheet_start_time,
+            sheet_id,
+            step_id,
+            param_name,
+            site_name,
+            param_value
+        FROM (
+            SELECT 
+                '{fac}' AS factory,
+                P.PRODUCTCODE AS prod_code, 
+                T.{time_col} AS sheet_start_time, 
+                T.{id_col} AS sheet_id, 
+                T.step_id, 
+                T.param_name,
+                T.site_name,
+                T.param_value,
+                ROW_NUMBER() OVER (
+                    PARTITION BY P.PRODUCTCODE, T.{id_col}, T.step_id, T.param_name, T.site_name 
+                    ORDER BY T.{time_col} DESC
+                ) as rn
+            FROM eda.{table_name} T
+            JOIN DWR_MES_PRODUCTSPEC P ON T.product_spec = P.PRODUCTSPECNAME
+            WHERE T.{time_col} >= '{start_time_fmt}' 
+              AND T.{time_col} <= '{end_time_fmt}' 
+              AND P.PRODUCTCODE = '{prod_code}'
+        ) t
+        WHERE rn = 1
         """
         sql_queries.append(q)
 
