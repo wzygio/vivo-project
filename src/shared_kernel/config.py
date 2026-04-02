@@ -1,4 +1,4 @@
-# src/vivo_project/config.py
+# src\shared_kernel\config.py
 import yaml
 import logging
 from pathlib import Path
