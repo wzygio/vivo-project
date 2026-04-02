@@ -145,9 +145,11 @@ def _execute_unified_pipeline(
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     
     is_group = 'defect_desc' not in df_processing.columns
-    df_processing = _pad_daily_data_to_today(df_processing, is_group)
+    # [核心修复] 传入 last_day 作为补齐的截止日期，与后端时间窗口保持一致
+    df_processing = _pad_daily_data_to_today(df_processing, is_group, end_date=last_day)
     
-    eval_last_day = pd.to_datetime(dt.now().date())
+    # [核心修复] 使用 last_day 作为评估锚点，而非强制使用系统当前日期
+    eval_last_day = pd.to_datetime(last_day) if last_day else pd.to_datetime(dt.now().date())
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
@@ -357,14 +359,18 @@ def _apply_t1_filtering(
 
     return df_filtered, new_anchor
 
-def _pad_daily_data_to_today(df: pd.DataFrame, is_group_level: bool) -> pd.DataFrame:
+def _pad_daily_data_to_today(df: pd.DataFrame, is_group_level: bool, end_date: dt | None = None) -> pd.DataFrame:
     """
-    [核心新增] 在进入计算流水线前，将日期网格强行对齐到现实世界中的"今天"。
+    [核心新增] 在进入计算流水线前，将日期网格强行对齐到结束日期。
     保证 EMA 动量传递和向上聚合(周/月)在数学上的绝对连续性。
+    
+    [企业级修复] 通过 end_date 参数支持自定义结束日期（如 _custom_end_date），
+    不再强制使用系统当前日期，确保前后端时间窗口一致。
     """
     if df.empty: return df
     df_out = df.copy()
-    real_today = pd.to_datetime(dt.now().date())
+    # [核心修复] 使用传入的 end_date，若未传入则回退到当前系统日期
+    real_today = pd.to_datetime(end_date) if end_date else pd.to_datetime(dt.now().date())
 
     if is_group_level:
         # --- Group Level (宽表补齐) ---

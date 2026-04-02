@@ -150,8 +150,10 @@ class SpcRepository:
 
             # =================================================================
             # [核心修复] 动态内存过滤：索要当前产品的专属白名单
+            # [扩展] 支持按 data_type 筛选: SPC, CTQ, AOI, ALL
             # =================================================================
-            valid_params_df = load_valid_spc_params(self.db, config.prod_code)
+            data_type_filter = getattr(config, 'data_type_filter', 'ALL')
+            valid_params_df = load_valid_spc_params(self.db, config.prod_code, data_type_filter)
             
             if valid_params_df is not None:
                 if not valid_params_df.empty:

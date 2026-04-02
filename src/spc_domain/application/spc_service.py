@@ -165,7 +165,8 @@ class SpcAnalysisService:
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
         time_type: str = 'MIXED',
-        force_compliant: bool = False
+        force_compliant: bool = False,
+        data_type_filter: str = 'SPC'
     ) -> dict:
         """
         [企业级 V4.2] 修复 Pydantic 赋值异常与目录自动扫描逻辑
@@ -173,6 +174,8 @@ class SpcAnalysisService:
         # 1. 严格实例化配置对象，防止类/实例混淆
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
+            # [新增] 注入 data_type_filter 参数
+            config_instance.data_type_filter = data_type_filter
         except Exception as e:
             logging.error(f"Config 解析失败: {e}")
             return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame()}
@@ -208,6 +211,8 @@ class SpcAnalysisService:
             current_fetch_config.prod_code = prod
             current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")
             current_fetch_config.end_date = end_dt.strftime("%Y-%m-%d")
+            # [新增] 透传 data_type_filter
+            current_fetch_config.data_type_filter = data_type_filter
 
             m_df = repo.get_spc_measurements(current_fetch_config)
             s_df = repo.get_spc_spec_limits(prod)
@@ -215,7 +220,12 @@ class SpcAnalysisService:
             if not m_df.empty:
                 # 立即降维判定，减少内存占用
                 features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
-                status = apply_spc_rules(sheet_features=features)
+                
+                # [企业级优化] 根据数据类型决定是否启用 SOOS 判定
+                # AOI 类型数据不包含 SOOS，避免无效计算
+                enable_soos = data_type_filter.upper() != 'AOI'
+                status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
+                
                 # [可选] 合规修饰：强制所有 Sheet 状态为 OK
                 if force_compliant:
                     status = sanitize_to_compliant(status)
@@ -229,16 +239,21 @@ class SpcAnalysisService:
         full_status_df = SpcAnalysisService._apply_time_bucket_mapping(full_status_df, time_type.upper(), end_dt)
 
         # 5. 双轨聚合逻辑 (强制补齐必填参数)
+        # [企业级优化] AOI 场景不聚合 SOOS 相关列
+        enable_soos = data_type_filter.upper() != 'AOI'
+        
         global_summary_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
             group_cols=['sort_index', 'time_group'],
-            time_group_col='time_group'
+            time_group_col='time_group',
+            enable_soos=enable_soos
         ) 
         
         detail_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
             group_cols=['sort_index', 'time_group', 'prod_code', 'factory'],
-            time_group_col='time_group'
+            time_group_col='time_group',
+            enable_soos=enable_soos
         ) 
 
         # 6. 最终排序
@@ -259,7 +274,8 @@ class SpcAnalysisService:
         time_group: str, 
         defect_type: str,
         time_type: str = 'MIXED',
-        force_compliant: bool = False
+        force_compliant: bool = False,
+        data_type_filter: str = 'SPC'
     ) -> pd.DataFrame:
         """
         [企业级下钻 API] 针对前端大盘数字点击事件，提供精准的明细级数据下钻。
@@ -272,6 +288,8 @@ class SpcAnalysisService:
         
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
+            # [新增] 注入 data_type_filter 参数
+            config_instance.data_type_filter = data_type_filter
         except Exception as e:
             logging.error(f"Config 解析失败: {e}")
             return pd.DataFrame()
@@ -311,7 +329,11 @@ class SpcAnalysisService:
             
             if not m_df.empty:
                 features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
-                status = apply_spc_rules(sheet_features=features)
+                
+                # [企业级优化] 根据数据类型决定是否启用 SOOS 判定
+                enable_soos = data_type_filter.upper() != 'AOI'
+                status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
+                
                 # [可选] 合规修饰
                 if force_compliant:
                     status = sanitize_to_compliant(status)

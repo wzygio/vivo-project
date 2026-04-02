@@ -174,8 +174,27 @@ class PanelRepository:
             # 最后的防御性过滤：确保返回给业务层的数据严格符合请求范围
             mask = (df_final['warehousing_time'] >= req_start_dt) & \
                    (df_final['warehousing_time'] <= req_end_dt)
+            df_final = df_final[mask].copy()
             
-            return df_final[mask].reset_index(drop=True)
+            # [核心修复] 对缓存命中的数据进行 Group 过滤（缓存可能包含全量 Group）
+            if query.target_defect_groups:
+                # 找到所有"非目标组"且"非良品"的行
+                mask_non_target = (
+                    ~df_final['defect_group'].isin(query.target_defect_groups) & 
+                    df_final['defect_group'].notna()
+                )
+                
+                if mask_non_target.sum() > 0:
+                    # 强制抹除这些行的不良信息（将其变为良品）
+                    import numpy as np
+                    cols_to_clean = ['defect_code', 'defect_desc', 'defect_group']
+                    df_final.loc[mask_non_target, cols_to_clean] = np.nan
+                    logging.info(
+                        f"🛡️ [Repository] 命中缓存后清洗：已抹除 {mask_non_target.sum()} 条非目标 Group 记录 "
+                        f"(Target: {query.target_defect_groups})。"
+                    )
+            
+            return df_final.reset_index(drop=True)
 
         return df_final
 
