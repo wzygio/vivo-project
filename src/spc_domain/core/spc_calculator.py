@@ -19,8 +19,9 @@ def preprocess_sheet_features(
 
     # 1. 核心降维逻辑 (Feature Aggregation)
     # [修改] 分组键移除 'sheet_start_time'，按 sheet 唯一标识分组
+    # [更新] 增加 site_name 字段，支持更细粒度的分组
     if group_keys is None:
-        group_keys = ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+        group_keys = ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
     
     try: 
         # 执行命名聚合
