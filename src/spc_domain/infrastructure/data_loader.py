@@ -98,6 +98,21 @@ def load_spc_measurements(
             measure_df['param_value'] = pd.to_numeric(measure_df['param_value'], errors='coerce') 
             measure_df = measure_df.dropna(subset=['param_value']) 
 
+        # =====================================================================
+        # 🚨 [文件导出探针 1]：拦截刚刚从数据库查询出来的最原始明细
+        # =====================================================================
+        try:
+            debug_mask = (measure_df['sheet_id'] == 'L3MY5C01Z01') & (measure_df['param_name'] == 'TFT_7_ION')
+            if debug_mask.any():
+                dump_df = measure_df[debug_mask].copy()
+                dump_path = "logs/debug_1_from_db.csv"
+                # 输出带有 BOM 的 UTF-8 格式，防止用 Excel 打开时中文乱码
+                dump_df.to_csv(dump_path, index=False, encoding='utf-8-sig')
+                logging.warning(f"🚨 [文件导出] 已将数据库提取的原始数据导出至 {dump_path} (共 {len(dump_df)} 条)")
+        except Exception as e:
+            logging.error(f"导出探针 1 失败: {e}")
+        # =====================================================================
+        
         logging.info(f"[DAO] 成功提取并清洗 {len(measure_df)} 条底层大宽表数据。")
         return measure_df
         

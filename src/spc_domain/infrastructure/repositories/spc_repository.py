@@ -1,9 +1,10 @@
 import pandas as pd
-import logging
+import logging, re
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+
 
 from spc_domain.infrastructure.data_loader import(
     load_spc_measurements, 
@@ -11,6 +12,8 @@ from spc_domain.infrastructure.data_loader import(
     load_valid_spc_params
 )
 from spc_domain.application.dtos import SpcQueryConfig
+from src.shared_kernel.config import ConfigLoader
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -100,7 +103,8 @@ class SpcRepository:
                         df_delta['sheet_start_time'] = pd.to_datetime(df_delta['sheet_start_time'])
                         df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
                         df_combined = df_combined.sort_values(by='sheet_start_time', ascending=True)
-                        df_combined.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
+                        df_combined.drop_duplicates(
+                            subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
                         df_final = df_combined
                         need_save = True
                     else:
@@ -117,7 +121,8 @@ class SpcRepository:
                 df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
                 if not df_final.empty:
                     df_final['sheet_start_time'] = pd.to_datetime(df_final['sheet_start_time'])
-                    df_final.drop_duplicates(subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name'], keep='last', inplace=True)
+                    df_final.drop_duplicates(
+                        subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
                     need_save = True
                 elif cache_exists and not df_cache.empty:
                     # [容灾防线 2] 数据库假死返回空，无损回退
@@ -179,11 +184,7 @@ class SpcRepository:
                 logging.error("[SpcRepo] 严重警告：拉取 SPC 参数白名单失败，下发全量参数并标记未知类型。")
                 df_filtered['data_type'] = 'UNKNOWN'
 
-            # --- 🎯 满足您的监控需求：TDSUM 专属雷达探测 ---
-            if 'TDSUM' in df_filtered['param_name'].str.upper().values:
-                logging.warning("🚨 [DEBUG 探测仪] 发现 TDSUM 依然存活在过滤后的数据中！说明白名单中竟然有它，请检查配置表。")
-            else:
-                logging.info("✅ [DEBUG 探测仪] TDSUM 已被成功消灭！它不在 SPC 白名单中。")
+            df_filtered = self._apply_outlier_filters(df_filtered, config.prod_code)
 
             # 原有的维度过滤
             if config.factory:
@@ -196,3 +197,89 @@ class SpcRepository:
             return df_filtered.reset_index(drop=True)
 
         return df_final
+    
+    def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
+        """
+        [物理级拦截器] 读取 Excel 规则，剔除点位级别 (site_name) 的极端脏数据。
+        支持产品通配符 (ALL) 与动态逻辑运算符 (<=, <, >=, >)。
+        """
+        # [核心修复 2] 绝对路径锁定：利用 ConfigLoader 动态获取根目录
+        project_root = ConfigLoader.get_project_root()
+        rule_file = project_root / "resources" / "spc_outlier_filters.xlsx"
+        
+        if not rule_file.exists() or df.empty:
+            return df
+
+        try:
+            # 1. 加载规则表
+            rules_df = pd.read_excel(rule_file, dtype=str).fillna("")
+            
+            # [核心修复 1] 移除冗余映射，直接实施强表头校验
+            required_cols = ['step_col', 'param_col']
+            if not all(k in rules_df.columns for k in required_cols):
+                logging.warning("⚠️ [SpcRepo] 异常过滤规则表头缺失核心字段(step_col/param_col)，跳过物理过滤。")
+                return df
+
+            # 2. 初始化掩码与辅助解析器
+            outlier_mask = pd.Series(False, index=df.index)
+            df_vals = pd.to_numeric(df['param_value'], errors='coerce')
+
+            def parse_condition(cond_str):
+                if not cond_str: return None, None
+                match = re.match(r'(<=|>=|<|>|=)?\s*([+-]?\d+\.?\d*)', str(cond_str).strip())
+                if match:
+                    return match.group(1) or '=', float(match.group(2))
+                return None, None
+
+            applied_count = 0
+
+            # 3. 遍历规则库执行靶向捕获
+            for _, rule in rules_df.iterrows():
+                r_prod = str(rule.get('prod_col', '')).strip().upper()
+                r_step = str(rule['step_col']).strip()
+                r_param = str(rule['param_col']).strip()
+
+                # 产品白名单过滤
+                if r_prod and r_prod != 'ALL' and r_prod != prod_code.upper():
+                    continue
+
+                # 锁定靶向数据范围
+                target_mask = (df['step_id'] == r_step) & (df['param_name'].str.upper() == r_param.upper())
+                if not target_mask.any():
+                    continue
+
+                # 获取严格列名下的限制值
+                lower_op, lower_val = parse_condition(rule.get('lower_col', ''))
+                upper_op, upper_val = parse_condition(rule.get('upper_col', ''))
+
+                # 执行下限捕获
+                if lower_val is not None:
+                    if lower_op == '<=': outlier_mask |= (target_mask & (df_vals <= lower_val))
+                    elif lower_op == '<': outlier_mask |= (target_mask & (df_vals < lower_val))
+                    elif lower_op == '>=': outlier_mask |= (target_mask & (df_vals >= lower_val))
+                    elif lower_op == '>': outlier_mask |= (target_mask & (df_vals > lower_val))
+                    elif lower_op == '=': outlier_mask |= (target_mask & (df_vals == lower_val))
+
+                # 执行上限捕获
+                if upper_val is not None:
+                    if upper_op == '<=': outlier_mask |= (target_mask & (df_vals <= upper_val))
+                    elif upper_op == '<': outlier_mask |= (target_mask & (df_vals < upper_val))
+                    elif upper_op == '>=': outlier_mask |= (target_mask & (df_vals >= upper_val))
+                    elif upper_op == '>': outlier_mask |= (target_mask & (df_vals > upper_val))
+                    elif upper_op == '=': outlier_mask |= (target_mask & (df_vals == upper_val))
+
+                applied_count += 1
+
+            # 4. 执行物理剔除
+            if outlier_mask.any():
+                drop_count = outlier_mask.sum()
+                df = df[~outlier_mask].copy()
+                logging.info(f"🛡️ [SpcRepo] 物理防线触发：根据 {applied_count} 条规则，成功剔除了 {drop_count} 个异常量测点！")
+            else:
+                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕：检查了 {applied_count} 条规则，未发现异常点。")
+
+            return df
+
+        except Exception as e:
+            logging.error(f"❌ [SpcRepo] 应用点位异常过滤规则时崩溃: {e}")
+            return df
