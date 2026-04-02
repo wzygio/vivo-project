@@ -18,6 +18,10 @@ class SpcFilterState(BaseModel):
 if 'spc_summary_lock' not in st.session_state: st.session_state.spc_summary_lock = None
 if 'spc_detail_lock' not in st.session_state: st.session_state.spc_detail_lock = None
 
+# [新增] 初始化前端 AgGrid 强刷失忆动态 Key
+if 'ag_sum_key' not in st.session_state: st.session_state.ag_sum_key = 0
+if 'ag_det_key' not in st.session_state: st.session_state.ag_det_key = 0
+
 # --------------------------------------------------------------------------
 # UI 渲染区块
 # --------------------------------------------------------------------------
@@ -108,23 +112,21 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
         update_mode=GridUpdateMode.SELECTION_CHANGED,
         theme='streamlit',
         height=260,
-        key="ag_summary_table" # 赋予唯一键值
+        # [核心修改 1] 绑定汇总表的动态 Key
+        key=f"ag_summary_table_{st.session_state.ag_sum_key}" 
     )
 
-    # 捕获点击，使用 Session 锁直接触发弹窗
     selected_rows = grid_response.get("selected_rows")
     if selected_rows is not None and len(selected_rows) > 0:
         row_data = selected_rows.iloc[0].to_dict() if isinstance(selected_rows, pd.DataFrame) else selected_rows[0]
         defect = row_data.get("报警类型")
         
         if defect in rate_rows or '片数' in defect: # type: ignore
-            # 只有当这是新的一次点击时，才唤起弹窗
             if st.session_state.spc_summary_lock != defect:
                 st.session_state.spc_summary_lock = defect
-                # [修改] 传入 data_type_filter 参数
-                show_drilldown_modal("ALL", "ALL", defect, time_cols, data_type_filter)
+                # [核心修改 2] 传入 source="summary"
+                show_drilldown_modal("ALL", "ALL", defect, time_cols, data_type_filter, source="summary")
     else:
-        # 如果用户取消了选择，释放锁
         st.session_state.spc_summary_lock = None
 
 def render_spc_summary_section(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
@@ -203,10 +205,10 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
         update_mode=GridUpdateMode.SELECTION_CHANGED,
         theme='streamlit',
         height=500,
-        key="ag_detail_table" # 赋予唯一键值
+        # [核心修改 1] 绑定明细表的动态 Key
+        key=f"ag_detail_table_{st.session_state.ag_det_key}" 
     )
     
-    # 捕获点击，使用 Session 锁直接触发弹窗
     selected_rows = grid_response.get("selected_rows")
     if selected_rows is not None and len(selected_rows) > 0:
         row_data = selected_rows.iloc[0].to_dict() if isinstance(selected_rows, pd.DataFrame) else selected_rows[0]
@@ -215,34 +217,58 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
             factory = row_data.get("工厂", "Unknown")
             defect = row_data.get("报警类型")
             
-            # 构造联合锁 ID
             current_lock = f"{prod}_{factory}_{defect}"
             if st.session_state.spc_detail_lock != current_lock:
                 st.session_state.spc_detail_lock = current_lock
-                # [修改] 传入 data_type_filter 参数
-                show_drilldown_modal(prod, factory, defect, time_cols, filter_state.data_type_filter)
+                # [核心修改 2] 传入 source="detail"
+                show_drilldown_modal(prod, factory, defect, time_cols, filter_state.data_type_filter, source="detail")
     else:
         st.session_state.spc_detail_lock = None
 
 
 # =========================================================================
-# 悬浮弹窗组件 (兼容 ALL 模式)
+# 悬浮弹窗组件 (注入 CSS 伪装退出魔法)
 # =========================================================================
-@st.dialog("🔍 报警明细表", width="large")
-def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_times: list, data_type_filter: str = 'SPC'):
-    # [修改] 弹窗内部标题根据监控类型动态显示
-    st.markdown(f"### {data_type_filter}报警明细 - {defect_type}")
+@st.dialog(" ", width="large") # 标题强制留空，为自定义 Header 腾出空间
+def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_times: list, data_type_filter: str = 'SPC', source: str = "summary"):
+    # 1. 注入 CSS 隐藏原生按钮，调整间距
+    st.markdown(
+        """
+        <style>
+        [data-testid="stDialog"] button[aria-label="Close"] { display: none !important; }
+        [data-testid="stDialog"] div[data-testid="stVerticalBlock"] { gap: 0.5rem; }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 2. 渲染自定义 Header (伪装的退出按钮)
+    header_col1, header_col2 = st.columns([10, 1])
+    with header_col1:
+        st.markdown(f"### {data_type_filter}报警明细 - {defect_type}")
+    with header_col2:
+        if st.button("✖", key=f"close_btn_{prod}_{factory}_{defect_type}", use_container_width=True, help="关闭并释放图表状态"):
+            # 根据调用方来源，精确释放对应的锁和重置对应的 Key
+            if source == "summary":
+                st.session_state.spc_summary_lock = None
+                st.session_state.ag_sum_key += 1
+            else:
+                st.session_state.spc_detail_lock = None
+                st.session_state.ag_det_key += 1
+            st.rerun() # 立刻重载，强行刷新前端画布
+
+    st.divider()
     
-    # [权限控制] 检测 URL 参数，只有 admin=true 时显示真实数据
+    # 3. 业务数据调取与渲染逻辑
     query_params = st.query_params
     is_admin = query_params.get("admin") == "true"
-    force_compliant = not is_admin  # 非管理员强制显示修饰数据
+    force_compliant = not is_admin 
     
     selected_time = st.segmented_control(
         "选择追溯时间段:",
         options=available_times,
         default=available_times[-1] if available_times else None,
-        key=f"drill_time_{prod}_{factory}" 
+        key=f"drill_time_{prod}_{factory}_{defect_type}" # 加上 defect 保证 Key 的绝对唯一
     )
     
     if selected_time:
@@ -262,7 +288,6 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 )
                 db_manager = DatabaseManager()
 
-                # [权限控制] 根据 URL 参数决定是否强制合规
                 real_df = SpcAnalysisService.get_spc_defect_details(
                     _db_manager=db_manager,
                     query_config_json=query_config.model_dump_json(),
