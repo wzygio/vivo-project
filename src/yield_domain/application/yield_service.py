@@ -35,8 +35,8 @@ class YieldAnalysisService:
     #  1. 基础数据源 (L1 & L2 Cache)
     # ==========================================================================
 
-    # [核心修复]: 废弃静态的时间化石，改为仅记录“人工锁定的时间”
-    _custom_end_date: Optional[datetime] = None
+    # 更新时间需使用 datetime(2026, 3, 31)
+    _custom_end_date: Optional[datetime] = datetime(2026, 3, 31) 
     group_scale: float = 1.0
     code_scale: float = 1.0
     group_ema_span: int = 30

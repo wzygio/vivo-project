@@ -55,11 +55,13 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
         # E. 发起真实的服务层调用 (严格对齐后端 3 参数签名)
         # 删除了 snapshot_dir_str 参数，由后端 Service 内部自理
         # [权限控制] 根据 URL 参数决定是否强制合规
+        # [新增] 默认查询 SPC 类型数据
         view_model = SpcAnalysisService.get_spc_dashboard_data(
             _db_manager=db_manager,
             query_config_json=query_config.model_dump_json(),
             time_type='MIXED',
-            force_compliant=force_compliant
+            force_compliant=force_compliant,
+            data_type_filter='SPC'
         )
     except Exception as e:
         # 如果依然报错，此处会打印出最真实的错误堆栈
@@ -106,9 +108,39 @@ available_factories = detail_df['factory'].unique().tolist() if not detail_df.em
 # 4. 组装积木: 渲染控制台
 filter_state = render_spc_control_panel(available_products, available_factories)
 
-with st.expander("SPC自动预警", expanded=True):
+# [新增] 根据监控类型筛选动态刷新数据
+# 使用 session_state 避免重复请求
+session_key = f"spc_view_model_{filter_state.data_type_filter}"
+if session_key not in st.session_state:
+    with st.spinner(f"正在加载 {filter_state.data_type_filter} 监控数据..."):
+        query_config_typed = SpcQueryConfig(
+            prod_code="ALL", 
+            start_date=start_dt.strftime("%Y-%m-%d"),
+            end_date=end_dt.strftime("%Y-%m-%d"),
+            data_type_filter=filter_state.data_type_filter
+        )
+        view_model = SpcAnalysisService.get_spc_dashboard_data(
+            _db_manager=db_manager,
+            query_config_json=query_config_typed.model_dump_json(),
+            time_type='MIXED',
+            force_compliant=force_compliant,
+            data_type_filter=filter_state.data_type_filter
+        )
+        st.session_state[session_key] = view_model
+        # 清理其他类型的缓存
+        for key in list(st.session_state.keys()):
+            if key.startswith("spc_view_model_") and key != session_key:
+                del st.session_state[key]
+else:
+    view_model = st.session_state[session_key]
+
+# 更新数据引用
+detail_df = view_model.get("detail_df", pd.DataFrame())
+global_summary_df = view_model.get("global_summary_df", pd.DataFrame())
+
+with st.expander(f"{filter_state.data_type_filter} 自动预警", expanded=True):
     # 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
-    render_spc_summary_section(global_summary_df)
+    render_spc_summary_section(global_summary_df, filter_state.data_type_filter)
 
     # 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
     render_spc_detail_section(detail_df, filter_state)

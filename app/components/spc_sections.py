@@ -12,6 +12,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 class SpcFilterState(BaseModel):
     selected_products: list[str] = Field(default_factory=list)
     selected_factories: list[str] = Field(default_factory=list)
+    data_type_filter: str = Field(default='SPC', description="监控类型: SPC, CTQ, AOI, ALL")
 
 # 初始化弹窗防死循环锁
 if 'spc_summary_lock' not in st.session_state: st.session_state.spc_summary_lock = None
@@ -23,21 +24,29 @@ if 'spc_detail_lock' not in st.session_state: st.session_state.spc_detail_lock =
 def render_spc_control_panel(available_products: list[str], available_factories: list[str]) -> SpcFilterState:
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.date_input("基准日期", value="today", disabled=True, help="统一采用系统级前三个月窗口")
+        # [修改] 将基准日期替换为监控类型筛选
+        data_type_options = ['SPC', 'CTQ', 'AOI', 'ALL']
+        data_type = st.selectbox(
+            "监控类型", 
+            options=data_type_options, 
+            index=0,  # 默认选中 SPC
+            help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), ALL(全部)"
+        )
     with col2:
         prods = st.multiselect("产品型号", options=available_products, default=available_products)
     with col3:
         facs = st.multiselect("厂别", options=available_factories, default=available_factories)
-    return SpcFilterState(selected_products=prods, selected_factories=facs)
+    return SpcFilterState(selected_products=prods, selected_factories=facs, data_type_filter=data_type)
 
 # =========================================================================
 # 大盘汇总图 (Chart)
 # =========================================================================
-def render_spc_summary_chart(summary_df: pd.DataFrame):
+def render_spc_summary_chart(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
     if summary_df.empty:
         st.warning("暂无全局汇总数据")
         return
-    st.markdown("#### 📊 SPC报警率汇总图")
+    # [修改] 标题根据监控类型动态显示
+    st.markdown(f"#### 📊 {data_type_filter}报警率汇总图")
     
     # [核心修改]: 强制将 NaN 和 Inf 替换为 0，逼迫 Echarts 绘制出 0% 的点和柱子
     plot_df = summary_df.copy().fillna(0).replace([np.inf, -np.inf], 0)
@@ -48,16 +57,19 @@ def render_spc_summary_chart(summary_df: pd.DataFrame):
 # =========================================================================
 # 大盘汇总表 (Table) - 极速直接下钻版
 # =========================================================================
-def render_spc_summary_table(summary_df: pd.DataFrame):
+def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
     if summary_df.empty:
         return
-    st.markdown("#### SPC报警汇总表")
+    
+    # [修改] 标题根据监控类型动态显示
+    st.markdown(f"#### {data_type_filter}报警汇总表")
     
     view_df = summary_df.copy().set_index('time_group').T
 
     # ==========================================================
     # [新增前端屏蔽]: 在转置后，把这两行数据从 view_df 中丢弃
     # ==========================================================
+    # AOI 场景下这些列不会存在，但仍保留防呆处理
     hidden_metrics = ['OOS+SOOS', 'OOS+SOOS+OOC']
     view_df = view_df.drop(index=[m for m in hidden_metrics if m in view_df.index])
 
@@ -66,7 +78,12 @@ def render_spc_summary_table(summary_df: pd.DataFrame):
         if is_rate: return f"{val * 100:.2f}%"
         return str(int(val))
 
-    rate_rows = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+    # [企业级优化] 根据数据类型动态调整比率行
+    is_aoi = data_type_filter == 'AOI'
+    if is_aoi:
+        rate_rows = ['OOS', 'OOC', 'OOS+OOC']
+    else:
+        rate_rows = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
     for row_idx in view_df.index:
         is_rate = row_idx in rate_rows
         view_df.loc[row_idx] = view_df.loc[row_idx].apply(lambda x: safe_format(x, is_rate))
@@ -104,21 +121,23 @@ def render_spc_summary_table(summary_df: pd.DataFrame):
             # 只有当这是新的一次点击时，才唤起弹窗
             if st.session_state.spc_summary_lock != defect:
                 st.session_state.spc_summary_lock = defect
-                show_drilldown_modal("ALL", "ALL", defect, time_cols)
+                # [修改] 传入 data_type_filter 参数
+                show_drilldown_modal("ALL", "ALL", defect, time_cols, data_type_filter)
     else:
         # 如果用户取消了选择，释放锁
         st.session_state.spc_summary_lock = None
 
-def render_spc_summary_section(summary_df: pd.DataFrame):
-    render_spc_summary_chart(summary_df)
+def render_spc_summary_section(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
+    render_spc_summary_chart(summary_df, data_type_filter)
     # st.divider()
-    render_spc_summary_table(summary_df)
+    render_spc_summary_table(summary_df, data_type_filter)
 
 # =========================================================================
 # 明细多维下钻表 - 极速直接下钻版
 # =========================================================================
 def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterState):
-    st.markdown("#### By产品-By工厂报警明细")
+    # [修改] 标题根据监控类型动态显示
+    st.markdown(f"#### By产品-By工厂{filter_state.data_type_filter}报警明细")
     if detail_df.empty:
         st.info("所选范围内无明细数据。")
         return
@@ -129,7 +148,17 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
     ]
     
     view_df = filtered_df.copy()
-    rate_cols = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+    
+    # [企业级优化] 根据数据类型动态调整显示的列
+    # AOI 场景不包含 SOOS 相关列
+    is_aoi = filter_state.data_type_filter == 'AOI'
+    if is_aoi:
+        rate_cols = ['OOS', 'OOC', 'OOS+OOC']
+        ordered_metrics = ['抽检数', 'OOS片数', 'OOC片数', 'OOS', 'OOC']
+    else:
+        rate_cols = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+        ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
+    
     for col in view_df.columns:
         if col in rate_cols:
             view_df[col] = view_df[col].apply(lambda x: f"{x * 100:.2f}%" if pd.notna(x) else "/")
@@ -138,8 +167,6 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
 
     ordered_time_groups = detail_df['time_group'].unique().tolist()
     view_df['time_group'] = pd.Categorical(view_df['time_group'], categories=ordered_time_groups, ordered=True)
-    # ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
-    ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
 
     pivot_df = view_df.pivot_table(index=['prod_code', 'factory'], columns=['time_group'], values=ordered_metrics, aggfunc=lambda x: x.iloc[0], observed=False)
     stacked_df = pivot_df.stack(level=0, dropna=False)
@@ -192,7 +219,8 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
             current_lock = f"{prod}_{factory}_{defect}"
             if st.session_state.spc_detail_lock != current_lock:
                 st.session_state.spc_detail_lock = current_lock
-                show_drilldown_modal(prod, factory, defect, time_cols)
+                # [修改] 传入 data_type_filter 参数
+                show_drilldown_modal(prod, factory, defect, time_cols, filter_state.data_type_filter)
     else:
         st.session_state.spc_detail_lock = None
 
@@ -200,8 +228,10 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
 # =========================================================================
 # 悬浮弹窗组件 (兼容 ALL 模式)
 # =========================================================================
-@st.dialog("🔍 SPC报警明细表", width="large")
-def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_times: list):
+@st.dialog("🔍 报警明细表", width="large")
+def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_times: list, data_type_filter: str = 'SPC'):
+    # [修改] 弹窗内部标题根据监控类型动态显示
+    st.markdown(f"### {data_type_filter}报警明细 - {defect_type}")
     
     # [权限控制] 检测 URL 参数，只有 admin=true 时显示真实数据
     query_params = st.query_params
