@@ -1,0 +1,33 @@
+# ==============================================================================
+# 数据修饰配置文件 (Compliance Configuration)
+# ==============================================================================
+# 说明：
+# - 此文件用于控制"监控类型-产品型号-厂别"组合的报警数据修饰开关
+# - 值为 true 表示显示修饰后的合规数据（所有报警变为 OK）
+# - 值为 false 表示显示真实原始数据
+# - 修改此文件后，刷新页面即可生效
+# ==============================================================================
+
+# 默认配置（当特定组合未配置时，使用此默认值）
+default: false
+
+# 精细化配置（优先级高于 default）
+# 格式：{监控类型}-{产品型号}-{厂别}: true/false
+rules:
+  # 示例配置（请根据实际需求修改）
+  SPC-M626-ARRAY: false
+  SPC-M626-OLED: false
+  SPC-M626-TP: false
+  SPC-M678-ARRAY: false
+  SPC-M678-OLED: false
+  SPC-M678-TP: false
+  
+  CTQ-M626-ARRAY: false
+  CTQ-M626-OLED: false
+  CTQ-M678-ARRAY: false
+  CTQ-M678-OLED: false
+  
+  AOI-M626-ARRAY: false
+  AOI-M626-OLED: false
+  AOI-M678-ARRAY: false
+  AOI-M678-OLED: false
