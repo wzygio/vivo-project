@@ -36,7 +36,7 @@ class YieldAnalysisService:
     # ==========================================================================
 
     # 更新时间需使用 datetime(2026, 3, 31)
-    _custom_end_date: Optional[datetime] = datetime(2026, 3, 31) 
+    _custom_end_date: Optional[datetime] = None
     group_scale: float = 1.0
     code_scale: float = 1.0
     group_ema_span: int = 30
@@ -139,17 +139,21 @@ class YieldAnalysisService:
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
         if panel_df.empty: return None
         
+        # [核心修复] 获取目标截止日期，用于数据补齐
+        _, target_end_dt = YieldAnalysisService.get_time_window()
+        
         # 1. 强制依赖 Code 级结果作为数据源头
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config, product_dir, _core_revision, ema_span, scaling_factor
         )
 
-        # [Refactor] 传入 config 和 resource_dir 给 Core 层
+        # [Refactor] 传入 config 和 resource_dir 给 Core 层，同时传入目标截止日期
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             mwd_code_data=mwd_code_data,  # 传入 Code 数据
             config=config,
-            scaling_factor=scaling_factor
+            scaling_factor=scaling_factor,
+            target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )
 
     @staticmethod
@@ -167,6 +171,9 @@ class YieldAnalysisService:
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
         
+        # [核心修复] 获取目标截止日期，用于数据补齐
+        _, target_end_dt = YieldAnalysisService.get_time_window()
+        
         # [新增] 提前加载警戒线配置，准备下发给底层调节器
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
 
@@ -175,7 +182,8 @@ class YieldAnalysisService:
             config=config,
             ema_span=ema_span,
             scaling_factor=scaling_factor,
-            warning_lines=warning_lines
+            warning_lines=warning_lines,
+            target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )
 
     # ==========================================================================

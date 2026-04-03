@@ -22,13 +22,14 @@ class MWDTrendProcessor:
         config: AppConfig,
         scaling_factor: float,
         volatility: float = 0.1,
+        target_end_date: dt | None = None,  # [核心修复] 传入目标截止日期
     ) -> Dict[str, pd.DataFrame] | None:
         
         logging.info("Group级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...")
         if panel_details_df.empty or not mwd_code_data: return None
         
         try:
-            raw_daily, last_day, target_defects = _prepare_group_raw_data(panel_details_df)
+            raw_daily, last_day, target_defects = _prepare_group_raw_data(panel_details_df, target_end_date)
             if raw_daily is None: return None
 
             m_vals = config.processing.get('group_monthly_values', {})
@@ -83,14 +84,15 @@ class MWDTrendProcessor:
         ema_span: int,          
         scaling_factor: float,
         volatility: float = 0.1,
-        warning_lines: dict = None  # type: ignore
+        warning_lines: dict = None,  # type: ignore
+        target_end_date: dt | None = None,  # [核心修复] 传入目标截止日期
     ) -> Dict[str, pd.DataFrame] | None:    
         
         logging.info("Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...")
         if panel_details_df.empty: return None
         
         try:
-            raw_daily, last_day = _prepare_code_raw_data(panel_details_df)
+            raw_daily, last_day = _prepare_code_raw_data(panel_details_df, target_end_date)
             if raw_daily is None: return None
 
             agg_monthly_func = lambda d, t: _safe_trend_aggregator(d, t, 'M', is_group_level=False)
@@ -501,18 +503,32 @@ def _calc_code_ema_noise(
 #  数据准备与格式化 (Helpers)
 # ==============================================================================
 
-def _prepare_group_raw_data(df: pd.DataFrame):
-    """提取 Group 级 Raw Data (Wide Format)"""
+def _prepare_group_raw_data(df: pd.DataFrame, target_end_date: dt | None = None):
+    """提取 Group 级 Raw Data (Wide Format)
+    
+    Args:
+        df: Panel 详情数据
+        target_end_date: 目标截止日期，如果提供则使用该日期作为 last_day，
+                        确保图表显示到该日期（即使数据缺失也会补0）
+    """
     df = df.copy()
     df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-    last_day = df['warehousing_time'].max()
     
+    # [核心修复] 使用传入的目标截止日期，或数据中的最大日期
+    data_last_day = df['warehousing_time'].max()
+    if target_end_date:
+        last_day = pd.to_datetime(target_end_date)
+        logging.info(f"[Group Raw Data] 目标截止日期: {last_day.strftime('%Y-%m-%d')}, 数据实际最大日期: {data_last_day.strftime('%Y-%m-%d')}")
+    else:
+        last_day = data_last_day
+        
     # --- [新增调试日志: 抓出 2-26 消失的真相] ---
     try:
         logging.info(f"========== [DEBUG: 数据源时间边界排查] ==========")
         dates_in_df = df['warehousing_time'].dt.strftime('%Y-%m-%d').unique()
         logging.info(f"提取的数据总行数: {len(df)}")
-        logging.info(f"数据源中【实际存在的最后日期】: {last_day.strftime('%Y-%m-%d')}")
+        logging.info(f"数据源中【实际存在的最后日期】: {data_last_day.strftime('%Y-%m-%d')}")
+        logging.info(f"最终使用的【截止日期】: {last_day.strftime('%Y-%m-%d')}")
         logging.info(f"数据源中最近的 5 个有效日期: {sorted(dates_in_df)[-5:]}")
     except: pass
     # ---------------------------------------------
@@ -525,11 +541,24 @@ def _prepare_group_raw_data(df: pd.DataFrame):
     target_defects = sorted(df['defect_group'].dropna().unique().tolist())
     return raw_daily, last_day, target_defects
 
-def _prepare_code_raw_data(df: pd.DataFrame):
-    """提取 Code 级 Raw Data (Long Format)"""
+def _prepare_code_raw_data(df: pd.DataFrame, target_end_date: dt | None = None):
+    """提取 Code 级 Raw Data (Long Format)
+    
+    Args:
+        df: Panel 详情数据
+        target_end_date: 目标截止日期，如果提供则使用该日期作为 last_day，
+                        确保图表显示到该日期（即使数据缺失也会补0）
+    """
     df = df.copy()
     df['warehousing_time'] = pd.to_datetime(df['warehousing_time'], format='%Y%m%d')
-    last_day = pd.to_datetime(dt.now().date())
+    
+    # [核心修复] 使用传入的目标截止日期，或数据中的最大日期
+    data_last_day = df['warehousing_time'].max()
+    if target_end_date:
+        last_day = pd.to_datetime(target_end_date)
+        logging.info(f"[Code Raw Data] 目标截止日期: {last_day.strftime('%Y-%m-%d')}, 数据实际最大日期: {data_last_day.strftime('%Y-%m-%d')}")
+    else:
+        last_day = data_last_day
 
     d_total = df.groupby(df['warehousing_time'].dt.date)['panel_id'].nunique().to_frame('total_panels') # type: ignore
     d_code = df.groupby([df['warehousing_time'].dt.date, 'defect_group', 'defect_desc'])['panel_id'].nunique().to_frame('defect_panel_count') # type: ignore

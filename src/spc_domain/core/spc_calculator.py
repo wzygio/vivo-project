@@ -217,59 +217,66 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
 ) -> pd.DataFrame: # 返回：严格包含前端报表所需所有中英文列名的最终汇总表
     """
     [Phase 3] 报表颗粒度聚合与复合指标计算 (Report Aggregation & Metric Calculation)
-    按时间桶折叠数据，计算抽检数分母与各报警分子，并安全推演复合报警率。
+    
+    [方案B] 分母改为 Sheet+Step+Param 组合粒度：
+    - 抽检数 = 不重复的 (sheet_id + step_id + param_name) 组合数量
+    - 分子保持不变：按 is_oos/is_ooc/is_soos 求和
+    - 确保报警率不超过 100%
     
     [企业级扩展] 通过 enable_soos 参数支持 AOI 等无需 SOOS 的业务场景。
     """
-    logging.info(f"开始执行 [Phase 3] 报表指标聚合 (按维度: {time_group_col})...") # 记录聚合启动
+    logging.info(f"开始执行 [Phase 3] 报表指标聚合 (按维度: {time_group_col}, 方案B: Sheet+Step+Param 组合粒度)...")
 
-    if spc_status_df.empty: # 顶层防呆防御：检查无数据输入的情况
-        logging.warning("输入的状态数据为空，返回空聚合表。") # 记录空数据警告
-        return pd.DataFrame() # 安全兜底返回
+    if spc_status_df.empty:
+        logging.warning("输入的状态数据为空，返回空聚合表。")
+        return pd.DataFrame()
 
-    try: # 开启防宕机聚合计算块
+    try:
+        # [方案B 核心修改] 创建组合键用于统计分母
+        # 分母 = 不重复的 (sheet_id + step_id + param_name) 组合
+        df = spc_status_df.copy()
+        df['_sample_key'] = df['sheet_id'].astype(str) + '|' + df['step_id'].astype(str) + '|' + df['param_name'].astype(str)
+        
         # 1. 核心折叠逻辑：定义聚合策略字典
-        # [企业级优化] 根据 enable_soos 动态构建聚合字典，AOI 场景不包含 is_soos
-        agg_funcs = { # 构造字典以指导 Pandas 的列级聚合行为
-            'sheet_id': 'nunique', # 分母防线：统计去重后的独特 Panel 数量，作为真实的"抽检/抽检数"
-            'is_oos': 'sum',       # 分子 1：对 OOS 的独热列求和，得出 OOS 总片数
-            'is_ooc': 'sum'        # 分子 2：对 OOC 的独热列求和，得出 OOC 总片数
+        agg_funcs = {
+            '_sample_key': 'nunique',  # [方案B] 分母：统计组合键的唯一数量
+            'is_oos': 'sum',           # 分子 1：对 OOS 的独热列求和
+            'is_ooc': 'sum'            # 分子 2：对 OOC 的独热列求和
         }
         if enable_soos:
-            agg_funcs['is_soos'] = 'sum'  # 分子 3：对 SOOS 的独热列求和，得出 SOOS 总片数
+            agg_funcs['is_soos'] = 'sum'  # 分子 3：对 SOOS 的独热列求和
 
         # 2. 执行向量化聚合计算
-        report_df = spc_status_df.groupby(group_cols, as_index=False).agg(agg_funcs) # 以时间维度为轴进行分组并应用上述聚合策略
+        report_df = df.groupby(group_cols, as_index=False).agg(agg_funcs)
 
         # 3. 字段映射：重命名为前端严格要求的报表字段
-        rename_map = { # 建立从底层列名到业务指标列名的映射关系
-            'sheet_id': '抽检数', # 映射分母列
-            'is_oos': 'OOS片数', # 映射 OOS 报警数量
-            'is_ooc': 'OOC片数' # 映射 OOC 报警数量
+        rename_map = {
+            '_sample_key': '抽检数',  # [方案B] 映射分母列为组合键数量
+            'is_oos': 'OOS片数',
+            'is_ooc': 'OOC片数'
         }
         if enable_soos:
-            rename_map['is_soos'] = 'SOOS片数' # 映射 SOOS 报警数量
-        report_df.rename(columns=rename_map, inplace=True) # 原地更新列名，节省内存切片操作
+            rename_map['is_soos'] = 'SOOS片数'
+        report_df.rename(columns=rename_map, inplace=True)
 
         # 4. 复合比率运算与物理底线防御 (Zero-Division Protection)
-        total = report_df['抽检数'] # 提取分母列引用，提高代码可读性与后续运算速度
+        total = report_df['抽检数']
 
-        # 基础报警率计算：利用 np.where 拦截除零错误。如果抽检数为0，强制返回纯净的 np.nan
-        report_df['OOS'] = np.where(total == 0, np.nan, report_df['OOS片数'] / total) # 向量化计算 OOS 率
-        report_df['OOC'] = np.where(total == 0, np.nan, report_df['OOC片数'] / total) # 向量化计算 OOC 率
+        # 基础报警率计算
+        report_df['OOS'] = np.where(total == 0, np.nan, report_df['OOS片数'] / total)
+        report_df['OOC'] = np.where(total == 0, np.nan, report_df['OOC片数'] / total)
         if enable_soos:
-            report_df['SOOS'] = np.where(total == 0, np.nan, report_df['SOOS片数'] / total) # 向量化计算 SOOS 率
+            report_df['SOOS'] = np.where(total == 0, np.nan, report_df['SOOS片数'] / total)
 
-        # 复合报警率计算：严格使用 (分子A + 分子B) / 分母，避免比率直接相加带来的浮点精度坍塌
-        # [企业级优化] AOI 场景只计算 OOS+OOC
+        # 复合报警率计算
         if enable_soos:
-            report_df['OOS+SOOS'] = np.where( # 防呆计算：OOS 与 SOOS 的复合不良率
-                total == 0, np.nan, # 拦截条件：分母为 0 抛出 NaN
-                (report_df['OOS片数'] + report_df['SOOS片数']) / total # 逻辑：两分子之和除以总数
+            report_df['OOS+SOOS'] = np.where(
+                total == 0, np.nan,
+                (report_df['OOS片数'] + report_df['SOOS片数']) / total
             )
-            report_df['OOS+SOOS+OOC'] = np.where( # 防呆计算：总体不良率 (三者全包)
-                total == 0, np.nan, # 拦截条件：分母为 0 抛出 NaN
-                (report_df['OOS片数'] + report_df['SOOS片数'] + report_df['OOC片数']) / total # 逻辑：三分母之和除以总数
+            report_df['OOS+SOOS+OOC'] = np.where(
+                total == 0, np.nan,
+                (report_df['OOS片数'] + report_df['SOOS片数'] + report_df['OOC片数']) / total
             )
         else:
             # AOI 场景：简化为 OOS+OOC
@@ -278,9 +285,9 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
                 (report_df['OOS片数'] + report_df['OOC片数']) / total
             )
 
-        logging.info(f"[Phase 3] 指标聚合完成，成功生成 {len(report_df)} 个时间桶的报表数据。") # 记录处理成果
-        return report_df # 将承载最终指标的 DataFrame 交付给外部系统
+        logging.info(f"[Phase 3] 指标聚合完成(方案B)，成功生成 {len(report_df)} 个时间桶的报表数据。")
+        return report_df
 
-    except Exception as e: # 拦截极速聚合中可能因类型导致的底层崩溃
-        logging.error(f"[Phase 3] 指标聚合时发生致命错误: {e}") # 记录异常源追踪
-        return pd.DataFrame() # 抛出空表触发顶层架构的降级响应
+    except Exception as e:
+        logging.error(f"[Phase 3] 指标聚合时发生致命错误: {e}")
+        return pd.DataFrame()
