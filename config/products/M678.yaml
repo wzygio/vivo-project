@@ -49,11 +49,14 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.4
+    'S向亮线': 0.7
     'G向单亮线': 0.5
+    'G向单暗线': 0.8
     # Array_Pixel
     '暗点': 0.7
+    '群暗点': 0.8
     'G3亮点': 0.5
+    '大面积亮点': 0
     # OLED_Mura
     '彩斑Mura': 0.3
 

@@ -7,18 +7,22 @@ vivo-project/
 │   │   ├── __init__.py
 │   │   ├── mwd_chart.py
 │   │   ├── sheet_details_chart.py
-│   │   └── sheet_lot_chart.py
+│   │   ├── sheet_lot_chart.py
+│   │   └── spc_chart.py
 │   ├── components
 │   │   ├── __init__.py
+│   │   ├── compliance_control.py
 │   │   ├── components.py
+│   │   ├── spc_sections.py
 │   │   ├── table_sections.py
-│   │   └── view_sections.py
+│   │   └── yield_sections.py
 │   ├── pages
 │   │   ├── 专项资料-台账周报.py
 │   │   ├── 专项资料-解析报告.py
 │   │   ├── 入库不良率ByLot明细表.py
 │   │   ├── 入库不良率BySheet明细表.py
-│   │   └── 入库不良率分析看板.py
+│   │   ├── 入库不良率分析看板.py
+│   │   └── 自动预警看板.py
 │   ├── utils
 │   │   ├── __init__.py
 │   │   ├── app_setup.py
@@ -31,6 +35,7 @@ vivo-project/
 │   ├── products
 │   │   ├── M626.yaml
 │   │   └── M678.yaml
+│   ├── compliance_state.json
 │   └── global.yaml
 ├── docs
 │   ├── 报表文件
@@ -73,6 +78,9 @@ vivo-project/
 │   └── scaffold_generator.py
 ├── src
 │   ├── shared_kernel
+│   │   ├── infrastructure
+│   │   │   ├── __init__.py
+│   │   │   └── db_handler.py
 │   │   ├── utils
 │   │   │   ├── __init__.py
 │   │   │   └── excel_tools.py
@@ -82,6 +90,7 @@ vivo-project/
 │   ├── spc_domain
 │   │   ├── application
 │   │   │   ├── __init__.py
+│   │   │   ├── dtos.py
 │   │   │   └── spc_service.py
 │   │   ├── core
 │   │   │   ├── __init__.py
@@ -96,6 +105,7 @@ vivo-project/
 │       ├── application
 │       │   ├── __init__.py
 │       │   ├── alert_service.py
+│       │   ├── dtos.py
 │       │   ├── excel_service.py
 │       │   ├── file_manager_service.py
 │       │   ├── pdf_service.py
@@ -113,16 +123,17 @@ vivo-project/
 │       ├── infrastructure
 │       │   ├── repositories
 │       │   │   ├── __init__.py
-│       │   │   └── panel_repository.py
+│       │   │   └── yield_repository.py
 │       │   ├── __init__.py
-│       │   ├── data_loader.py
-│       │   └── db_handler.py
+│       │   └── data_loader.py
 │       └── __init__.py
 ├── tests
 │   ├── integration
 │   │   ├── test_config.py
 │   │   ├── test_mapping_flow.py
-│   │   └── test_new_product_flow.py
+│   │   ├── test_new_product_flow.py
+│   │   ├── test_spc_db.py
+│   │   └── test_spc_table.py
 │   ├── unit
 │   │   ├── diagnose_streamlit_env.py
 │   │   ├── test_abnormal_detector.py
@@ -133,7 +144,9 @@ vivo-project/
 │   ├── __init__.py
 │   ├── conftest.py
 │   ├── diagnose_streamlit_env.py
-│   └── factories.py
+│   ├── factories.py
+│   ├── test_aggrid.py
+│   └── test_spc_db.py
 ├── .env
 ├── .gitignore
 ├── .python-version
