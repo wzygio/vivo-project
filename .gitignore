@@ -25,7 +25,8 @@ data/
 docs/
 
 # 数据源
-# resources/
+project_files/
+analysis_files/
 
 # 工具脚本
 Scripts/
