@@ -69,11 +69,13 @@ class PanelRepository:
                     else:
                         if age_hours < self.SNAPSHOT_TTL_HOURS:
                             max_cached_date = df_cache['warehousing_time'].max()
-                            if max_cached_date >= req_end_dt:
+                            # [核心修复] 使用日期部分比较，避免时间精度问题
+                            # 如果缓存的最新日期 >= 请求的结束日期，则缓存有效
+                            if max_cached_date.date() >= req_end_dt.date():
                                 is_cache_fresh = True
-                                logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h)。")
+                                logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h, 最新数据日期: {max_cached_date.date()} >= 请求截止日期: {req_end_dt.date()})。")
                             else:
-                                logging.info("⏰ [YieldRepo] 缓存虽未过12h，但缺少目标尾部数据，触发增量拉取！")
+                                logging.info(f"⏰ [YieldRepo] 缓存虽未过12h，但缺少目标尾部数据 (缓存最新: {max_cached_date.date()}, 请求截止: {req_end_dt.date()})，触发增量拉取！")
                         else:
                             logging.info(f"⏰ [YieldRepo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
             except Exception as e:
@@ -93,8 +95,11 @@ class PanelRepository:
             max_cached_date = df_cache['warehousing_time'].max()
             delta_start_dt = max_cached_date - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
             
-            if delta_start_dt < req_end_dt:
+            # [核心修复] 使用日期部分比较，确保当天数据也能被增量拉取
+            if delta_start_dt.date() <= req_end_dt.date():
                 delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
+                # 增量查询的结束日期需要包含请求的结束日期（即当天）
+                # 使用原始 query.end_date，因为它已经格式化为 YYYY-MM-DD
                 try:
                     df_delta = self._fetch_from_db_in_chunks(
                         delta_s_str, query.end_date, 

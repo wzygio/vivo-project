@@ -62,6 +62,12 @@ def render_spc_summary_chart(summary_df: pd.DataFrame, data_type_filter: str = '
 # 大盘汇总表 (Table) - 极速直接下钻版
 # =========================================================================
 def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
+    # [安全初始化] 确保 session_state 变量已初始化
+    if 'ag_sum_key' not in st.session_state:
+        st.session_state.ag_sum_key = 0
+    if 'spc_summary_lock' not in st.session_state:
+        st.session_state.spc_summary_lock = None
+        
     if summary_df.empty:
         return
     
@@ -138,6 +144,12 @@ def render_spc_summary_section(summary_df: pd.DataFrame, data_type_filter: str =
 # 明细多维下钻表 - 极速直接下钻版
 # =========================================================================
 def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterState):
+    # [安全初始化] 确保 session_state 变量已初始化
+    if 'ag_det_key' not in st.session_state:
+        st.session_state.ag_det_key = 0
+    if 'spc_detail_lock' not in st.session_state:
+        st.session_state.spc_detail_lock = None
+        
     # [修改] 标题根据监控类型动态显示
     st.markdown(f"#### By产品-By工厂{filter_state.data_type_filter}报警明细")
     if detail_df.empty:

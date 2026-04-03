@@ -83,3 +83,11 @@ processing:
         'fluctuation_sheet': 0.2,  
         'fluctuation_lot': 0.2,
     }
+
+# SPC 参数规格覆盖配置
+# 用于手动调整特定产品-站点-参数的规格限制
+spc_spec_override:
+  - prod_code: "M626"
+    step_id: "1L650"
+    param_name: "CD1"
+    ucl: 5.45
