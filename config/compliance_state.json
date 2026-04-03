@@ -1,12 +1,5 @@
 {
   "version": "1.0",
-  "last_updated": "2026-04-03T14:53:24.771229",
-  "states": {
-    "SPC-M626-ARRAY": true,
-    "SPC-M626-OLED": true,
-    "SPC-M626-TP": true,
-    "SPC-M678-ARRAY": true,
-    "SPC-M678-OLED": true,
-    "SPC-M678-TP": true
-  }
+  "last_updated": "2026-04-03T17:20:52.127267",
+  "states": {}
 }

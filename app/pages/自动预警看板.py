@@ -17,8 +17,11 @@ from app.components.spc_sections import (
     render_spc_summary_section,
     render_spc_detail_section
 )
-# [新增] 导入数据修饰控制组件（当前仅作展示用途）
-from app.components.compliance_control import render_compliance_control_panel
+# [新增] 导入数据修饰控制组件
+from app.components.compliance_control import (
+    render_compliance_control_panel,
+    compute_global_compliance_status
+)
 
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.spc_domain.application.spc_service import SpcAnalysisService
@@ -31,7 +34,6 @@ setup_hot_reload(enable=True)
 # [权限控制] 检测 URL 参数，仅用于控制修饰器面板显示
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true"
-
 st.title("自动预警看板")
 
 # ==============================================================================
@@ -110,15 +112,21 @@ filter_state = render_spc_control_panel(available_products, available_factories)
 
 # [新增] 渲染数据修饰控制面板（仅管理员可见，当前仅作展示用途）
 # [注意] 数据修饰功能已下线，此面板保留用于后续功能扩展
-render_compliance_control_panel(
+# [新增] 渲染数据修饰控制面板并获取配置
+compliance_configs = render_compliance_control_panel(
     data_type=filter_state.data_type_filter,
     selected_products=filter_state.selected_products or ["ALL"],
     selected_factories=filter_state.selected_factories or ["ALL"],
     key_prefix="main_"
 )
 
+# [核心修复] 根据修饰器配置计算全局修饰状态
+# 策略：任一选中的组合启用了修饰，则整体启用（保守策略）
+any_compliant_enabled = compute_global_compliance_status(compliance_configs)
+
 # 使用 session_state 避免重复请求
-session_key = f"spc_view_model_{filter_state.data_type_filter}"
+# [修改] 缓存键包含修饰状态，切换时自动刷新数据
+session_key = f"spc_view_model_{filter_state.data_type_filter}_compliant_{any_compliant_enabled}"
 if session_key not in st.session_state:
     with st.spinner(f"正在加载 {filter_state.data_type_filter} 监控数据..."):
         query_config_typed = SpcQueryConfig(
@@ -131,6 +139,7 @@ if session_key not in st.session_state:
             _db_manager=db_manager,
             query_config_json=query_config_typed.model_dump_json(),
             time_type='MIXED',
+            force_compliant=any_compliant_enabled,  # [核心修复] 传递修饰器配置
             data_type_filter=filter_state.data_type_filter
         )
         st.session_state[session_key] = view_model

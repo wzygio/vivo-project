@@ -185,7 +185,6 @@ def render_compliance_control_panel(
     
     # 管理员：显示控制面板
     with st.expander("🔧 数据修饰配置 (按监控类型-产品-厂别)", expanded=False):
-        st.info("控制每个组合的报警数据是否显示修饰后的值")
         
         # 批量操作按钮
         col1, col2, col3 = st.columns(3)
