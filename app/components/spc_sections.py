@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import logging
 from streamlit_echarts import st_echarts
 from pydantic import BaseModel, Field
 from app.charts.spc_chart import get_spc_summary_echarts_option
@@ -22,10 +23,18 @@ if 'spc_detail_lock' not in st.session_state: st.session_state.spc_detail_lock =
 if 'ag_sum_key' not in st.session_state: st.session_state.ag_sum_key = 0
 if 'ag_det_key' not in st.session_state: st.session_state.ag_det_key = 0
 
+# [注意] 精细化数据修饰配置已迁移到 compliance_control.py 模块
+# 使用 get_compliance_config() 函数从持久化存储获取配置
+
 # --------------------------------------------------------------------------
 # UI 渲染区块
 # --------------------------------------------------------------------------
 def render_spc_control_panel(available_products: list[str], available_factories: list[str]) -> SpcFilterState:
+    """
+    渲染 SPC 控制面板
+    
+    [注意] 数据修饰配置已移至主页面使用 compliance_control 模块渲染
+    """
     col1, col2, col3 = st.columns(3)
     with col1:
         # [修改] 将基准日期替换为监控类型筛选
@@ -40,6 +49,10 @@ def render_spc_control_panel(available_products: list[str], available_factories:
         prods = st.multiselect("产品型号", options=available_products, default=available_products)
     with col3:
         facs = st.multiselect("厂别", options=available_factories, default=available_factories)
+    
+    # [注意] 精细化数据修饰控制面板已移至主页面统一渲染
+    # 使用 app.components.compliance_control.render_compliance_control_panel()
+    
     return SpcFilterState(selected_products=prods, selected_factories=facs, data_type_filter=data_type)
 
 # =========================================================================
@@ -272,10 +285,6 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     st.divider()
     
     # 3. 业务数据调取与渲染逻辑
-    query_params = st.query_params
-    is_admin = query_params.get("admin") == "true"
-    force_compliant = not is_admin 
-    
     selected_time = st.segmented_control(
         "选择追溯时间段:",
         options=available_times,
@@ -306,7 +315,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                     time_group=selected_time,
                     defect_type=core_defect_type,
                     time_type='MIXED',
-                    force_compliant=force_compliant
+                    data_type_filter=data_type_filter  # ✅ 传入监控类型
                 )
 
                 if real_df.empty:
