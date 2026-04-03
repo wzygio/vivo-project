@@ -285,6 +285,10 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     st.divider()
     
     # 3. 业务数据调取与渲染逻辑
+    # [新增] 获取当前组合的修饰配置
+    from app.components.compliance_control import get_compliance_config
+    force_compliant = get_compliance_config(data_type_filter, prod, factory)
+    
     selected_time = st.segmented_control(
         "选择追溯时间段:",
         options=available_times,
@@ -315,6 +319,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                     time_group=selected_time,
                     defect_type=core_defect_type,
                     time_type='MIXED',
+                    force_compliant=force_compliant,  # [核心修复] 传递当前组合修饰配置
                     data_type_filter=data_type_filter  # ✅ 传入监控类型
                 )
 
