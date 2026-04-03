@@ -24,10 +24,14 @@ rules:
   
   CTQ-M626-ARRAY: false
   CTQ-M626-OLED: false
+  CTQ-M626-TP: false
   CTQ-M678-ARRAY: false
   CTQ-M678-OLED: false
+  CTQ-M678-TP: false
   
   AOI-M626-ARRAY: false
   AOI-M626-OLED: false
+  AOI-M626-TP: false
   AOI-M678-ARRAY: false
   AOI-M678-OLED: false
+  AOI-M678-TP: false
