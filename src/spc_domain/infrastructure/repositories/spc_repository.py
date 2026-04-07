@@ -13,6 +13,7 @@ from spc_domain.infrastructure.data_loader import(
 )
 from spc_domain.application.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.utils.data_inspector import export_probed_details
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -172,6 +173,11 @@ class SpcRepository:
                 if not df_cache.empty and 'sheet_start_time' in df_cache.columns:
                     df_cache['sheet_start_time'] = pd.to_datetime(df_cache['sheet_start_time'])
                     cache_exists = True
+                    
+                    # ==============================================================
+                    # 🚨 [通用探针] 检查本地旧快照中的数据驻留情况
+                    # ==============================================================
+                    export_probed_details(df_cache, "02_Repo层-历史Parquet缓存")
 
                     # [核心] 拦截强刷指令
                     if force_refresh:
