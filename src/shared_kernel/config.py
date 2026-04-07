@@ -34,7 +34,6 @@ class ConfigLoader:
             if not products:
                 logging.warning(f"⚠️ global.yaml 中未找到有效的 enabled_products 列表，将回退到默认 ['M678']。")
                 return ["M678"]
-                
             return products
             
         except Exception as e:
@@ -129,3 +128,23 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 配置数据校验失败: {e}")
             raise ValueError(f"配置不符合 Schema 定义: {e}") from e
+
+    @classmethod
+    def get_compliance_rules(cls) -> dict:
+        """
+        [新增] 动态获取数据修饰规则。
+        每次被调用时动态读取，确保 YAML 文件被修改后，前端点击刷新即可立即生效，无需重启服务。
+        """
+        root_dir = cls.get_project_root()
+        yaml_path = root_dir / "config" / "compliance_config.yaml"
+        
+        try:
+            if yaml_path.exists():
+                # 复用类内部的 YAML 读取器
+                conf = cls._load_yaml(yaml_path)
+                return conf.get('rules', {})
+        except Exception as e:
+            import logging
+            logging.error(f"❌ 读取合规配置文件 (compliance_config.yaml) 失败: {e}")
+            
+        return {}
