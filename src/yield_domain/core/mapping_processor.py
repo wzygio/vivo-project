@@ -26,7 +26,7 @@ def prepare_mapping_data(
     
     try:
         FIRST_REDUCTION_FACTOR = scaling_factor
-        SECOND_REDUCTION_FACTOR = 1
+        SECOND_REDUCTION_FACTOR = 0.95
         SEED = 42
 
         # --- 步骤1: 筛选有效批次 ---
@@ -95,39 +95,45 @@ def prepare_mapping_data(
 
         df_defective_panels_modified = pd.concat(batches_after_pos_modification)
         
-        # --- 步骤3: Rate-Based 级联衰减 (核心逻辑重写) ---
-        # 逻辑：LimitRate_Next = Rate_Prev * 0.95
-        #      MaxCount_Next = LimitRate_Next * TotalInput_Next
-        max_allowed_rates = {} # 存储每个 Code 允许的最大不良率 (Rate)
+        # --- 步骤3: Rate-Based 级联衰减 (完美级联版) ---
+        max_allowed_rates = {} # 存储每个 Code 的理论天花板
         processed_dfs = []
 
         for batch_no in sorted_batches:
             df_current_batch = df_defective_panels_modified[df_defective_panels_modified['batch_no'] == batch_no]
             if df_current_batch.empty: continue
             
-            # [关键] 获取当前批次的真实入库总数 (分母)
-            current_batch_total = batch_totals.get(batch_no, 50000) # Fallback safe value
+            current_batch_total = batch_totals.get(batch_no, 50000) 
 
             processed_codes_in_batch = []
             
-            for code_desc, df_code_group in df_current_batch.groupby('defect_desc'): # type: ignore
+            for code_desc, df_code_group in df_current_batch.groupby('defect_desc'): 
                 current_count = len(df_code_group)
-                # 计算当前原始不良率
                 current_rate = current_count / (current_batch_total or 1)
                 
                 prev_max_rate = max_allowed_rates.get(code_desc, float('inf'))
                 
-                # 计算目标良率 (Rate)
+                # =========================================================
+                # [完美级联逻辑] 让“天花板”自身随时间衰减，无视真实良率的波动
+                # =========================================================
                 if prev_max_rate == float('inf'):
+                    # 最老批次：确立初始天花板
                     target_rate = current_rate * FIRST_REDUCTION_FACTOR
+                    max_allowed_rates[code_desc] = target_rate 
                 else:
-                    # 比较的是 Rate，不再是 Count
-                    target_rate = min(current_rate, prev_max_rate) * SECOND_REDUCTION_FACTOR
+                    # 后续批次：天花板严格按照 SECOND_REDUCTION_FACTOR 逐级递减
+                    # 比如 0.95 -> 0.9025 -> 0.857
+                    new_ceiling = prev_max_rate * SECOND_REDUCTION_FACTOR
+                    
+                    # 当前批次只能在“真实率”和“新天花板”之间取极小值
+                    target_rate = min(current_rate, new_ceiling)
+                    
+                    # 核心：把这个按比例算出来的【纯理论新天花板】存回去！
+                    # 而不是存入 target_rate 或 current_rate！
+                    max_allowed_rates[code_desc] = new_ceiling
                 
-                # 将目标良率转换回目标数量 (Count)
+                # 将目标良率转换回目标数量
                 target_count = int((target_rate or 0) * (current_batch_total or 0))
-                
-                # 确保至少保留 1 个 (如果原本有的话)，且不超过实际数量
                 target_count = max(1, min(target_count, current_count)) if current_count > 0 else 0
 
                 # 执行抽样
@@ -135,11 +141,6 @@ def prepare_mapping_data(
                     df_processed_code = df_code_group.sample(n=target_count, random_state=SEED)
                 else:
                     df_processed_code = df_code_group
-                
-                # 更新允许的最大良率 (作为下一个批次的天花板)
-                # 注意：这里记录的是衰减后的 Rate
-                actual_processed_rate = len(df_processed_code) / (current_batch_total or 1)
-                max_allowed_rates[code_desc] = actual_processed_rate
                 
                 processed_codes_in_batch.append(df_processed_code)
             

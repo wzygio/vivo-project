@@ -305,7 +305,7 @@ def create_code_selection_ui(
     source_data: pd.DataFrame | dict,
     key_prefix: str,
     filter_by: str = 'rate',
-    rate_threshold: float = 0.0002,
+    rate_threshold: float = 0.00015,
     count_threshold: int = 20
 ) -> dict:
     """
