@@ -15,7 +15,8 @@ from app.components.components import (
 from app.components.spc_sections import (
     render_spc_control_panel,
     render_spc_summary_section,
-    render_spc_detail_section
+    render_spc_detail_section,
+    filter_and_rollup_spc_data
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
 from app.components.compliance_config import (
@@ -156,9 +157,11 @@ else:
 detail_df = view_model.get("detail_df", pd.DataFrame())
 global_summary_df = view_model.get("global_summary_df", pd.DataFrame())
 
-with st.expander(f"{filter_state.data_type_filter} 自动预警", expanded=True):
-    # 5. 组装积木: 渲染全局汇总图表 (传入全球聚合大盘)
-    render_spc_summary_section(global_summary_df, filter_state.data_type_filter)
+filtered_summary_df, filtered_detail_df = filter_and_rollup_spc_data(detail_df, global_summary_df, filter_state)
 
-    # 6. 组装积木: 渲染明细透视表 (传入多维下钻明细)
-    render_spc_detail_section(detail_df, filter_state)
+with st.expander(f"{filter_state.data_type_filter} 自动预警", expanded=True):
+    # 5. 组装积木: 传入动态重算后的过滤大盘
+    render_spc_summary_section(filtered_summary_df, filter_state.data_type_filter)
+
+    # 6. 组装积木: 传入过滤后的明细
+    render_spc_detail_section(filtered_detail_df, filter_state)
