@@ -16,6 +16,7 @@ from app.components.spc_sections import (
     render_spc_control_panel,
     render_spc_summary_section,
     render_spc_detail_section,
+    render_station_top10_section,
     filter_and_rollup_spc_data
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
@@ -102,8 +103,9 @@ with st.expander("数据刷新"):
 # --------------------------------------------------------------------------
 # 页面积木组装层 (UI Assembly)
 # --------------------------------------------------------------------------
-detail_df = view_model.get("detail_df", pd.DataFrame())
-global_summary_df = view_model.get("global_summary_df", pd.DataFrame())
+detail_df = getattr(view_model, "detail_df", pd.DataFrame())
+global_summary_df = getattr(view_model, "global_summary_df", pd.DataFrame())
+station_detail_df = getattr(view_model, "station_detail_df", pd.DataFrame())
 
 # 3. 提取所有可用的维度供前端过滤使用 (防呆处理：如果为空则返回空列表)
 available_products = detail_df['prod_code'].unique().tolist() if not detail_df.empty else []
@@ -154,14 +156,21 @@ else:
     view_model = st.session_state[session_key]
 
 # 更新数据引用
-detail_df = view_model.get("detail_df", pd.DataFrame())
-global_summary_df = view_model.get("global_summary_df", pd.DataFrame())
+detail_df = getattr(view_model, "detail_df", pd.DataFrame())
+global_summary_df = getattr(view_model, "global_summary_df", pd.DataFrame())
+station_detail_df = getattr(view_model, "station_detail_df", pd.DataFrame())
 
-filtered_summary_df, filtered_detail_df = filter_and_rollup_spc_data(detail_df, global_summary_df, filter_state)
+filtered_summary_df, filtered_detail_df, filtered_station_df = filter_and_rollup_spc_data(
+    detail_df, global_summary_df, station_detail_df, filter_state
+)
 
-with st.expander(f"{filter_state.data_type_filter} 自动预警", expanded=True):
+with st.expander(f"{filter_state.data_type_filter}——By月周天", expanded=True):
     # 5. 组装积木: 传入动态重算后的过滤大盘
     render_spc_summary_section(filtered_summary_df, filter_state.data_type_filter)
 
     # 6. 组装积木: 传入过滤后的明细
     render_spc_detail_section(filtered_detail_df, filter_state)
+
+with st.expander(f"{filter_state.data_type_filter}——By站点", expanded=True):
+    # 7. 组装积木: 渲染明细透视表 (最细颗粒度下钻)
+    render_station_top10_section(filtered_station_df)

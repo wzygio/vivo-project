@@ -35,6 +35,7 @@ class SpcDashboardViewModel:
     """SPC 看板视图模型 (支持 st.cache_data 原生序列化)"""
     global_summary_df: pd.DataFrame
     detail_df: pd.DataFrame
+    station_detail_df: pd.DataFrame = None  # type: ignore
 
 class SpcAnalysisService:
     _custom_end_date: Optional[datetime] = None
@@ -256,16 +257,41 @@ class SpcAnalysisService:
             enable_soos=enable_soos
         ) 
 
+        # =========================================================
+        # [新增] 5.5 站点维度聚合 (保留 factory，放弃 time_group)
+        # =========================================================
+        station_detail_df = aggregate_spc_metrics(
+            spc_status_df=full_status_df, 
+            group_cols=['prod_code', 'factory', 'step_id'], # 明确包含产品和厂别
+            time_group_col='step_id', # 防止底层引擎报错的占位
+            enable_soos=enable_soos
+        )
+
         # 6. 最终排序
         if not global_summary_df.empty:
             global_summary_df = global_summary_df.sort_values('sort_index').drop(columns=['sort_index'])
         if not detail_df.empty:
             detail_df = detail_df.sort_values(['sort_index', 'factory']).drop(columns=['sort_index'])
 
-        return {
-            "global_summary_df": global_summary_df, 
-            "detail_df": detail_df
-        }
+        # 7. 全链路合规修饰 (确保所有暴露给前端的数据都被洗白)
+        detail_df = sanitize_to_compliant(detail_df, add_tag=True)
+        global_summary_df = sanitize_to_compliant(global_summary_df, add_tag=False)
+        station_detail_df = sanitize_to_compliant(station_detail_df, add_tag=False) # [新增] 修饰站点数据
+
+        # [新增] 8. 剔除完全健康的站点，极致瘦身传输负担
+        if not station_detail_df.empty:
+            check_cols = ['OOS片数', 'OOC片数', 'SOOS片数']
+            check_cols = [c for c in check_cols if c in station_detail_df.columns]
+            if check_cols:
+                station_detail_df['total_err'] = station_detail_df[check_cols].sum(axis=1)
+                station_detail_df = station_detail_df[station_detail_df['total_err'] > 0].drop(columns=['total_err'])
+
+        # 最终组装返回模型
+        return SpcDashboardViewModel(
+            global_summary_df=global_summary_df,
+            detail_df=detail_df,
+            station_detail_df=station_detail_df
+        )
 
     @staticmethod
     def get_spc_defect_details(
