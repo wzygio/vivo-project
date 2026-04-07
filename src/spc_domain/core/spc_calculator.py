@@ -220,7 +220,7 @@ def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
         if col in df.columns:
             df.loc[mask, col] = 0
             
-    for col in ['OOS', 'OOC', 'SOOS', 'OOS+SOOS', 'OOS+SOOS+OOC']:
+    for col in ['OOS', 'OOC', 'SOOS']:
         if col in df.columns:
             df.loc[mask, col] = 0.0
 
@@ -281,31 +281,13 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
             rename_map['is_soos'] = 'SOOS片数'
         report_df.rename(columns=rename_map, inplace=True)
 
-        # 4. 复合比率运算与物理底线防御 (Zero-Division Protection)
+        # 4. 基础报警率计算 (不含复合报警类型)
         total = report_df['抽检数']
 
-        # 基础报警率计算
         report_df['OOS'] = np.where(total == 0, np.nan, report_df['OOS片数'] / total)
         report_df['OOC'] = np.where(total == 0, np.nan, report_df['OOC片数'] / total)
         if enable_soos:
             report_df['SOOS'] = np.where(total == 0, np.nan, report_df['SOOS片数'] / total)
-
-        # 复合报警率计算
-        if enable_soos:
-            report_df['OOS+SOOS'] = np.where(
-                total == 0, np.nan,
-                (report_df['OOS片数'] + report_df['SOOS片数']) / total
-            )
-            report_df['OOS+SOOS+OOC'] = np.where(
-                total == 0, np.nan,
-                (report_df['OOS片数'] + report_df['SOOS片数'] + report_df['OOC片数']) / total
-            )
-        else:
-            # AOI 场景：简化为 OOS+OOC
-            report_df['OOS+OOC'] = np.where(
-                total == 0, np.nan,
-                (report_df['OOS片数'] + report_df['OOC片数']) / total
-            )
 
         logging.info(f"[Phase 3] 指标聚合完成(方案B)，成功生成 {len(report_df)} 个时间桶的报表数据。")
         return report_df

@@ -65,10 +65,20 @@ def render_spc_summary_chart(summary_df: pd.DataFrame, data_type_filter: str = '
     # [修改] 标题根据监控类型动态显示
     st.markdown(f"#### 📊 {data_type_filter}报警率汇总图")
     
-    # [核心修改]: 强制将 NaN 和 Inf 替换为 0，逼迫 Echarts 绘制出 0% 的点和柱子
-    plot_df = summary_df.copy().fillna(0).replace([np.inf, -np.inf], 0)
+    # [核心修复]: 避开 Categorical 类型强校验引发的 fillna 崩溃
+    plot_df = summary_df.copy()
     
+    # 1. 解除类别锁定：将 Category 类型的列转回普通字符串，防止填 0 时报错
+    if 'time_group' in plot_df.columns:
+        plot_df['time_group'] = plot_df['time_group'].astype(str)
+        
+    # 2. 强制将 NaN 和 Inf 替换为 0，逼迫 Echarts 绘制出 0% 的点和柱子
+    plot_df = plot_df.fillna(0).replace([np.inf, -np.inf], 0)
+    
+    from app.charts.spc_chart import get_spc_summary_echarts_option
     echarts_option = get_spc_summary_echarts_option(plot_df)
+    
+    from streamlit_echarts import st_echarts
     st_echarts(options=echarts_option, height="450px")
 
 # =========================================================================
@@ -89,12 +99,7 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
     
     view_df = summary_df.copy().set_index('time_group').T
 
-    # ==========================================================
-    # [新增前端屏蔽]: 在转置后，把这两行数据从 view_df 中丢弃
-    # ==========================================================
-    # AOI 场景下这些列不会存在，但仍保留防呆处理
-    hidden_metrics = ['OOS+SOOS', 'OOS+SOOS+OOC']
-    view_df = view_df.drop(index=[m for m in hidden_metrics if m in view_df.index])
+    # [注：复合报警类型已移除]
 
     def safe_format(val, is_rate=False):
         if pd.isna(val): return "/"
@@ -104,9 +109,9 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
     # [企业级优化] 根据数据类型动态调整比率行
     is_aoi = data_type_filter == 'AOI'
     if is_aoi:
-        rate_rows = ['OOS', 'OOC', 'OOS+OOC']
+        rate_rows = ['OOS', 'OOC']
     else:
-        rate_rows = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+        rate_rows = ['OOS', 'SOOS', 'OOC']
     for row_idx in view_df.index:
         is_rate = row_idx in rate_rows
         view_df.loc[row_idx] = view_df.loc[row_idx].apply(lambda x: safe_format(x, is_rate))
@@ -180,10 +185,10 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
     # AOI 场景不包含 SOOS 相关列
     is_aoi = filter_state.data_type_filter == 'AOI'
     if is_aoi:
-        rate_cols = ['OOS', 'OOC', 'OOS+OOC']
+        rate_cols = ['OOS', 'OOC']
         ordered_metrics = ['抽检数', 'OOS片数', 'OOC片数', 'OOS', 'OOC']
     else:
-        rate_cols = ['OOS', 'SOOS', 'OOC', 'OOS+SOOS', 'OOS+SOOS+OOC']
+        rate_cols = ['OOS', 'SOOS', 'OOC']
         ordered_metrics = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数', 'OOS', 'SOOS', 'OOC']
     
     for col in view_df.columns:
@@ -340,3 +345,53 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 st.error(f"❌ 钻取请求失败: {str(e)}")
                 with st.expander("查看详细错误日志"):
                     st.code(traceback.format_exc())
+
+# =========================================================================
+# 数据联动处理引擎 (Data Binding Engine)
+# =========================================================================
+def filter_and_rollup_spc_data(
+    detail_df: pd.DataFrame, 
+    global_summary_df: pd.DataFrame, 
+    filter_state: SpcFilterState
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    [前端动态联动核心] 
+    根据用户的下拉框选择过滤明细数据，并动态向上卷起重算大盘汇总数据。
+    彻底解耦：在不重新请求后端的情况下，实现图表和表格的实时物理联动。
+    """
+    if detail_df.empty:
+        return global_summary_df, detail_df
+
+    # 1. 过滤明细表
+    filtered_detail_df = detail_df[
+        (detail_df['prod_code'].isin(filter_state.selected_products)) & 
+        (detail_df['factory'].isin(filter_state.selected_factories))
+    ].copy()
+    
+    # 2. 动态重算汇总表 (Roll-up)
+    if not filtered_detail_df.empty and not global_summary_df.empty:
+        sum_cols = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数']
+        sum_cols = [c for c in sum_cols if c in filtered_detail_df.columns]
+        
+        # 按 time_group 聚合绝对数值
+        agg_df = filtered_detail_df.groupby('time_group', as_index=False)[sum_cols].sum()
+        
+        # 重新计算比率
+        if 'OOS片数' in agg_df.columns:
+            agg_df['OOS'] = agg_df['OOS片数'] / agg_df['抽检数']
+        if 'OOC片数' in agg_df.columns:
+            agg_df['OOC'] = agg_df['OOC片数'] / agg_df['抽检数']
+        if 'SOOS片数' in agg_df.columns:  # SPC/CTQ 场景
+            agg_df['SOOS'] = agg_df['SOOS片数'] / agg_df['抽检数']
+            
+        # 强制对齐原始时间轴的排序
+        ordered_times = global_summary_df['time_group'].tolist() if 'time_group' in global_summary_df.columns else []
+        if ordered_times:
+            agg_df['time_group'] = pd.Categorical(agg_df['time_group'], categories=ordered_times, ordered=True)
+            
+        filtered_summary_df = agg_df.sort_values('time_group').reset_index(drop=True)
+    else:
+        # 过滤后没数据，返回空壳
+        filtered_summary_df = pd.DataFrame(columns=global_summary_df.columns)
+        
+    return filtered_summary_df, filtered_detail_df
