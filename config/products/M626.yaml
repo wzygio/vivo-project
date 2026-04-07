@@ -44,6 +44,7 @@ processing:
   defect_multipliers:
     # Array_Line
     'S向亮线': 0.5
+    'G向单亮线': 0.8
     # OLED_Mura
     '彩斑Mura': 0.3
 

@@ -111,13 +111,13 @@ available_factories = detail_df['factory'].unique().tolist() if not detail_df.em
 # 4. 组装积木: 渲染控制台
 filter_state = render_spc_control_panel(available_products, available_factories)
 
-# [新增] 渲染数据修饰配置面板（文件配置版）
-# [说明] 配置存储在 config/compliance_config.yaml，刷新页面后生效
-render_compliance_config_panel(
-    data_type=filter_state.data_type_filter,
-    selected_products=filter_state.selected_products or ["ALL"],
-    selected_factories=filter_state.selected_factories or ["ALL"]
-)
+# [新增] 渲染数据修饰配置面板（仅管理员可见）
+if is_admin:
+    render_compliance_config_panel(
+        data_type=filter_state.data_type_filter,
+        selected_products=filter_state.selected_products or ["ALL"],
+        selected_factories=filter_state.selected_factories or ["ALL"]
+    )
 
 # [核心修复] 从配置文件计算全局修饰状态
 any_compliant_enabled = compute_global_compliance_status(

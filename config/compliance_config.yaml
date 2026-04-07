@@ -8,8 +8,8 @@
 # - 修改此文件后，刷新页面即可生效
 # ==============================================================================
 
-# 默认配置（当特定组合未配置时，使用此默认值）
-default: True
+# 全局开关
+default: false
 
 # 精细化配置（优先级高于 default）
 # 格式：{监控类型}-{产品型号}-{厂别}: true/false
@@ -31,7 +31,7 @@ rules:
   
   AOI-M626-ARRAY: false
   AOI-M626-OLED: false
-  AOI-M626-TP: false
+  AOI-M626-TP: true
   AOI-M678-ARRAY: false
   AOI-M678-OLED: false
-  AOI-M678-TP: false
+  AOI-M678-TP: true
