@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import logging
 import re
-from yield_domain.core.batch_statistics import BatchStatistics
+from src.yield_domain.core.batch_statistics import BatchStatistics
 
 # ==============================================================================
 #                      ByCode计算Mapping集中性

@@ -13,11 +13,11 @@ from dataclasses import dataclass
 
 # 引入底层配置与仓储层
 from src.shared_kernel.config_model import AppConfig
-from spc_domain.infrastructure.data_loader import SpcQueryConfig
-from spc_domain.infrastructure.repositories.spc_repository import SpcRepository
+from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
+from src.spc_domain.infrastructure.repositories.spc_repository import SpcRepository
 
 # 引入核心计算引擎
-from spc_domain.core.spc_calculator import (
+from src.spc_domain.core.spc_calculator import (
     preprocess_sheet_features, 
     apply_spc_rules, 
     aggregate_spc_metrics,
@@ -25,7 +25,7 @@ from spc_domain.core.spc_calculator import (
 )
 
 if TYPE_CHECKING:
-    from shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # =========================================================================
 # [核心修复] 将 Pydantic 的 BaseModel 替换为标准库的 @dataclass

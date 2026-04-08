@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from pathlib import Path
 
 from src.shared_kernel.config_model import AppConfig
-from yield_domain.core.trend_regulator import TrendRegulator
+from src.yield_domain.core.trend_regulator import TrendRegulator
 
 class MWDTrendProcessor:
 
