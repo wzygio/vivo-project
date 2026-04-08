@@ -6,18 +6,18 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
 
-from spc_domain.infrastructure.data_loader import(
+from src.spc_domain.infrastructure.data_loader import(
     load_spc_measurements, 
     load_spc_spec_limits, 
     load_valid_spc_params
 )
-from spc_domain.application.dtos import SpcQueryConfig
+from src.spc_domain.application.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.data_inspector import export_probed_details
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 class SpcRepository:
     """

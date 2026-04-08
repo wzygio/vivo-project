@@ -29,7 +29,7 @@ from app.components.compliance_config import (
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
-from shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 setup_hot_reload(enable=True)

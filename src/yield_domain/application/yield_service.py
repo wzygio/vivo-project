@@ -9,17 +9,17 @@ import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
-from yield_domain.infrastructure.repositories.yield_repository import PanelRepository
-from yield_domain.application.dtos import YieldQueryConfig
+from src.yield_domain.infrastructure.repositories.yield_repository import PanelRepository
+from src.yield_domain.application.dtos import YieldQueryConfig
 
 # --- Core (Processors) ---
-from yield_domain.core.mwd_trend_processor import MWDTrendProcessor
-from yield_domain.core.sheet_lot_processor import (
+from src.yield_domain.core.mwd_trend_processor import MWDTrendProcessor
+from src.yield_domain.core.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
 )
-from yield_domain.core.mapping_processor import prepare_mapping_data
-from yield_domain.core.defect_modifier import (
+from src.yield_domain.core.mapping_processor import prepare_mapping_data
+from src.yield_domain.core.defect_modifier import (
     apply_defect_multipliers
 )
 
@@ -86,7 +86,7 @@ class YieldAnalysisService:
         """
         import logging
         import pandas as pd
-        from yield_domain.application.dtos import YieldQueryConfig
+        from src.yield_domain.application.dtos import YieldQueryConfig
         
         # [核心修复]：从全局 config 中剥离出底层所需的参数，组装成标准的 DTO
         start_dt, end_dt = YieldAnalysisService.get_time_window()
@@ -115,7 +115,7 @@ class YieldAnalysisService:
             logging.info("应用缺陷衰减...")
             try:
                 # 假设 apply_defect_multipliers 在 core 层，按需调整引入路径
-                from yield_domain.core.defect_modifier import apply_defect_multipliers
+                from src.yield_domain.core.defect_modifier import apply_defect_multipliers
                 processed_df = apply_defect_multipliers(processed_df, multipliers_config)
             except Exception as e:
                 logging.error(f"应用缺陷衰减失败: {e}")
