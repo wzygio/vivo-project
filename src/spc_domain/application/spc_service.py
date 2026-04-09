@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 # 引入底层配置与仓储层
 from src.shared_kernel.config_model import AppConfig
+from src.shared_kernel.utils.data_inspector import export_probed_details
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.spc_domain.infrastructure.repositories.spc_repository import SpcRepository
 
@@ -160,9 +161,13 @@ class SpcAnalysisService:
             
         return df
 
+    # =========================================================================
+    # 1. 内部缓存引擎 (绝对安全地缓存原生数据)
+    # [架构亮点] 去掉了下划线前缀，确保能被前端的 extract_cached_funcs 工具自动抓取清空
+    # =========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False, ttl=3600)
-    def get_spc_dashboard_data(
+    def fetch_dashboard_data_dict(
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
         time_type: str = 'MIXED',
@@ -170,21 +175,18 @@ class SpcAnalysisService:
         data_type_filter: str = 'SPC'
     ) -> dict:
         """
-        [企业级 V4.2] 修复 Pydantic 赋值异常与目录自动扫描逻辑
+        [内部缓存层] 负责所有重负载的查询与计算，返回原生字典以完美规避 Pickle 序列化陷阱。
         """
-        # 1. 严格实例化配置对象，防止类/实例混淆
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
-            # [新增] 注入 data_type_filter 参数
             config_instance.data_type_filter = data_type_filter
         except Exception as e:
             logging.error(f"Config 解析失败: {e}")
-            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame()}
+            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame(), "station_detail_df": pd.DataFrame()}
         
         target_prod = config_instance.prod_code
         start_dt, end_dt = SpcAnalysisService.get_time_window()
         
-        # 2. 智能探测产品目录
         search_prods: List[str] = []
         data_root = Path("data")
         
@@ -200,47 +202,35 @@ class SpcAnalysisService:
         all_status_dfs = []
 
         for prod in search_prods:
-            # [核心修复]: 移除 spc_cache 子层级，直接指向数据根目录
             prod_snapshot_dir = data_root / prod 
             prod_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
-            # 使用 dict 传参，避开 Pydantic 内部 model_copy 的版本差异风险
             repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
             
-            # 手动构建提取参数
             current_fetch_config = config_instance.model_copy()
             current_fetch_config.prod_code = prod
             current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")
             current_fetch_config.end_date = end_dt.strftime("%Y-%m-%d")
-            # [新增] 透传 data_type_filter
             current_fetch_config.data_type_filter = data_type_filter
 
             m_df = repo.get_spc_measurements(current_fetch_config)
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                # 立即降维判定，减少内存占用
                 features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
-                
-                # [企业级优化] 根据数据类型决定是否启用 SOOS 判定
-                # AOI 类型数据不包含 SOOS，避免无效计算
                 enable_soos = data_type_filter.upper() != 'AOI'
                 status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
                 
-                # [可选] 合规修饰：强制所有 Sheet 状态为 OK
                 if force_compliant:
                     status = sanitize_to_compliant(status)
                 all_status_dfs.append(status)
 
         if not all_status_dfs:
-            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame()}
+            return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame(), "station_detail_df": pd.DataFrame()}
 
-        # 4. 合并并贴上时间标签
         full_status_df = pd.concat(all_status_dfs, ignore_index=True)
         full_status_df = SpcAnalysisService._apply_time_bucket_mapping(full_status_df, time_type.upper(), end_dt)
 
-        # 5. 双轨聚合逻辑 (强制补齐必填参数)
-        # [企业级优化] AOI 场景不聚合 SOOS 相关列
         enable_soos = data_type_filter.upper() != 'AOI'
         
         global_summary_df = aggregate_spc_metrics(
@@ -257,28 +247,22 @@ class SpcAnalysisService:
             enable_soos=enable_soos
         ) 
 
-        # =========================================================
-        # [新增] 5.5 站点维度聚合 (保留 factory，放弃 time_group)
-        # =========================================================
         station_detail_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
-            group_cols=['prod_code', 'factory', 'step_id'], # 明确包含产品和厂别
-            time_group_col='step_id', # 防止底层引擎报错的占位
+            group_cols=['prod_code', 'factory', 'step_id'], 
+            time_group_col='step_id', 
             enable_soos=enable_soos
         )
 
-        # 6. 最终排序
         if not global_summary_df.empty:
             global_summary_df = global_summary_df.sort_values('sort_index').drop(columns=['sort_index'])
         if not detail_df.empty:
             detail_df = detail_df.sort_values(['sort_index', 'factory']).drop(columns=['sort_index'])
 
-        # 7. 全链路合规修饰 (确保所有暴露给前端的数据都被洗白)
         detail_df = sanitize_to_compliant(detail_df, add_tag=True)
         global_summary_df = sanitize_to_compliant(global_summary_df, add_tag=False)
-        station_detail_df = sanitize_to_compliant(station_detail_df, add_tag=False) # [新增] 修饰站点数据
+        station_detail_df = sanitize_to_compliant(station_detail_df, add_tag=False)
 
-        # [新增] 8. 剔除完全健康的站点，极致瘦身传输负担
         if not station_detail_df.empty:
             check_cols = ['OOS片数', 'OOC片数', 'SOOS片数']
             check_cols = [c for c in check_cols if c in station_detail_df.columns]
@@ -286,11 +270,41 @@ class SpcAnalysisService:
                 station_detail_df['total_err'] = station_detail_df[check_cols].sum(axis=1)
                 station_detail_df = station_detail_df[station_detail_df['total_err'] > 0].drop(columns=['total_err'])
 
-        # 最终组装返回模型
+        # 返回绝对安全的字典
+        return {
+            "global_summary_df": global_summary_df,
+            "detail_df": detail_df,
+            "station_detail_df": station_detail_df
+        }
+
+    # =========================================================================
+    # 2. 对外标准契约 (无缓存装饰器，实时组装强模型)
+    # =========================================================================
+    @staticmethod
+    def get_spc_dashboard_data(
+        _db_manager: 'DatabaseManager', 
+        query_config_json: str, 
+        time_type: str = 'MIXED',
+        force_compliant: bool = False,
+        data_type_filter: str = 'SPC'
+    ) -> SpcDashboardViewModel:
+        """
+        [企业级标准接口] 实时从底层缓存引擎拉取字典，安全组装为 SpcDashboardViewModel 对象。
+        """
+        # 1. 穿透调用内部缓存引擎，获取字典
+        raw_data = SpcAnalysisService.fetch_dashboard_data_dict(
+            _db_manager, 
+            query_config_json, 
+            time_type, 
+            force_compliant, 
+            data_type_filter
+        )
+        
+        # 2. 实时实例化数据类，彻底消灭热重载时的序列化报错！
         return SpcDashboardViewModel(
-            global_summary_df=global_summary_df,
-            detail_df=detail_df,
-            station_detail_df=station_detail_df
+            global_summary_df=raw_data.get("global_summary_df", pd.DataFrame()),
+            detail_df=raw_data.get("detail_df", pd.DataFrame()),
+            station_detail_df=raw_data.get("station_detail_df", pd.DataFrame())
         )
 
     @staticmethod

@@ -6,7 +6,7 @@ data_source:
   target_defect_groups:
     - "Array_Line"
     - "Array_Pixel"
-    - "OLED_Mura"
+    # - "OLED_Mura"
     
   work_order_types:
     - "ESLC" # 量产

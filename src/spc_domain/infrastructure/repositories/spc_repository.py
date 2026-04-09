@@ -300,6 +300,11 @@ class SpcRepository:
             if config.param_name:
                 df_filtered = df_filtered[df_filtered['param_name'] == config.param_name]
 
+            # =================================================================
+            # 🚨 [追踪矩阵 1]：Repo 层彻底处理完毕，即将离开 Repo 
+            # =================================================================
+            export_probed_details(df_filtered, "Track_01_Repo即将返回")
+
             return df_filtered.reset_index(drop=True)
 
         return df_final

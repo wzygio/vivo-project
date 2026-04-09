@@ -1,6 +1,7 @@
 import logging # 引入日志模块用于记录计算过程的状态
 import pandas as pd # 引入 Pandas 用于全量向量化内存计算
 import numpy as np # 引入 Numpy 用于处理极值与 NaN 数学防呆
+from src.shared_kernel.utils.data_inspector import export_probed_details
 
 def preprocess_sheet_features(
     measure_df: pd.DataFrame, 
@@ -16,6 +17,7 @@ def preprocess_sheet_features(
     1. 过滤阶段：按 filter_keys（含 site_name）去重，保留每个点位最新记录
     2. 计算阶段：按 group_keys（不含 site_name）聚合，计算整个 sheet 的统计值
     """
+    export_probed_details(measure_df, "Track_03_Core刚进入")
     logging.info("开始执行 [Phase 1] Sheet 级特征降维与规格关联...") 
 
     if measure_df.empty: 
@@ -44,6 +46,7 @@ def preprocess_sheet_features(
         
         logging.info(f"去重完成: {len(measure_df)} 条 -> {len(df_deduplicated)} 条")
         
+        export_probed_details(df_deduplicated, "Track_04_Core去重后")
         # ===================================================================
         # 阶段 2: 按 group_keys 聚合，计算整个 sheet 的统计值
         # ===================================================================

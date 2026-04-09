@@ -15,18 +15,6 @@ class SpcFilterState(BaseModel):
     selected_factories: list[str] = Field(default_factory=list)
     data_type_filter: str = Field(default='SPC', description="监控类型: SPC, CTQ, AOI, ALL")
 
-# 初始化弹窗防死循环锁
-if 'spc_summary_lock' not in st.session_state: st.session_state.spc_summary_lock = None
-if 'spc_detail_lock' not in st.session_state: st.session_state.spc_detail_lock = None
-
-# [新增] 初始化前端 AgGrid 强刷失忆动态 Key
-if 'ag_sum_key' not in st.session_state: st.session_state.ag_sum_key = 0
-if 'ag_det_key' not in st.session_state: st.session_state.ag_det_key = 0
-
-# [新增] 初始化 Top 10 站点的专属动态 Key，彻底避开命名冲突
-if 'ag_top10_sum_key' not in st.session_state: st.session_state.ag_top10_sum_key = 0
-if 'ag_top10_det_key' not in st.session_state: st.session_state.ag_top10_det_key = 0
-
 # --------------------------------------------------------------------------
 # UI 渲染区块
 # --------------------------------------------------------------------------
@@ -415,13 +403,21 @@ def filter_and_rollup_spc_data(
 # =========================================================================
 # 🏆 Top 10 异常站点分析模块 (Top 10 Station Section)
 # =========================================================================
+# =========================================================================
+# 🏆 Top 10 异常站点分析模块 (Top 10 Station Section)
+# =========================================================================
 def render_station_top10_section(filtered_station_df: pd.DataFrame):
     """渲染 Top 10 异常站点图表、汇总(转置)与明细表(产品折叠)"""
+    
+    if 'ag_top10_sum_key' not in st.session_state: 
+        st.session_state.ag_top10_sum_key = 0
+    if 'ag_top10_det_key' not in st.session_state: 
+        st.session_state.ag_top10_det_key = 0
+
     if filtered_station_df.empty:
         st.success("🎉 当前监控下无任何超规报警站点！")
         return
 
-    # [核心修复 2] 动态确定实际存在的“片数”列
     base_cols = ['OOS', 'SOOS', 'OOC']
     actual_count_cols = [f"{c}片数" for c in base_cols if f"{c}片数" in filtered_station_df.columns]
     
@@ -429,11 +425,16 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
          st.success("🎉 当前监控下，无有效的报警数据列！")
          return
 
+    # [核心修复 1]：动态识别并纳入“抽检数”进行多维聚合
+    has_sample_size = '抽检数' in filtered_station_df.columns
+    agg_cols = actual_count_cols + (['抽检数'] if has_sample_size else [])
+
     # --- 核心视图逻辑：内部提炼 Top 10 站点 ---
-    agg_station_df = filtered_station_df.groupby('step_id', as_index=False)[actual_count_cols].sum()
+    agg_station_df = filtered_station_df.groupby('step_id', as_index=False)[agg_cols].sum()
+    
+    # [核心修复 2]：计算异常总数 (Total) 仅用于找出 Top 10 瓶颈，绝对不能把抽检数加进去！
     agg_station_df['Total'] = agg_station_df[actual_count_cols].sum(axis=1)
     
-    # 过滤 0 报警，降序截取 Top 10
     top_station_df = agg_station_df[agg_station_df['Total'] > 0].sort_values('Total', ascending=False).head(10)
     
     if top_station_df.empty:
@@ -479,8 +480,6 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
         option["series"].append({
             "name": "OOS片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
             "itemStyle": {"color": "#7B9CE1"},
-            # [核心修复 1] 直接移除了导致乱码的自定义 formatter
-            # 依靠原生 Tooltip 悬浮展示明细，更加整洁、符合主站风格
             "data": chart_df['OOS片数'].tolist()
         })
 
@@ -493,30 +492,37 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
     st.markdown("#### 📊 Top 10 异常站点汇总表")
     sum_view = top_station_df.copy()
     
-    ordered_metrics = ['报警总数']
+    # [核心修复 3]：表格第一行展示真正的“抽检数”
+    ordered_metrics = ['抽检数'] if has_sample_size else ['报警总数']
     
     for c in base_cols:
         col_name = f"{c}片数"
         if col_name in actual_count_cols:
-            ratio = np.where(sum_view['Total'] > 0, sum_view[col_name] / sum_view['Total'], 0)
+            # [核心修复 4]：使用抽检数作为分母，计算真正的报警率(不良率)
+            denominator = sum_view['抽检数'] if has_sample_size else sum_view['Total']
+            ratio = np.where(denominator > 0, sum_view[col_name] / denominator, 0)
+            
             sum_view[f'{c}占比'] = [f"{x * 100:.2f}%" for x in ratio]
             sum_view[col_name] = sum_view[col_name].astype(str)
             ordered_metrics.extend([col_name, f"{c}占比"])
             
-    sum_view['报警总数'] = sum_view['Total'].astype(str)
+    if has_sample_size:
+        sum_view['抽检数'] = sum_view['抽检数'].astype(int).astype(str)
+    else:
+        sum_view['报警总数'] = sum_view['Total'].astype(str)
+        
     sum_view = sum_view.set_index('step_id')[ordered_metrics]
     view_df = sum_view.T.reset_index().rename(columns={'index': '统计维度'})
     
     gb_sum = GridOptionsBuilder.from_dataframe(view_df)
     gb_sum.configure_selection(selection_mode="single", use_checkbox=False)
-    gb_sum.configure_column("统计维度", pinned="left", width=120, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
+    gb_sum.configure_column("统计维度", pinned="left", width=95, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
     
     for col in top10_stations_list:
         gb_sum.configure_column(col, cellStyle={'backgroundColor': 'transparent'})
         
     grid_options_sum = gb_sum.build()
-    
-    row_style_jscode = JsCode("""
+    grid_options_sum['getRowStyle'] = JsCode("""
     function(params) {
         if (params.data && params.data['统计维度'] && params.data['统计维度'].includes('占比')) {
             return {'backgroundColor': 'rgba(230, 240, 255, 0.4)'};
@@ -524,7 +530,6 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
         return null;
     }
     """)
-    grid_options_sum['getRowStyle'] = row_style_jscode
     
     AgGrid(
         view_df,
@@ -539,36 +544,72 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
     st.divider()
 
     # ==========================================
-    # 2. 明细表 (Detail Table): By 产品折叠
+    # 2. 明细表 (Detail Table): By 产品折叠 + 占比补全
     # ==========================================
     st.markdown("#### 📑 By产品 - Top 10 站点报警明细")
     
     filtered_det = filtered_station_df[filtered_station_df['step_id'].isin(top10_stations_list)].copy()
     
-    agg_det = filtered_det.groupby(['prod_code', 'step_id'])[actual_count_cols].sum()
+    # 细粒度聚合，同样要带上抽检数
+    agg_det = filtered_det.groupby(['prod_code', 'step_id'])[agg_cols].sum()
+    
+    ordered_metrics_det = ['抽检数'] if has_sample_size else ['报警总数']
+    
+    for c in base_cols:
+        col_name = f"{c}片数"
+        if col_name in actual_count_cols:
+            if has_sample_size:
+                denominator = agg_det['抽检数']
+            else:
+                denominator = agg_det[actual_count_cols].sum(axis=1)
+                
+            ratio = np.where(denominator > 0, agg_det[col_name] / denominator, 0)
+            agg_det[f'{c}占比'] = ratio 
+            ordered_metrics_det.extend([col_name, f"{c}占比"])
+            
+    if not has_sample_size:
+        agg_det['报警总数'] = agg_det[actual_count_cols].sum(axis=1)
     
     pivot_df = agg_det.unstack(level='step_id', fill_value=0)
     stacked_df = pivot_df.stack(level=0, dropna=False)
     stacked_df.index.names = ['品名', '报警类型']
-    stacked_df = stacked_df.reindex(actual_count_cols, level='报警类型')
+    stacked_df = stacked_df.reindex(ordered_metrics_det, level='报警类型')
     
     flat_df = stacked_df.reset_index()
     available_stations = [s for s in top10_stations_list if s in flat_df.columns]
+    
+    for col in available_stations:
+        is_ratio = flat_df['报警类型'].str.contains('占比')
+        flat_df[col] = np.where(
+            is_ratio,
+            (flat_df[col].fillna(0).astype(float) * 100).map("{:.2f}%".format),
+            flat_df[col].fillna(0).astype(int).astype(str)
+        )
+
     flat_df = flat_df[['品名', '报警类型'] + available_stations]
     
     gb_det = GridOptionsBuilder.from_dataframe(flat_df)
     gb_det.configure_selection(selection_mode="single", use_checkbox=False)
     gb_det.configure_column("品名", rowGroup=True, hide=True)
-    gb_det.configure_column("报警类型", pinned="left", width=120, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
+    gb_det.configure_column("报警类型", pinned="left", width=95, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
     
     grid_options_det = gb_det.build()
     grid_options_det['groupDefaultExpanded'] = -1 
     grid_options_det['autoGroupColumnDef'] = {
         'headerName': '📦 产品型号', 
-        'width': 160, 
+        'width': 130, 
         'pinned': 'left', 
         'cellRendererParams': {'suppressCount': True}
     }
+    
+    grid_options_det['getRowStyle'] = JsCode("""
+    function(params) {
+        if (params.data && params.data['报警类型'] && params.data['报警类型'].includes('占比')) {
+            return {'backgroundColor': 'rgba(230, 240, 255, 0.4)'};
+        }
+        return null;
+    }
+    """)
     
     AgGrid(
         flat_df,
@@ -576,6 +617,7 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
         enable_enterprise_modules=True,
         update_mode=GridUpdateMode.SELECTION_CHANGED,
         theme='streamlit',
-        height=350,
+        height=380,
+        allow_unsafe_jscode=True,
         key=f"ag_top10_detail_{st.session_state.ag_top10_det_key}"
     )
