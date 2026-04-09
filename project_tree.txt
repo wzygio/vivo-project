@@ -11,7 +11,7 @@ vivo-project/
 │   │   └── spc_chart.py
 │   ├── components
 │   │   ├── __init__.py
-│   │   ├── compliance_control.py
+│   │   ├── compliance_config.py
 │   │   ├── components.py
 │   │   ├── spc_sections.py
 │   │   ├── table_sections.py
@@ -35,7 +35,7 @@ vivo-project/
 │   ├── products
 │   │   ├── M626.yaml
 │   │   └── M678.yaml
-│   ├── compliance_state.json
+│   ├── compliance_config.yaml
 │   └── global.yaml
 ├── docs
 │   ├── 报表文件
@@ -83,6 +83,7 @@ vivo-project/
 │   │   │   └── db_handler.py
 │   │   ├── utils
 │   │   │   ├── __init__.py
+│   │   │   ├── data_inspector.py
 │   │   │   └── excel_tools.py
 │   │   ├── __init__.py
 │   │   ├── config.py
@@ -146,7 +147,9 @@ vivo-project/
 │   ├── diagnose_streamlit_env.py
 │   ├── factories.py
 │   ├── test_aggrid.py
-│   └── test_spc_db.py
+│   ├── test_compliance_control_fix.py
+│   ├── test_spc_db.py
+│   └── test_top10_station.py
 ├── .env
 ├── .gitignore
 ├── .python-version
