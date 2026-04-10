@@ -244,7 +244,6 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
     else:
         st.session_state.spc_detail_lock = None
 
-
 # =========================================================================
 # 悬浮弹窗组件 (注入 CSS 伪装退出魔法)
 # =========================================================================

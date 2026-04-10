@@ -36,7 +36,7 @@ class YieldAnalysisService:
     # ==========================================================================
 
     # 更新时间需使用 datetime(2026, 3, 31)
-    _custom_end_date: Optional[datetime] = datetime(2026, 3, 31)
+    _custom_end_date: Optional[datetime] = None
     group_scale: float = 1.0
     code_scale: float = 1.0
     group_ema_span: int = 30
