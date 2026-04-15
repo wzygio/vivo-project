@@ -43,10 +43,14 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.5
-    'G向单亮线': 0.8
+    'S向亮线': 0.4
+    'S向单暗线': 0.6
+    'G向单亮线': 0.5
+    # Array_Pixel
+    '群暗点': 0.7
     # OLED_Mura
     '彩斑Mura': 0.3
+    'S向边缘Mura': 0.5
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:
