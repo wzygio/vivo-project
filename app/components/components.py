@@ -15,10 +15,10 @@ DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
 # --- 常量 ---
 COLOR_MAP = {
     'Array_Line': "#1930ff",  # Plotly默认的蓝色
-    'OLED_Mura': "#ff2828",   # Plotly默认的红色
+    'OLED_Mura': "#c9c7c7",   # Plotly默认的红色
     'Array_Pixel': "#6fb9ff",   # Plotly默认的浅蓝色
     'array_Line_rate': "#1930ff",  
-    'oled_mura_rate': "#ff2828",   
+    'oled_mura_rate': "#c9c7c7",   
     'array_pixel_rate': "#6fb9ff"   
 }
 
