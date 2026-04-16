@@ -45,9 +45,11 @@ def load_compliance_config() -> Dict:
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f) or {}
+            if not isinstance(config, dict):
+                config = {}
             return {
                 "default": config.get("default", False),
-                "rules": config.get("rules", {})
+                "rules": config.get("rules") or {}
             }
     except Exception as e:
         logging.error(f"[ComplianceConfig] 加载配置失败: {e}")

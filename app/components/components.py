@@ -140,7 +140,7 @@ def render_page_header(
     title: Optional[str] = None, 
     config: AppConfig = None, 
     cached_funcs: list = None,
-    refresh_handlers: list = None # [重构] 接收无参闭包，期待返回 bool
+    refresh_handlers: list = None
 ):
     # =========================================================================
     # [新增] Admin 隐身模式 (Stealth Mode)

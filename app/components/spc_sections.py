@@ -384,20 +384,35 @@ def filter_and_rollup_spc_data(
         filtered_summary_df = pd.DataFrame(columns=global_summary_df.columns)
         
     # =========================================================
-    # [重构] 处理 Top 10 站点数据，仅做物理过滤，将完整维度交给 UI 降维
+    # 处理 Top 10 站点数据，前端根据用户交互进行二次切片
     # =========================================================
     if station_detail_df is not None and not station_detail_df.empty:
-        # 严格响应前端【产品】与【厂别】的下拉框筛选联动
-        filtered_station_df = station_detail_df[
+        # 1. 物理过滤：严格响应前端【产品】与【厂别】的下拉框
+        filtered_station = station_detail_df[
             (station_detail_df['prod_code'].isin(filter_state.selected_products)) & 
             (station_detail_df['factory'].isin(filter_state.selected_factories))
         ].copy()
-    else:
-        filtered_station_df = pd.DataFrame()
         
-    # [恢复极简] 仅返回 3 个过滤后的数据源
-    return filtered_summary_df, filtered_detail_df, filtered_station_df
+        if not filtered_station.empty:
+            # 2. 统计所有异常列的总和，找出 Top 10 站点的名称 (step_id)
+            err_cols = [c for c in ['OOS片数', 'SOOS片数', 'OOC片数'] if c in filtered_station.columns]
+            
+            if err_cols:
+                # 先按站点把异常数揉在一起，纯粹为了排序找 Top 10
+                step_errors = filtered_station.groupby('step_id')[err_cols].sum().sum(axis=1)
+                top10_step_ids = step_errors.sort_values(ascending=False).head(10).index.tolist()
+                
+                # 3. [核心修复] 从切片后的完整数据中，仅提取这 10 个站点的行。
+                # 这样做完美保留了 prod_code 和 抽检数 等所有维度，供下游图表自由 groupby 和堆叠！
+                top_station_df = filtered_station[filtered_station['step_id'].isin(top10_step_ids)].copy()
+            else:
+                top_station_df = pd.DataFrame()
+        else:
+            top_station_df = pd.DataFrame()
+    else:
+        top_station_df = pd.DataFrame()
 
+    return filtered_summary_df, filtered_detail_df, top_station_df
 
 # =========================================================================
 # 🏆 Top 10 异常站点分析模块 (Top 10 Station Section)
