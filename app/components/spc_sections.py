@@ -392,6 +392,10 @@ def filter_and_rollup_spc_data(
             (station_detail_df['prod_code'].isin(filter_state.selected_products)) & 
             (station_detail_df['factory'].isin(filter_state.selected_factories))
         ].copy()
+
+        # 🚨 [关键探针 C] 前端联动后计数
+        ooc_frontend = filtered_station['OOC片数'].sum() if 'OOC片数' in filtered_station.columns else 0
+        logging.info(f"📊 [UI] 前端过滤后站点 OOC 总数: {ooc_frontend}")
         
         if not filtered_station.empty:
             # 2. 统计所有异常列的总和，找出 Top 10 站点的名称 (step_id)

@@ -231,6 +231,10 @@ class SpcAnalysisService:
         # 合并所有工厂/产品原始状态
         raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
         
+        # 🚨 [关键探针 A] 记录原始物理报警数
+        ooc_count_raw = raw_status_df[raw_status_df['is_ooc'] == 1].shape[0] if 'is_ooc' in raw_status_df.columns else 0
+        logging.info(f"📊 [Service] 原始物理 OOC 总数: {ooc_count_raw}")
+
         # =========================================================================
         # 🛑 [核心修复 1]：在“三倍扩充”之前，先进行站点聚合！
         # 此时 raw_status_df 是 1:1 的真实物理数据，绝无重复
@@ -242,6 +246,10 @@ class SpcAnalysisService:
             time_group_col='step_id', # 站点维度不需要时间组
             enable_soos=enable_soos
         )
+
+        # 🚨 [关键探针 B] 记录聚合后的站点报警数
+        ooc_count_station = station_detail_df['OOC片数'].sum() if 'OOC片数' in station_detail_df.columns else 0
+        logging.info(f"📊 [Service] 站点维度 OOC 汇总数: {ooc_count_station}")
 
         # =========================================================================
         # [执行扩充]：此处开始，数据将变为 3 份副本，仅用于趋势展示
@@ -261,14 +269,7 @@ class SpcAnalysisService:
             time_group_col='time_group',
             enable_soos=enable_soos
         ) 
-
-        station_detail_df = aggregate_spc_metrics(
-            spc_status_df=full_status_df, 
-            group_cols=['prod_code', 'factory', 'step_id'], 
-            time_group_col='step_id', 
-            enable_soos=enable_soos
-        )
-
+        
         if not global_summary_df.empty:
             global_summary_df = global_summary_df.sort_values('sort_index').drop(columns=['sort_index'])
         if not detail_df.empty:
