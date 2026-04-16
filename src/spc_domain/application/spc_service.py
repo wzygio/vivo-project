@@ -81,8 +81,8 @@ class SpcAnalysisService:
             target_days_strs = [d.strftime('%Y%m%d') for d in target_days]
             target_days_sorts = ["3_" + d for d in target_days_strs]
 
-            # 1.2 周级 (工厂自定义：倒推2天使得周三变为周一，从而完美借用 iso 标准提取3周)
-            shifted_end = end_dt_ts - pd.Timedelta(days=2)
+            # 1.2 周级 (工厂自定义：加一天使得周日变为周一，从而完美借用 iso 标准提取3周)
+            shifted_end = end_dt_ts + pd.Timedelta(days=1)
             w0_iso = shifted_end.isocalendar()
             w1_iso = (shifted_end - pd.Timedelta(days=7)).isocalendar()
             w2_iso = (shifted_end - pd.Timedelta(days=14)).isocalendar()
@@ -116,7 +116,7 @@ class SpcAnalysisService:
                 df_day['sort_index'] = "3_" + df_day['time_group']
 
                 # 真实周级 (对齐工厂自定义周，全量减2天以匹配前方的 target_weeks)
-                df_shifted = df['sheet_start_time'] - pd.Timedelta(days=2)
+                df_shifted = df['sheet_start_time'] + pd.Timedelta(days=1)
                 df_iso = df_shifted.dt.isocalendar()
                 df_week_str = df_iso.year.astype(str) + "W" + df_iso.week.astype(str).str.zfill(2)
                 mask_week = df_week_str.isin(target_weeks_strs)
@@ -228,10 +228,25 @@ class SpcAnalysisService:
         if not all_status_dfs:
             return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame(), "station_detail_df": pd.DataFrame()}
 
-        full_status_df = pd.concat(all_status_dfs, ignore_index=True)
-        full_status_df = SpcAnalysisService._apply_time_bucket_mapping(full_status_df, time_type.upper(), end_dt)
-
+        # 合并所有工厂/产品原始状态
+        raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
+        
+        # =========================================================================
+        # 🛑 [核心修复 1]：在“三倍扩充”之前，先进行站点聚合！
+        # 此时 raw_status_df 是 1:1 的真实物理数据，绝无重复
+        # =========================================================================
         enable_soos = data_type_filter.upper() != 'AOI'
+        station_detail_df = aggregate_spc_metrics(
+            spc_status_df=raw_status_df, 
+            group_cols=['prod_code', 'factory', 'step_id'], 
+            time_group_col='step_id', # 站点维度不需要时间组
+            enable_soos=enable_soos
+        )
+
+        # =========================================================================
+        # [执行扩充]：此处开始，数据将变为 3 份副本，仅用于趋势展示
+        # =========================================================================
+        full_status_df = SpcAnalysisService._apply_time_bucket_mapping(raw_status_df, time_type.upper(), end_dt)
         
         global_summary_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 

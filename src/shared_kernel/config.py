@@ -130,21 +130,18 @@ class ConfigLoader:
             raise ValueError(f"配置不符合 Schema 定义: {e}") from e
 
     @classmethod
-    def get_compliance_rules(cls) -> dict:
+    def get_compliance_config(cls) -> dict:
         """
-        [新增] 动态获取数据修饰规则。
-        每次被调用时动态读取，确保 YAML 文件被修改后，前端点击刷新即可立即生效，无需重启服务。
+        [新增/修改] 获取完整的合规配置（包含 default 开关 和 rules 细节）
         """
         root_dir = cls.get_project_root()
         yaml_path = root_dir / "config" / "compliance_config.yaml"
         
         try:
             if yaml_path.exists():
-                # 复用类内部的 YAML 读取器
-                conf = cls._load_yaml(yaml_path)
-                return conf.get('rules', {})
+                return cls._load_yaml(yaml_path)
         except Exception as e:
             import logging
-            logging.error(f"❌ 读取合规配置文件 (compliance_config.yaml) 失败: {e}")
+            logging.error(f"❌ 读取 compliance_config.yaml 失败: {e}")
             
-        return {}
+        return {"default": False, "rules": {}}
