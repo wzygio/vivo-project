@@ -131,45 +131,27 @@ class MWDTrendProcessor:
         
 def _generate_code_baseline(df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
     """
-    [自动基准生成器] 分析历史数据，提取每个 Code 前两个月最优表现作为 EMA 锚点。
+    [自动基准生成器] ByCode 计算当前三个月的均值作为 EMA 锚点。
     支持增量补充已存在的 Excel 文件，确保基准值文件始终完整。
     """
     out_dir = Path(f"resources/{prod_code}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "code_baseline.xlsx"
+    out_path = out_dir / f"{prod_code}_codebaseline.xlsx"
     
-    # 1. 基于当前 df 计算最新 baseline
+    # 1. ByCode 计算当前三个月全局均值
     new_baseline = pd.DataFrame()
     if not df.empty and 'defect_desc' in df.columns:
         df_calc = df.copy()
-        df_calc['warehousing_time'] = pd.to_datetime(df_calc['warehousing_time'])
-        df_calc['month'] = df_calc['warehousing_time'].dt.to_period('M').astype(str)
-        
-        monthly = df_calc.groupby(['defect_desc', 'month']).agg(
+        grouped = df_calc.groupby('defect_desc').agg(
             defect_panel_count=('defect_panel_count', 'sum'),
             total_panels=('total_panels', 'sum')
         ).reset_index()
-        monthly['defect_rate'] = np.where(monthly['total_panels'] > 0, monthly['defect_panel_count'] / monthly['total_panels'], 0.0)
-        
-        all_months = sorted(monthly['month'].unique())
-        previous_months = all_months[:-1]
-        
-        if not previous_months:
-            new_baseline = monthly.groupby('defect_desc').agg(
-                baseline_rate=('defect_rate', 'mean')
-            ).reset_index()
-        else:
-            recent_two = previous_months[-2:]
-            recent_df = monthly[monthly['month'].isin(recent_two)]
-            new_baseline = recent_df.groupby('defect_desc')['defect_rate'].min().reset_index()
-            new_baseline.columns = ['defect_desc', 'baseline_rate']
-            
-            all_codes = monthly['defect_desc'].unique()
-            missing_codes = set(all_codes) - set(new_baseline['defect_desc'].unique())
-            if missing_codes:
-                missing_df = monthly[monthly['defect_desc'].isin(missing_codes)].groupby('defect_desc')['defect_rate'].mean().reset_index()
-                missing_df.columns = ['defect_desc', 'baseline_rate']
-                new_baseline = pd.concat([new_baseline, missing_df], ignore_index=True)
+        grouped['baseline_rate'] = np.where(
+            grouped['total_panels'] > 0,
+            grouped['defect_panel_count'] / grouped['total_panels'],
+            0.0
+        )
+        new_baseline = grouped[['defect_desc', 'baseline_rate']].copy()
     
     # 2. 增量补充已有 Excel（如果存在）
     if out_path.exists():
@@ -196,10 +178,10 @@ def _generate_code_baseline(df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
 
 def _load_code_baseline(prod_code: str) -> dict:
     """
-    [锚点加载器] 从 resources/<prod_code>/code_baseline.xlsx 读取 Code 基准映射。
+    [锚点加载器] 从 resources/<prod_code>/{prod_code}_codebaseline.xlsx 读取 Code 基准映射。
     返回 {defect_desc: baseline_rate} 字典。
     """
-    path = Path(f"resources/{prod_code}/code_baseline.xlsx")
+    path = Path(f"resources/{prod_code}/{prod_code}_codebaseline.xlsx")
     if not path.exists():
         return {}
     try:
