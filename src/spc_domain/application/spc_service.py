@@ -231,6 +231,12 @@ class SpcAnalysisService:
         # 合并所有工厂/产品原始状态
         raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
         
+        # =========================================================================
+        # 🛑 [核心修复 B] 在合并完成、聚合发生之前，对全维度物理表执行【唯一一次】洗白！
+        # 此时数据含有厂别、型号等所有字段，修饰规则 100% 精准命中！
+        # =========================================================================
+        raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
+
         # 🚨 [关键探针 A] 记录原始物理报警数
         ooc_count_raw = raw_status_df[raw_status_df['is_ooc'] == 1].shape[0] if 'is_ooc' in raw_status_df.columns else 0
         logging.info(f"📊 [Service] 原始物理 OOC 总数: {ooc_count_raw}")
@@ -274,10 +280,6 @@ class SpcAnalysisService:
             global_summary_df = global_summary_df.sort_values('sort_index').drop(columns=['sort_index'])
         if not detail_df.empty:
             detail_df = detail_df.sort_values(['sort_index', 'factory']).drop(columns=['sort_index'])
-
-        detail_df = sanitize_to_compliant(detail_df, add_tag=True)
-        global_summary_df = sanitize_to_compliant(global_summary_df, add_tag=False)
-        station_detail_df = sanitize_to_compliant(station_detail_df, add_tag=False)
 
         if not station_detail_df.empty:
             check_cols = ['OOS片数', 'OOC片数', 'SOOS片数']

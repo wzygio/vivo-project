@@ -702,7 +702,7 @@ def _simulate_concentration(
                 final_debug_df['daily_base_rate'] = final_debug_df['daily_base_rate'].apply(lambda x: f"{x:.5%}")
                 final_debug_df['defect_rate'] = final_debug_df['defect_rate'].apply(lambda x: f"{x:.5%}")
                 
-                out_path = Path("logs/debug_lot_simulation.csv")
+                out_path = Path("logs/sheet_lot_processor-lot_rate.csv")
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 final_debug_df.to_csv(out_path, index=False, encoding='utf-8-sig')
                 logging.info(f"✅ [DEBUG] Lot 模拟分配明细已导出至: {out_path.absolute()}")

@@ -240,22 +240,16 @@ def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
 
     return df
 
-def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报表指标
-    spc_status_df: pd.DataFrame, # 入参：经过 Phase 2 状态路由并附带 One-Hot 标签的数据表
-    time_group_col: str, # 入参：时间桶的列名 (例如 'time_group'，由调用方在传入前基于时间戳生成)
+def aggregate_spc_metrics(
+    spc_status_df: pd.DataFrame,
+    time_group_col: str,
     group_cols: list | str,
-    enable_soos: bool = True # [新增] 是否包含 SOOS 列，默认为 True
-) -> pd.DataFrame: # 返回：严格包含前端报表所需所有中英文列名的最终汇总表
+    enable_soos: bool = True
+) -> pd.DataFrame:
     """
-    [Phase 3] 报表颗粒度聚合与复合指标计算 (Report Aggregation & Metric Calculation)
-    
-    [方案B] 分母改为 Sheet+Step+Param 组合粒度：
-    - 抽检数 = 不重复的 (sheet_id + step_id + param_name) 组合数量
-    - 分子保持不变：按 is_oos/is_ooc/is_soos 求和
-    - 确保报警率不超过 100%
-    
-    [企业级扩展] 通过 enable_soos 参数支持 AOI 等无需 SOOS 的业务场景。
+    [Phase 3] 报表颗粒度聚合与复合指标计算 (V5 最终版 - 包含合规标签传递)
     """
+    
     logging.info(f"开始执行 [Phase 3] 报表指标聚合 (按维度: {time_group_col}, 方案B: Sheet+Step+Param 组合粒度)...")
 
     if spc_status_df.empty:
@@ -263,26 +257,29 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
         return pd.DataFrame()
 
     try:
-        # [方案B 核心修改] 创建组合键用于统计分母
-        # 分母 = 不重复的 (sheet_id + step_id + param_name) 组合
         df = spc_status_df.copy()
         df['_sample_key'] = df['sheet_id'].astype(str) + '|' + df['step_id'].astype(str) + '|' + df['param_name'].astype(str)
         
-        # 1. 核心折叠逻辑：定义聚合策略字典
         agg_funcs = {
-            '_sample_key': 'nunique',  # [方案B] 分母：统计组合键的唯一数量
-            'is_oos': 'sum',           # 分子 1：对 OOS 的独热列求和
-            'is_ooc': 'sum'            # 分子 2：对 OOC 的独热列求和
+            '_sample_key': 'nunique',
+            'is_oos': 'sum',
+            'is_ooc': 'sum'
         }
         if enable_soos:
-            agg_funcs['is_soos'] = 'sum'  # 分子 3：对 SOOS 的独热列求和
+            agg_funcs['is_soos'] = 'sum'
 
-        # 2. 执行向量化聚合计算
+        # =====================================================================
+        # 🛑 [核心修复 A] 检测底层物理数据是否含有合规标签，加入聚合字典
+        # 使用 'max' 聚合：只要这批组合数据里有 1 条被洗白过，这整个桶就被标记为 True
+        # =====================================================================
+        has_compliant_tag = 'is_compliant_modified' in df.columns
+        if has_compliant_tag:
+            agg_funcs['is_compliant_modified'] = 'max' 
+
         report_df = df.groupby(group_cols, as_index=False).agg(agg_funcs)
 
-        # 3. 字段映射：重命名为前端严格要求的报表字段
         rename_map = {
-            '_sample_key': '抽检数',  # [方案B] 映射分母列为组合键数量
+            '_sample_key': '抽检数',
             'is_oos': 'OOS片数',
             'is_ooc': 'OOC片数'
         }
@@ -290,9 +287,11 @@ def aggregate_spc_metrics( # 定义 Phase 3 核心聚合函数：生成最终报
             rename_map['is_soos'] = 'SOOS片数'
         report_df.rename(columns=rename_map, inplace=True)
 
-        # 4. 基础报警率计算 (不含复合报警类型)
-        total = report_df['抽检数']
+        # 还原布尔值标签
+        if has_compliant_tag:
+            report_df['is_compliant_modified'] = report_df['is_compliant_modified'].astype(bool)
 
+        total = report_df['抽检数']
         report_df['OOS'] = np.where(total == 0, np.nan, report_df['OOS片数'] / total)
         report_df['OOC'] = np.where(total == 0, np.nan, report_df['OOC片数'] / total)
         if enable_soos:

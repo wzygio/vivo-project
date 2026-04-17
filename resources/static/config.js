@@ -17,7 +17,7 @@ const LINKS = {
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
-    AOI: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Yield_Monitoring%252FDefect_Monitoring%252FDB107.AOI_TDSUM_Analyze_for_BJX_Report.cpt&ref_t=design&ref_c=273d9530-1b98-4bbe-9c39-dd79889a6e16",
+    AOI: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Yield_Monitoring%252FDefect_Monitoring%252FDB107.SPC_AOI_TDSUM_Analyze_for_BJX_Report.cpt&ref_t=design&ref_c=273d9530-1b98-4bbe-9c39-dd79889a6e16",
     AOI_RS: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Yield_Monitoring%252FDefect_Monitoring%252FDB114.RS_Density_Analyze_for_BJX_Report.cpt&ref_t=design&op=view&ref_c=5984e028-78ba-4264-857b-d9ee3d00fcca",
     CTQ: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/6883bfc0-b11b-4548-8e78-3b6a3474f0d0?preview=true",
     QTIME: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Test%252FQTIME_TZBJX.cpt&ref_t=design&ref_c=273d9530-1b98-4bbe-9c39-dd79889a6e16",
