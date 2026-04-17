@@ -221,14 +221,31 @@ def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
     # 3. 执行瞬间洗白 (毫秒级)
     if not mask.any():
         return df
-        
-    if 'spc_status' in df.columns:
-        df.loc[mask, 'spc_status'] = 'OK'
-        
-    for col in ['is_oos', 'is_ooc', 'is_soos', 'OOS片数', 'OOC片数', 'SOOS片数']:
+
+    # ---------------------------------------------------------
+    # [多态支持] 底层原始特征列洗白 (明细视图 / 物理行数据)
+    # 明细链路传入的是未聚合的原始行，包含布尔/整型标识与字符串状态
+    # ---------------------------------------------------------
+    # 布尔/整型标识列：根据实际 dtype 多态赋值为 False 或 0
+    for col in ['is_ooc', 'is_oos', 'is_soos']:
+        if col in df.columns:
+            if df[col].dtype == bool:
+                df.loc[mask, col] = False
+            else:
+                df.loc[mask, col] = 0
+
+    # 字符串状态列：兼容 spc_status 与 status 两种命名体系
+    for col in ['spc_status', 'status']:
+        if col in df.columns:
+            df.loc[mask, col] = 'OK'
+
+    # ---------------------------------------------------------
+    # 聚合指标列洗白 (聚合视图 / 报表数据，如 OOC片数、OOS 比率)
+    # ---------------------------------------------------------
+    for col in ['OOS片数', 'OOC片数', 'SOOS片数']:
         if col in df.columns:
             df.loc[mask, col] = 0
-            
+
     for col in ['OOS', 'OOC', 'SOOS']:
         if col in df.columns:
             df.loc[mask, col] = 0.0

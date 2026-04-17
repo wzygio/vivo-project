@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 from app.charts.spc_chart import get_spc_summary_echarts_option
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
+from src.spc_domain.application.spc_service import SpcAnalysisService
+from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
+from shared_kernel.infrastructure.db_handler import DatabaseManager
 # --------------------------------------------------------------------------
 # 状态模型定义 (Type-Safe Session State)
 # --------------------------------------------------------------------------
@@ -73,7 +76,7 @@ def render_spc_summary_chart(summary_df: pd.DataFrame, data_type_filter: str = '
 # =========================================================================
 # 大盘汇总表 (Table) - 极速直接下钻版
 # =========================================================================
-def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
+def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = 'SPC', is_admin: bool = False):
     # [安全初始化] 确保 session_state 变量已初始化
     if 'ag_sum_key' not in st.session_state:
         st.session_state.ag_sum_key = 0
@@ -135,22 +138,26 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
         defect = row_data.get("报警类型")
         
         if defect in rate_rows or '片数' in defect: # type: ignore
-            if st.session_state.spc_summary_lock != defect:
-                st.session_state.spc_summary_lock = defect
-                # [核心修改 2] 传入 source="summary"
-                show_drilldown_modal("ALL", "ALL", defect, time_cols, data_type_filter, source="summary")
+            # 🛑 [核心修改]: 在弹出弹窗前，判断是否为管理员
+            if is_admin:
+                if st.session_state.spc_summary_lock != defect:
+                    st.session_state.spc_summary_lock = defect
+                    show_drilldown_modal("ALL", "ALL", defect, time_cols, data_type_filter, source="summary")
+            else:
+                 # 重置选中状态，避免一直显示警告
+                 st.session_state.spc_summary_lock = None 
     else:
         st.session_state.spc_summary_lock = None
 
-def render_spc_summary_section(summary_df: pd.DataFrame, data_type_filter: str = 'SPC'):
+def render_spc_summary_section(summary_df: pd.DataFrame, data_type_filter: str = 'SPC', is_admin: bool = False):
     render_spc_summary_chart(summary_df, data_type_filter)
     # st.divider()
-    render_spc_summary_table(summary_df, data_type_filter)
+    render_spc_summary_table(summary_df, data_type_filter, is_admin)
 
 # =========================================================================
 # 明细多维下钻表 - 极速直接下钻版
 # =========================================================================
-def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterState):
+def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterState, is_admin: bool = False):
     # [安全初始化] 确保 session_state 变量已初始化
     if 'ag_det_key' not in st.session_state:
         st.session_state.ag_det_key = 0
@@ -237,10 +244,14 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
             defect = row_data.get("报警类型")
             
             current_lock = f"{prod}_{factory}_{defect}"
-            if st.session_state.spc_detail_lock != current_lock:
-                st.session_state.spc_detail_lock = current_lock
-                # [核心修改 2] 传入 source="detail"
-                show_drilldown_modal(prod, factory, defect, time_cols, filter_state.data_type_filter, source="detail")
+            
+            # 🛑 [核心修改]: 在弹出弹窗前，判断是否为管理员
+            if is_admin:
+                if st.session_state.spc_detail_lock != current_lock:
+                    st.session_state.spc_detail_lock = current_lock
+                    show_drilldown_modal(prod, factory, defect, time_cols, filter_state.data_type_filter, source="detail")
+            else:
+                st.session_state.spc_detail_lock = None
     else:
         st.session_state.spc_detail_lock = None
 
@@ -281,21 +292,12 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     # [新增] 从配置文件获取当前组合的修饰配置
     from app.components.compliance_config import get_compliance_config
     force_compliant = get_compliance_config(data_type_filter, prod, factory)
-    
-    selected_time = st.segmented_control(
-        "选择追溯时间段:",
-        options=available_times,
-        default=available_times[-1] if available_times else None,
-        key=f"drill_time_{prod}_{factory}_{defect_type}" # 加上 defect 保证 Key 的绝对唯一
-    )
-    
-    if selected_time:
-        with st.spinner(f"正在从底层快照极速调取 {selected_time} 的 {defect_type} 明细..."):
-            try:
-                from src.spc_domain.application.spc_service import SpcAnalysisService
-                from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
-                from shared_kernel.infrastructure.db_handler import DatabaseManager
 
+    selected_time = "ALL"
+
+    if selected_time:
+        with st.spinner(f"正在从底层快照极速提取近 3 个月内所有的 {defect_type} 物理明细..."):
+            try:
                 start_dt, end_dt = SpcAnalysisService.get_time_window()
                 core_defect_type = defect_type.replace("片数", "").strip()
 
@@ -317,7 +319,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 )
 
                 if real_df.empty:
-                    st.info(f"💡 {selected_time} 期间，未追溯到具体的 **{defect_type}** 拦截明细。")
+                    st.info(f"💡 近 3 个月内，未追溯到具体的 **{defect_type}** 拦截明细。")
                 else:
                     if 'factory' in real_df.columns and factory != "ALL":
                         real_df = real_df[real_df['factory'] == factory]
@@ -325,7 +327,8 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                     if real_df.empty:
                         st.info(f"💡 该时段内，属于 **{factory}** 工厂的 {defect_type} 明细为空。")
                     else:
-                        st.success(f"✅ 钻取成功！共捕获 **{len(real_df)}** 片底层追溯数据。")
+                        st.success(f"✅ 钻取成功！共捕获 **{len(real_df)}** 片真实的底层追溯数据。")
+                        # 现在的 st.dataframe 自带极强的列过滤和排序功能，几百上千行数据一眼看穿！
                         st.dataframe(real_df, use_container_width=True, hide_index=True, height=400)
                         
             except Exception as e:
