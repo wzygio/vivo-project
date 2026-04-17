@@ -12,7 +12,7 @@ from src.yield_domain.core.batch_statistics import BatchStatistics
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
     scaling_factor: float,
-    min_panel_threshold: int = 2000
+    min_panel_threshold: int = 0
 ) -> pd.DataFrame:
     """
     [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
@@ -67,7 +67,7 @@ def prepare_mapping_data(
             sorted_batches = sorted(target_batches) 
         else:
             # 取最新的 5 个，然后按 Old -> New 排序
-            latest_n_df = valid_dates_df.head(4)
+            latest_n_df = valid_dates_df.head(5)
             sorted_batches = latest_n_df.sort_values('batch_date', ascending=True)['original_batch'].tolist()
 
         logging.info(f"处理批次顺序 (Old->New): {sorted_batches}")
