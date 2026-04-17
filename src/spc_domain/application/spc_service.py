@@ -402,16 +402,19 @@ class SpcAnalysisService:
             return pd.DataFrame()
 
         # 3. 合并全量数据并应用相同的重叠魔方时间切割规则
-        full_status_df = pd.concat(all_status_dfs, ignore_index=True)
-        full_status_df = SpcAnalysisService._apply_time_bucket_mapping(full_status_df, time_type.upper(), end_dt)
+        raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
+        if time_group == "ALL":
+            # 直接使用最底层的 1:1 物理真实数据
+            filtered_df = raw_status_df.copy()
+        else:
+            # 兼容旧逻辑：应用重叠魔方时间切割规则，并精确过滤
+            full_status_df = SpcAnalysisService._apply_time_bucket_mapping(raw_status_df, time_type.upper(), end_dt)
+            filtered_df = full_status_df[full_status_df['time_group'] == time_group].copy()
 
-        # 4. 精准拦截过滤
-        # 过滤时间节点 (严格匹配用户点击的列名，如 2026M01)
-        filtered_df = full_status_df[full_status_df['time_group'] == time_group].copy()
-        
         if filtered_df.empty:
             return pd.DataFrame()
 
+        # 4. 精准拦截过滤
         # 过滤缺陷类型 (兼容 Core 层状态字段可能的不同命名体系)
         # 这里假设您的规则引擎核心层输出的状态列名叫 'spc_status' 或 'status'
         if 'spc_status' in filtered_df.columns:

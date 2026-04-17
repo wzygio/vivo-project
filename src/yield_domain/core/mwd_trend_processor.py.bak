@@ -49,7 +49,6 @@ class MWDTrendProcessor:
                         res.loc[idx, g] = sub[sub['defect_group'] == g]['defect_panel_count'].sum()
                 return res
 
-            prod_code = config.data_source.product_code
             # [架构精简] 彻底废弃 Group 级趋势调节器适配器
             final_monthly, final_weekly, final_daily = _execute_unified_pipeline(
                 raw_daily_df=raw_daily,
@@ -65,9 +64,7 @@ class MWDTrendProcessor:
                 gen_daily_func=_generate_daily_from_weekly_baseline,
                 scaling_factor=scaling_factor,
                 volatility=volatility,
-                target_defects=target_defects,
-                prod_code=prod_code,
-                config=config
+                target_defects=target_defects                   
             )
 
             daily = _apply_daily_manual_overrides(final_daily, d_vals, target_defects)
@@ -105,11 +102,10 @@ class MWDTrendProcessor:
             w_vals = config.processing.get('code_weekly_values', {})
             d_vals = config.processing.get('code_daily_values', {})
 
-            prod_code = config.data_source.product_code
             monthly, weekly, daily = _execute_unified_pipeline(
                 raw_daily_df=raw_daily,
                 last_day=last_day,
-                calc_daily_ema_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility, config=config, prod_code=prod_code),
+                calc_daily_ema_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility),
                 agg_funcs=(agg_monthly_func, agg_weekly_func),
                 reg_func=TrendRegulator.regulate_code_daily_base,
                 override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
@@ -117,9 +113,7 @@ class MWDTrendProcessor:
                 gen_daily_func=_generate_code_daily_from_weekly_baseline,
                 scaling_factor=1.0, 
                 volatility=volatility,
-                warning_lines=warning_lines,
-                prod_code=prod_code,
-                config=config
+                warning_lines=warning_lines
             )
 
             daily = _apply_code_daily_manual_overrides(daily, d_vals)
@@ -129,90 +123,6 @@ class MWDTrendProcessor:
             logging.error(f"Code趋势分析出错: {e}", exc_info=True)
             return None
         
-def _generate_code_baseline(df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
-    """
-    [自动基准生成器] 分析历史数据，提取每个 Code 前两个月最优表现作为 EMA 锚点。
-    支持增量补充已存在的 Excel 文件，确保基准值文件始终完整。
-    """
-    out_dir = Path(f"resources/{prod_code}")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "code_baseline.xlsx"
-    
-    # 1. 基于当前 df 计算最新 baseline
-    new_baseline = pd.DataFrame()
-    if not df.empty and 'defect_desc' in df.columns:
-        df_calc = df.copy()
-        df_calc['warehousing_time'] = pd.to_datetime(df_calc['warehousing_time'])
-        df_calc['month'] = df_calc['warehousing_time'].dt.to_period('M').astype(str)
-        
-        monthly = df_calc.groupby(['defect_desc', 'month']).agg(
-            defect_panel_count=('defect_panel_count', 'sum'),
-            total_panels=('total_panels', 'sum')
-        ).reset_index()
-        monthly['defect_rate'] = np.where(monthly['total_panels'] > 0, monthly['defect_panel_count'] / monthly['total_panels'], 0.0)
-        
-        all_months = sorted(monthly['month'].unique())
-        previous_months = all_months[:-1]
-        
-        if not previous_months:
-            new_baseline = monthly.groupby('defect_desc').agg(
-                baseline_rate=('defect_rate', 'mean')
-            ).reset_index()
-        else:
-            recent_two = previous_months[-2:]
-            recent_df = monthly[monthly['month'].isin(recent_two)]
-            new_baseline = recent_df.groupby('defect_desc')['defect_rate'].min().reset_index()
-            new_baseline.columns = ['defect_desc', 'baseline_rate']
-            
-            all_codes = monthly['defect_desc'].unique()
-            missing_codes = set(all_codes) - set(new_baseline['defect_desc'].unique())
-            if missing_codes:
-                missing_df = monthly[monthly['defect_desc'].isin(missing_codes)].groupby('defect_desc')['defect_rate'].mean().reset_index()
-                missing_df.columns = ['defect_desc', 'baseline_rate']
-                new_baseline = pd.concat([new_baseline, missing_df], ignore_index=True)
-    
-    # 2. 增量补充已有 Excel（如果存在）
-    if out_path.exists():
-        try:
-            existing = pd.read_excel(out_path)
-            if 'defect_desc' in existing.columns and 'baseline_rate' in existing.columns:
-                merged_map = dict(zip(existing['defect_desc'], existing['baseline_rate'].astype(float)))
-                for _, row in new_baseline.iterrows():
-                    merged_map[row['defect_desc']] = float(row['baseline_rate'])
-                baseline = pd.DataFrame([
-                    {'defect_desc': k, 'baseline_rate': v} for k, v in merged_map.items()
-                ])
-                baseline.to_excel(out_path, index=False)
-                logging.info(f"[Baseline Generator] Code 基准已增量补充至: {out_path} (共 {len(baseline)} 个 Codes)")
-                return baseline
-        except Exception as e:
-            logging.warning(f"[Baseline Generator] 增量补充失败，将覆盖写入: {e}")
-    
-    # 3. 全新写入
-    new_baseline.to_excel(out_path, index=False)
-    logging.info(f"[Baseline Generator] Code 基准已生成并保存至: {out_path} (共 {len(new_baseline)} 个 Codes)")
-    return new_baseline
-
-
-def _load_code_baseline(prod_code: str) -> dict:
-    """
-    [锚点加载器] 从 resources/<prod_code>/code_baseline.xlsx 读取 Code 基准映射。
-    返回 {defect_desc: baseline_rate} 字典。
-    """
-    path = Path(f"resources/{prod_code}/code_baseline.xlsx")
-    if not path.exists():
-        return {}
-    try:
-        df = pd.read_excel(path)
-        if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
-            logging.warning(f"[Baseline Loader] Excel 列名不匹配: {path}")
-            return {}
-        return dict(zip(df['defect_desc'], df['baseline_rate'].astype(float)))
-    except Exception as e:
-        logging.warning(f"[Baseline Loader] 加载失败: {e}")
-        return {}
-
-
 # ==============================================================================
 #  核心策略流水线 (Generic Pipelines)
 # ==============================================================================
@@ -225,8 +135,6 @@ def _execute_unified_pipeline(
     override_funcs: Tuple[Callable, Callable],
     override_vals: Tuple[dict, dict],
     gen_daily_func: Callable,
-    prod_code: str | None = None,
-    config: AppConfig | None = None,
     **kwargs
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -244,11 +152,6 @@ def _execute_unified_pipeline(
     
     # [核心修复] 使用 last_day 作为评估锚点，而非强制使用系统当前日期
     eval_last_day = pd.to_datetime(last_day) if last_day else pd.to_datetime(dt.now().date())
-    
-    # [新增] 自动基准生成器 (仅 Code 级)
-    is_group = 'defect_desc' not in df_processing.columns
-    if not is_group and prod_code:
-        _generate_code_baseline(df_processing, prod_code)
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
@@ -518,80 +421,83 @@ def _calc_code_ema_noise(
     raw_df: pd.DataFrame, 
     span: int, 
     scale: float,
-    volatility: float,
-    config: AppConfig | None = None,
-    prod_code: str | None = None,
+    volatility: float
 ) -> pd.DataFrame:
-    """Code 级 EMA 计算 + 噪声注入 (日历网格化 + 按月分片隔离 + 锚点注入版)"""
-    if raw_df.empty:
-        return raw_df.copy()
-    
+    """Code 级 EMA 计算 + 噪声注入 (带 DEBUG 拦截器)"""
     ema_df = raw_df.copy()
+    ema_df['attenuated_rate'] = 0.0
     unique_codes = ema_df['defect_desc'].unique()
-    result_frames = []
     
-    # 预加载 Excel 基准，缺失则自动补充
-    baseline_map = _load_code_baseline(prod_code) if prod_code else {}
-    if prod_code:
-        missing_codes = [c for c in unique_codes if c != "NoDefect" and c not in baseline_map]
-        if missing_codes:
-            logging.info(f"[Baseline] 检测到缺失 Codes {missing_codes}，启动自动补充...")
-            _generate_code_baseline(ema_df, prod_code)
-            baseline_map = _load_code_baseline(prod_code)
+    # [新增] 用于收集所有 Code 的 EMA 调试数据
+    debug_frames = []
     
     for code in unique_codes:
-        if code == "NoDefect":
-            no_def_mask = ema_df['defect_desc'] == 'NoDefect'
-            result_frames.append(ema_df[no_def_mask].copy())
-            continue
-            
+        if code == "NoDefect": continue
         mask = ema_df['defect_desc'] == code
-        sub = ema_df[mask].sort_values('warehousing_time').copy()
+        sub = ema_df[mask].sort_values('warehousing_time')
         
-        # --- 步骤 1: 绝对日历网格化 ---
-        sub['warehousing_time'] = pd.to_datetime(sub['warehousing_time'])
-        min_date = sub['warehousing_time'].min()
-        max_date = sub['warehousing_time'].max()
-        start_month = min_date.replace(day=1)
-        full_dates = pd.date_range(start=start_month, end=max_date, freq='D')
+        # 核心算法调用
+        smooth = _calculate_adaptive_shadow_ema(
+            sub['defect_panel_count'].values, sub['total_panels'].values, span
+        )
         
-        date_df = pd.DataFrame({'warehousing_time': full_dates})
-        sub = pd.merge(date_df, sub, on='warehousing_time', how='left')
-        sub['defect_desc'] = code
-        defect_group_candidates = ema_df.loc[mask, 'defect_group'].dropna()
-        defect_group_val = defect_group_candidates.iloc[0] if not defect_group_candidates.empty else 'Unknown'
-        sub['defect_group'] = sub['defect_group'].fillna(defect_group_val)
-        sub['total_panels'] = sub['total_panels'].fillna(0).astype(int)
-        sub['defect_panel_count'] = sub['defect_panel_count'].fillna(0).astype(int)
+        # =========================================================================
+        # 🛑 [DEBUG 日志与 CSV 导出 - 增强版]
+        # =========================================================================
+        if debug_frames:
+            try:
+                debug_df = pd.concat(debug_frames, ignore_index=True)
+                
+                # 确保按时间升序，方便您在 Excel 画图
+                debug_df['Date'] = pd.to_datetime(debug_df['Date'])
+                debug_df = debug_df.sort_values(by=['Code', 'Date'])
+                debug_df['Date'] = debug_df['Date'].dt.strftime('%Y-%m-%d')
+                
+                out_path = Path("logs/debug_ema_rates_full.csv")
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                export_df = debug_df.copy()
+                # 将浮点数格式化为易读的百分比，避免科学计数法
+                export_df['Raw_Rate'] = export_df['Raw_Rate'].apply(lambda x: f"{x:.5%}")
+                export_df['EMA_Rate'] = export_df['EMA_Rate'].apply(lambda x: f"{x:.5%}")
+                
+                export_df.to_csv(out_path, index=False, encoding='utf-8-sig')
+                logging.info(f"✅ [DEBUG] 完整近3个月 EMA 明细已导出至: {out_path.absolute()}")
+            except Exception as e:
+                logging.error(f"导出 EMA debug 数据失败: {e}")
+        # =========================================================================
+
+        ema_df.loc[sub.index, 'attenuated_rate'] = np.array(smooth) * scale
         
-        # --- 步骤 2 & 3: 按月分片隔离 + 锚点注入 ---
-        sub['year_month'] = sub['warehousing_time'].dt.to_period('M').astype(str)
-        months = sorted(sub['year_month'].unique())
-        
-        smooth_all = []
-        
-        for month in months:
-            month_sub = sub[sub['year_month'] == month].sort_values('warehousing_time').copy()
-            counts = month_sub['defect_panel_count'].values
-            totals = month_sub['total_panels'].values
+    # =========================================================================
+    # 🛑 [DEBUG 日志与 CSV 导出]
+    # =========================================================================
+    if debug_frames:
+        try:
+            debug_df = pd.concat(debug_frames, ignore_index=True)
             
-            # --- 锚点解析：严格使用 Excel 基准，不再回退 ---
-            anchor_rate = baseline_map.get(code, 0.0)
+            # 1. 导出完整数据到 CSV，方便您在 Excel 中插入折线图进行直观对比
+            out_path = Path("logs/debug_ema_rates.csv")
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             
-            smooth = _calculate_adaptive_shadow_ema(
-                counts, totals, span, use_global_init=False, initial_anchor_rate=anchor_rate
-            )
+            # 将浮点数格式化为百分比字符串，提升 Excel 阅读体验
+            export_df = debug_df.copy()
+            export_df['Raw_Rate'] = export_df['Raw_Rate'].apply(lambda x: f"{x:.4%}")
+            export_df['EMA_Rate'] = export_df['EMA_Rate'].apply(lambda x: f"{x:.4%}")
+            export_df.to_csv(out_path, index=False, encoding='utf-8-sig')
             
-            smooth_all.extend(smooth)
-        
-        sub = sub.sort_values('warehousing_time').copy()
-        sub['attenuated_rate'] = np.array(smooth_all) * scale
-        sub['defect_panel_count'] = np.round(sub['attenuated_rate'] * sub['total_panels']).astype(int)
-        
-        result_frames.append(sub.drop(columns=['year_month'], errors='ignore'))
+            logging.info(f"✅ [DEBUG] EMA 算法明细已导出至: {out_path.absolute()}")
+            
+            # 2. 挑一个有数据的 Code，在控制台快速预览前 10 天的数据
+            sample_code = debug_df['Code'].iloc[0]
+            sample_df = export_df[export_df['Code'] == sample_code].head(10)
+            logging.info(f"--- [DEBUG] EMA 抽样展示 (Code: {sample_code}, Span: {span}) ---\n{sample_df.to_string(index=False)}")
+        except Exception as e:
+            logging.error(f"导出 EMA debug 数据失败: {e}")
+    # =========================================================================
     
-    new_ema_df = pd.concat(result_frames, ignore_index=True)
-    return _inject_deterministic_noise_code_level(new_ema_df, volatility)
+    ema_df['defect_panel_count'] = np.round(ema_df['attenuated_rate'] * ema_df['total_panels']).astype(int)
+    return _inject_deterministic_noise_code_level(ema_df, volatility)
 
 # ==============================================================================
 #  数据准备与格式化 (Helpers)
@@ -962,33 +868,26 @@ def _inject_deterministic_noise_code_level(df, volatility):
     
     return df_out
 
-def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True, initial_anchor_rate=None):
+def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True):
     """
-    自适应 EMA 计算函数 (V3.0 - 稳定锚点版)
+    自适应 EMA 计算函数 (V2.0 - 双向稳态控制版)
     :param span: 平滑窗口大小
-    :param use_global_init: 是否使用全局均值初始化 (当 initial_anchor_rate 未提供时生效)
-    :param initial_anchor_rate: 外部注入的初始锚点率。如果提供，优先使用此值作为初始动量。
+    :param use_global_init: 是否使用全局均值初始化
     """
     n = len(counts)
     if n == 0: return []
     alpha = 2/(span+1)
     res = []
     
+    # 计算全局平均良损
+    g_n, g_d = np.sum(counts), np.sum(totals)
+    base = g_n/g_d if g_d>0 else 0
+    
     t_d = totals[0]
     
     # 1. 初始化逻辑
     first_rate = (counts[0]/totals[0]) if totals[0]>0 else 0 # 计算第一天的良损
-    if initial_anchor_rate is not None:
-        # [新] 外部锚点注入模式
-        t_n = t_d * initial_anchor_rate
-        if totals[0] > 0:
-            res.append(0.5 * initial_anchor_rate + 0.5 * first_rate)
-        else:
-            # 若当月 1 号无产出，EMA 直接输出该基准值（不动量衰减）
-            res.append(initial_anchor_rate)
-    elif use_global_init: # 使用平均良损计算初始动量
-        g_n, g_d = np.sum(counts), np.sum(totals)
-        base = g_n/g_d if g_d>0 else 0
+    if use_global_init: # 使用平均良损计算初始动量
         t_n = t_d * base
         res.append(0.5 * base + 0.5 * first_rate)
     else: # 使用第一天的良损计算初始动量(原始方法)
@@ -1001,11 +900,7 @@ def _calculate_adaptive_shadow_ema(counts, totals, span, use_global_init=True, i
         if rd == 0: res.append(res[-1]); continue
         
         rr = rn/rd # 当日真实良损
-        if t_d > 0:
-            p_base = t_n / t_d
-        else:
-            # 若前几日无产出导致动量分母为0，回退到初始锚点或全局均值
-            p_base = initial_anchor_rate if initial_anchor_rate is not None else (base if use_global_init else 0)
+        p_base = t_n/t_d if t_d>0 else 0 # 昨日良损(根据昨日动量计算)
         
         # ======================================================================
         # [核心优化] 双向异常检测 (Bi-directional Outlier Detection)

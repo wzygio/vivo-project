@@ -166,10 +166,10 @@ filtered_summary_df, filtered_detail_df, filtered_station_df = filter_and_rollup
 
 with st.expander(f"{filter_state.data_type_filter}——By月周天", expanded=True):
     # 5. 组装积木: 传入动态重算后的过滤大盘
-    render_spc_summary_section(filtered_summary_df, filter_state.data_type_filter)
+    render_spc_summary_section(filtered_summary_df, filter_state.data_type_filter, is_admin)
 
     # 6. 组装积木: 传入过滤后的明细
-    render_spc_detail_section(filtered_detail_df, filter_state)
+    render_spc_detail_section(filtered_detail_df, filter_state, is_admin)
 
 with st.expander(f"{filter_state.data_type_filter}——By站点", expanded=True):
     # 7. 组装积木: 渲染明细透视表 (最细颗粒度下钻)
