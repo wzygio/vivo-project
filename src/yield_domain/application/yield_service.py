@@ -40,7 +40,7 @@ class YieldAnalysisService:
     group_scale: float = 1.0
     code_scale: float = 1.0
     group_ema_span: int = 30
-    code_ema_span: int = 120
+    code_ema_span: int = 30
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
