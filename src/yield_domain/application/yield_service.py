@@ -1,4 +1,5 @@
 import logging
+import hashlib
 import pandas as pd
 import streamlit as st
 from typing import Dict, Any, List, Tuple, Optional
@@ -11,6 +12,10 @@ import io
 from src.shared_kernel.config_model import AppConfig
 from src.yield_domain.infrastructure.repositories.yield_repository import PanelRepository
 from src.yield_domain.application.dtos import YieldQueryConfig
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # --- Core (Processors) ---
 from src.yield_domain.core.mwd_trend_processor import MWDTrendProcessor
@@ -51,18 +56,31 @@ class YieldAnalysisService:
 
     @classmethod
     def get_time_window(cls) -> Tuple[datetime, datetime]:
-        """动态获取当前的时间窗口 (打破'时间化石'魔咒)"""
-        # 如果外部没有人工锁定时间，就实时获取现实世界中的此时此刻
         current_end = cls._custom_end_date or datetime.now()
-        current_start = current_end - relativedelta(months=3)
+        # 1. 往前推3个月
+        three_months_ago = current_end - relativedelta(months=3)
+        # 2. [核心修复]：强制将起始日期对齐到该月的 1 号的 0点0分0秒，确保自然月的完整性
+        current_start = three_months_ago.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
         return current_start, current_end
         
     @staticmethod
+    def compute_snapshot_signature(snapshot_path: Path) -> str:
+        """
+        [企业级缓存签名] 计算本地快照文件的签名，用于 Streamlit 缓存失效感知。
+        当文件被删除、重建或修改时，签名改变，触发 L1 Cache Miss。
+        """
+        if not snapshot_path.exists():
+            return "NOT_EXISTS"
+        stat = snapshot_path.stat()
+        return hashlib.md5(f"{stat.st_mtime}_{stat.st_size}".encode()).hexdigest()[:8]
+
+    @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_raw_panel_details(query_config_json: str, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_raw_panel_details(query_config_json: str, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
         """
         [L1 Cache] 从数据库加载原始 Panel 数据。
-        基于 JSON 序列化的 DTO 进行缓存追踪。
+        基于 JSON 序列化的 DTO + 快照签名进行缓存追踪。
         """
         logging.info("--- [L1 Cache Miss] 加载原始 Panel 数据... ---")
         
@@ -73,14 +91,14 @@ class YieldAnalysisService:
         snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # 3. 实例化 Repo 并透传 DTO
-        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True)
+        # 3. 实例化 Repo 并透传 DTO 与 db_manager（依赖注入）
+        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True, db_manager=_db_manager)
         
         return repo.get_panel_details(query=query)
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_modified_panel_details(config: 'AppConfig', _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_modified_panel_details(config: 'AppConfig', _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
         """
         [L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据
         """
@@ -100,8 +118,8 @@ class YieldAnalysisService:
             target_defect_groups=config.data_source.target_defect_groups
         )
         
-        # 1. 获取 L1 数据 (向下传递严格序列化后的 JSON 字符串)
-        raw_df = YieldAnalysisService.get_raw_panel_details(query.model_dump_json(), _core_revision)
+        # 1. 获取 L1 数据 (向下传递严格序列化后的 JSON 字符串 + 签名)
+        raw_df = YieldAnalysisService.get_raw_panel_details(query.model_dump_json(), _db_manager, snapshot_signature)
         
         if raw_df.empty: 
             return pd.DataFrame()
@@ -131,12 +149,13 @@ class YieldAnalysisService:
     def get_mwd_trend_data(
         config: AppConfig, 
         product_dir: Path, 
-        _core_revision: float = 0.0, 
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
         ema_span: int = group_ema_span, 
         scaling_factor: float = group_scale,
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return None
         
         # [核心修复] 获取目标截止日期，用于数据补齐
@@ -144,7 +163,7 @@ class YieldAnalysisService:
         
         # 1. 强制依赖 Code 级结果作为数据源头
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _core_revision, ema_span, scaling_factor
+            config, product_dir, _db_manager, snapshot_signature, ema_span, scaling_factor
         )
 
         # [Refactor] 传入 config 和 resource_dir 给 Core 层，同时传入目标截止日期
@@ -161,12 +180,13 @@ class YieldAnalysisService:
     def get_code_level_trend_data(
         config: AppConfig, 
         product_dir: Path,
-        _core_revision: float = 0, 
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
         ema_span: int = code_ema_span, 
         scaling_factor: float = code_scale,
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
@@ -194,22 +214,23 @@ class YieldAnalysisService:
     def get_lot_defect_rates(
         config: AppConfig, 
         product_dir: Path,
-        _core_revision: float = 0.0,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
         ema_span: int = code_ema_span,
         scaling_factor: float = code_scale) -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return None
 
         # 1. 独立获取 Array Time (不再依赖 Sheet 结果)
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
+        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config, _db_manager)
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _core_revision, ema_span, scaling_factor
+            config, product_dir, _db_manager, snapshot_signature, ema_span, scaling_factor
         )
         warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
 
@@ -228,19 +249,20 @@ class YieldAnalysisService:
     def get_sheet_defect_rates(
         config: AppConfig, 
         product_dir: Path,
-        _core_revision: float = 0.0) -> Dict[str, Any] | None:
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "") -> Dict[str, Any] | None:
         """[重构] 计算 Sheet 级良率 (听命于 Lot 级数据)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return None
 
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config)
+        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config, _db_manager)
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
-            config, product_dir, _core_revision
+            config, product_dir, _db_manager, snapshot_signature
         )
         if not lot_results: return None
 
@@ -257,9 +279,9 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor: float = group_scale, _core_revision: float = 0.0) -> pd.DataFrame:
+    def get_mapping_data(config: AppConfig, scaling_factor: float = group_scale, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
         """准备 Mapping 数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _core_revision)
+        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return pd.DataFrame()
         return prepare_mapping_data(panel_details_df=panel_df, scaling_factor=scaling_factor)
 
@@ -268,7 +290,7 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def _get_array_times(lot_ids: Tuple[str, ...], config: AppConfig) -> pd.DataFrame:
+    def _get_array_times(lot_ids: Tuple[str, ...], config: AppConfig, _db_manager: Optional['DatabaseManager'] = None) -> pd.DataFrame:
         """独立的 Array Time 查询缓存"""
         if not lot_ids: return pd.DataFrame()
         
@@ -277,7 +299,7 @@ class YieldAnalysisService:
         processing_conf = config.processing
         snapshot_path = Path(processing_conf.get('snapshot_path', 'dummy.parquet'))
         
-        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=False)
+        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=False, db_manager=_db_manager)
         
         # 从 config 获取自定义时间
         input_time_conf = processing_conf.get('array_input_time', {})
@@ -388,7 +410,7 @@ class YieldAnalysisService:
             return {}
         
     @staticmethod
-    def safe_refresh_snapshots(query_config_json: str) -> bool:
+    def safe_refresh_snapshots(_db_manager: Optional['DatabaseManager'], query_config_json: str) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写。
         """
@@ -401,7 +423,7 @@ class YieldAnalysisService:
             snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             
-            repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True)
+            repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True, db_manager=_db_manager)
             
             logging.info(f"🔄 [YieldService] 向底层下发 {query.product_code} 强刷指令 (Force Refresh)...")
             

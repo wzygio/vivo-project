@@ -18,11 +18,9 @@ class PanelRepository:
     2. 增量更新 (只查最近 3 天)
     3. 滚动窗口 (自动裁剪过期数据)
     """
-    
-    # [还原] 缓存有效期：12小时
-    SNAPSHOT_TTL_HOURS = 12
-    # [新增] 增量缓冲：3天
-    INCREMENTAL_BUFFER_DAYS = 3 
+
+    SNAPSHOT_TTL_HOURS = 8 # 缓存有效期
+    INCREMENTAL_BUFFER_DAYS = 2 # 增量缓冲
 
     def __init__(
         self, 
@@ -46,11 +44,12 @@ class PanelRepository:
         req_start_dt = datetime.strptime(query.start_date, "%Y-%m-%d")
         req_end_dt = datetime.strptime(query.end_date, "%Y-%m-%d")
 
+        # --- Phase 0: 初始化flag ---
         df_cache = pd.DataFrame()
-        cache_exists = False
-        is_cache_fresh = False  
+        cache_exists, is_cache_fresh = False, False
+        time_col = 'warehousing_time'
 
-        # --- Phase 1: 加载缓存 & 检查 TTL (注入强刷拦截) ---
+        # --- Phase 1: 缓存检查 ---
         if self.use_snapshot and self.snapshot_path.exists():
             try:
                 stat = self.snapshot_path.stat()
@@ -58,20 +57,21 @@ class PanelRepository:
                 age_hours = (datetime.now() - mtime).total_seconds() / 3600
 
                 df_cache = pd.read_parquet(self.snapshot_path)
-                if not df_cache.empty and 'warehousing_time' in df_cache.columns:
-                    df_cache['warehousing_time'] = pd.to_datetime(df_cache['warehousing_time'])
+                
+
+                if not df_cache.empty and time_col in df_cache.columns:
+                    df_cache[time_col] = pd.to_datetime(df_cache[time_col])
                     cache_exists = True
 
-                    # [核心升级] 拦截强刷指令
                     if force_refresh:
-                        logging.info("⚡ [YieldRepo] 收到强刷指令，强制标记快照为过期，准备安全覆写！")
+                        logging.info("⚡ [YieldRepo] 收到强刷指令，强制标记快照为过期   ，准备安全覆写！")
                         is_cache_fresh = False
                     else:
+                        max_cached_date = df_cache[time_col].max()
+                        real_target_dt = min(req_end_dt, datetime.now()) # 修复1: 修正未来日期的越界比较
+
                         if age_hours < self.SNAPSHOT_TTL_HOURS:
-                            max_cached_date = df_cache['warehousing_time'].max()
-                            # [核心修复] 使用日期部分比较，避免时间精度问题
-                            # 如果缓存的最新日期 >= 请求的结束日期，则缓存有效
-                            if max_cached_date.date() >= req_end_dt.date():
+                            if max_cached_date.date() >= real_target_dt.date():
                                 is_cache_fresh = True
                                 logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h, 最新数据日期: {max_cached_date.date()} >= 请求截止日期: {req_end_dt.date()})。")
                             else:
@@ -82,7 +82,7 @@ class PanelRepository:
                 logging.warning(f"⚠️ 缓存读取失败: {e}")
                 cache_exists = False
 
-        # --- Phase 2: 决策逻辑与数据库容灾降级 ---
+        # --- Phase 2: 数据刷新 ---
         df_final = pd.DataFrame()
         need_save = False
 
@@ -92,14 +92,13 @@ class PanelRepository:
         elif cache_exists and not df_cache.empty:
             # === 增量更新模式 ===
             logging.info("🔄 [YieldRepo] 执行增量更新 (Safe Overwrite)...")
-            max_cached_date = df_cache['warehousing_time'].max()
+            max_cached_date = df_cache[time_col].max()
             delta_start_dt = max_cached_date - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
             
             # [核心修复] 使用日期部分比较，确保当天数据也能被增量拉取
             if delta_start_dt.date() <= req_end_dt.date():
                 delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
-                # 增量查询的结束日期需要包含请求的结束日期（即当天）
-                # 使用原始 query.end_date，因为它已经格式化为 YYYY-MM-DD
+                # 增量查询的结束日期需要包含请求的结束日期（即当天）；使用原始 query.end_date，因为它已经格式化为 YYYY-MM-DD
                 try:
                     df_delta = self._fetch_from_db_in_chunks(
                         delta_s_str, query.end_date, 
@@ -107,7 +106,7 @@ class PanelRepository:
                     )
                     
                     if not df_delta.empty:
-                        df_delta['warehousing_time'] = pd.to_datetime(df_delta['warehousing_time'])
+                        df_delta[time_col] = pd.to_datetime(df_delta[time_col])
                         logging.info(f"   >> 合并: 缓存({len(df_cache)}) + 增量({len(df_delta)})")
                         df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
                         
@@ -136,7 +135,7 @@ class PanelRepository:
                     query.product_code, query.work_order_types, query.target_defect_groups
                 )
                 if not df_final.empty:
-                    df_final['warehousing_time'] = pd.to_datetime(df_final['warehousing_time'])
+                    df_final[time_col] = pd.to_datetime(df_final[time_col])
                     need_save = True
                 elif cache_exists and not df_cache.empty:
                     # [容灾防线 2] 数据库假死返回空，无损回退
@@ -151,21 +150,18 @@ class PanelRepository:
 
         # --- Phase 3: 全局安全去重、滚动裁剪 & 持久化 ---
         if not df_final.empty:
-            # ====================================================================
-            # ✅ [核心新增：业务级全局去重]
             # 1. 按照入库时间升序排列，确保同一 panel_id 的最新状态在 DataFrame 末尾
-            df_final = df_final.sort_values(by='warehousing_time', ascending=True)
+            df_final = df_final.sort_values(by=time_col, ascending=True)
             
             # 2. 安全去重 (保留最新状态，并且绝不吞掉同一片玻璃上的多个不良)
             if 'defect_desc' in df_final.columns:
                 df_final = df_final.drop_duplicates(subset=['panel_id', 'defect_desc'], keep='last')
             else:
                 df_final = df_final.drop_duplicates(subset=['panel_id'], keep='last')
-            # ====================================================================
             
             # 持久化逻辑：仅当发生了数据库查询(need_save)时才写入磁盘
             if need_save and self.use_snapshot:
-                df_to_save = df_final[df_final['warehousing_time'] >= req_start_dt]
+                df_to_save = df_final[df_final[time_col] >= req_start_dt]
                 
                 try:
                     self.snapshot_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,8 +173,8 @@ class PanelRepository:
                 df_final = df_to_save
 
             # 最后的防御性过滤：确保返回给业务层的数据严格符合请求范围
-            mask = (df_final['warehousing_time'] >= req_start_dt) & \
-                   (df_final['warehousing_time'] <= req_end_dt)
+            mask = (df_final[time_col] >= req_start_dt) & \
+                   (df_final[time_col] <= req_end_dt)
             df_final = df_final[mask].copy()
             
             # [核心修复] 对缓存命中的数据进行 Group 过滤（缓存可能包含全量 Group）

@@ -2,6 +2,7 @@
 # 🛠️ Action: 全文件替换 (修复 Pydantic 赋值 Bug 与 ALL 扫描逻辑)
 
 import logging
+import hashlib
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -48,7 +49,10 @@ class SpcAnalysisService:
     @classmethod
     def get_time_window(cls) -> Tuple[datetime, datetime]:
         current_end = cls._custom_end_date or datetime.now()
-        current_start = current_end - relativedelta(months=3)
+        # 1. 往前推3个月
+        three_months_ago = current_end - relativedelta(months=3)
+        # 2. [核心修复]：强制将起始日期对齐到该月的 1 号的 0点0分0秒，确保自然月的完整性
+        current_start = three_months_ago.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return current_start, current_end
 
     @staticmethod
@@ -166,13 +170,37 @@ class SpcAnalysisService:
     # [架构亮点] 去掉了下划线前缀，确保能被前端的 extract_cached_funcs 工具自动抓取清空
     # =========================================================================
     @staticmethod
+    def compute_snapshot_signature(data_root: Path, target_prod: str) -> str:
+        """
+        [企业级缓存签名] 计算 SPC 快照目录的聚合签名。
+        当任意产品的快照被删除、重建或修改时，签名改变，触发 L1 Cache Miss。
+        """
+        hash_md5 = hashlib.md5()
+        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
+        
+        if target_prod.upper() == "ALL":
+            if not data_root.exists():
+                return "NOT_EXISTS"
+            dirs = [d for d in data_root.iterdir() if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs]
+        else:
+            dirs = [data_root / target_prod]
+        
+        for d in sorted(dirs, key=lambda x: x.name):
+            for f in sorted(d.glob("*.parquet"), key=lambda x: x.name):
+                stat = f.stat()
+                hash_md5.update(f"{f.name}_{stat.st_mtime}_{stat.st_size}".encode())
+        
+        return hash_md5.hexdigest()[:8]
+
+    @staticmethod
     @st.cache_data(show_spinner=False, ttl=3600)
     def fetch_dashboard_data_dict(
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
         time_type: str = 'MIXED',
         force_compliant: bool = False,
-        data_type_filter: str = 'SPC'
+        data_type_filter: str = 'SPC',
+        snapshot_signature: str = ""
     ) -> dict:
         """
         [内部缓存层] 负责所有重负载的查询与计算，返回原生字典以完美规避 Pickle 序列化陷阱。
@@ -304,7 +332,8 @@ class SpcAnalysisService:
         query_config_json: str, 
         time_type: str = 'MIXED',
         force_compliant: bool = False,
-        data_type_filter: str = 'SPC'
+        data_type_filter: str = 'SPC',
+        snapshot_signature: str = ""
     ) -> SpcDashboardViewModel:
         """
         [企业级标准接口] 实时从底层缓存引擎拉取字典，安全组装为 SpcDashboardViewModel 对象。
@@ -315,7 +344,8 @@ class SpcAnalysisService:
             query_config_json, 
             time_type, 
             force_compliant, 
-            data_type_filter
+            data_type_filter,
+            snapshot_signature
         )
         
         # 2. 实时实例化数据类，彻底消灭热重载时的序列化报错！

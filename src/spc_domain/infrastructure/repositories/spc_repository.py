@@ -24,7 +24,7 @@ class SpcRepository:
     [仓储层] SPC 数据仓储引擎
     职责：拦截DB直连，维护 Parquet 快照，处理增量更新。
     """
-    SNAPSHOT_TTL_HOURS = 12 
+    SNAPSHOT_TTL_HOURS = 8 
     INCREMENTAL_BUFFER_DAYS = 2 
 
     def __init__(self, snapshot_dir: Path, use_snapshot: bool = True, db_manager: Optional['DatabaseManager'] = None):
@@ -158,10 +158,12 @@ class SpcRepository:
         req_end_dt = datetime.strptime(config.end_date, "%Y-%m-%d")
         req_start_dt = req_end_dt - relativedelta(months=3) 
         actual_start_str = req_start_dt.strftime("%Y-%m-%d")
-
         snapshot_path = self.snapshot_dir / f"spc_snapshot_{config.prod_code}.parquet"
+
+
         df_cache = pd.DataFrame()
         cache_exists, is_cache_fresh = False, False
+        time_col = 'sheet_start_time'
 
         # --- Phase 1: 加载快照与指令拦截 ---
         if self.use_snapshot and snapshot_path.exists():
@@ -170,8 +172,8 @@ class SpcRepository:
                 age_hours = (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).total_seconds() / 3600
                 
                 df_cache = pd.read_parquet(snapshot_path)
-                if not df_cache.empty and 'sheet_start_time' in df_cache.columns:
-                    df_cache['sheet_start_time'] = pd.to_datetime(df_cache['sheet_start_time'])
+                if not df_cache.empty and time_col in df_cache.columns:
+                    df_cache[time_col] = pd.to_datetime(df_cache[time_col])
                     cache_exists = True
                     
                     # ==============================================================
@@ -185,7 +187,7 @@ class SpcRepository:
                         is_cache_fresh = False
                     else:
                         if age_hours < self.SNAPSHOT_TTL_HOURS:
-                            if df_cache['sheet_start_time'].max() >= req_end_dt:
+                            if df_cache[time_col].max() >= req_end_dt:
                                 is_cache_fresh = True
             except Exception as e:
                 logging.warning(f"⚠️ 读取 SPC 快照失败: {e}")
@@ -200,15 +202,15 @@ class SpcRepository:
             df_final = df_cache
         elif cache_exists and not df_cache.empty:
             logging.info("🔄 [SpcRepo] 执行增量更新 (Safe Overwrite 模式)...")
-            delta_start_dt = df_cache['sheet_start_time'].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
+            delta_start_dt = df_cache[time_col].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
             
             if delta_start_dt < req_end_dt:
                 try:
                     df_delta = load_spc_measurements(self.db, delta_start_dt.strftime("%Y-%m-%d"), config.end_date, config.prod_code)
                     if not df_delta.empty:
-                        df_delta['sheet_start_time'] = pd.to_datetime(df_delta['sheet_start_time'])
+                        df_delta[time_col] = pd.to_datetime(df_delta[time_col])
                         df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
-                        df_combined = df_combined.sort_values(by='sheet_start_time', ascending=True)
+                        df_combined = df_combined.sort_values(by=time_col, ascending=True)
                         df_combined.drop_duplicates(
                             subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
                         df_final = df_combined
@@ -226,7 +228,7 @@ class SpcRepository:
             try:
                 df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
                 if not df_final.empty:
-                    df_final['sheet_start_time'] = pd.to_datetime(df_final['sheet_start_time'])
+                    df_final[time_col] = pd.to_datetime(df_final[time_col])
                     df_final.drop_duplicates(
                         subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
                     need_save = True
@@ -245,7 +247,7 @@ class SpcRepository:
         if not df_final.empty:
             if need_save and self.use_snapshot:
                 # 滚动抛弃：只保留 req_start_dt 之后的三个月数据写入硬盘（⚠️ 此处写入的是不挑参数的全量数据！）
-                df_to_save = df_final[df_final['sheet_start_time'] >= req_start_dt]
+                df_to_save = df_final[df_final[time_col] >= req_start_dt]
                 try:
                     self.snapshot_dir.mkdir(parents=True, exist_ok=True)
                     df_to_save.to_parquet(snapshot_path, index=False)
@@ -255,7 +257,7 @@ class SpcRepository:
                     logging.error(f"❌ 快照覆写保存失败: {e}")
                 df_final = df_to_save
 
-            mask_time = (df_final['sheet_start_time'] >= req_start_dt) & (df_final['sheet_start_time'] <= req_end_dt)
+            mask_time = (df_final[time_col] >= req_start_dt) & (df_final[time_col] <= req_end_dt)
             # 引入 copy() 防止后续赋值触发 Pandas 的 SettingWithCopyWarning
             df_filtered = df_final[mask_time].copy() 
 
