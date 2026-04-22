@@ -7,6 +7,7 @@ from pathlib import Path
 #  配置与初始化
 # ==============================================================================
 from app.utils.session_manager import SessionManager
+from app.utils.app_setup import AppSetup
 from src.shared_kernel.config import ConfigLoader
 from app.components.components import (
     render_page_header, 
@@ -34,6 +35,7 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 setup_hot_reload(enable=True)
+AppSetup.initialize_app()
 
 # [权限控制] 检测 URL 参数，仅用于控制修饰器面板显示
 query_params = st.query_params
@@ -47,6 +49,14 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
     try:
         # A. 实例化数据库管理器
         db_manager = DatabaseManager() 
+        
+        # [核心修复] 计算 SPC 快照聚合签名，实现文件签名感知的缓存失效
+        # 使用 session_state 固定签名，防止 Service 写入快照后 mtime 变化导致 cache miss
+        data_root = Path("data")
+        spc_sig_session_key = "spc_snapshot_sig_ALL"
+        if spc_sig_session_key not in st.session_state:
+            st.session_state[spc_sig_session_key] = SpcAnalysisService.compute_snapshot_signature(data_root, "ALL")
+        spc_snapshot_sig = st.session_state[spc_sig_session_key]
         
         # C. 获取后端统一定义的时间窗口
         start_dt, end_dt = SpcAnalysisService.get_time_window()
@@ -72,7 +82,11 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
         )
     except Exception as e:
         # 如果依然报错，此处会打印出最真实的错误堆栈
+        import logging, traceback
+        logging.error(f"❌ 调用后端 SPC Service 失败: {e}", exc_info=True)
         st.error(f"❌ 调用后端 SPC Service 失败: {str(e)}")
+        with st.expander("查看详细错误堆栈"):
+            st.code(traceback.format_exc())
         st.stop()
 
 with st.expander("数据刷新"):

@@ -2,9 +2,11 @@
 import streamlit as st
 
 # --- 1. 初始化与配置 ---
+from pathlib import Path
+
 from app.utils.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
-from app.utils.reloader import get_project_revision
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 from yield_domain.application.yield_service import YieldAnalysisService
 from app.components.components import render_page_header
@@ -27,11 +29,16 @@ product_dir = SessionManager.get_product_dir()
 render_page_header("📋 入库不良率ByLot明细表", active_config)
 
 # --- 3. 加载数据 ---
-core_rev = get_project_revision(project_root)
+# [核心修复] 依赖注入 db_manager + 快照签名感知缓存
+db_manager = DatabaseManager()
+snapshot_path = Path("data") / active_config.data_source.product_code / f"yield_snapshot_{active_config.data_source.product_code}.parquet"
+snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
+
 all_data = YieldAnalysisService.get_lot_defect_rates(
     config=active_config,
     product_dir=product_dir,
-    _core_revision=core_rev
+    _db_manager=db_manager,
+    snapshot_signature=snapshot_sig
 )
 
 # --- 4. 页面积木式调度 ---

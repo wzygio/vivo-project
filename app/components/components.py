@@ -199,10 +199,17 @@ def render_page_header(
             for func in cached_funcs:
                 if hasattr(func, "clear"):
                     func.clear()
-            st.toast("🧹 内存缓存已清除", icon="✅")
         else:
             st.cache_data.clear()
             st.cache_resource.clear()
+        
+        # [核心修复] 同步清理前端 session_state 中的数据视图缓存
+        # 防止 @st.cache_data 被清除后，session_state 仍然拦截重新执行，导致旧数据死灰复燃
+        for key in list(st.session_state.keys()):
+            if "view_model" in key:
+                del st.session_state[key]
+        
+        st.toast("🧹 内存缓存已清除", icon="✅")
 
     # --- 渲染控制栏 (UI 保持不变) ---
     with st.container(border=True):

@@ -76,10 +76,14 @@ yield_query_config = YieldQueryConfig(
 db_manager = DatabaseManager()
 
 snapshot_path = Path("data") / current_product / f"yield_snapshot_{current_product}.parquet"
-snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
 
-# [核心修复] 复合缓存 Key：代码版本 + 快照签名
-# 任一维度变化都会触发 Streamlit Cache Miss，从而重新进入 Repository 的全量刷新逻辑
+# [核心修复] 使用 session_state 固定签名，防止 Service 写入快照后 mtime 变化导致 cache miss
+# 签名只在浏览器刷新（新 Session）时重新计算，st.rerun() 期间保持稳定
+sig_session_key = f"yield_snapshot_sig_{current_product}"
+if sig_session_key not in st.session_state:
+    st.session_state[sig_session_key] = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
+snapshot_sig = st.session_state[sig_session_key]
+
 composite_key = f"{get_project_revision(project_root)}:{snapshot_sig}"
 
 # 3. 利用闭包，安全地将带有参数的函数传给 Header
