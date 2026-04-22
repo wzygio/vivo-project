@@ -50,7 +50,7 @@ class SpcAnalysisService:
     def get_time_window(cls) -> Tuple[datetime, datetime]:
         current_end = cls._custom_end_date or datetime.now()
         # 1. 往前推3个月
-        three_months_ago = current_end - relativedelta(months=3)
+        three_months_ago = current_end - relativedelta(months=2)
         # 2. [核心修复]：强制将起始日期对齐到该月的 1 号的 0点0分0秒，确保自然月的完整性
         current_start = three_months_ago.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         return current_start, current_end
@@ -268,6 +268,20 @@ class SpcAnalysisService:
         # 🚨 [关键探针 A] 记录原始物理报警数
         ooc_count_raw = raw_status_df[raw_status_df['is_ooc'] == 1].shape[0] if 'is_ooc' in raw_status_df.columns else 0
         logging.info(f"📊 [Service] 原始物理 OOC 总数: {ooc_count_raw}")
+
+        # =========================================================================
+        # 🛡️ [核心修复] 对齐站点维度数据边界到近 3 个自然月，与趋势图保持一致
+        # 趋势图通过 _apply_time_bucket_mapping 只保留 end_dt、end_dt-1月、end_dt-2月 的数据
+        # 此处对 raw_status_df 做同样的前置过滤，避免上上个月尾气的残余数据进入 station_detail_df
+        # =========================================================================
+        if 'sheet_start_time' in raw_status_df.columns:
+            raw_status_df['sheet_start_time'] = pd.to_datetime(raw_status_df['sheet_start_time'], errors='coerce')
+            three_month_start = (end_dt - relativedelta(months=2)).replace(day=1)
+            mask = raw_status_df['sheet_start_time'] >= three_month_start
+            trimmed_count = (~mask).sum()
+            if trimmed_count > 0:
+                logging.info(f"🛡️ [Service] 站点聚合前置过滤：剔除 {trimmed_count} 条上上个月尾气数据 (<{three_month_start.date()})")
+            raw_status_df = raw_status_df[mask].copy()
 
         # =========================================================================
         # 🛑 [核心修复 1]：在“三倍扩充”之前，先进行站点聚合！

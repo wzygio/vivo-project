@@ -190,4 +190,4 @@ with st.expander(f"{filter_state.data_type_filter}——By月周天", expanded=T
 
 with st.expander(f"{filter_state.data_type_filter}——By站点", expanded=True):
     # 7. 组装积木: 渲染明细透视表 (最细颗粒度下钻)
-    render_station_top10_section(filtered_station_df)
+    render_station_top10_section(filtered_station_df, filter_state.data_type_filter, is_admin)
