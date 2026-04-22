@@ -16,7 +16,7 @@ from shared_kernel.infrastructure.db_handler import DatabaseManager
 class SpcFilterState(BaseModel):
     selected_products: list[str] = Field(default_factory=list)
     selected_factories: list[str] = Field(default_factory=list)
-    data_type_filter: str = Field(default='SPC', description="监控类型: SPC, CTQ, AOI, ALL")
+    data_type_filter: str = Field(default='SPC', description="监控类型: SPC, CTQ, AOI, 报废, ALL")
 
 # --------------------------------------------------------------------------
 # UI 渲染区块
@@ -30,12 +30,12 @@ def render_spc_control_panel(available_products: list[str], available_factories:
     col1, col2, col3 = st.columns(3)
     with col1:
         # [修改] 将基准日期替换为监控类型筛选
-        data_type_options = ['SPC', 'CTQ', 'AOI', 'ALL']
+        data_type_options = ['SPC', 'CTQ', 'AOI', '报废', 'ALL']
         data_type = st.selectbox(
             "监控类型", 
             options=data_type_options, 
             index=0,  # 默认选中 SPC
-            help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), ALL(全部)"
+            help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), 报废(报废数据), ALL(全部)"
         )
     with col2:
         prods = st.multiselect("产品型号", options=available_products, default=available_products)
@@ -55,7 +55,8 @@ def render_spc_summary_chart(summary_df: pd.DataFrame, data_type_filter: str = '
         st.warning("暂无全局汇总数据")
         return
     # [修改] 标题根据监控类型动态显示
-    st.markdown(f"#### 📊 {data_type_filter}报警率汇总图")
+    chart_title = f"{data_type_filter}报废率汇总图" if data_type_filter == '报废' else f"{data_type_filter}报警率汇总图"
+    st.markdown(f"#### 📊 {chart_title}")
     
     # [核心修复]: 避开 Categorical 类型强校验引发的 fillna 崩溃
     plot_df = summary_df.copy()
@@ -100,7 +101,10 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
 
     # [企业级优化] 根据数据类型动态调整比率行
     is_aoi = data_type_filter == 'AOI'
-    if is_aoi:
+    is_scrap = data_type_filter == '报废'
+    if is_scrap:
+        rate_rows = ['OOC']
+    elif is_aoi:
         rate_rows = ['OOS', 'OOC']
     else:
         rate_rows = ['OOS', 'SOOS', 'OOC']
@@ -109,6 +113,13 @@ def render_spc_summary_table(summary_df: pd.DataFrame, data_type_filter: str = '
         view_df.loc[row_idx] = view_df.loc[row_idx].apply(lambda x: safe_format(x, is_rate))
     
     view_df = view_df.reset_index().rename(columns={'index': '报警类型'})
+    
+    # [报废类型] 前端文案替换：OOC → 报废
+    if is_scrap:
+        view_df['报警类型'] = view_df['报警类型'].replace({
+            'OOC片数': '报废片数',
+            'OOC': '报废率'
+        })
 
     gb = GridOptionsBuilder.from_dataframe(view_df)
     # 开启单选模式，支持再次点击取消选中
@@ -178,9 +189,13 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
     view_df = filtered_df.copy()
     
     # [企业级优化] 根据数据类型动态调整显示的列
-    # AOI 场景不包含 SOOS 相关列
+    # AOI 场景不包含 SOOS 相关列；报废场景只保留 OOC（伪装）
     is_aoi = filter_state.data_type_filter == 'AOI'
-    if is_aoi:
+    is_scrap = filter_state.data_type_filter == '报废'
+    if is_scrap:
+        rate_cols = ['OOC']
+        ordered_metrics = ['抽检数', 'OOC片数', 'OOC']
+    elif is_aoi:
         rate_cols = ['OOS', 'OOC']
         ordered_metrics = ['抽检数', 'OOS片数', 'OOC片数', 'OOS', 'OOC']
     else:
@@ -202,9 +217,17 @@ def render_spc_detail_section(detail_df: pd.DataFrame, filter_state: SpcFilterSt
     stacked_df = stacked_df.reindex(ordered_metrics, level='报警类型')
 
     flat_df = stacked_df.reset_index()
+    
+    # [报废类型] 前端文案替换
+    if is_scrap:
+        flat_df['报警类型'] = flat_df['报警类型'].replace({
+            'OOC片数': '报废片数',
+            'OOC': '报废率'
+        })
+    
     time_cols = [col for col in flat_df.columns if col not in ['品名', '工厂', '报警类型']]
     
-    is_rate_row = flat_df['报警类型'].isin(rate_cols)
+    is_rate_row = flat_df['报警类型'].isin(rate_cols) if not is_scrap else flat_df['报警类型'] == '报废率'
     for col in time_cols:
         flat_df.loc[is_rate_row, col] = flat_df.loc[is_rate_row, col].fillna("0.00%")
         flat_df.loc[~is_rate_row, col] = flat_df.loc[~is_rate_row, col].fillna("0")
@@ -438,8 +461,13 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
         st.success("🎉 当前监控下无任何超规报警站点！")
         return
 
-    base_cols = ['OOS', 'SOOS', 'OOC']
-    actual_count_cols = [f"{c}片数" for c in base_cols if f"{c}片数" in filtered_station_df.columns]
+    is_scrap = data_type_filter == '报废'
+    if is_scrap:
+        base_cols = ['OOC']
+        actual_count_cols = [f"{c}片数" for c in base_cols if f"{c}片数" in filtered_station_df.columns]
+    else:
+        base_cols = ['OOS', 'SOOS', 'OOC']
+        actual_count_cols = [f"{c}片数" for c in base_cols if f"{c}片数" in filtered_station_df.columns]
     
     if not actual_count_cols:
          st.success("🎉 当前监控下，无有效的报警数据列！")
@@ -473,20 +501,20 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
     
     option = {
         "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
-        "legend": {"data": ["OOC片数", "SOOS片数", "OOS片数"], "bottom": 0},
+        "legend": {"data": ["报废片数"] if is_scrap else ["OOC片数", "SOOS片数", "OOS片数"], "bottom": 0},
         "grid": {"left": "3%", "right": "3%", "bottom": "15%", "containLabel": True},
         "xAxis": {
             "type": "category",
             "data": x_data,
             "axisLabel": {"interval": 0, "fontWeight": "bold"}
         },
-        "yAxis": {"type": "value", "name": "报警总片数"},
+        "yAxis": {"type": "value", "name": "报废总片数" if is_scrap else "报警总片数"},
         "series": []
     }
 
     if 'OOC片数' in actual_count_cols:
         option["series"].append({
-            "name": "OOC片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
+            "name": "报废片数" if is_scrap else "OOC片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
             "itemStyle": {"color": "#F9D976"},
             "data": chart_df['OOC片数'].tolist()
         })
@@ -533,6 +561,13 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
         
     sum_view = sum_view.set_index('step_id')[ordered_metrics]
     view_df = sum_view.T.reset_index().rename(columns={'index': '统计维度'})
+    
+    # [报废类型] 前端文案替换
+    if is_scrap:
+        view_df['统计维度'] = view_df['统计维度'].replace({
+            'OOC片数': '报废片数',
+            'OOC占比': '报废率'
+        })
     
     gb_sum = GridOptionsBuilder.from_dataframe(view_df)
     gb_sum.configure_selection(selection_mode="single", use_checkbox=False)
@@ -596,10 +631,18 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
     stacked_df = stacked_df.reindex(ordered_metrics_det, level='报警类型')
     
     flat_df = stacked_df.reset_index()
+    
+    # [报废类型] 前端文案替换
+    if is_scrap:
+        flat_df['报警类型'] = flat_df['报警类型'].replace({
+            'OOC片数': '报废片数',
+            'OOC占比': '报废率'
+        })
+    
     available_stations = [s for s in top10_stations_list if s in flat_df.columns]
     
     for col in available_stations:
-        is_ratio = flat_df['报警类型'].str.contains('占比')
+        is_ratio = flat_df['报警类型'].str.contains('占比') if not is_scrap else flat_df['报警类型'] == '报废率'
         flat_df[col] = np.where(
             is_ratio,
             (flat_df[col].fillna(0).astype(float) * 100).map("{:.2f}%".format),
@@ -657,7 +700,8 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
         if "报警类型" in row_data:
             defect = row_data.get("报警类型")
             # 支持下钻的报警类型：片数行、占比行、或纯比率行
-            if '片数' in defect or '占比' in defect or defect in ['OOS', 'SOOS', 'OOC']: # type: ignore
+            drillable_types = ['OOS', 'SOOS', 'OOC', '报废率'] if is_scrap else ['OOS', 'SOOS', 'OOC']
+            if '片数' in defect or '占比' in defect or defect in drillable_types: # type: ignore
                 prod = row_data.get("品名", "ALL")
                 core_defect = defect.replace("片数", "").replace("占比", "").strip()
                 

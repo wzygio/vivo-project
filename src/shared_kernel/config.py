@@ -145,3 +145,23 @@ class ConfigLoader:
             logging.error(f"❌ 读取 compliance_config.yaml 失败: {e}")
             
         return {"default": False, "rules": {}}
+
+    @classmethod
+    def get_scrap_factory_mapping(cls) -> dict:
+        """
+        [新增] 获取报废站点 → 厂别映射配置
+        """
+        root_dir = cls.get_project_root()
+        yaml_path = root_dir / "config" / "scrap_factory_mapping.yaml"
+        
+        try:
+            if yaml_path.exists():
+                result = cls._load_yaml(yaml_path)
+                # 防御：确保 mappings 不为 None（YAML 空节点解析为 None）
+                if result.get('mappings') is None:
+                    result['mappings'] = {}
+                return result
+        except Exception as e:
+            logging.error(f"❌ 读取 scrap_factory_mapping.yaml 失败: {e}")
+            
+        return {"default_prefix_rules": {}, "mappings": {}}
