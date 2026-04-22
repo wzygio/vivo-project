@@ -192,6 +192,9 @@ def render_page_header(
             logging.info("🔄 [UI] 单页数据刷新完毕")
         else:
             st.cache_data.clear()
+        
+        # [核心修复] 强制页面重新加载，确保用户立即看到刷新后的数据
+        st.rerun()
 
     # [保留] 精准清除内存回调 (纯清内存，不动硬盘)
     def _hard_reset_callback():
@@ -210,6 +213,7 @@ def render_page_header(
                 del st.session_state[key]
         
         st.toast("🧹 内存缓存已清除", icon="✅")
+        st.rerun()
 
     # --- 渲染控制栏 (UI 保持不变) ---
     with st.container(border=True):

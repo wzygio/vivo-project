@@ -64,7 +64,8 @@ class PanelRepository:
                     cache_exists = True
 
                     if force_refresh:
-                        logging.info("⚡ [YieldRepo] 收到强刷指令，强制标记快照为过期   ，准备安全覆写！")
+                        logging.info("⚡ [YieldRepo] 收到强刷指令，忽略缓存，执行全量刷新！")
+                        cache_exists = False  # [核心修复] 强制视为无缓存，走全量刷新而非增量更新
                         is_cache_fresh = False
                     else:
                         max_cached_date = df_cache[time_col].max()

@@ -424,13 +424,15 @@ def filter_and_rollup_spc_data(
 # =========================================================================
 # 🏆 Top 10 异常站点分析模块 (Top 10 Station Section)
 # =========================================================================
-def render_station_top10_section(filtered_station_df: pd.DataFrame):
+def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_filter: str = 'SPC', is_admin: bool = False):
     """渲染 Top 10 异常站点图表、汇总(转置)与明细表(产品折叠)"""
     
     if 'ag_top10_sum_key' not in st.session_state: 
         st.session_state.ag_top10_sum_key = 0
     if 'ag_top10_det_key' not in st.session_state: 
         st.session_state.ag_top10_det_key = 0
+    if 'spc_station_top10_lock' not in st.session_state:
+        st.session_state.spc_station_top10_lock = None
 
     if filtered_station_df.empty:
         st.success("🎉 当前监控下无任何超规报警站点！")
@@ -611,6 +613,12 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
     gb_det.configure_column("品名", rowGroup=True, hide=True)
     gb_det.configure_column("报警类型", pinned="left", width=95, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
     
+    # [核心修改] 为站点列添加下钻样式（蓝色下划线 + 手型光标）
+    for col in available_stations:
+        gb_det.configure_column(col, cellStyle={
+            'color': '#1e88e5', 'cursor': 'pointer', 'textDecoration': 'underline'
+        })
+    
     grid_options_det = gb_det.build()
     grid_options_det['groupDefaultExpanded'] = -1 
     grid_options_det['autoGroupColumnDef'] = {
@@ -629,7 +637,7 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
     }
     """)
     
-    AgGrid(
+    grid_response = AgGrid(
         flat_df,
         gridOptions=grid_options_det,
         enable_enterprise_modules=True,
@@ -639,3 +647,28 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame):
         allow_unsafe_jscode=True,
         key=f"ag_top10_detail_{st.session_state.ag_top10_det_key}"
     )
+    
+    # =========================================================================
+    # [核心新增] Top 10 站点明细表下钻逻辑
+    # =========================================================================
+    selected_rows = grid_response.get("selected_rows")
+    if selected_rows is not None and len(selected_rows) > 0:
+        row_data = selected_rows.iloc[0].to_dict() if isinstance(selected_rows, pd.DataFrame) else selected_rows[0]
+        if "报警类型" in row_data:
+            defect = row_data.get("报警类型")
+            # 支持下钻的报警类型：片数行、占比行、或纯比率行
+            if '片数' in defect or '占比' in defect or defect in ['OOS', 'SOOS', 'OOC']: # type: ignore
+                prod = row_data.get("品名", "ALL")
+                core_defect = defect.replace("片数", "").replace("占比", "").strip()
+                
+                current_lock = f"{prod}_{core_defect}"
+                
+                # 🛑 [核心修改]: 在弹出弹窗前，判断是否为管理员
+                if is_admin:
+                    if st.session_state.spc_station_top10_lock != current_lock:
+                        st.session_state.spc_station_top10_lock = current_lock
+                        show_drilldown_modal(prod, "ALL", core_defect, available_stations, data_type_filter, source="station_top10")
+                else:
+                    st.session_state.spc_station_top10_lock = None
+    else:
+        st.session_state.spc_station_top10_lock = None
