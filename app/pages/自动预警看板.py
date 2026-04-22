@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from pathlib import Path
 
 # ==============================================================================
 #  配置与初始化
@@ -66,7 +67,8 @@ with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
             _db_manager=db_manager,
             query_config_json=query_config.model_dump_json(),
             time_type='MIXED',
-            data_type_filter='SPC'
+            data_type_filter='SPC',
+            snapshot_signature=spc_snapshot_sig
         )
     except Exception as e:
         # 如果依然报错，此处会打印出最真实的错误堆栈
@@ -145,7 +147,8 @@ if session_key not in st.session_state:
             query_config_json=query_config_typed.model_dump_json(),
             time_type='MIXED',
             force_compliant=any_compliant_enabled,  # [核心修复] 传递修饰器配置
-            data_type_filter=filter_state.data_type_filter
+            data_type_filter=filter_state.data_type_filter,
+            snapshot_signature=spc_snapshot_sig
         )
         st.session_state[session_key] = view_model
         # 清理其他类型的缓存

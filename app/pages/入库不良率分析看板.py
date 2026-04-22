@@ -14,6 +14,8 @@ from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
 from yield_domain.application.excel_service import ExcelService
 from yield_domain.application.dtos import YieldQueryConfig
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from pathlib import Path
 
 # 引入图表组件
 from app.components.components import (
@@ -69,9 +71,20 @@ yield_query_config = YieldQueryConfig(
     target_defect_groups=defect_groups
 )
 
+# [核心修复] 初始化数据库连接与快照签名
+# 依赖注入：由 Service 层外部初始化 db_manager，避免 Repository 内部构造失败
+db_manager = DatabaseManager()
+
+snapshot_path = Path("data") / current_product / f"yield_snapshot_{current_product}.parquet"
+snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
+
+# [核心修复] 复合缓存 Key：代码版本 + 快照签名
+# 任一维度变化都会触发 Streamlit Cache Miss，从而重新进入 Repository 的全量刷新逻辑
+composite_key = f"{get_project_revision(project_root)}:{snapshot_sig}"
+
 # 3. 利用闭包，安全地将带有参数的函数传给 Header
 handlers = [
-    lambda: YieldAnalysisService.safe_refresh_snapshots(yield_query_config.model_dump_json())
+    lambda: YieldAnalysisService.safe_refresh_snapshots(db_manager, yield_query_config.model_dump_json())
 ]
 
 # [Refactor] 3. 渲染页头
@@ -93,38 +106,36 @@ ExcelService.inject_excel_overrides_to_config(active_config, product_dir)
 #  数据加载
 # ==============================================================================
 with st.spinner("正在加载全维度分析数据..."):
-    # [Refactor] 4. 获取核心版本号 (依赖注入 project_root)
-    current_revision = get_project_revision(project_root)
-    
-    # 1. 获取当前产品代号
-    current_product = st.session_state.get(SessionManager.KEY_PRODUCT, "Unknown")
-    
-    # 2. 定义默认参数 (兜底)
-
     # [Refactor] 5. 并行加载所有服务数据
+    # [核心修复] 传入 snapshot_signature 与 db_manager，实现文件签名感知的缓存失效
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
         active_config, 
         product_dir, 
-        _core_revision=current_revision
+        _db_manager=db_manager,
+        snapshot_signature=composite_key
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config, 
         product_dir, 
-        _core_revision=current_revision
+        _db_manager=db_manager,
+        snapshot_signature=composite_key
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config, 
         product_dir, 
-        _core_revision=current_revision, 
+        _db_manager=db_manager,
+        snapshot_signature=composite_key, 
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
         active_config, 
         product_dir, 
-        _core_revision=current_revision, 
+        _db_manager=db_manager,
+        snapshot_signature=composite_key, 
     )
     mapping_data = YieldAnalysisService.get_mapping_data(
         active_config, 
-        _core_revision=current_revision
+        _db_manager=db_manager,
+        snapshot_signature=composite_key
     )
     warning_lines = YieldAnalysisService.load_static_warning_lines(
         active_config, product_dir
