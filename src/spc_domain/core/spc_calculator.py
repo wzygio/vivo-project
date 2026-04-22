@@ -53,12 +53,17 @@ def preprocess_sheet_features(
         logging.info(f"[Phase 1.2] 按 Sheet 聚合计算: {group_keys}")
         
         # 执行命名聚合 - 一个 sheet 下所有点位的统计值
-        sheet_features = df_deduplicated.groupby(group_keys, as_index=False).agg(
-            sheet_mean=('param_value', 'mean'),     # 所有点位的均值
-            sheet_max=('param_value', 'max'),       # 所有点位的最大值
-            sheet_min=('param_value', 'min'),       # 所有点位最小值
-            sheet_start_time=('sheet_start_time', 'min')  # 该 sheet 的最早时间
-        ) 
+        agg_spec = {
+            'sheet_mean': ('param_value', 'mean'),     # 所有点位的均值
+            'sheet_max': ('param_value', 'max'),       # 所有点位的最大值
+            'sheet_min': ('param_value', 'min'),       # 所有点位最小值
+            'sheet_start_time': ('sheet_start_time', 'min')  # 该 sheet 的最早时间
+        }
+        # [核心修复] 若数据源携带 data_type，则保留至 Sheet 级特征表，供 sanitize_to_compliant 三维度精准匹配
+        if 'data_type' in df_deduplicated.columns:
+            agg_spec['data_type'] = ('data_type', 'first')
+        
+        sheet_features = df_deduplicated.groupby(group_keys, as_index=False).agg(**agg_spec) 
         
         logging.info(f"特征降维完成，单点数据已压缩为 {len(sheet_features)} 条 Sheet 级特征。")
 

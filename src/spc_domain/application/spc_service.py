@@ -235,6 +235,24 @@ class SpcAnalysisService:
 
             repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
             
+            # =========================================================================
+            # 🆕 [报废数据分支] 当监控类型为"报废"时，跳过数据库查询，直接读取 Excel
+            # =========================================================================
+            if data_type_filter.upper() == '报废':
+                scrap_df = repo.get_scrap_data(prod)
+                if not scrap_df.empty:
+                    # 应用时间窗口过滤
+                    scrap_df['sheet_start_time'] = pd.to_datetime(scrap_df['sheet_start_time'], errors='coerce')
+                    mask = (scrap_df['sheet_start_time'] >= start_dt) & (scrap_df['sheet_start_time'] <= end_dt)
+                    scrap_df = scrap_df[mask].copy()
+                    
+                    if force_compliant:
+                        scrap_df = sanitize_to_compliant(scrap_df, add_tag=True)
+                    
+                    if not scrap_df.empty:
+                        all_status_dfs.append(scrap_df)
+                continue
+            
             current_fetch_config = config_instance.model_copy()
             current_fetch_config.prod_code = prod
             current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")

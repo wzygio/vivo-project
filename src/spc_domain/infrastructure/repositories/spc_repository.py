@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import logging, re
 from pathlib import Path
 from typing import Optional
@@ -401,3 +402,124 @@ class SpcRepository:
         except Exception as e:
             logging.error(f"❌ [SpcRepo] 物理过滤执行失败: {e}")
             return df
+
+    # =========================================================================
+    # 🆕 新增接口：报废数据适配器
+    # =========================================================================
+    def get_scrap_data(self, prod_code: str) -> pd.DataFrame:
+        """
+        [报废数据适配器] 从 resources/<prod_code>/报废sheet.xlsx 读取报废数据，
+        转换为与 SPC 管道兼容的格式（OOC 伪装）。
+        
+        字段映射：
+            产品型号/ prod_code          -> prod_code
+            Sheet_ID / sheet_id          -> sheet_id
+            报废时间/ warehousing_time   -> sheet_start_time
+            报废站点/ scrap_step         -> step_id
+        
+        状态伪装：
+            is_ooc = 1, is_oos = 0, is_soos = 0
+            param_name = '报废', site_name = '报废', data_type = 'SCRAP'
+        """
+        try:
+            project_root = ConfigLoader.get_project_root()
+            
+            # 1. 定位 Excel 文件（优先按产品子目录，回退根目录）
+            scrap_path = project_root / "resources" / prod_code / "报废sheet.xlsx"
+            if not scrap_path.exists():
+                scrap_path = project_root / "resources" / "报废sheet.xlsx"
+            
+            if not scrap_path.exists():
+                logging.warning(f"[SpcRepo] 产品 {prod_code} 的报废数据文件不存在: {scrap_path}")
+                return pd.DataFrame()
+            
+            # 2. 读取 Excel（尝试多种引擎）
+            df = pd.DataFrame()
+            engines = ['openpyxl', 'xlrd']
+            for engine in engines:
+                try:
+                    df = pd.read_excel(scrap_path, engine=engine)
+                    break
+                except Exception:
+                    continue
+            
+            if df.empty:
+                logging.info(f"[SpcRepo] 产品 {prod_code} 的报废数据为空或无法读取: {scrap_path}")
+                return pd.DataFrame()
+            
+            # 3. 列名标准化（支持中文和英文列名）
+            col_mapping = {
+                '产品型号': 'prod_code',
+                'Sheet_ID': 'sheet_id',
+                'sheet_id': 'sheet_id',
+                '报废时间': 'sheet_start_time',
+                '报废时间(yyyy-mm-dd)': 'sheet_start_time',
+                'warehousing_time': 'sheet_start_time',
+                '报废站点': 'step_id',
+                '报废站点(五位代码)': 'step_id',
+                'scrap_step': 'step_id',
+            }
+            
+            rename_dict = {src: dst for src, dst in col_mapping.items() if src in df.columns}
+            if rename_dict:
+                df = df.rename(columns=rename_dict)
+            
+            # 4. 确保必要列存在
+            required_cols = ['prod_code', 'sheet_id', 'sheet_start_time', 'step_id']
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                logging.error(f"[SpcRepo] 报废数据缺少必要列: {missing}，实际列: {df.columns.tolist()}")
+                return pd.DataFrame()
+            
+            # 5. 类型转换与清洗
+            df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce')
+            df = df.dropna(subset=['sheet_start_time'])
+            
+            # 6. 推断厂别
+            df['factory'] = df['step_id'].astype(str).apply(self._infer_factory_from_step)
+            
+            # 7. 状态伪装（伪装成 OOC，使 aggregate_spc_metrics 无感知处理）
+            df['is_ooc'] = 1
+            df['is_oos'] = 0
+            df['is_soos'] = 0
+            df['param_name'] = '报废'
+            df['site_name'] = '报废'
+            df['data_type'] = '报废'
+            df['spc_status'] = 'OOC'
+            
+            # 8. 添加必要的占位列（与 apply_spc_rules 输出格式兼容）
+            for col in ['sheet_mean', 'sheet_max', 'sheet_min', 'usl', 'lsl', 'ucl', 'lcl']:
+                if col not in df.columns:
+                    df[col] = np.nan
+            
+            logging.info(f"[SpcRepo] 产品 {prod_code} 报废数据加载完成: {len(df)} 条")
+            return df
+            
+        except Exception as e:
+            logging.error(f"[SpcRepo] 加载报废数据失败: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    @staticmethod
+    def _infer_factory_from_step(step_id: str) -> str:
+        """
+        根据报废站点代码推断厂别。
+        优先级：精确映射 > 前缀推断 > UNKNOWN
+        """
+        try:
+            config = ConfigLoader.get_scrap_factory_mapping()
+            step = str(step_id).strip().upper()
+            
+            # 1. 精确匹配
+            mappings = config.get('mappings', {})
+            if step in mappings:
+                return mappings[step]
+            
+            # 2. 前缀推断
+            prefix_rules = config.get('default_prefix_rules', {})
+            for prefix, factory in prefix_rules.items():
+                if step.startswith(str(prefix).upper()):
+                    return factory
+            
+            return 'UNKNOWN'
+        except Exception:
+            return 'UNKNOWN'
