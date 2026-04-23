@@ -239,18 +239,32 @@ class SpcAnalysisService:
             # 🆕 [报废数据分支] 当监控类型为"报废"时，跳过数据库查询，直接读取 Excel
             # =========================================================================
             if data_type_filter.upper() == '报废':
+                logging.info(f"🚧 [ScrapTrace][L1-Service] 开始处理产品 {prod} 的报废数据")
                 scrap_df = repo.get_scrap_data(prod)
+                logging.info(f"🚧 [ScrapTrace][L2-Repo] 产品 {prod} get_scrap_data 返回: {len(scrap_df)} 条, 列: {scrap_df.columns.tolist() if not scrap_df.empty else 'N/A'}")
+                
                 if not scrap_df.empty:
                     # 应用时间窗口过滤
                     scrap_df['sheet_start_time'] = pd.to_datetime(scrap_df['sheet_start_time'], errors='coerce')
+                    logging.info(f"🚧 [ScrapTrace][L3-TimeFilter] 时间范围: {start_dt} ~ {end_dt}, sheet_start_time 样本: {scrap_df['sheet_start_time'].head(3).tolist()}")
+                    
                     mask = (scrap_df['sheet_start_time'] >= start_dt) & (scrap_df['sheet_start_time'] <= end_dt)
+                    logging.info(f"🚧 [ScrapTrace][L3-TimeFilter] mask 结果: {mask.tolist()}, 通过数: {mask.sum()}")
+                    
                     scrap_df = scrap_df[mask].copy()
+                    logging.info(f"🚧 [ScrapTrace][L3-TimeFilter] 过滤后: {len(scrap_df)} 条")
                     
                     if force_compliant:
                         scrap_df = sanitize_to_compliant(scrap_df, add_tag=True)
+                        logging.info(f"🚧 [ScrapTrace][L4-Compliant] 洗白后 is_ooc=1 数: {(scrap_df['is_ooc'] == 1).sum() if 'is_ooc' in scrap_df.columns else 0}")
                     
                     if not scrap_df.empty:
                         all_status_dfs.append(scrap_df)
+                        logging.info(f"🚧 [ScrapTrace][L5-Append] 产品 {prod} 报废数据已加入 all_status_dfs")
+                    else:
+                        logging.info(f"🚧 [ScrapTrace][L5-Append] 产品 {prod} 过滤后为空，未加入")
+                else:
+                    logging.info(f"🚧 [ScrapTrace][L2-Repo] 产品 {prod} get_scrap_data 返回空")
                 continue
             
             current_fetch_config = config_instance.model_copy()
@@ -272,16 +286,19 @@ class SpcAnalysisService:
                 all_status_dfs.append(status)
 
         if not all_status_dfs:
+            logging.info("🚧 [ScrapTrace][L6-Concat] all_status_dfs 为空，直接返回空结果")
             return {"global_summary_df": pd.DataFrame(), "detail_df": pd.DataFrame(), "station_detail_df": pd.DataFrame()}
 
         # 合并所有工厂/产品原始状态
         raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
+        logging.info(f"🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: {len(raw_status_df)} 条, 列: {raw_status_df.columns.tolist()}")
         
         # =========================================================================
         # 🛑 [核心修复 B] 在合并完成、聚合发生之前，对全维度物理表执行【唯一一次】洗白！
         # 此时数据含有厂别、型号等所有字段，修饰规则 100% 精准命中！
         # =========================================================================
         raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
+        logging.info(f"🚧 [ScrapTrace][L7-Sanitize] 洗白后: {len(raw_status_df)} 条, is_ooc=1 数: {(raw_status_df['is_ooc'] == 1).sum() if 'is_ooc' in raw_status_df.columns else 0}")
 
         # 🚨 [关键探针 A] 记录原始物理报警数
         ooc_count_raw = raw_status_df[raw_status_df['is_ooc'] == 1].shape[0] if 'is_ooc' in raw_status_df.columns else 0
@@ -294,12 +311,13 @@ class SpcAnalysisService:
         # =========================================================================
         if 'sheet_start_time' in raw_status_df.columns:
             raw_status_df['sheet_start_time'] = pd.to_datetime(raw_status_df['sheet_start_time'], errors='coerce')
-            three_month_start = (end_dt - relativedelta(months=2)).replace(day=1)
+            three_month_start = (end_dt - relativedelta(months=2)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             mask = raw_status_df['sheet_start_time'] >= three_month_start
             trimmed_count = (~mask).sum()
             if trimmed_count > 0:
                 logging.info(f"🛡️ [Service] 站点聚合前置过滤：剔除 {trimmed_count} 条上上个月尾气数据 (<{three_month_start.date()})")
             raw_status_df = raw_status_df[mask].copy()
+            logging.info(f"🚧 [ScrapTrace][L8-TimeTrim] 时间边界过滤后: {len(raw_status_df)} 条, three_month_start={three_month_start}")
 
         # =========================================================================
         # 🛑 [核心修复 1]：在“三倍扩充”之前，先进行站点聚合！
@@ -312,6 +330,7 @@ class SpcAnalysisService:
             time_group_col='step_id', # 站点维度不需要时间组
             enable_soos=enable_soos
         )
+        logging.info(f"🚧 [ScrapTrace][L9-StationAgg] station_detail_df: {len(station_detail_df)} 条, 列: {station_detail_df.columns.tolist()}")
 
         # 🚨 [关键探针 B] 记录聚合后的站点报警数
         ooc_count_station = station_detail_df['OOC片数'].sum() if 'OOC片数' in station_detail_df.columns else 0
@@ -321,6 +340,7 @@ class SpcAnalysisService:
         # [执行扩充]：此处开始，数据将变为 3 份副本，仅用于趋势展示
         # =========================================================================
         full_status_df = SpcAnalysisService._apply_time_bucket_mapping(raw_status_df, time_type.upper(), end_dt)
+        logging.info(f"🚧 [ScrapTrace][L10-TimeBucket] _apply_time_bucket_mapping 后: {len(full_status_df)} 条")
         
         global_summary_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
@@ -328,13 +348,15 @@ class SpcAnalysisService:
             time_group_col='time_group',
             enable_soos=enable_soos
         ) 
+        logging.info(f"🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: {len(global_summary_df)} 条")
         
         detail_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
             group_cols=['sort_index', 'time_group', 'prod_code', 'factory'],
             time_group_col='time_group',
             enable_soos=enable_soos
-        ) 
+        )
+        logging.info(f"🚧 [ScrapTrace][L11-DetailAgg] detail_df: {len(detail_df)} 条") 
         
         if not global_summary_df.empty:
             global_summary_df = global_summary_df.sort_values('sort_index').drop(columns=['sort_index'])

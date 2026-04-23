@@ -374,14 +374,20 @@ def filter_and_rollup_spc_data(
     根据用户的下拉框选择过滤明细数据，并动态向上卷起重算大盘汇总数据。
     彻底解耦：在不重新请求后端的情况下，实现图表和表格的实时物理联动。
     """
+    logging.info(f"🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df={len(detail_df)} 条, global={len(global_summary_df)} 条, station={len(station_detail_df)} 条")
+    logging.info(f"🚧 [ScrapTrace][UI-L1] filter_state: products={filter_state.selected_products}, factories={filter_state.selected_factories}, type={filter_state.data_type_filter}")
+    
     if detail_df.empty:
-        return global_summary_df, detail_df
+        logging.info("🚧 [ScrapTrace][UI-L2] detail_df 为空，直接透传")
+        return global_summary_df, detail_df, station_detail_df
 
     # 1. 过滤明细表
+    logging.info(f"🚧 [ScrapTrace][UI-L3] detail_df 列: {detail_df.columns.tolist()}, factory唯一值: {detail_df['factory'].unique().tolist() if 'factory' in detail_df.columns else 'N/A'}")
     filtered_detail_df = detail_df[
         (detail_df['prod_code'].isin(filter_state.selected_products)) & 
         (detail_df['factory'].isin(filter_state.selected_factories))
     ].copy()
+    logging.info(f"🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: {len(filtered_detail_df)} 条")
     
     # 2. 动态重算汇总表 (Roll-up)
     if not filtered_detail_df.empty and not global_summary_df.empty:

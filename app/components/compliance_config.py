@@ -11,13 +11,18 @@
 import streamlit as st
 import yaml
 import logging
+import pandas as pd
+from io import BytesIO
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 from datetime import datetime
 
 
 # 配置文件路径
 CONFIG_PATH = Path("config/compliance_config.yaml")
+
+# 报废Sheet路径
+SCRAP_SHEET_PATH = Path("resources/scrap_sheets.xlsx")
 
 
 def _ensure_config_exists():
@@ -208,9 +213,109 @@ def render_compliance_config_panel(
                             st.success("✅ 配置已更新，请刷新页面生效")
                     except Exception as e:
                         st.error(f"配置文件解析失败: {e}")
+            
+            st.divider()
+            render_scrap_sheet_uploader()
+            
         else:
             st.divider()
             st.info("💡 管理员可通过添加 `?admin=true` 参数到 URL 来获取配置文件管理权限")
+
+
+def render_scrap_sheet_uploader():
+    """
+    报废Sheet覆写面板
+    
+    参考 render_trend_override_uploader 的交互样式：
+    - 左列：步骤1 下载标准模板（现有文件或空模板）
+    - 右列：步骤2 上传覆盖文件
+    """
+    st.markdown("**📊 报废Sheet覆写**")
+    
+    file_exists = SCRAP_SHEET_PATH.exists()
+    
+    col_dl, col_up = st.columns(2)
+    
+    # ---------------- 📥 步骤 1: 下载标准模板 ----------------
+    with col_dl:
+        st.markdown("**📥 步骤 1: 下载标准模板**")
+        
+        output = BytesIO()
+        if file_exists:
+            try:
+                # 读取当前生效的报废清单
+                with open(SCRAP_SHEET_PATH, "rb") as f:
+                    output.write(f.read())
+                st.download_button(
+                    label="⬇️ 下载当前报废清单",
+                    data=output.getvalue(),
+                    file_name="scrap_sheets.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_scrap_sheet"
+                )
+            except Exception as e:
+                logging.error(f"[ScrapSheet] 读取现有文件失败: {e}")
+                st.error(f"读取现有文件失败: {e}")
+        else:
+            # 生成标准模板
+            template_df = pd.DataFrame(columns=['产品型号', 'Sheet_ID', '报废时间', '报废站点'])
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                template_df.to_excel(writer, index=False, sheet_name='报废数据')
+            st.download_button(
+                label="⬇️ 下载标准模板",
+                data=output.getvalue(),
+                file_name="scrap_sheets_template.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_scrap_tpl"
+            )
+            st.info("当前无报废数据，已生成标准模板")
+    
+    # ---------------- 📤 步骤 2: 上传覆盖文件 ----------------
+    with col_up:
+        st.markdown("**📤 步骤 2: 上传覆盖文件**")
+        uploaded = st.file_uploader(
+            "请上传填好的 Excel 文件",
+            type=['xlsx'],
+            key="up_scrap_sheet"
+        )
+        
+        if uploaded is not None:
+            if st.button("🚀 确认覆盖并刷新", type="primary", use_container_width=True, key="btn_scrap_sheet"):
+                try:
+                    # 确保目标文件夹存在
+                    SCRAP_SHEET_PATH.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # 如果旧文件存在，尝试删除
+                    if SCRAP_SHEET_PATH.exists():
+                        try:
+                            SCRAP_SHEET_PATH.unlink()
+                            logging.info(f"[ScrapSheet] 已删除旧文件: {SCRAP_SHEET_PATH}")
+                        except PermissionError:
+                            st.error("❌ 无法删除旧文件，它可能正被 Excel 打开，请关闭后重试。")
+                            return
+                    
+                    # 保存上传的文件
+                    with open(SCRAP_SHEET_PATH, "wb") as f:
+                        f.write(uploaded.getbuffer())
+                    
+                    st.success("✅ 报废Sheet已更新，正在刷新页面...")
+                    logging.info(f"[ScrapSheet] 成功覆写文件: {SCRAP_SHEET_PATH}")
+                    
+                    # 清除缓存并刷新
+                    st.cache_data.clear()
+                    
+                    # 🆕 [核心修复] 清除 st.session_state 中报废类型的 view_model 缓存
+                    # 否则旧的空 view_model 会继续被使用，导致新上传的数据不显示
+                    keys_to_remove = [k for k in st.session_state.keys() if k.startswith("spc_view_model_报废")]
+                    for k in keys_to_remove:
+                        del st.session_state[k]
+                        logging.info(f"[ScrapSheet] 已清除 session_state 缓存: {k}")
+                    
+                    st.rerun()
+                    
+                except Exception as e:
+                    logging.error(f"[ScrapSheet] 保存文件失败: {e}")
+                    st.error(f"保存文件失败: {e}")
 
 
 def export_config_template() -> str:
