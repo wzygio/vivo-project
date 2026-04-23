@@ -408,46 +408,38 @@ class SpcRepository:
     # =========================================================================
     def get_scrap_data(self, prod_code: str) -> pd.DataFrame:
         """
-        [报废数据适配器] 从 resources/<prod_code>/报废sheet.xlsx 读取报废数据，
-        转换为与 SPC 管道兼容的格式（OOC 伪装）。
+        [报废数据适配器] 从 resources/scrap_sheets.xlsx 读取报废数据，
+        按 prod_code 过滤后转换为与 SPC 管道兼容的格式（OOC 伪装）。
         
-        字段映射：
-            产品型号/ prod_code          -> prod_code
-            Sheet_ID / sheet_id          -> sheet_id
-            报废时间/ warehousing_time   -> sheet_start_time
-            报废站点/ scrap_step         -> step_id
-        
-        状态伪装：
-            is_ooc = 1, is_oos = 0, is_soos = 0
-            param_name = '报废', site_name = '报废', data_type = 'SCRAP'
+        注意：scrap_sheets.xlsx 是统一文件，内部已包含所有产品的数据，
+              通过 '产品型号' 列进行过滤。
         """
         try:
             project_root = ConfigLoader.get_project_root()
-            
-            # 1. 定位 Excel 文件（优先按产品子目录，回退根目录）
-            scrap_path = project_root / "resources" / prod_code / "报废sheet.xlsx"
-            if not scrap_path.exists():
-                scrap_path = project_root / "resources" / "报废sheet.xlsx"
+            scrap_path = project_root / "resources" / "scrap_sheets.xlsx"
+            logging.info(f"🚧 [ScrapTrace][Repo-L1] scrap_path={scrap_path}, exists={scrap_path.exists()}")
             
             if not scrap_path.exists():
-                logging.warning(f"[SpcRepo] 产品 {prod_code} 的报废数据文件不存在: {scrap_path}")
+                logging.warning(f"[SpcRepo] 报废数据文件不存在: {scrap_path}")
                 return pd.DataFrame()
             
-            # 2. 读取 Excel（尝试多种引擎）
+            # 1. 读取 Excel（尝试多种引擎）
             df = pd.DataFrame()
             engines = ['openpyxl', 'xlrd']
             for engine in engines:
                 try:
                     df = pd.read_excel(scrap_path, engine=engine)
+                    logging.info(f"🚧 [ScrapTrace][Repo-L2] 使用引擎 {engine} 读取成功, shape={df.shape}, columns={df.columns.tolist()}")
                     break
-                except Exception:
+                except Exception as e:
+                    logging.info(f"🚧 [ScrapTrace][Repo-L2] 引擎 {engine} 失败: {e}")
                     continue
             
             if df.empty:
-                logging.info(f"[SpcRepo] 产品 {prod_code} 的报废数据为空或无法读取: {scrap_path}")
+                logging.info(f"[SpcRepo] 报废数据为空或无法读取: {scrap_path}")
                 return pd.DataFrame()
             
-            # 3. 列名标准化（支持中文和英文列名）
+            # 2. 列名标准化（支持中文和英文列名）
             col_mapping = {
                 '产品型号': 'prod_code',
                 'Sheet_ID': 'sheet_id',
@@ -461,22 +453,36 @@ class SpcRepository:
             }
             
             rename_dict = {src: dst for src, dst in col_mapping.items() if src in df.columns}
+            logging.info(f"🚧 [ScrapTrace][Repo-L3] rename_dict={rename_dict}")
             if rename_dict:
                 df = df.rename(columns=rename_dict)
             
-            # 4. 确保必要列存在
+            # 3. 确保必要列存在
             required_cols = ['prod_code', 'sheet_id', 'sheet_start_time', 'step_id']
             missing = [c for c in required_cols if c not in df.columns]
             if missing:
                 logging.error(f"[SpcRepo] 报废数据缺少必要列: {missing}，实际列: {df.columns.tolist()}")
                 return pd.DataFrame()
             
+            # 4. 按产品型号过滤（统一文件内包含多产品数据）
+            df['prod_code'] = df['prod_code'].astype(str).str.strip()
+            before_filter = len(df)
+            df = df[df['prod_code'].str.upper() == prod_code.upper()].copy()
+            logging.info(f"🚧 [ScrapTrace][Repo-L4] 按 prod_code={prod_code} 过滤: {before_filter} -> {len(df)} 条")
+            
+            if df.empty:
+                logging.info(f"[SpcRepo] 产品 {prod_code} 在报废数据中无记录")
+                return pd.DataFrame()
+            
             # 5. 类型转换与清洗
             df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce')
+            before_dropna = len(df)
             df = df.dropna(subset=['sheet_start_time'])
+            logging.info(f"🚧 [ScrapTrace][Repo-L5] dropna 后: {before_dropna} -> {len(df)} 条, 时间样本: {df['sheet_start_time'].head(3).tolist()}")
             
             # 6. 推断厂别
             df['factory'] = df['step_id'].astype(str).apply(self._infer_factory_from_step)
+            logging.info(f"🚧 [ScrapTrace][Repo-L6] 厂别推断: {df['factory'].unique().tolist()}")
             
             # 7. 状态伪装（伪装成 OOC，使 aggregate_spc_metrics 无感知处理）
             df['is_ooc'] = 1
@@ -492,7 +498,7 @@ class SpcRepository:
                 if col not in df.columns:
                     df[col] = np.nan
             
-            logging.info(f"[SpcRepo] 产品 {prod_code} 报废数据加载完成: {len(df)} 条")
+            logging.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
             return df
             
         except Exception as e:

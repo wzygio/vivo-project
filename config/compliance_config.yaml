@@ -15,8 +15,8 @@ default: false
 # 格式：{监控类型}-{产品型号}-{厂别}
 rules:
   # 示例配置（请根据实际需求修改）
-  # AOI-M626-ARRAY: true
-  # AOI-M678-ARRAY: true
+  AOI-M626-ARRAY: true
+  AOI-M678-ARRAY: true
   # AOI-M626-OLED: true
   # AOI-M678-OLED: true
 

@@ -209,7 +209,7 @@ def render_page_header(
         # [核心修复] 同步清理前端 session_state 中的数据视图缓存
         # 防止 @st.cache_data 被清除后，session_state 仍然拦截重新执行，导致旧数据死灰复燃
         for key in list(st.session_state.keys()):
-            if "view_model" in key:
+            if "view_model" in key: # type: ignore
                 del st.session_state[key]
         
         st.toast("🧹 内存缓存已清除", icon="✅")
@@ -304,6 +304,11 @@ def setup_hot_reload(enable: bool = True):
             # [关键联动]：代码都变了，旧的代码生成的缓存数据大概率也不能用了，直接顺手清空数据缓存！
             st.cache_data.clear()
             st.cache_resource.clear()
+            
+            # [核心修复] 同步清除 yield 域的 composite_key 缓存，强制下次重新计算签名
+            for key in list(st.session_state.keys()):
+                if key.startswith("yield_composite_key_") or key.startswith("yield_snapshot_sig_"):
+                    del st.session_state[key]
             
         # 4. 更新指纹
         st.session_state['last_code_revision'] = current_rev
@@ -432,7 +437,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=False):
         
         # 建立多标签页视图
-        tab1, tab2, tab3 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Lot不良覆写配置"])
+        tab1, tab2, tab3 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Sheet不良率覆写"])
         
         # --- Tab 1: 趋势图人工修正 ---
         with tab1:

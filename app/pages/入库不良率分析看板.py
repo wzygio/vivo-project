@@ -77,14 +77,14 @@ db_manager = DatabaseManager()
 
 snapshot_path = Path("data") / current_product / f"yield_snapshot_{current_product}.parquet"
 
-# [核心修复] 使用 session_state 固定签名，防止 Service 写入快照后 mtime 变化导致 cache miss
+# [核心修复] 使用 session_state 固定 composite_key，防止 st.rerun() 时 get_project_revision 波动导致 cache miss
 # 签名只在浏览器刷新（新 Session）时重新计算，st.rerun() 期间保持稳定
-sig_session_key = f"yield_snapshot_sig_{current_product}"
-if sig_session_key not in st.session_state:
-    st.session_state[sig_session_key] = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
-snapshot_sig = st.session_state[sig_session_key]
-
-composite_key = f"{get_project_revision(project_root)}:{snapshot_sig}"
+composite_key_session_key = f"yield_composite_key_{current_product}"
+if composite_key_session_key not in st.session_state:
+    snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
+    project_rev = get_project_revision(project_root)
+    st.session_state[composite_key_session_key] = f"{project_rev}:{snapshot_sig}"
+composite_key = st.session_state[composite_key_session_key]
 
 # 3. 利用闭包，安全地将带有参数的函数传给 Header
 handlers = [

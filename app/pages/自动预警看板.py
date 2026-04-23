@@ -147,7 +147,15 @@ any_compliant_enabled = compute_global_compliance_status(
 
 # 使用 session_state 避免重复请求
 # [修改] 缓存键包含修饰状态，切换配置后自动刷新数据
-session_key = f"spc_view_model_{filter_state.data_type_filter}_compliant_{any_compliant_enabled}"
+# [新增] 报废类型额外包含 scrap_sheets.xlsx 文件签名，实现文件级缓存失效
+scrap_sig = ""
+if filter_state.data_type_filter == '报废':
+    scrap_path = Path("resources/scrap_sheets.xlsx")
+    if scrap_path.exists():
+        stat = scrap_path.stat()
+        scrap_sig = f"_scrap_{stat.st_mtime}_{stat.st_size}"
+
+session_key = f"spc_view_model_{filter_state.data_type_filter}_compliant_{any_compliant_enabled}{scrap_sig}"
 if session_key not in st.session_state:
     with st.spinner(f"正在加载 {filter_state.data_type_filter} 监控数据..."):
         query_config_typed = SpcQueryConfig(
