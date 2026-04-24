@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import logging, re
 from pathlib import Path
+
+# [Phase 1] 调试追踪专用 Logger
+trace_logger = logging.getLogger("trace")
 from typing import Optional
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -417,7 +420,7 @@ class SpcRepository:
         try:
             project_root = ConfigLoader.get_project_root()
             scrap_path = project_root / "resources" / "scrap_sheets.xlsx"
-            logging.info(f"🚧 [ScrapTrace][Repo-L1] scrap_path={scrap_path}, exists={scrap_path.exists()}")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L1] scrap_path={scrap_path}, exists={scrap_path.exists()}")
             
             if not scrap_path.exists():
                 logging.warning(f"[SpcRepo] 报废数据文件不存在: {scrap_path}")
@@ -429,10 +432,10 @@ class SpcRepository:
             for engine in engines:
                 try:
                     df = pd.read_excel(scrap_path, engine=engine)
-                    logging.info(f"🚧 [ScrapTrace][Repo-L2] 使用引擎 {engine} 读取成功, shape={df.shape}, columns={df.columns.tolist()}")
+                    trace_logger.info(f"🚧 [ScrapTrace][Repo-L2] 使用引擎 {engine} 读取成功, shape={df.shape}, columns={df.columns.tolist()}")
                     break
                 except Exception as e:
-                    logging.info(f"🚧 [ScrapTrace][Repo-L2] 引擎 {engine} 失败: {e}")
+                    trace_logger.info(f"🚧 [ScrapTrace][Repo-L2] 引擎 {engine} 失败: {e}")
                     continue
             
             if df.empty:
@@ -453,7 +456,7 @@ class SpcRepository:
             }
             
             rename_dict = {src: dst for src, dst in col_mapping.items() if src in df.columns}
-            logging.info(f"🚧 [ScrapTrace][Repo-L3] rename_dict={rename_dict}")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L3] rename_dict={rename_dict}")
             if rename_dict:
                 df = df.rename(columns=rename_dict)
             
@@ -468,7 +471,7 @@ class SpcRepository:
             df['prod_code'] = df['prod_code'].astype(str).str.strip()
             before_filter = len(df)
             df = df[df['prod_code'].str.upper() == prod_code.upper()].copy()
-            logging.info(f"🚧 [ScrapTrace][Repo-L4] 按 prod_code={prod_code} 过滤: {before_filter} -> {len(df)} 条")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L4] 按 prod_code={prod_code} 过滤: {before_filter} -> {len(df)} 条")
             
             if df.empty:
                 logging.info(f"[SpcRepo] 产品 {prod_code} 在报废数据中无记录")
@@ -478,11 +481,11 @@ class SpcRepository:
             df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce')
             before_dropna = len(df)
             df = df.dropna(subset=['sheet_start_time'])
-            logging.info(f"🚧 [ScrapTrace][Repo-L5] dropna 后: {before_dropna} -> {len(df)} 条, 时间样本: {df['sheet_start_time'].head(3).tolist()}")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L5] dropna 后: {before_dropna} -> {len(df)} 条, 时间样本: {df['sheet_start_time'].head(3).tolist()}")
             
             # 6. 推断厂别
             df['factory'] = df['step_id'].astype(str).apply(self._infer_factory_from_step)
-            logging.info(f"🚧 [ScrapTrace][Repo-L6] 厂别推断: {df['factory'].unique().tolist()}")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L6] 厂别推断: {df['factory'].unique().tolist()}")
             
             # 7. 状态伪装（伪装成 OOC，使 aggregate_spc_metrics 无感知处理）
             df['is_ooc'] = 1
@@ -498,7 +501,7 @@ class SpcRepository:
                 if col not in df.columns:
                     df[col] = np.nan
             
-            logging.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
+            trace_logger.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
             return df
             
         except Exception as e:
