@@ -1,0 +1,11 @@
+#!/bin/sh
+# 【通用 Hook】利用 basename 自动从当前执行路径提取仓库名 (去掉 .git 后缀)
+REPO_NAME=$(basename "$PWD" .git)
+
+# 使用本地 PC 能够识别的 SMB 网络绝对路径 (UNC Path)
+TARGET="//10.71.7.15/Deploy/$REPO_NAME"
+GIT_DIR="$PWD"
+
+mkdir -p "$TARGET"
+git --work-tree="$TARGET" --git-dir="$GIT_DIR" checkout -f master
+echo "✅ [Enterprise Executer] Auto-Deployment to $TARGET completed."
