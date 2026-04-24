@@ -7,6 +7,9 @@ import re
 from pathlib import Path
 from src.shared_kernel.config import ConfigLoader
 
+# [Phase 1] 调试追踪专用 Logger
+trace_logger = logging.getLogger("trace")
+
 def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
     """
     [全链路数据探针 - 单文件多 Sheet 模式]
@@ -29,7 +32,7 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
         
         required_cols = ['prod_code', 'sheet_id', 'step_id', 'param_name']
         if not all(col in targets_df.columns for col in required_cols):
-            logging.warning(f"🚨 [{probe_name}] 探针目标表缺少必要字段，必须包含: {required_cols}")
+            trace_logger.warning(f"🚨 [{probe_name}] 探针目标表缺少必要字段，必须包含: {required_cols}")
             return
             
         if targets_df.empty:
@@ -73,7 +76,7 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
                 with pd.ExcelWriter(export_path, engine='openpyxl', mode='w') as writer:
                     hit_data.to_excel(writer, sheet_name=safe_sheet_name, index=False)
             
-            logging.warning(f"🚨 [{probe_name}] 成功捕获 {len(hit_data)} 条明细！已覆盖更新至 logs/spc_probe_results.xlsx (Sheet: {safe_sheet_name})")
+            trace_logger.warning(f"🚨 [{probe_name}] 成功捕获 {len(hit_data)} 条明细！已覆盖更新至 logs/spc_probe_results.xlsx (Sheet: {safe_sheet_name})")
 
     except Exception as e:
-        logging.error(f"🚨 [{probe_name}] 探针导出异常: {e}")
+        trace_logger.error(f"🚨 [{probe_name}] 探针导出异常: {e}")

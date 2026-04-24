@@ -12,7 +12,7 @@ class AppSetup:
         """
         setup_logging(log_name)
         
-        # [修复] 应用启动时统一加载环境变量，确保后续所有模块都能读取
+        # [修复] 应用启动时统一加载环境变量，确保后续所 有模块都能读取
         env_path = Path(__file__).resolve().parent.parent.parent / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path, override=True)

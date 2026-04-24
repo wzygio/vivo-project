@@ -28,6 +28,29 @@ def setup_logging(base_filename: str = "app"):
             handler.close()
             root_logger.removeHandler(handler)
 
+    # =========================================================
+    #  [Phase 2] 领域分流 Filter（零侵入业务代码）
+    # =========================================================
+    class DomainFilter(logging.Filter):
+        """根据文件路径判断日志所属领域，兼容 Windows / Linux 路径"""
+        def __init__(self, domain_marker: str):
+            self.domain_marker = domain_marker
+        
+        def filter(self, record):
+            path = record.pathname.replace("\\", "/")
+            return self.domain_marker in path
+
+    class ExcludeDomainsFilter(logging.Filter):
+        """排除已分类的领域日志，仅保留未分类日志（如 app/ 目录）"""
+        def __init__(self, domain_markers: list[str]):
+            self.domain_markers = domain_markers
+        
+        def filter(self, record):
+            path = record.pathname.replace("\\", "/")
+            return not any(m in path for m in self.domain_markers)
+
+    DOMAIN_MARKERS = ["spc_domain", "yield_domain", "shared_kernel"]
+
     try:
         # =========================================================
         #  通道 1：全量流水日志 (按天轮转)
@@ -42,7 +65,25 @@ def setup_logging(base_filename: str = "app"):
         )
         info_handler.setLevel(logging.INFO) # 拦截 INFO 级别
         info_handler.setFormatter(formatter)
+        info_handler.addFilter(ExcludeDomainsFilter(DOMAIN_MARKERS))  # 排除已分类的领域日志
         root_logger.addHandler(info_handler)
+
+        # =========================================================
+        #  [Phase 2] 通道 1b/1c/1d：按领域自动分流 (按天轮转)
+        # =========================================================
+        for domain in DOMAIN_MARKERS:
+            domain_log_path = log_dir / f"{base_filename}_{domain.split('_')[0]}.log"
+            domain_handler = TimedRotatingFileHandler(
+                filename=domain_log_path,
+                when="midnight",
+                interval=1,
+                backupCount=30,
+                encoding='utf-8'
+            )
+            domain_handler.setLevel(logging.INFO)
+            domain_handler.setFormatter(formatter)
+            domain_handler.addFilter(DomainFilter(domain))
+            root_logger.addHandler(domain_handler)
 
         # =========================================================
         #  通道 2：高优报警日志 (按天轮转，专供快速排查)
@@ -59,6 +100,25 @@ def setup_logging(base_filename: str = "app"):
         error_handler.setFormatter(formatter)
         root_logger.addHandler(error_handler)
 
+        # =========================================================
+        #  通道 3：调试追踪日志 (按天轮转，短期保留)
+        # =========================================================
+        trace_logger = logging.getLogger("trace")
+        trace_logger.setLevel(logging.DEBUG)
+        trace_logger.propagate = False  # 防止 trace 日志重复进入根 Logger 的业务通道
+
+        trace_log_path = log_dir / f"{base_filename}_trace.log"
+        trace_handler = TimedRotatingFileHandler(
+            filename=trace_log_path,
+            when="midnight",    # 每天午夜零点自动触发切分
+            interval=1,         # 间隔 1 天
+            backupCount=7,      # 探针日志只需短期保留
+            encoding='utf-8'
+        )
+        trace_handler.setLevel(logging.DEBUG)
+        trace_handler.setFormatter(formatter)
+        trace_logger.addHandler(trace_handler)
+
     except Exception as e:
         print(f"❌ 严重错误：无法初始化企业级日志 Handler: {e}")
 
@@ -68,6 +128,6 @@ def setup_logging(base_filename: str = "app"):
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
 
-    logging.info("✅ SOTA 企业级日志系统已启动 (双通道隔离 | 午夜自动轮转)")
+    logging.info("✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)")
     
     return root_logger
