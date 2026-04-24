@@ -1,10 +1,12 @@
 # src/handler/db_handler.py
 # (或者你最终确定的路径，例如 src/database_handler.py)
 import pandas as pd
-import os, logging
+import os
+import logging
+from pathlib import Path
 from urllib.parse import quote_plus
 from sqlalchemy import create_engine
-# 注意：load_dotenv 不再需要在这里导入
+from dotenv import load_dotenv
 
 class DatabaseManager:
     """
@@ -19,18 +21,27 @@ class DatabaseManager:
         if cls._instance is None:
             logging.info("首次创建DatabaseManager实例...")
             cls._instance = super(DatabaseManager, cls).__new__(cls)
-            # 将初始化逻辑移到这里，确保只执行一次
-            # 注意: load_dotenv() 已移至 app_setup.py
+        
+        # [修复] 支持失败重试：如果 engine 为 None，每次实例化请求都尝试重新创建
+        # 这解决了 .env 延迟加载或环境变量临时缺失导致的单例死锁问题
+        if cls._instance.engine is None:
             cls._instance.engine = cls._instance._create_engine()
         else:
             logging.debug("返回已存在的DatabaseManager实例。")
+        
         return cls._instance
     
     def _create_engine(self):
         """
         根据环境变量创建并返回 SQLAlchemy Engine 对象。
+        [防御性设计] 在读取环境变量前先加载 .env，确保即使 app_setup.py 被绕过也能正常工作。
         """
         try:
+            # [防御性加载] 确保 .env 环境变量已加载（幂等操作，重复调用无影响）
+            env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path, override=True)
+            
             logging.info("正在使用SQLAlchemy尝试连接到 PostgreSQL 数据库...")
             
             # 从环境变量中获取原始密码
