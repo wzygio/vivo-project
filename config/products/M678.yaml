@@ -7,6 +7,7 @@ data_source:
     - "Array_Line"
     - "Array_Pixel"
     - "OLED_Mura"
+    - "TP 容值NG"
     
   work_order_types:
     - "ESLC" # 量产
