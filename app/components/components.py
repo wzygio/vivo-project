@@ -196,8 +196,15 @@ def render_page_header(
         # [核心修复] 强制页面重新加载，确保用户立即看到刷新后的数据
         st.rerun()
 
-    # [保留] 精准清除内存回调 (纯清内存，不动硬盘)
+    # [企业级] 精准 "清除缓存 + 模块重载" 回调
+    #
+    # 执行顺序必须严格保持以下链条：
+    #   1. func.clear()         ─ 旧模块函数尚存活，.clear() 正常生效
+    #   2. deep_reload_modules()─ 卸载 sys.modules 中的旧模块
+    #   3. 清除 composite_key   ─ 强制下次重算 project_rev
+    #   4. st.rerun()           ─ 重新 import → 加载新代码 → 新 project_rev → 新 composite_key
     def _hard_reset_callback():
+        # ---- 阶段 1: 清除数据缓存 (旧模块函数仍有效) ----
         if cached_funcs:
             for func in cached_funcs:
                 if hasattr(func, "clear"):
@@ -206,13 +213,27 @@ def render_page_header(
             st.cache_data.clear()
             st.cache_resource.clear()
         
-        # [核心修复] 同步清理前端 session_state 中的数据视图缓存
-        # 防止 @st.cache_data 被清除后，session_state 仍然拦截重新执行，导致旧数据死灰复燃
+        # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
         for key in list(st.session_state.keys()):
             if "view_model" in key: # type: ignore
                 del st.session_state[key]
         
-        st.toast("🧹 内存缓存已清除", icon="✅")
+        # ---- 阶段 3: 卸载旧模块，强制下次 import 读取磁盘新代码 ----
+        try:
+            from app.utils.reloader import deep_reload_modules
+            deep_reload_modules()
+            logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
+        except ImportError:
+            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅清除缓存)。")
+        
+        # ---- 阶段 4: 清除 composite_key 签名缓存，强制重算 ----
+        # 新 Session 重算时 project_rev 会包含新代码的 mtime → key 不同 → 缓存自动 miss
+        for key in list(st.session_state.keys()):
+            key_str = str(key)
+            if key_str.startswith("yield_composite_key_") or key_str.startswith("yield_snapshot_sig_") or key_str.startswith("spc_snapshot_sig_"):
+                del st.session_state[key]
+        
+        st.toast("🧹 缓存已清除 · 模块已重载", icon="✅")
         st.rerun()
 
     # --- 渲染控制栏 (UI 保持不变) ---

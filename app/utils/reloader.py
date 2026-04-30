@@ -22,25 +22,40 @@ def deep_reload_modules(root_package_names=("src", "app", "spc_domain", "yield_d
         logging.info(f"🔥 [Hot Reload] 已强制卸载 {unloaded_count} 个后端模块，下次 import 将读取最新代码。")
 
 
+# 可跟踪的文件扩展名：代码 + 配置文件 + 资源文件
+_TRACKED_EXTENSIONS = {".py", ".yaml", ".yml", ".xlsx", ".xls", ".csv"}
+
+
 def get_project_revision(project_root: Path) -> str:
     """
-    [V2.0 DDD 适配版] 计算整个项目的代码指纹。
-    抛弃硬编码子目录，直接监控顶层 src 和 app，实现真正的全覆盖。
+    [V3.0 企业级] 计算项目完整指纹，用于 composite_key 缓存失效感知。
+    
+    覆盖范围：
+      - 代码:  src/ 和 app/ 下的 .py
+      - 配置:  config/ 下的 .yaml
+      - 资源:  resources/ 下的 .xlsx / .csv
+      
+    当任一文件的 mtime 变更时，指纹变化 → composite_key 变化
+    → 新 Session 的 @st.cache_data 自动 miss → 重新计算
     """
     hash_md5 = hashlib.md5()
     
-    # 核心修复：直接监控项目根目录下的 src 和 app 两个大类
-    # 无论 Infrastructure 藏在哪个 Domain 文件夹里，全部都能扫到！
-    target_dirs = [project_root / "src", project_root / "app"]
+    # 监控 src (代码), app (前端代码/组件), config (YAML配置), resources (Excel基线等)
+    target_dirs = [
+        project_root / "src",
+        project_root / "app",
+        project_root / "config",
+        project_root / "resources",
+    ]
     
     for target_path in target_dirs:
-        if not target_path.exists(): 
+        if not target_path.exists():
             continue
         
-        # 深度遍历目录下所有 .py 和 .yaml 文件
+        # 深度遍历目录下所有受跟踪的文件
         for root, _, files in os.walk(target_path):
             for file in sorted(files):  # 排序保证哈希顺序一致
-                if file.endswith(".py") or file.endswith(".yaml"):
+                if any(file.endswith(ext) for ext in _TRACKED_EXTENSIONS):
                     file_path = os.path.join(root, file)
                     mtime = os.path.getmtime(file_path)
                     hash_md5.update(f"{file}_{mtime}".encode('utf-8'))
