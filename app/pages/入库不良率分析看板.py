@@ -19,12 +19,11 @@ from pathlib import Path
 
 # 引入图表组件
 from app.components.components import (
-    create_code_selection_ui, 
-    render_page_header, 
+    create_code_selection_ui,
+    render_page_header,
     render_lot_spec_alert,
     render_trend_override_uploader,
     extract_cached_funcs,
-    setup_hot_reload
 )
 from app.charts.mwd_chart import (
     prepare_union_data_for_filter
@@ -39,10 +38,9 @@ from app.components.yield_sections import (
 )
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
-setup_hot_reload(enable=True)
 AppSetup.initialize_app()
 
-# [Refactor] 2. 获取3上下文 (配置 & 路径)
+# [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 product_dir = SessionManager.get_product_dir()
@@ -54,15 +52,13 @@ current_product = active_config.data_source.product_code
 start_dt, end_dt = YieldAnalysisService.get_time_window()
 
 # 1. [新增] 安全提取底层的业务过滤参数 (兼容字典和对象模式)
-# 提取工单类型
 wo_types = getattr(active_config.data_source, 'work_order_types', [])
-# 提取目标缺陷组
 if isinstance(active_config.processing, dict):
     defect_groups = active_config.processing.get('target_defect_groups', [])
 else:
     defect_groups = getattr(active_config.processing, 'target_defect_groups', [])
 
-# 2. 实例化后端的 DTO，补齐核心过滤参数，确保刷新拉取的数据与常规查询 100% 严格一致
+# 2. 实例化后端的 DTO
 yield_query_config = YieldQueryConfig(
     product_code=current_product,
     start_date=start_dt.strftime("%Y-%m-%d"),
@@ -71,14 +67,13 @@ yield_query_config = YieldQueryConfig(
     target_defect_groups=defect_groups
 )
 
-# [核心修复] 初始化数据库连接与快照签名
-# 依赖注入：由 Service 层外部初始化 db_manager，避免 Repository 内部构造失败
+# 依赖注入：初始化数据库连接
 db_manager = DatabaseManager()
 
 snapshot_path = Path("data") / current_product / f"yield_snapshot_{current_product}.parquet"
 
-# [核心修复] 使用 session_state 固定 composite_key，防止 st.rerun() 时 get_project_revision 波动导致 cache miss
-# 签名只在浏览器刷新（新 Session）时重新计算，st.rerun() 期间保持稳定
+# [企业级标准] 使用 session_state 固定 composite_key，仅在新 Session 时重新计算
+# 代码变更或快照变更时，通过刷新按钮显式清除缓存，而非自动热重载
 composite_key_session_key = f"yield_composite_key_{current_product}"
 if composite_key_session_key not in st.session_state:
     snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
@@ -94,13 +89,13 @@ handlers = [
 # [Refactor] 3. 渲染页头
 funcs_to_clear = extract_cached_funcs(YieldAnalysisService)
 render_page_header(
-    title="📊 入库不良率分析看板", 
+    title="📊 入库不良率分析看板",
     config=active_config,
     cached_funcs=funcs_to_clear,
-    refresh_handlers=handlers  # 注入携带了全量参数的闭包
+    refresh_handlers=handlers
 )
 
-# [Refactor] 4. 渲染趋势图覆盖文件上传组件 (注入 config 用于刷新逻辑)
+# [Refactor] 4. 渲染趋势图覆盖文件上传组件
 query_params = st.query_params
 if query_params.get("admin") == "true":
     render_trend_override_uploader(active_config, product_dir)
@@ -110,34 +105,32 @@ ExcelService.inject_excel_overrides_to_config(active_config, product_dir)
 #  数据加载
 # ==============================================================================
 with st.spinner("正在加载全维度分析数据..."):
-    # [Refactor] 5. 并行加载所有服务数据
-    # [核心修复] 传入 snapshot_signature 与 db_manager，实现文件签名感知的缓存失效
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-        active_config, 
-        product_dir, 
+        active_config,
+        product_dir,
         _db_manager=db_manager,
         snapshot_signature=composite_key
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-        active_config, 
-        product_dir, 
+        active_config,
+        product_dir,
         _db_manager=db_manager,
         snapshot_signature=composite_key
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
-        active_config, 
-        product_dir, 
+        active_config,
+        product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key, 
+        snapshot_signature=composite_key,
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
-        active_config, 
-        product_dir, 
+        active_config,
+        product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key, 
+        snapshot_signature=composite_key,
     )
     mapping_data = YieldAnalysisService.get_mapping_data(
-        active_config, 
+        active_config,
         _db_manager=db_manager,
         snapshot_signature=composite_key
     )

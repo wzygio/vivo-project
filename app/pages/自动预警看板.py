@@ -10,9 +10,8 @@ from app.utils.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 from src.shared_kernel.config import ConfigLoader
 from app.components.components import (
-    render_page_header, 
+    render_page_header,
     extract_cached_funcs,
-    setup_hot_reload
 )
 from app.components.spc_sections import (
     render_spc_control_panel,
@@ -34,7 +33,6 @@ from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
-setup_hot_reload(enable=True)
 AppSetup.initialize_app()
 
 # [权限控制] 检测 URL 参数，仅用于控制修饰器面板显示

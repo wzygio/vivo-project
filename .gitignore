@@ -4,7 +4,6 @@
 OfflineRepo/
 
 # 日志和输出
-logs/
 output/
 
 # Python 缓存
