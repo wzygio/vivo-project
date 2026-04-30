@@ -26,10 +26,9 @@ if TYPE_CHECKING:
 class SpcRepository:
     """
     [仓储层] SPC 数据仓储引擎
-    职责：拦截DB直连，维护 Parquet 快照，处理增量更新。
+    职责：拦截DB直连，维护 Parquet 快照，支持全量刷新。
     """
     SNAPSHOT_TTL_HOURS = 8 
-    INCREMENTAL_BUFFER_DAYS = 2 
 
     def __init__(self, snapshot_dir: Path, use_snapshot: bool = True, db_manager: Optional['DatabaseManager'] = None):
         self.snapshot_dir = snapshot_dir
@@ -153,11 +152,10 @@ class SpcRepository:
     # ==========================================
     # 🔄 优化接口：量测明细拉取 (强制 3 个月看板逻辑)
     # ==========================================
-    # [架构升级] 新增 force_refresh 强刷参数
     def get_spc_measurements(self, config: SpcQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         """
-        获取量测数据，处理增量更新。
-        包含: 强刷指令拦截 (Safe Overwrite) 与 数据库防断连容灾降级。
+        获取量测数据，强制全量刷新。
+        包含: 数据库防断连容灾降级。
         """
         req_end_dt = datetime.strptime(config.end_date, "%Y-%m-%d")
         req_start_dt = req_end_dt - relativedelta(months=3) 
@@ -169,7 +167,7 @@ class SpcRepository:
         cache_exists, is_cache_fresh = False, False
         time_col = 'sheet_start_time'
 
-        # --- Phase 1: 加载快照与指令拦截 ---
+        # --- Phase 1: 加载快照与有效性检查 ---
         if self.use_snapshot and snapshot_path.exists():
             try:
                 stat = snapshot_path.stat()
@@ -188,7 +186,7 @@ class SpcRepository:
                     # [核心] 拦截强刷指令
                     if force_refresh:
                         logging.info(f"⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！")
-                        cache_exists = False  # [核心修复] 强制视为无缓存，走全量刷新而非增量更新
+                        cache_exists = False
                         is_cache_fresh = False
                     else:
                         if age_hours < self.SNAPSHOT_TTL_HOURS:
@@ -198,37 +196,15 @@ class SpcRepository:
                 logging.warning(f"⚠️ 读取 SPC 快照失败: {e}")
                 cache_exists = False
 
-        # --- Phase 2: 智能路由与容灾降级 ---
+        # --- Phase 2: 缓存命中 / 全量刷新 / 容灾降级 ---
         df_final = pd.DataFrame()
         need_save = False
 
         if cache_exists and is_cache_fresh:
             logging.info("🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。")
             df_final = df_cache
-        elif cache_exists and not df_cache.empty:
-            logging.info("🔄 [SpcRepo] 执行增量更新 (Safe Overwrite 模式)...")
-            delta_start_dt = df_cache[time_col].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
-            
-            if delta_start_dt < req_end_dt:
-                try:
-                    df_delta = load_spc_measurements(self.db, delta_start_dt.strftime("%Y-%m-%d"), config.end_date, config.prod_code)
-                    if not df_delta.empty:
-                        df_delta[time_col] = pd.to_datetime(df_delta[time_col])
-                        df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
-                        df_combined = df_combined.sort_values(by=time_col, ascending=True)
-                        df_combined.drop_duplicates(
-                            subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
-                        df_final = df_combined
-                        need_save = True
-                    else:
-                        df_final = df_cache
-                except Exception as e:
-                    # [容灾防线 1] 增量拉取挂掉，无损回退旧快照
-                    logging.warning(f"🚨 数据库增量拉取失败 ({e})，安全回退至陈旧快照！")
-                    df_final = df_cache
-            else:
-                df_final = df_cache
         else:
+            # [修改] 去掉增量更新，直接执行全量刷新
             logging.info(f"🆕 [SpcRepo] 执行全量刷新 ({actual_start_str} 至 {config.end_date})")
             try:
                 df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
@@ -238,11 +214,11 @@ class SpcRepository:
                         subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
                     need_save = True
                 elif cache_exists and not df_cache.empty:
-                    # [容灾防线 2] 数据库假死返回空，无损回退
+                    # [容灾防线] 数据库假死返回空，无损回退
                     logging.warning("🚨 数据库全量拉取返回空数据，安全回退至陈旧快照！")
                     df_final = df_cache
             except Exception as e:
-                # [容灾防线 3] 彻底断连，无损回退
+                # [容灾防线] 彻底断连，无损回退
                 logging.error(f"❌ 数据库全量拉取崩溃 ({e})")
                 if cache_exists and not df_cache.empty:
                     logging.warning("🚨 触发极端容灾降级，强行启用本地历史快照续命！")
@@ -256,10 +232,9 @@ class SpcRepository:
                 try:
                     self.snapshot_dir.mkdir(parents=True, exist_ok=True)
                     df_to_save.to_parquet(snapshot_path, index=False)
-                    if force_refresh:
-                        logging.info("✅ [SpcRepo] 安全覆写 (Safe Overwrite) 完成！")
+                    logging.info("✅ [SpcRepo] 快照保存完成！")
                 except Exception as e:
-                    logging.error(f"❌ 快照覆写保存失败: {e}")
+                    logging.error(f"❌ 快照保存失败: {e}")
                 df_final = df_to_save
 
             mask_time = (df_final[time_col] >= req_start_dt) & (df_final[time_col] <= req_end_dt)
@@ -318,8 +293,10 @@ class SpcRepository:
     
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
         """
-        [物理级拦截器] 根据 Excel 预设的数字边界剔除异常点位 (site_name)。
+        [物理级拦截器] 根据 Excel/CSV 预设的数字边界剔除异常点位 (site_name)。
         逻辑：value <= lower_col 或 value >= upper_col 的数据将被物理剔除。
+
+        [加密兼容] 当 xlsx 被企业加密软件锁定时，自动 fallback 到同名的 csv 文件。
         """
         import io
         from src.shared_kernel.config import ConfigLoader
@@ -327,21 +304,72 @@ class SpcRepository:
         # 1. 路径锁定
         project_root = ConfigLoader.get_project_root()
         rule_file = project_root / "resources" / "spc_outlier_filters.xlsx"
+        csv_fallback = project_root / "resources" / "xlsx_to_csv" / "spc_outlier_filters.csv"
         
-        if not rule_file.exists() or df.empty:
+        if df.empty:
+            return df
+
+        df_clean = None
+        read_source = None
+
+        # ---- 策略 1: 尝试 Excel ----
+        if rule_file.exists():
+            try:
+                df_raw = pd.read_excel(rule_file, header=None, dtype=str, engine='openpyxl')
+                csv_buffer = io.StringIO()
+                df_raw.to_csv(csv_buffer, index=False, header=False)
+                csv_buffer.seek(0)
+                df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
+                read_source = "excel"
+            except Exception as e:
+                # 区分加密导致的 BadZipFile 与一般损坏
+                import zipfile
+                if isinstance(e, zipfile.BadZipFile):
+                    logging.warning(
+                        f"⚠️ [SpcRepo] 规则文件 {rule_file.name} 不是有效的 xlsx 格式，"
+                        f"可能已被加密软件锁定或损坏 (BadZipFile)。将尝试 CSV 备用文件。"
+                    )
+                else:
+                    logging.warning(f"⚠️ [SpcRepo] 读取 Excel 规则文件失败: {e}")
+
+        # ---- 策略 1.5: xlsx 读取成功时，自动转换为 csv 备用 ----
+        if df_clean is not None and read_source == "excel":
+            try:
+                from src.shared_kernel.utils.excel_tools import xlsx_to_csv
+                if not csv_fallback.exists():
+                    xlsx_to_csv(rule_file, csv_fallback.parent)
+            except Exception as e:
+                # 自动转换失败不应影响主流程，仅记录
+                logging.debug(f"[SpcRepo] 自动转换规则文件为 csv 备份失败: {e}")
+
+        # ---- 策略 2: 尝试 CSV 备用文件 ----
+        if df_clean is None and csv_fallback.exists():
+            try:
+                # CSV 已含表头，为兼容原解析逻辑（第一行作为 header_row），
+                # 先将 DataFrame 写回 CSV Buffer 再按 header=None 读取
+                df_csv = pd.read_csv(csv_fallback, dtype=str).fillna("")
+                if not df_csv.empty:
+                    csv_buffer = io.StringIO()
+                    df_csv.to_csv(csv_buffer, index=False, header=True)
+                    csv_buffer.seek(0)
+                    df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
+                    read_source = "csv"
+                    logging.info(f"✅ [SpcRepo] 成功从 CSV 备用文件加载过滤规则: {csv_fallback.name}")
+            except Exception as e:
+                logging.warning(f"⚠️ [SpcRepo] 读取 CSV 备用文件失败: {e}")
+
+        # 无任何可用规则
+        if df_clean is None:
+            logging.warning(
+                f"🛡️ [SpcRepo] 无可用的物理过滤规则（xlsx 加密且 csv 备用不存在），"
+                f"跳过异常值剔除。当前产品: {prod_code}"
+            )
+            return df
+
+        if len(df_clean) < 2:
             return df
 
         try:
-            # 2. 降维读取：Excel -> CSV Buffer -> DataFrame (免疫格式干扰) 
-            df_raw = pd.read_excel(rule_file, header=None, dtype=str, engine='openpyxl')
-            csv_buffer = io.StringIO()
-            df_raw.to_csv(csv_buffer, index=False, header=False)
-            csv_buffer.seek(0)
-            df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
-
-            if len(df_clean) < 2:
-                return df
-
             # 3. 提取表头索引 (严格匹配您提供的列名)
             header_row = df_clean.iloc[0].astype(str).str.strip()
             col_indices = {col_name: idx for idx, col_name in enumerate(header_row)}
@@ -396,9 +424,12 @@ class SpcRepository:
             if outlier_mask.any():
                 drop_count = outlier_mask.sum()
                 df = df[~outlier_mask].copy()
-                logging.info(f"🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 {drop_count} 个异常测量点。")
+                logging.info(
+                    f"🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 {drop_count} 个异常测量点"
+                    f" (来源: {read_source})。"
+                )
             else:
-                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕，未发现越界点。")
+                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕，未发现越界点 (来源: {read_source})。")
 
             return df
 

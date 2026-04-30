@@ -129,11 +129,11 @@ class YieldAnalysisService:
 
         # 缺陷衰减 (从 config.processing 获取)
         multipliers_config = config.processing.get('defect_multipliers', {})
+        logging.info(f"[CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={multipliers_config}")
         if multipliers_config:
             logging.info("应用缺陷衰减...")
             try:
                 # 假设 apply_defect_multipliers 在 core 层，按需调整引入路径
-                from src.yield_domain.core.defect_modifier import apply_defect_multipliers
                 processed_df = apply_defect_multipliers(processed_df, multipliers_config)
             except Exception as e:
                 logging.error(f"应用缺陷衰减失败: {e}")

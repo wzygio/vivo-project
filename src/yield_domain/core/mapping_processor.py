@@ -222,30 +222,55 @@ def apply_hotspot_modification_to_matrix(
     heatmap_matrix: pd.DataFrame,
     batch_no: str,
     code_desc: str,
-    batch_index: str,
-    script_config_list: list  # <--- 参数名是 list，接收列表
+    batch_position: int,        # [修改] 当前批次在排序列表中的 0-based 位置
+    total_batches: int,         # [新增] 批次总数，用于解析负索引
+    script_config_list: list
 ) -> pd.DataFrame:
     """
-    [V2.4 - 列表搜索 + 修复随机性]
-    按照“剧本库”(列表)修饰已聚合的Mapping图矩阵。
-    它会搜索列表，找到第一个匹配 code 和 batch 的脚本并执行。
-    加值模式使用确定性随机波动。
+    [V3.0 - 数字索引匹配]
+    按照"剧本库"(列表)修饰已聚合的Mapping图矩阵。
+    target_batch_index 支持以下格式：
+      - 整数: 0=第一个, -1=最后一个, -2=倒数第二个
+      - 整数列表: [-1, -2] = 最后两个
+      - 字符串(向后兼容): 'oldest'/'latest'/'middle'
     """
     try:
         # --- [核心逻辑 1] 搜索匹配的脚本 ---
         matched_script = None
-        for script in script_config_list: # 遍历传入的列表
-            # 使用 .get() 安全访问字典键
-            if (script.get('enable', False) and
-                script.get('target_code') == code_desc and
-                script.get('target_batch_index') == batch_index):
+        for script in script_config_list:
+            if not script.get('enable', False):
+                continue
+            if script.get('target_code') != code_desc:
+                continue
 
-                matched_script = script # 将找到的 *字典* 赋给 matched_script
-                break # 找到第一个匹配项，停止搜索
+            target_idx = script.get('target_batch_index')
+
+            # [核心] 判断当前 batch_position 是否匹配
+            is_match = False
+            if isinstance(target_idx, int):
+                # 负索引解析：-1 → total_batches-1
+                normalized = target_idx if target_idx >= 0 else total_batches + target_idx
+                is_match = (normalized == batch_position)
+            elif isinstance(target_idx, list):
+                # 列表中的每个元素都做负索引解析
+                normalized_set = {i if i >= 0 else total_batches + i for i in target_idx}
+                is_match = (batch_position in normalized_set)
+            elif isinstance(target_idx, str):
+                # [向后兼容] 旧的字符串模式
+                if target_idx == 'oldest' and batch_position == 0:
+                    is_match = True
+                elif target_idx == 'latest' and batch_position == total_batches - 1:
+                    is_match = True
+                elif target_idx == 'middle' and 0 < batch_position < total_batches - 1:
+                    is_match = True
+
+            if is_match:
+                matched_script = script
+                break
 
         # 如果没有匹配的脚本，则返回原始矩阵
         if matched_script is None:
-            logging.debug(f"未找到 Code '{code_desc}' / Batch '{batch_index}' 的匹配修饰脚本，跳过。")
+            logging.debug(f"未找到 Code '{code_desc}' / 位置({batch_position}/{total_batches}) 的匹配修饰脚本，跳过。")
             return heatmap_matrix
 
         logging.info(f"为批次 {batch_no} (Code: {code_desc}) 应用匹配的Mapping热点修饰脚本...")

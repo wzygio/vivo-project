@@ -22,13 +22,48 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
     try:
         root_dir = ConfigLoader.get_project_root()
         target_file = root_dir / "resources" / "spc_probe_targets.xlsx"
+        csv_fallback = root_dir / "resources" / "xlsx_to_csv" / "spc_probe_targets.csv"
         
+        targets_df = pd.DataFrame()
+        read_source = None
+
         # 1. 探针名单不存在则静默放行
-        if not target_file.exists():
+        if not target_file.exists() and not csv_fallback.exists():
             return
-            
-        # 2. 读取目标名单
-        targets_df = pd.read_excel(target_file, dtype=str).fillna("")
+
+        # 2. 读取目标名单（xlsx 优先，加密时 fallback csv）
+        if target_file.exists():
+            try:
+                targets_df = pd.read_excel(target_file, dtype=str).fillna("")
+                read_source = "excel"
+            except Exception as e:
+                import zipfile
+                if isinstance(e, zipfile.BadZipFile):
+                    trace_logger.warning(
+                        f"🚨 [{probe_name}] 探针目标表 {target_file.name} 被加密锁定，将尝试 CSV 备用文件。"
+                    )
+                else:
+                    trace_logger.warning(f"🚨 [{probe_name}] 读取 Excel 探针目标表失败: {e}")
+
+        # xlsx 读取成功时，自动转换为 csv 备用
+        if not targets_df.empty and csv_fallback.exists() is False:
+            try:
+                from src.shared_kernel.utils.excel_tools import xlsx_to_csv
+                xlsx_to_csv(target_file, csv_fallback.parent)
+            except Exception as e:
+                trace_logger.debug(f"🚧 [ScrapTrace][Probe] 自动转换探针目标表为 csv 备份失败: {e}")
+
+        if targets_df.empty and csv_fallback.exists():
+            try:
+                targets_df = pd.read_csv(csv_fallback, dtype=str).fillna("")
+                read_source = "csv"
+                trace_logger.info(f"🚧 [ScrapTrace][Probe] 从 CSV 备用文件读取探针目标表成功: {csv_fallback.name}")
+            except Exception as e:
+                trace_logger.warning(f"🚨 [{probe_name}] 读取 CSV 探针目标表也失败: {e}")
+                return
+
+        if targets_df.empty:
+            return
         
         required_cols = ['prod_code', 'sheet_id', 'step_id', 'param_name']
         if not all(col in targets_df.columns for col in required_cols):

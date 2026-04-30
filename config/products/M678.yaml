@@ -7,7 +7,7 @@ data_source:
     - "Array_Line"
     - "Array_Pixel"
     - "OLED_Mura"
-    - "TP 容值NG"
+    - "Array_Mura"
     
   work_order_types:
     - "ESLC" # 量产
@@ -64,9 +64,9 @@ processing:
   # 6. Mapping集中性调节
   mapping_hotspot_script:
     - enable: true
-      target_code: 'S向单暗线'       
-      target_batch_index: 'oldest'    
-      mode: 'multiplicative'          
+      target_code: 'S向单暗线'
+      target_batch_index: 0            # [修改] 数字索引: 0=最旧批次, -1=最新批次
+      mode: 'multiplicative'
       hotspot_multiplier: 1.3
       normal_multiplier: 0.7
       hotspot_rules:

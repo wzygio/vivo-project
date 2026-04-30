@@ -180,7 +180,10 @@ if query_params.get("admin") == "true":
 # ==============================================================================
 render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
-render_macro_trend_section(mwd_group_data)
+render_macro_trend_section(
+    mwd_group_data,
+    group_order=active_config.data_source.target_defect_groups
+)
 
 st.divider()
 
@@ -207,6 +210,10 @@ if not selection.get("code"):
 curr_code = selection["code"]
 curr_group = selection["group"]
 curr_warning = warning_lines.get(curr_code)
+
+# [防御] 如果当前 Code 未在警戒线配置中找到，使用默认值防止 None['upper'] 报错
+if curr_warning is None:
+    curr_warning = {'upper': 0.002, 'lower': 0.0}
 
 st.markdown(f"### 🎯 当前分析: **{curr_code}**")
 

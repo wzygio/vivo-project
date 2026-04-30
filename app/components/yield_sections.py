@@ -1,6 +1,7 @@
 # src/vivo_project/app/components/view_sections.py
 import streamlit as st
 import pandas as pd
+from typing import Dict, List, Optional
 
 # 引入现有的绘图函数
 from app.charts.mwd_chart import (
@@ -21,7 +22,19 @@ from yield_domain.core.mapping_processor import apply_hotspot_modification_to_ma
 # ==============================================================================
 #  1. 宏观分析区 (Group Level)
 # ==============================================================================
-def render_macro_trend_section(mwd_group_data: dict):
+def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = None):
+    """
+    渲染 Group 级宏观趋势堆叠柱状图。
+
+    Parameters
+    ----------
+    mwd_group_data : dict
+        包含 'monthly', 'weekly', 'daily' 三个 DataFrame 的趋势数据。
+    group_order : list | None
+        可选的 Group 规范排序列表（如 YAML 中的 target_defect_groups）。
+        若提供，图表中 Group 将按此顺序排列；未在列表中的 Group 追加到末尾。
+        若为 None，则按字母序排序（原行为）。
+    """
     if not mwd_group_data:
         st.warning("无宏观趋势数据。")
         return
@@ -29,21 +42,33 @@ def render_macro_trend_section(mwd_group_data: dict):
     available_groups = []
     ref_df = mwd_group_data.get('monthly')
     if ref_df is not None and not ref_df.empty:
-        available_groups = sorted(ref_df['defect_group'].unique().tolist())
+        raw_groups = ref_df['defect_group'].unique().tolist()
+        if group_order:
+            # 1) 按配置规范顺序排列
+            available_groups = [g for g in group_order if g in raw_groups]
+            # 2) 追加数据中存在但配置中未列出的 Group（字母序）
+            available_groups += sorted([g for g in raw_groups if g not in group_order])
+        else:
+            available_groups = sorted(raw_groups)
     
     dynamic_category_orders = {"defect_group": available_groups}
 
     c1, _, _ = st.columns(3)
     with c1:
-        grp_opts = ["全部Group"] + available_groups
-        sel_grp_macro = st.selectbox("选择Group:", grp_opts, key="macro_group_sel")
+        sel_grps_macro = st.multiselect(
+            "选择Group (可多选):",
+            available_groups,
+            default=available_groups,
+            key="macro_group_sel"
+        )
 
     df_m = slice_recent_data(mwd_group_data.get('monthly'), 3)
     df_w = slice_recent_data(mwd_group_data.get('weekly'), 3)
     df_d = slice_recent_data(mwd_group_data.get('daily'), 7)
 
-    if sel_grp_macro != "全部Group":
-        filter_func = lambda df: df[df['defect_group'] == sel_grp_macro] if df is not None else None
+    # 多选过滤: 若用户有选中 Group 则只展示选中项；未选或全不选时展示全部
+    if sel_grps_macro:
+        filter_func = lambda df: df[df['defect_group'].isin(sel_grps_macro)] if df is not None else None
         df_m, df_w, df_d = map(filter_func, [df_m, df_w, df_d])
 
     max_rate = 0
@@ -251,6 +276,7 @@ def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_cod
             return
 
         batches = sorted(df_map['batch_no'].unique())
+        total_batches = len(batches)
         tab_labels = []
         for b in batches:
             b_data = df_map[df_map['batch_no'] == b]
@@ -270,11 +296,11 @@ def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_cod
             mat = pd.pivot_table(d_c, values='panel_id', index='r', columns='c', aggfunc='count', fill_value=0)
             mat = mat.reindex(index=range(10), columns=range(19), fill_value=0)
             
-            b_idx = 'oldest' if i == 0 else ('latest' if i == len(batches) - 1 else 'middle')
-            
+            # [修改] 传递数字位置而非字符串：i=0(最旧), i=total-1(最新), i=中间位置
             mat = apply_hotspot_modification_to_matrix(
-                heatmap_matrix=mat, batch_no=b, code_desc=curr_code, 
-                batch_index=b_idx, script_config_list=hotspot_scripts
+                heatmap_matrix=mat, batch_no=b, code_desc=curr_code,
+                batch_position=i, total_batches=total_batches,
+                script_config_list=hotspot_scripts
             )
 
             matrices_cache[b] = mat

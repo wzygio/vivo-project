@@ -3,9 +3,100 @@ import pandas as pd
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
+
+
+def xlsx_to_csv(
+    xlsx_path: Path,
+    csv_dir: Path,
+    sheet_name: Optional[str] = None,
+    encoding: str = "utf-8-sig",
+    **read_excel_kwargs,
+) -> Path:
+    """
+    [通用工具] 将 xlsx 文件转换为 csv 格式。
+
+    用途：在企业加密环境中，xlsx 可能被加密导致 openpyxl 无法读取，
+          提前在解密环境中将其转为 csv，供生产代码作为 fallback 读取。
+
+    Args:
+        xlsx_path: 源 xlsx 文件路径
+        csv_dir:   输出 csv 目录
+        sheet_name: 指定 sheet 名（单 sheet 文件可留空）
+        encoding:  csv 编码，默认 utf-8-sig（Excel 兼容）
+        **read_excel_kwargs: 透传给 pd.read_excel 的额外参数
+
+    Returns:
+        生成的 csv 文件路径
+    """
+    if not xlsx_path.exists():
+        raise FileNotFoundError(f"源文件不存在: {xlsx_path}")
+
+    csv_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = csv_dir / xlsx_path.with_suffix(".csv").name
+
+    # 读取 xlsx：优先用 openpyxl，失败时尝试 xlrd
+    df = pd.DataFrame()
+    engines = ["openpyxl", "xlrd"]
+    last_err = None
+    for engine in engines:
+        try:
+            kwargs = dict(read_excel_kwargs)
+            if sheet_name is not None:
+                kwargs["sheet_name"] = sheet_name
+            df = pd.read_excel(xlsx_path, engine=engine, **kwargs)
+            logging.info(f"[xlsx_to_csv] 使用引擎 {engine} 读取 {xlsx_path.name} 成功, shape={df.shape}")
+            break
+        except Exception as e:
+            last_err = e
+            logging.warning(f"[xlsx_to_csv] 引擎 {engine} 读取失败: {e}")
+            continue
+
+    if df.empty and last_err is not None:
+        raise last_err
+
+    # 写入 csv（不写入 index，保留原始表头）
+    df.to_csv(csv_path, index=False, encoding=encoding)
+    logging.info(f"[xlsx_to_csv] 成功导出: {csv_path}")
+    return csv_path
+
+
+def batch_export_spc_rules_to_csv(
+    resource_dir: Optional[Path] = None,
+    csv_subdir: str = "xlsx_to_csv",
+) -> list[Path]:
+    """
+    [批量导出] 将 SPC 相关的加密 xlsx 规则文件批量导出为 csv。
+    目标文件：spc_outlier_filters.xlsx、spc_probe_targets.xlsx
+
+    应在能透明解密企业加密文件的环境中执行一次，
+    之后生产代码即可通过 csv fallback 读取规则。
+
+    Returns:
+        生成的 csv 文件路径列表
+    """
+    if resource_dir is None:
+        resource_dir = ConfigLoader.get_project_root() / "resources"
+
+    target_files = ["spc_outlier_filters.xlsx", "spc_probe_targets.xlsx"]
+    csv_dir = resource_dir / csv_subdir
+    exported: list[Path] = []
+
+    for fname in target_files:
+        xlsx_path = resource_dir / fname
+        if not xlsx_path.exists():
+            logging.warning(f"[batch_export_spc_rules_to_csv] 跳过不存在的文件: {xlsx_path}")
+            continue
+        try:
+            csv_path = xlsx_to_csv(xlsx_path, csv_dir)
+            exported.append(csv_path)
+        except Exception as e:
+            logging.error(f"[batch_export_spc_rules_to_csv] 导出 {fname} 失败: {e}")
+
+    return exported
 
 
 def save_dict_to_excel(data_dict: dict, output_dir: Path, filename: str):
