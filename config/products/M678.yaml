@@ -6,8 +6,8 @@ data_source:
   target_defect_groups:
     - "Array_Line"
     - "Array_Pixel"
-    - "OLED_Mura"
     - "Array_Mura"
+    - "OLED_Mura"
     
   work_order_types:
     - "ESLC" # 量产
@@ -58,6 +58,12 @@ processing:
     '群暗点': 0.8
     'G3亮点': 0.5
     '大面积亮点': 0
+    # Array_Mura
+    'S向ELA Mura': 0
+    'G向ELA Mura': 0
+    '常亮白斑': 0 
+    '白画面黑斑Mura': 3
+    '孔区跑道Mura': 5
     # OLED_Mura
     '彩斑Mura': 0.3
 

@@ -1,0 +1,63 @@
+2026-05-06 14:36:28 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:41 - WARNING - [data_inspector] - 🚨 [01_DAO层-SQL真实返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:47 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:48 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:49 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:50 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:54 - WARNING - [data_inspector] - 🚨 [01_DAO层-SQL真实返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:55 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:55 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:55 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:36:56 - INFO - [spc_service] - 🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: 49702 条, 列: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'sheet_mean', 'sheet_max', 'sheet_min', 'sheet_start_time', 'data_type', 'usl', 'lsl', 'ucl', 'lcl', 'spc_status', 'is_oos', 'is_ooc', 'is_soos']
+2026-05-06 14:36:56 - INFO - [spc_service] - 🚧 [ScrapTrace][L7-Sanitize] 洗白后: 49702 条, is_ooc=1 数: 7
+2026-05-06 14:36:56 - INFO - [spc_service] - 🚧 [ScrapTrace][L8-TimeTrim] 时间边界过滤后: 38789 条, three_month_start=2026-03-01 00:00:00
+2026-05-06 14:36:56 - INFO - [spc_service] - 🚧 [ScrapTrace][L9-StationAgg] station_detail_df: 112 条, 列: ['prod_code', 'factory', 'step_id', '抽检数', 'OOS片数', 'OOC片数', 'SOOS片数', 'OOS', 'OOC', 'SOOS']
+2026-05-06 14:36:56 - INFO - [spc_service] - 🚧 [ScrapTrace][L10-TimeBucket] _apply_time_bucket_mapping 后: 58161 条
+2026-05-06 14:36:57 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: 13 条
+2026-05-06 14:36:57 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-DetailAgg] detail_df: 78 条
+2026-05-06 14:36:57 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df=78 条, global=13 条, station=8 条
+2026-05-06 14:36:57 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_state: products=['M626', 'M678'], factories=['ARRAY', 'OLED', 'TP'], type=SPC
+2026-05-06 14:36:57 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] detail_df 列: ['time_group', 'prod_code', 'factory', '抽检数', 'OOS片数', 'OOC片数', 'SOOS片数', 'OOS', 'OOC', 'SOOS'], factory唯一值: ['ARRAY', 'OLED', 'TP']
+2026-05-06 14:36:57 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: 78 条
+2026-05-06 14:37:02 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:03 - INFO - [spc_service] - 🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: 72993 条, 列: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'sheet_mean', 'sheet_max', 'sheet_min', 'sheet_start_time', 'data_type', 'usl', 'lsl', 'ucl', 'lcl', 'spc_status', 'is_oos', 'is_ooc', 'is_compliant_modified']
+2026-05-06 14:37:04 - INFO - [spc_service] - 🚧 [ScrapTrace][L7-Sanitize] 洗白后: 72993 条, is_ooc=1 数: 3
+2026-05-06 14:37:04 - INFO - [spc_service] - 🚧 [ScrapTrace][L8-TimeTrim] 时间边界过滤后: 59294 条, three_month_start=2026-03-01 00:00:00
+2026-05-06 14:37:04 - INFO - [spc_service] - 🚧 [ScrapTrace][L9-StationAgg] station_detail_df: 14 条, 列: ['prod_code', 'factory', 'step_id', '抽检数', 'OOS片数', 'OOC片数', 'is_compliant_modified', 'OOS', 'OOC']
+2026-05-06 14:37:04 - INFO - [spc_service] - 🚧 [ScrapTrace][L10-TimeBucket] _apply_time_bucket_mapping 后: 95905 条
+2026-05-06 14:37:04 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: 13 条
+2026-05-06 14:37:05 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-DetailAgg] detail_df: 78 条
+2026-05-06 14:37:05 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df=78 条, global=13 条, station=1 条
+2026-05-06 14:37:05 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_state: products=['M626', 'M678'], factories=['ARRAY', 'OLED', 'TP'], type=AOI
+2026-05-06 14:37:05 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] detail_df 列: ['time_group', 'prod_code', 'factory', '抽检数', 'OOS片数', 'OOC片数', 'is_compliant_modified', 'OOS', 'OOC'], factory唯一值: ['ARRAY', 'OLED', 'TP']
+2026-05-06 14:37:05 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: 78 条
+2026-05-06 14:37:06 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df=78 条, global=13 条, station=1 条
+2026-05-06 14:37:06 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_state: products=['M626', 'M678'], factories=['OLED', 'TP'], type=AOI
+2026-05-06 14:37:06 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] detail_df 列: ['time_group', 'prod_code', 'factory', '抽检数', 'OOS片数', 'OOC片数', 'is_compliant_modified', 'OOS', 'OOC'], factory唯一值: ['ARRAY', 'OLED', 'TP']
+2026-05-06 14:37:06 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: 52 条
+2026-05-06 14:37:07 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_01_Repo即将返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_03_Core刚进入] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - WARNING - [data_inspector] - 🚨 [Track_04_Core去重后] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
+2026-05-06 14:37:08 - INFO - [spc_service] - 🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: 72993 条, 列: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'sheet_mean', 'sheet_max', 'sheet_min', 'sheet_start_time', 'data_type', 'usl', 'lsl', 'ucl', 'lcl', 'spc_status', 'is_oos', 'is_ooc']
+2026-05-06 14:37:08 - INFO - [spc_service] - 🚧 [ScrapTrace][L7-Sanitize] 洗白后: 72993 条, is_ooc=1 数: 3
+2026-05-06 14:37:08 - INFO - [spc_service] - 🚧 [ScrapTrace][L8-TimeTrim] 时间边界过滤后: 59294 条, three_month_start=2026-03-01 00:00:00
+2026-05-06 14:37:08 - INFO - [spc_service] - 🚧 [ScrapTrace][L9-StationAgg] station_detail_df: 14 条, 列: ['prod_code', 'factory', 'step_id', '抽检数', 'OOS片数', 'OOC片数', 'is_compliant_modified', 'OOS', 'OOC']
+2026-05-06 14:37:09 - INFO - [spc_service] - 🚧 [ScrapTrace][L10-TimeBucket] _apply_time_bucket_mapping 后: 95905 条
+2026-05-06 14:37:09 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: 13 条
+2026-05-06 14:37:09 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-DetailAgg] detail_df: 78 条
+2026-05-06 14:37:09 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df=78 条, global=13 条, station=1 条
+2026-05-06 14:37:09 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_state: products=['M626'], factories=['TP'], type=AOI
+2026-05-06 14:37:09 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] detail_df 列: ['time_group', 'prod_code', 'factory', '抽检数', 'OOS片数', 'OOC片数', 'is_compliant_modified', 'OOS', 'OOC'], factory唯一值: ['ARRAY', 'OLED', 'TP']
+2026-05-06 14:37:09 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: 13 条

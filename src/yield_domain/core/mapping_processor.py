@@ -177,8 +177,8 @@ def _get_deterministically_modified_panel_id(panel_id: str, batch_no: str) -> st
     np.random.seed(seed % (2**32 - 1)) # 确保种子在有效范围内
     
     # 2. 生成固定的随机偏移量：如果是(-1,2)，则对应(-1, 0, or 1)
-    row_offset = np.random.randint(-1, 2)
-    col_offset = np.random.randint(-1, 2)
+    row_offset = np.random.randint(-3, 4)
+    col_offset = np.random.randint(-3, 4)
     
     # 3. 计算新坐标并确保其在边界内
     new_row = max(0, min(9, original_row + row_offset))

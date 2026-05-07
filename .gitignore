@@ -22,6 +22,8 @@ data/
 
 # 文件信息
 docs/报表文件/
+docs/others/
+docs/关键备件/
 
 # 数据源
 project_files/
