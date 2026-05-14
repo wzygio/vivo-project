@@ -1,0 +1,195 @@
+# 1. 🌍 角色与项目介绍 (Meta-Context)
+- **角色定义**: Senior Backend Architect (遵守 TDD 与 DDD 原则)
+- **项目介绍**: 本项目是一个面向面板制造业（OLED/Array 半导体显示）的良率(`Yield`)分析与统计过程控制(`SPC`)报表系统，项目代号"**天柱专项报表系统**"。系统通过 [`Streamlit`](app/Home.py:48) Web 门户，从 [`PostgreSQL`](src/shared_kernel/infrastructure/db_handler.py:64) 数据库抽取 Panel 级生产和量测数据，执行多级不良率模拟（Lot→Sheet 多项式散布）、SPC 规则判定（OOS/SOOS/OOC）、趋势聚合等计算，最终以 Mapping 热力图、趋势图、SPC 看板等形式呈现给用户。
+
+# 2. 📂 渐进式披露 (Progressive Disclosure)
+- **词汇表 (Glossary)**:
+  - **Panel**: 面板（最小分析单元），带有 ID、坐标、缺陷信息
+  - **Sheet**: 玻璃基板（Panel 的物理载体），每个 Sheet 包含多个 Panel
+  - **Lot (批次)**: 生产批次，由多个 Sheet 组成
+  - **Defect Group / Defect Code**: 缺陷分组与缺陷编码，如 `Array_Line`, `OLED_Mura`
+  - **OOS**: Out of Spec（超规 — 均值触碰规格线 USL/LSL）
+  - **SOOS**: Some Out of Spec（超极值 — 极值触碰规格线）
+  - **OOC**: Out of Control（失控 — 均值触碰管控线 UCL/LCL）
+  - **MWD**: Monthly/Weekly/Daily（月/周/日 趋势数据）
+  - **Mapping**: 不良在 Sheet 上的空间集中性分布热力图
+  - **Snapshot**: Parquet 格式的本地磁盘快照，用于缓存加速与断网降级
+  - **COM**: 通过 [`comtypes`](src/yield_domain/core/sheet_lot_processor.py:5) 调用本地 Excel.Application 读取加密 Excel 的 Windows 专用方案
+  - **TTL**: Time-To-Live，缓存有效期，如快照 TTL=8h
+
+- **🚫 负面清单 (Negative Constraints)**:
+  - **禁止静态重构已有核心逻辑**: 良率模拟算法（如 [`_simulate_concentration`](src/yield_domain/core/sheet_lot_processor.py:591)、[`_distribute_sheet_from_lot`](src/yield_domain/core/sheet_lot_processor.py:467) 和 Mapping 级联衰减）经过多次业务验证和调试优化，静态重构会破坏已修复的边界条件和物理防呆逻辑。
+  - **禁止修改数据库连接单例模式**: [`DatabaseManager`](src/shared_kernel/infrastructure/db_handler.py:11) 采用 `__new__` 单例模式并内置失败重试机制，任何改变实例化方式的修改都会破坏 `.env` 延迟加载和断线重连的容灾能力。
+  - **禁止消除 Streamlit 缓存装饰器 `@st.cache_data`**: 良率服务中大量使用 [`@st.cache_data`](src/yield_domain/application/yield_service.py:79) 进行 L2 缓存，移除或变更这些装饰器将导致每次页面刷新都触发全量数据库查询和重计算，造成性能灾难。
+  - **禁止修改 Parquet 快照的增量更新逻辑**: [`PanelRepository`](src/yield_domain/infrastructure/repositories/yield_repository.py:39) 的增量更新模式（TTL 保护 + 2 天缓冲窗口 + 三防线容灾降级）经过精心设计，任何简化都可能导致数据不一致或数据库过载。
+
+- **细项规则映射**: (留空，待后续需要时扩展)
+
+# 3. 🏗️ 系统架构约定 (Architecture Blueprint)
+- **项目结构 (DDD)**:
+
+```
+vivo-project/
+├── .env                          # 环境变量（数据库凭证）
+├── pyproject.toml                # 项目元数据 & uv 依赖声明
+├── uv.lock                       # 依赖锁定文件
+├── start_streamlit.bat           # Windows 启动脚本
+│
+├── app/                          # [展示层/Presentation] Streamlit 前端应用
+│   ├── Home.py                   #   门户入口：全屏 iframe 加载静态资源
+│   ├── charts/                   #   图表组件（ECharts 封装）
+│   ├── components/               #   Streamlit UI 组件
+│   ├── pages/                    #   多页面路由（不良率看板、SPC看板等）
+│   └── utils/                    #   前端工具
+│       ├── app_setup.py          #     应用初始化（日志+环境变量）
+│       ├── logger_setup.py       #     [企业级日志架构] 按领域+级别二维隔离
+│       ├── reloader.py           #     [代码热重载] 模块卸载 + 项目指纹
+│       └── session_manager.py    #     Session 状态管理
+│
+├── config/                       # [配置层] YAML 配置仓库
+│   ├── global.yaml               #   全局配置（缓存TTL、UI图标、产品注册表）
+│   ├── compliance_config.yaml    #   合规修饰开关（AOI-M626-OLED 等三维规则）
+│   ├── scrap_factory_mapping.yaml#   报废站点→厂别映射
+│   └── products/                 #   产品级配置
+│       ├── M626.yaml             #     M626: defect_multipliers, mapping_script...
+│       └── M678.yaml             #     M678: 差异化处理参数
+│
+├── src/                          # [领域层/Domain] 核心业务逻辑
+│   ├── shared_kernel/            # [共享内核] 通用基础设施
+│   │   ├── config.py             #   ConfigLoader: 配置工厂（YAML加载+深度合并+Pydantic校验）
+│   │   ├── config_model.py       #   AppConfig/FileResource: Pydantic V2 配置模型
+│   │   ├── infrastructure/
+│   │   │   └── db_handler.py     #   DatabaseManager: SQLAlchemy 单例连接池
+│   │   └── utils/
+│   │       ├── data_inspector.py #   [数据探针] 条件捕获 + 单文件多Sheet导出
+│   │       └── excel_tools.py    #   xlsx→csv 转换（加密文件 fallback 方案）
+│   │
+│   ├── yield_domain/             # [良率分析域] Yield Analysis
+│   │   ├── application/          #   应用服务层
+│   │   │   ├── yield_service.py  #     主入口: 缓存编排+L1/L2数据管道+趋势/Mapping/Sheet/Lot计算调度
+│   │   │   ├── dtos.py           #     YieldQueryConfig DTO
+│   │   │   ├── alert_service.py  #     预警服务
+│   │   │   ├── excel_service.py  #     Excel 导出
+│   │   │   ├── pdf_service.py    #     PDF 导出
+│   │   │   ├── ppt_service.py    #     PPT 导出
+│   │   │   └── file_manager_service.py
+│   │   ├── core/                 #   核心领域层
+│   │   │   ├── sheet_lot_processor.py # Sheet/Lot 不良率: 泊松散布 + 多项式分配 + 软熔断
+│   │   │   ├── mapping_processor.py   # Mapping 集中性: 级联衰减 + 热点修饰脚本
+│   │   │   ├── mwd_trend_processor.py # MWD 趋势: 月/周/日 EMA 聚合
+│   │   │   ├── batch_statistics.py    # 批次统计
+│   │   │   ├── abnormal_detector.py   # 异常检测
+│   │   │   ├── defect_modifier.py     # 缺陷倍数修饰
+│   │   │   └── trend_regulator.py     # 趋势调节器
+│   │   └── infrastructure/       #   基础设施层
+│   │       ├── data_loader.py    #     DAO: PostgreSQL SQL 查询 + Excel/CSV 本地文件读取
+│   │       └── repositories/
+│   │           └── yield_repository.py # PanelRepository: 快照缓存+增量更新+三防线容灾
+│   │
+│   └── spc_domain/               # [SPC控制域] Statistical Process Control
+│       ├── application/          #   应用服务层
+│       │   ├── spc_service.py    #     主入口: 多厂别聚合+重叠时间桶+合规修饰调度
+│       │   └── dtos.py           #     SpcQueryConfig DTO
+│       ├── core/                 #   核心领域层
+│       │   └── spc_calculator.py #     [SPC规则引擎]: Phase1 特征降维 → Phase2 OOS/SOOS/OOC判定 → Phase3 聚合
+│       └── infrastructure/       #   基础设施层
+│           ├── data_loader.py    #     DAO: 多态厂别分表UNION+规格线查询+参数映射
+│           └── repositories/
+│               └── spc_repository.py # SpcRepository: 快照缓存
+│
+├── resources/                    # [资源层] 静态文件与Excel基线数据
+│   ├── static/                   #   HTML/CSS/JS 前端门户源码
+│   ├── xlsx_to_csv/              #   加密Excel的CSV备用文件
+│   ├── M626/ M678/               #   产品级资源（规格书、修正文件等）
+│   └── scrap_sheets.xlsx ...     #   SPC规则文件
+│
+├── tests/                        # [测试层]
+│   ├── conftest.py               #   Pytest Fixtures: real_app_config / mock_config / sample_panel_df
+│   ├── factories.py              #   测试数据工厂
+│   ├── unit/                     #   单元测试
+│   └── integration/              #   集成测试
+│
+└── logs/                         # [运行时日志] 按天轮转，自动清理
+    ├── app_info.log              #   INFO 流水（保留30天）
+    ├── app_error.log             #   ERROR 高优（保留90天）
+    ├── app_trace.log             #   TRACE 调试（保留7天）
+    ├── app_spc.log               #   SPC领域日志
+    ├── app_yield.log             #   Yield领域日志
+    └── app_shared.log            #   Shared Kernel日志
+```
+
+---
+
+- **基础工程规范 (Core Infrastructure Patterns)**:
+  - **依赖管理**: 项目使用 [`uv`](pyproject.toml:31) 作为包管理工具。依赖声明在 [`pyproject.toml`](pyproject.toml:8) 的 `[project] dependencies` 字段，开发依赖在 `[tool.uv] dev-dependencies`。虚拟环境路径配置在 `[tool.pyright]` 的 `venv=".venv"`。镜像源使用 [`https://pypi.tuna.tsinghua.edu.cn/simple`](pyproject.toml:40)。
+
+  - **配置管理 (Config)**: 基于 **Pydantic V2** 的链式配置体系。[`ConfigLoader`](src/shared_kernel/config.py:11) 是静态配置工厂，调用链为：`load_config(product_code)` → 加载 `.env` → 加载 [`global.yaml`](config/global.yaml) → 加载 `products/{product_code}.yaml` → [`_deep_merge`](src/shared_kernel/config.py:66) 深度合并 → [`AppConfig.model_validate()`](src/shared_kernel/config.py:125) Pydantic 校验。单例模式通过 `@st.cache_resource` 隐式实现（Streamlit 生命周期内全局唯一），配置模型链式访问如：`config.application.cache_ttl_hours` / `config.data_source.product_code` / `config.paths['static_warning_lines'].file_name` / `config.processing['defect_capping']`。
+
+  - **安全与凭证**: 数据库连接信息（[`DB_HOST`](.env:4), [`DB_PORT`](.env:5), [`DB_DATABASE`](.env:1), [`DB_USER`](.env:2), [`DB_PASSWORD`](.env:3)）统一存储于项目根目录的 [`.env`](.env) 文件，被 `.gitignore` 排除。通过 [`load_dotenv(dotenv_path=.env, override=True)`](src/shared_kernel/config.py:102) 加载为进程环境变量。密码在构建数据库 URI 时通过 [`quote_plus()`](src/shared_kernel/infrastructure/db_handler.py:60) 进行 URL 编码防止特殊字符破坏 URI 结构。
+
+  - **日志管理 (Logging)**: 企业级日志架构实现于 [`app/utils/logger_setup.py`](app/utils/logger_setup.py:10)。采用 **用途 × 领域 二维隔离** 策略：
+    - **领域分流**（纵轴）: 使用 [`DomainFilter`](app/utils/logger_setup.py:34) 根据代码文件路径自动将日志分流到 `app_spc.log`（spc_domain）、`app_yield.log`（yield_domain）、`app_shared.log`（shared_kernel）
+    - **级别隔离**（横轴）: `app_info.log`（全量 INFO+）、`app_error.log`（仅 WARNING+，保留90天）、`app_trace.log`（独立 Logger `logging.getLogger("trace")`，DEBUG 级别，保留7天）
+    - 所有 Handler 使用 [`TimedRotatingFileHandler`](app/utils/logger_setup.py:3) 按天午夜零点自动轮转，过期自动清理
+
+  - **数据刷新机制**: 三层失效刷新体系：
+    1. **L1 (Snaphost 快照)** - [`PanelRepository`](src/yield_domain/infrastructure/repositories/yield_repository.py:12) 维护 Parquet 格式本地快照文件（路径: `data/{product_code}/yield_snapshot_{product_code}.parquet`），TTL=8h，超时后自动触发增量更新（最近2天缓冲窗口），支持 [`force_refresh=True`](src/yield_domain/infrastructure/repositories/yield_repository.py:67) 强制全量刷新；
+    2. **L2 (Streamlit 缓存)** - [`@st.cache_data`](src/yield_domain/application/yield_service.py:79) 装饰器对 Service 层方法（`get_raw_panel_details`, `get_modified_panel_details`, `get_mwd_trend_data` 等）进行内存缓存，通过 [`snapshot_signature`](src/yield_domain/application/yield_service.py:68)（MD5(文件mtime+size)）作为缓存键的一部分实现自动失效；
+    3. **代码刷新** - [`deep_reload_modules()`](app/utils/reloader.py:6) 强制卸载 `src/`、`app/` 下的全部模块，下次 import 时加载最新代码；[`get_project_revision()`](app/utils/reloader.py:29) 计算 `src/` + `app/` + `config/` + `resources/` 的 MD5 指纹，用于 composite_key 缓存失效。
+
+  - **文件处理逻辑**: 针对企业加密环境设计了 **xlsx → csv 降级读取** 策略：[`xlsx_to_csv()`](src/shared_kernel/utils/excel_tools.py:12) 尝试用 `openpyxl` 引擎读取 xlsx，失败则尝试 `xlrd`，在解密环境中先将加密 xlsx 批量转为 csv（输出到 `resources/xlsx_to_csv/`）。生产代码通过 [`data_inspector.py`](src/shared_kernel/utils/data_inspector.py:34) 的探针机制先读 xlsx，遇到 `BadZipFile`（加密）时自动 fallback 到 csv 备用文件。此外，[`sheet_lot_processor.py`](src/yield_domain/core/sheet_lot_processor.py:741) 中的 Override 数据读取使用 Windows 本地 COM 方案（[`comtypes`](src/yield_domain/core/sheet_lot_processor.py:5) 启动本地 Excel.Application）读取加密 Excel 文件，确保在无法通过 Pandas 直接读取的情况下也能提取覆盖数据。
+
+# 4. 🎯 业务需求与边界 (Scope & Boundaries)
+- **IN Scope (已实现边界)**:
+  - ✅ **入库不良率分析**: 从 PostgreSQL 数据仓库提取 Panel 级明细，计算 Lot/Sheet 级不良率，支持按缺陷组（`defect_group`）/缺陷码（`defect_code`）下钻
+  - ✅ **Mapping 集中性热力图**: 基于坐标解析（`_parse_panel_id_to_coords`），展示不良在 Sheet 上的空间分布，支持 Rate-Based 级联衰减算法和 Hotspot 修饰脚本
+  - ✅ **MWD 趋势图**: 月/周/日 级别的 EMA 趋势聚合，支持 Code 级和 Group 级双轨趋势
+  - ✅ **SPC 统计过程控制**: 全链路规则引擎（特征降维 → OOS/SOOS/OOC 判定 → 报表聚合 → 合规修饰）
+  - ✅ **数据合规修饰**: 通过 [`compliance_config.yaml`](config/compliance_config.yaml) 配置 "监控类型-产品型号-厂别" 三维修饰规则，支持将报警数据洗白为 OK
+  - ✅ **多产品支持**: M626/M678 双产品并行，通过 `product_registry.enabled_products` 和产品级 YAML 配置实现差异化管理
+  - ✅ **缓存降级容灾**: Parquet 快照 + 增量更新 + 三防线容灾（数据库假死时自动回退到陈旧快照）
+  - ✅ **数据探针调试**: 全链路探针 `export_probed_details()` 配合 `spc_probe_targets.xlsx` 名单，支持对特定 Sheet/站点/参数的追踪
+  - ✅ **自动预警看板**: 基于预警线和异常检测的自动报警
+
+- **OUT of Scope (未实现/纯规划)**:
+  - ❌ **PDF/PPT 导出服务**: [`pdf_service.py`](src/yield_domain/application/pdf_service.py) 和 [`ppt_service.py`](src/yield_domain/application/ppt_service.py) 存在模块文件但尚未实现具体业务逻辑 [待人类确认]
+  - ❌ **用户认证与权限管理**: 系统目前无登录/角色权限控制 [待人类确认]
+  - ❌ **数据写入/回写数据库**: 当前系统纯查询分析，不支持将计算结果写回源数据库
+  - ❌ **自动化定时刷新**: 目前依赖用户手动点击刷新或自然缓存过期触发 [待人类确认]
+  - ❌ **报废数据分支**: SPC Service 中检测到 `data_type_filter == '报废'` 时走 `repo.get_scrap_data()` 分支，此功能仍在开发验证中，[`sanitize_to_compliant`](src/spd_domain/core/spc_calculator.py:179) 中的 `add_tag` 参数标记为实验性
+
+# 5. 🤖 开发规范：多 Agent 协作 (EPCC Flow)
+*(此部分为硬性纪律，请原样保留)*
+1. **Explore**: 必须先阅读相关文件，读懂上下文后再行动。
+2. **Plan**: 必须先输出修改计划，交由人类审核。
+3. **Code**:
+   - **防御性编程**: 必须包含 Type Hints 和基础异常捕获。
+   - **结构化输出**: 明确指出修改了哪个文件的哪几行。
+   - **🚨 熔断机制**: 同一个 Bug 连续修复 3 次失败，必须立即停止并要求人类介入。
+4. **Commit (TDD)**:
+   - 必须先写测试。
+   - **✅ 验收标准**: `uv run pytest tests/ -v --tb=short`，必须达到 100% PASS 才算完成。
+
+# 6. 💻 系统环境与命令 (System Commands)
+- **运行命令**:
+  ```bash
+  # 方式1：批处理脚本（Windows 推荐）
+  start_streamlit.bat
+
+  # 方式2：手动启动（需先激活虚拟环境）
+  cd d:\wzy\Python\vivo-project
+  set PYTHONPATH=%cd%\src;%PYTHONPATH%
+  uv run streamlit run app/Home.py --server.headless true --server.port 8503
+  ```
+
+- **测试命令**:
+  ```bash
+  # 运行全部测试
+  uv run pytest tests/ -v --tb=short
+
+  # 仅运行单元测试
+  uv run pytest tests/unit/ -v --tb=short
+
+  # 仅运行集成测试
+  uv run pytest tests/integration/ -v --tb=short
+  ```

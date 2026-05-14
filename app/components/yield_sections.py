@@ -272,7 +272,7 @@ def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_cod
         ]
         
         if df_map.empty:
-            st.warning("该 Code 在 Mapping 数据源中无记录 (可能未达 Top 10 门槛)。")
+            st.warning("该 Code 在 Mapping 数据源中无记录。")
             return
 
         batches = sorted(df_map['batch_no'].unique())
@@ -281,7 +281,7 @@ def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_cod
         for b in batches:
             b_data = df_map[df_map['batch_no'] == b]
             total_in = b_data['batch_total_input'].iloc[0] if 'batch_total_input' in b_data.columns else 0
-            tab_labels.append(f"{b} (入库: {int(total_in):,})" if total_in else f"{b}")
+            tab_labels.append(f"{b} ({int(total_in):,})" if total_in else f"{b}")
             
         tabs = st.tabs(tab_labels)
         matrices_cache = {}
