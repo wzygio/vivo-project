@@ -14,6 +14,7 @@ const LINKS = {
     ANALYSIS_FILES: "http://10.72.26.31:8503/专项资料-解析报告",
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
+    CRITICAL_PARTS: "http://10.72.26.31:8503/关键备件报表",
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
@@ -86,6 +87,12 @@ const APP_CONFIG = {
                 { name: "IQC", url: LINKS.IQC },
             ]
         },
+        {
+            name: "关键备件",
+            children: [
+                { name: "关键备件报表", url: LINKS.CRITICAL_PARTS },
+            ]
+        },
     ],
 
     // ============================================================
@@ -146,12 +153,20 @@ const APP_CONFIG = {
                 {l:'', v:'IQC', url: LINKS.IQC }          
             ]
         },
+        {
+            id: 'critical_parts',
+            label: '关键备件',
+            icon: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>',
+            subs: [
+                {l:'', v:'备件寿命', url: LINKS.CRITICAL_PARTS }
+            ]
+        },
         // 新增：自动预警独立分支节点
-        { 
-            id: 'warning', 
-            label: '自动预警', 
-            icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>', 
-            subs: [ 
+        {
+            id: 'warning',
+            label: '自动预警',
+            icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+            subs: [
                 {l:'', v:'预警看板', url: LINKS.WARNING_DASHBOARD }
             ]
         },

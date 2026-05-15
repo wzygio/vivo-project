@@ -69,7 +69,7 @@ project_root/
 # 4. 🎯 业务需求与边界 (Scope & Boundaries)
 - **IN Scope (已实现边界)**: 
   - [请填写具体业务范围]
-- **OUT of Scope (未实现/纯规划)**: 
+- **OUT of Scope (未实现/纯规划)**:  
   - [请填写未实现或排除的范围]
 
 # 5. 🤖 开发规范：多 Agent 协作 (EPCC Flow)
