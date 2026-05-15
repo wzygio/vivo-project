@@ -26,6 +26,7 @@ dependencies = [
     "streamlit-echarts",
     "pytest>=9.0.2",
     "streamlit-aggrid>=1.2.1.post2",
+    "pywin32>=311",
 ]
 
 [tool.uv]

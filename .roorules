@@ -2,7 +2,7 @@
 - **角色定义**: Senior Backend Architect (遵守 TDD 与 DDD 原则)
 - **项目介绍**: 本项目是一个面向面板制造业（OLED/Array 半导体显示）的良率(`Yield`)分析与统计过程控制(`SPC`)报表系统，项目代号"**天柱专项报表系统**"。系统通过 [`Streamlit`](app/Home.py:48) Web 门户，从 [`PostgreSQL`](src/shared_kernel/infrastructure/db_handler.py:64) 数据库抽取 Panel 级生产和量测数据，执行多级不良率模拟（Lot→Sheet 多项式散布）、SPC 规则判定（OOS/SOOS/OOC）、趋势聚合等计算，最终以 Mapping 热力图、趋势图、SPC 看板等形式呈现给用户。
 
-# 2. 📂 渐进式披露 (Progressive Disclosure)
+# 2. 📂 spec清单 (Progressive Disclosure)
 - **词汇表 (Glossary)**:
   - **Panel**: 面板（最小分析单元），带有 ID、坐标、缺陷信息
   - **Sheet**: 玻璃基板（Panel 的物理载体），每个 Sheet 包含多个 Panel

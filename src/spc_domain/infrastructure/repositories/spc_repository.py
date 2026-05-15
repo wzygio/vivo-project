@@ -293,10 +293,14 @@ class SpcRepository:
     
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
         """
-        [物理级拦截器] 根据 Excel/CSV 预设的数字边界剔除异常点位 (site_name)。
+        [物理级拦截器] 根据 CSV 预设的数字边界剔除异常点位 (site_name)。
         逻辑：value <= lower_col 或 value >= upper_col 的数据将被物理剔除。
 
-        [加密兼容] 当 xlsx 被企业加密软件锁定时，自动 fallback 到同名的 csv 文件。
+        [核心流程] xlsx(加密) → COM 解密 → 另存为 CSV → 读取 CSV → 过滤
+        xlsx 被企业加密软件锁定，openpyxl 无法直接读取。
+        通过 Windows COM (Excel.Application) 透明解密后，立即另存为 CSV
+        覆盖旧文件，再从 CSV 加载规则进行过滤。
+        [降级] 当 COM 不可用时（如无 Excel），降级到已有 CSV（带内容校验）。
         """
         import io
         from src.shared_kernel.config import ConfigLoader
@@ -312,56 +316,72 @@ class SpcRepository:
         df_clean = None
         read_source = None
 
-        # ---- 策略 1: 尝试 Excel ----
+        # ---- 策略 1 (主路径): xlsx(COM解密) → 另存 CSV → 读取 CSV ----
+        # xlsx 已被企业加密软件锁定，openpyxl 必然失败。
+        # 通过 COM (Excel.Application) 透明解密，立即另存为 CSV 覆盖旧文件。
         if rule_file.exists():
             try:
-                df_raw = pd.read_excel(rule_file, header=None, dtype=str, engine='openpyxl')
-                csv_buffer = io.StringIO()
-                df_raw.to_csv(csv_buffer, index=False, header=False)
-                csv_buffer.seek(0)
-                df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
-                read_source = "excel"
-            except Exception as e:
-                # 区分加密导致的 BadZipFile 与一般损坏
-                import zipfile
-                if isinstance(e, zipfile.BadZipFile):
-                    logging.warning(
-                        f"⚠️ [SpcRepo] 规则文件 {rule_file.name} 不是有效的 xlsx 格式，"
-                        f"可能已被加密软件锁定或损坏 (BadZipFile)。将尝试 CSV 备用文件。"
+                from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+                df_com = _read_encrypted_xlsx_via_com(rule_file)
+                if df_com is not None and not df_com.empty:
+                    # 立即另存为 CSV，覆盖可能损坏的旧文件
+                    csv_fallback.parent.mkdir(parents=True, exist_ok=True)
+                    df_com.to_csv(csv_fallback, index=False, encoding='utf-8-sig')
+                    logging.info(
+                        f"✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: "
+                        f"{csv_fallback.name} (shape={df_com.shape})"
                     )
-                else:
-                    logging.warning(f"⚠️ [SpcRepo] 读取 Excel 规则文件失败: {e}")
 
-        # ---- 策略 1.5: xlsx 读取成功时，自动转换为 csv 备用 ----
-        if df_clean is not None and read_source == "excel":
-            try:
-                from src.shared_kernel.utils.excel_tools import xlsx_to_csv
-                if not csv_fallback.exists():
-                    xlsx_to_csv(rule_file, csv_fallback.parent)
-            except Exception as e:
-                # 自动转换失败不应影响主流程，仅记录
-                logging.debug(f"[SpcRepo] 自动转换规则文件为 csv 备份失败: {e}")
+                    # 从刚保存的 CSV 读取规则（优先走文件读取以保持一致性）
+                    try:
+                        df_clean = pd.read_csv(csv_fallback, header=None, dtype=str).fillna("")
+                        read_source = "csv"
+                    except Exception:
+                        # CSV 可能刚写出就被加密软件锁定，回退到内存数据
+                        csv_buffer = io.StringIO()
+                        df_com.to_csv(csv_buffer, index=False, header=True)
+                        csv_buffer.seek(0)
+                        df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
+                        read_source = "excel_com"
+                        logging.warning(
+                            f"⚠️ [SpcRepo] 刚保存的 CSV 被加密软件锁定，"
+                            f"回退到内存数据路径 (来源: excel_com)"
+                        )
+            except Exception as com_e:
+                logging.warning(f"⚠️ [SpcRepo] COM 直读加密 xlsx 失败: {com_e}")
 
-        # ---- 策略 2: 尝试 CSV 备用文件 ----
+        # ---- 策略 2 (降级): 尝试已有 CSV（带内容有效性校验） ----
         if df_clean is None and csv_fallback.exists():
             try:
-                # CSV 已含表头，为兼容原解析逻辑（第一行作为 header_row），
-                # 先将 DataFrame 写回 CSV Buffer 再按 header=None 读取
                 df_csv = pd.read_csv(csv_fallback, dtype=str).fillna("")
                 if not df_csv.empty:
                     csv_buffer = io.StringIO()
                     df_csv.to_csv(csv_buffer, index=False, header=True)
                     csv_buffer.seek(0)
                     df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
-                    read_source = "csv"
-                    logging.info(f"✅ [SpcRepo] 成功从 CSV 备用文件加载过滤规则: {csv_fallback.name}")
+                    
+                    # CSV 内容有效性校验：防止二进制垃圾文件被误用
+                    if df_clean is not None and len(df_clean) > 0:
+                        probe_header = df_clean.iloc[0].astype(str).str.strip().tolist()
+                        if 'step_col' not in probe_header or 'param_col' not in probe_header:
+                            logging.warning(
+                                f"⚠️ [SpcRepo] CSV 备用文件 {csv_fallback.name} 内容异常"
+                                f"（缺少 step_col/param_col，实际表头: {probe_header}），"
+                                f"跳过过滤。"
+                            )
+                            df_clean = None
+                        else:
+                            read_source = "csv"
+                            logging.info(
+                                f"✅ [SpcRepo] 从现有 CSV 加载过滤规则: {csv_fallback.name}"
+                            )
             except Exception as e:
                 logging.warning(f"⚠️ [SpcRepo] 读取 CSV 备用文件失败: {e}")
 
         # 无任何可用规则
         if df_clean is None:
             logging.warning(
-                f"🛡️ [SpcRepo] 无可用的物理过滤规则（xlsx 加密且 csv 备用不存在），"
+                f"🛡️ [SpcRepo] 无可用的物理过滤规则（COM 不可用且 CSV 无效），"
                 f"跳过异常值剔除。当前产品: {prod_code}"
             )
             return df
@@ -401,7 +421,15 @@ class SpcRepository:
                     continue
 
                 # 锁定靶向范围
-                target_mask = (df['step_id'] == r_step) & (df['param_name'].str.upper() == r_param.upper())
+                # [类型归一化修复] CSV 中 step 值可能带有 ".0" 后缀（如 "21230.0"），
+                # 而 SPC 数据中的 step_id 可能是整数 21230 或字符串 "21230"。
+                # 将两边都转为字符串并同时尝试带/不带 ".0" 的变体，确保匹配。
+                r_step_clean = r_step.rstrip('0').rstrip('.') if '.' in r_step else r_step
+                step_variants = [r_step]
+                if r_step_clean != r_step:
+                    step_variants.append(r_step_clean)
+                target_mask = (df['step_id'].astype(str).str.strip().isin(step_variants)) & \
+                              (df['param_name'].str.upper() == r_param.upper())
                 if not target_mask.any():
                     continue
 

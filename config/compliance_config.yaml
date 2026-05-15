@@ -19,4 +19,8 @@ rules:
   # AOI-M678-ARRAY: true
   # AOI-M626-OLED: true
   # AOI-M678-OLED: true
+  CTQ-M626-ARRAY: true
+  CTQ-M678-ARRAY: true
+  CTQ-M626-OLED: true
+  CTQ-M678-OLED: true
 

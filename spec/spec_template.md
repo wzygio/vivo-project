@@ -2,7 +2,7 @@
 - **角色定义**: Senior Backend Architect (遵守 TDD 与 DDD 原则)
 - **项目介绍**: [请填写具体业务需求]
 
-# 2. 📂 渐进式披露 (Progressive Disclosure)
+# 2. 📂 spec清单 (Progressive Disclosure)
 - **词汇表 (Glossary)**:
   - [请填写具体业务术语]
   - **Snapshot**: Parquet 格式的本地磁盘快照，用于缓存加速与断网降级

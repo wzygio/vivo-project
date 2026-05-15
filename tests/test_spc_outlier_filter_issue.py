@@ -421,3 +421,110 @@ class TestOutlierFilterBusinessLogic:
         assert len(filtered_df) == 3
         assert 15.0 not in filtered_df["param_value"].values
         assert 12.0 not in filtered_df["param_value"].values
+
+    def test_type_normalization_step_matching_with_dot_zero(self, tmp_path):
+        """
+        [类型归一化] 验证当 CSV 规则中的 step 值为 "21230.0"（带 .0 后缀），
+        而 SPC 数据中的 step_id 为整数 21230 时，过滤仍能正确匹配。
+        
+        这是 COM→CSV 路径下的核心差异：原始 xlsx 读取时 step_col 为 float，
+        CSV 读取后变为字符串 "21230.0"，与数据中的整数 21230 比较会失败。
+        """
+        from io import StringIO
+        
+        # 模拟 CSV 内容（step 值带 ".0" 后缀）
+        csv_content = """step_col,param_col,lower_col,upper_col
+21230.0,B_0_CIE_Y,0.0415,0.0555
+21230.0,Bi_0,114.0,210.0
+21200.0,PPA_B_X,-6.0,6.0"""
+        
+        csv_buffer = StringIO(csv_content)
+        df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
+        
+        # 模拟 SPC 量测数据：step_id 为整数 21230/21200（数据库常见格式）
+        df = pd.DataFrame({
+            "step_id": [21230, 21230, 21230, 21200, 21200, 99999],
+            "param_name": ["B_0_CIE_Y", "Bi_0", "OTHER_PARAM", "PPA_B_X", "PPA_B_Y", "B_0_CIE_Y"],
+            "param_value": [0.0500, 150.0, 0.0500, 0.0, 0.0, 0.0500],
+        })
+        
+        # 提取表头索引
+        header_row = df_clean.iloc[0].astype(str).str.strip()
+        col_indices = {col_name: idx for idx, col_name in enumerate(header_row)}
+        
+        outlier_mask = pd.Series(False, index=df.index)
+        df_vals = pd.to_numeric(df["param_value"], errors="coerce")
+        
+        for curr_r in range(1, len(df_clean)):
+            rule = df_clean.iloc[curr_r]
+            r_step = str(rule[col_indices["step_col"]]).strip()
+            r_param = str(rule[col_indices["param_col"]]).strip()
+            
+            if not r_step or not r_param:
+                continue
+            
+            # ---- 使用修复后的 type normalization 逻辑 ----
+            r_step_clean = r_step.rstrip('0').rstrip('.') if '.' in r_step else r_step
+            step_variants = [r_step]
+            if r_step_clean != r_step:
+                step_variants.append(r_step_clean)
+            target_mask = (df["step_id"].astype(str).str.strip().isin(step_variants)) & \
+                          (df["param_name"].str.upper() == r_param.upper())
+            
+            if not target_mask.any():
+                continue
+            
+            if "lower_col" in col_indices:
+                l_val = pd.to_numeric(rule[col_indices["lower_col"]], errors="coerce")
+                if not pd.isna(l_val):
+                    outlier_mask |= target_mask & (df_vals <= l_val)
+            
+            if "upper_col" in col_indices:
+                u_val = pd.to_numeric(rule[col_indices["upper_col"]], errors="coerce")
+                if not pd.isna(u_val):
+                    outlier_mask |= target_mask & (df_vals >= u_val)
+        
+        # 验证：
+        # - step=21230, param=B_0_CIE_Y, value=0.0500 → lower=0.0415, upper=0.0555 → 未越界 ✅
+        # - step=21230, param=Bi_0, value=150.0 → lower=114.0, upper=210.0 → 未越界 ✅
+        # - step=21230, param=OTHER_PARAM → 无匹配规则 → 保留 ✅
+        # - step=21200, param=PPA_B_X, value=0.0 → lower=-6.0, upper=6.0 → 未越界 ✅
+        # - step=21200, param=PPA_B_Y → 无匹配规则（不在 CSV 中）→ 保留 ✅
+        # - step=99999, param=B_0_CIE_Y → 无匹配规则 → 保留 ✅
+        filtered_df = df[~outlier_mask].copy()
+        assert len(filtered_df) == 6, f"所有数据应全部保留（无越界值），实际保留: {len(filtered_df)}"
+        
+        # 验证 step 匹配确实工作：添加越界值后应被过滤
+        df2 = pd.DataFrame({
+            "step_id": [21230, 21230],
+            "param_name": ["B_0_CIE_Y", "B_0_CIE_Y"],
+            "param_value": [0.0300, 0.0600],  # lower=0.0415 → 0.0300 越下界；upper=0.0555 → 0.0600 越上界
+        })
+        outlier_mask2 = pd.Series(False, index=df2.index)
+        df2_vals = pd.to_numeric(df2["param_value"], errors="coerce")
+        
+        for curr_r in range(1, len(df_clean)):
+            rule = df_clean.iloc[curr_r]
+            r_step = str(rule[col_indices["step_col"]]).strip()
+            r_param = str(rule[col_indices["param_col"]]).strip()
+            if not r_step or not r_param:
+                continue
+            r_step_clean = r_step.rstrip('0').rstrip('.') if '.' in r_step else r_step
+            step_variants = [r_step]
+            if r_step_clean != r_step:
+                step_variants.append(r_step_clean)
+            target_mask = (df2["step_id"].astype(str).str.strip().isin(step_variants)) & \
+                          (df2["param_name"].str.upper() == r_param.upper())
+            if not target_mask.any():
+                continue
+            if "lower_col" in col_indices:
+                l_val = pd.to_numeric(rule[col_indices["lower_col"]], errors="coerce")
+                if not pd.isna(l_val):
+                    outlier_mask2 |= target_mask & (df2_vals <= l_val)
+            if "upper_col" in col_indices:
+                u_val = pd.to_numeric(rule[col_indices["upper_col"]], errors="coerce")
+                if not pd.isna(u_val):
+                    outlier_mask2 |= target_mask & (df2_vals >= u_val)
+        
+        filtered_df2 = df2[~outlier_mask2].copy()
+        assert len(filtered_df2) == 0, f"越界值应全部被剔除，实际保留: {len(filtered_df2)}"
