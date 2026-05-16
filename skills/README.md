@@ -1,41 +1,43 @@
 # 📚 Skills 技能库
 
-> **用途**：记录针对每个特殊/棘手问题的解决方案，形成可复用的知识资产。  
-> **原则**：每个 Skill 聚焦 **一个具体问题**，包含根因分析 + 解决方案 + 关键代码片段。  
-> **触发**：当 AI Agent 在开发过程中遇到类似问题时，应主动搜索 `skills/` 目录寻找参考方案。
+> **用途**：项目级技能索引。所有技能的完整内容已迁移到 **Roo Code 全局 Skills Store**（`C:\Users\V0141351\.roo\skills\`），AI Agent 会在需要时自动匹配加载。  
+> **原则**：每个 Skill 聚焦 **一个具体问题**，包含根因分析 + 解决方案 + 关键代码片段。
 
 ---
 
 ## Skills 索引
 
-| 编号 | Skill | 问题域 | 版本 | 最后更新 |
-|------|-------|--------|------|----------|
-| S001 | [加密 Excel 的 COM 透明解密](encrypted-xlsx-com-read.md) | 文件处理 | 1.0 | 2026-05-14 |
-| S002 | [SPC 步骤 ID 类型标准化匹配](type-normalization-step-matching.md) | 类型系统 | 1.0 | 2026-05-14 |
-| ... | *（随项目演进持续补充）* | ... | ... | ... |
+| 编号 | Skill（全局路径） | 问题域 | 版本 | 最后更新 |
+|------|------------------|--------|------|----------|
+| S001 | [加密 Excel 的 COM 透明解密](file:///C:/Users/V0141351/.roo/skills/encrypted-xlsx-com-read/SKILL.md) | 文件处理 | 1.0 | 2026-05-14 |
+| S002 | [SPC 步骤 ID 类型标准化匹配](file:///C:/Users/V0141351/.roo/skills/type-normalization-step-matching/SKILL.md) | 类型系统 | 1.0 | 2026-05-14 |
+| S003 | [帆软报表数据爬虫](file:///C:/Users/V0141351/.roo/skills/finereport-crawler/SKILL.md) | Python 爬虫 | 1.0 | 2026-05-14 |
+
+> **💡 提示**：上述技能已在 Roo Code 全局 Skills Store 中注册。当 AI 遇到匹配的问题描述时，会自动加载对应 SKILL.md。
+
+---
+
+## 本地模板
+
+[`templates/skill-template.md`](templates/skill-template.md) — 新建 Skill 的模板文件，仍保留在项目中供参考。
 
 ---
 
 ## 如何贡献新的 Skill
 
-1. 复制 [`templates/skill-template.md`](templates/skill-template.md) 到 `skills/` 目录
-2. 按模板填写问题描述、根因分析、解决方案和关键代码
-3. 在本文的 Skills 索引表中添加新条目
+1. 复制 [`templates/skill-template.md`](templates/skill-template.md) 到 `C:\Users\V0141351\.roo\skills\<skill-name>\` 目录
+2. 在文件头部添加 YAML frontmatter：
+   ```yaml
+   ---
+   name: <skill-name>
+   description: <当出现此问题时，应加载该 Skill>
+   ---
+   ```
+3. 按模板填写问题描述、根因分析、解决方案和关键代码
+4. 在本索引表中添加新条目
 
 ---
 
-## 架构说明
-
-当前采用 **扁平式架构**（1 Skill = 1 个 markdown 文件），原因：
-
-| 维度 | 扁平式 ✅（当前） | 目录式 ❌（如 `finereport-crawler`） |
-|------|------------------|--------------------------------------|
-| AI 读取成本 | 1 次 `read_file` 获取全部内容 | 需 3~5 次 `read_file` 跳转 |
-| Token 效率 | 零浪费 | 目录结构 + 导航文件浪费约 30% |
-| 维护成本 | 新增 = 1 文件 + 1 行索引 | 需建目录、更新多个导航文件 |
-| 适用场景 | **具体技术问题**（加密文件/类型匹配） | 超大型方法论（完整逆向工程） |
-
----
-
-> **版本**: 1.1  
-> **最后更新**: 2026-05-15
+> **版本**: 2.0  
+> **最后更新**: 2026-05-16  
+> **变更说明**: 技能内容已全部迁移至全局 Skills Store，本文件仅保留索引功能

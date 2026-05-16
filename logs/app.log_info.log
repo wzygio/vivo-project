@@ -251,3 +251,8 @@
 2026-05-15 14:27:13 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
 2026-05-15 14:27:13 - INFO - [app_setup] - Application setup complete (logging & env initialized).
 2026-05-15 14:27:13 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-05-15 14:30:33 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-05-15 14:30:33 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-05-15 14:30:33 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-05-15 14:30:34 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-05-15 14:30:34 - INFO - [app_setup] - Application setup complete (logging & env initialized).
