@@ -1,0 +1,12 @@
+请执行以下操作：
+
+1. 使用 Puppeteer 打开浏览器，访问 http://10.73.17.76:8080/webroot/decision
+2. 等待页面加载完成，当前应该在登录页面（V3生产管理平台）
+3. 在用户名输入框中填入：V0141351
+4. 在密码输入框中填入：Wangziyao@105
+5. 点击「登录」按钮
+6. 等待页面跳转到系统首页（等待至少5秒让页面完全加载）
+7. 截图保存到 d:\wzy\Python\vivo-project\decision_loggedin.png
+8. 在系统中搜索报表「V3良率及不良率By月周天汇总报表」
+9. 如果找到，截图到 d:\wzy\Python\vivo-project\report_found.png
+10. 详细描述你看到的所有内容

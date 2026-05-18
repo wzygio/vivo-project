@@ -21,7 +21,7 @@
 
 ## 2. Step 1：架构变更检测
 
-检查本次修改是否涉及以下**可记录到 `spec/`** 的变更：
+检查本次修改是否涉及以下**可记录到 `ARCHITECTURE.md` / `docs/design/`** 的变更：
 
 | 检测项 | 判断标准 |
 |--------|----------|
@@ -33,7 +33,7 @@
 | 新测试模式 | 是否使用了未记录的 fixtures / factories？ |
 
 **无变更** → 跳到 Step 2
-**有变更** → 在 Step 3 生成 `spec` 提案
+**有变更** → 在 Step 3 生成架构提案（`ARCHITECTURE.md` / `docs/design/`）
 
 ---
 
@@ -58,7 +58,7 @@
 ### 4.1 架构变更提案（格式）
 
 ```
-文件名：plans/spec_知识提案_YYYYMMDD.md
+文件名：docs/plans/spec_知识提案_YYYYMMDD.md
 ```
 
 内容模板：
@@ -71,12 +71,23 @@
 ## 涉及文件清单
 - [`路径`](路径): 变更说明
 
-## 建议更新到 spec/00_project_spec.md 的内容
-### 新增领域 / 服务 / 数据流描述
+## 建议更新的目标文件与插入位置
+
+根据变更类型，选择以下目标之一：
+
+### A. 系统级架构变更 → 更新 [ARCHITECTURE.md](ARCHITECTURE.md)
+#### 新增领域 / 服务 / 数据流描述
 （具体内容）
 
-### 建议插入位置
-（指明在 spec 文件中的位置）
+#### 建议插入位置
+（指明在 `ARCHITECTURE.md` 中的位置，如"数据流架构"或"领域模块划分"章节）
+
+### B. 领域级业务变更 → 更新 [docs/design/](docs/design/) 下对应的设计文档
+#### 新增领域 / 服务 / 数据流描述
+（具体内容）
+
+#### 建议插入位置
+（指明在 `docs/design/` 中哪个文件及章节，如 `docs/design/yield_domain.md` 的"核心算法"章节）
 
 ## 回滚指南
 （如果用户不采纳，如何回退）
@@ -85,7 +96,7 @@
 ### 4.2 新解决方案提案（格式）
 
 ```
-文件名：plans/skill_提案_XXX.md
+文件名：docs/plans/skill_提案_XXX.md
 ```
 
 内容模板（参考 `skills/templates/skill-template.md`）：
@@ -110,10 +121,10 @@
 
 | 类型 | 状态 | 提案文件 |
 |------|------|----------|
-| 架构变更 | ✅ 有变更 / ❌ 无变更 | [`plans/spec_知识提案_YYYYMMDD.md`](...) |
-| 新解决方案 | ✅ 有变更 / ❌ 无变更 | [`plans/skill_提案_XXX.md`](...) |
+| 架构变更 | ✅ 有变更 / ❌ 无变更 | [`docs/plans/spec_知识提案_YYYYMMDD.md`](docs/plans/spec_知识提案_YYYYMMDD.md) |
+| 新解决方案 | ✅ 有变更 / ❌ 无变更 | [`docs/plans/skill_提案_XXX.md`](docs/plans/skill_提案_XXX.md) |
 
-> 请审阅上述提案文件。如同意采纳，我将把内容合并到 `spec/00_project_spec.md` 或 `skills/` 中。
+> 请审阅上述提案文件。如同意采纳，我将把内容合并到 `ARCHITECTURE.md` / `docs/design/` 或 `skills/` 中。
 ```
 
 ---
@@ -122,8 +133,8 @@
 
 | 用户反馈 | 操作 |
 |----------|------|
-| "采纳" | 将提案内容合并到 `spec/00_project_spec.md` 或 `skills/README.md` + 新建 skill 文件 |
-| "拒绝" | 删除 `plans/` 下的提案文件 |
+| "采纳" | 将提案内容合并到 `ARCHITECTURE.md` / `docs/design/` 对应文件，或 `skills/README.md` + 新建 skill 文件 |
+| "拒绝" | 删除 `docs/plans/` 下的提案文件 |
 | "修改后采纳" | 按用户要求修改后合并 |
 
 ---
@@ -131,6 +142,6 @@
 ## 7. 原则
 
 1. **提案 ≠ 正式文档**：提案是临时文件，只有经用户确认后才会写入正式文档
-2. **不污染正式文档**：未经用户许可，绝不直接修改 `spec/` 或 `skills/` 下的文件
+2. **不污染正式文档**：未经用户许可，绝不直接修改 `ARCHITECTURE.md`、`docs/design/` 或 `skills/` 下的文件
 3. **可追溯**：提案文件以日期命名，可随时删除
 4. **零冗余**：如果检测无变更，在 attempt_completion 中明确说明"本次无架构变更/新解决方案需记录"
