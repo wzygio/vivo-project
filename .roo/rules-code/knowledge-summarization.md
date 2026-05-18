@@ -87,7 +87,7 @@
 （具体内容）
 
 #### 建议插入位置
-（指明在 `docs/design/` 中哪个文件及章节，如 `docs/design/yield_domain.md` 的"核心算法"章节）
+（指明在 `docs/design/` 中哪个文件及章节，如 `docs/design/<domain_name>.md` 的"核心算法"章节）
 
 ## 回滚指南
 （如果用户不采纳，如何回退）
