@@ -171,3 +171,154 @@ def render_parts_table(df: pd.DataFrame):
         hide_index=True,
         use_container_width=True,
     )
+
+
+def render_parts_trend_section(
+    available_factories: List[str],
+    available_layers: List[str],
+    available_part_types: List[str],
+    selected_factory: str,
+    spec_df: pd.DataFrame = None,
+):
+    """
+    渲染关键备件趋势分析区（实际数据随时间变化的折线图，带三个筛选维度）。
+    """
+    st.markdown("---")
+    with st.expander("📈 备件寿命趋势分析 (实际数据随时间变化)", expanded=True):
+        col_f, col_l, col_p = st.columns(3)
+        
+        with col_f:
+            # 与页面顶部的厂别选择框做初始状态联动
+            try:
+                default_f_idx = available_factories.index(selected_factory) if selected_factory in available_factories else 0
+            except ValueError:
+                default_f_idx = 0
+                
+            trend_factory = st.selectbox(
+                "厂别 (趋势图)",
+                options=available_factories,
+                index=default_f_idx,
+                key="trend_factory_select"
+            )
+            
+        with col_l:
+            trend_layer = st.selectbox(
+                "膜层 (趋势图)",
+                options=available_layers,
+                index=0,
+                key="trend_layer_select"
+            )
+            
+        with col_p:
+            trend_part_type = st.selectbox(
+                "备件类型 (趋势图)",
+                options=available_part_types,
+                index=0,
+                key="trend_part_type_select"
+            )
+            
+        # 局部导入绘图与 Mock 数据生成服务，遵循高内聚解耦约定
+        from app.charts.parts_chart import (
+            generate_mock_trend_data,
+            create_parts_trend_chart,
+        )
+        
+        # 1. 生成高保真确定性走势数据
+        df_trend = generate_mock_trend_data(
+            factory=trend_factory,
+            layer=trend_layer,
+            part_type=trend_part_type,
+            spec_df=spec_df,
+        )
+        
+        # 2. 绘制 Plotly 趋势图
+        fig = create_parts_trend_chart(
+            df_trend=df_trend,
+            factory=trend_factory,
+            layer=trend_layer,
+            part_type=trend_part_type,
+        )
+        
+        # 3. 渲染至前端
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_parts_table_selectable(df: pd.DataFrame) -> dict:
+    """
+    [新功能] 渲染可交互、支持单行点击选中的关键备件数据表（已过滤冗余列：参数名称、站点、机台编号）。
+    
+    Args:
+        df: 要展示的 DataFrame
+        
+    Returns:
+        dict: 用户选中行状态字典
+    """
+    if df.empty:
+        st.info("当前筛选条件下没有数据。")
+        return {"selection": {"rows": []}}
+    
+    column_config = {
+        "使用进度": st.column_config.ProgressColumn(
+            "使用进度 (%)",
+            help="实际数据 / 寿命规格 × 100%",
+            format="%.0f%%",
+            min_value=0,
+            max_value=100,
+        ),
+        "预警状态": st.column_config.TextColumn(
+            "预警状态",
+            help="⚠️ 超预警 或 ✅ 正常",
+        ),
+        "实际数据": st.column_config.NumberColumn(
+            "实际数据",
+            help="从数据库查询的最新测量值（或填充的最新Mock值）",
+            format="%.0f",
+        ),
+        "寿命规格": st.column_config.NumberColumn(
+            "寿命规格 (HR)",
+            help="备件额定寿命（小时）",
+            format="%.0f",
+        ),
+        "预警值": st.column_config.NumberColumn(
+            "预警值 (%)",
+            help="触发预警的使用进度百分比阈值",
+            format="%.0f%%",
+        ),
+        "测量时间": st.column_config.TextColumn(
+            "测量时间",
+            help="最近一次数据采集时间",
+        ),
+    }
+    
+    # 彻底去掉 "参数名称", "站点", "机台编号" 三个冗余列
+    column_order = [
+        "厂别",
+        "膜层",
+        "制程",
+        "机台",
+        "腔室",
+        "备件类型",
+        "寿命规格",
+        "预警值",
+        "实际数据",
+        "使用进度",
+        "预警状态",
+        "测量时间",
+    ]
+    
+    valid_columns = [col for col in column_order if col in df.columns]
+    
+    # 启动单行选中联动
+    selected_rows = st.dataframe(
+        df,
+        column_config=column_config,
+        column_order=valid_columns,
+        hide_index=True,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+    )
+    
+    return selected_rows
+
+
