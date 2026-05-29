@@ -47,15 +47,18 @@ processing:
     'S向亮线': 0.4
     'S向单暗线': 0.6
     'G向单亮线': 0.5
+    'G向单暗线': 0.8
     # Array_Pixel
     '群暗点': 0.7
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
     '常亮白斑': 0 
+    '白画面黑斑Mura': 0.8
     # OLED_Mura
     '彩斑Mura': 0.3
     'S向边缘Mura': 0.5
+    '孔区跑道Mura': 0.8
 
   # 6. Mapping集中性调节
   mapping_hotspot_script:

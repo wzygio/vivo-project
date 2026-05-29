@@ -1,0 +1,11 @@
+2026-05-27 15:53:53 - INFO - [spc_service] - 🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: 83240 条, 列: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'sheet_mean', 'sheet_max', 'sheet_min', 'sheet_start_time', 'data_type', 'usl', 'lsl', 'ucl', 'lcl', 'spc_status', 'is_oos', 'is_ooc', 'is_soos']
+2026-05-27 15:53:53 - INFO - [spc_service] - 🚧 [ScrapTrace][L7-Sanitize] 洗白后: 83240 条, is_ooc=1 数: 13
+2026-05-27 15:53:53 - INFO - [spc_service] - 🚧 [ScrapTrace][L8-TimeTrim] 时间边界过滤后: 83118 条, three_month_start=2026-03-01 00:00:00
+2026-05-27 15:53:54 - INFO - [spc_service] - 🚧 [ScrapTrace][L9-StationAgg] station_detail_df: 117 条, 列: ['prod_code', 'factory', 'step_id', '抽检数', 'OOS片数', 'OOC片数', 'SOOS片数', 'OOS', 'OOC', 'SOOS']
+2026-05-27 15:53:55 - INFO - [spc_service] - 🚧 [ScrapTrace][L10-TimeBucket] _apply_time_bucket_mapping 后: 142100 条
+2026-05-27 15:53:55 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: 13 条
+2026-05-27 15:53:55 - INFO - [spc_service] - 🚧 [ScrapTrace][L11-DetailAgg] detail_df: 78 条
+2026-05-27 15:53:56 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_and_rollup 输入: detail_df=78 条, global=13 条, station=4 条
+2026-05-27 15:53:56 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L1] filter_state: products=['M626', 'M678'], factories=['ARRAY', 'OLED', 'TP'], type=SPC
+2026-05-27 15:53:56 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] detail_df 列: ['time_group', 'prod_code', 'factory', '抽检数', 'OOS片数', 'OOC片数', 'SOOS片数', 'OOS', 'OOC', 'SOOS'], factory唯一值: ['ARRAY', 'OLED', 'TP']
+2026-05-27 15:53:56 - INFO - [spc_sections] - 🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: 78 条

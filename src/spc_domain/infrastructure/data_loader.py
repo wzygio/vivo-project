@@ -11,6 +11,20 @@ if TYPE_CHECKING:
     # 假设使用已存在的 DB Manager，实际传入的只要带有 .engine 属性的实例即可
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
+
+# =============================================================================
+#  涉及数据库表说明
+# =============================================================================
+# eda.spc_tzbjx_array  — ARRAY 厂 SPC 测量明细表（时序数据，每片玻璃每次测量的记录）
+#                       主键: sheet_id + step_id + param_name + site_name
+# eda.spc_tzbjx_oled   — OLED 厂 SPC 测量明细表（同上结构，ID 列为 glass_id）
+# eda.spc_tzbjx_tsp    — TP 厂 SPC 测量明细表（同上结构，ID 列为 glass_id）
+# eda.IMP_SPC_TZBJX    — SPC 参数大类表：参数名称，参数大类（元数据，定义当前产品哪些参数受控）
+#                       列: parmtername(参数名), data_type(SPC/CTQ/空), productspecname
+# dwd_imp_dv_param_spec — 管控规格基准表：参数名称，参数类型，规格线（定义每个参数的 USL/LSL/UCL/LCL）
+# DWR_MES_PRODUCTSPEC  — 产品号字典表（productspecname → productcode 翻译）
+# =============================================================================
+
 class SpcQueryConfig(BaseModel):
     """SPC 报表查询的强类型配置模型，用于控制数据提取范围"""
     start_date: str = Field(..., description="开始日期, 格式 YYYY-MM-DD")
@@ -158,64 +172,47 @@ def load_spc_spec_limits(
         return pd.DataFrame()
 
 
-def load_valid_spc_params(
+def load_param_whitelist(
     db_manager: 'DatabaseManager', 
-    prod_code: str,
-    data_type_filter: str = 'ALL'
+    prod_code: str
 ) -> Optional[pd.DataFrame]:
     """
-    提取 IMP_SPC_TZBJX 表中所有数据，并按 data_type 分类：
-    - SPC: data_type = 'SPC'
-    - CTQ: data_type = 'CTQ'  
-    - AOI: data_type 为 Null 或空字符串
-    
-    通过 DWR_MES_PRODUCTSPEC 关联，精准定位当前产品的白名单。
-    
+    [纯 DAO] 提取 IMP_SPC_TZBJX 表中当前产品的参数白名单（裸查询，无分类、无筛选）。
+
+    通过 DWR_MES_PRODUCTSPEC 关联，精确定位当前产品的白名单。
+    返回列: ref_param_name (参数名), data_type (DB 原始值，未经分类映射)
+
     Args:
         db_manager: 数据库管理器
         prod_code: 产品代码
-        data_type_filter: 筛选类型: 'SPC', 'CTQ', 'AOI', 'ALL'(默认)
+
+    Returns:
+        DataFrame with columns [ref_param_name, data_type]，失败返回 None
     """
-    # [核心修改] 去掉 data_type = 'SPC' 筛选，提取所有类型数据
-    # 使用 COALESCE 将 Null/空字符串统一标记为 'AOI'
     sql_query = f"""
     SELECT DISTINCT 
         T1.parmtername AS ref_param_name, 
-        CASE 
-            WHEN T1.data_type IS NULL OR TRIM(T1.data_type) = '' THEN 'AOI'
-            ELSE UPPER(TRIM(T1.data_type))
-        END AS data_type
+        T1.data_type
     FROM eda.IMP_SPC_TZBJX T1
     JOIN DWR_MES_PRODUCTSPEC T2 ON T1.productspecname = T2.PRODUCTSPECNAME
     WHERE T2.PRODUCTCODE = '{prod_code}'
     """
-    
-    # 根据筛选条件添加额外过滤（在 Python 层处理，保持 SQL 简单）
+
     try:
         if db_manager.engine is None:
             raise ValueError("数据库引擎未初始化。")
-        
-        logging.info(f"[DAO] 开始提取参数映射表，产品: {prod_code}, 筛选类型: {data_type_filter}")
+
+        logging.info(f"[DAO] 提取参数白名单 (裸查询)，产品: {prod_code}")
         df = pd.read_sql(text(sql_query), db_manager.engine)
-        
+
         if not df.empty:
-            # 清洗首尾空格，并统一转大写，防止后续 merge 时遭遇大小写暗坑
-            df['ref_param_name'] = df['ref_param_name'].astype(str).str.strip().str.upper()
-            
-            # [核心修改] 根据 data_type_filter 进行内存筛选
-            filter_upper = data_type_filter.upper() if data_type_filter else 'ALL'
-            if filter_upper != 'ALL':
-                before_count = len(df)
-                df = df[df['data_type'] == filter_upper].copy()
-                logging.info(f"[DAO] 内存筛选: {filter_upper}, 过滤前 {before_count} 条, 过滤后 {len(df)} 条")
-            else:
-                logging.info(f"[DAO] 返回所有类型参数，共 {len(df)} 条")
-            
+            df["ref_param_name"] = df["ref_param_name"].astype(str).str.strip().str.upper()
+            logging.info(f"[DAO] 产品 {prod_code} 白名单: {len(df)} 个参数")
             return df
-        
+
         logging.warning(f"[DAO] 产品 {prod_code} 未查询到任何参数映射数据")
         return pd.DataFrame()
-        
+
     except Exception as e:
-        logging.error(f"[DAO] 提取参数映射表失败: {e}")
+        logging.error(f"[DAO] 提取参数白名单失败: {e}")
         return None

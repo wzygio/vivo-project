@@ -1,0 +1,42 @@
+# M673为高PPI产品，Array段良率较低
+
+# 数据加载相关的参数
+data_source:
+  product_code: "M673"
+
+  # 4. defect_group
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "Array_Mura"
+    - "OLED_Mura"
+    
+  work_order_types:
+    - "ESLC" # 量产
+    - "P" # 量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
+
+# 本地文件读取
+paths:
+  static_warning_lines: 
+    file_name: 'M673_入库不良率规格.xlsx'
+    sheet_name: 'Sheet1'
+
+  rate_override_config:
+    file_name: "M673_override_rates.xlsx"
+    sheet_name: "Sheet1"
+
+  mwd_override_config:
+    file_name: "M673_趋势图人工修正.xlsx"
+
+# 数据处理相关的参数
+processing:
+  use_local_snapshot: True
+  snapshot_path: 'data/snapshot_M673.parquet'
+  
+  defect_capping:
+    enable: True
+
+  

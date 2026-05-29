@@ -9,10 +9,10 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 from yield_domain.application.yield_service import YieldAnalysisService
-from app.components.components import render_page_header
+from app.components.page_header import render_page_header
 
 # 引入区块渲染组件
-from app.components.table_sections import (
+from app.sections.table_details import (
     render_lot_group_summary_section,
     render_lot_code_details_section,
     render_lot_top20_section

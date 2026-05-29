@@ -9,11 +9,11 @@ from pathlib import Path
 from app.utils.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 from src.shared_kernel.config import ConfigLoader
-from app.components.components import (
+from app.components.page_header import (
     render_page_header,
     extract_cached_funcs,
 )
-from app.components.spc_sections import (
+from app.sections.spc_dashboard import (
     render_spc_control_panel,
     render_spc_summary_section,
     render_spc_detail_section,
@@ -21,7 +21,7 @@ from app.components.spc_sections import (
     filter_and_rollup_spc_data
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
-from app.components.compliance_config import (
+from app.compliance.manager import (
     render_compliance_config_panel,
     compute_global_compliance_status,
     get_compliance_config

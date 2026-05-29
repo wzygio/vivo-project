@@ -16,7 +16,7 @@ from app.charts.sheet_lot_chart import (
     parse_panel_id_to_coords,
     create_sheet_stack_chart
 )
-from app.components.components import COLOR_MAP
+from app.constants import COLOR_MAP
 from yield_domain.core.mapping_processor import apply_hotspot_modification_to_matrix
 
 # ==============================================================================

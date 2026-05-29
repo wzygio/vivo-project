@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from app.components.components import create_code_selection_ui
+from app.components.code_selector import create_code_selection_ui
 from app.charts.sheet_details_chart import render_lot_id_filter, render_sheet_id_query
 
 # ==============================================================================

@@ -3,7 +3,7 @@
 > **项目代号**: 天柱专项报表系统  
 > **领域**: 面板制造业（OLED/Array 半导体显示）良率分析与 SPC 统计过程控制  
 > **技术栈**: Python + Streamlit + PostgreSQL + Parquet 快照  
-> **最后更新**: 2026-05-18
+> **最后更新**: 2026-05-29
 
 ---
 
@@ -52,8 +52,20 @@ vivo-project/
 │
 ├── app/                          # [展示层/Presentation] Streamlit 前端应用
 │   ├── Home.py                   #   门户入口：全屏 iframe 加载静态资源
+│   ├── constants.py              #   共享常量（COLOR_MAP 等）
 │   ├── charts/                   #   图表组件（ECharts 封装）
-│   ├── components/               #   Streamlit UI 组件
+│   ├── components/               #   可复用 UI 组件（跨页面共享）
+│   │   ├── page_header.py        #     页面标题栏 + 缓存刷新 + 热重载
+│   │   ├── code_selector.py      #     Defect Code 筛选器
+│   │   ├── alert_center.py       #     统一预警中心（趋势 + Lot 超规）
+│   │   └── file_uploader.py      #     趋势覆盖文件上传
+│   ├── sections/                 #   页面专属业务区块（按页面组织）
+│   │   ├── yield_dashboard.py    #     良率分析看板区块
+│   │   ├── spc_dashboard.py      #     SPC 预警看板区块
+│   │   ├── parts_dashboard.py    #     关键备件报表区块
+│   │   └── table_details.py      #     明细表（ByLot/BySheet）区块
+│   ├── compliance/               #   合规配置模块（非 UI，纯逻辑）
+│   │   └── manager.py            #     数据修饰配置读写
 │   ├── pages/                    #   多页面路由
 │   │   ├── 入库不良率分析看板.py
 │   │   ├── 入库不良率ByLot明细表.py

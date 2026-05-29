@@ -971,7 +971,7 @@ def _override_rates(
             # =================================================================
             if target_entity_id not in valid_entity_ids:
                 if is_target_trace:
-                    logging.error(f"    -> [拦截] 实体 '{target_entity_id}' 在当前数据底座中物理不存在！拒绝凭空捏造。")
+                    logging.warning(f"    -> [拦截] 实体 '{target_entity_id}' 在当前数据底座中物理不存在！拒绝凭空捏造。")
                 else:
                     logging.debug(f"跳过覆盖: 实体 '{target_entity_id}' 在当前窗口内不存在或已被过滤。")
                 continue # 直接跳过，不计入 processed_ids

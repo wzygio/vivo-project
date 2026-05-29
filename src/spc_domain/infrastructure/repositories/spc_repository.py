@@ -13,8 +13,9 @@ from dateutil.relativedelta import relativedelta
 from src.spc_domain.infrastructure.data_loader import(
     load_spc_measurements, 
     load_spc_spec_limits, 
-    load_valid_spc_params
+    load_param_whitelist
 )
+from src.spc_domain.core.spc_param_classifier import classify_param_type
 from src.spc_domain.application.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.data_inspector import export_probed_details
@@ -242,35 +243,40 @@ class SpcRepository:
             df_filtered = df_final[mask_time].copy() 
 
             # =================================================================
-            # [核心修复] 动态内存过滤：索要当前产品的专属白名单
-            # [扩展] 支持按 data_type 筛选: SPC, CTQ, AOI, ALL
+            # [重构] 白名单过滤：DAO 裸查询 → Core 分类 → Repo 筛选 + merge
             # =================================================================
-            data_type_filter = getattr(config, 'data_type_filter', 'ALL')
-            valid_params_df = load_valid_spc_params(self.db, config.prod_code, data_type_filter)
-            
-            if valid_params_df is not None:
-                if not valid_params_df.empty:
-                    # 1. 统一转大写建立连接键
-                    df_filtered['param_name_upper'] = df_filtered['param_name'].str.upper()
-                    
-                    # 2. 内连接：既过滤了不合规的参数，又顺路带回了 data_type 列
+            data_type_filter = getattr(config, "data_type_filter", "ALL")
+            raw_whitelist = load_param_whitelist(self.db, config.prod_code)
+
+            if raw_whitelist is not None:
+                if not raw_whitelist.empty:
+                    # 1. Core 层：对原始 data_type 进行分类映射
+                    raw_whitelist["data_type"] = raw_whitelist["data_type"].apply(classify_param_type)
+
+                    # 2. Repo 层：按前端筛选条件过滤（不下沉到 DAO）
+                    filter_upper = data_type_filter.upper() if data_type_filter else "ALL"
+                    if filter_upper != "ALL":
+                        before_count = len(raw_whitelist)
+                        raw_whitelist = raw_whitelist[raw_whitelist["data_type"] == filter_upper].copy()
+                        logging.info(f"[SpcRepo] 按 data_type_filter={filter_upper} 筛选白名单: {before_count} → {len(raw_whitelist)}")
+
+                    # 3. 内存 merge：既过滤了不合规参数，又注入 data_type 标签
+                    df_filtered["param_name_upper"] = df_filtered["param_name"].str.upper()
                     df_filtered = df_filtered.merge(
-                        valid_params_df,
-                        left_on='param_name_upper',
-                        right_on='ref_param_name',
-                        how='inner'
+                        raw_whitelist,
+                        left_on="param_name_upper",
+                        right_on="ref_param_name",
+                        how="inner"
                     )
-                    
-                    # 3. 清理联结产生的临时字段
-                    df_filtered = df_filtered.drop(columns=['param_name_upper', 'ref_param_name'])
-                    
-                    logging.info(f"[SpcRepo] 内存过滤与 data_type 注入完成，下发 {len(valid_params_df)} 种专属参数。")
+                    df_filtered = df_filtered.drop(columns=["param_name_upper", "ref_param_name"])
+
+                    logging.info(f"[SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 {len(raw_whitelist)} 种。")
                 else:
-                    logging.warning(f"[SpcRepo] 警告：产品 {config.prod_code} 查无 SPC 参数白名单！已清空本批次数据。")
-                    df_filtered = df_filtered.iloc[0:0] 
+                    logging.warning(f"[SpcRepo] 警告：产品 {config.prod_code} 查无参数白名单！已清空本批次数据。")
+                    df_filtered = df_filtered.iloc[0:0]
             else:
-                logging.error("[SpcRepo] 严重警告：拉取 SPC 参数白名单失败，下发全量参数并标记未知类型。")
-                df_filtered['data_type'] = 'UNKNOWN'
+                logging.error("[SpcRepo] 严重警告：拉取参数白名单失败，下发全量参数并标记未知类型。")
+                df_filtered["data_type"] = "UNKNOWN"
 
             df_filtered = self._apply_outlier_filters(df_filtered, config.prod_code)
 

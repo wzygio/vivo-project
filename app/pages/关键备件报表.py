@@ -38,7 +38,7 @@ from pathlib import Path
 
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
-from app.components.parts_sections import (
+from app.sections.parts_dashboard import (
     render_parts_header,
     render_parts_refresh_button,
     render_factory_filter,

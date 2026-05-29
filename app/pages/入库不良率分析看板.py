@@ -18,18 +18,15 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from pathlib import Path
 
 # 引入图表组件
-from app.components.components import (
-    create_code_selection_ui,
-    render_page_header,
-    render_lot_spec_alert,
-    render_trend_override_uploader,
-    extract_cached_funcs,
-)
+from app.components.page_header import render_page_header, extract_cached_funcs
+from app.components.code_selector import create_code_selection_ui
+from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
+from app.components.file_uploader import render_trend_override_uploader
 from app.charts.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]
-from app.components.yield_sections import (
+from app.sections.yield_dashboard import (
     render_macro_trend_section,
     render_micro_trend_section,
     render_lot_distribution_section,
@@ -146,32 +143,43 @@ if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
 # ==============================================================================
 #  🚨 智能预警中心 (Intelligent Alert Center)
 # ==============================================================================
-if query_params.get("admin") == "true":
-    with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦截)..."):
-        # 1. 趋势预警
-        trend_alerts = AlertService.get_dashboard_alerts(
-            mwd_group_data=mwd_group_data,
-            mwd_code_data=mwd_code_data,
-            config=active_config,
-            product_dir=product_dir
-        )
-        
-        has_trend_alerts = len(trend_alerts) > 0
-        
-        # [A] 趋势异常通报区
-        with st.expander("🛡️ 月周天数据异常预警", expanded=not has_trend_alerts):
-            if has_trend_alerts:
-                with st.container(border=True):
-                    st.error(f"🚨 趋势监测发现 {len(trend_alerts)} 项异常波动 (需关注)")
-                    for msg in trend_alerts:
-                        st.markdown(msg)
-            else:
-                st.success("✅ 系统监测正常：未发现月周天良率异常。")
+with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦截)..."):
+    # 1. 趋势预警
+    trend_alerts = AlertService.get_dashboard_alerts(
+        mwd_group_data=mwd_group_data,
+        mwd_code_data=mwd_code_data,
+        config=active_config,
+        product_dir=product_dir
+    )
+    
+    # 2. 构建趋势监控上下文
+    trend_context = build_trend_context(
+        alert_service_result=trend_alerts,
+        mwd_code_data=mwd_code_data,
+        mwd_group_data=mwd_group_data
+    )
+
+    # 3. Lot 超规扫描
+    oos_records, total_recent_lots = compute_lot_oos_records(
+        lot_data=lot_data,
+        warning_lines=warning_lines,
+        time_period=30
+    )
+
+    # 4. 统一渲染
+    render_alert_center(
+        trend_alerts=trend_alerts,
+        trend_context=trend_context,
+        oos_records=oos_records,
+        total_recent_lots=total_recent_lots,
+        time_period=30
+    )
+
+
 
 # ==============================================================================
 #  第一部分: 宏观监控 (Group级趋势)
 # ==============================================================================
-render_lot_spec_alert(lot_data=lot_data, warning_lines=warning_lines)
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
 render_macro_trend_section(
     mwd_group_data,
