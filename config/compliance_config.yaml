@@ -15,13 +15,23 @@ default: false
 # 格式：{监控类型}-{产品型号}-{厂别}
 rules:
   # 示例配置（请根据实际需求修改）
+  # SPC-M678-ARRAY: true
+  # SPC-M678-OLED: true
+  # SPC-M626-ARRAY: true
+  # SPC-M626-OLED: true
+  # SPC-Z571-ARRAY: true
+  # SPC-Z571-OLED: true
+
+  # CTQ-M678-ARRAY: true
+  # CTQ-M678-OLED: true
+  # CTQ-M626-ARRAY: true
+  # CTQ-M626-OLED: true
+  CTQ-Z571-ARRAY: true
+  CTQ-Z571-OLED: true
+
   # AOI-M626-OLED: true
   # AOI-M678-OLED: true
-  # CTQ-M626-ARRAY: true
-  # CTQ-M678-ARRAY: true
-  # CTQ-M626-OLED: true
-  # CTQ-M678-OLED: true
-  # SPC-M626-ARRAY: true
-  # SPC-M678-ARRAY: true
-  # SPC-M626-OLED: true
-  # SPC-M678-OLED: true
+
+  
+
+  

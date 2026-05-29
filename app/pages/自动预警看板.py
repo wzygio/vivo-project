@@ -21,7 +21,7 @@ from app.sections.spc_dashboard import (
     filter_and_rollup_spc_data
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
-from app.compliance.manager import (
+from app.compliance.compliance_manager import (
     render_compliance_config_panel,
     compute_global_compliance_status,
     get_compliance_config
