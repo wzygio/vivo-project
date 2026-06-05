@@ -130,7 +130,7 @@ else:
 # ==============================================================================
 
 render_parts_metrics(
-    total_count=view_model.total_count if selected_factory == "" else len(filtered_df),
+    total_count=len(filtered_df) if not filtered_df.empty else 0,
     over_count=int((filtered_df["预警状态"] == "超规").sum()) if not filtered_df.empty else 0,
     warning_count=int((filtered_df["预警状态"] == "预警").sum()) if not filtered_df.empty else 0,
     normal_count=int((filtered_df["预警状态"] == "正常").sum()) if not filtered_df.empty else 0,

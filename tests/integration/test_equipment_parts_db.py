@@ -1,157 +1,137 @@
-# tests/integration/test_equipment_parts_db.py
 """
-集成测试 — 关键备件报表数据库层。
+集成测试 - 关键备件报表数据库/快照链路。
 
 测试范围:
-1. SQL 查询正确执行，返回预期列
-2. ROW_NUMBER 去重逻辑生效（每个 sub_equip_id 至多一条记录）
-3. 完整 DAO → Service 管道
+1. 规格基线文件可加载
+2. DB/Parquet 快照链路返回稳定结构
+3. 规格匹配、超规修饰、进度状态计算完整执行
 """
 
-import pytest
-import pandas as pd
 from pathlib import Path
 
-from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+import pandas as pd
+import pytest
+
+from src.equipment_domain.core.parts_calculator import (
+    apply_over_spec_alert_and_decoration,
+    batch_calculate_progress_and_status,
+)
+from src.equipment_domain.core.parts_matcher import (
+    build_and_match_all,
+    find_matching_db_record,
+)
 from src.equipment_domain.infrastructure.data_loader import (
-    load_latest_part_life,
+    load_part_life_snapshot,
     load_spec_baseline,
 )
-from src.equipment_domain.application.parts_service import (
-    _find_matching_db_record,
-)
-
-
-# ==============================================================================
-#  Fixtures
-# ==============================================================================
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
 @pytest.fixture(scope="module")
-def db_manager():
-    """全局数据库管理器实例（模块级复用）"""
+def db_manager() -> DatabaseManager:
+    """全局数据库管理器实例（模块级复用）。"""
     return DatabaseManager()
 
 
 @pytest.fixture
 def baseline_path() -> Path:
-    """指向项目实际的 CSV 基线文件"""
+    """指向项目实际的 CSV 基线文件。"""
     return Path("resources/critical_parts_baseline.csv")
 
 
-# ==============================================================================
-#  测试: load_latest_part_life()
-# ==============================================================================
+@pytest.fixture
+def spec_df(baseline_path: Path) -> pd.DataFrame:
+    """加载实际规格基线。"""
+    return load_spec_baseline(baseline_path)
 
 
-class TestLoadLatestPartLife:
+class TestSpecBaseline:
+    """测试实际规格基线。"""
 
-    def test_db_query_returns_expected_columns(self, db_manager):
-        """
-        SQL 执行成功，返回包含预期列的非空 DataFrame。
-        """
-        df = load_latest_part_life(db_manager)
+    def test_spec_baseline_loaded(
+        self,
+        baseline_path: Path,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """CSV 基线存在、非空且包含当前关键字段。"""
+        assert baseline_path.exists(), f"基线 CSV 不存在: {baseline_path.resolve()}"
+        assert len(spec_df) > 0
+        assert {"Target", "Mask"}.issubset(set(spec_df["备件类型"].dropna()))
+        assert (spec_df["寿命规格"].dropna() > 0).all()
 
-        # 是否返回了 DataFrame
+
+class TestPartLifeSnapshot:
+    """测试 DB/Parquet 快照链路。"""
+
+    def test_snapshot_returns_expected_columns(
+        self,
+        db_manager: DatabaseManager,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """快照链路执行成功，并在有数据时返回预期列。"""
+        df = load_part_life_snapshot(db_manager, spec_df)
+
         assert isinstance(df, pd.DataFrame)
-
-        # 如果数据库无数据（测试环境可能没有这张表），跳过不报错
         if df.empty:
-            pytest.skip("数据库返回空结果（可能是测试环境无数据）")
+            pytest.skip("数据库/快照返回空结果")
 
-        # 验证预期列存在
         expected_columns = {
-            "step_id", "sub_equip_id", "param_name", "value", "glass_start_time"
+            "step_id", "sub_equip_id", "param_name", "value", "glass_start_time",
         }
-        actual_columns = set(df.columns)
-        missing = expected_columns - actual_columns
-        assert not missing, f"缺少列: {missing}"
+        assert expected_columns.issubset(set(df.columns))
 
-    def test_db_row_number_unique_per_sub_equip(self, db_manager):
-        """
-        验证 ROW_NUMBER 窗口函数生效：
-        每个 sub_equip_id 在结果中最多出现一次。
-        """
-        df = load_latest_part_life(db_manager)
-
-        if df.empty:
-            pytest.skip("数据库返回空结果")
-
-        # 检查 sub_equip_id 是否有重复
-        duplicates = df["sub_equip_id"].duplicated().sum()
-        assert duplicates == 0, (
-            f"ROW_NUMBER 窗口函数未正确去重: "
-            f"发现 {duplicates} 个重复 sub_equip_id"
-        )
-
-    def test_db_value_is_numeric(self, db_manager):
-        """
-        验证 value 列已正确转换为数值类型。
-        """
-        df = load_latest_part_life(db_manager)
+    def test_snapshot_value_and_time_types(
+        self,
+        db_manager: DatabaseManager,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """有数据时，value 为数值，glass_start_time 为时间类型。"""
+        df = load_part_life_snapshot(db_manager, spec_df)
 
         if df.empty:
-            pytest.skip("数据库返回空结果")
+            pytest.skip("数据库/快照返回空结果")
 
-        # value 列应为数值类型
-        assert df["value"].dtype in (
-            "float64", "int64", "Float64", "Int64"
-        ), f"value 列不是数值类型: {df['value'].dtype}"
-
-    def test_db_glass_start_time_is_datetime(self, db_manager):
-        """
-        验证 glass_start_time 列已正确转换为 datetime。
-        """
-        df = load_latest_part_life(db_manager)
-
-        if df.empty:
-            pytest.skip("数据库返回空结果")
-
-        assert pd.api.types.is_datetime64_any_dtype(
-            df["glass_start_time"]
-        ), "glass_start_time 不是 datetime 类型"
-
-
-# ==============================================================================
-#  测试: 完整 DAO 管道
-# ==============================================================================
+        assert pd.api.types.is_numeric_dtype(df["value"])
+        assert pd.api.types.is_datetime64_any_dtype(df["glass_start_time"])
 
 
 class TestPartsPipeline:
+    """测试完整匹配与计算管道。"""
 
-    def test_spec_baseline_loaded(self, baseline_path: Path):
-        """
-        验证 CSV 基线文件存在且可正常加载。
-        """
-        assert baseline_path.exists(), (
-            f"基线 CSV 文件不存在: {baseline_path.resolve()}"
-        )
-        df = load_spec_baseline(baseline_path)
-        assert len(df) > 0, "基线 CSV 为空"
-        # 验证关键数据
-        assert "TRGTLIFE_R" in df["备件类型"].values
-        assert "MASKLIFE_R" in df["备件类型"].values
-        assert 840 in df["寿命规格"].values
+    def test_find_matching_record_does_not_raise(
+        self,
+        db_manager: DatabaseManager,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """规格行逐条匹配快照数据时不抛异常。"""
+        snapshot_df = load_part_life_snapshot(db_manager, spec_df)
+        if snapshot_df.empty:
+            pytest.skip("数据库/快照返回空结果")
 
-    def test_full_pipeline_run(self, db_manager, baseline_path: Path):
-        """
-        完整管道执行：加载 CSV → 查询 DB → 匹配 → 计算。
-        不验证具体数值，只验证执行不抛异常且返回合理结构。
-        """
-        # 1. 加载基线
-        spec_df = load_spec_baseline(baseline_path)
-        assert len(spec_df) > 0
-
-        # 2. 查询 DB
-        latest_df = load_latest_part_life(db_manager)
-
-        # 3. 执行匹配（不报异常）
         match_count = 0
-        for _, spec_row in spec_df.iterrows():
-            matched = _find_matching_db_record(spec_row, latest_df)
+        for _, spec_row in spec_df.head(20).iterrows():
+            matched = find_matching_db_record(spec_row, snapshot_df)
             if matched is not None:
                 match_count += 1
 
-        # 只要执行不抛异常就算通过
         assert isinstance(match_count, int)
         assert match_count >= 0
+
+    def test_full_pipeline_run(
+        self,
+        db_manager: DatabaseManager,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """规格加载 -> 快照 -> 匹配 -> 修饰 -> 计算完整执行。"""
+        snapshot_df = load_part_life_snapshot(db_manager, spec_df)
+        report_df = build_and_match_all(spec_df, snapshot_df)
+        report_df = apply_over_spec_alert_and_decoration(
+            report_df,
+            group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+        )
+        report_df = batch_calculate_progress_and_status(report_df)
+
+        assert len(report_df) == len(spec_df)
+        assert {"测量值", "使用进度", "预警状态", "是否超规"}.issubset(
+            set(report_df.columns)
+        )

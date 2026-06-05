@@ -1,0 +1,13 @@
+[     290ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8503/%E5%85%B3%E9%94%AE%E5%A4%87%E4%BB%B6%E6%8A%A5%E8%A1%A8/_stcore/health:0
+[     290ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8503/%E5%85%B3%E9%94%AE%E5%A4%87%E4%BB%B6%E6%8A%A5%E8%A1%A8/_stcore/host-config:0
+[     481ms] [ERROR] Failed to load resource: net::ERR_ACCESS_DENIED @ https://data.streamlit.io/metrics.json:0
+[     482ms] [ERROR] Failed to fetch metrics config: TypeError: Failed to fetch
+    at MetricsManager.requestDefaultMetricsConfig (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:12838)
+    at MetricsManager.initialize (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:12150)
+    at App.handleInitialization (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:28627)
+    at App.handleNewSession (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:27397)
+    at Object.newSession (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:22107)
+    at e (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:22018)
+    at App.handleMessage [as onMessage] (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:141:22076)
+    at WebsocketConnection.handleMessage (http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:137:4043) @ http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:140
+[     482ms] [ERROR] Undefined metrics config - deactivating metrics tracking. @ http://127.0.0.1:8503/static/js/index.RuhrnD1v.js:140

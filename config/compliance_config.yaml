@@ -2,36 +2,51 @@
 # 数据修饰配置文件 (Compliance Configuration)
 # ==============================================================================
 # 说明：
-# - 此文件用于控制"监控类型-产品型号-厂别"组合的报警数据修饰开关
+# - 规则键格式（固定顺序）: 监控类型-产品型号-厂别-月份-周别
+# - 支持 1-5 段键，每段可使用 ALL 作为通配符
+# - 段数越多优先级越高（更具体的规则覆盖更宽泛的规则）
 # - 值为 true 表示显示修饰后的合规数据（所有报警变为 OK）
 # - 值为 false 表示显示真实原始数据
 # - 修改此文件后，刷新页面即可生效
-# ==============================================================================
+# 
+# 格式:
+#   1段: {监控类型}
+#   2段: {监控类型}-{产品型号}
+#   3段: {监控类型}-{产品型号}-{厂别}
+#   4段: {监控类型}-{产品型号}-{厂别}-M{ISO月份}
+#   5段: {监控类型}-{产品型号}-{厂别}-M{ISO月份}-W{ISO周号}
+# 
+# 示例:
+# === 1段键示例（匹配该类型下任意筛选条件）===
+# CTQ: true                   # 洗白所有 CTQ 数据
+
+# === 2段键示例 ===
+# CTQ-Z571: true              # 洗白 Z571 全部 CTQ 数据
+
+# === 3段键示例 ===
+# SPC-M678-ARRAY: true
+# CTQ-M678-ARRAY: true
+
+# === CTQ 4段键示例（精细到 ISO 月份）===
+# CTQ-Z571-OLED-M05: true     # 仅修饰 Z571 OLED 5月 CTQ 数据
+
+# === CTQ 5段键示例（精细到 ISO 周）===
+# CTQ-Z571-OLED-M05-W21: true   # 仅修饰 Z571 OLED 5月第21周 CTQ 数据
+# CTQ-Z571-OLED-M05-W22: false  # 5月第22周显示真实数据（覆盖上级规则）
+
+# === ALL 通配示例 ===
+# ALL-Z571-OLED: true         # 任意监控类型下的 Z571 OLED
+# CTQ-ALL-OLED: true          # CTQ 下任意产品的 OLED
+
+# === AOI 示例 ===
+# AOI-M626-OLED: true
+# AOI-M678-OLED: true
 
 # 全局开关
 default: false
 
-# 精细化配置（优先级高于 de fault）
-# 格式：{监控类型}-{产品型号}-{厂别}
-rules:
-  # 示例配置（请根据实际需求修改）
-  # SPC-M678-ARRAY: true
-  # SPC-M678-OLED: true
-  # SPC-M626-ARRAY: true
-  # SPC-M626-OLED: true
-  # SPC-Z571-ARRAY: true
-  # SPC-Z571-OLED: true
-
-  # CTQ-M678-ARRAY: true
-  # CTQ-M678-OLED: true
-  # CTQ-M626-ARRAY: true
-  # CTQ-M626-OLED: true
-  CTQ-Z571-ARRAY: true
-  CTQ-Z571-OLED: true
-
-  # AOI-M626-OLED: true
-  # AOI-M678-OLED: true
-
-  
-
-  
+rules: 
+  SPC-Z571-ALL-ALL: true
+  CTQ-Z571-ALL-ALL: true
+  AOI-Z571-ARRAY-M05: true
+  AOI-ALL-TP-M06: true

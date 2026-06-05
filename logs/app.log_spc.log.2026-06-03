@@ -1,0 +1,784 @@
+2026-06-03 10:51:07 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:51:07 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 10:51:07 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:51:07 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 10:51:07 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 10:51:07 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 10:51:07 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:51:07 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 10:51:09 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:51:09 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 M626 的 SPC 数据...
+2026-06-03 10:51:09 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:51:27 - INFO - [data_loader] - [DAO] 成功提取并清洗 1283393 条底层大宽表数据。
+2026-06-03 10:51:30 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 10:51:30 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 10:51:30 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 10:51:30 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 10:51:33 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:51:39 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:51:52 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 10:51:57 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 10:51:57 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 10:51:57 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:51:57 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:51:57 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 10:51:57 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 10:51:57 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 10:51:57 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:51:57 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:51:58 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 10:51:58 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:51:59 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 10:51:59 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:52:00 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:52:00 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 10:52:00 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:52:00 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 M678 的 SPC 数据...
+2026-06-03 10:52:00 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:52:09 - INFO - [data_loader] - [DAO] 成功提取并清洗 620186 条底层大宽表数据。
+2026-06-03 10:52:10 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 10:52:10 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 10:52:10 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 10:52:10 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 10:52:11 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:52:17 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:52:23 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 10:52:25 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 10:52:25 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 10:52:25 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:52:25 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:52:25 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:52:25 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:52:26 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 10:52:26 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:52:26 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 10:52:26 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:52:26 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:52:26 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 10:52:26 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:52:26 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 Z571 的 SPC 数据...
+2026-06-03 10:52:26 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:52:29 - INFO - [data_loader] - [DAO] 成功提取并清洗 148080 条底层大宽表数据。
+2026-06-03 10:52:29 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 10:52:29 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 10:52:29 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 10:52:29 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 10:52:29 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 10:52:35 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:52:37 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 10:52:37 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 10:52:37 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 10:52:37 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:52:37 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:52:37 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:52:37 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:52:37 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 10:52:37 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:52:37 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 10:52:37 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:52:38 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:52:38 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 10:52:38 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 1
+2026-06-03 10:52:38 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 10:52:38 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:52:38 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 10:52:38 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 1
+2026-06-03 10:52:40 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:52:40 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 10:52:40 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:52:40 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 10:52:41 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:52:41 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 10:52:41 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:52:41 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 10:52:41 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 10:52:41 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 10:52:41 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:52:41 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 10:52:41 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:52:41 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 10:52:41 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 10:52:41 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 10:52:42 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:52:47 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:52:55 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 10:52:55 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 10:52:55 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 10:52:55 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:52:55 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:52:55 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 10:52:55 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 10:52:55 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 10:52:55 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:52:55 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:52:55 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 10:52:55 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:52:56 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 10:52:56 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:52:56 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:52:56 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 10:52:56 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:52:56 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 10:52:56 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 10:52:56 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 10:52:57 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:53:02 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:53:05 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 10:53:05 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 10:53:05 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 10:53:05 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:53:05 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:53:06 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:53:06 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:53:06 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 10:53:06 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:53:06 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 10:53:06 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:53:06 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:53:06 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 10:53:06 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:53:06 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 10:53:06 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 10:53:06 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 10:53:06 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 10:53:12 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:53:13 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 10:53:13 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 10:53:13 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 10:53:13 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:53:13 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:53:13 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:53:13 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:53:13 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 10:53:13 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:53:13 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 10:53:13 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:53:13 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:53:13 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 10:53:13 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 1
+2026-06-03 10:53:13 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 10:53:13 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:53:13 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 10:53:13 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 1
+2026-06-03 10:53:15 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:53:15 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 10:53:15 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:53:15 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 10:53:58 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:53:58 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 10:53:58 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:53:59 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 10:53:59 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 10:53:59 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 10:53:59 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:53:59 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 10:53:59 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:53:59 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 10:53:59 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 10:53:59 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 10:54:00 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:54:02 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:09 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 10:54:09 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 10:54:09 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 10:54:09 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:09 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:09 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 10:54:09 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 10:54:09 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 10:54:09 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:09 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:09 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 10:54:09 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:10 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 10:54:10 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:10 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:10 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 10:54:10 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:54:10 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 10:54:10 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 10:54:10 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 10:54:10 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:54:16 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:19 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 10:54:19 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 10:54:19 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 10:54:19 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:19 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:19 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:19 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:19 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 10:54:19 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:19 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 10:54:19 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:19 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:19 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 10:54:19 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:54:19 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 10:54:19 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 10:54:19 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 10:54:19 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 10:54:25 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:25 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 10:54:25 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 10:54:25 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 10:54:25 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:25 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:25 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:25 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:26 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 10:54:26 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:26 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 10:54:26 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:26 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:26 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 10:54:26 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 1
+2026-06-03 10:54:26 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 10:54:26 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:26 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 10:54:26 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 1
+2026-06-03 10:54:27 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:27 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 10:54:27 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:27 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 10:54:27 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:54:27 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 10:54:27 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:54:27 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 10:54:27 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 10:54:27 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 10:54:27 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:27 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 10:54:28 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:54:28 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 10:54:28 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 10:54:28 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 10:54:29 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:54:34 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:40 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 10:54:40 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 10:54:40 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 10:54:40 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:40 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:40 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 10:54:40 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 10:54:40 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 10:54:40 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:40 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:41 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 10:54:41 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:41 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 10:54:41 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:41 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:41 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 10:54:41 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:54:42 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 10:54:42 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 10:54:42 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 10:54:42 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:54:47 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:50 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 10:54:50 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 10:54:50 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 10:54:50 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:50 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:50 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:50 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:50 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 10:54:50 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:51 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 10:54:51 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:51 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:51 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 10:54:51 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:54:51 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 10:54:51 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 10:54:51 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 10:54:51 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 10:54:56 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:54:57 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 10:54:57 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 10:54:57 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 10:54:57 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:54:57 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:54:57 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:54:57 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:54:57 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 10:54:57 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:54:57 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 10:54:57 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:54:57 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:54:57 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 10:54:57 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 1
+2026-06-03 10:54:57 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 10:54:57 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:58 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 10:54:58 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 1
+2026-06-03 10:54:59 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:59 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 10:54:59 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 10:54:59 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 10:57:42 - INFO - [spc_service] - ==> [Drill-down API] 开始钻取明细 | 时间节点: ALL | 类型: SOOS <==
+2026-06-03 10:57:42 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 10:57:42 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 10:57:42 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 10:57:42 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 10:57:42 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 10:57:42 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 10:57:42 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:57:42 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 10:57:43 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:57:43 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 10:57:43 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 10:57:43 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 10:57:44 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:57:49 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:57:55 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 10:57:55 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 10:57:55 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 10:57:55 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:57:55 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:57:55 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 10:57:55 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 10:57:55 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 10:57:55 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:57:55 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:57:56 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 10:57:56 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:57:56 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 10:57:56 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:57:56 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:57:56 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 10:57:56 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:57:56 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 10:57:56 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 10:57:56 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 10:57:57 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 10:58:02 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:58:05 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 10:58:05 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 10:58:05 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 10:58:05 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:58:05 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:58:05 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:58:05 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:58:05 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 10:58:06 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:58:06 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 10:58:06 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:58:06 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:58:06 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 10:58:06 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 10:58:06 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 10:58:06 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 10:58:06 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 10:58:06 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 10:58:11 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 10:58:12 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 10:58:12 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 10:58:12 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 10:58:12 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 10:58:12 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 10:58:12 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 10:58:12 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 10:58:12 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 10:58:12 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 10:58:12 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 10:58:12 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 10:58:12 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 10:58:12 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 10:58:12 - INFO - [spc_service] - 钻取成功，共捕获 5 条明细数据。
+2026-06-03 11:01:15 - INFO - [spc_service] - ==> [Drill-down API] 开始钻取明细 | 时间节点: ALL | 类型: SOOS <==
+2026-06-03 11:01:16 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 11:01:16 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 11:01:16 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 11:01:16 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 11:01:17 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 11:01:22 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 11:01:28 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 11:01:29 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 11:01:29 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 11:01:29 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 11:01:29 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 11:01:29 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 11:01:29 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 11:01:29 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 11:01:29 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 11:01:29 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 11:01:29 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 11:01:29 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 11:01:29 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 11:01:29 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 11:01:30 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 11:01:30 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 11:01:30 - INFO - [spc_service] - 钻取成功，共捕获 2 条明细数据。
+2026-06-03 11:01:45 - INFO - [spc_service] - ==> [Drill-down API] 开始钻取明细 | 时间节点: ALL | 类型: OOS <==
+2026-06-03 11:01:46 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 11:01:46 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 11:01:46 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 11:01:46 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 11:01:46 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 11:01:52 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 11:01:58 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 11:01:58 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 11:01:58 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 11:01:58 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 11:01:58 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 11:01:58 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 11:01:58 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 11:01:58 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 11:01:58 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 11:01:58 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 11:01:59 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 11:01:59 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 11:01:59 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 11:01:59 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 11:01:59 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 11:01:59 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 11:01:59 - INFO - [spc_service] - 钻取成功，共捕获 2 条明细数据。
+2026-06-03 13:24:52 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 13:24:52 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 13:24:52 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 13:24:52 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 13:24:52 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 13:24:52 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 13:24:52 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 13:24:52 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 13:24:53 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 13:24:53 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 13:24:53 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 13:24:53 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 13:24:54 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 13:24:54 - WARNING - [spc_repository] - ⚠️ [SpcRepo] COM 直读加密 xlsx 失败: 'src.shared_kernel'
+2026-06-03 13:24:54 - INFO - [spc_repository] - ✅ [SpcRepo] 从现有 CSV 加载过滤规则: spc_outlier_filters.csv
+2026-06-03 13:25:01 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 13:25:01 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 13:25:01 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 13:25:01 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 13:25:01 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 13:25:01 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 13:25:01 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 13:25:01 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 13:25:01 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 13:25:01 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 13:25:01 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 13:25:01 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 13:25:02 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 13:25:02 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 13:25:02 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 13:25:02 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 13:25:02 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 13:25:02 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 13:25:02 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 13:25:02 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 13:25:02 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 13:25:04 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 13:25:07 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 13:25:07 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 13:25:07 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 13:25:07 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 13:25:07 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 13:25:07 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 13:25:07 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 13:25:07 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 13:25:07 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 13:25:07 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 13:25:07 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 13:25:07 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 13:25:07 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 13:25:08 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 13:25:08 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 13:25:08 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 13:25:08 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 13:25:08 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 13:25:13 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 13:25:14 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 13:25:14 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 13:25:14 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 13:25:14 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 13:25:14 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 13:25:14 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 13:25:14 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 13:25:14 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 13:25:14 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 13:25:14 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 13:25:14 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 13:25:14 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 13:25:14 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 13:25:14 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 1
+2026-06-03 13:25:14 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 13:25:14 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 13:25:14 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 13:25:14 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 1
+2026-06-03 13:25:15 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 13:25:15 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 13:25:15 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 13:25:16 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 13:27:53 - INFO - [spc_service] - 🔄 [Service] 向底层下发 equipment 强刷指令 (Force Refresh)...
+2026-06-03 13:27:53 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 13:27:53 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 13:27:53 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 13:27:53 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 13:27:53 - INFO - [spc_service] - 🔄 [Service] 向底层下发 M626 强刷指令 (Force Refresh)...
+2026-06-03 13:27:53 - INFO - [spc_repository] - ⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！
+2026-06-03 13:27:53 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 13:27:53 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 M626 的 SPC 数据...
+2026-06-03 13:27:53 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 13:28:11 - INFO - [data_loader] - [DAO] 成功提取并清洗 1283393 条底层大宽表数据。
+2026-06-03 13:28:14 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 13:28:15 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 13:28:15 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 13:28:15 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 13:28:17 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 13:28:28 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 13:28:40 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 13:28:41 - INFO - [spc_service] - 🔄 [Service] 向底层下发 M678 强刷指令 (Force Refresh)...
+2026-06-03 13:28:41 - INFO - [spc_repository] - ⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！
+2026-06-03 13:28:41 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 13:28:41 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 M678 的 SPC 数据...
+2026-06-03 13:28:41 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 13:28:50 - INFO - [data_loader] - [DAO] 成功提取并清洗 620186 条底层大宽表数据。
+2026-06-03 13:28:52 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 13:28:52 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 13:28:52 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 13:28:52 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 13:28:53 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 13:28:58 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 13:29:05 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 13:29:05 - INFO - [spc_service] - 🔄 [Service] 向底层下发 Z571 强刷指令 (Force Refresh)...
+2026-06-03 13:29:06 - INFO - [spc_repository] - ⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！
+2026-06-03 13:29:06 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 13:29:06 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 Z571 的 SPC 数据...
+2026-06-03 13:29:06 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 13:29:08 - INFO - [data_loader] - [DAO] 成功提取并清洗 148080 条底层大宽表数据。
+2026-06-03 13:29:08 - INFO - [spc_repository] - ✅ [SpcRepo] 快照保存完成！
+2026-06-03 13:29:08 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 13:29:08 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 13:29:08 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 13:29:08 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 13:29:14 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 13:29:15 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 16:03:10 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 16:03:10 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 16:03:10 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 16:03:11 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 16:03:11 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 16:03:11 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 16:03:11 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:11 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 16:03:12 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:12 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 16:03:12 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 16:03:12 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 16:03:13 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:03:15 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:23 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 16:03:23 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 16:03:23 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 16:03:23 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:24 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:24 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 16:03:24 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 16:03:24 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 16:03:24 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:24 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:24 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 16:03:24 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:25 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 16:03:25 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:25 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:25 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 16:03:25 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:25 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 16:03:25 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 16:03:25 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 16:03:26 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:03:27 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:31 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 16:03:31 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 16:03:31 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 16:03:31 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:31 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:31 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:31 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:31 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 16:03:31 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:32 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 16:03:32 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:32 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:32 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 16:03:32 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:32 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 16:03:32 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 16:03:32 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 16:03:32 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 16:03:34 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:34 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 16:03:34 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 16:03:34 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 16:03:34 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:34 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:34 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:34 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:34 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 16:03:34 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:34 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 16:03:34 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:34 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:34 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 16:03:35 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 0
+2026-06-03 16:03:35 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 16:03:35 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:03:35 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 16:03:35 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 0
+2026-06-03 16:03:36 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:03:36 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 16:03:36 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:03:36 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 16:03:37 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 16:03:37 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 16:03:37 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 16:03:37 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 16:03:37 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 16:03:37 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 16:03:37 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:37 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 16:03:37 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:37 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 16:03:37 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 16:03:37 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 16:03:38 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:03:40 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:47 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 16:03:47 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 16:03:47 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 16:03:47 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:47 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:47 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 16:03:47 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 16:03:47 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 16:03:47 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:47 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:48 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 16:03:48 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:48 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 16:03:48 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:48 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:48 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 16:03:48 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:48 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 16:03:49 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 16:03:49 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 16:03:49 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:03:51 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:54 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 16:03:54 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 16:03:54 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 16:03:54 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:54 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:54 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:54 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:54 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 16:03:54 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:55 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 16:03:55 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:55 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:55 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 16:03:55 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:03:55 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 16:03:55 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 16:03:55 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 16:03:55 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 16:03:56 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:03:57 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 16:03:57 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 16:03:57 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 16:03:57 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:03:57 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:03:57 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:03:57 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:03:57 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 16:03:57 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:03:57 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 16:03:57 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:03:57 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:03:57 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 16:03:58 - INFO - [spc_service] - 📊 [Service] 原始物理 OOC 总数: 0
+2026-06-03 16:03:58 - INFO - [spc_service] - 🛡️ [Service] 站点聚合前置过滤：剔除 13059 条上上个月尾气数据 (<2026-04-01)
+2026-06-03 16:03:58 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: step_id, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:03:58 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 182 个时间桶的报表数据。
+2026-06-03 16:03:58 - INFO - [spc_service] - 📊 [Service] 站点维度 OOC 汇总数: 0
+2026-06-03 16:03:59 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:03:59 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 13 个时间桶的报表数据。
+2026-06-03 16:03:59 - INFO - [spc_calculator] - 开始执行 [Phase 3] 报表指标聚合 (按维度: time_group, 方案B: Sheet+Step+Param 组合粒度)...
+2026-06-03 16:04:00 - INFO - [spc_calculator] - [Phase 3] 指标聚合完成(方案B)，成功生成 117 个时间桶的报表数据。
+2026-06-03 16:04:50 - INFO - [spc_service] - ==> [Drill-down API] 开始钻取明细 | 时间节点: ALL | 类型: SOOS <==
+2026-06-03 16:04:50 - INFO - [spc_repository] - 🆕 [SpcRepo] 执行全量刷新 (2026-03-03 至 2026-06-03)
+2026-06-03 16:04:50 - INFO - [data_loader] - ==> [DAO] 开始从底层数据库 (eda 模式) 抽取产品 equipment 的 SPC 数据...
+2026-06-03 16:04:50 - INFO - [data_loader] - 执行大一统多厂别 (带字典表翻译与多态映射) 的 UNION SPC SQL 查询...
+2026-06-03 16:04:51 - INFO - [data_loader] - [DAO] 成功提取并清洗 0 条底层大宽表数据。
+2026-06-03 16:04:51 - INFO - [spc_repository] - [SpcRepo] 代理拉取 equipment 规格基准线...
+2026-06-03 16:04:51 - INFO - [data_loader] - 开始提取产品 equipment 的管控规格基准数据...
+2026-06-03 16:04:51 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:04:51 - INFO - [data_loader] - 成功提取 0 条管控规格规则。
+2026-06-03 16:04:51 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:04:51 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M626
+2026-06-03 16:04:51 - INFO - [data_loader] - [DAO] 产品 M626 白名单: 136 个参数
+2026-06-03 16:04:51 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 136 → 67
+2026-06-03 16:04:52 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:04:53 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:04:59 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 64818 个异常测量点 (来源: csv)。
+2026-06-03 16:05:00 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M626 规格基准线...
+2026-06-03 16:05:00 - INFO - [data_loader] - 开始提取产品 M626 的管控规格基准数据...
+2026-06-03 16:05:00 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:05:00 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:05:00 - INFO - [spc_repository] - [SpcRepo] 从 YAML 加载到 1 条规格覆盖配置
+2026-06-03 16:05:00 - INFO - [spc_repository] - [SpcRepo] 规格覆盖: M626-1L650-CD1 ucl: 5.45 → 5.45
+2026-06-03 16:05:00 - INFO - [spc_repository] - [SpcRepo] 共成功应用 1 条规格覆盖配置
+2026-06-03 16:05:00 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:05:00 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:05:00 - INFO - [spc_calculator] - 去重完成: 1065361 条 -> 1065361 条
+2026-06-03 16:05:00 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:05:00 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 65608 条 Sheet 级特征。
+2026-06-03 16:05:00 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:05:00 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:05:00 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 65608 条状态裁决。
+2026-06-03 16:05:01 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:05:01 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: M678
+2026-06-03 16:05:01 - INFO - [data_loader] - [DAO] 产品 M678 白名单: 137 个参数
+2026-06-03 16:05:01 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 137 → 67
+2026-06-03 16:05:01 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 67 种。
+2026-06-03 16:05:03 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:05:06 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 31010 个异常测量点 (来源: csv)。
+2026-06-03 16:05:06 - INFO - [spc_repository] - [SpcRepo] 代理拉取 M678 规格基准线...
+2026-06-03 16:05:06 - INFO - [data_loader] - 开始提取产品 M678 的管控规格基准数据...
+2026-06-03 16:05:06 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:05:06 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:05:06 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:05:06 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:05:06 - INFO - [spc_calculator] - 去重完成: 511590 条 -> 511590 条
+2026-06-03 16:05:06 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:05:06 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 31433 条 Sheet 级特征。
+2026-06-03 16:05:06 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:05:06 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:05:06 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 31433 条状态裁决。
+2026-06-03 16:05:06 - INFO - [spc_repository] - 🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。
+2026-06-03 16:05:06 - INFO - [data_loader] - [DAO] 提取参数白名单 (裸查询)，产品: Z571
+2026-06-03 16:05:06 - INFO - [data_loader] - [DAO] 产品 Z571 白名单: 128 个参数
+2026-06-03 16:05:06 - INFO - [spc_repository] - [SpcRepo] 按 data_type_filter=SPC 筛选白名单: 128 → 68
+2026-06-03 16:05:06 - INFO - [spc_repository] - [SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 68 种。
+2026-06-03 16:05:08 - INFO - [spc_repository] - ✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: spc_outlier_filters.csv (shape=(19, 4))
+2026-06-03 16:05:09 - INFO - [spc_repository] - 🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 1947 个异常测量点 (来源: csv)。
+2026-06-03 16:05:09 - INFO - [spc_repository] - [SpcRepo] 代理拉取 Z571 规格基准线...
+2026-06-03 16:05:09 - INFO - [data_loader] - 开始提取产品 Z571 的管控规格基准数据...
+2026-06-03 16:05:09 - INFO - [data_loader] - 执行管控规格基准 SQL 查询...
+2026-06-03 16:05:09 - INFO - [data_loader] - 成功提取 171 条管控规格规则。
+2026-06-03 16:05:09 - INFO - [spc_calculator] - 开始执行 [Phase 1] Sheet 级特征降维与规格关联...
+2026-06-03 16:05:09 - INFO - [spc_calculator] - [Phase 1.1] 按点位去重: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name', 'site_name']
+2026-06-03 16:05:09 - INFO - [spc_calculator] - 去重完成: 128822 条 -> 128822 条
+2026-06-03 16:05:09 - INFO - [spc_calculator] - [Phase 1.2] 按 Sheet 聚合计算: ['factory', 'prod_code', 'sheet_id', 'step_id', 'param_name']
+2026-06-03 16:05:09 - INFO - [spc_calculator] - 特征降维完成，单点数据已压缩为 7799 条 Sheet 级特征。
+2026-06-03 16:05:09 - INFO - [spc_calculator] - [Phase 1] 规格绑定成功。
+2026-06-03 16:05:09 - INFO - [spc_calculator] - 开始执行 [Phase 2] 向量化规则判定矩阵计算...
+2026-06-03 16:05:09 - INFO - [spc_calculator] - [Phase 2] 规则判定完成，共生成 7799 条状态裁决。
+2026-06-03 16:05:09 - INFO - [spc_service] - 钻取成功，共捕获 4 条明细数据。

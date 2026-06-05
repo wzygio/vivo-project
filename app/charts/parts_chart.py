@@ -15,6 +15,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from src.equipment_domain.core.parts_calculator import (
+    OVER_SPEC_COLUMN,
+    apply_over_spec_alert_and_decoration,
+)
+
 logger = logging.getLogger(__name__)
 
 SNAPSHOT_GLOB = "data/equipment/part_life_snapshot_*.parquet"
@@ -136,24 +141,23 @@ def generate_trend_data(
     if filtered.empty:
         return pd.DataFrame()
 
-    # 按日期聚合（每日取均值）
+    # 按日期聚合（累计寿命取每日最大值，保留真实锯齿形态）
     filtered["date"] = filtered["glass_start_time"].dt.date
-    daily = filtered.groupby("date")["value"].mean().reset_index()
+    daily = filtered.groupby("date")["value"].max().reset_index()
     daily.columns = ["日期", "实际数据"]
     daily["日期"] = pd.to_datetime(daily["日期"])
-
-    # 填充缺失日期（前向填充）
-    date_range = pd.date_range(
-        start=cutoff.date(), end=datetime.now().date(), freq="D"
-    )
-    daily = daily.set_index("日期").reindex(date_range)
-    daily["实际数据"] = daily["实际数据"].ffill()
-    daily = daily.reset_index()
-    daily.columns = ["日期", "实际数据"]
+    daily = daily.sort_values("日期", kind="mergesort")
 
     # 添加规格线和预警线
     daily["寿命规格"] = spec_limit
     daily["预警线"] = warn_line
+    daily = apply_over_spec_alert_and_decoration(
+        daily,
+        value_col="实际数据",
+        spec_col="寿命规格",
+        raw_value_col="原始实际数据",
+        sort_col="日期",
+    )
 
     # 格式化日期为字符串
     daily["日期"] = daily["日期"].dt.strftime("%Y-%m-%d")
@@ -189,15 +193,31 @@ def create_parts_trend_chart(
 
     fig = go.Figure()
 
+    over_spec_values = (
+        df_trend[OVER_SPEC_COLUMN]
+        if OVER_SPEC_COLUMN in df_trend.columns
+        else pd.Series(False, index=df_trend.index)
+    )
+
     fig.add_trace(go.Scatter(
         x=df_trend["日期"],
         y=df_trend["实际数据"],
         mode="lines+markers",
         name="实际数据 (HR)",
-        line=dict(color="#1f77b4", width=3),
+        line=dict(color="#1f77b4", width=3, shape="hv"),
         marker=dict(size=6),
         hovertemplate="日期: %{x}<br>实际: %{y} HR<extra></extra>",
     ))
+
+    if bool(over_spec_values.any()):
+        fig.add_trace(go.Scatter(
+            x=df_trend.loc[over_spec_values, "日期"],
+            y=df_trend.loc[over_spec_values, "实际数据"],
+            mode="markers",
+            name="原始超规点",
+            marker=dict(color="#d62728", size=9, symbol="diamond"),
+            hovertemplate="日期: %{x}<br>修饰后: %{y} HR<extra></extra>",
+        ))
 
     spec_val = df_trend["寿命规格"].iloc[0]
     fig.add_trace(go.Scatter(

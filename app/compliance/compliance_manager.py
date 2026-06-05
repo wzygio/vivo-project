@@ -1,4 +1,4 @@
-"""
+﻿"""
 数据修饰配置文件管理模块 (Compliance Config Manager)
 
 功能：
@@ -61,23 +61,55 @@ def load_compliance_config() -> Dict:
         return {"default": False, "rules": {}}
 
 
-def get_compliance_config(data_type: str, prod_code: str, factory: str) -> bool:
+def get_compliance_config(
+    data_type: str,
+    prod_code: str = "ALL",
+    factory: str = "ALL",
+    month: Optional[int] = None,
+    week: Optional[int] = None
+) -> bool:
     """
-    获取指定组合的修饰状态
+    获取指定组合的修饰状态（1-5段键级联查找）
     
     Args:
         data_type: 监控类型 (SPC/CTQ/AOI/ALL)
-        prod_code: 产品型号
-        factory: 厂别
+        prod_code: 产品型号 (默认 ALL)
+        factory: 厂别 (默认 ALL)
+        month: ISO 月份 (可选，1-12)
+        week: ISO 周号 (可选，1-53)
     
     Returns:
         bool: True = 显示修饰数据, False = 显示真实数据
+    
+    优先级: 5段 > 4段 > 3段 > 2段 > 1段 > default
     """
     config = load_compliance_config()
-    key = f"{data_type}-{prod_code}-{factory}"
     
-    # 优先从 rules 中查找，找不到使用 default
-    return config["rules"].get(key, config["default"])
+    # 从最具体到最宽泛逐级查找
+    candidates = []
+    
+    # 5段: type-prod-fac-MXX-WYY
+    if month is not None and week is not None:
+        candidates.append(f"{data_type}-{prod_code}-{factory}-M{month:02d}-W{week:02d}")
+    
+    # 4段: type-prod-fac-MXX
+    if month is not None:
+        candidates.append(f"{data_type}-{prod_code}-{factory}-M{month:02d}")
+    
+    # 3段: type-prod-fac
+    candidates.append(f"{data_type}-{prod_code}-{factory}")
+    
+    # 2段: type-prod
+    candidates.append(f"{data_type}-{prod_code}")
+    
+    # 1段: type
+    candidates.append(f"{data_type}")
+    
+    for key in candidates:
+        if key in config["rules"]:
+            return config["rules"][key]
+    
+    return config["default"]
 
 
 def save_compliance_config(config: Dict):
@@ -98,16 +130,34 @@ def compute_global_compliance_status(
     selected_factories: list
 ) -> bool:
     """
-    计算全局修饰状态
+    计算全局修饰状态（1-5段键通配感知）
     
-    策略：任一选中的组合启用了修饰，则返回 True（保守策略）
+    策略：对每个已选 type * prod * factory 组合，遍历所有规则键。
+    段0(type) 必须匹配 data_type（或为 ALL），段1(prod) 匹配产品（或为 ALL/不存在），
+    段2(fac) 匹配厂别（或为 ALL/不存在），月/周段忽略。任一命中即返回 True。
     """
     config = load_compliance_config()
     
     for prod in selected_products:
         for factory in selected_factories:
-            key = f"{data_type}-{prod}-{factory}"
-            if config["rules"].get(key, config["default"]):
+            for rule_key, is_enabled in config["rules"].items():
+                if not is_enabled:
+                    continue
+                parts = rule_key.split("-")
+                
+                # 段 0: type 必须匹配 data_type (或为 ALL)
+                if parts[0].upper() not in (data_type.upper(), "ALL"):
+                    continue
+                
+                # 段 1: prod 必须匹配 (或为 ALL，或规则只有 1 段 = 通配 prod)
+                if len(parts) >= 2 and parts[1].upper() not in (prod.upper(), "ALL"):
+                    continue
+                
+                # 段 2: factory 必须匹配 (或为 ALL，或规则只有 <=2 段 = 通配 fac)
+                if len(parts) >= 3 and parts[2].upper() not in (factory.upper(), "ALL"):
+                    continue
+                
+                # 段 3+(月/周): 忽略，不影响全局状态判定
                 return True
     
     return config["default"]
@@ -325,12 +375,29 @@ def export_config_template() -> str:
 # 默认配置（当特定组合未配置时使用）
 default: false
 
-# 精细化配置
+# 精细化配置 (1-5段键通用模型，顺序固定: 监控类型-产品型号-厂别-月份-周别)
+# 每段支持 ALL 通配；段数越多优先级越高
 rules:
-  # 格式: {监控类型}-{产品型号}-{厂别}: true/false
+  # 1段键: 匹配该类型下任意筛选条件
+  # CTQ: true
+
+  # 2段键: 匹配指定类型+产品
+  # CTQ-Z571: true
+
+  # 3段键: 匹配指定类型+产品+厂别
   SPC-M626-ARRAY: false
   SPC-M626-OLED: true
   CTQ-M678-ARRAY: false
-  # ... 添加更多配置
+
+  # 4段键: 匹配指定类型+产品+厂别+ISO月份
+  # CTQ-Z571-OLED-M05: true   # 仅修饰5月数据
+
+  # 5段键: 匹配指定类型+产品+厂别+ISO月份+ISO周
+  # CTQ-Z571-OLED-M05-W21: true   # 仅修饰5月第21周数据
+  # CTQ-Z571-OLED-M05-W22: false  # 5月第22周显示真实数据
+
+  # ALL 通配示例
+  # ALL-Z571-OLED: true   # 任意监控类型下的 Z571 OLED
+  # CTQ-ALL-OLED: true    # CTQ 下任意产品的 OLED
 """
     return template

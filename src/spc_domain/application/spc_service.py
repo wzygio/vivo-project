@@ -44,6 +44,14 @@ class SpcDashboardViewModel:
 
 class SpcAnalysisService:
     _custom_end_date: Optional[datetime] = None
+    SPC_DATA_IGNORE_DIRS: set[str] = {
+        'doc_cache',
+        'equipment',
+        'processed',
+        'raw',
+        'spc_cache',
+        'yield_cache',
+    }
 
     @classmethod
     def set_analysis_end_date(cls, end_date: Optional[datetime] = None):
@@ -173,18 +181,44 @@ class SpcAnalysisService:
     # [架构亮点] 去掉了下划线前缀，确保能被前端的 extract_cached_funcs 工具自动抓取清空
     # =========================================================================
     @staticmethod
+    def discover_spc_products(data_root: Path) -> List[str]:
+        """
+        Discover SPC product data directories for ALL-mode scans.
+
+        The shared data root also contains sibling domain folders such as
+        equipment snapshots; those must never be treated as SPC product codes.
+        """
+        try:
+            if not data_root.exists():
+                return []
+
+            products: List[str] = []
+            for data_dir in sorted(data_root.iterdir(), key=lambda x: x.name):
+                if not data_dir.is_dir():
+                    continue
+                if data_dir.name.startswith(('.', '__')):
+                    continue
+                if data_dir.name in SpcAnalysisService.SPC_DATA_IGNORE_DIRS:
+                    continue
+                products.append(data_dir.name)
+            return products
+        except Exception as e:
+            logging.warning(f"[SPC] 扫描产品快照目录失败: {data_root}, error={e}")
+            return []
+
+    @staticmethod
     def compute_snapshot_signature(data_root: Path, target_prod: str) -> str:
         """
         [企业级缓存签名] 计算 SPC 快照目录的聚合签名。
         当任意产品的快照被删除、重建或修改时，签名改变，触发 L1 Cache Miss。
         """
         hash_md5 = hashlib.md5()
-        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
         
         if target_prod.upper() == "ALL":
-            if not data_root.exists():
+            products = SpcAnalysisService.discover_spc_products(data_root)
+            if not products:
                 return "NOT_EXISTS"
-            dirs = [d for d in data_root.iterdir() if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs]
+            dirs = [data_root / prod for prod in products]
         else:
             dirs = [data_root / target_prod]
         
@@ -221,12 +255,8 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
-        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
         if target_prod.upper() == "ALL":
-            if data_root.exists():
-                for d in data_root.iterdir():
-                    if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
-                        search_prods.append(d.name)
+            search_prods = SpcAnalysisService.discover_spc_products(data_root)
         else:
             search_prods = [target_prod]
 
@@ -446,12 +476,8 @@ class SpcAnalysisService:
         search_prods: List[str] = []
         data_root = Path("data")
         
-        ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
         if target_prod.upper() == "ALL":
-            if data_root.exists():
-                for d in data_root.iterdir():
-                    if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
-                        search_prods.append(d.name)
+            search_prods = SpcAnalysisService.discover_spc_products(data_root)
         else:
             search_prods = [target_prod]
 
@@ -537,12 +563,8 @@ class SpcAnalysisService:
 
             search_prods = []
             
-            ignore_dirs = {'doc_cache', 'processed', 'raw', 'spc_cache', 'yield_cache'}
             if target_prod.upper() == "ALL":
-                if data_root.exists():
-                    for d in data_root.iterdir():
-                        if d.is_dir() and not d.name.startswith(('.', '__')) and d.name not in ignore_dirs:
-                            search_prods.append(d.name)
+                search_prods = SpcAnalysisService.discover_spc_products(data_root)
             else:
                 search_prods = [target_prod]
 

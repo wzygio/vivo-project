@@ -1,4 +1,4 @@
-import logging # 引入日志模块用于记录计算过程的状态
+﻿import logging # 引入日志模块用于记录计算过程的状态
 import pandas as pd # 引入 Pandas 用于全量向量化内存计算
 import numpy as np # 引入 Numpy 用于处理极值与 NaN 数学防呆
 from src.shared_kernel.utils.data_inspector import export_probed_details
@@ -178,7 +178,15 @@ def apply_spc_rules( # 定义 Phase 2 核心计算函数：执行 SPC 判定引�
 
 def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
     """
-    [企业级解耦版] 向量化蒙版引擎 (已修复 Default 穿透 Bug)
+    [企业级解耦版] 向量化蒙版引擎 (1-5段键通用模型)
+
+    规则键格式（固定顺序）: 监控类型-产品型号-厂别-月份-周别
+    - 1段键 (type): 匹配该类型下的任意筛选条件
+    - 2段键 (type-prod): 匹配指定类型+产品
+    - 3段键 (type-prod-fac): 匹配指定类型+产品+厂别
+    - 4段键 (type-prod-fac-MXX): 匹配指定类型+产品+厂别+ISO月份
+    - 5段键 (type-prod-fac-MXX-WYY): 匹配指定类型+产品+厂别+ISO月份+ISO周
+    每段支持 ALL 通配；段数越多优先级越高（后处理覆盖前处理）。
     """
     if spc_status_df is None or spc_status_df.empty:
         return spc_status_df
@@ -197,27 +205,65 @@ def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
         
     mask = pd.Series(default_wash, index=df.index)
     
-    # 2. 精准剔除/追加保护名单 (动态向量化过滤)
+    # 1.5 预计算 ISO 月份和 ISO 周列（用于月/周段规则匹配）
+    _iso_month_col = None
+    _iso_week_col = None
+    if rules and 'sheet_start_time' in df.columns:
+        df['sheet_start_time'] = pd.to_datetime(df['sheet_start_time'], errors='coerce')
+        _iso_month_col = df['sheet_start_time'].dt.month.astype('Int64')
+        _iso_week_col = df['sheet_start_time'].dt.isocalendar().week.astype('Int64')
+    
+    # 2. 通用规则引擎：按段数升序处理（段少先处理，段多后覆盖）
     if rules and 'factory' in df.columns and 'prod_code' in df.columns:
-        for rule_key, is_enabled in rules.items():
-            parts = rule_key.split('-') 
-            if len(parts) == 3:
-                r_type, r_prod, r_fac = parts
-                
-                # 匹配产品和厂别
-                cond = (df['prod_code'].astype(str).str.upper() == r_prod.upper()) & \
-                       (df['factory'].astype(str).str.upper() == r_fac.upper())
-                       
-                # 匹配监控类型
-                if 'data_type' in df.columns and r_type.upper() != 'ALL':
-                    cond &= (df['data_type'].astype(str).str.upper() == r_type.upper())
-                    
-                if is_enabled is False:
-                    # YAML 配了 false -> 从修饰蒙版中挖掉 (~cond)，保留真实
-                    mask &= (~cond)
-                elif is_enabled is True:
-                    # YAML 配了 true -> 强制加入修饰蒙版 (cond)，执行洗白
-                    mask |= cond
+        # 按段数升序排序：1段 -> 2段 -> 3段 -> 4段 -> 5段
+        sorted_rules = sorted(rules.items(), key=lambda x: len(x[0].split('-')))
+        
+        for rule_key, is_enabled in sorted_rules:
+            parts = rule_key.split('-')
+            num_parts = len(parts)
+            
+            # 从全 True 开始，逐段收紧条件
+            cond = pd.Series(True, index=df.index)
+            
+            # 段 0: 监控类型 (type) — 若为 ALL 则跳过
+            if parts[0].upper() != 'ALL' and 'data_type' in df.columns:
+                cond &= (df['data_type'].astype(str).str.upper() == parts[0].upper())
+            
+            # 段 1: 产品型号 (prod) — 若为 ALL 则跳过
+            if num_parts >= 2 and parts[1].upper() != 'ALL':
+                cond &= (df['prod_code'].astype(str).str.upper() == parts[1].upper())
+            
+            # 段 2: 厂别 (factory) — 若为 ALL 则跳过
+            if num_parts >= 3 and parts[2].upper() != 'ALL':
+                cond &= (df['factory'].astype(str).str.upper() == parts[2].upper())
+            
+            # 段 3: ISO 月份 (M01-M12) — 若为 ALL 则跳过
+            if num_parts >= 4 and _iso_month_col is not None:
+                month_str = parts[3].upper()
+                if month_str != 'ALL' and month_str.startswith('M'):
+                    try:
+                        month_val = int(month_str[1:])
+                        if 1 <= month_val <= 12:
+                            cond &= (_iso_month_col == month_val)
+                    except (ValueError, IndexError):
+                        pass
+            
+            # 段 4: ISO 周 (W01-W53) — 若为 ALL 则跳过
+            if num_parts >= 5 and _iso_week_col is not None:
+                week_str = parts[4].upper()
+                if week_str != 'ALL' and week_str.startswith('W'):
+                    try:
+                        week_val = int(week_str[1:])
+                        if 1 <= week_val <= 53:
+                            cond &= (_iso_week_col == week_val)
+                    except (ValueError, IndexError):
+                        pass
+            
+            # 应用规则到蒙版
+            if is_enabled is False:
+                mask &= (~cond)
+            elif is_enabled is True:
+                mask |= cond
     else:
         # [极限防呆]：如果 YAML 被误删，默认保护 TP 厂不被误洗白
         if default_wash and 'factory' in df.columns:
@@ -261,7 +307,6 @@ def sanitize_to_compliant(spc_status_df, add_tag=True, **kwargs):
         df.loc[mask, 'is_compliant_modified'] = True
 
     return df
-
 def aggregate_spc_metrics(
     spc_status_df: pd.DataFrame,
     time_group_col: str,

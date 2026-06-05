@@ -1,0 +1,48 @@
+2026-06-04 09:02:11 - INFO - [logger_setup] - ✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)
+2026-06-04 09:02:11 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 09:02:11 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 09:03:26 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-04 09:03:46 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-04 09:19:24 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-04 09:19:24 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-04 09:19:24 - INFO - [data_loader] - Snapshot expired, re-querying...
+2026-06-04 09:19:24 - INFO - [data_loader] - Querying: 8 stations, 30 machines, 4 patterns, since 2026-03-06
+2026-06-04 09:20:13 - INFO - [data_loader] - Extracted 1239857 records.
+2026-06-04 09:20:14 - INFO - [data_loader] - Saved snapshot: data\equipment\part_life_snapshot_88aff5417162.parquet (1239857 records)
+2026-06-04 09:23:23 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 09:23:23 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 09:23:43 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-04 09:24:03 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-04 09:35:36 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 09:35:36 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 09:35:36 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-04 10:22:18 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:22:18 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:22:18 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-04 10:22:27 - INFO - [_code_cache] - Imported existing <module 'comtypes.gen' from 'D:\\wzy\\Python\\vivo-project\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2026-06-04 10:22:27 - INFO - [_code_cache] - Using writeable comtypes cache directory: 'D:\wzy\Python\vivo-project\.venv\Lib\site-packages\comtypes\gen'
+2026-06-04 10:22:59 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:22:59 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:22:59 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-04 10:24:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:24:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:24:00 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: Z571
+2026-06-04 10:24:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:24:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:24:15 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:24:15 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:24:15 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-04 10:24:15 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:24:15 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:25:39 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:25:39 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:25:46 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:25:46 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:25:51 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:25:51 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:25:56 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:25:56 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:26:01 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:26:01 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-04 10:26:06 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-04 10:26:06 - INFO - [app_setup] - Application setup complete (logging & env initialized).
