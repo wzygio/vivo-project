@@ -16,6 +16,19 @@
 
 ---
 
+## Harness 入口
+
+本仓库采用轻量 Codex Harness。根文件只做路由，详细规则进入对应索引：
+
+- `CONTEXT.md` — 项目目标、边界和快速路由。
+- `docs/design/index.md` — 架构、领域设计、共享内核和历史快照入口。
+- `docs/plans/index.md` — 活跃/历史计划入口。
+- `specs/README.md` — 用户可维护规则、任务契约和验收标准入口。
+- `docs/references/README.md` — 外部框架、供应商和设计参考入口。
+- `docs/generated/README.md` — 可重建审计和生成事实入口。
+
+---
+
 ## 目录结构
 
 `
@@ -143,8 +156,10 @@ uv run pyright
 | [docs/design/spc_domain.md](docs/design/spc_domain.md) | SPC 控制域设计：SPC 规则引擎、合规修饰 | 需要修改 SPC 相关代码时 |
 | [docs/design/shared_kernel.md](docs/design/shared_kernel.md) | 共享内核设计：配置、数据库、日志、文件处理 | 需要修改基础设施层时 |
 | [docs/design/development_framework.md](docs/design/development_framework.md) | 开发框架：EPCC Flow、TDD 纪律、红线约束 | ✅ **每次修改前必读** |
-| [docs/design/business_boundary.md](docs/design/business_boundary.md) | 业务边界：已实现功能 & 待规划功能 | 需要了解系统能力边界时 |
-| [docs/plans/PLANS.md](docs/plans/PLANS.md) | 计划总览：当前活跃计划 & 已完成计划 | ✅ **开始新任务前，先查看是否已有计划** |
+| [docs/design/index.md](docs/design/index.md) | 设计文档入口：领域设计、共享内核、历史快照 | 需要判断该读哪个设计文档时 |
+| [docs/plans/index.md](docs/plans/index.md) | 计划入口：当前/历史计划与计划模板 | ✅ **开始新任务前，先查看是否已有计划** |
+| [CONTEXT.md](CONTEXT.md) | 项目目标、边界和快速路由 | 需要快速恢复项目上下文时 |
+| [specs/README.md](specs/README.md) | 可维护规则和任务契约入口 | 需要沉淀稳定规则或验收契约时 |
 | [skills/README.md](skills/README.md) | 技能库索引：加密 Excel、类型标准化等专项方案 | 遇到 skills/ 中记录的特性问题时 |
 
 ---

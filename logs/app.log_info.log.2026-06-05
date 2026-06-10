@@ -1,0 +1,298 @@
+2026-06-05 09:00:22 - INFO - [logger_setup] - ✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)
+2026-06-05 09:00:22 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 09:00:22 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 09:01:42 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 09:02:05 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 09:02:05 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 09:02:48 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 09:03:44 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 09:03:44 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:05:01 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:05:01 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:05:49 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 10:06:45 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:06:45 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:07:29 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:07:29 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:07:51 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:11:24 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:11:24 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:11:24 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:11:36 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:11:36 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:12:18 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 10:13:32 - INFO - [_code_cache] - Imported existing <module 'comtypes.gen' from 'D:\\wzy\\Python\\vivo-project\\.venv\\Lib\\site-packages\\comtypes\\gen\\__init__.py'>
+2026-06-05 10:13:32 - INFO - [_code_cache] - Using writeable comtypes cache directory: 'D:\wzy\Python\vivo-project\.venv\Lib\site-packages\comtypes\gen'
+2026-06-05 10:13:33 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:13:33 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:13:33 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:13:33 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:13:33 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 10:14:11 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:27:24 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:27:24 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:27:24 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:28:37 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:28:37 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:28:37 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:29:03 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:29:03 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:29:03 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:30:04 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:30:04 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:30:04 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 4
+2026-06-05 10:33:13 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:33:13 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:33:19 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:33:19 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:34:28 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:34:28 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:34:28 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 10:34:29 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:34:29 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:36:41 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:36:41 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:39:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:39:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:39:00 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M678.yaml)，触发热重载...
+2026-06-05 10:39:00 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 10:40:26 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:26 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:28 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:28 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:30 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:30 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:32 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:32 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:34 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:34 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:36 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:36 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:38 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:38 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:41 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:41 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:40:48 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:40:48 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:41:15 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:41:15 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:41:18 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:41:18 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:41:22 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:41:22 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:41:26 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:41:26 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:41:29 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:41:29 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:42:43 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:42:43 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:45:16 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:45:16 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:50:58 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:50:58 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:35 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:35 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:39 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:39 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:42 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:42 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:44 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:44 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:46 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:46 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:49 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:49 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:51 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:51 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:53 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:53 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:56 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:56 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:52:58 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:52:58 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:53:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:53:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:53:03 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:53:03 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:53:04 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:53:04 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:53:06 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:53:06 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:56:51 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:56:51 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:58:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:58:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 10:59:20 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 10:59:59 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 10:59:59 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:00:04 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:00:04 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:00:42 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:00:42 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:00:42 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M678.yaml)，触发热重载...
+2026-06-05 11:00:42 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 11:00:44 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:00:44 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:01:13 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:01:13 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:03:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:03:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:03:00 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M678.yaml)，触发热重载...
+2026-06-05 11:03:00 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 11:03:39 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:03:39 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:03:41 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:03:41 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:03:57 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:03:57 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:04:58 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:04:58 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:07:38 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:07:38 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:08:34 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:08:34 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:08:34 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M678.yaml)，触发热重载...
+2026-06-05 11:08:34 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 11:11:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:11:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:11:40 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M678.yaml)，触发热重载...
+2026-06-05 11:11:40 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 11:14:19 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:14:19 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:03 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:03 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:03 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: Z571
+2026-06-05 11:19:08 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:08 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:08 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:19:39 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:39 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:39 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: Z571
+2026-06-05 11:19:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:53 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:53 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:53 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:19:53 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:53 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:19:56 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:19:56 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:21:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:21:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:21:40 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 11:21:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:21:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:21:52 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:21:52 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:22:14 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:22:14 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:22:21 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 11:22:29 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:22:29 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:22:29 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:22:29 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:22:29 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:22:56 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:22:56 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:22:56 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M626.yaml)，触发热重载...
+2026-06-05 11:22:56 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:22:56 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 11:23:00 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:23:00 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:23:00 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 11:23:03 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:23:03 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:23:08 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:23:08 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:23:49 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:27:12 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:27:12 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:27:12 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M626.yaml)，触发热重载...
+2026-06-05 11:27:12 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:28:04 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:28:04 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:28:04 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M626.yaml)，触发热重载...
+2026-06-05 11:28:04 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:33:44 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:33:44 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:34:07 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:34:07 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:34:07 - INFO - [session_manager] - ⚡ 检测到配置文件变动 (M626.yaml)，触发热重载...
+2026-06-05 11:34:07 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 11:34:27 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 3
+2026-06-05 11:34:50 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:34:50 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:54:35 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:54:35 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:58:09 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 11:58:09 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 11:58:47 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 3
+2026-06-05 12:45:37 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 12:45:37 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 12:45:37 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 3
+2026-06-05 12:45:41 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 12:45:41 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 12:46:21 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 12:51:34 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 12:51:34 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 12:52:22 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 12:52:24 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 12:52:24 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 12:52:24 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 12:56:21 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 12:56:21 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 12:56:21 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 2
+2026-06-05 13:01:19 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-05 13:01:19 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-05 13:01:19 - INFO - [data_loader] - Querying: 8 stations, 30 machines, 4 patterns, since 2026-03-07
+2026-06-05 13:02:17 - INFO - [data_loader] - Extracted 2302555 records.
+2026-06-05 13:02:18 - INFO - [data_loader] - Saved snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet (2302555 records)
+2026-06-05 13:07:50 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 13:07:58 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 13:08:03 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: Z571
+2026-06-05 13:08:04 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 13:08:22 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 13:08:26 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 13:08:53 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 13:14:18 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-05 13:14:18 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-05 13:14:18 - INFO - [data_loader] - Loading from Parquet snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet
+2026-06-05 13:14:19 - INFO - [data_loader] - Loaded 2302555 records from snapshot
+2026-06-05 13:20:24 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-05 13:20:24 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-05 13:20:24 - INFO - [data_loader] - Loading from Parquet snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet
+2026-06-05 13:20:25 - INFO - [data_loader] - Loaded 2302555 records from snapshot
+2026-06-05 13:28:37 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-05 13:28:37 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-05 13:28:37 - INFO - [data_loader] - Loading from Parquet snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet
+2026-06-05 13:28:38 - INFO - [data_loader] - Loaded 2302555 records from snapshot
+2026-06-05 13:34:18 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-05 13:34:18 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-05 13:34:18 - INFO - [data_loader] - Loading from Parquet snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet
+2026-06-05 13:34:19 - INFO - [data_loader] - Loaded 2302555 records from snapshot
+2026-06-05 13:40:23 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 13:40:23 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 13:40:23 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 14:24:09 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 14:24:09 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 14:24:09 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 14:24:18 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 14:24:18 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 14:24:18 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 14:25:57 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 14:25:57 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 14:30:27 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 14:30:27 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 14:30:27 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M678
+2026-06-05 14:30:27 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 14:30:27 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 15:53:50 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 15:53:50 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 15:53:50 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-05 16:16:02 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 16:16:02 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 16:16:05 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 16:16:05 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 17:12:37 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-05 17:12:37 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-05 17:12:37 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626

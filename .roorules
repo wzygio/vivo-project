@@ -6,19 +6,32 @@
 
 ---
 
+## Harness 入口
+
+- `CONTEXT.md`: 项目目标、边界和快速路由。
+- `docs/design/index.md`: 设计文档入口。
+- `docs/plans/index.md`: 计划入口。
+- `specs/README.md`: 可维护规则和任务契约入口。
+- `docs/references/README.md`: 外部参考入口。
+- `docs/generated/README.md`: 可重建审计和生成事实入口。
+
+---
+
 ## 📖 渐进式披露 (Progressive Disclosure)
 
 请根据当前任务，**仅加载与任务相关**的文档。不要一次性加载全部内容。
 
 | 文档 | 用途 | 何时阅读 |
 |------|------|----------|
+| [`CONTEXT.md`](CONTEXT.md) | **项目上下文**：目标、边界、快速路由 | 需要快速恢复项目上下文时 |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | **系统架构**：技术栈、目录结构、数据流、缓存体系 | ✅ **首次进入项目 / 需要了解技术选型时** |
+| [`docs/design/index.md`](docs/design/index.md) | **设计入口**：领域设计、共享内核、历史快照 | 需要判断该读哪个设计文档时 |
 | [`docs/design/yield_domain.md`](docs/design/yield_domain.md) | **良率分析域设计**：Yield 业务逻辑、核心算法 | 需要修改 Yield 相关代码时 |
 | [`docs/design/spc_domain.md`](docs/design/spc_domain.md) | **SPC 控制域设计**：SPC 规则引擎、合规修饰 | 需要修改 SPC 相关代码时 |
 | [`docs/design/shared_kernel.md`](docs/design/shared_kernel.md) | **共享内核设计**：配置、数据库、日志、文件处理 | 需要修改基础设施层时 |
 | [`docs/design/development_framework.md`](docs/design/development_framework.md) | **开发框架**：EPCC Flow、TDD 纪律、红线约束 | ✅ **每次修改前必读** |
-| [`docs/design/business_boundary.md`](docs/design/business_boundary.md) | **业务边界**：已实现功能 & 待规划功能 | 需要了解系统能力边界时 |
-| [`docs/plans/PLANS.md`](docs/plans/PLANS.md) | **计划总览**：当前活跃计划 & 已完成计划 | ✅ **开始新任务前，先查看是否有已有计划** |
+| [`docs/plans/index.md`](docs/plans/index.md) | **计划入口**：当前/历史计划与模板 | ✅ **开始新任务前，先查看是否有已有计划** |
+| [`specs/README.md`](specs/README.md) | **规格入口**：可维护规则、任务契约、验收标准 | 需要沉淀稳定规则或任务合同 |
 | [`skills/README.md`](skills/README.md) | **技能库索引**：加密 Excel、类型标准化等专项解决方案 | 遇到 `skills/` 中记录的特定问题时 |
 
 ---

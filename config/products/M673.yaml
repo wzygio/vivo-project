@@ -39,4 +39,12 @@ processing:
   defect_capping:
     enable: True
 
+  defect_multipliers:
+    # Array_Line
+    # Array_Pixel
+    '大面积亮点': 0
+    '大面积暗点': 0
+    # Array_Mura
+    'S向ELA Mura': 0
+    'G向ELA Mura': 0
   
