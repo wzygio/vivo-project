@@ -58,3 +58,11 @@ processing:
     '孔区跑道Mura': 5
     # OLED_Mura
     '彩斑Mura': 0.3
+
+  sheet_hotspot_config: 
+    enable: True
+    random_seed: 2025
+    hide_hotspot_config: {
+        'fluctuation_sheet': 0.2,  
+        'fluctuation_lot': 0.2,
+    }

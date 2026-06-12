@@ -129,6 +129,11 @@ def _get_default_group(
     return active_groups[0] if active_groups else None
 
 
+def _reset_code_selection(code_key: str) -> None:
+    """Reset the selected Code before Streamlit renders dependent widgets."""
+    st.session_state[code_key] = PLACEHOLDER_OPTION
+
+
 def create_code_selection_ui(
     source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
     key_prefix: str,
@@ -218,9 +223,14 @@ def create_code_selection_ui(
 
         with reset_col:
             st.write("")
-            if st.button("🔄", key=f"reset_{key_prefix}", help="重置 Code 选择", use_container_width=True):
-                st.session_state[code_key] = PLACEHOLDER_OPTION
-                st.rerun()
+            st.button(
+                "🔄",
+                key=f"reset_{key_prefix}",
+                help="重置 Code 选择",
+                use_container_width=True,
+                on_click=_reset_code_selection,
+                args=(code_key,),
+            )
 
     # --- 5. 状态读取 ---
     selected_group = st.session_state.get(group_key)

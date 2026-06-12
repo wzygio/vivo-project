@@ -35,7 +35,7 @@ def load_panel_details(
     # imp_ct_dft_group： 获取defect_group及defect_desc
     sql_query = f"""
     select 
-        sgbi.lot as batch_no,
+        evap_batch.batch_no as batch_no,
         substr(dwp.panel_id, 1, 9) as lot_id, 
         substr(dwp.panel_id, 1, 11) as sheet_id, 
         dwp.panel_id as panel_id, 
@@ -46,7 +46,17 @@ def load_panel_details(
         icdg.defect_group as defect_group
     from dwt_warehousing_pnl dwp
     left join dws_dft_warehousing_d ddwd on dwp.panel_id = ddwd.panel_id 
-    left join spot_glass_batch_info sgbi on substr(dwp.panel_id, 1, 11) = substr(sgbi.glass_id, 1, 11)
+    left join (
+        select distinct on (D.panel_id)
+            D.panel_id,
+            substr(R.DESCRIPTION, 1, 10) as batch_no
+        from dwt_yield_result_pnl D
+        left join DWR_MES_PRODUCTREQUEST R on D.SUB_PROD_ID = R.PRODUCTREQUESTNAME
+        where D.prod_code = '{prod_code}'
+            and D.sub_prod_type in ('{work_orders_str}')
+            and D.oper_group = 'CT'
+        order by D.panel_id
+    ) evap_batch on dwp.panel_id = evap_batch.panel_id
     left join dwr_mes_productspec dmp on dwp.prod_id = dmp.productspecname
     left join imp_ct_dft_group icdg on icdg.defect_code = ddwd.defect_code
     where dwp.last_flag = 'Y'

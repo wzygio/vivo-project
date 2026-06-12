@@ -230,7 +230,7 @@ class SpcAnalysisService:
         return hash_md5.hexdigest()[:8]
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(show_spinner=False, max_entries=1)
     def fetch_dashboard_data_dict(
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 

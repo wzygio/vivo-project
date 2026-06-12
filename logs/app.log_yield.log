@@ -1472,3 +1472,70 @@
 2026-06-12 16:38:58 - INFO - [mapping_processor] - 应用“倍率”模式: 高发区(x0.3), 其他区(x1)
 2026-06-12 16:38:58 - INFO - [mapping_processor] - 为批次 26/05/25蒸镀批 (Code: 白画面黑斑Mura) 应用匹配的Mapping热点修饰脚本...
 2026-06-12 16:38:58 - INFO - [mapping_processor] - 应用“倍率”模式: 高发区(x0.3), 其他区(x1)
+2026-06-12 17:06:12 - INFO - [yield_service] - --- [L1 Cache Miss] 加载原始 Panel 数据... ---
+2026-06-12 17:06:12 - INFO - [yield_repository] - ⏱️ [YieldRepo] 缓存有效 (年龄 2.4h < 8h, 最新数据日期: 2026-06-12 >= 请求截止日期: 2026-06-12)。
+2026-06-12 17:06:12 - INFO - [yield_repository] - 🚀 [YieldRepo] 命中有效缓存，跳过数据库查询。
+2026-06-12 17:06:12 - INFO - [yield_service] - [CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={'大面积亮点': 0, '大面积暗点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0}
+2026-06-12 17:06:12 - INFO - [yield_service] - 应用缺陷衰减...
+2026-06-12 17:06:12 - INFO - [defect_modifier] - 开始应用不良倍率调整: {'大面积亮点': 0, '大面积暗点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0}
+2026-06-12 17:06:12 - INFO - [defect_modifier] - Code '大面积亮点': 不良数从 164 下调至 0 (倍率: 0)。
+2026-06-12 17:06:12 - INFO - [defect_modifier] - Code '大面积暗点': 不良数从 2 下调至 0 (倍率: 0)。
+2026-06-12 17:06:12 - INFO - [defect_modifier] - Code 'S向ELA Mura': 不良数从 8 下调至 0 (倍率: 0)。
+2026-06-12 17:06:12 - INFO - [defect_modifier] - Code 'G向ELA Mura': 不良数从 19 下调至 0 (倍率: 0)。
+2026-06-12 17:06:12 - INFO - [defect_modifier] - 不良倍率调整完成，数据从 183435 行变为 183242 行。
+2026-06-12 17:06:13 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-12 17:06:13 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-12, 数据实际最大日期: 2026-06-12
+2026-06-12 17:06:13 - INFO - [mwd_trend_processor] - [Baseline Generator] Code 基准已增量补充至: resources\M673\M673_codebaseline.xlsx (共 50 个 Codes)
+2026-06-12 17:06:13 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：底层向量化区间截断)...
+2026-06-12 17:06:13 - INFO - [trend_regulator] - [daily 维度] 向量化截断完成：压制超标 166 处，托底过低 45 处。
+2026-06-12 17:06:13 - INFO - [mwd_trend_processor] - 检测到人工覆盖指令，仅对以下目标启动重塑: ['S向边缘Mura']
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - Group级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [Group Raw Data] 目标截止日期: 2026-06-12, 数据实际最大日期: 2026-06-12
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - ========== [DEBUG: 数据源时间边界排查] ==========
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - 提取的数据总行数: 183242
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - 数据源中【实际存在的最后日期】: 2026-06-12
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - 最终使用的【截止日期】: 2026-06-12
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - 数据源中最近的 5 个有效日期: ['2026-06-08', '2026-06-09', '2026-06-10', '2026-06-11', '2026-06-12']
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [覆盖逻辑] 跳过覆盖: ovs=不存在, df=非空
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [覆盖逻辑] ✓ 应用覆盖: Array_Line @ 2026-05: rate: 0.0153
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [覆盖逻辑] ✓ 应用覆盖: Array_Mura @ 2026-05: rate: 0.0045
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [覆盖逻辑] ✓ 应用覆盖: Array_Pixel @ 2026-05: rate: 0.0169
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [覆盖逻辑] ✓ 应用覆盖: OLED_Mura @ 2026-05: rate: 0.0039
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-12 17:06:14 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-12, 数据实际最大日期: 2026-06-12
+2026-06-12 17:06:15 - INFO - [mwd_trend_processor] - [Baseline Generator] Code 基准已增量补充至: resources\M673\M673_codebaseline.xlsx (共 50 个 Codes)
+2026-06-12 17:06:15 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：底层向量化区间截断)...
+2026-06-12 17:06:15 - INFO - [trend_regulator] - [daily 维度] 向量化截断完成：压制超标 166 处，托底过低 45 处。
+2026-06-12 17:06:15 - INFO - [mwd_trend_processor] - 检测到人工覆盖指令，仅对以下目标启动重塑: ['S向边缘Mura']
+2026-06-12 17:06:15 - INFO - [yield_service] - --- [Cache Miss] 计算 Lot 级良率... ---
+2026-06-12 17:06:15 - INFO - [data_loader] - 开始为 51 个Lot提取阵列投入时间...
+2026-06-12 17:06:18 - INFO - [data_loader] - 成功提取 1530 条Sheet的阵列投入时间记录。
+2026-06-12 17:06:18 - INFO - [sheet_lot_processor] - 开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...
+2026-06-12 17:06:18 - INFO - [sheet_lot_processor] - 成功聚合了 51 个 Lot 的基础信息 (含 array_input_time)。
+2026-06-12 17:06:18 - INFO - [sheet_lot_processor] - 开始进行Lot过货率筛选 (阈值 >= 20.0%)...
+2026-06-12 17:06:18 - INFO - [sheet_lot_processor] - 过货率筛选完成：从 51 个Lot中筛选出 32 个。
+2026-06-12 17:06:18 - INFO - [sheet_lot_processor] - 开始计算lot_id级原始不良率 (回归原始逻辑)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始执行 lot_id 级不良率模拟调度 (V4.3 - 微观扰动版)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始对 Code 级不良率进行精准 Spec 截断处理...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - Code 级不良率精准截断/托底处理完成。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - --- [COM Loader] 开始加载覆盖数据 (文件: 'M673_override_rates.xlsx') ---
+2026-06-12 17:06:19 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始使用启发式公式计算 Lot 级覆盖不良率...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 成功构建了 45 条 Desc -> Group 映射。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 无覆盖数据提供 (lot_id 级别)，跳过覆盖步骤。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 模拟/覆盖完成，正在重新聚合 lot_id 的 Group 级数据 (含基础信息完整性检查)...
+2026-06-12 17:06:19 - INFO - [yield_service] - --- [Cache Miss] 计算 Sheet 级良率... ---
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始Sheet级计算 (Lot局域分发 -> 覆盖 模式)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始进行sheet过货率筛选 (阈值 >= 0.0%)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 过货率筛选完成：从 1308 个sheet中筛选出 1308 个。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始计算sheet_id级原始不良率 (回归原始逻辑)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 开始执行 Sheet 级不良发牌调度 (Lot -> Sheet 泊松自然散布 V5.3)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - --- [COM Loader] 开始加载覆盖数据 (文件: 'M673_override_rates.xlsx') ---
+2026-06-12 17:06:19 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 成功构建了 45 条 Desc -> Group 映射。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 无覆盖数据提供 (sheet_id 级别)，跳过覆盖步骤。
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - 模拟/覆盖完成，正在重新聚合 sheet_id 的 Group 级数据 (含基础信息完整性检查)...
+2026-06-12 17:06:19 - INFO - [sheet_lot_processor] - Sheet级计算完成。
+2026-06-12 17:06:19 - INFO - [mapping_processor] - 开始为Mapping图准备数据 (Rate-Based Mode, 阈值=0)...
+2026-06-12 17:06:20 - INFO - [mapping_processor] - 处理批次顺序 (Old->New): ['26/05/14蒸镀批', '26/05/25蒸镀批']

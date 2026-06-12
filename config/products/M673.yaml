@@ -48,3 +48,10 @@ processing:
     'S向ELA Mura': 0
     'G向ELA Mura': 0
   
+  sheet_hotspot_config: 
+    enable: True
+    random_seed: 2025
+    hide_hotspot_config: {
+        'fluctuation_sheet': 0.2,  
+        'fluctuation_lot': 0.2,
+    }
