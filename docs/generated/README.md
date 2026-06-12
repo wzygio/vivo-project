@@ -5,6 +5,7 @@ Rebuildable generated summaries, scans, and audit outputs live here.
 ## Current Files
 
 - `harness-audit.md`: output from `harness-builder` audit for the current repository.
+- `harness-garbage-collection.md`: cleanup loop for stale Harness content.
 
 ## Rules
 

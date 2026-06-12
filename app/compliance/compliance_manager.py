@@ -61,6 +61,51 @@ def load_compliance_config() -> Dict:
         return {"default": False, "rules": {}}
 
 
+def _rule_matches_context(
+    rule_key: str,
+    data_type: str,
+    prod_code: str,
+    factory: str,
+    month: Optional[int] = None,
+    week: Optional[int] = None,
+) -> bool:
+    """Return whether a 1-5 segment rule key matches the supplied context."""
+    parts = [part.strip().upper() for part in rule_key.split("-") if part.strip()]
+    if not 1 <= len(parts) <= 5:
+        return False
+
+    context = [
+        str(data_type).upper(),
+        str(prod_code).upper(),
+        str(factory).upper(),
+    ]
+
+    if len(parts) >= 4:
+        if month is None:
+            return False
+        context.append(f"M{month:02d}")
+
+    if len(parts) >= 5:
+        if week is None:
+            return False
+        context.append(f"W{week:02d}")
+
+    for index, rule_part in enumerate(parts):
+        if rule_part == "ALL":
+            continue
+        if index >= len(context) or rule_part != context[index]:
+            return False
+
+    return True
+
+
+def _rule_priority(rule_key: str, order_index: int) -> tuple[int, int, int]:
+    """Rank matching rules: deeper keys, fewer wildcards, later entries win."""
+    parts = [part.strip().upper() for part in rule_key.split("-") if part.strip()]
+    specific_parts = sum(1 for part in parts if part != "ALL")
+    return (len(parts), specific_parts, order_index)
+
+
 def get_compliance_config(
     data_type: str,
     prod_code: str = "ALL",
@@ -84,32 +129,22 @@ def get_compliance_config(
     优先级: 5段 > 4段 > 3段 > 2段 > 1段 > default
     """
     config = load_compliance_config()
-    
-    # 从最具体到最宽泛逐级查找
-    candidates = []
-    
-    # 5段: type-prod-fac-MXX-WYY
-    if month is not None and week is not None:
-        candidates.append(f"{data_type}-{prod_code}-{factory}-M{month:02d}-W{week:02d}")
-    
-    # 4段: type-prod-fac-MXX
-    if month is not None:
-        candidates.append(f"{data_type}-{prod_code}-{factory}-M{month:02d}")
-    
-    # 3段: type-prod-fac
-    candidates.append(f"{data_type}-{prod_code}-{factory}")
-    
-    # 2段: type-prod
-    candidates.append(f"{data_type}-{prod_code}")
-    
-    # 1段: type
-    candidates.append(f"{data_type}")
-    
-    for key in candidates:
-        if key in config["rules"]:
-            return config["rules"][key]
-    
-    return config["default"]
+    rules = config.get("rules") or {}
+    default_value = bool(config.get("default", False))
+
+    best_match: Optional[tuple[tuple[int, int, int], bool]] = None
+    for order_index, (rule_key, is_enabled) in enumerate(rules.items()):
+        if not _rule_matches_context(rule_key, data_type, prod_code, factory, month, week):
+            continue
+
+        priority = _rule_priority(rule_key, order_index)
+        if best_match is None or priority > best_match[0]:
+            best_match = (priority, bool(is_enabled))
+
+    if best_match is not None:
+        return best_match[1]
+
+    return default_value
 
 
 def save_compliance_config(config: Dict):

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import streamlit as st
-import os
-from pathlib import Path
+import logging
 from typing import Optional
+
+import streamlit as st
 
 from src.shared_kernel.config_model import AppConfig
 from app.utils.session_manager import SessionManager
@@ -37,45 +37,33 @@ def render_page_header(
     if title:
         st.title(title)
     
-    # [重构] 具备失败拦截与安全回退的刷新回调
+    # [L1] 仅刷新底层数据快照，不清除 st.cache_data。
     def _refresh_data_callback():
+        if not refresh_handlers:
+            st.toast("当前页面没有独立的数据快照刷新任务。", icon="ℹ️")
+            return
+
         all_success = True
-        
-        if refresh_handlers:
-            for handler in refresh_handlers:
-                if callable(handler):
-                    # 尝试执行后端的安全刷新动作
-                    is_success = handler()
-                    # 如果后端明确返回 False，说明该模块更新失败
-                    if is_success is False:
-                        all_success = False
-                        
-            # [核心容错逻辑] 如果任何一个服务更新失败
-            if not all_success:
-                st.toast("❌ 数据库连接或快照更新失败，已为您保留旧版本数据。", icon="🚨")
-                # 关键：直接 Return，绝对不执行下方的 clear()，保护当前内存里的旧数据依然可用
-                return 
+        for handler in refresh_handlers:
+            if callable(handler):
+                is_success = handler()
+                if is_success is False:
+                    all_success = False
 
-        # 只有在全部更新成功的情况下，才清空内存并重载
-        if cached_funcs:
-            for func in cached_funcs:
-                if hasattr(func, "clear"):
-                    func.clear()
-            st.toast("✅ 数据刷新成功，已加载最新快照！", icon="🎉")
-            logging.info("🔄 [UI] 单页数据刷新完毕")
-        else:
-            st.cache_data.clear()
-        
-        # [核心修复] 强制页面重新加载，确保用户立即看到刷新后的数据
-        st.rerun()
+        if not all_success:
+            st.toast("❌ 数据库连接或快照更新失败，已保留当前缓存视图。", icon="🚨")
+            return
 
-    # [企业级] 精准 "清除缓存 + 模块重载" 回调
+        st.toast("✅ 数据快照刷新完成。需要重读页面缓存时，请点击“刷新缓存”。", icon="🎉")
+        logging.info("🔄 [UI] L1 数据快照刷新完毕，未清除 Streamlit L2 缓存。")
+
+    # [企业级] 精准 "刷新缓存 + 模块重载" 回调
     #
     # 执行顺序必须严格保持以下链条：
     #   1. func.clear()         ─ 旧模块函数尚存活，.clear() 正常生效
     #   2. deep_reload_modules()─ 卸载 sys.modules 中的旧模块
-    #   3. 清除 composite_key   ─ 强制下次重算 project_rev
-    #   4. st.rerun()           ─ 重新 import → 加载新代码 → 新 project_rev → 新 composite_key
+    #   3. 清除页面视图缓存      ─ 强制下次重算 view model
+    #   4. st.rerun()           ─ 重新 import → 加载新代码 → 重新渲染页面
     def _hard_reset_callback():
         # ---- 阶段 1: 清除数据缓存 (旧模块函数仍有效) ----
         if cached_funcs:
@@ -97,19 +85,23 @@ def render_page_header(
             deep_reload_modules()
             logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
         except ImportError:
-            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅清除缓存)。")
+            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
         
-        # ---- 阶段 4: 清除 composite_key 签名缓存，强制重算 ----
-        # 新 Session 重算时 project_rev 会包含新代码的 mtime → key 不同 → 缓存自动 miss
+        # ---- 阶段 4: 清除页面级签名/视图状态，按钮点击后才允许缓存失效 ----
         for key in list(st.session_state.keys()):
             key_str = str(key)
-            if key_str.startswith("yield_composite_key_") or key_str.startswith("yield_snapshot_sig_") or key_str.startswith("spc_snapshot_sig_"):
+            if (
+                key_str.startswith("yield_composite_key_")
+                or key_str.startswith("yield_snapshot_sig_")
+                or key_str.startswith("spc_snapshot_sig_")
+                or key_str == "parts_baseline_sig"
+            ):
                 del st.session_state[key]
         
-        st.toast("🧹 缓存已清除 · 模块已重载", icon="✅")
+        st.toast("🔄 缓存已刷新 · 模块已重载", icon="✅")
         st.rerun()
 
-    # --- 渲染控制栏 (UI 保持不变) ---
+    # --- 渲染控制栏 ---
     with st.container(border=True):
         c_prod, c_space, c_refresh, c_clear = st.columns([2, 4, 1.2, 1.2])
 
@@ -136,16 +128,16 @@ def render_page_header(
                 key=f"btn_refresh_{title}",
                 on_click=_refresh_data_callback,
                 use_container_width=True,
-                help="强制从数据库获取最新数据。若失败则自动回退并保留当前视图。"
+                help="刷新底层 L1 数据快照；不会清除 Streamlit 页面缓存。"
             )
-            
+
         with c_clear:
             st.button(
-                "🧹 清除缓存",
+                "🔄 刷新缓存",
                 key=f"btn_clear_{title}",
                 on_click=_hard_reset_callback,
                 use_container_width=True,
-                help="仅清除当前报表的内存缓存 (极速重载视图)"
+                help="清除当前报表缓存并重载代码；普通浏览器刷新不会触发。"
             )
 
 def extract_cached_funcs(*services) -> list:
@@ -195,14 +187,7 @@ def setup_hot_reload(enable: bool = True):
             logging.info("♻️ 探测到后端底层代码库变更，触发 Deep Reload...")
             deep_reload_modules()
             
-            # [关键联动]：代码都变了，旧的代码生成的缓存数据大概率也不能用了，直接顺手清空数据缓存！
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            
-            # [核心修复] 同步清除 yield 域的 composite_key 缓存，强制下次重新计算签名
-            for key in list(st.session_state.keys()):
-                if key.startswith("yield_composite_key_") or key.startswith("yield_snapshot_sig_"):
-                    del st.session_state[key]
+            # 不在普通 rerun/浏览器刷新链路中清除 st 缓存；需要刷新缓存时请点击页头按钮。
             
         # 4. 更新指纹
         st.session_state['last_code_revision'] = current_rev

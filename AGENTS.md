@@ -23,7 +23,10 @@
 - `CONTEXT.md` — 项目目标、边界和快速路由。
 - `docs/design/index.md` — 架构、领域设计、共享内核和历史快照入口。
 - `docs/plans/index.md` — 活跃/历史计划入口。
+- `docs/exec-plans/active/` — 已接受、正在执行的短期计划。
+- `docs/exec-plans/completed/` — 已完成执行计划归档。
 - `specs/README.md` — 用户可维护规则、任务契约和验收标准入口。
+- `docs/observability.md` — 日志、Trace、Smoke、测试和诊断入口。
 - `docs/references/README.md` — 外部框架、供应商和设计参考入口。
 - `docs/generated/README.md` — 可重建审计和生成事实入口。
 
@@ -158,6 +161,8 @@ uv run pyright
 | [docs/design/development_framework.md](docs/design/development_framework.md) | 开发框架：EPCC Flow、TDD 纪律、红线约束 | ✅ **每次修改前必读** |
 | [docs/design/index.md](docs/design/index.md) | 设计文档入口：领域设计、共享内核、历史快照 | 需要判断该读哪个设计文档时 |
 | [docs/plans/index.md](docs/plans/index.md) | 计划入口：当前/历史计划与计划模板 | ✅ **开始新任务前，先查看是否已有计划** |
+| [docs/exec-plans/active/](docs/exec-plans/active/) | 当前执行计划 | 继续或接手正在执行的多步骤任务时 |
+| [docs/observability.md](docs/observability.md) | 日志、Trace、Smoke、测试和诊断入口 | 需要验证、排错、跑 UI/后台 Smoke 时 |
 | [CONTEXT.md](CONTEXT.md) | 项目目标、边界和快速路由 | 需要快速恢复项目上下文时 |
 | [specs/README.md](specs/README.md) | 可维护规则和任务契约入口 | 需要沉淀稳定规则或验收契约时 |
 | [skills/README.md](skills/README.md) | 技能库索引：加密 Excel、类型标准化等专项方案 | 遇到 skills/ 中记录的特性问题时 |

@@ -230,7 +230,7 @@ class SpcAnalysisService:
         return hash_md5.hexdigest()[:8]
 
     @staticmethod
-    @st.cache_data(show_spinner=False, ttl=3600)
+    @st.cache_data(show_spinner=False)
     def fetch_dashboard_data_dict(
         _db_manager: 'DatabaseManager', 
         query_config_json: str, 
@@ -268,10 +268,13 @@ class SpcAnalysisService:
 
             repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
             
+            data_type_upper = data_type_filter.upper() if data_type_filter else 'ALL'
+
             # =========================================================================
-            # 🆕 [报废数据分支] 当监控类型为"报废"时，跳过数据库查询，直接读取 Excel
+            # 🆕 [报废数据分支] 当监控类型为"报废"或"ALL"时，读取报废数据。
+            # ALL 模式保留 data_type 维度，前端切换监控类型时可直接从同一份缓存切片。
             # =========================================================================
-            if data_type_filter.upper() == '报废':
+            if data_type_upper in ('报废', 'ALL'):
                 trace_logger.info(f"🚧 [ScrapTrace][L1-Service] 开始处理产品 {prod} 的报废数据")
                 scrap_df = repo.get_scrap_data(prod)
                 trace_logger.info(f"🚧 [ScrapTrace][L2-Repo] 产品 {prod} get_scrap_data 返回: {len(scrap_df)} 条, 列: {scrap_df.columns.tolist() if not scrap_df.empty else 'N/A'}")
@@ -298,7 +301,9 @@ class SpcAnalysisService:
                         trace_logger.info(f"🚧 [ScrapTrace][L5-Append] 产品 {prod} 过滤后为空，未加入")
                 else:
                     trace_logger.info(f"🚧 [ScrapTrace][L2-Repo] 产品 {prod} get_scrap_data 返回空")
-                continue
+
+                if data_type_upper == '报废':
+                    continue
             
             current_fetch_config = config_instance.model_copy()
             current_fetch_config.prod_code = prod
@@ -310,13 +315,20 @@ class SpcAnalysisService:
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
-                enable_soos = data_type_filter.upper() != 'AOI'
-                status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
-                
-                if force_compliant:
-                    status = sanitize_to_compliant(status)
-                all_status_dfs.append(status)
+                if 'data_type' in m_df.columns:
+                    grouped_measurements = m_df.groupby('data_type', dropna=False)
+                else:
+                    grouped_measurements = [(data_type_upper, m_df)]
+
+                for current_data_type, typed_m_df in grouped_measurements:
+                    current_type_upper = str(current_data_type).upper()
+                    features = preprocess_sheet_features(measure_df=typed_m_df, spec_df=s_df)
+                    enable_soos = current_type_upper != 'AOI'
+                    status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
+                    
+                    if force_compliant:
+                        status = sanitize_to_compliant(status)
+                    all_status_dfs.append(status)
 
         if not all_status_dfs:
             trace_logger.info("🚧 [ScrapTrace][L6-Concat] all_status_dfs 为空，直接返回空结果")
@@ -356,10 +368,14 @@ class SpcAnalysisService:
         # 🛑 [核心修复 1]：在“三倍扩充”之前，先进行站点聚合！
         # 此时 raw_status_df 是 1:1 的真实物理数据，绝无重复
         # =========================================================================
+        aggregate_group_cols = ['prod_code', 'factory', 'step_id']
+        if 'data_type' in raw_status_df.columns:
+            aggregate_group_cols.append('data_type')
+
         enable_soos = data_type_filter.upper() != 'AOI'
         station_detail_df = aggregate_spc_metrics(
             spc_status_df=raw_status_df, 
-            group_cols=['prod_code', 'factory', 'step_id'], 
+            group_cols=aggregate_group_cols, 
             time_group_col='step_id', # 站点维度不需要时间组
             enable_soos=enable_soos
         )
@@ -383,9 +399,13 @@ class SpcAnalysisService:
         ) 
         trace_logger.info(f"🚧 [ScrapTrace][L11-GlobalAgg] global_summary_df: {len(global_summary_df)} 条")
         
+        detail_group_cols = ['sort_index', 'time_group', 'prod_code', 'factory']
+        if 'data_type' in full_status_df.columns:
+            detail_group_cols.append('data_type')
+
         detail_df = aggregate_spc_metrics(
             spc_status_df=full_status_df, 
-            group_cols=['sort_index', 'time_group', 'prod_code', 'factory'],
+            group_cols=detail_group_cols,
             time_group_col='time_group',
             enable_soos=enable_soos
         )

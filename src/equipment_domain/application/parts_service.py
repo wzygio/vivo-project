@@ -18,6 +18,7 @@ import streamlit as st
 from src.equipment_domain.infrastructure.data_loader import (
     load_spec_baseline,
     load_part_life_snapshot,
+    PartsRepository,
 )
 from src.equipment_domain.core.parts_matcher import build_and_match_all
 from src.equipment_domain.core.parts_calculator import (
@@ -55,6 +56,21 @@ class PartsReportViewModel:
 
 class PartsReportService:
     """关键备件报表服务"""
+
+    @staticmethod
+    def safe_refresh_snapshots(
+        _db_manager: "DatabaseManager",
+        baseline_path: str,
+    ) -> bool:
+        """刷新关键备件 L1 Parquet 快照，不触碰 Streamlit L2 缓存。"""
+        try:
+            spec_df = load_spec_baseline(baseline_path)
+            repo = PartsRepository(_db_manager, spec_df)
+            snapshot_df = repo.get_snapshot(force_refresh=True)
+            return not snapshot_df.empty
+        except Exception as e:
+            logger.error(f"关键备件快照刷新失败: {e}", exc_info=True)
+            return False
 
     @staticmethod
     @st.cache_data  # L2 缓存（遵循项目红线纪律，不可移除）

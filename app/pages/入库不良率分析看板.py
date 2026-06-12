@@ -6,16 +6,13 @@ import numpy as np
 #  配置与初始化
 # ==============================================================================
 from app.utils.session_manager import SessionManager
-from src.shared_kernel.config import ConfigLoader
 from app.utils.app_setup import AppSetup
-from app.utils.reloader import get_project_revision
 
 from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
 from yield_domain.application.excel_service import ExcelService
 from yield_domain.application.dtos import YieldQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
-from pathlib import Path
 
 # 引入图表组件
 from app.components.page_header import render_page_header, extract_cached_funcs
@@ -37,50 +34,29 @@ from app.sections.yield_dashboard import (
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
+YIELD_DASHBOARD_CACHE_SIGNATURE = "yield_dashboard_manual_refresh_v1"
+
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
-project_root = ConfigLoader.get_project_root()
 product_dir = SessionManager.get_product_dir()
-
-# ==============================================================================
-# [核心修复] 构造后端需要的 Query JSON 并使用 Lambda 包裹 (完全对齐业务参数)
-# ==============================================================================
-current_product = active_config.data_source.product_code
-start_dt, end_dt = YieldAnalysisService.get_time_window()
-
-# 1. [新增] 安全提取底层的业务过滤参数 (兼容字典和对象模式)
-wo_types = getattr(active_config.data_source, 'work_order_types', [])
-if isinstance(active_config.processing, dict):
-    defect_groups = active_config.processing.get('target_defect_groups', [])
-else:
-    defect_groups = getattr(active_config.processing, 'target_defect_groups', [])
-
-# 2. 实例化后端的 DTO
-yield_query_config = YieldQueryConfig(
-    product_code=current_product,
-    start_date=start_dt.strftime("%Y-%m-%d"),
-    end_date=end_dt.strftime("%Y-%m-%d"),
-    work_order_types=wo_types,
-    target_defect_groups=defect_groups
-)
 
 # 依赖注入：初始化数据库连接
 db_manager = DatabaseManager()
 
-snapshot_path = Path("data") / current_product / f"yield_snapshot_{current_product}.parquet"
-
-# [企业级标准] 使用 session_state 固定 composite_key，仅在新 Session 时重新计算
-# 代码变更或快照变更时，通过刷新按钮显式清除缓存，而非自动热重载
-composite_key_session_key = f"yield_composite_key_{current_product}"
-if composite_key_session_key not in st.session_state:
-    snapshot_sig = YieldAnalysisService.compute_snapshot_signature(snapshot_path)
-    project_rev = get_project_revision(project_root)
-    st.session_state[composite_key_session_key] = f"{project_rev}:{snapshot_sig}"
-composite_key = st.session_state[composite_key_session_key]
-
-# 3. 利用闭包，安全地将带有参数的函数传给 Header
-handlers = [
-    lambda: YieldAnalysisService.safe_refresh_snapshots(db_manager, yield_query_config.model_dump_json())
+# L1 快照刷新参数：仅由页头“刷新数据”按钮触发。
+start_dt, end_dt = YieldAnalysisService.get_time_window()
+yield_query_config = YieldQueryConfig(
+    product_code=active_config.data_source.product_code,
+    start_date=start_dt.strftime("%Y-%m-%d"),
+    end_date=end_dt.strftime("%Y-%m-%d"),
+    work_order_types=getattr(active_config.data_source, "work_order_types", []),
+    target_defect_groups=getattr(active_config.data_source, "target_defect_groups", []),
+)
+refresh_handlers = [
+    lambda: YieldAnalysisService.safe_refresh_snapshots(
+        db_manager,
+        yield_query_config.model_dump_json(),
+    )
 ]
 
 # [Refactor] 3. 渲染页头
@@ -89,7 +65,7 @@ render_page_header(
     title="📊 入库不良率分析看板",
     config=active_config,
     cached_funcs=funcs_to_clear,
-    refresh_handlers=handlers
+    refresh_handlers=refresh_handlers,
 )
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件
@@ -106,30 +82,30 @@ with st.spinner("正在加载全维度分析数据..."):
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key
+        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key
+        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key,
+        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE,
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=composite_key,
+        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE,
     )
     mapping_data = YieldAnalysisService.get_mapping_data(
         active_config,
         _db_manager=db_manager,
-        snapshot_signature=composite_key
+        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
     )
     warning_lines = YieldAnalysisService.load_static_warning_lines(
         active_config, product_dir

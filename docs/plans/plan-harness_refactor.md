@@ -2,7 +2,7 @@
 
 ## 目标
 
-将当前项目整理为轻量 Codex Harness：根级路由清晰、设计和计划可索引、生成事实可重建、可维护规则有独立入口。
+将当前项目整理为轻量 Codex Harness：根级路由清晰，设计、计划、执行计划、观测、生成事实和可维护规格都有独立入口。
 
 ## 涉及文件清单
 
@@ -11,9 +11,13 @@
 - `CONTEXT.md`: 新增项目上下文和边界速查。
 - `docs/design/index.md`: 设计文档入口。
 - `docs/plans/index.md`: 计划入口。
+- `docs/exec-plans/active/README.md`: 当前执行计划入口。
+- `docs/exec-plans/completed/README.md`: 已完成执行计划归档入口。
+- `docs/observability.md`: 日志、Trace、Smoke、测试和诊断入口。
 - `docs/references/README.md`: 外部参考入口。
 - `docs/generated/README.md`: 可重建生成事实入口。
 - `docs/generated/harness-audit.md`: Harness 审计结果。
+- `docs/generated/harness-garbage-collection.md`: stale Harness 内容清理循环。
 - `specs/README.md`: 可维护规则和任务契约入口。
 
 ## 执行步骤

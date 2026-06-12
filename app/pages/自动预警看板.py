@@ -1,17 +1,14 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from pathlib import Path
 
 # ==============================================================================
 #  配置与初始化
 # ==============================================================================
 from app.utils.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
-from src.shared_kernel.config import ConfigLoader
 from app.components.page_header import (
-    render_page_header,
     extract_cached_funcs,
+    render_page_header,
 )
 from app.sections.spc_dashboard import (
     render_spc_control_panel,
@@ -23,8 +20,6 @@ from app.sections.spc_dashboard import (
 # [新增] 导入数据修饰配置模块（文件配置版）
 from app.compliance.compliance_manager import (
     render_compliance_config_panel,
-    compute_global_compliance_status,
-    get_compliance_config
 )
 
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
@@ -32,98 +27,64 @@ from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
+SPC_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
+SPC_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_query_window() -> tuple[str, str]:
+    """Keep this page's time window stable until the user clears cache."""
+    start_dt, end_dt = SpcAnalysisService.get_time_window()
+    return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+
+
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
 # [权限控制] 检测 URL 参数，仅用于控制修饰器面板显示
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true"
-st.title("自动预警看板")
 
 # ==============================================================================
 #  数据加载
 # ==============================================================================
-with st.spinner("正在全量抽取 SPC 数据 (全产品自动扫描中)..."):
-    try:
-        # A. 实例化数据库管理器
-        db_manager = DatabaseManager() 
-        
-        # [核心修复] 计算 SPC 快照聚合签名，实现文件签名感知的缓存失效
-        # 使用 session_state 固定签名，防止 Service 写入快照后 mtime 变化导致 cache miss
-        data_root = Path("data")
-        spc_sig_session_key = "spc_snapshot_sig_ALL"
-        if spc_sig_session_key not in st.session_state:
-            st.session_state[spc_sig_session_key] = SpcAnalysisService.compute_snapshot_signature(data_root, "ALL")
-        spc_snapshot_sig = st.session_state[spc_sig_session_key]
-        
-        # C. 获取后端统一定义的时间窗口
-        start_dt, end_dt = SpcAnalysisService.get_time_window()
-        
-        # D. 构造 Pydantic 查询配置
-        # 传入 "ALL" 将触发后端的全产品目录自动探测逻辑
-        query_config = SpcQueryConfig(
-            prod_code="ALL", 
-            start_date=start_dt.strftime("%Y-%m-%d"),
-            end_date=end_dt.strftime("%Y-%m-%d")
-        )
-        
-        # E. 发起真实的服务层调用 (严格对齐后端 3 参数签名)
-        # 删除了 snapshot_dir_str 参数，由后端 Service 内部自理
-        # [权限控制] 根据 URL 参数决定是否强制合规
-        # [新增] 默认查询 SPC 类型数据
-        view_model = SpcAnalysisService.get_spc_dashboard_data(
-            _db_manager=db_manager,
-            query_config_json=query_config.model_dump_json(),
-            time_type='MIXED',
-            data_type_filter='SPC',
-            snapshot_signature=spc_snapshot_sig
-        )
-    except Exception as e:
-        # 如果依然报错，此处会打印出最真实的错误堆栈
-        import logging, traceback
-        logging.error(f"❌ 调用后端 SPC Service 失败: {e}", exc_info=True)
-        st.error(f"❌ 调用后端 SPC Service 失败: {str(e)}")
-        with st.expander("查看详细错误堆栈"):
-            st.code(traceback.format_exc())
-        st.stop()
-
-with st.expander("数据刷新"):
-    # [Refactor] 3. 渲染页头 (动态注入 auto_cached_funcs)
+try:
+    db_manager = DatabaseManager()
+    start_date_str, end_date_str = get_cached_query_window()
     active_config = SessionManager.get_active_config()
-    funcs_to_clear = extract_cached_funcs(SpcAnalysisService)
-    
-    # 1. 构建后端需要的 Pydantic 参数对象
-    query_config = SpcQueryConfig(
-        prod_code="ALL", 
-        start_date=start_dt.strftime("%Y-%m-%d"),
-        end_date=end_dt.strftime("%Y-%m-%d")
+    header_data_type_filter = st.session_state.get("spc_data_type_filter", "ALL")
+    header_query_config = SpcQueryConfig(
+        prod_code="ALL",
+        start_date=start_date_str,
+        end_date=end_date_str,
+        data_type_filter=header_data_type_filter,
     )
+except Exception as e:
+    import logging, traceback
+    logging.error(f"❌ 初始化 SPC 看板失败: {e}", exc_info=True)
+    st.error(f"❌ 初始化 SPC 看板失败: {str(e)}")
+    with st.expander("查看详细错误堆栈"):
+        st.code(traceback.format_exc())
+    st.stop()
 
-    # 2. [核心修复] 利用 Lambda 闭包，将 db_manager 和 json 参数一并安全包裹
-    handlers = [
+funcs_to_clear = extract_cached_funcs(SpcAnalysisService) + [get_cached_query_window]
+render_page_header(
+    title="自动预警看板",
+    config=active_config,
+    cached_funcs=funcs_to_clear,
+    refresh_handlers=[
         lambda: SpcAnalysisService.safe_refresh_snapshots(
-            _db_manager=db_manager, 
-            query_config_json=query_config.model_dump_json()
+            db_manager,
+            header_query_config.model_dump_json(),
         )
-    ]
-
-    # 3. 渲染 Header
-    render_page_header(
-        config=active_config,
-        cached_funcs=funcs_to_clear,
-        refresh_handlers=handlers  # 注入闭包
-    )
+    ],
+)
 
 # --------------------------------------------------------------------------
 # 页面积木组装层 (UI Assembly)
 # --------------------------------------------------------------------------
-detail_df = getattr(view_model, "detail_df", pd.DataFrame())
-global_summary_df = getattr(view_model, "global_summary_df", pd.DataFrame())
-station_detail_df = getattr(view_model, "station_detail_df", pd.DataFrame())
-
-# 3. 提取所有可用的维度供前端过滤使用 (防呆处理：如果为空则返回空列表)
-available_products = detail_df['prod_code'].unique().tolist() if not detail_df.empty else []
-available_factories = detail_df['factory'].unique().tolist() if not detail_df.empty else []
+available_products = SessionManager.AVAILABLE_PRODUCTS
+available_factories = SPC_FACTORY_OPTIONS
 
 # 4. 组装积木: 渲染控制台
 filter_state = render_spc_control_panel(available_products, available_factories)
@@ -136,47 +97,22 @@ if is_admin:
         selected_factories=filter_state.selected_factories or ["ALL"]
     )
 
-# [核心修复] 从配置文件计算全局修饰状态
-any_compliant_enabled = compute_global_compliance_status(
-    data_type=filter_state.data_type_filter,
-    selected_products=filter_state.selected_products or ["ALL"],
-    selected_factories=filter_state.selected_factories or ["ALL"]
-)
-
-# 使用 session_state 避免重复请求
-# [修改] 缓存键包含修饰状态，切换配置后自动刷新数据
-# [新增] 报废类型额外包含 scrap_sheets.xlsx 文件签名，实现文件级缓存失效
-scrap_sig = ""
-if filter_state.data_type_filter == '报废':
-    scrap_path = Path("resources/scrap_sheets.xlsx")
-    if scrap_path.exists():
-        stat = scrap_path.stat()
-        scrap_sig = f"_scrap_{stat.st_mtime}_{stat.st_size}"
-
-session_key = f"spc_view_model_{filter_state.data_type_filter}_compliant_{any_compliant_enabled}{scrap_sig}"
-if session_key not in st.session_state:
-    with st.spinner(f"正在加载 {filter_state.data_type_filter} 监控数据..."):
-        query_config_typed = SpcQueryConfig(
-            prod_code="ALL", 
-            start_date=start_dt.strftime("%Y-%m-%d"),
-            end_date=end_dt.strftime("%Y-%m-%d"),
-            data_type_filter=filter_state.data_type_filter
-        )
-        view_model = SpcAnalysisService.get_spc_dashboard_data(
-            _db_manager=db_manager,
-            query_config_json=query_config_typed.model_dump_json(),
-            time_type='MIXED',
-            force_compliant=any_compliant_enabled,  # [核心修复] 传递修饰器配置
-            data_type_filter=filter_state.data_type_filter,
-            snapshot_signature=spc_snapshot_sig
-        )
-        st.session_state[session_key] = view_model
-        # 清理其他类型的缓存
-        for key in list(st.session_state.keys()):
-            if key.startswith("spc_view_model_") and key != session_key:
-                del st.session_state[key]
-else:
-    view_model = st.session_state[session_key]
+# 只加载一次 ALL 数据；其它监控类型从同一份 st.cache_data 结果中切片秒切。
+with st.spinner("正在加载 ALL 监控数据..."):
+    query_config_all = SpcQueryConfig(
+        prod_code="ALL",
+        start_date=start_date_str,
+        end_date=end_date_str,
+        data_type_filter="ALL",
+    )
+    view_model = SpcAnalysisService.get_spc_dashboard_data(
+        _db_manager=db_manager,
+        query_config_json=query_config_all.model_dump_json(),
+        time_type='MIXED',
+        force_compliant=True,
+        data_type_filter="ALL",
+        snapshot_signature=SPC_PAGE_CACHE_SIGNATURE,
+    )
 
 # 更新数据引用
 detail_df = getattr(view_model, "detail_df", pd.DataFrame())

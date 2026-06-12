@@ -307,14 +307,21 @@ def prepare_union_data_for_filter(
 ) -> pd.DataFrame:
     """
     [核心策略]：并集筛选 (Union Strategy)
-    分别从 Trend, Lot, Mapping 中提取满足各自门槛的 Code，合并为一个主表。
-    用于欺骗筛选器组件，使其能同时展示所有维度的关注点。
+    分别从 Trend, Lot, Mapping 中提取候选 Code，合并为一个主表。
+    defect_rate 保留跨维度最大值用于排序，monthly_avg_rate 提供给筛选器执行月均阈值判断。
     """
     candidates = {} # {(group, code): max_rate}
+    monthly_avg_rates = {} # {(group, code): monthly_avg_rate}
 
-    # 1. 提取 Trend 候选者 (门槛 > 0.01%)
+    # 1. 提取 Trend 候选者与月均阈值口径
     # mwd_data 是 dict {'monthly': df, ...}
     if mwd_data:
+        monthly_df = mwd_data.get('monthly')
+        if monthly_df is not None and not monthly_df.empty:
+            monthly_metrics = monthly_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].mean()
+            for (grp, code), rate in monthly_metrics.items():
+                monthly_avg_rates[(grp, code)] = rate
+
         trend_df = pd.concat([df for df in mwd_data.values() if df is not None], ignore_index=True)
         if not trend_df.empty:
             # 按 Code 分组取最大不良率
@@ -346,7 +353,15 @@ def prepare_union_data_for_filter(
 
     # 4. 构建最终 DataFrame
     if not candidates:
-        return pd.DataFrame(columns=['defect_group', 'defect_desc', 'defect_rate'])
+        return pd.DataFrame(columns=['defect_group', 'defect_desc', 'defect_rate', 'monthly_avg_rate'])
     
-    rows = [{'defect_group': k[0], 'defect_desc': k[1], 'defect_rate': v} for k, v in candidates.items()]
+    rows = [
+        {
+            'defect_group': k[0],
+            'defect_desc': k[1],
+            'defect_rate': v,
+            'monthly_avg_rate': monthly_avg_rates.get(k, 0.0),
+        }
+        for k, v in candidates.items()
+    ]
     return pd.DataFrame(rows)

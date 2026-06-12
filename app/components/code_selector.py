@@ -1,17 +1,141 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
-from app.utils.session_manager import SessionManager
+PLACEHOLDER_OPTION = "---请选择---"
+
+
+def _prepare_processed_dataframe(
+    source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]]
+) -> Optional[pd.DataFrame]:
+    """Normalize selector input and preserve MWD dict grain names."""
+    if isinstance(source_data, pd.DataFrame):
+        return source_data.copy()
+
+    if isinstance(source_data, dict):
+        all_dfs: List[pd.DataFrame] = []
+        for source_key, df in source_data.items():
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                current_df = df.copy()
+                current_df["_source_grain"] = str(source_key)
+                all_dfs.append(current_df)
+        if all_dfs:
+            return pd.concat(all_dfs, ignore_index=True)
+
+    return None
+
+
+def _select_monthly_rate_frame(processed_df: pd.DataFrame) -> pd.DataFrame:
+    """Return rows that represent monthly rates when the input exposes them."""
+    if "_source_grain" in processed_df.columns:
+        grain = processed_df["_source_grain"].astype(str).str.lower()
+        monthly_df = processed_df[grain == "monthly"].copy()
+        if not monthly_df.empty:
+            return monthly_df
+
+    if "time_period" in processed_df.columns:
+        period = processed_df["time_period"].astype(str)
+        monthly_mask = (
+            period.str.contains("月", na=False)
+            | period.str.fullmatch(r"\d{4}-\d{1,2}", na=False)
+            | period.str.fullmatch(r"\d{4}/\d{1,2}", na=False)
+        )
+        monthly_df = processed_df[monthly_mask].copy()
+        if not monthly_df.empty:
+            return monthly_df
+
+    return processed_df
+
+
+def _calculate_rate_metrics(processed_df: pd.DataFrame) -> pd.Series:
+    """Calculate Code rate metrics with monthly average as the preferred basis."""
+    metric_col = "monthly_avg_rate" if "monthly_avg_rate" in processed_df.columns else "defect_rate"
+    if metric_col not in processed_df.columns:
+        return pd.Series(dtype=float)
+
+    metric_df = processed_df if metric_col == "monthly_avg_rate" else _select_monthly_rate_frame(processed_df)
+    metric_df = metric_df.copy()
+    metric_df[metric_col] = pd.to_numeric(metric_df[metric_col], errors="coerce")
+    metric_df = metric_df.dropna(subset=["defect_group", "defect_desc", metric_col])
+    if metric_df.empty:
+        return pd.Series(dtype=float)
+
+    return metric_df.groupby(["defect_group", "defect_desc"])[metric_col].mean()
+
+
+def _calculate_eligible_series(
+    processed_df: Optional[pd.DataFrame],
+    filter_by: str,
+    rate_threshold: float,
+    count_threshold: int,
+) -> pd.Series:
+    """Calculate eligible Code metrics for the selector."""
+    if processed_df is None or processed_df.empty:
+        return pd.Series(dtype=float)
+
+    if filter_by == "rate":
+        metrics = _calculate_rate_metrics(processed_df)
+        return metrics[metrics >= rate_threshold]
+
+    if filter_by == "panel_count" and "defect_panel_count" in processed_df.columns:
+        metrics = processed_df.groupby(["defect_group", "defect_desc"])["defect_panel_count"].sum()
+        return metrics[metrics > count_threshold]
+
+    if filter_by == "occurrence":
+        metrics = processed_df.groupby(["defect_group", "defect_desc"]).size()
+        return metrics[metrics > count_threshold]
+
+    return pd.Series(dtype=float)
+
+
+def _build_code_options_by_group(
+    active_groups: List[str],
+    eligible_series: pd.Series,
+) -> Dict[str, List[str]]:
+    """Build selectbox options grouped by defect group."""
+    code_options_by_group: Dict[str, List[str]] = {
+        group_name: [PLACEHOLDER_OPTION] for group_name in active_groups
+    }
+    if eligible_series.empty:
+        return code_options_by_group
+
+    sorted_series = eligible_series.sort_values(ascending=False)
+    for group_name in active_groups:
+        group_codes_series = sorted_series[
+            sorted_series.index.get_level_values("defect_group") == group_name
+        ]
+        codes_list = [
+            str(code)
+            for code in group_codes_series.index.get_level_values("defect_desc").tolist()
+            if str(code).strip() != ""
+        ]
+
+        if codes_list:
+            code_options_by_group[group_name] = [PLACEHOLDER_OPTION] + codes_list
+
+    return code_options_by_group
+
+
+def _get_default_group(
+    active_groups: List[str],
+    code_options_by_group: Dict[str, List[str]],
+) -> Optional[str]:
+    """Choose the first group that still has selectable codes."""
+    for group_name in active_groups:
+        if len(code_options_by_group.get(group_name, [PLACEHOLDER_OPTION])) > 1:
+            return group_name
+
+    return active_groups[0] if active_groups else None
+
 
 def create_code_selection_ui(
-    source_data: pd.DataFrame | dict,
+    source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
     key_prefix: str,
     filter_by: str = 'rate',
-    rate_threshold: float = 0.00015,
+    rate_threshold: float = 0.0001,
     count_threshold: int = 20
-) -> dict:
+) -> Dict[str, Optional[str]]:
     """
     (V3.5 - 数据驱动版)
     完全基于 source_data 动态生成筛选器，不再强依赖 target_defect_groups 配置。
@@ -21,13 +145,7 @@ def create_code_selection_ui(
     """
 
     # --- 1. 数据聚合 ---
-    processed_df = None
-    if isinstance(source_data, pd.DataFrame):
-        processed_df = source_data.copy()
-    elif isinstance(source_data, dict):
-        all_dfs = [df for df in source_data.values() if isinstance(df, pd.DataFrame) and not df.empty]
-        if all_dfs:
-            processed_df = pd.concat(all_dfs, ignore_index=True)
+    processed_df = _prepare_processed_dataframe(source_data)
 
     # --- 2. 动态识别活跃的 Group ---
     active_groups = []
@@ -47,73 +165,73 @@ def create_code_selection_ui(
         return {"group": None, "code": None}
 
     # --- 3. 筛选符合条件的 Code ---
-    code_options_by_group = {}
-    eligible_series = pd.Series(dtype=float)
-
-    if processed_df is not None and not processed_df.empty:
-        if filter_by == 'rate':
-            if 'defect_rate' in processed_df.columns:
-                metrics = processed_df.groupby(['defect_group', 'defect_desc'])['defect_rate'].mean()
-                eligible_series = metrics[metrics > rate_threshold]
-        elif filter_by == 'panel_count':
-            if 'defect_panel_count' in processed_df.columns:
-                metrics = processed_df.groupby(['defect_group', 'defect_desc'])['defect_panel_count'].sum()
-                eligible_series = metrics[metrics > count_threshold]
-        elif filter_by == 'occurrence':
-            metrics = processed_df.groupby(['defect_group', 'defect_desc']).size()
-            eligible_series = metrics[metrics > count_threshold]
-    
-        # 生成选项
-        if not eligible_series.empty:
-            sorted_series = eligible_series.sort_values(ascending=False)
-            for group_name in active_groups:
-                # 提取属于该 Group 的 Code
-                group_codes_series = sorted_series[sorted_series.index.get_level_values('defect_group') == group_name]
-                codes_list = group_codes_series.index.get_level_values('defect_desc').tolist()
-                
-                if codes_list:
-                    code_options_by_group[group_name] = ["---请选择---"] + codes_list
-                else:
-                    code_options_by_group[group_name] = ["---请选择---"]
+    eligible_series = _calculate_eligible_series(
+        processed_df,
+        filter_by=filter_by,
+        rate_threshold=rate_threshold,
+        count_threshold=count_threshold,
+    )
+    code_options_by_group = _build_code_options_by_group(active_groups, eligible_series)
 
     # --- 4. 动态渲染 UI ---
+    group_key = f"{key_prefix}_group"
+    code_key = f"{key_prefix}_code"
+    last_group_key = f"{key_prefix}_last_group"
+    default_group = _get_default_group(active_groups, code_options_by_group)
+
+    if default_group is None:
+        st.info("当前无可展示的 Group。")
+        return {"group": None, "code": None}
+
+    if group_key not in st.session_state or st.session_state[group_key] not in active_groups:
+        st.session_state[group_key] = default_group
+
+    selected_group = st.session_state[group_key]
+    group_code_options = code_options_by_group.get(selected_group, [PLACEHOLDER_OPTION])
+    if code_key not in st.session_state or st.session_state[code_key] not in group_code_options:
+        st.session_state[code_key] = PLACEHOLDER_OPTION
+
     with st.container():
-        # 标题栏：重置按钮
-        header_cols = st.columns([0.95, 0.05])
-        with header_cols[1]:
-            if st.button("🔄", key=f"reset_{key_prefix}", help="重置所有Code选择"):
-                for i in range(len(active_groups)):
-                    state_key = f"{key_prefix}_g{i}"
-                    if state_key in st.session_state:
-                         st.session_state[state_key] = "---请选择---"
+        group_col, code_col, reset_col = st.columns([1.2, 2.6, 0.28])
+
+        with group_col:
+            st.selectbox(
+                "不良 Group",
+                options=active_groups,
+                key=group_key,
+            )
+
+        selected_group = st.session_state[group_key]
+        group_changed = st.session_state.get(last_group_key) != selected_group
+        group_code_options = code_options_by_group.get(selected_group, [PLACEHOLDER_OPTION])
+        if group_changed or st.session_state.get(code_key) not in group_code_options:
+            st.session_state[code_key] = PLACEHOLDER_OPTION
+        st.session_state[last_group_key] = selected_group
+
+        with code_col:
+            st.selectbox(
+                "Defect Code",
+                options=group_code_options,
+                key=code_key,
+                help="仅显示月均不良率达到阈值的 Code。",
+            )
+
+        with reset_col:
+            st.write("")
+            if st.button("🔄", key=f"reset_{key_prefix}", help="重置 Code 选择", use_container_width=True):
+                st.session_state[code_key] = PLACEHOLDER_OPTION
                 st.rerun()
 
-        # 内容栏：动态列数
-        cols_count = len(active_groups) if len(active_groups) > 0 else 1
-        content_cols = st.columns(cols_count)
-        
-        for i, col in enumerate(content_cols):
-            group_name = active_groups[i]
-            key = f"{key_prefix}_g{i}"
-            
-            # Session State 初始化
-            if key not in st.session_state:
-                st.session_state[key] = "---请选择---"
-
-            with col:
-                st.subheader(f"__{group_name}__")
-                st.selectbox(
-                    f"选择 {group_name}下的Code:",
-                    options=code_options_by_group.get(group_name, ["---请选择---"]),
-                    key=key,
-                    label_visibility="collapsed"
-                )
-
     # --- 5. 状态读取 ---
-    for i, group_name in enumerate(active_groups):
-        key = f"{key_prefix}_g{i}"
-        if key in st.session_state and st.session_state[key] != "---请选择---":
-            return {"group": group_name, "code": st.session_state[key]}
+    selected_group = st.session_state.get(group_key)
+    selected_code = st.session_state.get(code_key)
+    selected_options = code_options_by_group.get(selected_group, [PLACEHOLDER_OPTION])
+    if (
+        selected_group in active_groups
+        and selected_code != PLACEHOLDER_OPTION
+        and selected_code in selected_options
+    ):
+        return {"group": selected_group, "code": selected_code}
 
     return {"group": None, "code": None}
 

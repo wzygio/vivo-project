@@ -12,14 +12,14 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
-from shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 # --------------------------------------------------------------------------
 # 状态模型定义 (Type-Safe Session State)
 # --------------------------------------------------------------------------
 class SpcFilterState(BaseModel):
     selected_products: list[str] = Field(default_factory=list)
     selected_factories: list[str] = Field(default_factory=list)
-    data_type_filter: str = Field(default='SPC', description="监控类型: SPC, CTQ, AOI, 报废, ALL")
+    data_type_filter: str = Field(default='ALL', description="监控类型: ALL, SPC, CTQ, AOI, 报废")
 
 # --------------------------------------------------------------------------
 # UI 渲染区块
@@ -33,11 +33,12 @@ def render_spc_control_panel(available_products: list[str], available_factories:
     col1, col2, col3 = st.columns(3)
     with col1:
         # [修改] 将基准日期替换为监控类型筛选
-        data_type_options = ['SPC', 'CTQ', 'AOI', '报废', 'ALL']
+        data_type_options = ['ALL', 'SPC', 'CTQ', 'AOI', '报废']
         data_type = st.selectbox(
             "监控类型", 
             options=data_type_options, 
-            index=0,  # 默认选中 SPC
+            index=0,  # 默认选中 ALL，避免切换时重复加载
+            key="spc_data_type_filter",
             help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), 报废(报废数据), ALL(全部)"
         )
     with col2:
@@ -366,6 +367,45 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
 # =========================================================================
 # 数据联动处理引擎 (Data Binding Engine)
 # =========================================================================
+def _filter_spc_data_type(df: pd.DataFrame, data_type_filter: str) -> pd.DataFrame:
+    """从 ALL 缓存结果中按监控类型切片。"""
+    if df is None or df.empty or data_type_filter == 'ALL' or 'data_type' not in df.columns:
+        return df.copy() if df is not None else pd.DataFrame()
+
+    target = str(data_type_filter).upper()
+    source = df['data_type'].astype(str).str.upper()
+    return df[source == target].copy()
+
+
+def _recompute_spc_rates(df: pd.DataFrame) -> pd.DataFrame:
+    """按聚合后的绝对片数重算报警率。"""
+    if df.empty or '抽检数' not in df.columns:
+        return df
+
+    denominator = df['抽检数'].replace(0, np.nan)
+    if 'OOS片数' in df.columns:
+        df['OOS'] = df['OOS片数'] / denominator
+    if 'OOC片数' in df.columns:
+        df['OOC'] = df['OOC片数'] / denominator
+    if 'SOOS片数' in df.columns:
+        df['SOOS'] = df['SOOS片数'] / denominator
+    return df
+
+
+def _rollup_metric_rows(df: pd.DataFrame, group_cols: list[str]) -> pd.DataFrame:
+    """把 ALL 缓存中的 data_type 维度卷回页面展示粒度。"""
+    if df.empty:
+        return df
+
+    metric_cols = ['抽检数', 'OOS片数', 'SOOS片数', 'OOC片数']
+    metric_cols = [col for col in metric_cols if col in df.columns]
+    if not metric_cols:
+        return df
+
+    rolled = df.groupby(group_cols, as_index=False, observed=False)[metric_cols].sum()
+    return _recompute_spc_rates(rolled)
+
+
 def filter_and_rollup_spc_data(
     detail_df: pd.DataFrame, 
     global_summary_df: pd.DataFrame, 
@@ -384,13 +424,18 @@ def filter_and_rollup_spc_data(
         trace_logger.info("🚧 [ScrapTrace][UI-L2] detail_df 为空，直接透传")
         return global_summary_df, detail_df, station_detail_df
 
-    # 1. 过滤明细表
+    # 1. 从 ALL 缓存结果中按监控类型、产品、厂别过滤明细表
+    typed_detail_df = _filter_spc_data_type(detail_df, filter_state.data_type_filter)
     trace_logger.info(f"🚧 [ScrapTrace][UI-L3] detail_df 列: {detail_df.columns.tolist()}, factory唯一值: {detail_df['factory'].unique().tolist() if 'factory' in detail_df.columns else 'N/A'}")
-    filtered_detail_df = detail_df[
-        (detail_df['prod_code'].isin(filter_state.selected_products)) & 
-        (detail_df['factory'].isin(filter_state.selected_factories))
+    filtered_detail_df = typed_detail_df[
+        (typed_detail_df['prod_code'].isin(filter_state.selected_products)) & 
+        (typed_detail_df['factory'].isin(filter_state.selected_factories))
     ].copy()
-    trace_logger.info(f"🚧 [ScrapTrace][UI-L3] 过滤后 filtered_detail_df: {len(filtered_detail_df)} 条")
+    filtered_detail_df = _rollup_metric_rows(
+        filtered_detail_df,
+        ['time_group', 'prod_code', 'factory'],
+    )
+    trace_logger.info(f"🚧 [ScrapTrace][UI-L3] 过滤并卷积后 filtered_detail_df: {len(filtered_detail_df)} 条")
     
     # 2. 动态重算汇总表 (Roll-up)
     if not filtered_detail_df.empty and not global_summary_df.empty:
@@ -409,7 +454,7 @@ def filter_and_rollup_spc_data(
             agg_df['SOOS'] = agg_df['SOOS片数'] / agg_df['抽检数']
             
         # 强制对齐原始时间轴的排序
-        ordered_times = global_summary_df['time_group'].tolist() if 'time_group' in global_summary_df.columns else []
+        ordered_times = global_summary_df['time_group'].drop_duplicates().tolist() if 'time_group' in global_summary_df.columns else []
         if ordered_times:
             agg_df['time_group'] = pd.Categorical(agg_df['time_group'], categories=ordered_times, ordered=True)
             
@@ -422,11 +467,16 @@ def filter_and_rollup_spc_data(
     # 处理 Top 10 站点数据，前端根据用户交互进行二次切片
     # =========================================================
     if station_detail_df is not None and not station_detail_df.empty:
-        # 1. 物理过滤：严格响应前端【产品】与【厂别】的下拉框
-        filtered_station = station_detail_df[
-            (station_detail_df['prod_code'].isin(filter_state.selected_products)) & 
-            (station_detail_df['factory'].isin(filter_state.selected_factories))
+        # 1. 物理过滤：严格响应前端【监控类型】、【产品】与【厂别】的下拉框
+        typed_station_df = _filter_spc_data_type(station_detail_df, filter_state.data_type_filter)
+        filtered_station = typed_station_df[
+            (typed_station_df['prod_code'].isin(filter_state.selected_products)) & 
+            (typed_station_df['factory'].isin(filter_state.selected_factories))
         ].copy()
+        filtered_station = _rollup_metric_rows(
+            filtered_station,
+            ['prod_code', 'factory', 'step_id'],
+        )
 
         # 🚨 [关键探针 C] 前端联动后计数
         ooc_frontend = filtered_station['OOC片数'].sum() if 'OOC片数' in filtered_station.columns else 0

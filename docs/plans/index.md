@@ -9,9 +9,15 @@ Use this file as the Agent-maintained entrypoint for implementation plans.
 - [PNL indicator improvement](plan-indicator_improvement.md): PNL 指标规格收严分析和输出配置。
 - [Critical parts report](plan-关键备件报表.md): 关键备件报表开发方案。
 
+## Execution Plan Routing
+
+- Current accepted execution plans: `../exec-plans/active/`
+- Completed execution plans: `../exec-plans/completed/`
+
 ## Update Rules
 
 - Add or update a plan before broad refactors, new workflows, or multi-step feature work.
 - Keep plans short and executable: objective, touched files, steps, validation, rollback.
 - When implementation is complete, leave the plan in this registry and update its checklist/status instead of hiding it in chat history.
+- Use `docs/exec-plans/active/` for short-lived current execution plans and `docs/exec-plans/completed/` for historical execution plans.
 - `AGENTS.md` should route to this index, not duplicate plan details.

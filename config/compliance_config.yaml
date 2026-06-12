@@ -45,8 +45,15 @@
 # 全局开关
 default: false
 
-rules: 
-  SPC-Z571-ALL-ALL: true
-  CTQ-Z571-ALL-ALL: true
-  AOI-Z571-ARRAY-M05: true
-  AOI-ALL-TP-M06: true
+rules:
+  # WEEK23
+  ALL-ALL-ALL-M06-W24: true
+  SPC-ALL-ALL-ALL-ALL: true
+  CTQ-ALL-ALL-ALL-ALL: true
+  AOI-M673-ARRAY-MO5: true
+
+  # 持续
+  ALL-Z571-ALL-M03: true
+  ALL-Z571-ALL-M04: true
+  ALL-M673-ALL-M03: true
+  ALL-M673-ALL-M04: true

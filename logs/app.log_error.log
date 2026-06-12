@@ -1,146 +1,139 @@
-2026-06-10 08:51:23 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 08:51:28 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 08:51:50 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 08:51:50 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 08:51:50 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 08:51:56 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:01:43 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:01:43 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:02:17 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:02:18 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:02:31 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:02:31 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 09:02:31 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 09:02:36 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:06:42 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:06:42 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 09:06:42 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 09:06:51 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:07:19 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:07:19 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 09:07:23 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:07:23 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 09:07:23 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 09:07:30 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:10:46 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:10:46 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 09:10:46 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 09:10:52 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 11:57:21 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 11:57:21 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 11:57:38 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 11:57:38 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 11:57:38 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 11:57:44 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:34:30 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:34:31 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:34:54 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:34:54 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 13:34:54 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 13:35:03 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:40:59 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:41:09 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:41:09 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 13:41:09 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:42:02 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:42:03 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:42:12 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:42:12 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 13:42:12 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 13:42:16 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:47:35 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:47:36 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:48:03 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:48:03 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 13:48:03 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 13:48:09 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 13:58:03 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 13:58:04 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 14:01:02 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 14:01:02 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 14:01:20 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 14:01:20 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
-2026-06-10 14:01:20 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
-2026-06-10 14:01:25 - WARNING - [sheet_lot_processor] - =======================================
-2026-06-10 14:09:35 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
-2026-06-10 14:09:36 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-12 08:53:18 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 08:53:18 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 08:53:18 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 08:53:23 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 08:56:53 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 08:56:53 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-12 08:56:53 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-12 08:56:56 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 10:17:52 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 10:17:52 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 10:17:52 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 10:18:02 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:38:23 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:38:23 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 14:38:23 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 14:38:34 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:43:48 - ERROR - [yield_service] - 获取基础Panel级数据失败，无法生成Code级趋势图。
+2026-06-12 14:44:48 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-12 14:44:49 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-12 14:48:27 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:48:27 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-12 14:48:27 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-12 14:48:31 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:57:39 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:57:39 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-12 14:57:39 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-12 14:57:43 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:00:17 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:00:17 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 15:00:17 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:00:20 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:00:20 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-12 15:00:20 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 15:00:26 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:00:28 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-12 15:00:29 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:04:36 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:04:36 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-12 15:04:36 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-12 15:04:40 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 16:05:22 - ERROR - [excel_tools] - [xlsx_to_csv] COM 读取加密文件失败: (-2146827864, 'OLE error 0x800a01a8', None, None)
+2026-06-12 16:05:22 - WARNING - [spc_repository] - ⚠️ [SpcRepo] COM 直读加密 xlsx 失败: (-2146827864, 'OLE error 0x800a01a8', None, None)
+2026-06-12 16:05:22 - ERROR - [excel_tools] - [xlsx_to_csv] COM 读取加密文件失败: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)
+2026-06-12 16:05:22 - WARNING - [spc_repository] - ⚠️ [SpcRepo] COM 直读加密 xlsx 失败: (-2147417848, '被调用的对象已与其客户端断开连接。', None, None)
+2026-06-12 16:20:41 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 16:20:41 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 16:20:41 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 16:20:50 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 16:37:39 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 16:37:39 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-12 16:37:39 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-12 16:37:49 - WARNING - [sheet_lot_processor] - =======================================

@@ -36,9 +36,9 @@ import pandas as pd
 
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
+from app.components.page_header import extract_cached_funcs, render_page_header
+from app.utils.session_manager import SessionManager
 from app.sections.parts_dashboard import (
-    render_parts_header,
-    render_parts_refresh_button,
     render_factory_filter,
     render_parts_metrics,
     render_parts_table_selectable,
@@ -49,6 +49,7 @@ from app.sections.parts_dashboard import (
 # ==============================================================================
 
 BASELINE_PATH = Path("resources/critical_parts_baseline.csv")
+PARTS_REPORT_CACHE_SIGNATURE = "parts_report_manual_refresh_v1"
 
 
 # ==============================================================================
@@ -61,16 +62,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-render_parts_header("📋 关键备件报表")
-
-
-# ==============================================================================
-#  数据刷新控制
-# ==============================================================================
-
-if render_parts_refresh_button():
-    st.cache_data.clear()
-    st.rerun()
+active_config = SessionManager.get_active_config()
+db_manager = DatabaseManager()
+render_page_header(
+    "📋 关键备件报表",
+    active_config,
+    cached_funcs=extract_cached_funcs(PartsReportService),
+    refresh_handlers=[
+        lambda: PartsReportService.safe_refresh_snapshots(
+            db_manager,
+            str(BASELINE_PATH),
+        )
+    ],
+)
 
 
 # ==============================================================================
@@ -94,19 +98,12 @@ selected_factory = render_factory_filter(available_factories)
 #  加载原始报表数据
 # ==============================================================================
 
-sig_key = "parts_baseline_sig"
-if sig_key not in st.session_state:
-    st.session_state[sig_key] = str(BASELINE_PATH.stat().st_mtime)
-snapshot_sig = st.session_state[sig_key]
-
-db_manager = DatabaseManager()
-
 with st.spinner("正在从数据库加载备件寿命数据..."):
     try:
         view_model = PartsReportService.get_report_data(
             _db_manager=db_manager,
             baseline_path=str(BASELINE_PATH),
-            snapshot_signature=snapshot_sig,
+            snapshot_signature=PARTS_REPORT_CACHE_SIGNATURE,
         )
     except Exception as e:
         st.error(f"❌ 数据加载失败: {e}")

@@ -11,7 +11,10 @@
 - `CONTEXT.md`: 项目目标、边界和快速路由。
 - `docs/design/index.md`: 设计文档入口。
 - `docs/plans/index.md`: 计划入口。
+- `docs/exec-plans/active/`: 已接受、正在执行的短期计划。
+- `docs/exec-plans/completed/`: 已完成执行计划归档。
 - `specs/README.md`: 可维护规则和任务契约入口。
+- `docs/observability.md`: 日志、Trace、Smoke、测试和诊断入口。
 - `docs/references/README.md`: 外部参考入口。
 - `docs/generated/README.md`: 可重建审计和生成事实入口。
 
@@ -31,6 +34,8 @@
 | [`docs/design/shared_kernel.md`](docs/design/shared_kernel.md) | **共享内核设计**：配置、数据库、日志、文件处理 | 需要修改基础设施层时 |
 | [`docs/design/development_framework.md`](docs/design/development_framework.md) | **开发框架**：EPCC Flow、TDD 纪律、红线约束 | ✅ **每次修改前必读** |
 | [`docs/plans/index.md`](docs/plans/index.md) | **计划入口**：当前/历史计划与模板 | ✅ **开始新任务前，先查看是否有已有计划** |
+| [`docs/exec-plans/active/`](docs/exec-plans/active/) | **执行计划**：当前已接受计划 | 继续或接手正在执行的多步骤任务时 |
+| [`docs/observability.md`](docs/observability.md) | **可观测性**：日志、Trace、Smoke、测试和诊断入口 | 需要验证、排错、跑 UI/后台 Smoke 时 |
 | [`specs/README.md`](specs/README.md) | **规格入口**：可维护规则、任务契约、验收标准 | 需要沉淀稳定规则或任务合同 |
 | [`skills/README.md`](skills/README.md) | **技能库索引**：加密 Excel、类型标准化等专项解决方案 | 遇到 `skills/` 中记录的特定问题时 |
 

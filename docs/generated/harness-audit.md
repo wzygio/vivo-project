@@ -10,8 +10,12 @@ Project: `D:\wzy\Python\vivo-project`
 - `CONTEXT.md`
 - `docs/design/`
 - `docs/plans/`
+- `docs/exec-plans/active/`
+- `docs/exec-plans/completed/`
+- `docs/observability.md`
 - `docs/references/`
 - `docs/generated/`
+- `docs/generated/harness-garbage-collection.md`
 - `specs/`
 - `tests/`
 
