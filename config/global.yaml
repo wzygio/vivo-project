@@ -8,6 +8,7 @@ product_registry:
     - "M678"
     - "Z571"
     - "M673"
+    - "Z517"
     
 # UI界面相关的配置
 ui:

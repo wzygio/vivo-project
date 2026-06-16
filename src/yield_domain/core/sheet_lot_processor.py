@@ -587,6 +587,53 @@ def _distribute_sheet_from_lot(
 # ==============================================================================
 #                      辅助函数：模拟数据
 # ==============================================================================
+
+def _expand_code_rows_to_positive_daily_entities(
+    df_code: pd.DataFrame,
+    base_info_df: pd.DataFrame,
+    date_map_str: pd.Series,
+    lookup_dict: Dict[str, float],
+    entity_id_col: str,
+    code_desc: Any,
+) -> pd.DataFrame:
+    """Add same-day entities when a Code has positive EMA daily rate."""
+    if df_code.empty or not lookup_dict or entity_id_col not in base_info_df.columns:
+        return df_code
+
+    positive_dates = {str(date_key) for date_key, rate in lookup_dict.items() if float(rate) > 0}
+    if not positive_dates:
+        return df_code
+
+    entity_date_map = {
+        str(entity_id).strip(): date_key
+        for entity_id, date_key in date_map_str.dropna().items()
+    }
+    roster = base_info_df.copy()
+    roster["_entity_key"] = roster[entity_id_col].astype(str).str.strip()
+    roster["_date_key"] = roster["_entity_key"].map(entity_date_map)
+    roster = roster[roster["_date_key"].isin(positive_dates)].copy()
+    if roster.empty:
+        return df_code
+
+    existing_entities = set(df_code[entity_id_col].astype(str).str.strip())
+    roster = roster[~roster["_entity_key"].isin(existing_entities)].copy()
+    if roster.empty:
+        return df_code
+
+    defect_group = df_code["defect_group"].dropna().iloc[0] if "defect_group" in df_code else ""
+    new_rows = roster.drop(columns=["_entity_key", "_date_key"], errors="ignore")
+    new_rows["defect_group"] = defect_group
+    new_rows["defect_desc"] = code_desc
+    new_rows["defect_panel_count"] = 0
+    new_rows["defect_rate"] = 0.0
+
+    for col in df_code.columns:
+        if col not in new_rows.columns:
+            new_rows[col] = np.nan
+
+    return pd.concat([df_code, new_rows[df_code.columns]], ignore_index=True)
+
+
 @staticmethod
 def _simulate_concentration(
     raw_results: Dict[str, Any],
@@ -636,14 +683,21 @@ def _simulate_concentration(
             processed_codes_list = []
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
                 df_code_mod = df_code.copy()
-                
-                df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
-                
                 lookup_dict = {}
                 if df_daily_ema is not None:
                     code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
                     code_ema_data['date_key'] = code_ema_data['time_period'].astype(str).str.replace('-', '')
                     lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
+
+                df_code_mod = _expand_code_rows_to_positive_daily_entities(
+                    df_code=df_code_mod,
+                    base_info_df=base_info_temp,
+                    date_map_str=date_map_str,
+                    lookup_dict=lookup_dict,
+                    entity_id_col=entity_id_col,
+                    code_desc=code_desc,
+                )
+                df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
 
                 # 🚀 核心映射：获取当日大盘基准
                 df_code_mod['daily_base_rate'] = df_code_mod['date_key'].map(lookup_dict).fillna(0.0)

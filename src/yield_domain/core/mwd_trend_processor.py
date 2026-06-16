@@ -10,6 +10,10 @@ from pathlib import Path
 from src.shared_kernel.config_model import AppConfig
 from src.yield_domain.core.trend_regulator import TrendRegulator
 
+CODE_BASELINE_MAX_AGE_DAYS = 30
+CODE_BASELINE_SHEET = "Sheet1"
+CODE_BASELINE_METADATA_SHEET = "_metadata"
+
 class MWDTrendProcessor:
 
     # ==========================================================================
@@ -129,51 +133,206 @@ class MWDTrendProcessor:
             logging.error(f"Code趋势分析出错: {e}", exc_info=True)
             return None
         
-def _generate_code_baseline(df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
+def _code_baseline_path(prod_code: str) -> Path:
+    return Path(f"resources/{prod_code}/{prod_code}_codebaseline.xlsx")
+
+
+def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
+    """Build baseline rates from the current Code-level daily window."""
+    columns = ['defect_desc', 'baseline_rate']
+    required_cols = {'defect_desc', 'defect_panel_count', 'total_panels'}
+    if df.empty or not required_cols.issubset(df.columns):
+        return pd.DataFrame(columns=columns)
+
+    df_calc = df.copy()
+    df_calc = df_calc[
+        df_calc['defect_desc'].notna()
+        & (df_calc['defect_desc'].astype(str).str.strip() != "")
+        & (df_calc['defect_desc'].astype(str) != "NoDefect")
+    ].copy()
+    if df_calc.empty:
+        return pd.DataFrame(columns=columns)
+
+    df_calc['defect_panel_count'] = pd.to_numeric(
+        df_calc['defect_panel_count'], errors='coerce'
+    ).fillna(0)
+    df_calc['total_panels'] = pd.to_numeric(
+        df_calc['total_panels'], errors='coerce'
+    ).fillna(0)
+
+    grouped = df_calc.groupby('defect_desc', dropna=True).agg(
+        defect_panel_count=('defect_panel_count', 'sum'),
+        total_panels=('total_panels', 'sum')
+    ).reset_index()
+    grouped['baseline_rate'] = np.where(
+        grouped['total_panels'] > 0,
+        grouped['defect_panel_count'] / grouped['total_panels'],
+        0.0
+    )
+    return grouped[columns].sort_values('defect_desc').reset_index(drop=True)
+
+
+def _code_baseline_source_window(df: pd.DataFrame) -> Tuple[str, str]:
+    if df.empty or 'warehousing_time' not in df.columns:
+        return "", ""
+    dates = pd.to_datetime(df['warehousing_time'], errors='coerce').dropna()
+    if dates.empty:
+        return "", ""
+    return dates.min().strftime('%Y-%m-%d'), dates.max().strftime('%Y-%m-%d')
+
+
+def _write_code_baseline_file(
+    out_path: Path,
+    baseline: pd.DataFrame,
+    prod_code: str,
+    generated_at: pd.Timestamp,
+    refresh_reason: str,
+    source_start: str,
+    source_end: str,
+) -> None:
+    metadata = pd.DataFrame(
+        [
+            {'key': 'product_code', 'value': prod_code},
+            {'key': 'generated_at', 'value': generated_at.isoformat()},
+            {'key': 'max_age_days', 'value': str(CODE_BASELINE_MAX_AGE_DAYS)},
+            {'key': 'refresh_reason', 'value': refresh_reason},
+            {'key': 'source_start', 'value': source_start},
+            {'key': 'source_end', 'value': source_end},
+            {'key': 'code_count', 'value': str(len(baseline))},
+        ]
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(out_path, engine='openpyxl') as writer:
+        baseline.to_excel(writer, index=False, sheet_name=CODE_BASELINE_SHEET)
+        metadata.to_excel(writer, index=False, sheet_name=CODE_BASELINE_METADATA_SHEET)
+
+
+def _read_code_baseline_metadata(path: Path) -> Dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        metadata_df = pd.read_excel(path, sheet_name=CODE_BASELINE_METADATA_SHEET)
+        if not {'key', 'value'}.issubset(metadata_df.columns):
+            return {}
+        return {
+            str(row['key']): str(row['value'])
+            for _, row in metadata_df.dropna(subset=['key']).iterrows()
+        }
+    except Exception:
+        return {}
+
+
+def _is_code_baseline_expired(
+    path: Path,
+    now: dt | pd.Timestamp | None = None,
+    max_age_days: int = CODE_BASELINE_MAX_AGE_DAYS,
+) -> bool:
+    if not path.exists():
+        return True
+
+    metadata = _read_code_baseline_metadata(path)
+    generated_at_raw = metadata.get('generated_at')
+    if not generated_at_raw:
+        return True
+
+    generated_at = pd.to_datetime(generated_at_raw, errors='coerce')
+    if pd.isna(generated_at):
+        return True
+
+    now_ts = pd.Timestamp(now or dt.now())
+    if getattr(generated_at, "tzinfo", None) is not None:
+        generated_at = generated_at.tz_localize(None)
+    if getattr(now_ts, "tzinfo", None) is not None:
+        now_ts = now_ts.tz_localize(None)
+
+    return (now_ts - generated_at).days >= max_age_days
+
+
+def _load_code_baseline_frame(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
+    try:
+        df = pd.read_excel(path, sheet_name=CODE_BASELINE_SHEET)
+        if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
+            return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
+        return df[['defect_desc', 'baseline_rate']].copy()
+    except Exception as e:
+        logging.warning(f"[Baseline Loader] 加载失败: {e}")
+        return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
+
+
+def _generate_code_baseline(
+    df: pd.DataFrame,
+    prod_code: str,
+    *,
+    generated_at: dt | pd.Timestamp | None = None,
+    refresh_reason: str = "manual_refresh",
+) -> pd.DataFrame:
     """
-    [自动基准生成器] ByCode 计算当前三个月的均值作为 EMA 锚点。
-    支持增量补充已存在的 Excel 文件，确保基准值文件始终完整。
+    [自动基准生成器] ByCode 计算当前窗口均值作为 EMA 锚点。
+    整表重建并写入元数据，避免长期沿用失真的旧锚点。
     """
-    out_dir = Path(f"resources/{prod_code}")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{prod_code}_codebaseline.xlsx"
-    
-    # 1. ByCode 计算当前三个月全局均值
-    new_baseline = pd.DataFrame()
-    if not df.empty and 'defect_desc' in df.columns:
-        df_calc = df.copy()
-        grouped = df_calc.groupby('defect_desc').agg(
-            defect_panel_count=('defect_panel_count', 'sum'),
-            total_panels=('total_panels', 'sum')
-        ).reset_index()
-        grouped['baseline_rate'] = np.where(
-            grouped['total_panels'] > 0,
-            grouped['defect_panel_count'] / grouped['total_panels'],
-            0.0
+    out_path = _code_baseline_path(prod_code)
+    new_baseline = _build_code_baseline(df)
+    generated_at_ts = pd.Timestamp(generated_at or dt.now())
+    source_start, source_end = _code_baseline_source_window(df)
+
+    try:
+        _write_code_baseline_file(
+            out_path=out_path,
+            baseline=new_baseline,
+            prod_code=prod_code,
+            generated_at=generated_at_ts,
+            refresh_reason=refresh_reason,
+            source_start=source_start,
+            source_end=source_end,
         )
-        new_baseline = grouped[['defect_desc', 'baseline_rate']].copy()
-    
-    # 2. 增量补充已有 Excel（如果存在）
-    if out_path.exists():
-        try:
-            existing = pd.read_excel(out_path)
-            if 'defect_desc' in existing.columns and 'baseline_rate' in existing.columns:
-                merged_map = dict(zip(existing['defect_desc'], existing['baseline_rate'].astype(float)))
-                for _, row in new_baseline.iterrows():
-                    merged_map[row['defect_desc']] = float(row['baseline_rate'])
-                baseline = pd.DataFrame([
-                    {'defect_desc': k, 'baseline_rate': v} for k, v in merged_map.items()
-                ])
-                baseline.to_excel(out_path, index=False)
-                logging.info(f"[Baseline Generator] Code 基准已增量补充至: {out_path} (共 {len(baseline)} 个 Codes)")
-                return baseline
-        except Exception as e:
-            logging.warning(f"[Baseline Generator] 增量补充失败，将覆盖写入: {e}")
-    
-    # 3. 全新写入
-    new_baseline.to_excel(out_path, index=False)
-    logging.info(f"[Baseline Generator] Code 基准已生成并保存至: {out_path} (共 {len(new_baseline)} 个 Codes)")
+        logging.info(
+            f"[Baseline Generator] Code 基准已重建: {out_path} "
+            f"(reason={refresh_reason}, codes={len(new_baseline)}, window={source_start}->{source_end})"
+        )
+    except Exception as e:
+        logging.warning(f"[Baseline Generator] 写入失败: {e}")
+
     return new_baseline
+
+
+def _ensure_code_baseline_current(
+    df: pd.DataFrame,
+    prod_code: str,
+    *,
+    now: dt | pd.Timestamp | None = None,
+    max_age_days: int = CODE_BASELINE_MAX_AGE_DAYS,
+) -> pd.DataFrame:
+    """
+    Ensure baseline is rebuilt when absent, expired, legacy, or missing current Codes.
+    """
+    path = _code_baseline_path(prod_code)
+    current_baseline = _build_code_baseline(df)
+    if current_baseline.empty:
+        return _load_code_baseline_frame(path)
+
+    existing = _load_code_baseline_frame(path)
+    existing_codes = set(existing['defect_desc'].astype(str)) if not existing.empty else set()
+    current_codes = set(current_baseline['defect_desc'].astype(str))
+    missing_codes = current_codes - existing_codes
+
+    if not path.exists():
+        reason = "missing_file"
+    elif _is_code_baseline_expired(path, now=now, max_age_days=max_age_days):
+        reason = "expired_or_legacy"
+    elif missing_codes:
+        reason = "missing_codes"
+    else:
+        logging.info(f"[Baseline] Code 基准仍在有效期内，沿用: {path}")
+        return existing
+
+    return _generate_code_baseline(
+        df,
+        prod_code,
+        generated_at=now,
+        refresh_reason=reason,
+    )
 
 
 def _load_code_baseline(prod_code: str) -> dict:
@@ -181,18 +340,11 @@ def _load_code_baseline(prod_code: str) -> dict:
     [锚点加载器] 从 resources/<prod_code>/{prod_code}_codebaseline.xlsx 读取 Code 基准映射。
     返回 {defect_desc: baseline_rate} 字典。
     """
-    path = Path(f"resources/{prod_code}/{prod_code}_codebaseline.xlsx")
-    if not path.exists():
+    path = _code_baseline_path(prod_code)
+    df = _load_code_baseline_frame(path)
+    if df.empty:
         return {}
-    try:
-        df = pd.read_excel(path)
-        if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
-            logging.warning(f"[Baseline Loader] Excel 列名不匹配: {path}")
-            return {}
-        return dict(zip(df['defect_desc'], df['baseline_rate'].astype(float)))
-    except Exception as e:
-        logging.warning(f"[Baseline Loader] 加载失败: {e}")
-        return {}
+    return dict(zip(df['defect_desc'], df['baseline_rate'].astype(float)))
 
 
 # ==============================================================================
@@ -230,7 +382,7 @@ def _execute_unified_pipeline(
     # [新增] 自动基准生成器 (仅 Code 级)
     is_group = 'defect_desc' not in df_processing.columns
     if not is_group and prod_code:
-        _generate_code_baseline(df_processing, prod_code)
+        _ensure_code_baseline_current(df_processing, prod_code)
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
@@ -512,14 +664,16 @@ def _calc_code_ema_noise(
     unique_codes = ema_df['defect_desc'].unique()
     result_frames = []
     
-    # 预加载 Excel 基准，缺失则自动补充
-    baseline_map = _load_code_baseline(prod_code) if prod_code else {}
     if prod_code:
-        missing_codes = [c for c in unique_codes if c != "NoDefect" and c not in baseline_map]
-        if missing_codes:
-            logging.info(f"[Baseline] 检测到缺失 Codes {missing_codes}，启动自动补充...")
-            _generate_code_baseline(ema_df, prod_code)
+        baseline_df = _ensure_code_baseline_current(ema_df, prod_code)
+        if not baseline_df.empty:
+            baseline_map = dict(
+                zip(baseline_df['defect_desc'], baseline_df['baseline_rate'].astype(float))
+            )
+        else:
             baseline_map = _load_code_baseline(prod_code)
+    else:
+        baseline_map = {}
     
     for code in unique_codes:
         if code == "NoDefect":

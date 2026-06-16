@@ -1,8 +1,8 @@
-# M673为高PPI产品，Array段良率较低
+# Z517同M678一致、
 
 # 数据加载相关的参数
 data_source:
-  product_code: "M673"
+  product_code: "Z517"
 
   # 4. defect_group
   target_defect_groups:
@@ -21,33 +21,27 @@ data_source:
 # 本地文件读取
 paths:
   static_warning_lines: 
-    file_name: 'M673_入库不良率规格.xlsx'
+    file_name: 'Z517_入库不良率规格.xlsx'
     sheet_name: 'Sheet1'
 
   rate_override_config:
-    file_name: "M673_override_rates.xlsx"
+    file_name: "Z517_override_rates.xlsx"
     sheet_name: "Sheet1"
 
   mwd_override_config:
-    file_name: "M673_趋势图人工修正.xlsx"
+    file_name: "Z517_趋势图人工修正.xlsx"
 
 # 数据处理相关的参数
 processing:
   use_local_snapshot: True
-  snapshot_path: 'data/snapshot_M673.parquet'
+  snapshot_path: 'data/snapshot_Z517.parquet'
   
   defect_capping:
     enable: True
-
-  defect_multipliers:
-    # Array_Line
-    # Array_Pixel
-    # '大面积亮点': 0
-    # '大面积暗点': 0
-    # Array_Mura
-    'S向ELA Mura': 0
-    'G向ELA Mura': 0
   
+    # 5. defect_code倍率调节
+  defect_multipliers:
+
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025
