@@ -57,50 +57,7 @@ processing:
     '彩斑Mura': 0.4
     'S向边缘Mura': 0.6
 
-  # 6. Mapping集中性调节
-  mapping_hotspot_script:
-    - enable: true
-      target_code: '彩斑Mura'
-      target_batch_index: 0            # [修改] 数字索引: 0=最旧批次, -1=最新批次, [0,-1]=最旧+最新
-      mode: 'multiplicative'
-      hotspot_multiplier: 0.3
-      normal_multiplier: 1.5
-      hotspot_rules:
-        - { type: 'row', value: ['1E','2A','2B'] }
-
-    - enable: true
-      target_code: 'S向边缘Mura'
-      target_batch_index: 0            # [修改] 数字索引: 0=最旧批次
-      mode: 'additive' 
-      hotspot_adder: 2
-      normal_multiplier_in_add_mode: 0
-      hotspot_rules:
-        - { 
-            type: 'position', 
-            value: [
-              ['1A', 'J0'], ['1A', 'K0'], ['1A', 'L0'], ['1B', 'J0'],
-              ['1B', 'K0'], ['1B', 'L0'], ['2B', 'F0'], ['2B', 'G0'],
-              ['1B', 'P0'], ['1B', 'S0'], ['1D', 'A0'], ['2B', 'B0'],
-              ['1A', 'S0'], ['2B', 'A0']
-            ]
-          }
-
-    - enable: true
-      target_code: '白画面黑斑Mura'
-      target_batch_index: [0, 1, 2, 3, 4 ]
-      mode: 'multiplicative'          
-      hotspot_multiplier: 0.3
-      normal_multiplier: 1
-      hotspot_rules:
-        - { 
-            type: 'position', 
-            value: [
-              ['1A', 'A0'], ['1A', 'B0'], 
-              ['1B', 'A0'], ['1B', 'B0']
-            ]
-          }
-
-  # 7. sheet/lot波动调节
+  # 6. sheet/lot波动调节
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025

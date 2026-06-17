@@ -17,9 +17,15 @@ from pathlib import Path
 from typing import Dict, Tuple, Optional, List
 from datetime import datetime
 
+from src.shared_kernel.compliance_config_excel import (
+    compliance_config_to_xlsx_bytes,
+    load_compliance_config_from_xlsx,
+    write_compliance_config_to_xlsx,
+)
 
 # 配置文件路径
-CONFIG_PATH = Path("config/compliance_config.yaml")
+CONFIG_PATH = Path("config/compliance_config.xlsx")
+LEGACY_YAML_CONFIG_PATH = Path("config/compliance_config.yaml")
 
 # 报废Sheet路径
 SCRAP_SHEET_PATH = Path("resources/scrap_sheets.xlsx")
@@ -27,15 +33,33 @@ SCRAP_SHEET_PATH = Path("resources/scrap_sheets.xlsx")
 
 def _ensure_config_exists():
     """确保配置文件存在，不存在则创建默认配置"""
-    if not CONFIG_PATH.exists():
+    if CONFIG_PATH.exists():
+        return
+
+    default_config = {
+        "default": False,
+        "rules": {}
+    }
+
+    if CONFIG_PATH.suffix.lower() in {".yaml", ".yml"}:
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        default_config = {
-            "default": False,
-            "rules": {}
-        }
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.dump(default_config, f, allow_unicode=True, default_flow_style=False)
-        logging.info(f"[ComplianceConfig] 创建默认配置文件: {CONFIG_PATH}")
+        logging.info(f"[ComplianceConfig] 创建默认 YAML 配置文件: {CONFIG_PATH}")
+        return
+
+    if LEGACY_YAML_CONFIG_PATH.exists():
+        try:
+            with open(LEGACY_YAML_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                legacy_config = yaml.safe_load(f) or default_config
+            write_compliance_config_to_xlsx(legacy_config, CONFIG_PATH)
+            logging.info(f"[ComplianceConfig] 已从 YAML 迁移到 xlsx: {CONFIG_PATH}")
+            return
+        except Exception as e:
+            logging.error(f"[ComplianceConfig] YAML 迁移 xlsx 失败: {e}", exc_info=True)
+
+    write_compliance_config_to_xlsx(default_config, CONFIG_PATH)
+    logging.info(f"[ComplianceConfig] 创建默认 xlsx 配置文件: {CONFIG_PATH}")
 
 
 def load_compliance_config() -> Dict:
@@ -48,6 +72,9 @@ def load_compliance_config() -> Dict:
     _ensure_config_exists()
     
     try:
+        if CONFIG_PATH.suffix.lower() == ".xlsx":
+            return load_compliance_config_from_xlsx(CONFIG_PATH)
+
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f) or {}
             if not isinstance(config, dict):
@@ -150,6 +177,11 @@ def get_compliance_config(
 def save_compliance_config(config: Dict):
     """保存配置到文件"""
     try:
+        if CONFIG_PATH.suffix.lower() == ".xlsx":
+            write_compliance_config_to_xlsx(config, CONFIG_PATH)
+            logging.info(f"[ComplianceConfig] xlsx 配置已保存")
+            return True
+
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
         logging.info(f"[ComplianceConfig] 配置已保存")
@@ -217,7 +249,7 @@ def render_compliance_config_panel(
     config = load_compliance_config()
     
     with st.expander("🔧 数据修饰配置", expanded=False):
-        st.info("当前配置从 `config/compliance_config.yaml` 加载，刷新页面后生效")
+        st.info("当前配置从 `config/compliance_config.xlsx` 加载，刷新页面后生效")
         
         # 显示默认配置
         default_status = "✅ 启用" if config["default"] else "❌ 禁用"
@@ -267,14 +299,11 @@ def render_compliance_config_panel(
             
             with col1:
                 # 下载当前配置
-                with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                    config_content = f.read()
-                
                 st.download_button(
                     label="📥 下载配置文件",
-                    data=config_content,
-                    file_name="compliance_config.yaml",
-                    mime="text/yaml",
+                    data=compliance_config_to_xlsx_bytes(config),
+                    file_name="compliance_config.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     help="下载当前配置文件到本地，修改后上传"
                 )
             
@@ -282,16 +311,16 @@ def render_compliance_config_panel(
                 # 上传新配置
                 uploaded_file = st.file_uploader(
                     "📤 上传配置文件",
-                    type=['yaml', 'yml'],
+                    type=['xlsx'],
                     help="上传修改后的配置文件（将覆盖原文件）"
                 )
                 
                 if uploaded_file is not None:
                     try:
-                        # 验证 YAML 格式
-                        new_config = yaml.safe_load(uploaded_file)
+                        # 验证 xlsx 格式
+                        new_config = load_compliance_config_from_xlsx(uploaded_file)
                         if "default" not in new_config or "rules" not in new_config:
-                            st.error("配置文件格式错误：必须包含 'default' 和 'rules' 字段")
+                            st.error("配置文件格式错误：必须包含默认配置和规则配置")
                         else:
                             # 保存上传的文件
                             save_compliance_config(new_config)

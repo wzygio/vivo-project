@@ -209,4 +209,10 @@ render_sheet_distribution_section(sheet_data, target_lot, curr_group, curr_code)
 
 # Row D: 空间热力图
 hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
-render_mapping_section(mapping_data, curr_group, curr_code, hotspot_scripts)
+render_mapping_section(
+    mapping_data,
+    curr_group,
+    curr_code,
+    hotspot_scripts,
+    product_code=active_config.data_source.product_code,
+)

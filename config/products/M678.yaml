@@ -68,18 +68,6 @@ processing:
     # OLED_Mura
     '彩斑Mura': 0.2
 
-  # 6. Mapping集中性调节
-  mapping_hotspot_script:
-    - enable: true
-      target_code: 'S向单暗线'
-      target_batch_index: 0            # [修改] 数字索引: 0=最旧批次, -1=最新批次
-      mode: 'multiplicative'
-      hotspot_multiplier: 1.3
-      normal_multiplier: 0.7
-      hotspot_rules:
-        - { type: 'row', value: ['2E', '1A'] }
-        - { type: 'col', value: ['A0', 'B0', 'S0'] }
-
   sheet_hotspot_config: 
       enable: True
       random_seed: 2025

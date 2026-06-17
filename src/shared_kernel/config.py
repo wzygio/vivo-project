@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 # 引入我们定义的 Pydantic 模型
 from src.shared_kernel.config_model import AppConfig
+from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
 
 class ConfigLoader:
     """
@@ -132,17 +133,20 @@ class ConfigLoader:
     @classmethod
     def get_compliance_config(cls) -> dict:
         """
-        [新增/修改] 获取完整的合规配置（包含 default 开关 和 rules 细节）
+        获取完整的合规配置（xlsx 优先，YAML 仅作兼容兜底）
         """
         root_dir = cls.get_project_root()
+        xlsx_path = root_dir / "config" / "compliance_config.xlsx"
         yaml_path = root_dir / "config" / "compliance_config.yaml"
         
         try:
+            if xlsx_path.exists():
+                return load_compliance_config_from_xlsx(xlsx_path)
             if yaml_path.exists():
                 return cls._load_yaml(yaml_path)
         except Exception as e:
             import logging
-            logging.error(f"❌ 读取 compliance_config.yaml 失败: {e}")
+            logging.error(f"❌ 读取 compliance 配置失败: {e}")
             
         return {"default": False, "rules": {}}
 

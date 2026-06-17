@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import logging
 import re
+import hashlib
+from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
 
 # ==============================================================================
@@ -224,11 +226,13 @@ def apply_hotspot_modification_to_matrix(
     code_desc: str,
     batch_position: int,        # [修改] 当前批次在排序列表中的 0-based 位置
     total_batches: int,         # [新增] 批次总数，用于解析负索引
-    script_config_list: list
+    script_config_list: list,
+    product_code: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    [V3.0 - 数字索引匹配]
+    [V4.0 - 产品/Code/批次精确匹配 + 多模式修饰]
     按照"剧本库"(列表)修饰已聚合的Mapping图矩阵。
+    新配置支持 target_product / target_code / target_batch，三者均支持 ALL。
     target_batch_index 支持以下格式：
       - 整数: 0=第一个, -1=最后一个, -2=倒数第二个
       - 整数列表: [-1, -2] = 最后两个
@@ -238,35 +242,17 @@ def apply_hotspot_modification_to_matrix(
         # --- [核心逻辑 1] 搜索匹配的脚本 ---
         matched_script = None
         for script in script_config_list:
-            if not script.get('enable', False):
+            if not _mapping_script_matches(
+                script=script,
+                product_code=product_code,
+                code_desc=code_desc,
+                batch_no=batch_no,
+                batch_position=batch_position,
+                total_batches=total_batches,
+            ):
                 continue
-            if script.get('target_code') != code_desc:
-                continue
-
-            target_idx = script.get('target_batch_index')
-
-            # [核心] 判断当前 batch_position 是否匹配
-            is_match = False
-            if isinstance(target_idx, int):
-                # 负索引解析：-1 → total_batches-1
-                normalized = target_idx if target_idx >= 0 else total_batches + target_idx
-                is_match = (normalized == batch_position)
-            elif isinstance(target_idx, list):
-                # 列表中的每个元素都做负索引解析
-                normalized_set = {i if i >= 0 else total_batches + i for i in target_idx}
-                is_match = (batch_position in normalized_set)
-            elif isinstance(target_idx, str):
-                # [向后兼容] 旧的字符串模式
-                if target_idx == 'oldest' and batch_position == 0:
-                    is_match = True
-                elif target_idx == 'latest' and batch_position == total_batches - 1:
-                    is_match = True
-                elif target_idx == 'middle' and 0 < batch_position < total_batches - 1:
-                    is_match = True
-
-            if is_match:
-                matched_script = script
-                break
+            matched_script = script
+            break
 
         # 如果没有匹配的脚本，则返回原始矩阵
         if matched_script is None:
@@ -277,12 +263,29 @@ def apply_hotspot_modification_to_matrix(
 
         # --- [核心逻辑 2] 使用匹配到的脚本字典 (matched_script) 执行操作 ---
         # 1. 加载所有模式的参数 (从 matched_script 获取)
-        mode = matched_script.get('mode', 'multiplicative')
+        mode = str(matched_script.get('mode', 'multiplicative')).strip().lower()
         hotspot_rules = matched_script.get('hotspot_rules', [])
         hot_multi = matched_script.get('hotspot_multiplier', 1.0)
         norm_multi = matched_script.get('normal_multiplier', 1.0)
         hot_add = matched_script.get('hotspot_adder', 0)
         norm_multi_in_add = matched_script.get('normal_multiplier_in_add_mode', 1.0)
+
+        if mode in {'original', 'raw', 'none'}:
+            return heatmap_matrix
+
+        if mode == 'random':
+            seed = matched_script.get('random_seed')
+            random_method = matched_script.get('random_method', 'poisson')
+            random_variation = matched_script.get('random_variation', 0.0)
+            return _apply_random_mapping_distribution(
+                heatmap_matrix=heatmap_matrix,
+                product_code=product_code,
+                batch_no=batch_no,
+                code_desc=code_desc,
+                seed=seed,
+                method=random_method,
+                variation=random_variation,
+            )
 
         # 2. 准备“翻译器” (10行 x 21列) - (保持不变)
         row_name_to_index = {
@@ -347,3 +350,141 @@ def apply_hotspot_modification_to_matrix(
     except Exception as e:
         logging.error(f"在应用Mapping矩阵修饰时发生错误: {e}", exc_info=True)
         return heatmap_matrix # 出错时返回原始矩阵
+
+
+def _mapping_script_matches(
+    script: dict[str, Any],
+    product_code: Optional[str],
+    code_desc: str,
+    batch_no: str,
+    batch_position: int,
+    total_batches: int,
+) -> bool:
+    if not script.get('enable', False):
+        return False
+
+    if not _matches_target(script.get('target_product'), product_code):
+        return False
+    if not _matches_target(script.get('target_code'), code_desc):
+        return False
+
+    target_batch = script.get('target_batch', script.get('target_batches'))
+    batch_matches = True
+    if target_batch is not None:
+        batch_matches = _matches_batch_target(target_batch, batch_no)
+
+    target_batch_index = script.get('target_batch_index')
+    index_matches = True
+    if target_batch_index is not None:
+        index_matches = _matches_batch_index(target_batch_index, batch_position, total_batches)
+
+    return batch_matches and index_matches
+
+
+def _matches_target(target: Any, actual: Optional[str]) -> bool:
+    if target is None:
+        return True
+    if isinstance(target, list):
+        return any(_matches_target(item, actual) for item in target)
+    target_text = str(target).strip()
+    if target_text.upper() == 'ALL':
+        return True
+    if actual is None:
+        return False
+    return target_text == str(actual).strip()
+
+
+def _normalize_batch_text(value: Any) -> str:
+    text = str(value).strip().upper()
+    text = re.sub(r'[\s/_\-]+', '', text)
+    text = text.replace('批次', '').replace('蒸镀批', '')
+    return text
+
+
+def _matches_batch_target(target: Any, batch_no: str) -> bool:
+    if isinstance(target, list):
+        return any(_matches_batch_target(item, batch_no) for item in target)
+    target_text = str(target).strip()
+    if target_text.upper() == 'ALL':
+        return True
+
+    actual_text = str(batch_no).strip()
+    if target_text == actual_text:
+        return True
+
+    normalized_target = _normalize_batch_text(target_text)
+    normalized_actual = _normalize_batch_text(actual_text)
+    if not normalized_target or not normalized_actual:
+        return False
+    return normalized_target == normalized_actual or normalized_target in normalized_actual
+
+
+def _matches_batch_index(target_idx: Any, batch_position: int, total_batches: int) -> bool:
+    if target_idx is None:
+        return True
+    if isinstance(target_idx, int):
+        normalized = target_idx if target_idx >= 0 else total_batches + target_idx
+        return normalized == batch_position
+    if isinstance(target_idx, list):
+        return any(_matches_batch_index(item, batch_position, total_batches) for item in target_idx)
+    if isinstance(target_idx, str):
+        normalized_idx = target_idx.strip().lower()
+        if normalized_idx == 'all':
+            return True
+        if normalized_idx == 'oldest':
+            return batch_position == 0
+        if normalized_idx == 'latest':
+            return batch_position == total_batches - 1
+        if normalized_idx == 'middle':
+            return 0 < batch_position < total_batches - 1
+    return False
+
+
+def _stable_mapping_seed(*parts: Any) -> int:
+    seed_text = '|'.join(str(part) for part in parts)
+    digest = hashlib.sha256(seed_text.encode('utf-8')).hexdigest()
+    return int(digest[:16], 16) % (2**32 - 1)
+
+
+def _apply_random_mapping_distribution(
+    heatmap_matrix: pd.DataFrame,
+    product_code: Optional[str],
+    batch_no: str,
+    code_desc: str,
+    seed: Any = None,
+    method: Any = 'poisson',
+    variation: Any = 0.0,
+) -> pd.DataFrame:
+    total_defects = int(np.nansum(heatmap_matrix.to_numpy()))
+    if total_defects <= 0:
+        return heatmap_matrix.astype(int).clip(lower=0)
+
+    row_count, col_count = heatmap_matrix.shape
+    cell_count = row_count * col_count
+    rng_seed = _stable_mapping_seed(product_code or 'ALL', batch_no, code_desc, seed or 'random')
+    rng = np.random.default_rng(rng_seed)
+
+    method_text = str(method or 'poisson').strip().lower()
+    if method_text in {'even', 'balanced'}:
+        base_count, remainder = divmod(total_defects, cell_count)
+        values = np.full(cell_count, base_count, dtype=int)
+        if remainder > 0:
+            chosen_cells = rng.choice(cell_count, size=remainder, replace=False)
+            values[chosen_cells] += 1
+    else:
+        probabilities = np.full(cell_count, 1.0 / cell_count)
+        try:
+            variation_value = max(0.0, float(variation or 0.0))
+        except (TypeError, ValueError):
+            variation_value = 0.0
+
+        if variation_value > 0:
+            shape = 1.0 / (variation_value ** 2)
+            scale = variation_value ** 2
+            weights = rng.gamma(shape=shape, scale=scale, size=cell_count)
+            probabilities = weights / weights.sum()
+
+        values = rng.multinomial(total_defects, probabilities)
+
+    randomized = values.reshape((row_count, col_count))
+    return pd.DataFrame(randomized, index=heatmap_matrix.index, columns=heatmap_matrix.columns)

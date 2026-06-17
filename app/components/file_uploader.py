@@ -3,8 +3,10 @@ import streamlit as st
 import pandas as pd
 import logging, io
 from pathlib import Path
+from typing import Optional
 
 from src.shared_kernel.config_model import AppConfig
+from src.yield_domain.application.excel_service import ExcelService
 
 def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     """
@@ -14,7 +16,7 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=False):
         
         # 建立多标签页视图
-        tab1, tab2, tab3 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Sheet不良率覆写"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Sheet不良率覆写", "🗺️ Mapping修饰配置"])
         
         # --- Tab 1: 趋势图人工修正 ---
         with tab1:
@@ -51,18 +53,44 @@ def render_trend_override_uploader(config: AppConfig, product_dir: Path):
                 }
             )
 
-def _render_file_manager_tab(config: AppConfig, product_dir: Path, config_key: str, template_dfs: dict):
+        # --- Tab 4: Mapping 修饰配置（全产品共享） ---
+        with tab4:
+            _render_file_manager_tab(
+                config=config,
+                product_dir=product_dir,
+                config_key='mapping_config',
+                template_dfs={
+                    'Mapping修饰': pd.DataFrame(columns=[
+                        '启用', '产品型号', 'Defect Code', '蒸镀批次', '批次位置',
+                        '修饰模式', '随机方法', '随机波动', '随机种子',
+                        '热点倍率', '普通倍率', '热点加值', '加值模式普通倍率',
+                        '规则', '膜位', '备注'
+                    ])
+                },
+                target_path=ExcelService.get_mapping_config_path(),
+            )
+
+def _render_file_manager_tab(
+    config: AppConfig,
+    product_dir: Path,
+    config_key: str,
+    template_dfs: dict,
+    target_path: Optional[Path] = None,
+):
     """
     内部子组件：处理单一配置文件的下载、生成、覆写和缓存清除流水线。
     """
     override_res = config.paths.get(config_key)
-    
-    if not override_res:
+
+    if target_path is None and not override_res:
         st.warning(f"当前产品尚未在 YAML 中配置 `{config_key}`，无法使用此管理功能。")
         return
     
-    file_name = override_res.file_name
-    target_path = product_dir / file_name
+    if target_path is None:
+        file_name = override_res.file_name
+        target_path = product_dir / file_name
+    else:
+        file_name = target_path.name
 
     col1, col2 = st.columns([1, 1])
     

@@ -1,12 +1,16 @@
 import pandas as pd
 import os, logging, time  # 导入日志模块
 import streamlit as st  # 导入 streamlit 库
+import yaml
+import re
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, List, Optional
 
 from src.shared_kernel.config_model import AppConfig
 
 class ExcelService:
+    MAPPING_CONFIG_FILE_NAME = "mapping_config.xlsx"
+
     @staticmethod
     def load_and_clean_data(file_path: str, sheet_name: str = "Sheet1") -> pd.DataFrame:
         """
@@ -205,6 +209,8 @@ class ExcelService:
         [核心] 在数据进入底层运算前，拦截并用 Excel 的数据覆盖 YAML 的配置。
         底层 mwd_trend_processor.py 完全无感知。
         """
+        ExcelService.inject_mapping_config_to_config(config)
+
         override_res = config.paths.get('mwd_override_config')
         if not override_res: 
             return
@@ -216,3 +222,278 @@ class ExcelService:
         for key, value_dict in excel_overrides.items():
             if value_dict:  # 如果 Excel 中有配置，则覆盖
                 config.processing[key] = value_dict
+
+    @staticmethod
+    def parse_mapping_config_excel(
+        excel_path: Path,
+        product_code: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """解析全产品 Mapping 修饰 Excel 为 mapping_hotspot_script 列表。"""
+        if not excel_path.exists():
+            return []
+
+        try:
+            xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
+            if not xls:
+                return []
+            df = xls.get("Mapping修饰", next(iter(xls.values())))
+        except Exception as e:
+            logging.error(f"解析 Mapping 配置 Excel 失败: {e}", exc_info=True)
+            return []
+
+        scripts: List[Dict[str, Any]] = []
+        grouped_scripts: Dict[tuple, Dict[str, Any]] = {}
+        for _, row in df.dropna(how="all").iterrows():
+            if not ExcelService._parse_bool(
+                ExcelService._get_first_value(row, ["启用", "enable"]),
+                default=True,
+            ):
+                continue
+
+            target_product = ExcelService._normalize_text(
+                ExcelService._get_first_value(row, ["产品型号", "产品", "target_product"]),
+                default="ALL",
+            )
+            if product_code and target_product.upper() != "ALL" and target_product != product_code:
+                continue
+
+            target_code = ExcelService._normalize_text(
+                ExcelService._get_first_value(row, ["Defect Code", "不良代码", "Code", "target_code"]),
+                default="ALL",
+            )
+            target_batch = ExcelService._normalize_text(
+                ExcelService._get_first_value(row, ["蒸镀批次", "批次", "target_batch"]),
+                default="ALL",
+            )
+            mode = ExcelService._normalize_text(
+                ExcelService._get_first_value(row, ["修饰模式", "mode"]),
+                default="multiplicative",
+            ).lower()
+
+            script: Dict[str, Any] = {
+                "enable": True,
+                "target_product": target_product,
+                "target_code": target_code,
+                "target_batch": target_batch,
+                "mode": mode,
+            }
+
+            batch_index = ExcelService._parse_batch_index(
+                ExcelService._get_first_value(row, ["批次位置", "target_batch_index"])
+            )
+            if batch_index is not None:
+                script["target_batch_index"] = batch_index
+
+            numeric_fields = {
+                "hotspot_multiplier": ["热点倍率", "hotspot_multiplier"],
+                "normal_multiplier": ["普通倍率", "normal_multiplier"],
+                "hotspot_adder": ["热点加值", "hotspot_adder"],
+                "normal_multiplier_in_add_mode": ["加值模式普通倍率", "normal_multiplier_in_add_mode"],
+                "random_seed": ["随机种子", "random_seed"],
+                "random_variation": ["随机波动", "random_variation"],
+            }
+            for key, columns in numeric_fields.items():
+                value = ExcelService._parse_number(ExcelService._get_first_value(row, columns))
+                if value is not None:
+                    script[key] = value
+
+            random_method = ExcelService._normalize_text(
+                ExcelService._get_first_value(row, ["随机方法", "random_method"]),
+                default="",
+            )
+            if random_method:
+                script["random_method"] = random_method
+
+            hotspot_rules = ExcelService._parse_hotspot_rule_fields(
+                rule_type=ExcelService._get_first_value(row, ["规则", "rule", "hotspot_rule"]),
+                positions=ExcelService._get_first_value(row, ["膜位", "位置", "positions", "hotspot_values"]),
+            )
+            if not hotspot_rules:
+                hotspot_rules = ExcelService._parse_hotspot_rules(
+                    ExcelService._get_first_value(row, ["热点规则", "hotspot_rules"])
+                )
+            if hotspot_rules:
+                script["hotspot_rules"] = hotspot_rules
+
+            script_key = ExcelService._mapping_script_key(script)
+            if script_key in grouped_scripts:
+                existing = grouped_scripts[script_key]
+                existing.setdefault("hotspot_rules", [])
+                existing["hotspot_rules"].extend(script.get("hotspot_rules", []))
+                continue
+
+            grouped_scripts[script_key] = script
+            scripts.append(script)
+
+        return scripts
+
+    @staticmethod
+    def inject_mapping_config_to_config(
+        config: AppConfig,
+        excel_path: Optional[Path] = None,
+    ) -> None:
+        """将全局 Mapping Excel 配置注入到当前产品的 AppConfig。"""
+        if excel_path is None:
+            excel_path = ExcelService.get_mapping_config_path()
+        if not excel_path.exists():
+            return
+
+        scripts = ExcelService.parse_mapping_config_excel(
+            excel_path,
+            product_code=config.data_source.product_code,
+        )
+        config.processing["mapping_hotspot_script"] = scripts
+
+    @staticmethod
+    def get_mapping_config_path() -> Path:
+        from src.shared_kernel.config import ConfigLoader
+
+        return ConfigLoader.get_project_root() / "resources" / ExcelService.MAPPING_CONFIG_FILE_NAME
+
+    @staticmethod
+    def _get_first_value(row: pd.Series, names: List[str]) -> Any:
+        for name in names:
+            if name in row.index:
+                return row.get(name)
+        return None
+
+    @staticmethod
+    def _is_blank(value: Any) -> bool:
+        if value is None:
+            return True
+        if pd.isna(value):
+            return True
+        return str(value).strip() == ""
+
+    @staticmethod
+    def _normalize_text(value: Any, default: str = "") -> str:
+        if ExcelService._is_blank(value):
+            return default
+        text = str(value).strip()
+        if text.lower() == "nan":
+            return default
+        return text
+
+    @staticmethod
+    def _parse_bool(value: Any, default: bool = False) -> bool:
+        if ExcelService._is_blank(value):
+            return default
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        text = str(value).strip().lower()
+        if text in {"true", "1", "yes", "y", "启用", "是"}:
+            return True
+        if text in {"false", "0", "no", "n", "禁用", "否"}:
+            return False
+        return default
+
+    @staticmethod
+    def _parse_number(value: Any) -> Optional[Any]:
+        if ExcelService._is_blank(value):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if number.is_integer():
+            return int(number)
+        return number
+
+    @staticmethod
+    def _parse_batch_index(value: Any) -> Optional[Any]:
+        if ExcelService._is_blank(value):
+            return None
+        text = str(value).strip()
+        if text.lower() in {"oldest", "latest", "middle", "all"}:
+            return text.lower() if text.lower() != "all" else "ALL"
+        parts = [part.strip() for part in text.replace("，", ",").split(",") if part.strip()]
+        parsed: List[Any] = []
+        for part in parts:
+            try:
+                parsed.append(int(float(part)))
+            except ValueError:
+                parsed.append(part)
+        if len(parsed) == 1:
+            return parsed[0]
+        return parsed
+
+    @staticmethod
+    def _parse_hotspot_rules(value: Any) -> List[Dict[str, Any]]:
+        if ExcelService._is_blank(value):
+            return []
+        text = str(value).strip()
+        try:
+            parsed = yaml.safe_load(text)
+            if isinstance(parsed, dict):
+                return [parsed]
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            logging.debug("热点规则不是 YAML/JSON 结构，尝试按简写语法解析。", exc_info=True)
+
+        return ExcelService._parse_hotspot_rule_shorthand(text)
+
+    @staticmethod
+    def _parse_hotspot_rule_fields(rule_type: Any, positions: Any) -> List[Dict[str, Any]]:
+        rule_type_text = ExcelService._normalize_text(rule_type, default="").lower()
+        if not rule_type_text:
+            return []
+
+        values = ExcelService._split_mapping_positions(positions)
+        if not values:
+            return []
+
+        if rule_type_text == "position":
+            position_pairs = []
+            for value in values:
+                parts = [part.strip() for part in re.split(r"[:：/\-\s]+", value) if part.strip()]
+                if len(parts) == 2:
+                    position_pairs.append(parts)
+            return [{"type": rule_type_text, "value": position_pairs}] if position_pairs else []
+
+        return [{"type": rule_type_text, "value": values}]
+
+    @staticmethod
+    def _split_mapping_positions(value: Any) -> List[str]:
+        if ExcelService._is_blank(value):
+            return []
+        return [item.strip() for item in str(value).replace("，", ",").split(",") if item.strip()]
+
+    @staticmethod
+    def _mapping_script_key(script: Dict[str, Any]) -> tuple:
+        def _freeze(value: Any) -> Any:
+            if isinstance(value, dict):
+                return tuple(sorted((key, _freeze(item)) for key, item in value.items()))
+            if isinstance(value, list):
+                return tuple(_freeze(item) for item in value)
+            return value
+
+        return tuple(
+            sorted(
+                (key, _freeze(value))
+                for key, value in script.items()
+                if key != "hotspot_rules"
+            )
+        )
+
+    @staticmethod
+    def _parse_hotspot_rule_shorthand(text: str) -> List[Dict[str, Any]]:
+        rules: List[Dict[str, Any]] = []
+        for segment in [part.strip() for part in text.split(";") if part.strip()]:
+            if ":" not in segment:
+                continue
+            rule_type, raw_values = segment.split(":", 1)
+            rule_type = rule_type.strip()
+            values = [item.strip() for item in raw_values.replace("，", ",").split(",") if item.strip()]
+            if rule_type == "position":
+                positions = []
+                for item in values:
+                    parts = [part.strip() for part in item.split(":") if part.strip()]
+                    if len(parts) == 2:
+                        positions.append(parts)
+                rules.append({"type": rule_type, "value": positions})
+            else:
+                rules.append({"type": rule_type, "value": values})
+        return rules

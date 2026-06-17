@@ -177,6 +177,14 @@ def create_sheet_stack_chart(
 # -----------------------------------------------------------------------------
 #  Mapping 级图表 (热力图与坐标解析)
 # -----------------------------------------------------------------------------
+MAPPING_HEATMAP_COLOR_SCALE = [
+    [0.0, "#fff8f3"],
+    [0.35, "#ffd7c7"],
+    [0.7, "#f59d82"],
+    [1.0, "#d95f4d"],
+]
+
+
 def parse_panel_id_to_coords(panel_id: str) -> tuple | None:
     """解析 Panel ID 为 (row, col) 坐标"""
     if not isinstance(panel_id, str) or len(panel_id) < 15: return None
@@ -196,7 +204,8 @@ def parse_panel_id_to_coords(panel_id: str) -> tuple | None:
 def create_mapping_heatmap(matrix_df: pd.DataFrame, title: str, global_max_value: int) -> go.Figure:
     """绘制 Mapping 热力图"""
     fig = px.imshow(
-        matrix_df, text_auto=True, aspect="auto", color_continuous_scale='Reds',
+        matrix_df, text_auto=True, aspect="auto",
+        color_continuous_scale=MAPPING_HEATMAP_COLOR_SCALE,
         labels=dict(x="列 (Column)", y="行 (Row)", color="不良数"), title=title,
         zmin=0, zmax=max(1, global_max_value)
     )

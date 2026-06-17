@@ -257,7 +257,13 @@ def render_sheet_distribution_section(sheet_data: dict, target_lot: str, curr_gr
 # ==============================================================================
 #  5. Mapping (Row D: 空间维度)
 # ==============================================================================
-def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_code: str, hotspot_scripts: list):
+def render_mapping_section(
+    mapping_data: pd.DataFrame,
+    curr_group: str,
+    curr_code: str,
+    hotspot_scripts: list,
+    product_code: Optional[str] = None,
+):
     """处理矩阵变换与热区应用，渲染 Mapping"""
     with st.container(border=True):
         st.markdown("**D. Mapping集中性**")
@@ -300,7 +306,8 @@ def render_mapping_section(mapping_data: pd.DataFrame, curr_group: str, curr_cod
             mat = apply_hotspot_modification_to_matrix(
                 heatmap_matrix=mat, batch_no=b, code_desc=curr_code,
                 batch_position=i, total_batches=total_batches,
-                script_config_list=hotspot_scripts
+                script_config_list=hotspot_scripts,
+                product_code=product_code,
             )
 
             matrices_cache[b] = mat
