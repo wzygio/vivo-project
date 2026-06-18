@@ -42,11 +42,13 @@ processing:
   defect_multipliers:
     # Array_Line
     # Array_Pixel
-    # '大面积亮点': 0
-    # '大面积暗点': 0
+    '暗点': 1.5
+    '群暗点': 1.5
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
+    # OLED_Mura
+    '彩斑Mura': 0.8
   
   sheet_hotspot_config: 
     enable: True

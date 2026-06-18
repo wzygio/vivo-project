@@ -265,6 +265,7 @@ class ExcelService:
                 ExcelService._get_first_value(row, ["蒸镀批次", "批次", "target_batch"]),
                 default="ALL",
             )
+            target_batch = ExcelService._normalize_mapping_batch_text(target_batch)
             mode = ExcelService._normalize_text(
                 ExcelService._get_first_value(row, ["修饰模式", "mode"]),
                 default="multiplicative",
@@ -277,12 +278,6 @@ class ExcelService:
                 "target_batch": target_batch,
                 "mode": mode,
             }
-
-            batch_index = ExcelService._parse_batch_index(
-                ExcelService._get_first_value(row, ["批次位置", "target_batch_index"])
-            )
-            if batch_index is not None:
-                script["target_batch_index"] = batch_index
 
             numeric_fields = {
                 "hotspot_multiplier": ["热点倍率", "hotspot_multiplier"],
@@ -418,6 +413,12 @@ class ExcelService:
         if len(parsed) == 1:
             return parsed[0]
         return parsed
+
+    @staticmethod
+    def _normalize_mapping_batch_text(value: str) -> str:
+        if value.upper() == "ALL":
+            return "ALL"
+        return value.replace("蒸镀批", "").replace("批次", "").strip()
 
     @staticmethod
     def _parse_hotspot_rules(value: Any) -> List[Dict[str, Any]]:

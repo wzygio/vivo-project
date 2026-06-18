@@ -709,7 +709,6 @@ def _simulate_concentration(
                 # 只有当基准率大于 0 时才施加扰动，提升计算效率
                 mask_positive = df_code_mod['daily_base_rate'] > 0
                 if mask_positive.any():
-                    # 生成 0.7 到 1.3 之间的随机因子
                     noise_factors = rng.uniform(0.8, 1.2, size=mask_positive.sum())
                     df_code_mod.loc[mask_positive, 'daily_base_rate'] *= noise_factors
                 # =========================================================

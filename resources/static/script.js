@@ -93,10 +93,21 @@ const nodesLayer = document.getElementById('nodes-layer');
 const coreLayer = document.getElementById('core-layer');
 const sceneContainer = document.getElementById('scene-container');
 let activeId = null;
+const FOCUS_SCALE = 1.1;
 
 function getEdgePoint(cx, cy, tx, ty, radius) {
     const angle = Math.atan2(ty - cy, tx - cx);
     return { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+}
+
+function getSubNodeAngle(baseAngle, index, total) {
+    const step = total > 4 ? 0.5 : 0.6;
+    return baseAngle + (index - (total - 1) / 2) * step;
+}
+
+function getSubNodeDistance(width, height, total) {
+    const compactDistance = Math.max(170, Math.min(width, height) * 0.37);
+    return total > 4 ? Math.min(200, compactDistance) : 200;
 }
 
 function render() {
@@ -166,8 +177,8 @@ function render() {
 
         if (isActive) {
             data.subs.forEach((sub, i) => {
-                const subAngle = angle + (i - 1) * 0.6;
-                const dist = 200;
+                const subAngle = getSubNodeAngle(angle, i, data.subs.length);
+                const dist = getSubNodeDistance(w, h, data.subs.length);
                 const sx = x + dist * Math.cos(subAngle);
                 const sy = y + dist * Math.sin(subAngle);
 
@@ -203,8 +214,9 @@ function render() {
 function focusNode(index, targetX, targetY) {
     activeId = index;
     const w = window.innerWidth; const h = window.innerHeight;
-    const offsetX = (w / 2) - targetX; const offsetY = (h / 2) - targetY;
-    sceneContainer.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(1.1)`;
+    const offsetX = ((w / 2) - targetX) * FOCUS_SCALE;
+    const offsetY = ((h / 2) - targetY) * FOCUS_SCALE;
+    sceneContainer.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${FOCUS_SCALE})`;
     render();
 }
 function resetCamera() {

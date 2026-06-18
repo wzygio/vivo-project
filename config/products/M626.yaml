@@ -44,11 +44,8 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.5
-    'S向单暗线': 0.7
-    'G向单亮线': 0.6
+    S向单暗线: 0.9
     # Array_Pixel
-    '群暗点': 0.8
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0

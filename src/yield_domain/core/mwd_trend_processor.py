@@ -137,6 +137,31 @@ def _code_baseline_path(prod_code: str) -> Path:
     return Path(f"resources/{prod_code}/{prod_code}_codebaseline.xlsx")
 
 
+def _defect_multipliers_signature(config: AppConfig | None) -> str:
+    """Return a stable signature for defect_multipliers that affect Code baseline."""
+    if config is None:
+        return ""
+
+    try:
+        multipliers = config.processing.get('defect_multipliers', {}) or {}
+    except Exception:
+        return ""
+
+    signature_parts = []
+    for code, factor in sorted(multipliers.items(), key=lambda item: str(item[0])):
+        code_text = str(code).strip()
+        if not code_text:
+            continue
+        try:
+            factor_text = f"{float(factor):.12g}"
+        except (TypeError, ValueError):
+            factor_text = str(factor).strip()
+        if factor_text:
+            signature_parts.append(f"{code_text}={factor_text}")
+
+    return ";".join(signature_parts)
+
+
 def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
     """Build baseline rates from the current Code-level daily window."""
     columns = ['defect_desc', 'baseline_rate']
@@ -166,7 +191,7 @@ def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
     grouped['baseline_rate'] = np.where(
         grouped['total_panels'] > 0,
-        grouped['defect_panel_count'] / grouped['total_panels'],
+        np.round(grouped['defect_panel_count'] / grouped['total_panels'], 5),
         0.0
     )
     return grouped[columns].sort_values('defect_desc').reset_index(drop=True)
@@ -189,6 +214,7 @@ def _write_code_baseline_file(
     refresh_reason: str,
     source_start: str,
     source_end: str,
+    defect_multipliers_signature: str = "",
 ) -> None:
     metadata = pd.DataFrame(
         [
@@ -199,6 +225,7 @@ def _write_code_baseline_file(
             {'key': 'source_start', 'value': source_start},
             {'key': 'source_end', 'value': source_end},
             {'key': 'code_count', 'value': str(len(baseline))},
+            {'key': 'defect_multipliers_signature', 'value': defect_multipliers_signature},
         ]
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -215,7 +242,7 @@ def _read_code_baseline_metadata(path: Path) -> Dict[str, str]:
         if not {'key', 'value'}.issubset(metadata_df.columns):
             return {}
         return {
-            str(row['key']): str(row['value'])
+            str(row['key']): "" if pd.isna(row['value']) else str(row['value'])
             for _, row in metadata_df.dropna(subset=['key']).iterrows()
         }
     except Exception:
@@ -267,6 +294,7 @@ def _generate_code_baseline(
     *,
     generated_at: dt | pd.Timestamp | None = None,
     refresh_reason: str = "manual_refresh",
+    defect_multipliers_signature: str = "",
 ) -> pd.DataFrame:
     """
     [自动基准生成器] ByCode 计算当前窗口均值作为 EMA 锚点。
@@ -286,6 +314,7 @@ def _generate_code_baseline(
             refresh_reason=refresh_reason,
             source_start=source_start,
             source_end=source_end,
+            defect_multipliers_signature=defect_multipliers_signature,
         )
         logging.info(
             f"[Baseline Generator] Code 基准已重建: {out_path} "
@@ -303,6 +332,7 @@ def _ensure_code_baseline_current(
     *,
     now: dt | pd.Timestamp | None = None,
     max_age_days: int = CODE_BASELINE_MAX_AGE_DAYS,
+    defect_multipliers_signature: str = "",
 ) -> pd.DataFrame:
     """
     Ensure baseline is rebuilt when absent, expired, legacy, or missing current Codes.
@@ -313,9 +343,11 @@ def _ensure_code_baseline_current(
         return _load_code_baseline_frame(path)
 
     existing = _load_code_baseline_frame(path)
+    metadata = _read_code_baseline_metadata(path)
     existing_codes = set(existing['defect_desc'].astype(str)) if not existing.empty else set()
     current_codes = set(current_baseline['defect_desc'].astype(str))
     missing_codes = current_codes - existing_codes
+    existing_multiplier_signature = metadata.get('defect_multipliers_signature', "")
 
     if not path.exists():
         reason = "missing_file"
@@ -323,6 +355,11 @@ def _ensure_code_baseline_current(
         reason = "expired_or_legacy"
     elif missing_codes:
         reason = "missing_codes"
+    elif (
+        existing_multiplier_signature != defect_multipliers_signature
+        and (existing_multiplier_signature or defect_multipliers_signature)
+    ):
+        reason = "multiplier_changed"
     else:
         logging.info(f"[Baseline] Code 基准仍在有效期内，沿用: {path}")
         return existing
@@ -332,6 +369,7 @@ def _ensure_code_baseline_current(
         prod_code,
         generated_at=now,
         refresh_reason=reason,
+        defect_multipliers_signature=defect_multipliers_signature,
     )
 
 
@@ -382,7 +420,11 @@ def _execute_unified_pipeline(
     # [新增] 自动基准生成器 (仅 Code 级)
     is_group = 'defect_desc' not in df_processing.columns
     if not is_group and prod_code:
-        _ensure_code_baseline_current(df_processing, prod_code)
+        _ensure_code_baseline_current(
+            df_processing,
+            prod_code,
+            defect_multipliers_signature=_defect_multipliers_signature(config),
+        )
     
     # --- Step 1: EMA 洗底 ---
     ema_daily_base = calc_daily_ema_func(df_processing)
@@ -665,7 +707,11 @@ def _calc_code_ema_noise(
     result_frames = []
     
     if prod_code:
-        baseline_df = _ensure_code_baseline_current(ema_df, prod_code)
+        baseline_df = _ensure_code_baseline_current(
+            ema_df,
+            prod_code,
+            defect_multipliers_signature=_defect_multipliers_signature(config),
+        )
         if not baseline_df.empty:
             baseline_map = dict(
                 zip(baseline_df['defect_desc'], baseline_df['baseline_rate'].astype(float))
