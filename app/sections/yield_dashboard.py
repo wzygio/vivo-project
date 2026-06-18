@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 from typing import Dict, List, Optional
+import plotly.graph_objects as go
 
 # 引入现有的绘图函数
 from app.charts.mwd_chart import (
@@ -317,3 +318,432 @@ def render_mapping_section(
             with tabs[i]:
                 fig_map = create_mapping_heatmap(matrices_cache[b], f"批次 {b} 热力图", g_max)
                 st.plotly_chart(fig_map, use_container_width=True)
+
+
+# ==============================================================================
+#  6. Code 批量展示紧凑布局
+# ==============================================================================
+def _apply_compact_chart_layout(fig: go.Figure, height: int) -> go.Figure:
+    fig.update_layout(
+        height=height,
+        margin=dict(l=10, r=10, t=34, b=26),
+        title_font_size=13,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_xaxes(tickfont=dict(size=10))
+    fig.update_yaxes(tickfont=dict(size=10))
+    return fig
+
+
+def _state_key_fragment(*parts: str) -> str:
+    return "_".join(
+        "".join(ch if ch.isalnum() else "_" for ch in str(part))
+        for part in parts
+    )
+
+
+def _get_code_trend_slices(
+    mwd_code_data: dict,
+    curr_code: str,
+) -> tuple[pd.DataFrame | None, pd.DataFrame | None, pd.DataFrame | None, List[float]]:
+    cd_m = slice_recent_data(mwd_code_data.get('monthly'), 3)
+    cd_w = slice_recent_data(mwd_code_data.get('weekly'), 3)
+    cd_d = slice_recent_data(mwd_code_data.get('daily'), 7)
+
+    def _filter_code(df: pd.DataFrame | None) -> pd.DataFrame | None:
+        if df is None:
+            return None
+        return df[df['defect_desc'] == curr_code].copy()
+
+    cd_m, cd_w, cd_d = map(_filter_code, [cd_m, cd_w, cd_d])
+    c_max = 0.0
+    for df in [cd_m, cd_w, cd_d]:
+        if df is not None and not df.empty:
+            c_max = max(c_max, float(df['defect_rate'].max()))
+    c_ylim = [0, c_max * 1.25] if c_max > 0 else [0, 0.01]
+    return cd_m, cd_w, cd_d, c_ylim
+
+
+def _render_compact_micro_trends(
+    mwd_code_data: dict,
+    curr_code: str,
+    curr_warning: float,
+) -> None:
+    st.markdown("**A. 月周天趋势图**")
+    cd_m, cd_w, cd_d, c_ylim = _get_code_trend_slices(mwd_code_data, curr_code)
+    trend_cols = st.columns(3)
+    chart_configs = [(cd_m, "月度", trend_cols[0]), (cd_w, "周度", trend_cols[1]), (cd_d, "日度", trend_cols[2])]
+
+    for df, title, col in chart_configs:
+        with col:
+            if df is None or df.empty:
+                st.info(f"暂无{title}数据")
+                continue
+            fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
+            if fig is None:
+                st.info(f"暂无{title}数据")
+                continue
+            st.plotly_chart(_apply_compact_chart_layout(fig, 345), use_container_width=True)
+
+
+def _prepare_mapping_matrices(
+    mapping_data: pd.DataFrame,
+    curr_group: str,
+    curr_code: str,
+    hotspot_scripts: list,
+    product_code: Optional[str],
+) -> tuple[List[str], Dict[str, pd.DataFrame], int, List[str]]:
+    df_map = mapping_data[
+        (mapping_data['defect_group'] == curr_group) &
+        (mapping_data['defect_desc'] == curr_code)
+    ]
+    if df_map.empty:
+        return [], {}, 0, []
+
+    batches = sorted(df_map['batch_no'].unique())
+    total_batches = len(batches)
+    tab_labels: List[str] = []
+    matrices_cache: Dict[str, pd.DataFrame] = {}
+    global_max = 0
+
+    for i, batch_no in enumerate(batches):
+        batch_df = df_map[df_map['batch_no'] == batch_no]
+        total_in = batch_df['batch_total_input'].iloc[0] if 'batch_total_input' in batch_df.columns else 0
+        tab_labels.append(f"{batch_no} ({int(total_in):,})" if total_in else str(batch_no))
+
+        coords = batch_df['panel_id'].apply(parse_panel_id_to_coords)
+        coord_df = batch_df.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r', 'c'])
+        coord_df[['r', 'c']] = coord_df[['r', 'c']].astype(int)
+
+        matrix = pd.pivot_table(
+            coord_df,
+            values='panel_id',
+            index='r',
+            columns='c',
+            aggfunc='count',
+            fill_value=0,
+        )
+        matrix = matrix.reindex(index=range(10), columns=range(19), fill_value=0)
+        matrix = apply_hotspot_modification_to_matrix(
+            heatmap_matrix=matrix,
+            batch_no=batch_no,
+            code_desc=curr_code,
+            batch_position=i,
+            total_batches=total_batches,
+            script_config_list=hotspot_scripts,
+            product_code=product_code,
+        )
+        matrices_cache[batch_no] = matrix
+        global_max = max(global_max, int(matrix.max().max()))
+
+    return batches, matrices_cache, global_max, tab_labels
+
+
+def _render_compact_mapping_section(
+    mapping_data: Optional[pd.DataFrame],
+    curr_group: str,
+    curr_code: str,
+    hotspot_scripts: list,
+    product_code: Optional[str],
+) -> None:
+    st.markdown("**B. Mapping集中性**")
+    if mapping_data is None or mapping_data.empty:
+        st.warning("Mapping 数据源为空。")
+        return
+
+    batches, matrices_cache, global_max, tab_labels = _prepare_mapping_matrices(
+        mapping_data=mapping_data,
+        curr_group=curr_group,
+        curr_code=curr_code,
+        hotspot_scripts=hotspot_scripts,
+        product_code=product_code,
+    )
+    if not batches:
+        st.warning("该 Code 在 Mapping 数据源中无记录。")
+        return
+
+    tabs = st.tabs(tab_labels)
+    for i, batch_no in enumerate(batches):
+        with tabs[i]:
+            fig_map = create_mapping_heatmap(matrices_cache[batch_no], f"批次 {batch_no} 热力图", global_max)
+            st.plotly_chart(_apply_compact_chart_layout(fig_map, 345), use_container_width=True)
+
+
+def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
+    lot_details = lot_data.get("code_level_details", {}) if lot_data else {}
+    if not lot_details:
+        return pd.DataFrame()
+
+    lot_frames = [df for df in lot_details.values() if isinstance(df, pd.DataFrame) and not df.empty]
+    if not lot_frames:
+        return pd.DataFrame()
+
+    df_lot_all = pd.concat(lot_frames, ignore_index=True)
+    if 'defect_desc' not in df_lot_all.columns:
+        return pd.DataFrame()
+
+    df_lot_curr = df_lot_all[df_lot_all['defect_desc'] == curr_code].copy()
+    if df_lot_curr.empty:
+        return df_lot_curr
+
+    df_lot_curr['warehousing_time'] = pd.to_datetime(
+        df_lot_curr['warehousing_time'],
+        format='%Y%m%d',
+        errors='coerce',
+    )
+    if 'array_input_time' in df_lot_curr.columns:
+        df_lot_curr['array_input_time'] = pd.to_datetime(df_lot_curr['array_input_time'], errors='coerce')
+    else:
+        df_lot_curr['array_input_time'] = pd.NaT
+    if 'defect_panel_count' not in df_lot_curr.columns:
+        df_lot_curr['defect_panel_count'] = 0
+    df_lot_curr['defect_rate'] = pd.to_numeric(df_lot_curr['defect_rate'], errors='coerce').fillna(0.0)
+    df_lot_curr = df_lot_curr[df_lot_curr['defect_rate'] > 0]
+    if df_lot_curr.empty:
+        return df_lot_curr
+
+    iso_s = df_lot_curr['warehousing_time'].dt.isocalendar()
+    df_lot_curr['week_label'] = iso_s.year.astype(str) + '-W' + iso_s.week.map('{:02d}'.format)
+    return df_lot_curr.sort_values('warehousing_time')
+
+
+def _render_compact_lot_chart(
+    lot_data: dict,
+    curr_group: str,
+    curr_code: str,
+    curr_warning: float,
+) -> str:
+    st.markdown("**C. Lot集中性**")
+    df_lot_curr = _prepare_lot_code_dataframe(lot_data, curr_code)
+    if df_lot_curr.empty:
+        st.warning(f"当前 Code ({curr_code}) 在 Lot 级无不良记录。")
+        return ""
+
+    fig_lot = create_lot_defect_chart(
+        df_lot_curr,
+        "Lot ID",
+        df_lot_curr['lot_id'].astype(str).tolist(),
+        curr_warning,
+    )
+    key_fragment = _state_key_fragment(curr_group, curr_code)
+    selected_lot_key = f"compact_sheet_lot_{key_fragment}"
+    event = st.plotly_chart(
+        _apply_compact_chart_layout(fig_lot, 300),
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="points",
+        key=f"compact_lot_chart_{key_fragment}",
+    )
+
+    if event and event.selection and event.selection["points"]:  # type: ignore
+        clicked_lot = str(event.selection["points"][0]["x"])  # type: ignore
+        st.session_state[selected_lot_key] = clicked_lot
+
+    return str(st.session_state.get(selected_lot_key, ""))
+
+
+def _prepare_sheet_chart_dataframe(
+    sheet_data: dict,
+    target_lot: str,
+    curr_group: str,
+    curr_code: str,
+) -> pd.DataFrame:
+    group_summary = sheet_data.get("group_level_summary_for_table", pd.DataFrame()) if sheet_data else pd.DataFrame()
+    if group_summary.empty or 'lot_id' not in group_summary.columns:
+        return pd.DataFrame()
+
+    base_cols = [
+        col for col in ['sheet_id', 'lot_id', 'warehousing_time', 'array_input_time']
+        if col in group_summary.columns
+    ]
+    if 'sheet_id' not in base_cols:
+        return pd.DataFrame()
+
+    df_base_sheets = group_summary[group_summary['lot_id'].astype(str) == str(target_lot)][base_cols].copy()
+    if df_base_sheets.empty:
+        return pd.DataFrame()
+
+    sheet_details_dict = sheet_data.get("code_level_details", {})
+    df_sheet_all = sheet_details_dict.get(curr_group, pd.DataFrame())
+    if not df_sheet_all.empty:
+        df_defect_only = df_sheet_all[
+            (df_sheet_all['lot_id'].astype(str) == str(target_lot)) &
+            (df_sheet_all['defect_desc'] == curr_code)
+        ].copy()
+        keep_cols = [col for col in ['sheet_id', 'defect_rate', 'defect_panel_count'] if col in df_defect_only.columns]
+        df_defect_only = df_defect_only[keep_cols] if keep_cols else pd.DataFrame(columns=['sheet_id'])
+    else:
+        df_defect_only = pd.DataFrame(columns=['sheet_id', 'defect_rate', 'defect_panel_count'])
+
+    df_sheet = pd.merge(df_base_sheets, df_defect_only, on='sheet_id', how='left')
+    if 'defect_rate' not in df_sheet.columns:
+        df_sheet['defect_rate'] = 0.0
+    if 'defect_panel_count' not in df_sheet.columns:
+        df_sheet['defect_panel_count'] = 0
+    df_sheet['defect_rate'] = pd.to_numeric(df_sheet['defect_rate'], errors='coerce').fillna(0.0)
+    df_sheet['defect_panel_count'] = pd.to_numeric(
+        df_sheet['defect_panel_count'],
+        errors='coerce',
+    ).fillna(0).astype(int)
+    if 'warehousing_time' in df_sheet.columns:
+        df_sheet['warehousing_time'] = pd.to_datetime(df_sheet['warehousing_time'], format='%Y%m%d', errors='coerce')
+    else:
+        df_sheet['warehousing_time'] = pd.NaT
+    if 'array_input_time' in df_sheet.columns:
+        df_sheet['array_input_time'] = pd.to_datetime(df_sheet['array_input_time'], errors='coerce')
+    else:
+        df_sheet['array_input_time'] = pd.NaT
+
+    if 'array_input_time' in df_sheet.columns:
+        return df_sheet.sort_values('array_input_time')
+    return df_sheet.sort_values('sheet_id')
+
+
+def _render_compact_sheet_chart(
+    sheet_data: dict,
+    target_lot: str,
+    curr_group: str,
+    curr_code: str,
+) -> None:
+    if not target_lot:
+        st.caption("点击上方 Lot 柱体后显示 Sheet 分布。")
+        return
+
+    st.markdown(f"**D. Sheet分布 | Lot {target_lot}**")
+    df_sheet = _prepare_sheet_chart_dataframe(sheet_data, target_lot, curr_group, curr_code)
+    if df_sheet.empty:
+        st.warning(f"未找到 Lot {target_lot} 的 Sheet 级明细。")
+        return
+
+    fig_sheet = create_sheet_defect_chart(
+        df=df_sheet,
+        xaxis_label="Sheet ID",
+        sorted_sheet_ids=df_sheet['sheet_id'].astype(str).tolist(),
+    )
+    st.plotly_chart(_apply_compact_chart_layout(fig_sheet, 300), use_container_width=True)
+
+
+def _prepare_sheet_detail_table(sheet_data: dict, curr_group: str, curr_code: str) -> pd.DataFrame:
+    sheet_details_dict = sheet_data.get("code_level_details", {}) if sheet_data else {}
+    df_sheet_all = sheet_details_dict.get(curr_group, pd.DataFrame())
+    if df_sheet_all is None or df_sheet_all.empty or 'defect_desc' not in df_sheet_all.columns:
+        return pd.DataFrame()
+
+    df_sheet = df_sheet_all[df_sheet_all['defect_desc'] == curr_code].copy()
+    if df_sheet.empty:
+        return df_sheet
+
+    if 'defect_panel_count' in df_sheet.columns:
+        df_sheet['defect_panel_count'] = pd.to_numeric(df_sheet['defect_panel_count'], errors='coerce').fillna(0).astype(int)
+        df_sheet = df_sheet[df_sheet['defect_panel_count'] > 0]
+
+    if 'defect_rate' in df_sheet.columns:
+        df_sheet['defect_rate'] = pd.to_numeric(df_sheet['defect_rate'], errors='coerce').fillna(0.0)
+        sort_cols = [col for col in ['defect_rate', 'lot_id', 'sheet_id'] if col in df_sheet.columns]
+        ascending = [False if col == 'defect_rate' else True for col in sort_cols]
+        if sort_cols:
+            df_sheet = df_sheet.sort_values(sort_cols, ascending=ascending)
+
+    for date_col in ['warehousing_time', 'array_input_time']:
+        if date_col in df_sheet.columns:
+            df_sheet[date_col] = pd.to_datetime(df_sheet[date_col], errors='coerce')
+
+    return df_sheet.reset_index(drop=True)
+
+
+def _render_compact_sheet_table(sheet_data: dict, curr_group: str, curr_code: str) -> None:
+    st.markdown("**D. Sheet明细**")
+    df_sheet = _prepare_sheet_detail_table(sheet_data, curr_group, curr_code)
+    if df_sheet.empty:
+        st.warning("当前 Code 暂无 Sheet 级不良明细。")
+        return
+
+    display_cols = [
+        col for col in [
+            'lot_id',
+            'sheet_id',
+            'warehousing_time',
+            'array_input_time',
+            'defect_panel_count',
+            'defect_rate',
+            'total_panels',
+        ] if col in df_sheet.columns
+    ]
+    df_display = df_sheet[display_cols].copy()
+    if 'defect_rate' in df_display.columns:
+        df_display['defect_rate'] = df_display['defect_rate'] * 100
+
+    st.dataframe(
+        df_display,
+        use_container_width=True,
+        hide_index=True,
+        height=300,
+        column_config={
+            "lot_id": st.column_config.TextColumn("Lot ID", width="medium"),
+            "sheet_id": st.column_config.TextColumn("Sheet ID", width="medium"),
+            "warehousing_time": st.column_config.DatetimeColumn("入库时间", format="YYYY/MM/DD", width="small"),
+            "array_input_time": st.column_config.DatetimeColumn("阵列投入", format="YYYY/MM/DD HH:mm", width="medium"),
+            "defect_panel_count": st.column_config.NumberColumn("不良数", format="%d", width="small"),
+            "defect_rate": st.column_config.NumberColumn("不良率", format="%.3f%%", width="small"),
+            "total_panels": st.column_config.NumberColumn("Panel数", format="%d", width="small"),
+        },
+    )
+
+
+def _build_code_expander_label(
+    mwd_code_data: dict,
+    curr_code: str,
+    curr_warning: float,
+) -> str:
+    monthly_df = mwd_code_data.get('monthly') if mwd_code_data else None
+    if monthly_df is None or monthly_df.empty:
+        return f"{curr_code} | Spec {curr_warning:.2%}"
+
+    code_monthly = monthly_df[monthly_df['defect_desc'] == curr_code].copy()
+    if code_monthly.empty or 'defect_rate' not in code_monthly.columns:
+        return f"{curr_code} | Spec {curr_warning:.2%}"
+
+    avg_rate = pd.to_numeric(code_monthly['defect_rate'], errors='coerce').dropna().mean()
+    if pd.isna(avg_rate):
+        return f"{curr_code} | Spec {curr_warning:.2%}"
+    return f"{curr_code} | 月均 {avg_rate:.2%} | Spec {curr_warning:.2%}"
+
+
+def render_code_compact_expander(
+    mwd_code_data: dict,
+    lot_data: dict,
+    sheet_data: dict,
+    mapping_data: Optional[pd.DataFrame],
+    curr_group: str,
+    curr_code: str,
+    curr_warning: float,
+    hotspot_scripts: list,
+    product_code: Optional[str] = None,
+    expanded: bool = False,
+) -> None:
+    label = _build_code_expander_label(mwd_code_data, curr_code, curr_warning)
+    with st.expander(label, expanded=expanded):
+        top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
+        with top_trend_col:
+            _render_compact_micro_trends(mwd_code_data, curr_code, curr_warning)
+        with top_mapping_col:
+            _render_compact_mapping_section(
+                mapping_data=mapping_data,
+                curr_group=curr_group,
+                curr_code=curr_code,
+                hotspot_scripts=hotspot_scripts,
+                product_code=product_code,
+            )
+
+        target_lot = _render_compact_lot_chart(
+            lot_data=lot_data,
+            curr_group=curr_group,
+            curr_code=curr_code,
+            curr_warning=curr_warning,
+        )
+        _render_compact_sheet_chart(
+            sheet_data=sheet_data,
+            target_lot=target_lot,
+            curr_group=curr_group,
+            curr_code=curr_code,
+        )

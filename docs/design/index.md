@@ -14,10 +14,6 @@ Use this file as the entrypoint for design knowledge in the 天柱专项报表�
 - [SPC Domain](spc_domain.md): SPC/AOI/CTQ/OOC/OOS/SOOS、合规修饰和参数分类设计。
 - [Shared Kernel](shared_kernel.md): 配置、数据库、日志、Excel/文件处理等共享基础设施。
 
-## Snapshots And Historical References
-
-- [Task4 equipment snapshot](task4_snapshot/README.md): 关键备件 Task4 试验性实现快照和回滚参考。
-
 ## Update Rules
 
 - Update the relevant design doc when module responsibilities, public contracts, data flow, cache semantics, or product rules change.

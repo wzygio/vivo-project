@@ -117,6 +117,101 @@ def _build_code_options_by_group(
     return code_options_by_group
 
 
+def build_batch_code_options_by_group(
+    source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
+    filter_by: str = "rate",
+    rate_threshold: float = 0.0001,
+    count_threshold: int = 20,
+) -> Dict[str, List[str]]:
+    """Return eligible Codes by Group for batch rendering, without UI placeholders."""
+    processed_df = _prepare_processed_dataframe(source_data)
+    if processed_df is None or processed_df.empty:
+        return {}
+
+    required_cols = {"defect_group", "defect_desc"}
+    if not required_cols.issubset(processed_df.columns):
+        return {}
+
+    raw_groups = processed_df["defect_group"].dropna().unique()
+    active_groups = sorted([str(group) for group in raw_groups if str(group).strip() != ""])
+    if not active_groups:
+        return {}
+
+    eligible_series = _calculate_eligible_series(
+        processed_df,
+        filter_by=filter_by,
+        rate_threshold=rate_threshold,
+        count_threshold=count_threshold,
+    )
+    code_options_by_group = _build_code_options_by_group(active_groups, eligible_series)
+
+    batch_options: Dict[str, List[str]] = {}
+    for group_name in active_groups:
+        codes = [
+            code
+            for code in code_options_by_group.get(group_name, [])
+            if code != PLACEHOLDER_OPTION
+        ]
+        if codes:
+            batch_options[group_name] = codes
+
+    return batch_options
+
+
+def create_group_batch_selection_ui(
+    source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
+    key_prefix: str,
+    filter_by: str = "rate",
+    rate_threshold: float = 0.0001,
+    count_threshold: int = 20,
+) -> Dict[str, object]:
+    """Render Group multiselect and return eligible Codes grouped by selected Group."""
+    code_options_by_group = build_batch_code_options_by_group(
+        source_data=source_data,
+        filter_by=filter_by,
+        rate_threshold=rate_threshold,
+        count_threshold=count_threshold,
+    )
+    active_groups = list(code_options_by_group.keys())
+
+    if not active_groups:
+        st.info("当前无可展示的 Group。")
+        return {"groups": [], "codes_by_group": {}, "total_codes": 0}
+
+    group_key = f"{key_prefix}_groups"
+    current_groups = st.session_state.get(group_key)
+    if not isinstance(current_groups, list):
+        st.session_state[group_key] = active_groups
+    else:
+        normalized_groups = [group for group in current_groups if group in active_groups]
+        st.session_state[group_key] = normalized_groups if normalized_groups else active_groups
+
+    with st.container():
+        group_col, metric_col, _ = st.columns([2.2, 0.8, 4.0])
+        with group_col:
+            selected_groups = st.multiselect(
+                "不良 Group",
+                options=active_groups,
+                help="默认全选；取消勾选可临时隐藏某些 Group。",
+                key=group_key,
+            )
+
+        codes_by_group = {
+            group_name: code_options_by_group.get(group_name, [])
+            for group_name in selected_groups
+            if code_options_by_group.get(group_name, [])
+        }
+        total_codes = sum(len(codes) for codes in codes_by_group.values())
+        with metric_col:
+            st.metric("Code 数", total_codes)
+
+    return {
+        "groups": selected_groups,
+        "codes_by_group": codes_by_group,
+        "total_codes": total_codes,
+    }
+
+
 def _get_default_group(
     active_groups: List[str],
     code_options_by_group: Dict[str, List[str]],
@@ -244,4 +339,3 @@ def create_code_selection_ui(
         return {"group": selected_group, "code": selected_code}
 
     return {"group": None, "code": None}
-

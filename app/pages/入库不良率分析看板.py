@@ -16,7 +16,7 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
 from app.components.page_header import render_page_header, extract_cached_funcs
-from app.components.code_selector import create_code_selection_ui
+from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
 from app.components.file_uploader import render_trend_override_uploader
 from app.charts.mwd_chart import (
@@ -25,10 +25,7 @@ from app.charts.mwd_chart import (
 # [新增引入区块渲染组件]
 from app.sections.yield_dashboard import (
     render_macro_trend_section,
-    render_micro_trend_section,
-    render_lot_distribution_section,
-    render_sheet_distribution_section,
-    render_mapping_section
+    render_code_compact_expander,
 )
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -172,47 +169,47 @@ st.subheader("2️⃣ 入库不良率分析 (Code Level)")
 # 1. 准备“全能候选池”
 master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 
-# 2. 渲染筛选器
-selection = create_code_selection_ui(
+# 2. 渲染 Group 批量筛选器
+selection = create_group_batch_selection_ui(
     source_data=master_df,
     key_prefix="unified_focus"
 )
 
-# 如果没选 Code，下方不显示
-if not selection.get("code"):
-    st.info("👈 请在上方选择一个 Defect Code 以查看详细分析。")
+selected_groups = selection.get("groups", [])
+codes_by_group = selection.get("codes_by_group", {})
+if not selected_groups or not codes_by_group:
+    st.info("请选择至少一个包含有效 Code 的 Defect Group。")
     st.stop()
 
-# 获取当前上下文
-curr_code = selection["code"]
-curr_group = selection["group"]
-curr_warning = warning_lines.get(curr_code)
-
-# [防御] 如果当前 Code 未在警戒线配置中找到，使用默认值防止 None['upper'] 报错
-if curr_warning is None:
-    curr_warning = {'upper': 0.002, 'lower': 0.0}
-
-st.markdown(f"### 🎯 当前分析: **{curr_code}**")
-
 # ==============================================================================
-#  第三部分: 微观分析 (Code 级积木式拼装)
+#  第三部分: 微观分析 (Group 下所有 Code 批量展示)
 # ==============================================================================
-
-# Row A: 时间趋势
-render_micro_trend_section(mwd_code_data, curr_code, curr_warning['upper'])
-
-# Row B: 批次分布 (返回被点击选中的 Lot)
-target_lot = render_lot_distribution_section(lot_data, curr_code, curr_warning['upper'])
-
-# Row C: 单片分布 (监听 Lot 点击状态)
-render_sheet_distribution_section(sheet_data, target_lot, curr_group, curr_code)
-
-# Row D: 空间热力图
 hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
-render_mapping_section(
-    mapping_data,
-    curr_group,
-    curr_code,
-    hotspot_scripts,
-    product_code=active_config.data_source.product_code,
-)
+st.markdown(f"### 🎯 当前分析: **{selection.get('total_codes', 0)} 个 Code**")
+
+for group_index, curr_group in enumerate(selected_groups):
+    group_codes = codes_by_group.get(curr_group, [])
+    if not group_codes:
+        continue
+
+    if group_index > 0:
+        st.divider()
+    st.markdown(f"#### {curr_group} · {len(group_codes)} Codes")
+
+    for curr_code in group_codes:
+        curr_warning = warning_lines.get(curr_code) if warning_lines else None
+        if curr_warning is None:
+            curr_warning = {'upper': 0.002, 'lower': 0.0}
+
+        render_code_compact_expander(
+            mwd_code_data=mwd_code_data,
+            lot_data=lot_data,
+            sheet_data=sheet_data,
+            mapping_data=mapping_data,
+            curr_group=str(curr_group),
+            curr_code=str(curr_code),
+            curr_warning=float(curr_warning.get('upper', 0.002)),
+            hotspot_scripts=hotspot_scripts,
+            product_code=active_config.data_source.product_code,
+            expanded=True,
+        )

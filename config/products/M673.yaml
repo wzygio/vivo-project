@@ -41,9 +41,10 @@ processing:
 
   defect_multipliers:
     # Array_Line
+    'S向亮线': 0.7
     # Array_Pixel
     '暗点': 1.5
-    '群暗点': 1.5
+    '群暗点': 2
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0

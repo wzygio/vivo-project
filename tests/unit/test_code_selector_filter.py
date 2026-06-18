@@ -2,6 +2,7 @@ import pandas as pd
 
 from app.charts.mwd_chart import prepare_union_data_for_filter
 from app.components.code_selector import (
+    build_batch_code_options_by_group,
     _build_code_options_by_group,
     _calculate_eligible_series,
     _get_default_group,
@@ -154,3 +155,70 @@ def test_default_group_prefers_group_with_selectable_codes() -> None:
     }
 
     assert _get_default_group(["Array_Line", "Array_Mura"], options) == "Array_Mura"
+
+
+def test_batch_code_options_return_all_eligible_codes_without_placeholder() -> None:
+    source_data = pd.DataFrame(
+        [
+            {
+                "defect_group": "Array_Mura",
+                "defect_desc": "高发CodeA",
+                "monthly_avg_rate": 0.0003,
+                "defect_rate": 0.003,
+            },
+            {
+                "defect_group": "Array_Mura",
+                "defect_desc": "高发CodeB",
+                "monthly_avg_rate": 0.0002,
+                "defect_rate": 0.002,
+            },
+            {
+                "defect_group": "Array_Mura",
+                "defect_desc": "低发Code",
+                "monthly_avg_rate": 0.00001,
+                "defect_rate": 0.01,
+            },
+        ]
+    )
+
+    options = build_batch_code_options_by_group(
+        source_data,
+        rate_threshold=0.0001,
+    )
+
+    assert options == {"Array_Mura": ["高发CodeA", "高发CodeB"]}
+
+
+def test_batch_code_options_keep_eligible_codes_across_groups() -> None:
+    source_data = pd.DataFrame(
+        [
+            {
+                "defect_group": "Array_Line",
+                "defect_desc": "线亮点",
+                "monthly_avg_rate": 0.0002,
+                "defect_rate": 0.0002,
+            },
+            {
+                "defect_group": "Array_Pixel",
+                "defect_desc": "暗点",
+                "monthly_avg_rate": 0.0003,
+                "defect_rate": 0.0003,
+            },
+            {
+                "defect_group": "Array_Pixel",
+                "defect_desc": "低发暗点",
+                "monthly_avg_rate": 0.00001,
+                "defect_rate": 0.005,
+            },
+        ]
+    )
+
+    options = build_batch_code_options_by_group(
+        source_data,
+        rate_threshold=0.0001,
+    )
+
+    assert options == {
+        "Array_Line": ["线亮点"],
+        "Array_Pixel": ["暗点"],
+    }

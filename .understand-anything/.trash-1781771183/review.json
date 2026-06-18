@@ -1,0 +1,51 @@
+{
+  "issues": [],
+  "warnings": [],
+  "stats": {
+    "totalNodes": 604,
+    "totalEdges": 1454,
+    "totalLayers": 8,
+    "tourSteps": 7,
+    "nodeTypes": {
+      "config": 10,
+      "document": 35,
+      "file": 133,
+      "module": 8,
+      "function": 362,
+      "class": 56
+    },
+    "edgeTypes": {
+      "contains": 596,
+      "exports": 406,
+      "calls": 202,
+      "imports": 159,
+      "tested_by": 45,
+      "documents": 24,
+      "configures": 21,
+      "serves": 1
+    },
+    "filesAnalyzed": 178,
+    "fileCategories": {
+      "code": 132,
+      "docs": 34,
+      "config": 9,
+      "markup": 2,
+      "script": 1
+    },
+    "languages": {
+      "unknown": 3,
+      "markdown": 33,
+      "python": 126,
+      "toml": 2,
+      "yaml": 7,
+      "txt": 1,
+      "javascript": 2,
+      "html": 1,
+      "css": 1,
+      "vbs": 1,
+      "batch": 1
+    },
+    "filteredByIgnore": 154,
+    "estimatedComplexity": "large"
+  }
+}
