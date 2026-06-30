@@ -43,13 +43,13 @@ processing:
     # Array_Line
     'S向亮线': 0.7
     # Array_Pixel
-    '暗点': 1.5
-    '群暗点': 2
+    '暗点': 1.8
+    '群暗点': 1.2
+    '群亮点': 1.2
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
     # OLED_Mura
-    '彩斑Mura': 0.8
   
   sheet_hotspot_config: 
     enable: True

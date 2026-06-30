@@ -1,0 +1,79 @@
+# 🌍 天柱专项报表系统 · 总路由 (AGENTS.md)
+
+> **项目代号**: 天柱专项报表系统  
+> **领域**: 面板制造业（OLED/Array 半导体显示）良率分析与 SPC 统计过程控制  
+> **技术栈**: Python + Streamlit + PostgreSQL + Parquet 快照
+
+---
+
+## Harness 入口
+
+- `CONTEXT.md`: 项目目标、边界和快速路由。
+- `docs/design/index.md`: 设计文档入口。
+- `docs/plans/index.md`: 计划入口。
+- `docs/exec-plans/active/`: 已接受、正在执行的短期计划。
+- `docs/exec-plans/completed/`: 已完成执行计划归档。
+- `specs/README.md`: 可维护规则和任务契约入口。
+- `docs/observability.md`: 日志、Trace、Smoke、测试和诊断入口。
+- `docs/references/README.md`: 外部参考入口。
+- `docs/generated/README.md`: 可重建审计和生成事实入口。
+
+---
+
+## 📖 渐进式披露 (Progressive Disclosure)
+
+请根据当前任务，**仅加载与任务相关**的文档。不要一次性加载全部内容。
+
+| 文档 | 用途 | 何时阅读 |
+|------|------|----------|
+| [`CONTEXT.md`](CONTEXT.md) | **项目上下文**：目标、边界、快速路由 | 需要快速恢复项目上下文时 |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | **系统架构**：技术栈、目录结构、数据流、缓存体系 | ✅ **首次进入项目 / 需要了解技术选型时** |
+| [`docs/design/index.md`](docs/design/index.md) | **设计入口**：领域设计、共享内核、历史快照 | 需要判断该读哪个设计文档时 |
+| [`docs/design/yield_domain.md`](docs/design/yield_domain.md) | **良率分析域设计**：Yield 业务逻辑、核心算法 | 需要修改 Yield 相关代码时 |
+| [`docs/design/spc_domain.md`](docs/design/spc_domain.md) | **SPC 控制域设计**：SPC 规则引擎、合规修饰 | 需要修改 SPC 相关代码时 |
+| [`docs/design/shared_kernel.md`](docs/design/shared_kernel.md) | **共享内核设计**：配置、数据库、日志、文件处理 | 需要修改基础设施层时 |
+| [`docs/design/development_framework.md`](docs/design/development_framework.md) | **开发框架**：EPCC Flow、TDD 纪律、红线约束 | ✅ **每次修改前必读** |
+| [`docs/plans/index.md`](docs/plans/index.md) | **计划入口**：当前/历史计划与模板 | ✅ **开始新任务前，先查看是否有已有计划** |
+| [`docs/exec-plans/active/`](docs/exec-plans/active/) | **执行计划**：当前已接受计划 | 继续或接手正在执行的多步骤任务时 |
+| [`docs/observability.md`](docs/observability.md) | **可观测性**：日志、Trace、Smoke、测试和诊断入口 | 需要验证、排错、跑 UI/后台 Smoke 时 |
+| [`specs/README.md`](specs/README.md) | **规格入口**：可维护规则、任务契约、验收标准 | 需要沉淀稳定规则或任务合同 |
+| [`skills/README.md`](skills/README.md) | **技能库索引**：加密 Excel、类型标准化等专项解决方案 | 遇到 `skills/` 中记录的特定问题时 |
+
+---
+
+## 🚨 全局红线纪律
+
+以下为硬性约束，任何时候**不得违反**：
+
+1. **禁止静态重构核心算法**：良率模拟（`_simulate_concentration`、`_distribute_sheet_from_lot`）和 Mapping 级联衰减经过多次业务验证，静态重构会破坏已修复的边界条件。
+2. **禁止修改数据库连接单例**：`DatabaseManager`（`__new__` 单例 + 失败重试）是容灾基石，任何修改会破坏 `.env` 延迟加载和断线重连。
+3. **禁止移除 `@st.cache_data`**：L2 缓存移除将导致每次刷新触发全量数据库查询，造成性能灾难。
+4. **禁止简化 Parquet 快照增量更新**：TTL 保护 + 2 天缓冲 + 三防线容灾是精心设计的降级策略。
+
+> **详细红线说明请参考**：[`docs/design/development_framework.md`](docs/design/development_framework.md#4-红线纪律负面清单)
+
+---
+
+## 🔧 遇到特殊问题？查 Skills 库
+
+```bash
+skills/README.md
+```
+
+记录了加密 Excel 读取（COM）、类型标准化匹配等专项解决方案。
+
+---
+
+## ⚡ 快速命令
+
+```bash
+# 启动
+start_streamlit.bat
+
+# 测试（必须 100% PASS）
+uv run pytest tests/ -v --tb=short
+```
+
+---
+
+> **信息冲突时，以更具体的文档为准。** 例如：`docs/design/yield_domain.md` 中的详细设计优先于 `ARCHITECTURE.md` 中的概述。

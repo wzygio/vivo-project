@@ -1,0 +1,28 @@
+2026-06-24 16:54:29 - INFO - [logger_setup] - ✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)
+2026-06-24 16:54:30 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:54:30 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:54:34 - INFO - [data_loader] - Loading spec baseline CSV: resources\critical_parts_baseline.csv
+2026-06-24 16:54:34 - INFO - [data_loader] - Loaded 270 spec baseline records
+2026-06-24 16:54:34 - INFO - [data_loader] - Snapshot expired, re-querying...
+2026-06-24 16:54:34 - INFO - [data_loader] - Querying: 8 stations, 30 machines, 4 patterns, since 2026-03-26
+2026-06-24 16:54:40 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:54:40 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:55:42 - INFO - [data_loader] - Extracted 2242414 records.
+2026-06-24 16:55:44 - INFO - [data_loader] - Saved snapshot: data\equipment\part_life_snapshot_fd4a2fa20206.parquet (2242414 records)
+2026-06-24 16:56:46 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:56:46 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:56:46 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-24 16:56:46 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 33
+2026-06-24 16:56:59 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:56:59 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:56:59 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 16
+2026-06-24 16:57:12 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:57:12 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:57:12 - INFO - [session_manager] - ✅ 配置已更新并加载到 Session: M626
+2026-06-24 16:57:13 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 33
+2026-06-24 16:57:16 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:57:16 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:57:16 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 16
+2026-06-24 16:57:25 - INFO - [app_setup] - 环境变量已从 .env 文件加载。
+2026-06-24 16:57:25 - INFO - [app_setup] - Application setup complete (logging & env initialized).
+2026-06-24 16:57:25 - INFO - [spc_dashboard] - 📊 [UI] 前端过滤后站点 OOC 总数: 16

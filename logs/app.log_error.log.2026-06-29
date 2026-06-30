@@ -1,0 +1,42 @@
+2026-06-29 22:32:03 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-29 22:32:03 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-29 22:32:03 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013', 'L3MR5C03716']
+2026-06-29 22:32:10 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-29 22:37:54 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-29 22:37:54 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030']
+2026-06-29 22:37:54 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B023
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B023' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] - !!! [追踪] 发现 Excel 指令 ID: L3MR5A0B026
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] -     - 缺陷描述: 'S向亮线'
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] -     -> [拦截] 实体 'L3MR5A0B026' 在当前数据底座中物理不存在！拒绝凭空捏造。
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A08321', 'L3MR5A08324', 'L3MR5A0B023', 'L3MR5A0B026', 'L3MR5A0B029', 'L3MR5A0BR02', 'L3MR5A0BR05', 'L3MR5A0BR08', 'L3MR5A0BR11', 'L3MR5A0BR14', 'L3MR5A0BR17', 'L3MR5A0BR20', 'L3MR5A0BR23', 'L3MR5A0BR26', 'L3MR5A0BR29', 'L3MR5C03010', 'L3MR5C03013']
+2026-06-29 22:38:00 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-29 22:41:30 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-29 22:41:32 - ERROR - [sheet_lot_processor] - [COM] 文件不存在: D:\wzy\Python\vivo-project\resources\M673\M673_override_rates.xlsx
+2026-06-29 22:44:26 - ERROR - [sheet_lot_processor] - 计算lot_id级原始不良率时出错: 'Requested level (defect_group) does not match index name (None)'
+Traceback (most recent call last):
+  File "D:\wzy\Python\vivo-project\src\yield_domain\core\sheet_lot_processor.py", line 317, in _calculate_raw_rates
+    group_numerators_df = group_numerators.unstack(level='defect_group').fillna(0)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\wzy\Python\vivo-project\.venv\Lib\site-packages\pandas\core\frame.py", line 9955, in unstack
+    result = unstack(self, level, fill_value, sort)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\wzy\Python\vivo-project\.venv\Lib\site-packages\pandas\core\reshape\reshape.py", line 500, in unstack
+    obj.index._get_level_number(level)
+  File "D:\wzy\Python\vivo-project\.venv\Lib\site-packages\pandas\core\indexes\base.py", line 2024, in _get_level_number
+    self._validate_index_level(level)
+  File "D:\wzy\Python\vivo-project\.venv\Lib\site-packages\pandas\core\indexes\base.py", line 2019, in _validate_index_level
+    raise KeyError(
+KeyError: 'Requested level (defect_group) does not match index name (None)'
+2026-06-29 22:45:43 - ERROR - [yield_service] - 获取基础Panel级数据失败，无法生成Code级趋势图。

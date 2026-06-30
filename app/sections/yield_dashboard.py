@@ -366,6 +366,7 @@ def _get_code_trend_slices(
 
 def _render_compact_micro_trends(
     mwd_code_data: dict,
+    curr_group: str,
     curr_code: str,
     curr_warning: float,
 ) -> None:
@@ -374,7 +375,10 @@ def _render_compact_micro_trends(
     trend_cols = st.columns(3)
     chart_configs = [(cd_m, "月度", trend_cols[0]), (cd_w, "周度", trend_cols[1]), (cd_d, "日度", trend_cols[2])]
 
-    for df, title, col in chart_configs:
+    key_fragment = _state_key_fragment(curr_group, curr_code)
+    period_keys = ["monthly", "weekly", "daily"]
+
+    for chart_index, (df, title, col) in enumerate(chart_configs):
         with col:
             if df is None or df.empty:
                 st.info(f"暂无{title}数据")
@@ -383,7 +387,11 @@ def _render_compact_micro_trends(
             if fig is None:
                 st.info(f"暂无{title}数据")
                 continue
-            st.plotly_chart(_apply_compact_chart_layout(fig, 345), use_container_width=True)
+            st.plotly_chart(
+                _apply_compact_chart_layout(fig, 345),
+                use_container_width=True,
+                key=f"compact_micro_trend_{key_fragment}_{period_keys[chart_index]}",
+            )
 
 
 def _prepare_mapping_matrices(
@@ -463,10 +471,15 @@ def _render_compact_mapping_section(
         return
 
     tabs = st.tabs(tab_labels)
+    key_fragment = _state_key_fragment(curr_group, curr_code)
     for i, batch_no in enumerate(batches):
         with tabs[i]:
             fig_map = create_mapping_heatmap(matrices_cache[batch_no], f"批次 {batch_no} 热力图", global_max)
-            st.plotly_chart(_apply_compact_chart_layout(fig_map, 345), use_container_width=True)
+            st.plotly_chart(
+                _apply_compact_chart_layout(fig_map, 345),
+                use_container_width=True,
+                key=f"compact_mapping_{key_fragment}_{_state_key_fragment(batch_no)}",
+            )
 
 
 def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
@@ -620,7 +633,11 @@ def _render_compact_sheet_chart(
         xaxis_label="Sheet ID",
         sorted_sheet_ids=df_sheet['sheet_id'].astype(str).tolist(),
     )
-    st.plotly_chart(_apply_compact_chart_layout(fig_sheet, 300), use_container_width=True)
+    st.plotly_chart(
+        _apply_compact_chart_layout(fig_sheet, 300),
+        use_container_width=True,
+        key=f"compact_sheet_chart_{_state_key_fragment(curr_group, curr_code, target_lot)}",
+    )
 
 
 def _prepare_sheet_detail_table(sheet_data: dict, curr_group: str, curr_code: str) -> pd.DataFrame:
@@ -725,7 +742,7 @@ def render_code_compact_expander(
     with st.expander(label, expanded=expanded):
         top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
         with top_trend_col:
-            _render_compact_micro_trends(mwd_code_data, curr_code, curr_warning)
+            _render_compact_micro_trends(mwd_code_data, curr_group, curr_code, curr_warning)
         with top_mapping_col:
             _render_compact_mapping_section(
                 mapping_data=mapping_data,

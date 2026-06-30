@@ -1,0 +1,3 @@
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - =======================================

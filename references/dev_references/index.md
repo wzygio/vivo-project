@@ -1,6 +1,13 @@
 # 开发框架规范
 
-> **最后更新**: 2026-05-18
+## Folder Routes
+
+- `references/dev_references/coding_spec/`
+- `references/dev_references/restrictions/`
+
+## Update Rule
+
+Keep this index folder-only. Do not list individual files here.
 
 ---
 
@@ -12,14 +19,10 @@
 必须先阅读相关文件，读懂上下文后再行动。不得在不了解现有代码的情况下直接修改。
 
 ### 1.2 Plan（计划）
-必须先输出修改计划，交由人类审核。计划通过后，方可进入编码阶段。
-
-**入口文件**：参考 [`PLANS.md`](../plans/PLANS.md) 了解当前活跃计划。
+必须先制定开发计划，包括一份预期功能的checklist。完成后方可进入编码阶段。
 
 ### 1.3 Code（编码）
-- 必须包含 **Type Hints** 和基础异常捕获
-- **结构化输出**：明确指出修改了哪个文件的哪几行
-- **🚨 熔断机制**：同一个 Bug 连续修复 3 次失败，必须立即停止并要求人类介入
+请遵守编程规范：references\dev_references\coding_spec
 
 ### 1.4 Commit（提交）
 遵循 TDD 纪律（见下文）。
@@ -78,6 +81,3 @@ tests/
 ### 🚨 Agent 熔断机制
 - 同一个 Bug 连续修复 3 次失败，必须立即停止并要求人类介入
 
----
-
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`yield_domain.md`](./yield_domain.md) · [`spc_domain.md`](./spc_domain.md)

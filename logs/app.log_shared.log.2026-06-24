@@ -1,0 +1,15 @@
+2026-06-24 16:55:07 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:55:43 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:56:08 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:56:30 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:56:46 - INFO - [db_handler] - 首次创建DatabaseManager实例...
+2026-06-24 16:56:46 - INFO - [db_handler] - 正在使用SQLAlchemy尝试连接到 PostgreSQL 数据库...
+2026-06-24 16:56:46 - INFO - [db_handler] - 数据库连接成功！ (SQLAlchemy Engine)
+2026-06-24 16:56:46 - INFO - [config] - 正在构建配置对象 (Product: M626)...
+2026-06-24 16:56:46 - INFO - [config] - ✅ 配置加载完成: M626
+2026-06-24 16:57:12 - INFO - [config] - 正在构建配置对象 (Product: M626)...
+2026-06-24 16:57:12 - INFO - [config] - ✅ 配置加载完成: M626
+2026-06-24 16:57:50 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:58:12 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:58:17 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)
+2026-06-24 16:58:23 - INFO - [excel_tools] - [xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 spc_outlier_filters.xlsx 成功, shape=(19, 4)

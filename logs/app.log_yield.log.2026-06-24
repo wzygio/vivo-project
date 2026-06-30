@@ -1,0 +1,140 @@
+2026-06-24 16:54:34 - INFO - [yield_repository] - 💾 [Repo] 快照已更新 (Rolling Window)。
+2026-06-24 16:54:35 - INFO - [yield_repository] - 🛡️ [Repository] 命中缓存后清洗：已抹除 10010 条非目标 Group 记录 (Target: ['Array_Line', 'Array_Pixel', 'Array_Mura', 'OLED_Mura'])。
+2026-06-24 16:54:37 - INFO - [yield_service] - [CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={'S向单暗线': 0.6, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '白画面黑斑Mura': 0.8, '彩斑Mura': 0.4, 'S向边缘Mura': 0.6}
+2026-06-24 16:54:37 - INFO - [yield_service] - 应用缺陷衰减...
+2026-06-24 16:54:37 - INFO - [defect_modifier] - 开始应用不良倍率调整: {'S向单暗线': 0.6, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '白画面黑斑Mura': 0.8, '彩斑Mura': 0.4, 'S向边缘Mura': 0.6}
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code 'S向单暗线': 不良数从 5735 下调至 3441 (倍率: 0.6)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code 'S向ELA Mura': 不良数从 3110 下调至 0 (倍率: 0)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code 'G向ELA Mura': 不良数从 232 下调至 0 (倍率: 0)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code '白画面黑斑Mura': 不良数从 3684 下调至 2947 (倍率: 0.8)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code '彩斑Mura': 不良数从 5990 下调至 2396 (倍率: 0.4)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - Code 'S向边缘Mura': 不良数从 172 下调至 103 (倍率: 0.6)。
+2026-06-24 16:54:37 - INFO - [defect_modifier] - 不良倍率调整完成，数据从 1807523 行变为 1797487 行。
+2026-06-24 16:54:39 - INFO - [data_loader] - 开始为 349 个Lot提取阵列投入时间...
+2026-06-24 16:54:41 - INFO - [yield_service] - --- [L1 Cache Miss] 加载原始 Panel 数据... ---
+2026-06-24 16:54:41 - INFO - [yield_repository] - 🆕 [YieldRepo] 执行全量刷新 (Full Refresh)...
+2026-06-24 16:54:41 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:54:41 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:54:42 - INFO - [data_loader] - 成功提取 10470 条Sheet的阵列投入时间记录。
+2026-06-24 16:54:43 - INFO - [yield_service] - Excel 已在内存中清洗为纯文本矩阵，形状: (44, 5)
+2026-06-24 16:54:43 - INFO - [yield_service] - ✅ 警戒线加载成功，共提取 42 条配置 (含上下限)。
+2026-06-24 16:54:43 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-24 16:54:43 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-24, 数据实际最大日期: 2026-06-23
+2026-06-24 16:54:47 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\M626\M626_codebaseline.xlsx
+2026-06-24 16:54:47 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\M626\M626_codebaseline.xlsx
+2026-06-24 16:54:47 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：上限压制)...
+2026-06-24 16:54:47 - INFO - [trend_regulator] - [daily 维度] 向量化上限截断完成：压制超标 299 处。
+2026-06-24 16:54:47 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-24 16:54:47 - INFO - [sheet_lot_processor] - 开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...
+2026-06-24 16:54:48 - INFO - [data_loader] - 🛡️ [数据清洗] 数据纯净，无需抹除。
+2026-06-24 16:54:48 - INFO - [data_loader] - 成功提取并清洗 0 行数据。
+2026-06-24 16:54:48 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:54:48 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:54:49 - INFO - [sheet_lot_processor] - 成功聚合了 349 个 Lot 的基础信息 (含 array_input_time)。
+2026-06-24 16:54:49 - INFO - [sheet_lot_processor] - 开始进行Lot过货率筛选 (阈值 >= 20.0%)...
+2026-06-24 16:54:49 - INFO - [sheet_lot_processor] - 过货率筛选完成：从 349 个Lot中筛选出 333 个。
+2026-06-24 16:54:50 - INFO - [sheet_lot_processor] - 开始计算lot_id级原始不良率 (回归原始逻辑)...
+2026-06-24 16:54:51 - INFO - [sheet_lot_processor] - 开始执行 lot_id 级不良率模拟调度 (V4.3 - 微观扰动版)...
+2026-06-24 16:54:51 - INFO - [sheet_lot_processor] - ✅ [DEBUG] Lot 模拟分配明细已导出至: D:\wzy\Python\vivo-project\logs\sheet_lot_processor-lot_rate.csv
+2026-06-24 16:54:51 - INFO - [sheet_lot_processor] - 开始对 Code 级不良率进行精准 Spec 截断处理...
+2026-06-24 16:54:52 - INFO - [sheet_lot_processor] - Code 级不良率精准截断/托底处理完成。
+2026-06-24 16:54:52 - INFO - [sheet_lot_processor] - --- [COM Loader] 开始加载覆盖数据 (文件: 'M626_override_rates.xlsx') ---
+2026-06-24 16:54:52 - INFO - [sheet_lot_processor] - [COM] 正在启动 Excel 应用程序实例...
+2026-06-24 16:54:53 - INFO - [sheet_lot_processor] - [COM] 正在打开工作簿: D:\wzy\Python\vivo-project\resources\M626\M626_override_rates.xlsx
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - [COM] 成功通过 Excel 提取数据，共 19 行。
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - 开始使用启发式公式计算 Lot 级覆盖不良率...
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - Lot 级覆盖率计算完成，共计算 5 条记录。
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - 成功构建了 56 条 Desc -> Group 映射。
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - 开始使用外部数据覆盖 lot_id 级别的不良率 (严格审查模式)...
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - 覆盖审计完成: Excel中共配置 5 个ID，成功应用 0 个，拦截防呆 5 个。
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - ========== [物理防呆拦截名单] ==========
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - 以下 ID 由于在当前数据底座中不存在，已被系统拒绝凭空捏造: ['L3MR5A083', 'L3MR5A0B0', 'L3MR5A0BR', 'L3MR5C030', 'L3MR5C037']
+2026-06-24 16:54:54 - WARNING - [sheet_lot_processor] - =======================================
+2026-06-24 16:54:54 - INFO - [sheet_lot_processor] - 模拟/覆盖完成，正在重新聚合 lot_id 的 Group 级数据 (含基础信息完整性检查)...
+2026-06-24 16:55:03 - INFO - [data_loader] - 🛡️ [数据清洗] 数据纯净，无需抹除。
+2026-06-24 16:55:03 - INFO - [data_loader] - 成功提取并清洗 0 行数据。
+2026-06-24 16:55:03 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:55:03 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:55:12 - INFO - [data_loader] - 🛡️ [数据清洗] 数据纯净，无需抹除。
+2026-06-24 16:55:12 - INFO - [data_loader] - 成功提取并清洗 0 行数据。
+2026-06-24 16:55:12 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:55:12 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:55:52 - INFO - [data_loader] - 🛡️ [数据清洗] 数据纯净，无需抹除。
+2026-06-24 16:55:52 - INFO - [data_loader] - 成功提取并清洗 0 行数据。
+2026-06-24 16:55:52 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:55:52 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:56:02 - INFO - [data_loader] - 🛡️ [数据清洗] 已抹除 382 条非目标 Defect 记录 (Target: ['Array_Line', 'Array_Pixel', 'Array_Mura', 'OLED_Mura'])。
+2026-06-24 16:56:02 - INFO - [data_loader] - 成功提取并清洗 456 行数据。
+2026-06-24 16:56:03 - INFO - [yield_repository] - 💾 [Repo] 快照已更新 (Rolling Window)。
+2026-06-24 16:56:03 - INFO - [yield_service] - [CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:03 - INFO - [yield_service] - 应用缺陷衰减...
+2026-06-24 16:56:03 - INFO - [defect_modifier] - 开始应用不良倍率调整: {'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:03 - INFO - [defect_modifier] - Code 'S向亮线': 不良数从 53 下调至 37 (倍率: 0.7)。
+2026-06-24 16:56:03 - INFO - [defect_modifier] - Code 'G向单暗线': 不良数从 1 下调至 0 (倍率: 0.8)。
+2026-06-24 16:56:03 - INFO - [defect_modifier] - 不良倍率调整完成，数据从 456 行变为 439 行。
+2026-06-24 16:56:03 - INFO - [data_loader] - 开始为 16 个Lot提取阵列投入时间...
+2026-06-24 16:56:06 - INFO - [data_loader] - 成功提取 480 条Sheet的阵列投入时间记录。
+2026-06-24 16:56:06 - INFO - [yield_service] - [CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:06 - INFO - [yield_service] - 应用缺陷衰减...
+2026-06-24 16:56:06 - INFO - [defect_modifier] - 开始应用不良倍率调整: {'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:06 - INFO - [defect_modifier] - Code 'S向亮线': 不良数从 53 下调至 37 (倍率: 0.7)。
+2026-06-24 16:56:06 - INFO - [defect_modifier] - Code 'G向单暗线': 不良数从 1 下调至 0 (倍率: 0.8)。
+2026-06-24 16:56:06 - INFO - [defect_modifier] - 不良倍率调整完成，数据从 456 行变为 439 行。
+2026-06-24 16:56:07 - INFO - [yield_service] - Excel 已在内存中清洗为纯文本矩阵，形状: (44, 5)
+2026-06-24 16:56:07 - INFO - [yield_service] - ✅ 警戒线加载成功，共提取 42 条配置 (含上下限)。
+2026-06-24 16:56:07 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-24 16:56:07 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-24, 数据实际最大日期: 2026-06-23
+2026-06-24 16:56:07 - INFO - [mwd_trend_processor] - [Baseline Generator] Code 基准已重建: resources\Z571\Z571_codebaseline.xlsx (reason=missing_file, codes=2, window=2026-06-23->2026-06-24)
+2026-06-24 16:56:07 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\Z571\Z571_codebaseline.xlsx
+2026-06-24 16:56:07 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：上限压制)...
+2026-06-24 16:56:07 - INFO - [trend_regulator] - [daily 维度] 向量化上限截断完成：压制超标 2 处。
+2026-06-24 16:56:07 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-24 16:56:07 - INFO - [sheet_lot_processor] - 开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...
+2026-06-24 16:56:07 - INFO - [sheet_lot_processor] - 成功聚合了 16 个 Lot 的基础信息 (含 array_input_time)。
+2026-06-24 16:56:07 - INFO - [sheet_lot_processor] - 开始进行Lot过货率筛选 (阈值 >= 20.0%)...
+2026-06-24 16:56:07 - INFO - [sheet_lot_processor] - 过货率筛选完成：从 16 个Lot中筛选出 0 个。
+2026-06-24 16:56:13 - INFO - [data_loader] - 🛡️ [数据清洗] 数据纯净，无需抹除。
+2026-06-24 16:56:13 - INFO - [data_loader] - 成功提取并清洗 0 行数据。
+2026-06-24 16:56:13 - INFO - [data_loader] - 开始从数据库提取原始数据 (V3.1)...
+2026-06-24 16:56:13 - INFO - [data_loader] - 正在执行SQL查询 (已移除DB端排序)...
+2026-06-24 16:56:41 - INFO - [data_loader] - 🛡️ [数据清洗] 已抹除 382 条非目标 Defect 记录 (Target: ['Array_Line', 'Array_Pixel', 'Array_Mura', 'OLED_Mura'])。
+2026-06-24 16:56:41 - INFO - [data_loader] - 成功提取并清洗 456 行数据。
+2026-06-24 16:56:41 - INFO - [yield_repository] - 💾 [Repo] 快照已更新 (Rolling Window)。
+2026-06-24 16:56:41 - INFO - [yield_service] - [CACHE_DEBUG] get_modified_panel_details 被执行, defect_multipliers={'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:41 - INFO - [yield_service] - 应用缺陷衰减...
+2026-06-24 16:56:41 - INFO - [defect_modifier] - 开始应用不良倍率调整: {'S向亮线': 0.7, 'G向单亮线': 0.5, 'G向单暗线': 0.8, '暗点': 0.7, '群暗点': 0.8, 'G3亮点': 0.5, '大面积亮点': 0, 'S向ELA Mura': 0, 'G向ELA Mura': 0, '常亮白斑': 0, '白画面黑斑Mura': 3, '孔区跑道Mura': 5, '彩斑Mura': 0.3}
+2026-06-24 16:56:41 - INFO - [defect_modifier] - Code 'S向亮线': 不良数从 53 下调至 37 (倍率: 0.7)。
+2026-06-24 16:56:41 - INFO - [defect_modifier] - Code 'G向单暗线': 不良数从 1 下调至 0 (倍率: 0.8)。
+2026-06-24 16:56:41 - INFO - [defect_modifier] - 不良倍率调整完成，数据从 456 行变为 439 行。
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-24, 数据实际最大日期: 2026-06-23
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\Z571\Z571_codebaseline.xlsx
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\Z571\Z571_codebaseline.xlsx
+2026-06-24 16:56:41 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：上限压制)...
+2026-06-24 16:56:41 - INFO - [trend_regulator] - [daily 维度] 向量化上限截断完成：压制超标 2 处。
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - Group级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - [Group Raw Data] 目标截止日期: 2026-06-24, 数据实际最大日期: 2026-06-23
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - ========== [DEBUG: 数据源时间边界排查] ==========
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - 提取的数据总行数: 439
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - 数据源中【实际存在的最后日期】: 2026-06-23
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - 最终使用的【截止日期】: 2026-06-24
+2026-06-24 16:56:41 - INFO - [mwd_trend_processor] - 数据源中最近的 5 个有效日期: ['2026-06-23']
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - [覆盖逻辑] 跳过覆盖: ovs=不存在, df=非空
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - [覆盖逻辑] 跳过覆盖: ovs=不存在, df=非空
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - Code级趋势分析 (模式: 大一统混合流水线 Unified Hybrid Pipeline)...
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - [Code Raw Data] 目标截止日期: 2026-06-24, 数据实际最大日期: 2026-06-23
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\Z571\Z571_codebaseline.xlsx
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - [Baseline] Code 基准仍在有效期内，沿用: resources\Z571\Z571_codebaseline.xlsx
+2026-06-24 16:56:42 - INFO - [trend_regulator] - 启动 Code 级智能趋势调节器 (单一职责：上限压制)...
+2026-06-24 16:56:42 - INFO - [trend_regulator] - [daily 维度] 向量化上限截断完成：压制超标 2 处。
+2026-06-24 16:56:42 - INFO - [mwd_trend_processor] - 未检测到覆盖指令，完美保留纯净 EMA 日度曲线。
+2026-06-24 16:56:42 - INFO - [yield_service] - --- [Cache Miss] 计算 Lot 级良率... ---
+2026-06-24 16:56:42 - INFO - [sheet_lot_processor] - 开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...
+2026-06-24 16:56:42 - INFO - [sheet_lot_processor] - 成功聚合了 16 个 Lot 的基础信息 (含 array_input_time)。
+2026-06-24 16:56:42 - INFO - [sheet_lot_processor] - 开始进行Lot过货率筛选 (阈值 >= 20.0%)...
+2026-06-24 16:56:42 - INFO - [sheet_lot_processor] - 过货率筛选完成：从 16 个Lot中筛选出 0 个。
+2026-06-24 16:56:42 - INFO - [yield_service] - --- [Cache Miss] 计算 Sheet 级良率... ---
+2026-06-24 16:56:42 - INFO - [mapping_processor] - 开始为Mapping图准备数据 (Rate-Based Mode, 阈值=0)...
+2026-06-24 16:56:42 - INFO - [mapping_processor] - 处理批次顺序 (Old->New): ['2026/06/15']

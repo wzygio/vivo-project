@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "checks": {
+    "agents_router": {
+      "status": "ok",
+      "violations": []
+    },
+    "folder_only_indexes": {
+      "status": "ok",
+      "index_count": 21,
+      "violations": []
+    },
+    "architecture_depth": {
+      "status": "ok",
+      "violations": []
+    },
+    "required_harness_paths": {
+      "status": "ok",
+      "missing": []
+    }
+  }
+}
