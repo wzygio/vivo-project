@@ -1,5 +1,6 @@
 import logging
 import math
+from datetime import date, timedelta
 from typing import Optional
 
 import numpy as np
@@ -59,6 +60,189 @@ def calculate_cpk(mean_value: float, std_value: float, usl: float, lsl: float) -
             return 0.0
         return float("-inf")
     return float(nearest_distance / denominator)
+
+
+def _start_of_week(value: date) -> date:
+    return value - timedelta(days=value.weekday())
+
+
+def get_period_window_start(end_date: date) -> date:
+    """Return the first day needed by the Task2 M/W/D report windows."""
+    month = end_date.month - 1
+    year = end_date.year
+    if month <= 0:
+        month += 12
+        year -= 1
+    return date(year, month, 1)
+
+
+def build_period_axis(end_date: date) -> pd.DataFrame:
+    """Build the fixed Task2 period axis: 2 months, 3 weeks, and 7 days."""
+    end_date = pd.Timestamp(end_date).date()
+    records: list[dict[str, object]] = []
+
+    month_starts = [
+        get_period_window_start(end_date),
+        date(end_date.year, end_date.month, 1),
+    ]
+    for index, month_start in enumerate(month_starts, start=1):
+        next_month = date(month_start.year + (month_start.month // 12), (month_start.month % 12) + 1, 1)
+        month_end = min(end_date, next_month - timedelta(days=1))
+        records.append(
+            {
+                "period_type": "month",
+                "period_label": month_start.strftime("%Y-%m"),
+                "period_sort": 100 + index,
+                "period_start": pd.Timestamp(month_start),
+                "period_end": pd.Timestamp(month_end),
+            }
+        )
+
+    current_week_start = _start_of_week(end_date)
+    for index, week_offset in enumerate([2, 1, 0], start=1):
+        week_start = current_week_start - timedelta(weeks=week_offset)
+        iso_week = week_start.isocalendar()
+        records.append(
+            {
+                "period_type": "week",
+                "period_label": f"{iso_week.year}-W{iso_week.week:02d}",
+                "period_sort": 200 + index,
+                "period_start": pd.Timestamp(week_start),
+                "period_end": pd.Timestamp(min(end_date, week_start + timedelta(days=6))),
+            }
+        )
+
+    for index, day_offset in enumerate(range(6, -1, -1), start=1):
+        day = end_date - timedelta(days=day_offset)
+        records.append(
+            {
+                "period_type": "day",
+                "period_label": day.strftime("%Y-%m-%d"),
+                "period_sort": 300 + index,
+                "period_start": pd.Timestamp(day),
+                "period_end": pd.Timestamp(day),
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
+def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
+    period_df = df.copy()
+    period_df["sheet_start_time"] = pd.to_datetime(period_df["sheet_start_time"], errors="coerce")
+    period_df = period_df.dropna(subset=["sheet_start_time"]).copy()
+    if period_df.empty:
+        return period_df
+
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1)
+    period_axis = build_period_axis(end_date)
+    period_sort_lookup = period_axis[["period_type", "period_label", "period_sort"]]
+    month_start = period_axis[period_axis["period_type"] == "month"]["period_start"].min()
+    week_start = period_axis[period_axis["period_type"] == "week"]["period_start"].min()
+    day_start = period_axis[period_axis["period_type"] == "day"]["period_start"].min()
+
+    frames: list[pd.DataFrame] = []
+    month_df = period_df[(period_df["sheet_start_time"] >= month_start) & (period_df["sheet_start_time"] < end_ts)].copy()
+    if not month_df.empty:
+        month_df["period_type"] = "month"
+        month_df["period_label"] = month_df["sheet_start_time"].dt.strftime("%Y-%m")
+        frames.append(month_df)
+
+    week_df = period_df[(period_df["sheet_start_time"] >= week_start) & (period_df["sheet_start_time"] < end_ts)].copy()
+    if not week_df.empty:
+        iso_week = week_df["sheet_start_time"].dt.isocalendar()
+        week_df["period_type"] = "week"
+        week_df["period_label"] = iso_week.year.astype(str) + "-W" + iso_week.week.astype(str).str.zfill(2)
+        frames.append(week_df)
+
+    day_df = period_df[(period_df["sheet_start_time"] >= day_start) & (period_df["sheet_start_time"] < end_ts)].copy()
+    if not day_df.empty:
+        day_df["period_type"] = "day"
+        day_df["period_label"] = day_df["sheet_start_time"].dt.strftime("%Y-%m-%d")
+        frames.append(day_df)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).merge(period_sort_lookup, on=["period_type", "period_label"], how="inner")
+
+
+def build_period_capability_report(sheet_features: pd.DataFrame, end_date: date) -> pd.DataFrame:
+    """Aggregate Sheet-level SPC features into M/W/D CPM and CPK rows."""
+    required_cols = {
+        "prod_code",
+        "factory",
+        "sheet_id",
+        "step_id",
+        "param_name",
+        "sheet_start_time",
+        "sheet_mean",
+        "usl",
+        "lsl",
+    }
+    missing = required_cols - set(sheet_features.columns)
+    if missing:
+        logger.warning("[CPM] sheet_features missing required period columns: %s", sorted(missing))
+        return pd.DataFrame()
+
+    if sheet_features.empty:
+        return pd.DataFrame()
+
+    df = sheet_features.copy()
+    if "target" not in df.columns:
+        df["target"] = np.nan
+    for col in ["ucl", "lcl"]:
+        if col not in df.columns:
+            df[col] = np.nan
+
+    df = _period_frame(df, end_date)
+    if df.empty:
+        return pd.DataFrame()
+
+    group_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label", "period_sort"]
+    records: list[dict[str, object]] = []
+    for keys, group in df.groupby(group_cols, dropna=False, sort=True):
+        valid = group.dropna(subset=["sheet_mean", "usl", "lsl"])
+        if valid.empty:
+            continue
+
+        prod_code, factory, step_id, param_name, period_type, period_label, period_sort = keys
+        mean_value = float(valid["sheet_mean"].mean())
+        std_value = float(valid["sheet_mean"].std(ddof=1))
+        usl = float(valid["usl"].dropna().iloc[0])
+        lsl = float(valid["lsl"].dropna().iloc[0])
+        ucl = valid["ucl"].dropna().iloc[0] if valid["ucl"].notna().any() else np.nan
+        lcl = valid["lcl"].dropna().iloc[0] if valid["lcl"].notna().any() else np.nan
+        target_value = valid["target"].dropna().iloc[0] if valid["target"].notna().any() else np.nan
+        target = float(target_value) if pd.notna(target_value) else (usl + lsl) / 2.0
+
+        records.append(
+            {
+                "prod_code": prod_code,
+                "factory": factory,
+                "step_id": step_id,
+                "param_name": param_name,
+                "period_type": period_type,
+                "period_label": period_label,
+                "period_sort": int(period_sort),
+                "period_start": pd.to_datetime(valid["sheet_start_time"], errors="coerce").min(),
+                "period_end": pd.to_datetime(valid["sheet_start_time"], errors="coerce").max(),
+                "sample_count": int(valid["sheet_id"].nunique()),
+                "mean_value": mean_value,
+                "std_value": std_value,
+                "usl": usl,
+                "lsl": lsl,
+                "ucl": float(ucl) if pd.notna(ucl) else np.nan,
+                "lcl": float(lcl) if pd.notna(lcl) else np.nan,
+                "target": target,
+                "cpm": calculate_cpm(mean_value, std_value, usl, lsl, target),
+                "cpk": calculate_cpk(mean_value, std_value, usl, lsl),
+            }
+        )
+
+    result = pd.DataFrame(records)
+    if result.empty:
+        return result
+    return result.sort_values(["factory", "step_id", "param_name", "period_sort"]).reset_index(drop=True)
 
 
 def build_lot_cpm_report(sheet_features: pd.DataFrame, min_sheet_count: int = 2) -> pd.DataFrame:

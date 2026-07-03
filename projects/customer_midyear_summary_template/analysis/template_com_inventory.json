@@ -1,0 +1,30 @@
+﻿{
+    "source":  "D:\\wzy\\Python\\vivo-project\\projects\\customer_midyear_summary_template\\sources\\template-PPT.pptx",
+    "width":  960,
+    "height":  540,
+    "slide_count":  1,
+    "slides":  [
+                   {
+                       "index":  1,
+                       "name":  "Slide2",
+                       "layout":  "内容页_1",
+                       "shape_count":  1,
+                       "shapes":  [
+                                      {
+                                          "name":  "标题 1",
+                                          "type":  14,
+                                          "left":  42,
+                                          "top":  -3.2,
+                                          "width":  828,
+                                          "height":  78.2,
+                                          "text":  "",
+                                          "fill_color":  16777215,
+                                          "line_color":  16777215,
+                                          "font_name":  null,
+                                          "font_size":  null,
+                                          "font_color":  null
+                                      }
+                                  ]
+                   }
+               ]
+}

@@ -13,6 +13,13 @@ from src.yield_domain.core.trend_regulator import TrendRegulator
 CODE_BASELINE_MAX_AGE_DAYS = 30
 CODE_BASELINE_SHEET = "Sheet1"
 CODE_BASELINE_METADATA_SHEET = "_metadata"
+CODE_BASELINE_COLUMNS = [
+    'baseline_month',
+    'source_month',
+    'defect_desc',
+    'baseline_rate',
+    'source_total_panels',
+]
 
 class MWDTrendProcessor:
 
@@ -162,15 +169,21 @@ def _defect_multipliers_signature(config: AppConfig | None) -> str:
     return ";".join(signature_parts)
 
 
-def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
-    """Build baseline rates from the current Code-level daily window."""
-    columns = ['defect_desc', 'baseline_rate']
-    required_cols = {'defect_desc', 'defect_panel_count', 'total_panels'}
+def _build_code_baseline(
+    df: pd.DataFrame,
+    as_of: dt | pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Build next-month baseline rates from each Code-level source month."""
+    columns = CODE_BASELINE_COLUMNS
+    required_cols = {'warehousing_time', 'defect_desc', 'defect_panel_count', 'total_panels'}
     if df.empty or not required_cols.issubset(df.columns):
         return pd.DataFrame(columns=columns)
 
     df_calc = df.copy()
+    df_calc['warehousing_time'] = pd.to_datetime(df_calc['warehousing_time'], errors='coerce')
     df_calc = df_calc[
+        df_calc['warehousing_time'].notna()
+        &
         df_calc['defect_desc'].notna()
         & (df_calc['defect_desc'].astype(str).str.strip() != "")
         & (df_calc['defect_desc'].astype(str) != "NoDefect")
@@ -178,14 +191,25 @@ def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
     if df_calc.empty:
         return pd.DataFrame(columns=columns)
 
+    as_of_raw = pd.Timestamp(as_of) if as_of is not None else df_calc['warehousing_time'].max()
+    if pd.isna(as_of_raw):
+        return pd.DataFrame(columns=columns)
+    current_month_period = pd.Period(as_of_raw, freq='M')
+
     df_calc['defect_panel_count'] = pd.to_numeric(
         df_calc['defect_panel_count'], errors='coerce'
     ).fillna(0)
     df_calc['total_panels'] = pd.to_numeric(
         df_calc['total_panels'], errors='coerce'
     ).fillna(0)
+    df_calc['source_month_period'] = df_calc['warehousing_time'].dt.to_period('M')
+    # Only completed source months may seed baselines. If the analysis is in
+    # July, June can seed July, but partial July must not seed August.
+    df_calc = df_calc[df_calc['source_month_period'] < current_month_period].copy()
+    if df_calc.empty:
+        return pd.DataFrame(columns=columns)
 
-    grouped = df_calc.groupby('defect_desc', dropna=True).agg(
+    grouped = df_calc.groupby(['source_month_period', 'defect_desc'], dropna=True).agg(
         defect_panel_count=('defect_panel_count', 'sum'),
         total_panels=('total_panels', 'sum')
     ).reset_index()
@@ -194,7 +218,10 @@ def _build_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
         np.round(grouped['defect_panel_count'] / grouped['total_panels'], 5),
         0.0
     )
-    return grouped[columns].sort_values('defect_desc').reset_index(drop=True)
+    grouped['source_month'] = grouped['source_month_period'].astype(str)
+    grouped['baseline_month'] = (grouped['source_month_period'] + 1).astype(str)
+    grouped['source_total_panels'] = grouped['total_panels']
+    return grouped[columns].sort_values(['baseline_month', 'defect_desc']).reset_index(drop=True)
 
 
 def _code_baseline_source_window(df: pd.DataFrame) -> Tuple[str, str]:
@@ -277,15 +304,46 @@ def _is_code_baseline_expired(
 
 def _load_code_baseline_frame(path: Path) -> pd.DataFrame:
     if not path.exists():
-        return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
+        return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
     try:
         df = pd.read_excel(path, sheet_name=CODE_BASELINE_SHEET)
         if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
-            return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
-        return df[['defect_desc', 'baseline_rate']].copy()
+            return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
+        df = df.copy()
+        if 'baseline_month' not in df.columns:
+            df['baseline_month'] = ""
+        if 'source_month' not in df.columns:
+            df['source_month'] = ""
+        if 'source_total_panels' not in df.columns:
+            df['source_total_panels'] = np.nan
+        return df[CODE_BASELINE_COLUMNS].copy()
     except Exception as e:
         logging.warning(f"[Baseline Loader] 加载失败: {e}")
-        return pd.DataFrame(columns=['defect_desc', 'baseline_rate'])
+        return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
+
+
+def _is_legacy_code_baseline_frame(df: pd.DataFrame) -> bool:
+    if df.empty or 'baseline_month' not in df.columns:
+        return False
+    return not df['baseline_month'].astype(str).str.strip().astype(bool).any()
+
+
+def _code_baseline_keys(df: pd.DataFrame) -> set[tuple[str, str]]:
+    if df.empty or not {'baseline_month', 'defect_desc'}.issubset(df.columns):
+        return set()
+    keyed = df.copy()
+    keyed['baseline_month'] = keyed['baseline_month'].astype(str).str.strip()
+    keyed['defect_desc'] = keyed['defect_desc'].astype(str)
+    keyed = keyed[keyed['baseline_month'] != ""]
+    return set(zip(keyed['baseline_month'], keyed['defect_desc']))
+
+
+def _sort_code_baseline(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
+    return df[CODE_BASELINE_COLUMNS].sort_values(
+        ['baseline_month', 'defect_desc']
+    ).reset_index(drop=True)
 
 
 def _generate_code_baseline(
@@ -295,13 +353,16 @@ def _generate_code_baseline(
     generated_at: dt | pd.Timestamp | None = None,
     refresh_reason: str = "manual_refresh",
     defect_multipliers_signature: str = "",
+    baseline: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
-    [自动基准生成器] ByCode 计算当前窗口均值作为 EMA 锚点。
-    整表重建并写入元数据，避免长期沿用失真的旧锚点。
+    [自动基准生成器] ByCode 计算 source month 均值，作为 next month 的 EMA 锚点。
+    可整表迁移或只追加缺失月份，避免自动刷新改写已存在的历史月份锚点。
     """
     out_path = _code_baseline_path(prod_code)
-    new_baseline = _build_code_baseline(df)
+    new_baseline = _sort_code_baseline(
+        baseline.copy() if baseline is not None else _build_code_baseline(df, as_of=generated_at)
+    )
     generated_at_ts = pd.Timestamp(generated_at or dt.now())
     source_start, source_end = _code_baseline_source_window(df)
 
@@ -335,34 +396,60 @@ def _ensure_code_baseline_current(
     defect_multipliers_signature: str = "",
 ) -> pd.DataFrame:
     """
-    Ensure baseline is rebuilt when absent, expired, legacy, or missing current Codes.
+    Ensure period-scoped baselines exist without automatic rewrites of closed months.
+
+    max_age_days is retained for caller compatibility. Age-based whole-file refresh is
+    intentionally disabled because it makes historical months drift without user action.
     """
     path = _code_baseline_path(prod_code)
-    current_baseline = _build_code_baseline(df)
+    current_baseline = _build_code_baseline(df, as_of=now)
     if current_baseline.empty:
         return _load_code_baseline_frame(path)
 
     existing = _load_code_baseline_frame(path)
     metadata = _read_code_baseline_metadata(path)
-    existing_codes = set(existing['defect_desc'].astype(str)) if not existing.empty else set()
-    current_codes = set(current_baseline['defect_desc'].astype(str))
-    missing_codes = current_codes - existing_codes
+    existing_scoped = existing[existing['baseline_month'].astype(str).str.strip() != ""].copy()
+    existing_keys = _code_baseline_keys(existing_scoped)
+    current_keys = _code_baseline_keys(current_baseline)
+    missing_keys = current_keys - existing_keys
     existing_multiplier_signature = metadata.get('defect_multipliers_signature', "")
 
     if not path.exists():
         reason = "missing_file"
-    elif _is_code_baseline_expired(path, now=now, max_age_days=max_age_days):
-        reason = "expired_or_legacy"
-    elif missing_codes:
-        reason = "missing_codes"
     elif (
         existing_multiplier_signature != defect_multipliers_signature
         and (existing_multiplier_signature or defect_multipliers_signature)
     ):
         reason = "multiplier_changed"
+    elif _is_legacy_code_baseline_frame(existing):
+        reason = "legacy_schema"
+    elif missing_keys:
+        missing_df = current_baseline[
+            current_baseline.apply(
+                lambda row: (
+                    str(row['baseline_month']).strip(),
+                    str(row['defect_desc']),
+                )
+                in missing_keys,
+                axis=1,
+            )
+        ]
+        merged = pd.concat([existing_scoped, missing_df], ignore_index=True)
+        merged = merged.drop_duplicates(
+            subset=['baseline_month', 'defect_desc'],
+            keep='first',
+        )
+        return _generate_code_baseline(
+            df,
+            prod_code,
+            generated_at=now,
+            refresh_reason="missing_period_rows",
+            defect_multipliers_signature=defect_multipliers_signature,
+            baseline=merged,
+        )
     else:
-        logging.info(f"[Baseline] Code 基准仍在有效期内，沿用: {path}")
-        return existing
+        logging.info(f"[Baseline] Code 月度基准已覆盖当前窗口，沿用: {path}")
+        return existing_scoped
 
     return _generate_code_baseline(
         df,
@@ -376,13 +463,63 @@ def _ensure_code_baseline_current(
 def _load_code_baseline(prod_code: str) -> dict:
     """
     [锚点加载器] 从 resources/<prod_code>/{prod_code}_codebaseline.xlsx 读取 Code 基准映射。
-    返回 {defect_desc: baseline_rate} 字典。
+    返回每个 Code 最新月份的 {defect_desc: baseline_rate} 字典。
     """
     path = _code_baseline_path(prod_code)
     df = _load_code_baseline_frame(path)
     if df.empty:
         return {}
+    df = df.sort_values(['baseline_month', 'defect_desc'])
     return dict(zip(df['defect_desc'], df['baseline_rate'].astype(float)))
+
+
+def _build_code_baseline_lookup(
+    baseline_df: pd.DataFrame,
+) -> tuple[dict[tuple[str, str], tuple[float, float | None]], dict[str, float]]:
+    by_month: dict[tuple[str, str], tuple[float, float | None]] = {}
+    legacy: dict[str, float] = {}
+    if baseline_df.empty:
+        return by_month, legacy
+
+    for _, row in baseline_df.iterrows():
+        code = str(row['defect_desc'])
+        rate = float(row['baseline_rate'])
+        baseline_month = str(row.get('baseline_month', '')).strip()
+        source_total_raw = row.get('source_total_panels', np.nan)
+        source_total = None if pd.isna(source_total_raw) else float(source_total_raw)
+        if baseline_month:
+            by_month[(baseline_month, code)] = (rate, source_total)
+        else:
+            legacy[code] = rate
+    return by_month, legacy
+
+
+def _month_average_rate(counts, totals) -> float:
+    total_panels = np.sum(totals)
+    if total_panels <= 0:
+        return 0.0
+    return float(np.sum(counts) / total_panels)
+
+
+def _resolve_code_baseline_rate(
+    by_month: dict[tuple[str, str], tuple[float, float | None]],
+    legacy: dict[str, float],
+    code: str,
+    month: str,
+    counts=None,
+    totals=None,
+) -> float:
+    baseline = by_month.get((month, code))
+    if baseline is not None:
+        rate, source_total = baseline
+        if (source_total is not None and source_total <= 0) or (
+            source_total is None and rate <= 0
+        ):
+            return _month_average_rate(counts, totals)
+        return rate
+    if code in legacy:
+        return legacy[code]
+    return _month_average_rate(counts, totals)
 
 
 # ==============================================================================
@@ -712,14 +849,11 @@ def _calc_code_ema_noise(
             prod_code,
             defect_multipliers_signature=_defect_multipliers_signature(config),
         )
-        if not baseline_df.empty:
-            baseline_map = dict(
-                zip(baseline_df['defect_desc'], baseline_df['baseline_rate'].astype(float))
-            )
-        else:
-            baseline_map = _load_code_baseline(prod_code)
+        if baseline_df.empty:
+            baseline_df = _load_code_baseline_frame(_code_baseline_path(prod_code))
     else:
-        baseline_map = {}
+        baseline_df = pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
+    baseline_by_month, legacy_baseline_map = _build_code_baseline_lookup(baseline_df)
     
     for code in unique_codes:
         if code == "NoDefect":
@@ -758,7 +892,14 @@ def _calc_code_ema_noise(
             totals = month_sub['total_panels'].values
             
             # --- 锚点解析：严格使用 Excel 基准，不再回退 ---
-            anchor_rate = baseline_map.get(code, 0.0)
+            anchor_rate = _resolve_code_baseline_rate(
+                baseline_by_month,
+                legacy_baseline_map,
+                str(code),
+                str(month),
+                counts=counts,
+                totals=totals,
+            )
             
             smooth = _calculate_adaptive_shadow_ema(
                 counts, totals, span, use_global_init=False, initial_anchor_rate=anchor_rate

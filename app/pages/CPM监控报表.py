@@ -31,7 +31,7 @@ from src.spc_domain.application.cpm_service import CpmReportService
 from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 
-CPM_PAGE_CACHE_SIGNATURE = "spc_cpm_cpk_report_manual_refresh_v1"
+CPM_PAGE_CACHE_SIGNATURE = "spc_cpm_cpk_distribution_report_v1"
 
 
 st.set_page_config(page_title="CPM/CPK监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -63,38 +63,53 @@ render_page_header(
     ],
 )
 
-with st.spinner("正在加载近三个月 SPC CPM/CPK 数据..."):
+with st.spinner("正在加载 SPC CPM/CPK 分布数据..."):
     view_model = CpmReportService.get_cpm_report_data(
         _db_manager=db_manager,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=CPM_PAGE_CACHE_SIGNATURE,
     )
 
-lot_cpm_df = view_model.lot_cpm_df
-sheet_measurements_df = view_model.sheet_measurements_df
+period_capability_df = view_model.period_capability_df
+sheet_features_df = view_model.sheet_features_df
+raw_measurements_df = view_model.raw_measurements_df
+indicator_df = view_model.indicators_df
 
-if lot_cpm_df.empty:
-    st.info("当前产品近三个月暂无可计算 CPM/CPK 的 SPC 数据。")
+if sheet_features_df.empty or indicator_df.empty:
+    st.info("当前产品暂无可展示 CPM/CPK 分布的 SPC 数据。")
     st.stop()
 
 selected_metric, selected_factory, selected_params, selected_steps, should_render_report = render_cpm_filters(
-    lot_cpm_df=lot_cpm_df
+    indicator_df=indicator_df
 )
 
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
     st.stop()
 
-filtered_lot_cpm_df = filter_cpm_report(
-    lot_cpm_df=lot_cpm_df,
+filtered_period_capability_df = filter_cpm_report(
+    report_df=period_capability_df,
+    selected_factory=selected_factory,
+    selected_params=selected_params,
+    selected_steps=selected_steps,
+)
+filtered_sheet_features_df = filter_cpm_report(
+    report_df=sheet_features_df,
+    selected_factory=selected_factory,
+    selected_params=selected_params,
+    selected_steps=selected_steps,
+)
+filtered_raw_measurements_df = filter_cpm_report(
+    report_df=raw_measurements_df,
     selected_factory=selected_factory,
     selected_params=selected_params,
     selected_steps=selected_steps,
 )
 
 render_cpm_indicator_sections(
-    lot_cpm_df=filtered_lot_cpm_df,
-    sheet_measurements_df=sheet_measurements_df,
+    period_capability_df=filtered_period_capability_df,
+    sheet_features_df=filtered_sheet_features_df,
+    raw_measurements_df=filtered_raw_measurements_df,
     metric_key=selected_metric.lower(),
     metric_label=selected_metric,
 )

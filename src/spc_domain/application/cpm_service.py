@@ -1,12 +1,13 @@
 import logging
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
 import streamlit as st
 
-from src.spc_domain.core.cpm_calculator import build_lot_cpm_report
+from src.spc_domain.core.cpm_calculator import build_period_capability_report
 from src.spc_domain.core.spc_calculator import preprocess_sheet_features
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.spc_domain.infrastructure.repositories.spc_repository import SpcRepository
@@ -17,13 +18,38 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def resolve_period_capability_end_date(sheet_features_df: pd.DataFrame, query_end_date: object) -> date | None:
+    """Resolve the M/W/D capability window end date from the latest available Sheet."""
+    query_end_ts = pd.to_datetime(query_end_date, errors="coerce")
+    if pd.isna(query_end_ts):
+        return None
+
+    if not sheet_features_df.empty and "sheet_start_time" in sheet_features_df.columns:
+        latest_sheet_ts = pd.to_datetime(sheet_features_df["sheet_start_time"], errors="coerce").max()
+        if pd.notna(latest_sheet_ts):
+            return min(latest_sheet_ts.date(), query_end_ts.date())
+
+    return query_end_ts.date()
+
+
 @dataclass
 class CpmReportViewModel:
-    """CPM report view model."""
+    """CPM/CPK distribution report view model."""
 
-    lot_cpm_df: pd.DataFrame
-    sheet_measurements_df: pd.DataFrame
+    period_capability_df: pd.DataFrame
+    sheet_features_df: pd.DataFrame
+    raw_measurements_df: pd.DataFrame
     indicators_df: pd.DataFrame
+
+    @property
+    def lot_cpm_df(self) -> pd.DataFrame:
+        """Backward-compatible alias for older page code."""
+        return self.period_capability_df
+
+    @property
+    def sheet_measurements_df(self) -> pd.DataFrame:
+        """Backward-compatible alias for older page code."""
+        return self.sheet_features_df
 
 
 class CpmReportService:
@@ -32,8 +58,9 @@ class CpmReportService:
     @staticmethod
     def _empty_view_model() -> CpmReportViewModel:
         return CpmReportViewModel(
-            lot_cpm_df=pd.DataFrame(),
-            sheet_measurements_df=pd.DataFrame(),
+            period_capability_df=pd.DataFrame(),
+            sheet_features_df=pd.DataFrame(),
+            raw_measurements_df=pd.DataFrame(),
             indicators_df=pd.DataFrame(),
         )
 
@@ -44,7 +71,7 @@ class CpmReportService:
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> CpmReportViewModel:
-        """Load SPC data and calculate Lot-level CPM."""
+        """Load SPC data and calculate M/W/D CPM/CPK distribution data."""
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
             query_config.data_type_filter = "SPC"
@@ -80,19 +107,27 @@ class CpmReportService:
             if sheet_features_df.empty:
                 return CpmReportService._empty_view_model()
 
-            lot_cpm_df = build_lot_cpm_report(sheet_features_df)
+            capability_end_date = resolve_period_capability_end_date(sheet_features_df, query_config.end_date)
+            if capability_end_date is None:
+                return CpmReportService._empty_view_model()
+
+            period_capability_df = build_period_capability_report(
+                sheet_features=sheet_features_df,
+                end_date=capability_end_date,
+            )
             indicators_df = (
-                lot_cpm_df[["prod_code", "factory", "step_id", "param_name"]]
+                sheet_features_df[["prod_code", "factory", "step_id", "param_name"]]
                 .drop_duplicates()
                 .sort_values(["param_name", "step_id", "factory"])
                 .reset_index(drop=True)
-                if not lot_cpm_df.empty
+                if not sheet_features_df.empty
                 else pd.DataFrame(columns=["prod_code", "factory", "step_id", "param_name"])
             )
 
             return CpmReportViewModel(
-                lot_cpm_df=lot_cpm_df,
-                sheet_measurements_df=sheet_features_df,
+                period_capability_df=period_capability_df,
+                sheet_features_df=sheet_features_df,
+                raw_measurements_df=measurements_df,
                 indicators_df=indicators_df,
             )
         except Exception as e:
