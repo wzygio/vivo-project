@@ -5,6 +5,7 @@ OfflineRepo/
 
 # 日志和输出
 output/
+logs/
 
 # Python 缓存
 __pycache__/

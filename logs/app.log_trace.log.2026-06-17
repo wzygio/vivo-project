@@ -1,2 +1,0 @@
-2026-06-17 09:12:27 - WARNING - [data_inspector] - 🚨 [02_Repo层-历史Parquet缓存] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
-2026-06-17 09:12:47 - WARNING - [data_inspector] - 🚨 [01_DAO层-SQL真实返回] 读取 Excel 探针目标表失败: Excel file format cannot be determined, you must specify an engine manually.
