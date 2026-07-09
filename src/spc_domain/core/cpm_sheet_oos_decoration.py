@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import hashlib
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+OOS_DETAIL_FILE_NAME = "spc_sheet_oos_detail.xlsx"
+OOS_DECORATION_FILE_NAME = "spc_sheet_oos_decoration.xlsx"
+OOS_KEY_COLUMNS = ["prod_code", "step_id", "param_name", "sheet_id"]
+OOS_DETAIL_COLUMNS = [
+    "factory",
+    "prod_code",
+    "step_id",
+    "param_name",
+    "sheet_id",
+    "sheet_start_time",
+    "sheet_max",
+    "sheet_min",
+    "sheet_mean",
+    "usl",
+    "lsl",
+    "oos_type",
+]
+OOS_DECORATION_COLUMNS = [*OOS_DETAIL_COLUMNS, "flag"]
+
+
+@dataclass(frozen=True)
+class SheetOosDecorationResult:
+    raw_measurements_df: pd.DataFrame
+    detail_df: pd.DataFrame
+    decoration_df: pd.DataFrame
+    detail_path: Path
+    decoration_path: Path
+
+
+def get_sheet_oos_detail_path(product_dir: Path) -> Path:
+    return product_dir / OOS_DETAIL_FILE_NAME
+
+
+def get_sheet_oos_decoration_path(product_dir: Path) -> Path:
+    return product_dir / OOS_DECORATION_FILE_NAME
+
+
+def _empty_detail_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=OOS_DETAIL_COLUMNS)
+
+
+def _empty_decoration_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=OOS_DECORATION_COLUMNS)
+
+
+def _ordered_existing_columns(df: pd.DataFrame, ordered_columns: Iterable[str]) -> pd.DataFrame:
+    for column in ordered_columns:
+        if column not in df.columns:
+            df[column] = pd.NA
+    return df[list(ordered_columns)].copy()
+
+
+def _normalize_key_columns(df: pd.DataFrame) -> pd.DataFrame:
+    result = df.copy()
+    for column in OOS_KEY_COLUMNS:
+        if column in result.columns:
+            result[column] = result[column].fillna("").astype(str)
+    return result
+
+
+def _parse_flag(value: object) -> bool:
+    if pd.isna(value):
+        return True
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"false", "0", "no", "n", "否", "不修饰", "不截断"}:
+        return False
+    return True
+
+
+def _stable_fraction(parts: Iterable[object]) -> float:
+    seed = "|".join("" if pd.isna(part) else str(part) for part in parts)
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
+
+
+def _clip_inside_spec(row: pd.Series, side: str) -> float:
+    value = row.get("param_value")
+    usl = row.get("_oos_usl")
+    lsl = row.get("_oos_lsl")
+    if pd.isna(value) or pd.isna(usl) or pd.isna(lsl) or float(usl) <= float(lsl):
+        return value
+
+    span = float(usl) - float(lsl)
+    fraction = _stable_fraction(
+        [
+            row.get("prod_code"),
+            row.get("step_id"),
+            row.get("param_name"),
+            row.get("sheet_id"),
+            row.get("site_name"),
+            row.get("unit_id"),
+            value,
+            side,
+        ]
+)
+    margin = (0.05 + fraction * 0.1) * span
+    if side == "upper":
+        return float(usl) - margin
+    return float(lsl) + margin
+
+
+def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:
+    """Return Sheet-level rows whose point max/min crosses USL/LSL."""
+    required_cols = {"factory", *OOS_KEY_COLUMNS, "sheet_start_time", "sheet_max", "sheet_min", "sheet_mean", "usl", "lsl"}
+    if sheet_features_df.empty or not required_cols.issubset(sheet_features_df.columns):
+        return _empty_detail_frame()
+
+    df = sheet_features_df.copy()
+    for column in ["sheet_max", "sheet_min", "sheet_mean", "usl", "lsl"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+    upper_mask = df["sheet_max"] > df["usl"]
+    lower_mask = df["sheet_min"] < df["lsl"]
+    oos_df = df[upper_mask | lower_mask].copy()
+    if oos_df.empty:
+        return _empty_detail_frame()
+
+    oos_df["oos_type"] = "USL"
+    oos_df.loc[lower_mask.loc[oos_df.index], "oos_type"] = "LSL"
+    both_mask = upper_mask.loc[oos_df.index] & lower_mask.loc[oos_df.index]
+    oos_df.loc[both_mask, "oos_type"] = "USL/LSL"
+    oos_df = _normalize_key_columns(oos_df)
+    return _ordered_existing_columns(oos_df, OOS_DETAIL_COLUMNS).sort_values(
+        ["factory", "prod_code", "step_id", "param_name", "sheet_start_time", "sheet_id"],
+        kind="stable",
+    ).reset_index(drop=True)
+
+
+def load_sheet_oos_decoration(product_dir: Path) -> pd.DataFrame:
+    """Load the user-editable decoration flag file for one product."""
+    decoration_path = get_sheet_oos_decoration_path(product_dir)
+    if not decoration_path.exists():
+        return _empty_decoration_frame()
+    try:
+        df = pd.read_excel(decoration_path, engine="openpyxl")
+    except Exception as exc:
+        logger.warning("[CPM] failed to read Sheet OOS decoration file %s: %s", decoration_path, exc)
+        return _empty_decoration_frame()
+    if df.empty:
+        return _empty_decoration_frame()
+    df = _normalize_key_columns(df)
+    return _ordered_existing_columns(df, OOS_DECORATION_COLUMNS)
+
+
+def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decoration_df: pd.DataFrame) -> pd.DataFrame:
+    """Attach existing user flags to current OOS details, defaulting to True."""
+    if detail_df.empty:
+        return _empty_decoration_frame()
+
+    detail_df = _normalize_key_columns(_ordered_existing_columns(detail_df, OOS_DETAIL_COLUMNS))
+    if existing_decoration_df.empty or "flag" not in existing_decoration_df.columns:
+        result = detail_df.copy()
+        result["flag"] = True
+        return result[OOS_DECORATION_COLUMNS]
+
+    flags_df = _normalize_key_columns(existing_decoration_df).copy()
+    flags_df["flag"] = flags_df["flag"].apply(_parse_flag)
+    flags_df = flags_df[OOS_KEY_COLUMNS + ["flag"]].drop_duplicates(OOS_KEY_COLUMNS, keep="last")
+    result = detail_df.merge(flags_df, on=OOS_KEY_COLUMNS, how="left")
+    result["flag"] = result["flag"].apply(_parse_flag)
+    return result[OOS_DECORATION_COLUMNS]
+
+
+def persist_sheet_oos_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
+    """Write current OOS details and a flag table under resources/<prod_code>."""
+    product_dir.mkdir(parents=True, exist_ok=True)
+    detail_path = get_sheet_oos_detail_path(product_dir)
+    decoration_path = get_sheet_oos_decoration_path(product_dir)
+
+    detail_to_write = _ordered_existing_columns(detail_df, OOS_DETAIL_COLUMNS)
+    existing_decoration = load_sheet_oos_decoration(product_dir)
+    decoration_to_write = merge_detail_with_decoration_flags(detail_to_write, existing_decoration)
+
+    try:
+        detail_to_write.to_excel(detail_path, index=False)
+    except PermissionError as exc:
+        logger.warning("[CPM] Sheet OOS detail file is locked, skipped writing %s: %s", detail_path, exc)
+    try:
+        decoration_to_write.to_excel(decoration_path, index=False)
+    except PermissionError as exc:
+        logger.warning("[CPM] Sheet OOS decoration file is locked, skipped writing %s: %s", decoration_path, exc)
+    return decoration_to_write
+
+
+def apply_sheet_oos_decoration(
+    raw_measurements_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    decoration_df: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Clip out-of-spec point values for flagged Sheet records before boxplot rendering."""
+    if raw_measurements_df.empty or "param_value" not in raw_measurements_df.columns:
+        return raw_measurements_df
+
+    detail_df = build_sheet_oos_detail(sheet_features_df)
+    if detail_df.empty:
+        return raw_measurements_df.copy()
+
+    if decoration_df is None or decoration_df.empty:
+        decoration_df = merge_detail_with_decoration_flags(detail_df, _empty_decoration_frame())
+    else:
+        decoration_df = merge_detail_with_decoration_flags(detail_df, decoration_df)
+
+    active_df = decoration_df[decoration_df["flag"].apply(_parse_flag)].copy()
+    if active_df.empty:
+        return raw_measurements_df.copy()
+
+    spec_cols = [*OOS_KEY_COLUMNS, "usl", "lsl"]
+    spec_df = _normalize_key_columns(active_df[spec_cols].copy()).rename(
+        columns={"usl": "_oos_usl", "lsl": "_oos_lsl"}
+    )
+    df = _normalize_key_columns(raw_measurements_df.copy())
+    df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
+    df = df.merge(spec_df, on=OOS_KEY_COLUMNS, how="left")
+
+    upper_mask = df["_oos_usl"].notna() & (df["param_value"] > df["_oos_usl"])
+    lower_mask = df["_oos_lsl"].notna() & (df["param_value"] < df["_oos_lsl"])
+    if upper_mask.any():
+        df.loc[upper_mask, "param_value"] = df.loc[upper_mask].apply(_clip_inside_spec, axis=1, side="upper")
+    if lower_mask.any():
+        df.loc[lower_mask, "param_value"] = df.loc[lower_mask].apply(_clip_inside_spec, axis=1, side="lower")
+
+    return df.drop(columns=["_oos_usl", "_oos_lsl"])
+
+
+def prepare_sheet_oos_decoration(
+    raw_measurements_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    product_dir: Path,
+    persist_files: bool = True,
+) -> SheetOosDecorationResult:
+    """Build files and return chart-ready raw measurements for the CPM page."""
+    detail_df = build_sheet_oos_detail(sheet_features_df)
+    if persist_files:
+        decoration_df = persist_sheet_oos_files(product_dir, detail_df)
+    else:
+        decoration_df = merge_detail_with_decoration_flags(detail_df, load_sheet_oos_decoration(product_dir))
+
+    decorated_df = apply_sheet_oos_decoration(raw_measurements_df, sheet_features_df, decoration_df)
+    return SheetOosDecorationResult(
+        raw_measurements_df=decorated_df,
+        detail_df=detail_df,
+        decoration_df=decoration_df,
+        detail_path=get_sheet_oos_detail_path(product_dir),
+        decoration_path=get_sheet_oos_decoration_path(product_dir),
+    )

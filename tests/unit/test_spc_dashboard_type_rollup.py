@@ -16,7 +16,12 @@ st_aggrid_stub.DataReturnMode = types.SimpleNamespace()
 st_aggrid_stub.JsCode = lambda code: code
 sys.modules.setdefault("st_aggrid", st_aggrid_stub)
 
-from app.sections.spc_dashboard import SpcFilterState, filter_and_rollup_spc_data
+from app.sections.spc_dashboard import (
+    SpcFilterState,
+    _apply_compliance_visibility_filter,
+    filter_and_rollup_spc_data,
+)
+from src.shared_kernel.config import ConfigLoader
 
 
 def test_filter_and_rollup_uses_all_data_for_type_switching() -> None:
@@ -89,3 +94,59 @@ def test_filter_and_rollup_uses_all_data_for_type_switching() -> None:
     assert int(all_summary.loc[0, "OOC片数"]) == 3
     assert int(all_summary.loc[0, "OOS片数"]) == 1
     assert int(all_station.loc[0, "抽检数"]) == 17
+
+
+def test_alarm_detail_visibility_filter_hides_compliance_rows(monkeypatch) -> None:
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_compliance_config",
+        staticmethod(
+            lambda: {
+                "default": False,
+                "rules": {
+                    "ALL-Z571-ALL-M04": True,
+                },
+            }
+        ),
+    )
+
+    detail_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S1",
+                "prod_code": "Z571",
+                "factory": "ARRAY",
+                "data_type": "CTQ",
+                "sheet_start_time": "2026-04-15",
+                "spc_status": "OOC",
+                "is_ooc": 1,
+                "is_oos": 0,
+            },
+            {
+                "sheet_id": "S2",
+                "prod_code": "Z571",
+                "factory": "ARRAY",
+                "data_type": "CTQ",
+                "sheet_start_time": "2026-05-15",
+                "spc_status": "OOC",
+                "is_ooc": 1,
+                "is_oos": 0,
+            },
+            {
+                "sheet_id": "S3",
+                "prod_code": "M678",
+                "factory": "ARRAY",
+                "data_type": "CTQ",
+                "sheet_start_time": "2026-04-15",
+                "spc_status": "OOS",
+                "is_ooc": 0,
+                "is_oos": 1,
+            },
+        ]
+    )
+
+    visible_df = _apply_compliance_visibility_filter(detail_df)
+
+    assert visible_df["sheet_id"].tolist() == ["S2", "S3"]
+    assert "is_compliant_modified" not in visible_df.columns
+    assert visible_df.columns.tolist() == detail_df.columns.tolist()

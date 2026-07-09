@@ -7,8 +7,14 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
-from src.spc_domain.core.cpm_calculator import build_period_capability_report
-from src.spc_domain.core.spc_calculator import preprocess_sheet_features
+from src.spc_domain.core.cpm_calculator import (
+    PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    build_period_capability_report,
+    normalize_period_sigma_source,
+)
+from src.spc_domain.core.cpm_sheet_oos_decoration import SheetOosDecorationResult
+from src.spc_domain.application.spc_data_decoration import prepare_decorated_spc_data
+from src.shared_kernel.config import ConfigLoader
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.spc_domain.infrastructure.repositories.spc_repository import SpcRepository
 
@@ -40,6 +46,7 @@ class CpmReportViewModel:
     sheet_features_df: pd.DataFrame
     raw_measurements_df: pd.DataFrame
     indicators_df: pd.DataFrame
+    sheet_oos_decoration_result: SheetOosDecorationResult | None = None
 
     @property
     def lot_cpm_df(self) -> pd.DataFrame:
@@ -70,6 +77,7 @@ class CpmReportService:
         _db_manager: "DatabaseManager",
         query_config_json: str,
         snapshot_signature: str = "",
+        period_sigma_source: str = "",
     ) -> CpmReportViewModel:
         """Load SPC data and calculate M/W/D CPM/CPK distribution data."""
         try:
@@ -103,7 +111,13 @@ class CpmReportService:
                 if measurements_df.empty:
                     return CpmReportService._empty_view_model()
 
-            sheet_features_df = preprocess_sheet_features(measure_df=measurements_df, spec_df=spec_df)
+            decorated_spc_data = prepare_decorated_spc_data(
+                raw_measurements_df=measurements_df,
+                spec_df=spec_df,
+                prod_code=query_config.prod_code,
+            )
+            measurements_df = decorated_spc_data.raw_measurements_df
+            sheet_features_df = decorated_spc_data.sheet_features_df
             if sheet_features_df.empty:
                 return CpmReportService._empty_view_model()
 
@@ -111,9 +125,16 @@ class CpmReportService:
             if capability_end_date is None:
                 return CpmReportService._empty_view_model()
 
+            resolved_period_sigma_source = normalize_period_sigma_source(
+                period_sigma_source or ConfigLoader.get_cpm_period_sigma_source()
+            )
             period_capability_df = build_period_capability_report(
                 sheet_features=sheet_features_df,
                 end_date=capability_end_date,
+                raw_measurements=measurements_df
+                if resolved_period_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
+                else None,
+                sigma_source=resolved_period_sigma_source,
             )
             indicators_df = (
                 sheet_features_df[["prod_code", "factory", "step_id", "param_name"]]
@@ -129,6 +150,7 @@ class CpmReportService:
                 sheet_features_df=sheet_features_df,
                 raw_measurements_df=measurements_df,
                 indicators_df=indicators_df,
+                sheet_oos_decoration_result=decorated_spc_data.sheet_oos_decoration_result,
             )
         except Exception as e:
             logger.error("[CPM] report generation failed: %s", e, exc_info=True)

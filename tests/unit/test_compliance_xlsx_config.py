@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 import app.compliance.compliance_manager as compliance_manager
+from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
 from src.shared_kernel.config import ConfigLoader
 
@@ -74,3 +75,48 @@ def test_config_loader_reads_xlsx_before_legacy_yaml(
 
     assert config["default"] is False
     assert config["rules"]["SPC-Z571-ARRAY-M04"] is False
+
+
+def test_load_compliance_config_from_encrypted_xlsx_uses_com_fallback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "compliance_config.xlsx"
+    config_path.write_bytes(b"encrypted-placeholder")
+
+    def fail_read_excel(*args, **kwargs):
+        raise ValueError("File is not a zip file")
+
+    def fake_read_via_com(excel_path: Path, sheet_name: str | None = None) -> pd.DataFrame:
+        if sheet_name == "规则配置":
+            return pd.DataFrame(
+                [
+                    {
+                        "规则键": "ALL-Z571-ALL-M04",
+                        "启用": True,
+                    }
+                ]
+            )
+        if sheet_name == "默认配置":
+            return pd.DataFrame(
+                [
+                    {
+                        "规则键": "SPC-M678-ARRAY-M07",
+                        "启用": True,
+                    }
+                ]
+            )
+        return pd.DataFrame()
+
+    monkeypatch.setattr(pd, "read_excel", fail_read_excel)
+    monkeypatch.setattr(excel_tools, "_read_encrypted_xlsx_via_com", fake_read_via_com)
+
+    config = load_compliance_config_from_xlsx(config_path)
+
+    assert config == {
+        "default": False,
+        "rules": {
+            "ALL-Z571-ALL-M04": True,
+            "SPC-M678-ARRAY-M07": True,
+        },
+    }

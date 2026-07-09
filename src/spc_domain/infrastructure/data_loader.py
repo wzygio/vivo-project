@@ -11,6 +11,38 @@ if TYPE_CHECKING:
     # 假设使用已存在的 DB Manager，实际传入的只要带有 .engine 属性的实例即可
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
+SPC_EXCLUDED_PARAM_NAME_KEYWORDS = ("LOSS", "MT_CH_PRESS")
+
+
+def build_excluded_param_sql_predicates(column_expr: str) -> str:
+    """Build SQL predicates that exclude SPC parameters before extraction."""
+    return "\n".join(
+        f"              AND UPPER({column_expr}) NOT LIKE '%{keyword}%'"
+        for keyword in SPC_EXCLUDED_PARAM_NAME_KEYWORDS
+    )
+
+
+def filter_excluded_spc_param_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove SPC parameters that should never be displayed or calculated."""
+    if df.empty or "param_name" not in df.columns:
+        return df
+
+    param_upper = df["param_name"].fillna("").astype(str).str.upper()
+    excluded_mask = pd.Series(False, index=df.index)
+    for keyword in SPC_EXCLUDED_PARAM_NAME_KEYWORDS:
+        excluded_mask |= param_upper.str.contains(keyword, regex=False, na=False)
+
+    if not excluded_mask.any():
+        return df
+
+    logging.info(
+        "[SPC] 已屏蔽参数名包含 %s 的量测记录: %s -> %s",
+        ", ".join(SPC_EXCLUDED_PARAM_NAME_KEYWORDS),
+        len(df),
+        len(df) - int(excluded_mask.sum()),
+    )
+    return df[~excluded_mask].copy()
+
 
 # =============================================================================
 #  涉及数据库表说明
@@ -59,6 +91,7 @@ def load_spc_measurements(
     }
 
     sql_queries = []
+    excluded_param_predicates = build_excluded_param_sql_predicates("T.param_name")
     
     # 动态构建包含 Schema 路由、列名抹平、和字典表 JOIN 的大一统 SQL
     # [优化] 使用窗口函数在SQL层完成去重：每组保留最新 sheet_start_time 的记录
@@ -70,11 +103,12 @@ def load_spc_measurements(
             factory,
             prod_code,
             sheet_start_time,
-            sheet_id,
-            step_id,
-            param_name,
-            site_name,
-            param_value
+                sheet_id,
+                step_id,
+                param_name,
+                site_name,
+                unit_id,
+                param_value
         FROM (
             SELECT 
                 '{fac}' AS factory,
@@ -84,6 +118,7 @@ def load_spc_measurements(
                 T.step_id, 
                 T.param_name,
                 T.site_name,
+                T.unit_id,
                 T.param_value,
                 ROW_NUMBER() OVER (
                     PARTITION BY P.PRODUCTCODE, T.{id_col}, T.step_id, T.param_name, T.site_name 
@@ -94,6 +129,7 @@ def load_spc_measurements(
             WHERE T.{time_col} >= '{start_time_fmt}' 
               AND T.{time_col} <= '{end_time_fmt}' 
               AND P.PRODUCTCODE = '{prod_code}'
+{excluded_param_predicates}
         ) t
         WHERE rn = 1
         """
@@ -112,6 +148,7 @@ def load_spc_measurements(
         if not measure_df.empty:
             measure_df['param_value'] = pd.to_numeric(measure_df['param_value'], errors='coerce') 
             measure_df = measure_df.dropna(subset=['param_value']) 
+            measure_df = filter_excluded_spc_param_names(measure_df)
 
         # ==============================================================
         # 🚨 [通用探针] 检查刚执行完的 SQL 真实提取了多少条记录
@@ -189,6 +226,7 @@ def load_param_whitelist(
     Returns:
         DataFrame with columns [ref_param_name, data_type]，失败返回 None
     """
+    excluded_param_predicates = build_excluded_param_sql_predicates("T1.parmtername")
     sql_query = f"""
     SELECT DISTINCT 
         T1.parmtername AS ref_param_name, 
@@ -196,6 +234,7 @@ def load_param_whitelist(
     FROM eda.IMP_SPC_TZBJX T1
     JOIN DWR_MES_PRODUCTSPEC T2 ON T1.productspecname = T2.PRODUCTSPECNAME
     WHERE T2.PRODUCTCODE = '{prod_code}'
+{excluded_param_predicates}
     """
 
     try:

@@ -65,6 +65,7 @@ processing:
     '常亮白斑': 0 
     '白画面黑斑Mura': 3
     '孔区跑道Mura': 5
+    'G向带状Mura': 0
     # OLED_Mura
     '彩斑Mura': 0.2
 

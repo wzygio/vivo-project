@@ -151,6 +151,21 @@ class ConfigLoader:
         return {"default": False, "rules": {}}
 
     @classmethod
+    def get_cpm_period_sigma_source(cls) -> str:
+        """Read the hidden CPM/CPK period sigma source from global.yaml."""
+        root_dir = cls.get_project_root()
+        global_yaml_path = root_dir / "config" / "global.yaml"
+
+        try:
+            global_conf = cls._load_yaml(global_yaml_path)
+            spc_conf = global_conf.get("spc", {})
+            cpm_conf = spc_conf.get("cpm_cpk", {})
+            return str(cpm_conf.get("period_sigma_source", "sheet_mean")).strip().lower()
+        except Exception as e:
+            logging.error(f"❌ 读取 CPM/CPK 周期能力口径配置失败: {e}")
+            return "sheet_mean"
+
+    @classmethod
     def get_scrap_factory_mapping(cls) -> dict:
         """
         [新增] 获取报废站点 → 厂别映射配置

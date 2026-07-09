@@ -61,7 +61,7 @@ def test_parse_mapping_config_excel_supports_product_code_batch_and_custom_rules
             "enable": True,
             "target_product": "M626",
             "target_code": "彩斑Mura",
-            "target_batch": "26/04/29",
+            "target_batch": "2026/04/29",
             "mode": "multiplicative",
             "hotspot_multiplier": 0.3,
             "normal_multiplier": 1.5,
@@ -90,7 +90,7 @@ def test_inject_mapping_config_replaces_yaml_scripts_for_active_product(
             "enable": True,
             "target_product": "M678",
             "target_code": "S向单暗线",
-            "target_batch": "26/05/25",
+            "target_batch": "2026/05/25",
             "mode": "additive",
             "hotspot_adder": 2,
             "normal_multiplier_in_add_mode": 0,
@@ -132,10 +132,58 @@ def test_parse_mapping_config_ignores_legacy_batch_position_field(
             "enable": True,
             "target_product": "M626",
             "target_code": "白画面黑斑Mura",
-            "target_batch": "26/05/14",
+            "target_batch": "2026/05/14",
             "mode": "multiplicative",
             "hotspot_multiplier": 0.3,
             "normal_multiplier": 1,
             "hotspot_rules": [{"type": "position", "value": [["1A", "A0"], ["1B", "B0"]]}],
+        }
+    ]
+
+
+def test_parse_mapping_config_falls_back_to_com_when_openpyxl_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "mapping_config.xlsx"
+    config_path.write_bytes(b"encrypted-placeholder")
+
+    def fail_read_excel(*args, **kwargs):
+        raise ValueError("not a zip file")
+
+    fallback_df = pd.DataFrame(
+        [
+            {
+                "启用": True,
+                "产品型号": "M626",
+                "Defect Code": "彩斑Mura",
+                "蒸镀批次": "26/04/29",
+                "修饰模式": "random",
+                "随机方法": "poisson",
+                "随机波动": 0.2,
+                "随机种子": 2026,
+            }
+        ]
+    )
+
+    monkeypatch.setattr(pd, "read_excel", fail_read_excel)
+    monkeypatch.setattr(
+        ExcelService,
+        "_read_mapping_config_via_com",
+        staticmethod(lambda excel_path: fallback_df),
+    )
+
+    scripts = ExcelService.parse_mapping_config_excel(config_path, product_code="M626")
+
+    assert scripts == [
+        {
+            "enable": True,
+            "target_product": "M626",
+            "target_code": "彩斑Mura",
+            "target_batch": "2026/04/29",
+            "mode": "random",
+            "random_seed": 2026,
+            "random_variation": 0.2,
+            "random_method": "poisson",
         }
     ]

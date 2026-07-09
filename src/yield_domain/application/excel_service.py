@@ -238,8 +238,12 @@ class ExcelService:
                 return []
             df = xls.get("Mapping修饰", next(iter(xls.values())))
         except Exception as e:
-            logging.error(f"解析 Mapping 配置 Excel 失败: {e}", exc_info=True)
-            return []
+            logging.warning(f"openpyxl 解析 Mapping 配置 Excel 失败，尝试 COM 兜底: {e}")
+            try:
+                df = ExcelService._read_mapping_config_via_com(excel_path)
+            except Exception as com_error:
+                logging.error(f"解析 Mapping 配置 Excel 失败: {com_error}", exc_info=True)
+                return []
 
         scripts: List[Dict[str, Any]] = []
         grouped_scripts: Dict[tuple, Dict[str, Any]] = {}
@@ -346,6 +350,12 @@ class ExcelService:
         return ConfigLoader.get_project_root() / "resources" / ExcelService.MAPPING_CONFIG_FILE_NAME
 
     @staticmethod
+    def _read_mapping_config_via_com(excel_path: Path) -> pd.DataFrame:
+        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+
+        return _read_encrypted_xlsx_via_com(excel_path, sheet_name="Mapping修饰")
+
+    @staticmethod
     def _get_first_value(row: pd.Series, names: List[str]) -> Any:
         for name in names:
             if name in row.index:
@@ -418,7 +428,20 @@ class ExcelService:
     def _normalize_mapping_batch_text(value: str) -> str:
         if value.upper() == "ALL":
             return "ALL"
-        return value.replace("蒸镀批", "").replace("批次", "").strip()
+        text = value.replace("蒸镀批", "").replace("批次", "").strip()
+        return ExcelService._format_mapping_batch_date(text)
+
+    @staticmethod
+    def _format_mapping_batch_date(value: str) -> str:
+        match = re.fullmatch(r"(\d{2}|\d{4})[/-](\d{1,2})[/-](\d{1,2})", value.strip())
+        if not match:
+            return value
+
+        year_text, month_text, day_text = match.groups()
+        year = int(year_text)
+        if len(year_text) == 2:
+            year += 2000
+        return f"{year:04d}/{int(month_text):02d}/{int(day_text):02d}"
 
     @staticmethod
     def _parse_hotspot_rules(value: Any) -> List[Dict[str, Any]]:

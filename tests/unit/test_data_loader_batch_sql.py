@@ -47,6 +47,7 @@ def test_load_panel_details_uses_productrequest_description_for_batch_no(monkeyp
     assert "spot_glass_batch_info" not in normalized_sql
     assert "dwt_yield_result_pnl" in normalized_sql
     assert "dwr_mes_productrequest" in normalized_sql
-    assert "substr(r.description, 1, 10) as batch_no" in normalized_sql
+    assert "to_char(to_date(substring(r.description from '^[0-9]{4}/[0-9]{1,2}/[0-9]{1,2}'), 'yyyy/mm/dd'), 'yyyy/mm/dd') as batch_no" in normalized_sql
+    assert "substr(r.description, 1, 10) as batch_no" not in normalized_sql
     assert "d.sub_prod_id = r.productrequestname" in normalized_sql
     assert "d.oper_group = 'ct'" in normalized_sql

@@ -20,10 +20,10 @@ from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.utils.data_inspector import export_probed_details
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.spc_domain.infrastructure.repositories.spc_repository import SpcRepository
+from src.spc_domain.application.spc_data_decoration import prepare_decorated_spc_data
 
 # 引入核心计算引擎
 from src.spc_domain.core.spc_calculator import (
-    preprocess_sheet_features, 
     apply_spc_rules, 
     aggregate_spc_metrics,
     sanitize_to_compliant
@@ -315,14 +315,22 @@ class SpcAnalysisService:
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                if 'data_type' in m_df.columns:
-                    grouped_measurements = m_df.groupby('data_type', dropna=False)
-                else:
-                    grouped_measurements = [(data_type_upper, m_df)]
+                decorated_spc_data = prepare_decorated_spc_data(
+                    raw_measurements_df=m_df,
+                    spec_df=s_df,
+                    prod_code=prod,
+                )
+                features_df = decorated_spc_data.sheet_features_df
+                if features_df.empty:
+                    continue
 
-                for current_data_type, typed_m_df in grouped_measurements:
+                if 'data_type' in features_df.columns:
+                    grouped_features = features_df.groupby('data_type', dropna=False)
+                else:
+                    grouped_features = [(data_type_upper, features_df)]
+
+                for current_data_type, features in grouped_features:
                     current_type_upper = str(current_data_type).upper()
-                    features = preprocess_sheet_features(measure_df=typed_m_df, spec_df=s_df)
                     enable_soos = current_type_upper != 'AOI'
                     status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
                     
@@ -509,6 +517,21 @@ class SpcAnalysisService:
             
             # 使用 use_snapshot=True 强制走缓存，保护数据库
             repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+            data_type_upper = data_type_filter.upper() if data_type_filter else 'ALL'
+
+            if data_type_upper in ('报废', 'ALL'):
+                scrap_df = repo.get_scrap_data(prod)
+                if not scrap_df.empty:
+                    scrap_df['sheet_start_time'] = pd.to_datetime(scrap_df['sheet_start_time'], errors='coerce')
+                    mask = (scrap_df['sheet_start_time'] >= start_dt) & (scrap_df['sheet_start_time'] <= end_dt)
+                    scrap_df = scrap_df[mask].copy()
+
+                    if force_compliant:
+                        scrap_df = sanitize_to_compliant(scrap_df)
+                    all_status_dfs.append(scrap_df)
+
+                if data_type_upper == '报废':
+                    continue
             
             current_fetch_config = config_instance.model_copy()
             current_fetch_config.prod_code = prod
@@ -519,16 +542,30 @@ class SpcAnalysisService:
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                features = preprocess_sheet_features(measure_df=m_df, spec_df=s_df)
-                
-                # [企业级优化] 根据数据类型决定是否启用 SOOS 判定
-                enable_soos = data_type_filter.upper() != 'AOI'
-                status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
-                
-                # [可选] 合规修饰
-                if force_compliant:
-                    status = sanitize_to_compliant(status)
-                all_status_dfs.append(status)
+                decorated_spc_data = prepare_decorated_spc_data(
+                    raw_measurements_df=m_df,
+                    spec_df=s_df,
+                    prod_code=prod,
+                    persist_files=False,
+                )
+                features_df = decorated_spc_data.sheet_features_df
+                if features_df.empty:
+                    continue
+
+                if 'data_type' in features_df.columns:
+                    grouped_features = features_df.groupby('data_type', dropna=False)
+                else:
+                    grouped_features = [(data_type_filter.upper(), features_df)]
+
+                for current_data_type, features in grouped_features:
+                    # [企业级优化] 根据数据类型决定是否启用 SOOS 判定
+                    enable_soos = str(current_data_type).upper() != 'AOI'
+                    status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
+
+                    # [可选] 合规修饰
+                    if force_compliant:
+                        status = sanitize_to_compliant(status)
+                    all_status_dfs.append(status)
 
         if not all_status_dfs:
             logging.warning("下钻查询未命中任何底层数据。")

@@ -49,7 +49,7 @@ def load_panel_details(
     left join (
         select distinct on (D.panel_id)
             D.panel_id,
-            substr(R.DESCRIPTION, 1, 10) as batch_no
+            to_char(to_date(substring(R.DESCRIPTION from '^[0-9]{{4}}/[0-9]{{1,2}}/[0-9]{{1,2}}'), 'YYYY/MM/DD'), 'YYYY/MM/DD') as batch_no
         from dwt_yield_result_pnl D
         left join DWR_MES_PRODUCTREQUEST R on D.SUB_PROD_ID = R.PRODUCTREQUESTNAME
         where D.prod_code = '{prod_code}'

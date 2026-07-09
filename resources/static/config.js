@@ -66,9 +66,9 @@ const APP_CONFIG = {
             children: [
                 { name: "AOI", url: LINKS.AOI },
                 { name: "AOI_RS", url: LINKS.AOI_RS },
-                { name: "SPC", url: LINKS.SPC },
+                // { name: "SPC", url: LINKS.SPC },
                 { name: "CTQ", url: LINKS.CTQ },
-                { name: "CPM监控报表", url: LINKS.CPM_REPORT },
+                { name: "CPM", url: LINKS.CPM_REPORT },
             ]
         },
         {
@@ -118,9 +118,9 @@ const APP_CONFIG = {
             subs: [ 
                 {l:'', v:'AOI', url: LINKS.AOI } ,
                 {l:'', v:'AOI_RS', url: LINKS.AOI_RS },
-                {l:'', v:'SPC', url: LINKS.SPC }, 
+                // {l:'', v:'SPC', url: LINKS.SPC }, 
                 {l:'', v:'CTQ', url: LINKS.CTQ },
-                {l:'', v:'CPM', url: LINKS.CPM_REPORT },
+                {l:'', v:'SPC-CPM', url: LINKS.CPM_REPORT },
             ]
         },
         { 

@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 
 from src.spc_domain.core.cpm_calculator import (
+    PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    PERIOD_SIGMA_SOURCE_SHEET_MEAN,
+    build_available_period_axis,
     build_period_axis,
     build_period_capability_report,
     build_lot_cpm_report,
@@ -63,6 +66,41 @@ def test_build_period_axis_reserves_two_months_three_weeks_seven_days() -> None:
         "2026-06-25",
     ]
     assert axis["period_sort"].tolist() == [101, 102, 201, 202, 203, 301, 302, 303, 304, 305, 306, 307]
+
+
+def test_build_available_period_axis_uses_recent_periods_with_data_not_continuous_calendar() -> None:
+    sheet_features = pd.DataFrame(
+        {
+            "sheet_start_time": [
+                "2026-06-10",
+                "2026-06-15",
+                "2026-06-16",
+                "2026-06-17",
+                "2026-06-29",
+                "2026-06-30",
+                "2026-07-01",
+                "2026-07-02",
+            ]
+        }
+    )
+
+    axis = build_available_period_axis(sheet_features, pd.Timestamp("2026-07-07").date())
+
+    assert axis[axis["period_type"] == "month"]["period_label"].tolist() == ["2026-06", "2026-07"]
+    assert axis[axis["period_type"] == "week"]["period_label"].tolist() == [
+        "2026-W24",
+        "2026-W25",
+        "2026-W27",
+    ]
+    assert axis[axis["period_type"] == "day"]["period_label"].tolist() == [
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-17",
+        "2026-06-29",
+        "2026-06-30",
+        "2026-07-01",
+        "2026-07-02",
+    ]
 
 
 def test_build_lot_cpm_report_groups_by_lot_and_indicator() -> None:
@@ -215,3 +253,250 @@ def test_build_period_capability_report_groups_month_week_day() -> None:
     assert may_row["cpm"] == 10.0 / (6.0 * math.sqrt(2.0))
     assert may_row["cpk"] == 5.0 / (3.0 * math.sqrt(2.0))
     assert "2026-04" not in report["period_label"].tolist()
+
+
+def test_build_period_capability_report_uses_sheet_mean_for_mu_and_point_values_for_sigma() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "sheet_mean": 49.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "target": 50.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "sheet_mean": 51.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "target": 50.0,
+            },
+        ]
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P1",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "param_value": 45.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P2",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "param_value": 53.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P1",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "param_value": 47.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P2",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "param_value": 55.0,
+            },
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+        raw_measurements=raw_measurements,
+        sigma_source=PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    )
+    day_row = report[(report["period_type"] == "day") & (report["period_label"] == "2026-06-25")].iloc[0]
+    expected_mean = float(sheet_features["sheet_mean"].mean())
+    expected_point_std = float(raw_measurements["param_value"].std(ddof=1))
+
+    assert day_row["sample_count"] == 2
+    assert day_row["point_count"] == 4
+    assert day_row["sigma_source"] == PERIOD_SIGMA_SOURCE_POINT_VALUE
+    assert day_row["mean_value"] == expected_mean
+    assert day_row["std_value"] == expected_point_std
+    assert day_row["cpk"] == calculate_cpk(expected_mean, expected_point_std, 55.0, 45.0)
+    assert day_row["cpm"] == calculate_cpm(expected_mean, expected_point_std, 55.0, 45.0, 50.0)
+
+
+def test_build_period_capability_report_defaults_to_sheet_mean_sigma_when_raw_measurements_exist() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "sheet_mean": 49.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "target": 50.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "sheet_mean": 51.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "target": 50.0,
+            },
+        ]
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P1",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "param_value": 45.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P2",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "param_value": 55.0,
+            },
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+        raw_measurements=raw_measurements,
+    )
+    day_row = report[(report["period_type"] == "day") & (report["period_label"] == "2026-06-25")].iloc[0]
+    expected_sheet_std = float(sheet_features["sheet_mean"].std(ddof=1))
+
+    assert day_row["sigma_source"] == PERIOD_SIGMA_SOURCE_SHEET_MEAN
+    assert day_row["std_value"] == expected_sheet_std
+    assert day_row["cpk"] == calculate_cpk(50.0, expected_sheet_std, 55.0, 45.0)
+
+
+def test_build_period_capability_report_calculates_single_sheet_period_with_point_sigma() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "sheet_mean": 50.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "target": 50.0,
+            },
+        ]
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P1",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "param_value": 49.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "site_name": "P2",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "param_value": 51.0,
+            },
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+        raw_measurements=raw_measurements,
+        sigma_source=PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    )
+    day_row = report[(report["period_type"] == "day") & (report["period_label"] == "2026-06-25")].iloc[0]
+
+    assert day_row["sample_count"] == 1
+    assert day_row["point_count"] == 2
+    assert pd.notna(day_row["cpm"])
+    assert pd.notna(day_row["cpk"])
+
+
+def test_build_period_capability_report_keeps_older_days_for_metric_backfill() -> None:
+    rows = []
+    for day_index in range(1, 9):
+        sheet_count = 1 if day_index == 8 else 2
+        for sheet_index in range(sheet_count):
+            rows.append(
+                {
+                    "prod_code": "P1",
+                    "factory": "ARRAY",
+                    "sheet_id": f"LOT{day_index:06d}{sheet_index:02d}",
+                    "step_id": "S1",
+                    "param_name": "THK",
+                    "sheet_start_time": f"2026-06-{day_index:02d}",
+                    "sheet_mean": 49.0 + sheet_index,
+                    "usl": 55.0,
+                    "lsl": 45.0,
+                    "target": 50.0,
+                }
+            )
+
+    report = build_period_capability_report(pd.DataFrame(rows), end_date=pd.Timestamp("2026-06-08").date())
+    day_rows = report[report["period_type"] == "day"]
+    first_day = day_rows[day_rows["period_label"] == "2026-06-01"].iloc[0]
+    latest_day = day_rows[day_rows["period_label"] == "2026-06-08"].iloc[0]
+
+    assert first_day["sample_count"] == 2
+    assert pd.notna(first_day["cpm"])
+    assert latest_day["sample_count"] == 1
+    assert pd.isna(latest_day["cpm"])

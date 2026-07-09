@@ -8,6 +8,13 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+PERIOD_SIGMA_SOURCE_SHEET_MEAN = "sheet_mean"
+PERIOD_SIGMA_SOURCE_POINT_VALUE = "point_value"
+PERIOD_SIGMA_SOURCE_OPTIONS = {
+    PERIOD_SIGMA_SOURCE_SHEET_MEAN,
+    PERIOD_SIGMA_SOURCE_POINT_VALUE,
+}
+
 
 def derive_lot_id(sheet_id: object) -> str:
     """Derive 9-character Lot ID from Sheet/Glass/Panel-like identifiers."""
@@ -127,6 +134,124 @@ def build_period_axis(end_date: date) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def build_available_period_axis(sheet_features: pd.DataFrame, end_date: date) -> pd.DataFrame:
+    """Build a compact M/W/D axis from the latest periods that actually have Sheet data."""
+    end_date = pd.Timestamp(end_date).date()
+    if sheet_features.empty or "sheet_start_time" not in sheet_features.columns:
+        return build_period_axis(end_date)
+
+    df = sheet_features.copy()
+    df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
+    df = df.dropna(subset=["sheet_start_time"]).copy()
+    df = df[df["sheet_start_time"] < pd.Timestamp(end_date) + pd.Timedelta(days=1)].copy()
+    if df.empty:
+        return build_period_axis(end_date)
+
+    records: list[dict[str, object]] = []
+
+    month_periods = sorted(df["sheet_start_time"].dt.to_period("M").dropna().unique())[-2:]
+    for index, month_period in enumerate(month_periods, start=1):
+        month_start = month_period.to_timestamp().date()
+        next_month = date(month_start.year + (month_start.month // 12), (month_start.month % 12) + 1, 1)
+        month_end = min(end_date, next_month - timedelta(days=1))
+        records.append(
+            {
+                "period_type": "month",
+                "period_label": month_start.strftime("%Y-%m"),
+                "period_sort": 100 + index,
+                "period_start": pd.Timestamp(month_start),
+                "period_end": pd.Timestamp(month_end),
+            }
+        )
+
+    week_starts = sorted({ _start_of_week(ts.date()) for ts in df["sheet_start_time"] })[-3:]
+    for index, week_start in enumerate(week_starts, start=1):
+        iso_week = week_start.isocalendar()
+        records.append(
+            {
+                "period_type": "week",
+                "period_label": f"{iso_week.year}-W{iso_week.week:02d}",
+                "period_sort": 200 + index,
+                "period_start": pd.Timestamp(week_start),
+                "period_end": pd.Timestamp(min(end_date, week_start + timedelta(days=6))),
+            }
+        )
+
+    days = sorted({ ts.date() for ts in df["sheet_start_time"] })[-7:]
+    for index, day in enumerate(days, start=1):
+        records.append(
+            {
+                "period_type": "day",
+                "period_label": day.strftime("%Y-%m-%d"),
+                "period_sort": 300 + index,
+                "period_start": pd.Timestamp(day),
+                "period_end": pd.Timestamp(day),
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
+def build_all_available_period_axis(sheet_features: pd.DataFrame, end_date: date) -> pd.DataFrame:
+    """Build all M/W/D periods with data inside the active CPM query window."""
+    end_date = pd.Timestamp(end_date).date()
+    if sheet_features.empty or "sheet_start_time" not in sheet_features.columns:
+        return build_period_axis(end_date)
+
+    df = sheet_features.copy()
+    df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
+    df = df.dropna(subset=["sheet_start_time"]).copy()
+    window_start = pd.Timestamp(get_period_window_start(end_date))
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1)
+    df = df[(df["sheet_start_time"] >= window_start) & (df["sheet_start_time"] < end_ts)].copy()
+    if df.empty:
+        return build_period_axis(end_date)
+
+    records: list[dict[str, object]] = []
+
+    month_periods = sorted(df["sheet_start_time"].dt.to_period("M").dropna().unique())
+    for index, month_period in enumerate(month_periods, start=1):
+        month_start = month_period.to_timestamp().date()
+        next_month = date(month_start.year + (month_start.month // 12), (month_start.month % 12) + 1, 1)
+        month_end = min(end_date, next_month - timedelta(days=1))
+        records.append(
+            {
+                "period_type": "month",
+                "period_label": month_start.strftime("%Y-%m"),
+                "period_sort": 100 + index,
+                "period_start": pd.Timestamp(month_start),
+                "period_end": pd.Timestamp(month_end),
+            }
+        )
+
+    week_starts = sorted({_start_of_week(ts.date()) for ts in df["sheet_start_time"]})
+    for index, week_start in enumerate(week_starts, start=1):
+        iso_week = week_start.isocalendar()
+        records.append(
+            {
+                "period_type": "week",
+                "period_label": f"{iso_week.year}-W{iso_week.week:02d}",
+                "period_sort": 200 + index,
+                "period_start": pd.Timestamp(week_start),
+                "period_end": pd.Timestamp(min(end_date, week_start + timedelta(days=6))),
+            }
+        )
+
+    days = sorted({ts.date() for ts in df["sheet_start_time"]})
+    for index, day in enumerate(days, start=1):
+        records.append(
+            {
+                "period_type": "day",
+                "period_label": day.strftime("%Y-%m-%d"),
+                "period_sort": 300 + index,
+                "period_start": pd.Timestamp(day),
+                "period_end": pd.Timestamp(day),
+            }
+        )
+
+    return pd.DataFrame(records)
+
+
 def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
     period_df = df.copy()
     period_df["sheet_start_time"] = pd.to_datetime(period_df["sheet_start_time"], errors="coerce")
@@ -135,7 +260,7 @@ def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
         return period_df
 
     end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1)
-    period_axis = build_period_axis(end_date)
+    period_axis = build_all_available_period_axis(period_df, end_date)
     period_sort_lookup = period_axis[["period_type", "period_label", "period_sort"]]
     month_start = period_axis[period_axis["period_type"] == "month"]["period_start"].min()
     week_start = period_axis[period_axis["period_type"] == "week"]["period_start"].min()
@@ -166,8 +291,58 @@ def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True).merge(period_sort_lookup, on=["period_type", "period_label"], how="inner")
 
 
-def build_period_capability_report(sheet_features: pd.DataFrame, end_date: date) -> pd.DataFrame:
-    """Aggregate Sheet-level SPC features into M/W/D CPM and CPK rows."""
+def _build_period_measurement_stats(raw_measurements: pd.DataFrame | None, end_date: date) -> dict[tuple[object, ...], dict[str, float]]:
+    """Return point-level sigma inputs keyed by indicator and M/W/D period."""
+    required_cols = {
+        "prod_code",
+        "factory",
+        "sheet_id",
+        "step_id",
+        "param_name",
+        "sheet_start_time",
+        "param_value",
+    }
+    if raw_measurements is None or raw_measurements.empty or not required_cols.issubset(raw_measurements.columns):
+        return {}
+
+    df = raw_measurements.copy()
+    df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
+    df = df.dropna(subset=["param_value"]).copy()
+    if df.empty:
+        return {}
+
+    period_df = _period_frame(df, end_date)
+    if period_df.empty:
+        return {}
+
+    group_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label"]
+    stats: dict[tuple[object, ...], dict[str, float]] = {}
+    for keys, group in period_df.groupby(group_cols, dropna=False, sort=True):
+        values = pd.to_numeric(group["param_value"], errors="coerce").dropna()
+        if values.empty:
+            continue
+        stats[keys] = {
+            "point_count": int(len(values)),
+            "std_value": float(values.std(ddof=1)),
+        }
+    return stats
+
+
+def normalize_period_sigma_source(value: object) -> str:
+    """Normalize the M/W/D capability sigma source, defaulting to Sheet Mean."""
+    value_text = str(value).strip().lower() if value is not None else ""
+    if value_text in PERIOD_SIGMA_SOURCE_OPTIONS:
+        return value_text
+    return PERIOD_SIGMA_SOURCE_SHEET_MEAN
+
+
+def build_period_capability_report(
+    sheet_features: pd.DataFrame,
+    end_date: date,
+    raw_measurements: pd.DataFrame | None = None,
+    sigma_source: str = PERIOD_SIGMA_SOURCE_SHEET_MEAN,
+) -> pd.DataFrame:
+    """Aggregate M/W/D CPM and CPK rows with Sheet means and point-level sigma."""
     required_cols = {
         "prod_code",
         "factory",
@@ -199,6 +374,12 @@ def build_period_capability_report(sheet_features: pd.DataFrame, end_date: date)
         return pd.DataFrame()
 
     group_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label", "period_sort"]
+    resolved_sigma_source = normalize_period_sigma_source(sigma_source)
+    measurement_stats = (
+        _build_period_measurement_stats(raw_measurements, end_date)
+        if resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
+        else {}
+    )
     records: list[dict[str, object]] = []
     for keys, group in df.groupby(group_cols, dropna=False, sort=True):
         valid = group.dropna(subset=["sheet_mean", "usl", "lsl"])
@@ -207,7 +388,16 @@ def build_period_capability_report(sheet_features: pd.DataFrame, end_date: date)
 
         prod_code, factory, step_id, param_name, period_type, period_label, period_sort = keys
         mean_value = float(valid["sheet_mean"].mean())
-        std_value = float(valid["sheet_mean"].std(ddof=1))
+        sheet_std_value = float(valid["sheet_mean"].std(ddof=1))
+        stats_key = (prod_code, factory, step_id, param_name, period_type, period_label)
+        stats = measurement_stats.get(stats_key, {})
+        point_count = int(stats.get("point_count", 0))
+        if resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE and "std_value" in stats:
+            std_value = float(stats["std_value"])
+            effective_sigma_source = PERIOD_SIGMA_SOURCE_POINT_VALUE
+        else:
+            std_value = sheet_std_value
+            effective_sigma_source = PERIOD_SIGMA_SOURCE_SHEET_MEAN
         usl = float(valid["usl"].dropna().iloc[0])
         lsl = float(valid["lsl"].dropna().iloc[0])
         ucl = valid["ucl"].dropna().iloc[0] if valid["ucl"].notna().any() else np.nan
@@ -227,6 +417,8 @@ def build_period_capability_report(sheet_features: pd.DataFrame, end_date: date)
                 "period_start": pd.to_datetime(valid["sheet_start_time"], errors="coerce").min(),
                 "period_end": pd.to_datetime(valid["sheet_start_time"], errors="coerce").max(),
                 "sample_count": int(valid["sheet_id"].nunique()),
+                "point_count": point_count if point_count > 0 else np.nan,
+                "sigma_source": effective_sigma_source,
                 "mean_value": mean_value,
                 "std_value": std_value,
                 "usl": usl,

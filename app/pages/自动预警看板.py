@@ -11,9 +11,10 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.spc_dashboard import (
+    get_cached_alarm_detail_tables,
+    render_alarm_detail_tables,
     render_spc_control_panel,
-    render_spc_summary_section,
-    render_spc_detail_section,
+    render_spc_summary_chart,
     render_station_top10_section,
     filter_and_rollup_spc_data
 )
@@ -67,7 +68,10 @@ except Exception as e:
         st.code(traceback.format_exc())
     st.stop()
 
-funcs_to_clear = extract_cached_funcs(SpcAnalysisService) + [get_cached_query_window]
+funcs_to_clear = extract_cached_funcs(SpcAnalysisService) + [
+    get_cached_query_window,
+    get_cached_alarm_detail_tables,
+]
 render_page_header(
     title="自动预警看板",
     config=active_config,
@@ -123,13 +127,25 @@ filtered_summary_df, filtered_detail_df, filtered_station_df = filter_and_rollup
     detail_df, global_summary_df, station_detail_df, filter_state
 )
 
-with st.expander(f"{filter_state.data_type_filter}——By月周天", expanded=True):
-    # 5. 组装积木: 传入动态重算后的过滤大盘
-    render_spc_summary_section(filtered_summary_df, filter_state.data_type_filter, is_admin)
+# 5. 组装积木: 仅保留图表，移除旧的汇总/透视明细表
+render_spc_summary_chart(filtered_summary_df, filter_state.data_type_filter)
 
-    # 6. 组装积木: 传入过滤后的明细
-    render_spc_detail_section(filtered_detail_df, filter_state, is_admin)
+st.divider()
 
-with st.expander(f"{filter_state.data_type_filter}——By站点", expanded=True):
-    # 7. 组装积木: 渲染明细透视表 (最细颗粒度下钻)
-    render_station_top10_section(filtered_station_df, filter_state.data_type_filter, is_admin)
+# 6. 组装积木: 仅保留 Top 10 站点图，移除旧的站点汇总/明细表
+render_station_top10_section(
+    filtered_station_df,
+    filter_state.data_type_filter,
+    is_admin,
+    show_tables=False,
+)
+
+if is_admin:
+    st.divider()
+    render_alarm_detail_tables(
+        db_manager=db_manager,
+        query_config_json=query_config_all.model_dump_json(),
+        filter_state=filter_state,
+        snapshot_signature=SPC_PAGE_CACHE_SIGNATURE,
+        is_admin=is_admin,
+    )

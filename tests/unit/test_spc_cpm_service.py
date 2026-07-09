@@ -4,6 +4,7 @@ from datetime import date
 import pandas as pd
 
 from src.spc_domain.application import cpm_service
+from src.spc_domain.application import spc_data_decoration
 from src.spc_domain.application.cpm_service import CpmReportService, resolve_period_capability_end_date
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 
@@ -84,9 +85,20 @@ class FakeSpcRepository:
         )
 
 
-def test_cpm_service_requests_spc_only_and_returns_distribution_report(monkeypatch) -> None:
+def test_cpm_service_requests_spc_only_and_returns_distribution_report(monkeypatch, tmp_path: Path) -> None:
+    CpmReportService.get_cpm_report_data.clear()
     FakeSpcRepository.seen_data_type_filters = []
     monkeypatch.setattr(cpm_service, "SpcRepository", FakeSpcRepository)
+    monkeypatch.setattr(
+        cpm_service.ConfigLoader,
+        "get_cpm_period_sigma_source",
+        staticmethod(lambda: "sheet_mean"),
+    )
+    monkeypatch.setattr(
+        spc_data_decoration.ConfigLoader,
+        "get_project_root",
+        staticmethod(lambda: tmp_path),
+    )
 
     query = SpcQueryConfig(
         prod_code="M626",
@@ -106,7 +118,42 @@ def test_cpm_service_requests_spc_only_and_returns_distribution_report(monkeypat
     assert not report.period_capability_df.empty
     assert len(report.raw_measurements_df) == 4
     assert {"cpm", "cpk"}.issubset(report.period_capability_df.columns)
+    assert set(report.period_capability_df["sigma_source"]) == {"sheet_mean"}
     assert set(report.raw_measurements_df["data_type"]) == {"SPC"}
+    assert report.sheet_oos_decoration_result is not None
+
+
+def test_cpm_service_can_switch_period_sigma_source_from_global_config(monkeypatch, tmp_path: Path) -> None:
+    CpmReportService.get_cpm_report_data.clear()
+    FakeSpcRepository.seen_data_type_filters = []
+    monkeypatch.setattr(cpm_service, "SpcRepository", FakeSpcRepository)
+    monkeypatch.setattr(
+        cpm_service.ConfigLoader,
+        "get_cpm_period_sigma_source",
+        staticmethod(lambda: "point_value"),
+    )
+    monkeypatch.setattr(
+        spc_data_decoration.ConfigLoader,
+        "get_project_root",
+        staticmethod(lambda: tmp_path),
+    )
+
+    query = SpcQueryConfig(
+        prod_code="M626",
+        start_date="2026-06-01",
+        end_date="2026-06-07",
+        data_type_filter="SPC",
+    )
+
+    report = CpmReportService.get_cpm_report_data(
+        _db_manager=object(),
+        query_config_json=query.model_dump_json(),
+        snapshot_signature="unit-test-point-sigma",
+    )
+
+    assert not report.period_capability_df.empty
+    assert set(report.period_capability_df["sigma_source"]) == {"point_value"}
+    assert report.period_capability_df["point_count"].dropna().max() >= 2
 
 
 def test_period_capability_end_date_follows_latest_available_sheet_date() -> None:

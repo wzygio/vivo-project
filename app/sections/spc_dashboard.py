@@ -13,6 +13,21 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from src.spc_domain.application.spc_service import SpcAnalysisService
 from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.spc_domain.core.spc_calculator import sanitize_to_compliant
+
+ALARM_DETAIL_MONITOR_TYPES = ["SPC", "CTQ", "AOI", "报废"]
+ALARM_DETAIL_STATUS_OPTIONS = ["OOC", "OOS"]
+
+
+def _get_compliance_file_signature() -> str:
+    """Return a small cache-busting signature for compliance config changes."""
+    try:
+        from app.compliance.compliance_manager import CONFIG_PATH
+
+        stat = CONFIG_PATH.stat()
+        return f"{stat.st_mtime_ns}:{stat.st_size}"
+    except Exception:
+        return "missing"
 # --------------------------------------------------------------------------
 # 状态模型定义 (Type-Safe Session State)
 # --------------------------------------------------------------------------
@@ -364,6 +379,183 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 with st.expander("查看详细错误日志"):
                     st.code(traceback.format_exc())
 
+
+# =========================================================================
+# 管理员报警明细表 (Cached Alarm Details)
+# =========================================================================
+def _apply_compliance_visibility_filter(detail_df: pd.DataFrame) -> pd.DataFrame:
+    """Hide rows that the shared compliance engine marks as modified."""
+    if detail_df is None or detail_df.empty:
+        return pd.DataFrame()
+
+    original_columns = detail_df.columns.tolist()
+    compliant_df = sanitize_to_compliant(detail_df, add_tag=True)
+    if "is_compliant_modified" not in compliant_df.columns:
+        return compliant_df[original_columns].copy()
+
+    visible_df = compliant_df[~compliant_df["is_compliant_modified"].fillna(False).astype(bool)].copy()
+    return visible_df[[col for col in original_columns if col in visible_df.columns]].copy()
+
+
+def _normalise_alarm_detail_frame(df: pd.DataFrame, monitor_type: str, alarm_type: str) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    normalised = df.copy()
+    if "data_type" not in normalised.columns:
+        normalised["data_type"] = monitor_type
+    if "spc_status" not in normalised.columns and "status" not in normalised.columns:
+        normalised["spc_status"] = alarm_type
+    return normalised
+
+
+@st.cache_data(show_spinner=False, max_entries=4)
+def get_cached_alarm_detail_tables(
+    _db_manager: DatabaseManager,
+    query_config_json: str,
+    time_type: str,
+    snapshot_signature: str,
+    compliance_signature: str,
+) -> dict[str, pd.DataFrame]:
+    """Build cached physical alarm details for the admin table."""
+    del snapshot_signature, compliance_signature
+
+    alarm_frames: list[pd.DataFrame] = []
+    for monitor_type in ALARM_DETAIL_MONITOR_TYPES:
+        for alarm_type in ALARM_DETAIL_STATUS_OPTIONS:
+            try:
+                real_df = SpcAnalysisService.get_spc_defect_details(
+                    _db_manager=_db_manager,
+                    query_config_json=query_config_json,
+                    time_group="ALL",
+                    defect_type=alarm_type,
+                    time_type=time_type,
+                    force_compliant=False,
+                    data_type_filter=monitor_type,
+                )
+            except Exception as e:
+                logging.error(
+                    "[SPC] 报警明细缓存构建失败: monitor_type=%s alarm_type=%s error=%s",
+                    monitor_type,
+                    alarm_type,
+                    e,
+                    exc_info=True,
+                )
+                continue
+
+            if real_df.empty:
+                continue
+
+            visible_df = _apply_compliance_visibility_filter(real_df)
+            if visible_df.empty:
+                continue
+
+            alarm_frames.append(_normalise_alarm_detail_frame(visible_df, monitor_type, alarm_type))
+
+    if not alarm_frames:
+        return {monitor_type: pd.DataFrame() for monitor_type in ALARM_DETAIL_MONITOR_TYPES}
+
+    combined_df = pd.concat(alarm_frames, ignore_index=True).drop_duplicates().reset_index(drop=True)
+    if "data_type" not in combined_df.columns:
+        return {"ALL": combined_df}
+
+    return {
+        monitor_type: combined_df[
+            combined_df["data_type"].astype(str).str.upper() == monitor_type.upper()
+        ].copy()
+        for monitor_type in ALARM_DETAIL_MONITOR_TYPES
+    }
+
+
+def _selected_alarm_monitor_types(data_type_filter: str) -> list[str]:
+    if data_type_filter == "ALL":
+        return ALARM_DETAIL_MONITOR_TYPES
+    return [data_type_filter] if data_type_filter in ALARM_DETAIL_MONITOR_TYPES else []
+
+
+def _filter_alarm_detail_by_state(df: pd.DataFrame, filter_state: SpcFilterState) -> pd.DataFrame:
+    if df.empty:
+        return df
+
+    filtered = df.copy()
+    if filter_state.selected_products and "prod_code" in filtered.columns:
+        filtered = filtered[filtered["prod_code"].isin(filter_state.selected_products)]
+    if filter_state.selected_factories and "factory" in filtered.columns:
+        filtered = filtered[filtered["factory"].isin(filter_state.selected_factories)]
+    return filtered
+
+
+def _filter_alarm_detail_by_status(df: pd.DataFrame, selected_statuses: list[str]) -> pd.DataFrame:
+    if df.empty:
+        return df
+    if not selected_statuses:
+        return df.iloc[0:0].copy()
+
+    status_col = "spc_status" if "spc_status" in df.columns else "status" if "status" in df.columns else None
+    if status_col is None:
+        return df
+
+    selected = {status.upper() for status in selected_statuses}
+    return df[df[status_col].astype(str).str.upper().isin(selected)].copy()
+
+
+def render_alarm_detail_tables(
+    db_manager: DatabaseManager,
+    query_config_json: str,
+    filter_state: SpcFilterState,
+    snapshot_signature: str,
+    is_admin: bool = False,
+) -> None:
+    """Render cached alarm detail tables, grouped by monitor type."""
+    if not is_admin:
+        return
+
+    st.markdown("#### 报警明细表")
+    with st.spinner("正在加载缓存报警明细..."):
+        detail_tables = get_cached_alarm_detail_tables(
+            db_manager,
+            query_config_json,
+            "MIXED",
+            snapshot_signature,
+            _get_compliance_file_signature(),
+        )
+
+    monitor_types = _selected_alarm_monitor_types(filter_state.data_type_filter)
+    if not monitor_types:
+        st.info("当前监控类型暂无报警明细。")
+        return
+
+    has_any = False
+    for monitor_type in monitor_types:
+        type_df = _filter_alarm_detail_by_state(
+            detail_tables.get(monitor_type, pd.DataFrame()),
+            filter_state,
+        )
+        has_any = has_any or not type_df.empty
+
+        with st.expander(f"{monitor_type} 报警明细（{len(type_df)}）", expanded=not type_df.empty):
+            selected_statuses = st.multiselect(
+                "报警类型",
+                options=ALARM_DETAIL_STATUS_OPTIONS,
+                default=ALARM_DETAIL_STATUS_OPTIONS,
+                key=f"alarm_detail_status_filter_{monitor_type}",
+            )
+            view_df = _filter_alarm_detail_by_status(type_df, selected_statuses)
+
+            if view_df.empty:
+                st.info("当前筛选条件下无报警明细。")
+                continue
+
+            st.dataframe(
+                view_df,
+                use_container_width=True,
+                hide_index=True,
+                height=520,
+            )
+
+    if not has_any:
+        st.info("当前产品、厂别和监控类型下无可展示的报警明细。")
+
 # =========================================================================
 # 数据联动处理引擎 (Data Binding Engine)
 # =========================================================================
@@ -506,7 +698,12 @@ def filter_and_rollup_spc_data(
 # =========================================================================
 # 🏆 Top 10 异常站点分析模块 (Top 10 Station Section)
 # =========================================================================
-def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_filter: str = 'SPC', is_admin: bool = False):
+def render_station_top10_section(
+    filtered_station_df: pd.DataFrame,
+    data_type_filter: str = 'SPC',
+    is_admin: bool = False,
+    show_tables: bool = True,
+):
     """渲染 Top 10 异常站点图表、汇总(转置)与明细表(产品折叠)"""
     
     if 'ag_top10_sum_key' not in st.session_state: 
@@ -591,6 +788,8 @@ def render_station_top10_section(filtered_station_df: pd.DataFrame, data_type_fi
         })
 
     st_echarts(option, height="450px")
+    if not show_tables:
+        return
     st.divider()
 
     # ==========================================

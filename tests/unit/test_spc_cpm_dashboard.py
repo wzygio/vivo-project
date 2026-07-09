@@ -3,8 +3,10 @@ from datetime import date
 import pandas as pd
 
 from app.sections.spc_cpm_dashboard import (
+    _create_period_capability_table,
     _create_period_overview_chart,
     _create_sheet_points_box_chart,
+    _create_sheet_points_box_charts,
     filter_cpm_report,
     get_available_factories,
     get_default_cpm_start_date,
@@ -83,6 +85,73 @@ def _sample_sheet_features() -> pd.DataFrame:
     )
 
 
+def _sample_sparse_sheet_features() -> pd.DataFrame:
+    rows = []
+    for idx, sheet_date in enumerate(
+        [
+            "2026-06-10",
+            "2026-06-15",
+            "2026-06-16",
+            "2026-06-17",
+            "2026-06-29",
+            "2026-06-30",
+            "2026-07-01",
+            "2026-07-02",
+        ],
+        start=1,
+    ):
+        rows.append(
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "sheet_id": f"S{idx}",
+                "sheet_start_time": sheet_date,
+                "sheet_mean": float(idx),
+                "usl": 12.0,
+                "lsl": 0.0,
+                "ucl": 10.0,
+                "lcl": 2.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _sample_metric_backfill_sheet_features() -> pd.DataFrame:
+    rows = []
+    for idx, sheet_date in enumerate(
+        [
+            "2026-05-18",
+            "2026-05-25",
+            "2026-06-01",
+            "2026-06-02",
+            "2026-06-03",
+            "2026-06-04",
+            "2026-06-05",
+            "2026-06-06",
+            "2026-06-07",
+            "2026-06-08",
+            "2026-07-02",
+        ],
+        start=1,
+    ):
+        rows.append(
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "sheet_id": f"S{idx}",
+                "sheet_start_time": sheet_date,
+                "sheet_mean": float(idx),
+                "usl": 12.0,
+                "lsl": 0.0,
+                "ucl": 10.0,
+                "lcl": 2.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _sample_period_capability() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -130,12 +199,10 @@ def _sample_full_period_capability() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_period_overview_chart_uses_box_without_points_and_cpk_spec_line() -> None:
+def test_period_overview_chart_uses_box_without_metric_lines() -> None:
     fig = _create_period_overview_chart(
         sheet_features_df=_sample_sheet_features(),
         period_capability_df=_sample_period_capability(),
-        metric_key="cpk",
-        metric_label="CPK",
         title="ARRAY | 15260 | 4PP_Rs",
     )
 
@@ -143,67 +210,128 @@ def test_period_overview_chart_uses_box_without_points_and_cpk_spec_line() -> No
     line_traces = [trace for trace in fig.data if trace.type == "scatter"]
     assert box_traces
     assert all(trace.boxpoints is False for trace in box_traces)
-    assert line_traces
-    assert all(trace.yaxis == "y2" for trace in line_traces)
-    assert fig.layout.yaxis2.overlaying == "y"
-    assert any(getattr(shape, "y0", None) == 1.33 for shape in fig.layout.shapes)
+    assert not line_traces
+    assert all(getattr(shape, "y0", None) != 1.33 for shape in fig.layout.shapes)
     assert any(getattr(shape, "y0", None) == 10.0 for shape in fig.layout.shapes)
+    annotation_texts = {annotation.text for annotation in fig.layout.annotations}
+    assert {"USL: 12", "LSL: 8", "UCL: 11", "LCL: 9"}.issubset(annotation_texts)
     assert fig.layout.yaxis.range == (8.0, 12.0)
     assert fig.layout.height <= 480
 
 
-def test_period_overview_chart_splits_month_week_day_metric_lines() -> None:
-    fig = _create_period_overview_chart(
-        sheet_features_df=_sample_sheet_features(),
-        period_capability_df=_sample_full_period_capability(),
-        metric_key="cpm",
-        metric_label="CPM",
-        title="ARRAY | 15260 | 4PP_Rs",
-    )
+def test_period_capability_table_shows_cpm_and_cpk_together() -> None:
+    table = _create_period_capability_table(_sample_full_period_capability())
 
-    line_traces = [trace for trace in fig.data if trace.type == "scatter"]
-    assert [trace.name for trace in line_traces] == ["月CPM", "周CPM", "日CPM"]
-    assert all(trace.yaxis == "y2" for trace in line_traces)
-
-
-def test_period_overview_chart_does_not_draw_cpm_spec_line() -> None:
-    fig = _create_period_overview_chart(
-        sheet_features_df=_sample_sheet_features(),
-        period_capability_df=_sample_period_capability(),
-        metric_key="cpm",
-        metric_label="CPM",
-        title="ARRAY | 15260 | 4PP_Rs",
-    )
-
-    assert all(getattr(shape, "y0", None) != 1.33 for shape in fig.layout.shapes)
+    assert table.columns.tolist() == [
+        "指标",
+        "月 2026-05",
+        "月 2026-06",
+        "周 2026-W24",
+        "周 2026-W25",
+        "周 2026-W26",
+        "日 2026-06-23",
+        "日 2026-06-24",
+        "日 2026-06-25",
+    ]
+    assert table["指标"].tolist() == ["CPM", "CPK"]
+    assert table.loc[0, "月 2026-05"] == "1.100"
+    assert table.loc[1, "月 2026-05"] == "1.000"
 
 
 def test_period_overview_chart_handles_empty_capability_with_reserved_period_axis() -> None:
     fig = _create_period_overview_chart(
         sheet_features_df=_sample_sheet_features(),
         period_capability_df=pd.DataFrame(),
-        metric_key="cpm",
-        metric_label="CPM",
         title="ARRAY | 15260 | 4PP_Rs",
     )
 
     labels = list(fig.layout.xaxis.categoryarray)
     assert labels == [
-        "月 | 2026-05",
         "月 | 2026-06",
-        "周 | 2026-W24",
-        "周 | 2026-W25",
         "周 | 2026-W26",
-        "日 | 2026-06-19",
-        "日 | 2026-06-20",
-        "日 | 2026-06-21",
-        "日 | 2026-06-22",
-        "日 | 2026-06-23",
         "日 | 2026-06-24",
         "日 | 2026-06-25",
     ]
     assert [trace.type for trace in fig.data].count("box") == 4
     assert all(trace.type != "scatter" for trace in fig.data)
+
+
+def test_period_overview_chart_uses_recent_available_periods_without_calendar_gaps() -> None:
+    fig = _create_period_overview_chart(
+        sheet_features_df=_sample_sparse_sheet_features(),
+        period_capability_df=pd.DataFrame(),
+        title="ARRAY | 15260 | 4PP_Rs",
+    )
+
+    assert list(fig.layout.xaxis.categoryarray) == [
+        "月 | 2026-06",
+        "月 | 2026-07",
+        "周 | 2026-W24",
+        "周 | 2026-W25",
+        "周 | 2026-W27",
+        "日 | 2026-06-15",
+        "日 | 2026-06-16",
+        "日 | 2026-06-17",
+        "日 | 2026-06-29",
+        "日 | 2026-06-30",
+        "日 | 2026-07-01",
+        "日 | 2026-07-02",
+    ]
+
+
+def test_period_capability_table_limits_each_period_type_to_compact_window() -> None:
+    period_capability_df = pd.DataFrame(
+        [
+            {"period_type": "month", "period_label": "2026-05", "period_sort": 101, "cpm": 1.1, "sample_count": 2},
+            {"period_type": "month", "period_label": "2026-06", "period_sort": 102, "cpm": 1.2, "sample_count": 2},
+            {"period_type": "month", "period_label": "2026-07", "period_sort": 103, "cpm": float("nan"), "sample_count": 1},
+            {"period_type": "week", "period_label": "2026-W21", "period_sort": 201, "cpm": 2.1, "sample_count": 2},
+            {"period_type": "week", "period_label": "2026-W22", "period_sort": 202, "cpm": 2.2, "sample_count": 2},
+            {"period_type": "week", "period_label": "2026-W23", "period_sort": 203, "cpm": 2.3, "sample_count": 2},
+            {"period_type": "week", "period_label": "2026-W27", "period_sort": 204, "cpm": float("nan"), "sample_count": 1},
+            {"period_type": "day", "period_label": "2026-06-01", "period_sort": 301, "cpm": 3.1, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-02", "period_sort": 302, "cpm": 3.2, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-03", "period_sort": 303, "cpm": 3.3, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-04", "period_sort": 304, "cpm": 3.4, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-05", "period_sort": 305, "cpm": 3.5, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-06", "period_sort": 306, "cpm": 3.6, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-06-07", "period_sort": 307, "cpm": 3.7, "sample_count": 2},
+            {"period_type": "day", "period_label": "2026-07-02", "period_sort": 308, "cpm": float("nan"), "sample_count": 1},
+        ]
+    )
+
+    table = _create_period_capability_table(period_capability_df)
+
+    assert table.columns.tolist() == [
+        "指标",
+        "月 2026-06",
+        "月 2026-07",
+        "周 2026-W22",
+        "周 2026-W23",
+        "周 2026-W27",
+        "日 2026-06-02",
+        "日 2026-06-03",
+        "日 2026-06-04",
+        "日 2026-06-05",
+        "日 2026-06-06",
+        "日 2026-06-07",
+        "日 2026-07-02",
+    ]
+    assert table.loc[0, "月 2026-07"] == "-"
+
+
+def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_specs() -> None:
+    sheet_features_df = _sample_sheet_features().copy()
+    sheet_features_df.loc[0, "sheet_mean"] = 15.0
+
+    fig = _create_period_overview_chart(
+        sheet_features_df=sheet_features_df,
+        period_capability_df=_sample_period_capability(),
+        title="ARRAY | 15260 | 4PP_Rs",
+    )
+
+    assert fig.layout.yaxis.range[0] < 8.0
+    assert fig.layout.yaxis.range[1] > 15.0
 
 
 def test_sheet_points_box_chart_uses_site_name_as_chamber_fallback() -> None:
@@ -229,6 +357,57 @@ def test_sheet_points_box_chart_uses_site_name_as_chamber_fallback() -> None:
     assert all(trace.type == "box" for trace in fig.data)
     assert all(trace.boxpoints is False for trace in fig.data)
     assert [trace.name for trace in fig.data] == ["P1", "P2"]
+
+
+def test_sheet_points_box_chart_derives_chamber_from_unit_id_before_site_name() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-06-02 08:00:00",
+                "unit_id": "3CEE02-PPA",
+                "site_name": "P1",
+                "param_value": 10.0,
+            },
+            {
+                "sheet_id": "S2",
+                "sheet_start_time": "2026-06-02 09:00:00",
+                "unit_id": "3CEE02-CVD",
+                "site_name": "P2",
+                "param_value": 11.0,
+            },
+            {
+                "sheet_id": "S3",
+                "sheet_start_time": "2026-06-02 10:00:00",
+                "unit_id": "3CEE03",
+                "site_name": "P1",
+                "param_value": 12.0,
+            },
+        ]
+    )
+
+    fig = _create_sheet_points_box_chart(raw_measurements_df, sort_mode="按腔室排序", title="Sheet点位分布")
+
+    box_traces = [trace for trace in fig.data if trace.type == "box"]
+    assert [list(trace.x)[0] for trace in box_traces] == ["S1", "S2", "S3"]
+    assert [trace.name for trace in box_traces] == ["3CEE02", "3CEE02", "3CEE03"]
+    assert [list(trace.y) for trace in box_traces] == [[10.0], [11.0], [12.0]]
+    assert box_traces[0].marker.color == box_traces[1].marker.color
+    assert box_traces[1].marker.color != box_traces[2].marker.color
+
+
+def test_sheet_points_box_chart_sorts_sheet_boxes_by_chamber_then_time() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {"sheet_id": "S3", "sheet_start_time": "2026-06-02 10:00:00", "unit_id": "3CEE02-PPA", "param_value": 12.0},
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-02 08:00:00", "unit_id": "3CEE01-PPA", "param_value": 10.0},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-02 09:00:00", "unit_id": "3CEE02-CVD", "param_value": 11.0},
+        ]
+    )
+
+    fig = _create_sheet_points_box_chart(raw_measurements_df, sort_mode="按腔室排序", title="Sheet点位分布")
+
+    assert [list(trace.x)[0] for trace in fig.data if trace.type == "box"] == ["S1", "S2", "S3"]
 
 
 def test_sheet_points_box_chart_draws_spec_lines_and_single_color_for_time_sort() -> None:
@@ -261,3 +440,56 @@ def test_sheet_points_box_chart_draws_spec_lines_and_single_color_for_time_sort(
     assert {trace.marker.color for trace in fig.data if trace.type == "box"} == {"#1d4ed8"}
     assert any(getattr(shape, "y0", None) == 12.0 for shape in fig.layout.shapes)
     assert any(getattr(shape, "y0", None) == 10.0 for shape in fig.layout.shapes)
+    annotation_texts = {annotation.text for annotation in fig.layout.annotations}
+    assert {"USL: 12", "LSL: 8", "UCL: 11", "LCL: 9"}.issubset(annotation_texts)
+
+
+def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-02 09:00:00", "param_value": 14.0},
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-01 08:00:00", "param_value": 7.0},
+        ]
+    )
+    spec_df = pd.DataFrame([{"usl": 12.0, "lsl": 8.0, "ucl": 11.0, "lcl": 9.0, "target": 10.0}])
+
+    fig = _create_sheet_points_box_chart(
+        raw_measurements_df,
+        sort_mode="按过货时间排序",
+        title="Sheet点位分布",
+        spec_df=spec_df,
+    )
+
+    assert fig.layout.yaxis.range[0] < 7.0
+    assert fig.layout.yaxis.range[1] > 14.0
+
+
+def test_sheet_points_box_charts_returns_chamber_and_time_views() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S2",
+                "sheet_start_time": "2026-06-02 09:00:00",
+                "unit_id": "3CEE02-PPA",
+                "param_value": 11.0,
+            },
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-06-01 08:00:00",
+                "unit_id": "3CEE01-PPA",
+                "param_value": 10.0,
+            },
+        ]
+    )
+
+    chamber_fig, time_fig = _create_sheet_points_box_charts(
+        raw_measurements_df=raw_measurements_df,
+        title_prefix="ARRAY | 10140 | PPA_B_X",
+        spec_df=None,
+    )
+
+    assert chamber_fig.layout.title.text.endswith("By腔室")
+    assert time_fig.layout.title.text.endswith("By过货时间")
+    assert [list(trace.x)[0] for trace in chamber_fig.data if trace.type == "box"] == ["S1", "S2"]
+    assert [trace.name for trace in chamber_fig.data if trace.type == "box"] == ["3CEE01", "3CEE02"]
+    assert [trace.name for trace in time_fig.data if trace.type == "box"] == ["S1", "S2"]

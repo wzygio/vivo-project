@@ -23,9 +23,11 @@ from app.sections.spc_cpm_dashboard import (
     get_default_cpm_start_date,
     render_cpm_filters,
     render_cpm_indicator_sections,
+    render_sheet_oos_decoration_admin,
 )
 from app.utils.app_setup import AppSetup
 from app.utils.session_manager import SessionManager
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.spc_domain.application.cpm_service import CpmReportService
 from src.spc_domain.application.spc_service import SpcAnalysisService
@@ -68,18 +70,25 @@ with st.spinner("正在加载 SPC CPM/CPK 分布数据..."):
         _db_manager=db_manager,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=CPM_PAGE_CACHE_SIGNATURE,
+        period_sigma_source=ConfigLoader.get_cpm_period_sigma_source(),
     )
 
-period_capability_df = view_model.period_capability_df
 sheet_features_df = view_model.sheet_features_df
 raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
+period_capability_df = view_model.period_capability_df
 
 if sheet_features_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示 CPM/CPK 分布的 SPC 数据。")
     st.stop()
 
-selected_metric, selected_factory, selected_params, selected_steps, should_render_report = render_cpm_filters(
+query_params = st.query_params
+is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
+if is_admin and view_model.sheet_oos_decoration_result is not None:
+    decoration_result = view_model.sheet_oos_decoration_result
+    render_sheet_oos_decoration_admin(decoration_result)
+
+selected_factory, selected_params, selected_steps, should_render_report = render_cpm_filters(
     indicator_df=indicator_df
 )
 
@@ -110,6 +119,4 @@ render_cpm_indicator_sections(
     period_capability_df=filtered_period_capability_df,
     sheet_features_df=filtered_sheet_features_df,
     raw_measurements_df=filtered_raw_measurements_df,
-    metric_key=selected_metric.lower(),
-    metric_label=selected_metric,
 )

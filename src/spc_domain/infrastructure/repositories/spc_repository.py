@@ -11,6 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 
 from src.spc_domain.infrastructure.data_loader import(
+    filter_excluded_spc_param_names,
     load_spc_measurements, 
     load_spc_spec_limits, 
     load_param_whitelist
@@ -190,7 +191,10 @@ class SpcRepository:
                         cache_exists = False
                         is_cache_fresh = False
                     else:
-                        if age_hours < self.SNAPSHOT_TTL_HOURS:
+                        if "unit_id" not in df_cache.columns:
+                            logging.info("🆕 [SpcRepo] SPC 快照缺少 unit_id 字段，触发一次结构刷新。")
+                            is_cache_fresh = False
+                        elif age_hours < self.SNAPSHOT_TTL_HOURS:
                             if df_cache[time_col].max() >= req_end_dt:
                                 is_cache_fresh = True
             except Exception as e:
@@ -227,6 +231,11 @@ class SpcRepository:
 
         # --- Phase 3: 持久化与内存过滤 ---
         if not df_final.empty:
+            # SQL 层已经下推屏蔽；这里兜底清理历史 Parquet 快照中的旧数据。
+            df_final = filter_excluded_spc_param_names(df_final)
+            if df_final.empty:
+                return df_final
+
             if need_save and self.use_snapshot:
                 # 滚动抛弃：只保留 req_start_dt 之后的三个月数据写入硬盘（⚠️ 此处写入的是不挑参数的全量数据！）
                 df_to_save = df_final[df_final[time_col] >= req_start_dt]

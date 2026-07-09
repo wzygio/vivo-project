@@ -1,0 +1,65 @@
+﻿# Progress: SPC CPM/CPK Task2 Fix
+
+## 2026-07-07
+- Created isolated planning directory `.planning/2026-07-07-spc-cpm-task2-fix` and set it active.
+- Read `planning-with-files` and `tdd` skills.
+- Used CodeGraph first to inspect CPM report dependencies.
+- Confirmed current DAO does not select `unit_id`; current chamber fallback can incorrectly use `site_name`.
+- RED/GREEN slice 1 complete: added unit_id chamber behavior test and DAO SQL unit_id test; implemented unit_id extraction and chamber derivation.
+- RED/GREEN slice 2 complete: added available-period axis test; implemented build_available_period_axis and switched period overview to available periods.
+- RED/GREEN slice 3 complete: added visible CPM/CPK point labels to period metric traces.
+- Metric label test initially expected two month points, but available-period axis correctly retained only 2026-06 for the sample data; updating expectation.
+- RED/GREEN slice 4 complete: added helper for chamber/time Sheet point charts and rendered three charts side by side.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_loader.py -q` -> 25 passed.
+- Compile check passed for CPM dashboard, CPM calculator, SPC data loader, and CPM service modules.
+- `git diff --check` passed for touched CPM/SPC files; only CRLF conversion warnings were reported.
+- Restarted Streamlit on port 8503 and verified the CPM page returns HTTP 200; Chrome headless smoke found no `Traceback` or `KeyError`.
+- Added repository snapshot schema check for `unit_id`, reran focused tests (`25 passed`) and compile checks, then restarted Streamlit again; port 8503 returned HTTP 200.
+- Continued Task2-fix for period/Sheet chart behavior:
+  - Period capability now keeps all available M/W/D periods inside the active CPM query window, giving the dashboard enough history for CPM/CPK metric backfill.
+  - Period overview now prefers recent valid CPM/CPK periods per type, falling back to Sheet-data periods only when a type has no valid metric.
+  - By-chamber Sheet point chart now remains Sheet-level: one box per Sheet, sorted by derived chamber then pass time, with chamber colors/legend groups.
+  - Measurement y-axis range now keeps USL/LSL as default bounds only when plotted values are inside spec; out-of-spec values expand the range.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_loader.py -q` -> 30 passed.
+- Compile check passed for CPM page, dashboard, calculator, and service modules.
+- `git diff --check` passed for touched files; only CRLF conversion warnings were reported.
+- Existing Streamlit service on port 8503 returned HTTP 200 for the CPM page route.
+- Continued Task2-feat for Sheet point OOS data decoration:
+  - Added `src/spc_domain/core/cpm_sheet_oos_decoration.py` to detect Sheet OOS records, persist product-scoped detail/decoration Excel files, parse flag overrides, and deterministically clip flagged out-of-spec point values inside USL/LSL.
+  - Added CPM admin controls for OOS detail download, decoration table download, and decoration upload.
+  - Wired `app/pages/CPM监控报表.py` to prepare decoration files under `resources/<prod_code>/`, apply decorated raw measurements before chart rendering, and show admin controls for `?admin=true` or `?admin-true`.
+  - Added focused tests in `tests/unit/test_spc_cpm_sheet_oos_decoration.py`.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_sheet_oos_decoration.py tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_loader.py -q` -> 34 passed.
+- Compile check passed for CPM page, CPM dashboard, CPM Sheet OOS decoration, and CPM calculator modules.
+- `git diff --check` passed for touched tracked files; only CRLF conversion warnings were reported.
+- Continued Task2-fix frontend cleanup:
+  - Removed the CPM/CPK metric selector from the CPM filter bar.
+  - Removed CPM/CPK line traces and the CPK=1.33 right-axis overlay from the M/W/D period chart.
+  - Added a compact period capability dataframe above the three charts in each expander, showing latest M/W/D rows with `CPM` and `CPK` side by side.
+  - Replaced expander summary metrics with `中位CPK`, `最小CPK`, `中位CPM`, `最小CPM`.
+  - Removed the old sample-insufficient warning from the expander rendering path.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_sheet_oos_decoration.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_loader.py -q` -> 32 passed.
+- Continued Task2-fix to sync Sheet OOS decoration with Auto Warning dashboard:
+  - Added `src/spc_domain/application/spc_data_decoration.py` as the shared backend preparation layer.
+  - Moved CPM data decoration out of `app/pages/CPM监控报表.py` and into `CpmReportService`.
+  - Wired `SpcAnalysisService.fetch_dashboard_data_dict` and `get_spc_defect_details` to use decorated non-scrap SPC measurements/features.
+  - Kept scrap data on the existing `get_scrap_data` path.
+  - Added focused backend/service tests for shared decoration and Auto Warning behavior.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_sheet_oos_decoration.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_loader.py tests\unit\test_spc_data_decoration.py tests\unit\test_spc_auto_warning_decoration.py tests\unit\test_spc_product_discovery.py -q` -> 36 passed.
+- Compile check passed for shared decoration, CPM service, SPC service, CPM page, Auto Warning page, and CPM dashboard modules.
+- `git diff --check` passed for touched SPC/CPM files; only CRLF conversion warnings were reported.
+- Existing Streamlit service on port 8503 returned HTTP 200 for both CPM/CPK report and Auto Warning dashboard routes.
+- Continued CPM frontend table fix:
+  - Changed `_create_period_capability_table` from one row per period into a 2-row matrix with `CPM` and `CPK` rows.
+  - Columns now follow the same compact backfilled period window: latest 2 months, latest 3 weeks, latest 7 days.
+  - Missing or non-computable CPM/CPK values display `-`.
+  - Updated dashboard unit tests for the new matrix shape.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py tests\unit\test_spc_cpm_calculator.py tests\unit\test_spc_cpm_service.py tests\unit\test_spc_data_decoration.py tests\unit\test_spc_auto_warning_decoration.py -q` -> 30 passed.
+- Compile check passed for CPM dashboard/page, CPM calculator, and CPM service modules.
+- CPM report route on port 8503 returned HTTP 200.
+- Added concrete spec/control values to CPM chart annotations:
+  - USL/LSL/UCL/LCL labels now render as `USL: <value>`, `LSL: <value>`, etc.
+  - The same helper also gives Target/CL numeric labels when those lines are rendered.
+  - Verified with dashboard unit assertions for both M/W/D overview and Sheet point charts.
+- Focused verification passed: `uv run pytest tests\unit\test_spc_cpm_dashboard.py -q` -> 15 passed.
+- Compile check passed for CPM dashboard and page modules; CPM report route returned HTTP 200.
