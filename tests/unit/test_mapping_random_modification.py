@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.yield_domain.core.mapping_processor import apply_hotspot_modification_to_matrix
+from yield_domain.core.mapping.mapping_processor import apply_hotspot_modification_to_matrix
 
 
 def _concentrated_matrix() -> pd.DataFrame:

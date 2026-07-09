@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # --- Core (Processors) ---
-from src.yield_domain.core.mwd_trend_processor import MWDTrendProcessor
-from src.yield_domain.core.sheet_lot_processor import (
+from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
+from yield_domain.core.sheet_lot.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
 )
-from src.yield_domain.core.mapping_processor import prepare_mapping_data
+from yield_domain.core.mapping.mapping_processor import prepare_mapping_data
 from src.yield_domain.core.defect_modifier import (
     apply_defect_multipliers
 )

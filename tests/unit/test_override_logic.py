@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from src.shared_kernel.config import ConfigLoader
-from yield_domain.core.mwd_trend_processor import create_mwd_trend_data
+from yield_domain.core.mwd_trend.mwd_trend_processor import create_mwd_trend_data
 
 # 1. 模拟输入数据 (Panel Level)
 @pytest.fixture

@@ -18,7 +18,7 @@ from app.charts.sheet_lot_chart import (
     create_sheet_stack_chart
 )
 from app.constants import COLOR_MAP
-from yield_domain.core.mapping_processor import apply_hotspot_modification_to_matrix
+from yield_domain.core.mapping.mapping_processor import apply_hotspot_modification_to_matrix
 
 # ==============================================================================
 #  1. 宏观分析区 (Group Level)
