@@ -8,7 +8,6 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 
 ## Code Intelligence Policy
 
-- Use CodeGraph first when `.codegraph/` exists.
 - Keep `ARCHITECTURE.md` shallow and use code intelligence for deep lookup.
 
 ## Context Router

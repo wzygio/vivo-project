@@ -60,12 +60,12 @@ processing:
     '群亮点': 0.3
     '大面积亮点': 0
     # Array_Mura
-    'S向ELA Mura': 0
-    'G向ELA Mura': 0
-    '常亮白斑': 0 
-    '白画面黑斑Mura': 3
-    '孔区跑道Mura': 5
-    'G向带状Mura': 0
+    # 'S向ELA Mura': 0
+    # 'G向ELA Mura': 0
+    # '常亮白斑': 0 
+    # '白画面黑斑Mura': 3
+    # '孔区跑道Mura': 5
+    # 'G向带状Mura': 0
     # OLED_Mura
     '彩斑Mura': 0.2
 

@@ -1,38 +1,7 @@
-# Project Context
-
-## Purpose
-
-天柱专项报表系统是面向 OLED/Array 半导体显示制造的良率、SPC、关键备件和自动预警报表系统。
-
-## Operating Model
-
-- Presentation lives under `app/` as Streamlit pages, sections, components, and chart adapters.
-- Domain logic lives under `src/` and follows the Application -> Core -> Infrastructure layering described in `ARCHITECTURE.md`.
-- Stable project knowledge should be routed through `AGENTS.md`, `docs/design/index.md`, `docs/plans/index.md`, `docs/exec-plans/`, `docs/observability.md`, `docs/references/`, `docs/generated/`, and `specs/`.
-- Rebuildable outputs belong under `output/`; logs belong under `logs/`; source business fixtures belong under `resources/` or `docs/project_files/` when intentionally preserved.
-
-## Hard Boundaries
-
-- Do not refactor verified Yield concentration and Mapping algorithms without a specific task and regression proof.
-- Do not change the `DatabaseManager` singleton/retry behavior casually.
-- Do not remove `@st.cache_data` from page-facing flows.
-- Do not simplify the Parquet snapshot refresh and degradation strategy without an approved plan.
-
-## Fast Routing
-
-- Architecture and module boundaries: `ARCHITECTURE.md`
-- Design documents: `docs/design/index.md`
-- Work plans: `docs/plans/index.md`
-- Current execution plans: `docs/exec-plans/active/`
-- Logs, smoke checks, and diagnostics: `docs/observability.md`
-- Rebuildable scans and audits: `docs/generated/`
-- External/vendor references: `docs/references/`
-- User-maintainable contracts and task specs: `specs/`
-
-## Vocabulary
+# Vocabulary
 以下是OLED显示屏制造公司的专有词汇
 
-### LOT/SHEET/GLASS/PANEL及相关词汇
+## LOT/SHEET/GLASS/PANEL及相关词汇
 - Lot：生产单元，一般一个lot包含30个sheet。ID为9位。
 - Sheet：显示屏在前段工艺中是一整个大板，我们称之为Sheet。ID为11位，前9位为Lot ID。
 - Glass：Sheet在蒸镀工艺段被一切为二。ID为12位，前11为Sheet ID。
@@ -44,13 +13,13 @@
 - Mapping：将每一个Panel根据位置坐标拼接成一整个大板来寻找前端工艺的问题，是一种异常调查的常见手段。而拼接成的大板就叫做Mapping。注意，这里的拼接是在数据维度上，因此可以根据需求拼接。
 - 膜位：Mapping图上Panel所在的位置就叫做膜位。比如我们可以将所有的panel拼接成Mapping图，来观察哪个膜位的不良较为显著。
 
-### Defect
+## Defect
 - 异常：产品的缺陷，又称“缺陷/不良”
 - Defect Group：异常分组，一个分组包含多个Defect Code
 - Defect Code：异常代码
 - CT：屏体厂的核心检测站点
 
-### 工艺
+## 工艺
 - 四大工艺：OLED显示屏制造有四大工艺，分别为“ARRAY”, "OLED", "TP", "CELL" 。
     * ARRAY：阵列，制作TFT背板
     * OLED：制作有机发光层，又称“蒸镀/EVA(Evaporation)”
@@ -58,7 +27,7 @@
     * CELL：屏体封装，CT检测就在这里，CT不良打出的地方。
 - 厂别：每道工艺对应一个工厂。因此有时候“工艺”又称“工厂”。
 
-### SPC
+## SPC
 - 监控指标：“站点-参数”的组合。每个站点可能会测多个参数，但每个参数可能会在多个站点测量，所以只有组合才能锁定唯一一个监控指标
 - SPC：统计过程控制。对于我们公司来说，具体形式为：
     * 针对每个监控指标，在一个sheet上的多个点位进行测量，取均值作为该sheet的测量值。
