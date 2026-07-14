@@ -6,7 +6,16 @@
 
 ## Runtime Flow
 
-Document the main user or system flow here.
+- `ConfigLoader` deep-merges application defaults from `config/global.yaml` with
+  the selected product configuration and validates one `AppConfig`.
+- Yield application boundaries convert the validated config into an immutable
+  `YieldDataPolicy` once per request. Dynamic product/date conditions remain in
+  `YieldQueryConfig`.
+- `PanelRepository` applies Work Order policy at the database boundary, stores
+  raw Defect Group data in a policy-versioned Parquet snapshot, then applies the
+  injected Defect Group policy once before returning data to upper layers.
+- Yield services, alerts, and pages consume the resulting data without repeating
+  the global Defect Group filter.
 
 ## Project Map
 
@@ -81,8 +90,17 @@ Document the main user or system flow here.
 
 ## Boundaries
 
-Document module ownership and dependency direction here.
+- Global config owns application-wide Yield data policy; product config owns
+  product identity and product-specific paths/processing adjustments.
+- Yield Application composes dynamic queries and static policy. Infrastructure
+  owns database constraints, snapshots, incremental refresh, degradation, and
+  the final data-policy application. Core and UI do not load configuration files.
 
 ## Verification
 
-Document the checks that prove important behavior still works.
+- Config tests prove every enabled product inherits the single global Yield data
+  policy and that global config changes trigger Session reload.
+- Repository tests prove fresh and cached data receive the same policy while raw
+  Defect Group values remain intact in snapshots.
+- Service tests prove refresh injects validated config into a policy-versioned
+  bottom data provider.

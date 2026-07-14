@@ -10,11 +10,19 @@ product_registry:
     - "M673"
     - "Z517"
 
-spc:
-  cpm_cpk:
-    # sheet_mean: original mode, sigma uses period Sheet Mean std.
-    # point_value: hidden comparison mode, sigma uses period point-level param_value std.
-    period_sigma_source: "sheet_mean"
+# Yield 域通用数据策略。产品配置只声明产品差异。
+data_source:
+  target_defect_groups:
+    - "Array_Line"
+    - "Array_Pixel"
+    - "Array_Mura"
+    - "OLED_Mura"
+  work_order_types:
+    - "ESLC" # 量产
+    - "P" # 量产
+    - "LCFG" # 量产返工
+    - "SLCFG" # 试量产返工
+    - "SYZLC" # 实验转量产
     
 # UI界面相关的配置
 ui:

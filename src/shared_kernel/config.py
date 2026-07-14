@@ -152,9 +152,9 @@ class ConfigLoader:
 
     @classmethod
     def get_cpm_period_sigma_source(cls) -> str:
-        """Read the hidden CPM/CPK period sigma source from global.yaml."""
+        """Read the hidden CPM/CPK period sigma source from spc_config.yaml."""
         root_dir = cls.get_project_root()
-        global_yaml_path = root_dir / "config" / "global.yaml"
+        global_yaml_path = root_dir / "config" / "spc_config.yaml"
 
         try:
             global_conf = cls._load_yaml(global_yaml_path)
@@ -164,6 +164,54 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 读取 CPM/CPK 周期能力口径配置失败: {e}")
             return "sheet_mean"
+
+    @classmethod
+    def get_cpm_period_box_source(cls) -> str:
+        """Read the CPM/CPK period boxplot sample source from spc_config.yaml."""
+        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        try:
+            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
+            cpm_conf = spc_conf.get("cpm_cpk", {})
+            source = str(cpm_conf.get("period_box_source", "point_value")).strip().lower()
+            return source if source in {"sheet_mean", "point_value"} else "point_value"
+        except Exception as e:
+            logging.error(f"❌ 读取 CPM/CPK 周期箱线图数据源配置失败: {e}")
+            return "point_value"
+
+    @classmethod
+    def get_spc_sheet_oos_clip_rules(cls) -> list[dict[str, object]]:
+        """Read normalized parameter-specific Sheet OOS clipping rules."""
+        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        try:
+            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
+            decoration_conf = spc_conf.get("sheet_oos_decoration", {})
+            configured_rules = decoration_conf.get("param_clip_rules", [])
+            if not isinstance(configured_rules, list):
+                return []
+
+            normalized_rules: list[dict[str, object]] = []
+            for rule in configured_rules:
+                if not isinstance(rule, dict):
+                    continue
+                needle = str(rule.get("param_name_contains", "")).strip()
+                if not needle:
+                    continue
+                try:
+                    lower_offset = float(rule.get("lower_offset", 0.0))
+                    upper_offset = float(rule.get("upper_offset", 0.0))
+                except (TypeError, ValueError):
+                    continue
+                normalized_rules.append(
+                    {
+                        "param_name_contains": needle,
+                        "lower_offset": lower_offset,
+                        "upper_offset": upper_offset,
+                    }
+                )
+            return normalized_rules
+        except Exception as e:
+            logging.error(f"❌ 读取 SPC Sheet OOS 截断规则失败: {e}")
+            return []
 
     @classmethod
     def get_scrap_factory_mapping(cls) -> dict:

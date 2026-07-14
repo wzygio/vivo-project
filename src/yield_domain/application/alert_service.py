@@ -1,51 +1,38 @@
-import logging
-from typing import Dict, List, Any
-import pandas as pd
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# [Refactor] 引入配置模型，移除全局 CONFIG
-from src.shared_kernel.config_model import AppConfig
+import pandas as pd
+
 from src.yield_domain.infrastructure.data_loader import load_excel_report
 from src.yield_domain.core.abnormal_detector import AbnormalDetector
+
 
 class AlertService:
     @staticmethod
     def get_dashboard_alerts(
         mwd_group_data: Dict[str, pd.DataFrame],
         mwd_code_data: Dict[str, pd.DataFrame],
-        config: AppConfig,        # [Inject] 注入配置对象
-        product_dir: Path        # [Inject] 注入资源目录
+        product_dir: Path,
+        benchmark_report_config: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """
         获取所有看板相关的预警信息（系统计算 + 真实报表比对）。
-        [V2.0] 增加目标 Group 过滤，只分析配置中关注的三大类。
+
+        输入趋势数据已经由底层 Yield 数据策略统一限定，本层不再读取配置或二次过滤。
         """
         all_alerts = []
-        
-        # 0. 获取配置的目标 Group
-        # [Refactor] 使用对象属性访问
-        target_defect_groups = config.data_source.target_defect_groups or []
         
         # 1. 获取系统计算数据的趋势预警
         # ----------------------------------------------------
         group_monthly = mwd_group_data.get('monthly')
         code_monthly = mwd_code_data.get('monthly')
         
-        # [关键修改] 数据清洗：只保留目标 Group 的数据
-        
-        # A. 清洗 Group 数据
-        valid_group_monthly = pd.DataFrame()
-        if group_monthly is not None and not group_monthly.empty:
-            valid_group_monthly = group_monthly[
-                group_monthly['defect_group'].isin(target_defect_groups)
-            ]
-
-        # B. 清洗 Code 数据
-        valid_code_monthly = pd.DataFrame()
-        if code_monthly is not None and not code_monthly.empty:
-            valid_code_monthly = code_monthly[
-                code_monthly['defect_group'].isin(target_defect_groups)
-            ]
+        valid_group_monthly = (
+            group_monthly if group_monthly is not None else pd.DataFrame()
+        )
+        valid_code_monthly = (
+            code_monthly if code_monthly is not None else pd.DataFrame()
+        )
         
         # 调用检测器
         system_alerts = AbnormalDetector.detect_system_trend_alerts(
@@ -58,19 +45,12 @@ class AlertService:
         group_weekly = mwd_group_data.get('weekly')
         code_weekly = mwd_code_data.get('weekly')
 
-        # A. 清洗 Group 周度数据
-        valid_group_weekly = pd.DataFrame()
-        if group_weekly is not None and not group_weekly.empty:
-            valid_group_weekly = group_weekly[
-                group_weekly['defect_group'].isin(target_defect_groups)
-            ]
-            
-        # B. 清洗 Code 周度数据
-        valid_code_weekly = pd.DataFrame()
-        if code_weekly is not None and not code_weekly.empty:
-            valid_code_weekly = code_weekly[
-                code_weekly['defect_group'].isin(target_defect_groups)
-            ]
+        valid_group_weekly = (
+            group_weekly if group_weekly is not None else pd.DataFrame()
+        )
+        valid_code_weekly = (
+            code_weekly if code_weekly is not None else pd.DataFrame()
+        )
 
         # C. 调用检测器 (复用 detect_system_trend_alerts 逻辑，它也适用于周度数据的结构)
         # 注意：检测器内部生成的文案可能不包含“周度”字样，取决于 time_period 格式(如 2026-W05)
@@ -83,8 +63,7 @@ class AlertService:
 
         # 3. 获取外部基准报表的批次预警
         # ----------------------------------------------------
-        # [Refactor] 从 config.processing 获取字典
-        bench_cfg = config.processing.get('benchmark_report_config', {})
+        bench_cfg = benchmark_report_config or {}
         file_name = bench_cfg.get('file_name')
         sheet_name = bench_cfg.get('sheet_name', 'CT')
         
@@ -96,7 +75,13 @@ class AlertService:
             
             if raw_report_df is not None:
                 # B. 提取目标列表 (Context)
-                target_groups_context = target_defect_groups
+                target_groups_context = []
+                if not valid_group_monthly.empty:
+                    target_groups_context = list(
+                        dict.fromkeys(
+                            valid_group_monthly['defect_group'].dropna().tolist()
+                        )
+                    )
                 
                 # Code: 使用清洗后的 valid_code_monthly 中的 Code 列表
                 target_codes_context = []

@@ -11,7 +11,6 @@ from app.utils.app_setup import AppSetup
 from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
 from yield_domain.application.excel_service import ExcelService
-from yield_domain.application.dtos import YieldQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
@@ -40,19 +39,10 @@ product_dir = SessionManager.get_product_dir()
 # 依赖注入：初始化数据库连接
 db_manager = DatabaseManager()
 
-# L1 快照刷新参数：仅由页头“刷新数据”按钮触发。
-start_dt, end_dt = YieldAnalysisService.get_time_window()
-yield_query_config = YieldQueryConfig(
-    product_code=active_config.data_source.product_code,
-    start_date=start_dt.strftime("%Y-%m-%d"),
-    end_date=end_dt.strftime("%Y-%m-%d"),
-    work_order_types=getattr(active_config.data_source, "work_order_types", []),
-    target_defect_groups=getattr(active_config.data_source, "target_defect_groups", []),
-)
 refresh_handlers = [
     lambda: YieldAnalysisService.safe_refresh_snapshots(
         db_manager,
-        yield_query_config.model_dump_json(),
+        active_config,
     )
 ]
 
@@ -121,8 +111,10 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
     trend_alerts = AlertService.get_dashboard_alerts(
         mwd_group_data=mwd_group_data,
         mwd_code_data=mwd_code_data,
-        config=active_config,
-        product_dir=product_dir
+        product_dir=product_dir,
+        benchmark_report_config=active_config.processing.get(
+            'benchmark_report_config', {}
+        ),
     )
     
     # 2. 构建趋势监控上下文
@@ -154,10 +146,7 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
 #  第一部分: 宏观监控 (Group级趋势)
 # ==============================================================================
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
-render_macro_trend_section(
-    mwd_group_data,
-    group_order=active_config.data_source.target_defect_groups
-)
+render_macro_trend_section(mwd_group_data)
 
 st.divider()
 

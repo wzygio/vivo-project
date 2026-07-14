@@ -2,7 +2,7 @@
 
 > **领域代码**: `yield_domain`  
 > **对应目录**: [`src/yield_domain/`](../../src/yield_domain/)  
-> **最后更新**: 2026-05-18
+> **最后更新**: 2026-07-14
 
 ---
 
@@ -59,7 +59,11 @@
 
 ### 3.2 [`dtos.py`](../../src/yield_domain/application/dtos.py)
 
-`YieldQueryConfig` DTO — 封装查询参数（产品代码、时间范围、缺陷组等）。
+`YieldQueryConfig` DTO — 只封装动态查询参数（产品代码、时间范围）。
+
+`YieldDataPolicy` — 从已校验 `AppConfig` 一次构造的不可变数据策略，封装
+全局 `work_order_types` 与 `target_defect_groups`，并提供稳定签名参与缓存和
+快照隔离。页面和告警层不再拆读这两个配置字段。
 
 ### 3.3 辅助服务
 
@@ -126,19 +130,32 @@ DAO 层职责：
 - Parquet 格式本地快照缓存
 - 增量更新（2 天缓冲窗口）
 - 三防线容灾降级
+- 构造时接收 `YieldDataPolicy`
+- Work Order Type 仅在数据库查询边界应用
+- 原始 Defect Group 数据写入带策略签名的快照
+- 新查、快照、增量与降级数据在返回上层前统一应用一次 Defect Group 策略
 
 ---
 
 ## 6. 关键数据流
 
 ```
-PostgreSQL
+global.yaml + product YAML
     │
     ▼
-data_loader.py  (SQL 查询)
+AppConfig → YieldDataPolicy（一次注入）
     │
     ▼
-PanelRepository  (Parquet 快照缓存 / L1)
+PostgreSQL  ← Work Order 查询约束
+    │
+    ▼
+data_loader.py  (只提取原始 Panel 数据)
+    │
+    ▼
+PanelRepository  (原始 Parquet 快照 / L1)
+    │
+    ▼
+统一应用 Defect Group 数据策略
     │
     ▼
 yield_service.py  (L2: @st.cache_data)

@@ -119,4 +119,5 @@ render_cpm_indicator_sections(
     period_capability_df=filtered_period_capability_df,
     sheet_features_df=filtered_sheet_features_df,
     raw_measurements_df=filtered_raw_measurements_df,
+    period_box_source=ConfigLoader.get_cpm_period_box_source(),
 )

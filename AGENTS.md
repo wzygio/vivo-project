@@ -30,3 +30,22 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 - Do not print, copy, commit, or persist secrets.
 - Do not delete user data unless the user explicitly asks.
 - Preserve unrelated user changes.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked as local Markdown under `.scratch/`.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the canonical Matt Skills role names.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. Read root `CONTEXT.md`, then the
+manufacturing glossary at `references/design_references/domain/GLOSSARY.md`
+when relevant; consult `docs/adr/` for applicable architectural decisions.
+See `docs/agents/domain.md`.

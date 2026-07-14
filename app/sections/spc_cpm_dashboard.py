@@ -247,8 +247,8 @@ def _display_period_label(period_type: str, period_label: str) -> str:
     return f"{PERIOD_LABELS.get(period_type, period_type)} | {period_label}"
 
 
-def _empty_period_points_frame() -> pd.DataFrame:
-    return pd.DataFrame(columns=["period_type", "period_label", "display_label", "period_sort", "sheet_mean"])
+def _empty_period_points_frame(value_column: str = "sheet_mean") -> pd.DataFrame:
+    return pd.DataFrame(columns=["period_type", "period_label", "display_label", "period_sort", value_column])
 
 
 def _add_display_labels(axis_df: pd.DataFrame) -> pd.DataFrame:
@@ -281,15 +281,20 @@ def _infer_period_axis_end_date(sheet_features_df: pd.DataFrame, period_capabili
     return date.today()
 
 
-def _sheet_period_points(sheet_features_df: pd.DataFrame, period_axis_df: pd.DataFrame) -> pd.DataFrame:
-    if sheet_features_df.empty or "sheet_start_time" not in sheet_features_df.columns or "sheet_mean" not in sheet_features_df.columns:
-        return _empty_period_points_frame()
+def _period_points(
+    source_df: pd.DataFrame,
+    period_axis_df: pd.DataFrame,
+    value_column: str,
+) -> pd.DataFrame:
+    if source_df.empty or "sheet_start_time" not in source_df.columns or value_column not in source_df.columns:
+        return _empty_period_points_frame(value_column)
 
-    df = sheet_features_df.copy()
+    df = source_df.copy()
     df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
-    df = df.dropna(subset=["sheet_start_time", "sheet_mean"]).copy()
+    df[value_column] = pd.to_numeric(df[value_column], errors="coerce")
+    df = df.dropna(subset=["sheet_start_time", value_column]).copy()
     if df.empty:
-        return _empty_period_points_frame()
+        return _empty_period_points_frame(value_column)
 
     frames: list[pd.DataFrame] = []
     month_df = df.copy()
@@ -314,6 +319,14 @@ def _sheet_period_points(sheet_features_df: pd.DataFrame, period_axis_df: pd.Dat
         on=["period_type", "period_label"],
         how="inner",
     )
+
+
+def _sheet_period_points(sheet_features_df: pd.DataFrame, period_axis_df: pd.DataFrame) -> pd.DataFrame:
+    return _period_points(sheet_features_df, period_axis_df, "sheet_mean")
+
+
+def _measurement_period_points(raw_measurements_df: pd.DataFrame, period_axis_df: pd.DataFrame) -> pd.DataFrame:
+    return _period_points(raw_measurements_df, period_axis_df, "param_value")
 
 
 def _add_spec_line(fig: go.Figure, y_value: object, label: str, color: str, row: int) -> None:
@@ -483,20 +496,30 @@ def _create_period_overview_chart(
     sheet_features_df: pd.DataFrame,
     period_capability_df: pd.DataFrame,
     title: str,
+    raw_measurements_df: pd.DataFrame | None = None,
+    period_box_source: str = "sheet_mean",
 ) -> go.Figure:
-    """Create Figure1: M/W/D sheet_mean boxes."""
+    """Create Figure1: M/W/D boxes from Sheet means or point-level measurements."""
     fig = go.Figure()
 
     axis_end_date = _infer_period_axis_end_date(sheet_features_df, period_capability_df)
     period_axis_df = _period_axis_with_display(axis_end_date, sheet_features_df)
-    points_df = _sheet_period_points(sheet_features_df, period_axis_df)
+    use_point_values = period_box_source == "point_value" and raw_measurements_df is not None
+    if use_point_values:
+        points_df = _measurement_period_points(raw_measurements_df, period_axis_df)
+        value_column = "param_value"
+        value_label = "Point Value"
+    else:
+        points_df = _sheet_period_points(sheet_features_df, period_axis_df)
+        value_column = "sheet_mean"
+        value_label = "Sheet Mean"
     ordered_labels = period_axis_df["display_label"].tolist()
 
     for period_type in ["month", "week", "day"]:
         type_points = points_df[points_df["period_type"] == period_type]
         labels = period_axis_df[period_axis_df["period_type"] == period_type]["display_label"].tolist()
         for label in labels:
-            y_values = type_points[type_points["display_label"] == label]["sheet_mean"]
+            y_values = type_points[type_points["display_label"] == label][value_column]
             if y_values.empty:
                 continue
             fig.add_trace(
@@ -509,7 +532,7 @@ def _create_period_overview_chart(
                     line={"color": PERIOD_COLORS.get(period_type, "#2563eb"), "width": 1.4},
                     showlegend=False,
                     width=0.42,
-                    hovertemplate=f"{label}<br>Sheet Mean=%{{y:.4f}}<extra></extra>",
+                    hovertemplate=f"{label}<br>{value_label}=%{{y:.4f}}<extra></extra>",
                 ),
             )
 
@@ -520,7 +543,7 @@ def _create_period_overview_chart(
     )
     _apply_measurement_spec_lines(fig, spec_source)
     if not spec_source.empty:
-        y_range = _resolve_measurement_y_range(points_df["sheet_mean"], spec_source)
+        y_range = _resolve_measurement_y_range(points_df[value_column], spec_source)
         if y_range is not None:
             fig.update_yaxes(range=y_range)
 
@@ -532,7 +555,7 @@ def _create_period_overview_chart(
         boxmode="group",
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
-        yaxis={"title": "Sheet Mean"},
+        yaxis={"title": value_label},
     )
     fig.update_xaxes(categoryorder="array", categoryarray=ordered_labels, tickangle=-35)
     return fig
@@ -676,6 +699,7 @@ def render_cpm_indicator_sections(
     period_capability_df: pd.DataFrame,
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
 ) -> None:
     """Render one expander per monitoring indicator with Task2 distribution figures."""
     if sheet_features_df.empty:
@@ -733,6 +757,8 @@ def render_cpm_indicator_sections(
                 fig1 = _create_period_overview_chart(
                     sheet_features_df=indicator_features_df,
                     period_capability_df=indicator_capability_df,
+                    raw_measurements_df=indicator_raw_df,
+                    period_box_source=period_box_source,
                     title=f"{label} | 月周天分布",
                 )
                 st.plotly_chart(fig1, width="stretch")

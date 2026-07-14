@@ -2,7 +2,6 @@
 import streamlit as st
 import logging
 from pathlib import Path
-import time
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.config_model import AppConfig
 
@@ -15,7 +14,7 @@ class SessionManager:
     
     KEY_PRODUCT = "selected_product_code"
     KEY_CONFIG = "active_app_config"
-    KEY_CONFIG_MTIME = "config_file_mtime" # 记录配置文件的最后修改时间
+    KEY_CONFIG_VERSION = "config_files_version" # 记录全局+产品配置版本
     
     # 定义可用产品列表
     AVAILABLE_PRODUCTS = ConfigLoader.get_enabled_products()
@@ -49,19 +48,15 @@ class SessionManager:
             
         # 获取硬盘文件的最新修改时间
         try:
-            root = ConfigLoader.get_project_root()
-            config_file = root / "config" / "products" / f"{product_code}.yaml"
-            if not config_file.exists():
-                return False # 文件都没了，保持现状吧
+            current_version = SessionManager._get_config_version(product_code)
             
-            current_mtime = config_file.stat().st_mtime
+            # 获取上次加载时记录的组合版本
+            last_version = st.session_state.get(SessionManager.KEY_CONFIG_VERSION)
             
-            # 获取上次加载时记录的时间
-            last_mtime = st.session_state.get(SessionManager.KEY_CONFIG_MTIME, 0)
-            
-            # 如果硬盘文件比内存里的新，说明用户改了配置
-            if current_mtime > last_mtime:
-                logging.info(f"⚡ 检测到配置文件变动 ({product_code}.yaml)，触发热重载...")
+            if current_version != last_version:
+                logging.info(
+                    f"⚡ 检测到全局或产品配置变动 ({product_code})，触发热重载..."
+                )
                 return True
                 
         except Exception as e:
@@ -70,21 +65,32 @@ class SessionManager:
         return False
 
     @staticmethod
-    def load_and_set_config(product_code: str):
+    def _get_config_version(product_code: str) -> tuple[int, int]:
+        """返回全局配置与当前产品配置各自的纳秒级版本。"""
+        root = ConfigLoader.get_project_root()
+        config_paths = (
+            root / "config" / "global.yaml",
+            root / "config" / "products" / f"{product_code}.yaml",
+        )
+        return tuple(
+            path.stat().st_mtime_ns if path.exists() else 0
+            for path in config_paths
+        )
+
+    @staticmethod
+    def load_and_set_config(product_code: str) -> None:
         """加载指定产品的配置并存入 Session，同时更新时间戳"""
         try:
             # 1. 加载配置
             config = ConfigLoader.load_config(product_code)
             
-            # 2. 获取文件时间戳
-            root = ConfigLoader.get_project_root()
-            config_file = root / "config" / "products" / f"{product_code}.yaml"
-            mtime = config_file.stat().st_mtime if config_file.exists() else time.time()
+            # 2. 获取全局+产品配置组合版本
+            config_version = SessionManager._get_config_version(product_code)
             
             # 3. 更新 Session
             st.session_state[SessionManager.KEY_PRODUCT] = product_code
             st.session_state[SessionManager.KEY_CONFIG] = config
-            st.session_state[SessionManager.KEY_CONFIG_MTIME] = mtime
+            st.session_state[SessionManager.KEY_CONFIG_VERSION] = config_version
             
             # 4. [关键] 配置变了，旧的 Service 缓存(基于旧config对象)也应该失效
             # 虽然 Streamlit 会因为参数(config对象)变化而自动重算，

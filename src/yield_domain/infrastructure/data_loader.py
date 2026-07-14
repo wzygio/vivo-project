@@ -1,10 +1,9 @@
 # src/vivo_project/infrastructure/data_loader.py
 import logging
 import pandas as pd
-import numpy as np
 from sqlalchemy import text
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -14,8 +13,7 @@ def load_panel_details(
     start_date: str, 
     end_date: str, 
     prod_code: str, 
-    work_order_types: List[str],
-    target_defect_groups: List[str]
+    work_order_types: Sequence[str],
 ) -> pd.DataFrame:
     """
     (V3.1 - 纯净版)
@@ -82,29 +80,7 @@ def load_panel_details(
                 inplace=True
             )
         
-        # 2. 统一清洗层 (Sanitization Layer)
-        if target_defect_groups:
-            # 1. 找到所有“非目标组”且“非良品”的行
-            mask_non_target = (
-                ~panel_df['defect_group'].isin(target_defect_groups) & 
-                panel_df['defect_group'].notna()
-            )
-            
-            cleaned_count = mask_non_target.sum()
-            
-            if cleaned_count > 0:
-                # 2. 强制抹除这些行的不良信息 (将其变为良品)
-                cols_to_clean = ['defect_code', 'defect_desc', 'defect_group']
-                panel_df.loc[mask_non_target, cols_to_clean] = np.nan
-                
-                logging.info(
-                    f"🛡️ [数据清洗] 已抹除 {cleaned_count} 条非目标 Defect 记录 "
-                    f"(Target: {target_defect_groups})。"
-                )
-            else:
-                logging.info("🛡️ [数据清洗] 数据纯净，无需抹除。")
-                
-        logging.info(f"成功提取并清洗 {len(panel_df)} 行数据。")
+        logging.info(f"成功提取 {len(panel_df)} 行原始数据。")
         return panel_df
         
     except Exception as e:

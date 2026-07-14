@@ -37,7 +37,6 @@ def test_load_panel_details_uses_productrequest_description_for_batch_no(monkeyp
         end_date="2025-11-14",
         prod_code="M660",
         work_order_types=["ESLC", "P"],
-        target_defect_groups=[],
     )
 
     sql_text = captured_sql["text"]

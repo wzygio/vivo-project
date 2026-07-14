@@ -1,13 +1,28 @@
 # src/vivo_project/infrastructure/repositories/panel_repository.py
 import pandas as pd
+import numpy as np
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence
 from datetime import datetime, timedelta
 
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
-from src.yield_domain.application.dtos import YieldQueryConfig
+from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
+
+
+def build_yield_snapshot_path(
+    data_dir: Path,
+    product_code: str,
+    data_policy: YieldDataPolicy,
+) -> Path:
+    """构造包含静态数据策略签名的 Yield 快照路径。"""
+    return (
+        data_dir
+        / product_code
+        / f"yield_snapshot_{product_code}_{data_policy.signature}.parquet"
+    )
+
 
 class PanelRepository:
     """
@@ -25,6 +40,7 @@ class PanelRepository:
     def __init__(
         self, 
         snapshot_path: Path,
+        data_policy: YieldDataPolicy,
         use_snapshot: bool = True,
         db_manager: Optional[DatabaseManager] = None
     ):
@@ -34,6 +50,7 @@ class PanelRepository:
             self.db = DatabaseManager()
             
         self.snapshot_path = snapshot_path
+        self.data_policy = data_policy
         self.use_snapshot = use_snapshot
 
     def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
@@ -103,7 +120,8 @@ class PanelRepository:
                 try:
                     df_delta = self._fetch_from_db_in_chunks(
                         delta_s_str, query.end_date, 
-                        query.product_code, query.work_order_types, query.target_defect_groups
+                        query.product_code,
+                        self.data_policy.work_order_types,
                     )
                     
                     if not df_delta.empty:
@@ -133,7 +151,8 @@ class PanelRepository:
             try:
                 df_final = self._fetch_from_db_in_chunks(
                     query.start_date, query.end_date, 
-                    query.product_code, query.work_order_types, query.target_defect_groups
+                    query.product_code,
+                    self.data_policy.work_order_types,
                 )
                 if not df_final.empty:
                     df_final[time_col] = pd.to_datetime(df_final[time_col])
@@ -178,30 +197,16 @@ class PanelRepository:
                    (df_final[time_col] <= req_end_dt)
             df_final = df_final[mask].copy()
             
-            # [核心修复] 对缓存命中的数据进行 Group 过滤（缓存可能包含全量 Group）
-            if query.target_defect_groups:
-                # 找到所有"非目标组"且"非良品"的行
-                mask_non_target = (
-                    ~df_final['defect_group'].isin(query.target_defect_groups) & 
-                    df_final['defect_group'].notna()
-                )
-                
-                if mask_non_target.sum() > 0:
-                    # 强制抹除这些行的不良信息（将其变为良品）
-                    import numpy as np
-                    cols_to_clean = ['defect_code', 'defect_desc', 'defect_group']
-                    df_final.loc[mask_non_target, cols_to_clean] = np.nan
-                    logging.info(
-                        f"🛡️ [Repository] 命中缓存后清洗：已抹除 {mask_non_target.sum()} 条非目标 Group 记录 "
-                        f"(Target: {query.target_defect_groups})。"
-                    )
-            
-            return df_final.reset_index(drop=True)
+            return self._apply_data_policy(df_final).reset_index(drop=True)
 
         return df_final
 
     def _fetch_from_db_in_chunks(
-        self, start_str, end_str, prod, wo_types, target_groups
+        self,
+        start_str: str,
+        end_str: str,
+        prod: str,
+        wo_types: Sequence[str],
     ) -> pd.DataFrame:
         """
         内部辅助：分片执行数据库查询
@@ -222,7 +227,7 @@ class PanelRepository:
                 e_s = current_end.strftime("%Y-%m-%d")
                 
                 df = load_panel_details(
-                    self.db, s_s, e_s, prod, wo_types, target_groups
+                    self.db, s_s, e_s, prod, wo_types
                 )
                 if not df.empty: all_chunks.append(df)
                 
@@ -236,7 +241,34 @@ class PanelRepository:
             logging.error(f"❌ 数据库查询失败: {e}")
             return pd.DataFrame()
 
-    def get_array_input_times(self, lot_ids: List[str], custom_times: Optional[dict] = None) -> pd.DataFrame:
+    def _apply_data_policy(self, panel_df: pd.DataFrame) -> pd.DataFrame:
+        """在向上层返回前统一应用注入的 Defect Group 策略。"""
+        target_groups = self.data_policy.target_defect_groups
+        if panel_df.empty or not target_groups or 'defect_group' not in panel_df.columns:
+            return panel_df
+
+        mask_non_target = (
+            ~panel_df['defect_group'].isin(target_groups)
+            & panel_df['defect_group'].notna()
+        )
+        cleaned_count = int(mask_non_target.sum())
+        if cleaned_count:
+            cols_to_clean = ['defect_code', 'defect_desc', 'defect_group']
+            existing_cols = [col for col in cols_to_clean if col in panel_df.columns]
+            panel_df.loc[mask_non_target, existing_cols] = np.nan
+            logging.info(
+                "🛡️ [YieldRepo] 统一数据策略已抹除 %s 条非目标 Group 记录 "
+                "(Target: %s)。",
+                cleaned_count,
+                target_groups,
+            )
+        return panel_df
+
+    def get_array_input_times(
+        self,
+        lot_ids: List[str],
+        custom_times: Optional[Dict[str, str]] = None,
+    ) -> pd.DataFrame:
         # 保持原有逻辑不变
         if not lot_ids: return pd.DataFrame()
         return load_array_input_times(

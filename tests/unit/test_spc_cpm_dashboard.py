@@ -1,7 +1,9 @@
+from contextlib import nullcontext
 from datetime import date
 
 import pandas as pd
 
+from app.sections import spc_cpm_dashboard
 from app.sections.spc_cpm_dashboard import (
     _create_period_capability_table,
     _create_period_overview_chart,
@@ -12,6 +14,7 @@ from app.sections.spc_cpm_dashboard import (
     get_default_cpm_start_date,
     get_params_for_factory_steps,
     get_steps_for_factory,
+    render_cpm_indicator_sections,
 )
 
 
@@ -217,6 +220,82 @@ def test_period_overview_chart_uses_box_without_metric_lines() -> None:
     assert {"USL: 12", "LSL: 8", "UCL: 11", "LCL: 9"}.issubset(annotation_texts)
     assert fig.layout.yaxis.range == (8.0, 12.0)
     assert fig.layout.height <= 480
+
+
+def test_period_overview_chart_uses_all_measurement_points_in_point_value_mode() -> None:
+    raw_measurements = pd.DataFrame(
+        [
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-24", "param_value": 8.5},
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-24", "param_value": 9.5},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-25", "param_value": 10.5},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-25", "param_value": 11.5},
+        ]
+    )
+
+    fig = _create_period_overview_chart(
+        sheet_features_df=_sample_sheet_features(),
+        period_capability_df=_sample_period_capability(),
+        raw_measurements_df=raw_measurements,
+        period_box_source="point_value",
+        title="ARRAY | 15260 | 4PP_Rs",
+    )
+
+    month_trace = next(trace for trace in fig.data if trace.name == "月 | 2026-06")
+    assert list(month_trace.y) == [8.5, 9.5, 10.5, 11.5]
+    assert fig.layout.yaxis.title.text == "Point Value"
+
+
+def test_render_indicator_sections_forwards_point_box_source_and_measurements(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeColumn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def metric(self, *_args, **_kwargs):
+            return None
+
+    monkeypatch.setattr(spc_cpm_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(
+        spc_cpm_dashboard.st,
+        "columns",
+        lambda spec, **_kwargs: [FakeColumn() for _ in range(spec if isinstance(spec, int) else len(spec))],
+    )
+    monkeypatch.setattr(spc_cpm_dashboard.st, "plotly_chart", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        spc_cpm_dashboard,
+        "_create_period_overview_chart",
+        lambda **kwargs: captured.update(kwargs) or object(),
+    )
+    monkeypatch.setattr(
+        spc_cpm_dashboard,
+        "_create_sheet_points_box_charts",
+        lambda **_kwargs: (object(), object()),
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "sheet_start_time": "2026-06-24",
+                "param_value": 8.5,
+            }
+        ]
+    )
+
+    render_cpm_indicator_sections(
+        period_capability_df=pd.DataFrame(),
+        sheet_features_df=_sample_sheet_features(),
+        raw_measurements_df=raw_measurements,
+        period_box_source="point_value",
+    )
+
+    assert captured["period_box_source"] == "point_value"
+    assert captured["raw_measurements_df"].equals(raw_measurements)
 
 
 def test_period_capability_table_shows_cpm_and_cpk_together() -> None:

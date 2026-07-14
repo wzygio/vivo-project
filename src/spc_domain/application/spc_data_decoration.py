@@ -74,6 +74,7 @@ def prepare_decorated_spc_data(
         sheet_features_df=original_features_df,
         product_dir=resolved_product_dir,
         persist_files=persist_files,
+        clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
     )
 
     decorated_features_df = _preprocess_sheet_features_by_type(

@@ -10,8 +10,11 @@ import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
-from src.yield_domain.infrastructure.repositories.yield_repository import PanelRepository
-from src.yield_domain.application.dtos import YieldQueryConfig
+from src.yield_domain.infrastructure.repositories.yield_repository import (
+    PanelRepository,
+    build_yield_snapshot_path,
+)
+from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -77,7 +80,12 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_raw_panel_details(query_config_json: str, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
+    def get_raw_panel_details(
+        query_config_json: str,
+        data_policy_json: str,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+    ) -> pd.DataFrame:
         """
         [L1 Cache] 从数据库加载原始 Panel 数据。
         基于 JSON 序列化的 DTO + 快照签名进行缓存追踪。
@@ -86,15 +94,36 @@ class YieldAnalysisService:
         
         # 1. 严格实例化 DTO
         query = YieldQueryConfig.model_validate_json(query_config_json)
+        data_policy = YieldDataPolicy.model_validate_json(data_policy_json)
         
         # 2. 动态路由隔离路径 (Service 层自己决定存哪，不再依赖 AppConfig)
-        snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
+        snapshot_path = build_yield_snapshot_path(
+            Path("data"), query.product_code, data_policy
+        )
         snapshot_path.parent.mkdir(parents=True, exist_ok=True)
         
         # 3. 实例化 Repo 并透传 DTO 与 db_manager（依赖注入）
-        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True, db_manager=_db_manager)
+        repo = PanelRepository(
+            snapshot_path=snapshot_path,
+            data_policy=data_policy,
+            use_snapshot=True,
+            db_manager=_db_manager,
+        )
         
         return repo.get_panel_details(query=query)
+
+    @staticmethod
+    def _build_panel_request(
+        config: AppConfig,
+    ) -> tuple[YieldQueryConfig, YieldDataPolicy]:
+        """在 Yield 数据边界一次构造动态查询与静态数据策略。"""
+        start_dt, end_dt = YieldAnalysisService.get_time_window()
+        query = YieldQueryConfig(
+            start_date=start_dt.strftime("%Y-%m-%d"),
+            end_date=end_dt.strftime("%Y-%m-%d"),
+            product_code=config.data_source.product_code,
+        )
+        return query, YieldDataPolicy.from_app_config(config)
 
     @staticmethod
     @st.cache_data(show_spinner=False)
@@ -104,22 +133,15 @@ class YieldAnalysisService:
         """
         import logging
         import pandas as pd
-        from src.yield_domain.application.dtos import YieldQueryConfig
-        
-        # [核心修复]：从全局 config 中剥离出底层所需的参数，组装成标准的 DTO
-        start_dt, end_dt = YieldAnalysisService.get_time_window()
-        
-        query = YieldQueryConfig(
-            start_date=start_dt.strftime("%Y-%m-%d"),
-            end_date=end_dt.strftime("%Y-%m-%d"),
-            product_code=config.data_source.product_code,
-            # 补齐前端代码中遗漏的工单类型和特定不良组过滤参数
-            work_order_types=config.data_source.work_order_types,
-            target_defect_groups=config.data_source.target_defect_groups
-        )
+        query, data_policy = YieldAnalysisService._build_panel_request(config)
         
         # 1. 获取 L1 数据 (向下传递严格序列化后的 JSON 字符串 + 签名)
-        raw_df = YieldAnalysisService.get_raw_panel_details(query.model_dump_json(), _db_manager, snapshot_signature)
+        raw_df = YieldAnalysisService.get_raw_panel_details(
+            query.model_dump_json(),
+            data_policy.model_dump_json(),
+            _db_manager,
+            snapshot_signature,
+        )
         
         if raw_df.empty: 
             return pd.DataFrame()
@@ -299,7 +321,12 @@ class YieldAnalysisService:
         processing_conf = config.processing
         snapshot_path = Path(processing_conf.get('snapshot_path', 'dummy.parquet'))
         
-        repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=False, db_manager=_db_manager)
+        repo = PanelRepository(
+            snapshot_path=snapshot_path,
+            data_policy=YieldDataPolicy(),
+            use_snapshot=False,
+            db_manager=_db_manager,
+        )
         
         # 从 config 获取自定义时间
         input_time_conf = processing_conf.get('array_input_time', {})
@@ -410,7 +437,10 @@ class YieldAnalysisService:
             return {}
         
     @staticmethod
-    def safe_refresh_snapshots(_db_manager: Optional['DatabaseManager'], query_config_json: str) -> bool:
+    def safe_refresh_snapshots(
+        _db_manager: Optional['DatabaseManager'],
+        config: AppConfig,
+    ) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写。
         """
@@ -418,12 +448,19 @@ class YieldAnalysisService:
         from pathlib import Path
         
         try:
-            query = YieldQueryConfig.model_validate_json(query_config_json)
+            query, data_policy = YieldAnalysisService._build_panel_request(config)
             
-            snapshot_path = Path("data") / query.product_code / f"yield_snapshot_{query.product_code}.parquet"
+            snapshot_path = build_yield_snapshot_path(
+                Path("data"), query.product_code, data_policy
+            )
             snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             
-            repo = PanelRepository(snapshot_path=snapshot_path, use_snapshot=True, db_manager=_db_manager)
+            repo = PanelRepository(
+                snapshot_path=snapshot_path,
+                data_policy=data_policy,
+                use_snapshot=True,
+                db_manager=_db_manager,
+            )
             
             logging.info(f"🔄 [YieldService] 向底层下发 {query.product_code} 强刷指令 (Force Refresh)...")
             
