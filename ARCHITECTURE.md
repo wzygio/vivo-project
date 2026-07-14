@@ -16,6 +16,9 @@
   injected Defect Group policy once before returning data to upper layers.
 - Yield services, alerts, and pages consume the resulting data without repeating
   the global Defect Group filter.
+- Page-facing Streamlit data services cache only reload-stable native payloads
+  and construct project ViewModels outside `st.cache_data`; see
+  `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
 
 ## Project Map
 

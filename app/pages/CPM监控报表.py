@@ -19,8 +19,10 @@ import streamlit as st
 
 from app.components.page_header import extract_cached_funcs, render_page_header
 from app.sections.spc_cpm_dashboard import (
+    build_daily_cpk_alerts,
     filter_cpm_report,
     get_default_cpm_start_date,
+    render_cpk_alert_center,
     render_cpm_filters,
     render_cpm_indicator_sections,
     render_sheet_oos_decoration_admin,
@@ -77,6 +79,12 @@ sheet_features_df = view_model.sheet_features_df
 raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
 period_capability_df = view_model.period_capability_df
+
+cpk_alerts_df = build_daily_cpk_alerts(period_capability_df)
+# render_cpk_alert_center(
+#     cpk_alerts_df,
+#     has_capability_data=not period_capability_df.empty,
+# )
 
 if sheet_features_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示 CPM/CPK 分布的 SPC 数据。")

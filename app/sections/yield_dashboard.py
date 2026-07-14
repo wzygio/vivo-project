@@ -470,7 +470,8 @@ def _render_compact_mapping_section(
         st.warning("该 Code 在 Mapping 数据源中无记录。")
         return
 
-    tabs = st.tabs(tab_labels)
+    default_tab = tab_labels[-2] if len(tab_labels) >= 2 else tab_labels[-1]
+    tabs = st.tabs(tab_labels, default=default_tab)
     key_fragment = _state_key_fragment(curr_group, curr_code)
     for i, batch_no in enumerate(batches):
         with tabs[i]:

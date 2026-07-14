@@ -168,7 +168,7 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
         trend_line = f"已监控 {trend_scope}，{comparison_str}，无异常升高"
 
     # --- 渲染 ---
-    with st.expander(f"智能预警中心（近{time_period}天）", expanded=has_any):
+    with st.expander(f"智能预警中心（近{time_period}天）", expanded=False):
         if has_any:
             parts_summary = []
             if has_trend:

@@ -29,6 +29,33 @@ from src.yield_domain.core.sheet_lot.overrides import (
     _override_rates,
 )
 
+def _filter_lots_by_warehousing_window(
+    lot_base: pd.DataFrame,
+    as_of: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Keep lots warehoused on or after the first day of two months ago."""
+    if lot_base.empty:
+        return lot_base.copy()
+
+    if 'warehousing_time' not in lot_base.columns:
+        logging.warning("Lot data has no warehousing_time column; excluding all lots.")
+        return lot_base.iloc[0:0].copy()
+
+    reference_date = pd.Timestamp(as_of) if as_of is not None else pd.Timestamp.now()
+    cutoff_date = reference_date.normalize().replace(day=1) - pd.DateOffset(months=2)
+    warehousing_dates = pd.to_datetime(
+        lot_base['warehousing_time'], format='%Y%m%d', errors='coerce'
+    )
+    filtered_lot_base = lot_base.loc[warehousing_dates >= cutoff_date].copy()
+
+    logging.info(
+        "Applied lot warehousing window from %s: retained %d of %d lots.",
+        cutoff_date.strftime('%Y-%m-%d'),
+        len(filtered_lot_base),
+        len(lot_base),
+    )
+    return filtered_lot_base
+
 # ==============================================================================
 #             ByCode计算Sheet级不良率
 # ==============================================================================
@@ -164,6 +191,9 @@ def calculate_lot_defect_rates(
     logging.info("开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...")
     try:
         lot_base = _calculate_lot_base_info_with_median_time(panel_details_df, array_input_times_df)
+        if lot_base.empty: return None
+
+        lot_base = _filter_lots_by_warehousing_window(lot_base)
         if lot_base.empty: return None
 
         lot_base_filtered = _filter_by_pass_rate(lot_base.copy(), 190 * 30, 0.2, "Lot")

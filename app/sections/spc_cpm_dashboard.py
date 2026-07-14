@@ -30,11 +30,71 @@ PERIOD_FILL_COLORS = {
     "day": "rgba(245, 158, 11, 0.18)",
 }
 SHEET_BOX_PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0f766e", "#dc2626", "#64748b"]
+CPK_ALERT_THRESHOLD = 1.33
+CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规日期", "CPK值"]
 
 
 def get_default_cpm_start_date(end_date: date) -> date:
     """Return the first day needed by the CPM/CPK Task2 report."""
     return get_period_window_start(end_date)
+
+
+def build_daily_cpk_alerts(
+    period_capability_df: pd.DataFrame,
+    threshold: float = CPK_ALERT_THRESHOLD,
+) -> pd.DataFrame:
+    """Return every daily CPK record strictly below the alert threshold."""
+    required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", "cpk"}
+    if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
+        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+
+    capability_df = period_capability_df.copy()
+    capability_df["cpk"] = pd.to_numeric(capability_df["cpk"], errors="coerce")
+    alert_rows = capability_df[
+        capability_df["period_type"].astype(str).eq("day")
+        & capability_df["cpk"].lt(threshold)
+    ].copy()
+    if alert_rows.empty:
+        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+
+    alerts_df = alert_rows.rename(
+        columns={
+            "factory": "厂别",
+            "step_id": "站点",
+            "param_name": "参数名称",
+            "period_label": "超规日期",
+            "cpk": "CPK值",
+        }
+    )[CPK_ALERT_COLUMNS]
+    alerts_df["超规日期"] = alerts_df["超规日期"].astype(str)
+    return alerts_df.sort_values(
+        ["超规日期", "厂别", "站点", "参数名称", "CPK值"],
+        ascending=[False, True, True, True, True],
+        kind="stable",
+    ).reset_index(drop=True)
+
+
+def render_cpk_alert_center(
+    alerts_df: pd.DataFrame,
+    *,
+    has_capability_data: bool,
+    threshold: float = CPK_ALERT_THRESHOLD,
+) -> None:
+    """Render the product-level daily CPK alert summary and details."""
+    has_alerts = not alerts_df.empty
+    with st.expander(f"CPK预警中心（日CPK < {threshold:.2f}）", expanded=has_alerts):
+        if has_alerts:
+            st.error(f"检测到 {len(alerts_df)} 条日 CPK 预警，请关注。")
+            st.dataframe(
+                alerts_df,
+                column_config={"CPK值": st.column_config.NumberColumn("CPK值", format="%.3f")},
+                hide_index=True,
+                use_container_width=True,
+            )
+        elif has_capability_data:
+            st.success("当前产品日 CPK 均不低于 1.33。")
+        else:
+            st.info("当前产品暂无可计算的日 CPK 数据。")
 
 
 def _normalise_selection(selection: Iterable[str], available: list[str]) -> list[str]:
@@ -447,11 +507,12 @@ def _format_metric_value(value: object) -> str:
 
 
 def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.DataFrame:
-    """Return a 2-row CPM/CPK matrix over the recent 2M + 3W + 7D window."""
-    metric_column = "指标"
+    """Return one CPM/CPK row per recent month, week, or day period."""
+    period_column = "周期"
+    metric_columns = ["CPM", "CPK"]
     required_cols = {"period_type", "period_label"}
     if period_capability_df.empty or not required_cols.issubset(period_capability_df.columns):
-        return pd.DataFrame(columns=[metric_column])
+        return pd.DataFrame(columns=[period_column, *metric_columns])
 
     df = period_capability_df.copy()
     if "period_sort" not in df.columns:
@@ -472,24 +533,29 @@ def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.Da
         frames.append(type_df.tail(PERIOD_WINDOW_LIMITS[period_type]))
 
     if not frames:
-        return pd.DataFrame(columns=[metric_column])
+        return pd.DataFrame(columns=[period_column, *metric_columns])
 
     selected_df = pd.concat(frames, ignore_index=True).copy()
-    records = [{metric_column: "CPM"}, {metric_column: "CPK"}]
-    ordered_columns = [metric_column]
+    records: list[dict[str, str]] = []
+    seen_periods: set[str] = set()
 
     for _, row in selected_df.iterrows():
         period_type = row.get("period_type")
         period_label = str(row.get("period_label", ""))
         period_prefix = PERIOD_LABELS.get(str(period_type), str(period_type))
-        column_name = f"{period_prefix} {period_label}".strip()
-        if not column_name or column_name in ordered_columns:
+        period_name = f"{period_prefix} {period_label}".strip()
+        if not period_name or period_name in seen_periods:
             continue
-        ordered_columns.append(column_name)
-        records[0][column_name] = _format_metric_value(row.get("cpm"))
-        records[1][column_name] = _format_metric_value(row.get("cpk"))
+        seen_periods.add(period_name)
+        records.append(
+            {
+                period_column: period_name,
+                "CPM": _format_metric_value(row.get("cpm")),
+                "CPK": _format_metric_value(row.get("cpk")),
+            }
+        )
 
-    return pd.DataFrame(records, columns=ordered_columns)
+    return pd.DataFrame(records, columns=[period_column, *metric_columns])
 
 
 def _create_period_overview_chart(
@@ -744,31 +810,30 @@ def render_cpm_indicator_sections(
             metric_cols[3].metric("最小CPM", _format_metric_value(cpm_values.min() if not cpm_values.empty else pd.NA))
 
             capability_table = _create_period_capability_table(indicator_capability_df)
-            if not capability_table.empty:
-                st.dataframe(
-                    capability_table,
-                    hide_index=True,
-                    use_container_width=True,
-                    height=min(420, 38 + 35 * len(capability_table)),
-                )
-
-            period_col, chamber_col, time_col = st.columns([1.05, 1, 1], gap="large")
-            with period_col:
-                fig1 = _create_period_overview_chart(
-                    sheet_features_df=indicator_features_df,
-                    period_capability_df=indicator_capability_df,
-                    raw_measurements_df=indicator_raw_df,
-                    period_box_source=period_box_source,
-                    title=f"{label} | 月周天分布",
-                )
-                st.plotly_chart(fig1, width="stretch")
-
+            fig1 = _create_period_overview_chart(
+                sheet_features_df=indicator_features_df,
+                period_capability_df=indicator_capability_df,
+                raw_measurements_df=indicator_raw_df,
+                period_box_source=period_box_source,
+                title=f"{label} | 月周天分布",
+            )
             chamber_fig, time_fig = _create_sheet_points_box_charts(
                 raw_measurements_df=indicator_raw_df,
                 title_prefix=label,
                 spec_df=indicator_features_df,
             )
-            with chamber_col:
-                st.plotly_chart(chamber_fig, width="stretch")
-            with time_col:
-                st.plotly_chart(time_fig, width="stretch")
+
+            period_col, capability_col = st.columns([1.15, 1], gap="large")
+            with period_col:
+                st.plotly_chart(fig1, width="stretch")
+            with capability_col:
+                if not capability_table.empty:
+                    st.dataframe(
+                        capability_table,
+                        hide_index=True,
+                        use_container_width=True,
+                        height=min(420, 38 + 35 * len(capability_table)),
+                    )
+
+            st.plotly_chart(chamber_fig, width="stretch")
+            st.plotly_chart(time_fig, width="stretch")

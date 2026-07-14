@@ -26,6 +26,7 @@ class _FakeStreamlit:
     def __init__(self):
         self.plotly_keys = []
         self.session_state = {}
+        self.tab_defaults = []
 
     def markdown(self, *args, **kwargs):
         return None
@@ -46,7 +47,8 @@ class _FakeStreamlit:
         count = spec if isinstance(spec, int) else len(spec)
         return [_Context() for _ in range(count)]
 
-    def tabs(self, labels):
+    def tabs(self, labels, **kwargs):
+        self.tab_defaults.append(kwargs.get("default"))
         return [_Context() for _ in labels]
 
     def expander(self, *args, **kwargs):
@@ -141,3 +143,29 @@ def test_compact_expander_assigns_unique_plotly_keys(monkeypatch):
 
     assert all(fake_st.plotly_keys)
     assert len(fake_st.plotly_keys) == len(set(fake_st.plotly_keys))
+
+
+def test_compact_mapping_defaults_to_penultimate_batch(monkeypatch):
+    fake_st = _FakeStreamlit()
+    monkeypatch.setattr(yield_dashboard, "st", fake_st)
+    monkeypatch.setattr(yield_dashboard, "create_mapping_heatmap", lambda *args, **kwargs: go.Figure())
+
+    mapping_data = pd.DataFrame(
+        {
+            "defect_group": ["GROUP-A"] * 3,
+            "defect_desc": ["CODE-A"] * 3,
+            "batch_no": ["BATCH-1", "BATCH-2", "BATCH-3"],
+            "batch_total_input": [100, 100, 100],
+            "panel_id": ["1-1", "1-1", "1-1"],
+        }
+    )
+
+    yield_dashboard._render_compact_mapping_section(
+        mapping_data=mapping_data,
+        curr_group="GROUP-A",
+        curr_code="CODE-A",
+        hotspot_scripts=[],
+        product_code="TEST",
+    )
+
+    assert fake_st.tab_defaults == ["BATCH-2 (100)"]

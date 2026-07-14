@@ -119,9 +119,9 @@ def _build_code_options_by_group(
 
 def build_batch_code_options_by_group(
     source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
-    filter_by: str = "rate",
-    rate_threshold: float = 0.0001,
-    count_threshold: int = 20,
+    rate_threshold: float,
+    count_threshold: int,
+    filter_by: str = "rate"
 ) -> Dict[str, List[str]]:
     """Return eligible Codes by Group for batch rendering, without UI placeholders."""
     processed_df = _prepare_processed_dataframe(source_data)
@@ -163,7 +163,7 @@ def create_group_batch_selection_ui(
     key_prefix: str,
     filter_by: str = "rate",
     rate_threshold: float = 0.0001,
-    count_threshold: int = 20,
+    count_threshold: int = 10,
 ) -> Dict[str, object]:
     """Render Group multiselect and return eligible Codes grouped by selected Group."""
     code_options_by_group = build_batch_code_options_by_group(
@@ -234,7 +234,7 @@ def create_code_selection_ui(
     key_prefix: str,
     filter_by: str = 'rate',
     rate_threshold: float = 0.0001,
-    count_threshold: int = 20
+    count_threshold: int = 10
 ) -> Dict[str, Optional[str]]:
     """
     (V3.5 - 数据驱动版)

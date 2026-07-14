@@ -1,5 +1,8 @@
-from pathlib import Path
+import importlib
+import sys
+import threading
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -86,7 +89,7 @@ class FakeSpcRepository:
 
 
 def test_cpm_service_requests_spc_only_and_returns_distribution_report(monkeypatch, tmp_path: Path) -> None:
-    CpmReportService.get_cpm_report_data.clear()
+    CpmReportService.fetch_cpm_report_payload.clear()
     FakeSpcRepository.seen_data_type_filters = []
     monkeypatch.setattr(cpm_service, "SpcRepository", FakeSpcRepository)
     monkeypatch.setattr(
@@ -124,7 +127,7 @@ def test_cpm_service_requests_spc_only_and_returns_distribution_report(monkeypat
 
 
 def test_cpm_service_can_switch_period_sigma_source_from_global_config(monkeypatch, tmp_path: Path) -> None:
-    CpmReportService.get_cpm_report_data.clear()
+    CpmReportService.fetch_cpm_report_payload.clear()
     FakeSpcRepository.seen_data_type_filters = []
     monkeypatch.setattr(cpm_service, "SpcRepository", FakeSpcRepository)
     monkeypatch.setattr(
@@ -165,3 +168,73 @@ def test_period_capability_end_date_follows_latest_available_sheet_date() -> Non
     )
 
     assert resolve_period_capability_end_date(sheet_features, "2026-06-30") == date(2026, 5, 14)
+
+
+def test_cpm_report_remains_available_when_service_module_reloads_during_cache_fill(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    entered_repository = threading.Event()
+    continue_repository = threading.Event()
+
+    class BlockingSpcRepository(FakeSpcRepository):
+        def get_spc_measurements(
+            self,
+            config: SpcQueryConfig,
+            force_refresh: bool = False,
+        ) -> pd.DataFrame:
+            entered_repository.set()
+            assert continue_repository.wait(timeout=10)
+            return super().get_spc_measurements(config, force_refresh)
+
+    original_module = cpm_service
+    original_service = original_module.CpmReportService
+    original_service.fetch_cpm_report_payload.clear()
+    monkeypatch.setattr(original_module, "SpcRepository", BlockingSpcRepository)
+    monkeypatch.setattr(
+        original_module.ConfigLoader,
+        "get_cpm_period_sigma_source",
+        staticmethod(lambda: "sheet_mean"),
+    )
+    monkeypatch.setattr(
+        spc_data_decoration.ConfigLoader,
+        "get_project_root",
+        staticmethod(lambda: tmp_path),
+    )
+    query = SpcQueryConfig(
+        prod_code="M626",
+        start_date="2026-06-01",
+        end_date="2026-06-07",
+        data_type_filter="SPC",
+    )
+    outcome: dict[str, object] = {}
+
+    def load_report() -> None:
+        try:
+            outcome["report"] = original_service.get_cpm_report_data(
+                _db_manager=object(),
+                query_config_json=query.model_dump_json(),
+                snapshot_signature="reload-during-cache-fill",
+            )
+        except BaseException as exc:
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=load_report)
+    worker.start()
+    assert entered_repository.wait(timeout=10)
+
+    module_name = original_module.__name__
+    try:
+        del sys.modules[module_name]
+        importlib.import_module(module_name)
+        continue_repository.set()
+        worker.join(timeout=15)
+    finally:
+        continue_repository.set()
+        sys.modules[module_name] = original_module
+
+    assert not worker.is_alive()
+    assert "error" not in outcome, repr(outcome.get("error"))
+    report = outcome["report"]
+    assert isinstance(report, original_module.CpmReportViewModel)
+    assert not report.raw_measurements_df.empty

@@ -35,7 +35,7 @@ processing:
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
-    '白画面黑斑Mura': 0.8
+    'G向带状Mura': 0
     # OLED_Mura
     '彩斑Mura': 0.4
     'S向边缘Mura': 0.6

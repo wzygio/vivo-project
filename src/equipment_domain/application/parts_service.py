@@ -74,13 +74,13 @@ class PartsReportService:
 
     @staticmethod
     @st.cache_data  # L2 缓存（遵循项目红线纪律，不可移除）
-    def get_report_data(
+    def fetch_report_payload(
         _db_manager,
         baseline_path: str,
         snapshot_signature: str,
-    ) -> PartsReportViewModel:
+    ) -> dict[str, object]:
         """
-        获取完整的关键备件报表数据。
+        获取可安全跨模块重载缓存的关键备件报表载荷。
 
         输出列（13 + 1 调试列）:
         厂别, 备件类型, 设备类型, 膜层, 制程, 寿命规格,
@@ -93,7 +93,7 @@ class PartsReportService:
             snapshot_signature: 缓存键失效信号
 
         Returns:
-            PartsReportViewModel
+            仅包含 DataFrame 和原生标量的缓存载荷。
         """
         # 1. 加载基线 CSV
         spec_df = load_spec_baseline(baseline_path)
@@ -127,11 +127,34 @@ class PartsReportService:
         else:
             last_update = ""
 
+        return {
+            "report_df": report_df,
+            "total_count": len(report_df),
+            "over_count": over_count,
+            "warning_count": warning_count,
+            "normal_count": normal_count,
+            "last_update": last_update,
+        }
+
+    @staticmethod
+    def get_report_data(
+        _db_manager,
+        baseline_path: str,
+        snapshot_signature: str,
+    ) -> PartsReportViewModel:
+        """读取缓存载荷，并在 pickle 边界之外构造当前模块的 ViewModel。"""
+        payload = PartsReportService.fetch_report_payload(
+            _db_manager=_db_manager,
+            baseline_path=baseline_path,
+            snapshot_signature=snapshot_signature,
+        )
+        report_df = payload.get("report_df")
+        report_df = report_df if isinstance(report_df, pd.DataFrame) else pd.DataFrame()
         return PartsReportViewModel(
             report_df=report_df,
-            total_count=len(report_df),
-            over_count=over_count,
-            warning_count=warning_count,
-            normal_count=normal_count,
-            last_update=last_update,
+            total_count=int(payload.get("total_count", len(report_df))),
+            over_count=int(payload.get("over_count", 0)),
+            warning_count=int(payload.get("warning_count", 0)),
+            normal_count=int(payload.get("normal_count", 0)),
+            last_update=str(payload.get("last_update", "")),
         )

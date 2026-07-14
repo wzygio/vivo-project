@@ -9,11 +9,13 @@ from app.sections.spc_cpm_dashboard import (
     _create_period_overview_chart,
     _create_sheet_points_box_chart,
     _create_sheet_points_box_charts,
+    build_daily_cpk_alerts,
     filter_cpm_report,
     get_available_factories,
     get_default_cpm_start_date,
     get_params_for_factory_steps,
     get_steps_for_factory,
+    render_cpk_alert_center,
     render_cpm_indicator_sections,
 )
 
@@ -28,6 +30,135 @@ def _sample_report_df() -> pd.DataFrame:
             {"factory": "TP", "step_id": "41140", "param_name": "SE_L1T", "period_type": "month"},
         ]
     )
+
+
+def test_build_daily_cpk_alerts_returns_every_daily_value_below_threshold() -> None:
+    period_capability_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "day",
+                "period_label": "2026-07-13",
+                "cpk": 1.20,
+            },
+            {
+                "factory": "OLED",
+                "step_id": "21200",
+                "param_name": "PPA_B_X",
+                "period_type": "day",
+                "period_label": "2026-07-14",
+                "cpk": 1.10,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "day",
+                "period_label": "2026-07-14",
+                "cpk": 1.33,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "month",
+                "period_label": "2026-07",
+                "cpk": 0.80,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41140",
+                "param_name": "SE_L1T",
+                "period_type": "day",
+                "period_label": "2026-07-14",
+                "cpk": "not-a-number",
+            },
+        ]
+    )
+
+    alerts_df = build_daily_cpk_alerts(period_capability_df)
+
+    assert alerts_df.to_dict("records") == [
+        {
+            "厂别": "OLED",
+            "站点": "21200",
+            "参数名称": "PPA_B_X",
+            "超规日期": "2026-07-14",
+            "CPK值": 1.10,
+        },
+        {
+            "厂别": "ARRAY",
+            "站点": "15260",
+            "参数名称": "4PP_Rs",
+            "超规日期": "2026-07-13",
+            "CPK值": 1.20,
+        },
+    ]
+
+
+def test_render_cpk_alert_center_expands_and_displays_alert_details(monkeypatch) -> None:
+    expander_calls: list[tuple[str, bool]] = []
+    error_messages: list[str] = []
+    rendered_tables: list[pd.DataFrame] = []
+    alerts_df = pd.DataFrame(
+        [
+            {
+                "厂别": "OLED",
+                "站点": "21200",
+                "参数名称": "PPA_B_X",
+                "超规日期": "2026-07-14",
+                "CPK值": 1.10,
+            }
+        ]
+    )
+
+    def fake_expander(label: str, expanded: bool = False):
+        expander_calls.append((label, expanded))
+        return nullcontext()
+
+    monkeypatch.setattr(spc_cpm_dashboard.st, "expander", fake_expander)
+    monkeypatch.setattr(spc_cpm_dashboard.st, "error", error_messages.append)
+    monkeypatch.setattr(
+        spc_cpm_dashboard.st,
+        "dataframe",
+        lambda frame, **_kwargs: rendered_tables.append(frame),
+    )
+
+    render_cpk_alert_center(alerts_df, has_capability_data=True)
+
+    assert expander_calls == [("CPK预警中心（日CPK < 1.33）", True)]
+    assert error_messages == ["检测到 1 条日 CPK 预警，请关注。"]
+    assert rendered_tables[0].equals(alerts_df)
+
+
+def test_render_cpk_alert_center_distinguishes_missing_capability_data(monkeypatch) -> None:
+    info_messages: list[str] = []
+    success_messages: list[str] = []
+
+    monkeypatch.setattr(spc_cpm_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_cpm_dashboard.st, "info", info_messages.append)
+    monkeypatch.setattr(spc_cpm_dashboard.st, "success", success_messages.append)
+
+    render_cpk_alert_center(pd.DataFrame(), has_capability_data=False)
+
+    assert info_messages == ["当前产品暂无可计算的日 CPK 数据。"]
+    assert success_messages == []
+
+
+def test_render_cpk_alert_center_shows_all_clear_when_daily_cpk_is_normal(monkeypatch) -> None:
+    info_messages: list[str] = []
+    success_messages: list[str] = []
+
+    monkeypatch.setattr(spc_cpm_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_cpm_dashboard.st, "info", info_messages.append)
+    monkeypatch.setattr(spc_cpm_dashboard.st, "success", success_messages.append)
+
+    render_cpk_alert_center(pd.DataFrame(), has_capability_data=True)
+
+    assert success_messages == ["当前产品日 CPK 均不低于 1.33。"]
+    assert info_messages == []
 
 
 def test_default_cpm_start_date_uses_previous_month_first_day() -> None:
@@ -298,11 +429,79 @@ def test_render_indicator_sections_forwards_point_box_source_and_measurements(mo
     assert captured["raw_measurements_df"].equals(raw_measurements)
 
 
+def test_render_indicator_sections_places_sheet_distributions_on_full_width_rows(monkeypatch) -> None:
+    column_specs: list[int | list[float]] = []
+    rendered_figures: list[object] = []
+    rendered_tables: list[pd.DataFrame] = []
+    period_figure = object()
+    chamber_figure = object()
+    time_figure = object()
+
+    class FakeColumn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def metric(self, *_args, **_kwargs):
+            return None
+
+    def fake_columns(spec, **_kwargs):
+        column_specs.append(spec)
+        return [FakeColumn() for _ in range(spec if isinstance(spec, int) else len(spec))]
+
+    monkeypatch.setattr(spc_cpm_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_cpm_dashboard.st, "columns", fake_columns)
+    monkeypatch.setattr(
+        spc_cpm_dashboard.st,
+        "dataframe",
+        lambda table, **_kwargs: rendered_tables.append(table),
+    )
+    monkeypatch.setattr(
+        spc_cpm_dashboard.st,
+        "plotly_chart",
+        lambda figure, **_kwargs: rendered_figures.append(figure),
+    )
+    monkeypatch.setattr(spc_cpm_dashboard, "_create_period_overview_chart", lambda **_kwargs: period_figure)
+    monkeypatch.setattr(
+        spc_cpm_dashboard,
+        "_create_sheet_points_box_charts",
+        lambda **_kwargs: (chamber_figure, time_figure),
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "sheet_start_time": "2026-06-24",
+                "param_value": 8.5,
+            }
+        ]
+    )
+    period_capability = _sample_period_capability().assign(
+        factory="ARRAY",
+        step_id="15260",
+        param_name="4PP_Rs",
+    )
+
+    render_cpm_indicator_sections(
+        period_capability_df=period_capability,
+        sheet_features_df=_sample_sheet_features(),
+        raw_measurements_df=raw_measurements,
+    )
+
+    assert column_specs == [4, [1.15, 1]]
+    assert rendered_tables[0].columns.tolist() == ["周期", "CPM", "CPK"]
+    assert rendered_figures == [period_figure, chamber_figure, time_figure]
+
+
 def test_period_capability_table_shows_cpm_and_cpk_together() -> None:
     table = _create_period_capability_table(_sample_full_period_capability())
 
-    assert table.columns.tolist() == [
-        "指标",
+    assert table.columns.tolist() == ["周期", "CPM", "CPK"]
+    assert table["周期"].tolist() == [
         "月 2026-05",
         "月 2026-06",
         "周 2026-W24",
@@ -312,9 +511,8 @@ def test_period_capability_table_shows_cpm_and_cpk_together() -> None:
         "日 2026-06-24",
         "日 2026-06-25",
     ]
-    assert table["指标"].tolist() == ["CPM", "CPK"]
-    assert table.loc[0, "月 2026-05"] == "1.100"
-    assert table.loc[1, "月 2026-05"] == "1.000"
+    assert table.loc[0, "CPM"] == "1.100"
+    assert table.loc[0, "CPK"] == "1.000"
 
 
 def test_period_overview_chart_handles_empty_capability_with_reserved_period_axis() -> None:
@@ -381,8 +579,8 @@ def test_period_capability_table_limits_each_period_type_to_compact_window() -> 
 
     table = _create_period_capability_table(period_capability_df)
 
-    assert table.columns.tolist() == [
-        "指标",
+    assert table.columns.tolist() == ["周期", "CPM", "CPK"]
+    assert table["周期"].tolist() == [
         "月 2026-06",
         "月 2026-07",
         "周 2026-W22",
@@ -396,7 +594,7 @@ def test_period_capability_table_limits_each_period_type_to_compact_window() -> 
         "日 2026-06-07",
         "日 2026-07-02",
     ]
-    assert table.loc[0, "月 2026-07"] == "-"
+    assert table.loc[table["周期"] == "月 2026-07", "CPM"].item() == "-"
 
 
 def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_specs() -> None:

@@ -63,29 +63,67 @@ class CpmReportService:
     """Application service for SPC-only Lot-level CPM reporting."""
 
     @staticmethod
-    def _empty_view_model() -> CpmReportViewModel:
+    def _empty_payload() -> dict[str, object]:
+        return {
+            "period_capability_df": pd.DataFrame(),
+            "sheet_features_df": pd.DataFrame(),
+            "raw_measurements_df": pd.DataFrame(),
+            "indicators_df": pd.DataFrame(),
+            "sheet_oos_decoration": None,
+        }
+
+    @staticmethod
+    def _view_model_from_payload(payload: dict[str, object]) -> CpmReportViewModel:
+        period_capability_df = payload.get("period_capability_df")
+        sheet_features_df = payload.get("sheet_features_df")
+        raw_measurements_df = payload.get("raw_measurements_df")
+        indicators_df = payload.get("indicators_df")
+        decoration_payload = payload.get("sheet_oos_decoration")
+
+        period_capability_df = (
+            period_capability_df if isinstance(period_capability_df, pd.DataFrame) else pd.DataFrame()
+        )
+        sheet_features_df = sheet_features_df if isinstance(sheet_features_df, pd.DataFrame) else pd.DataFrame()
+        raw_measurements_df = (
+            raw_measurements_df if isinstance(raw_measurements_df, pd.DataFrame) else pd.DataFrame()
+        )
+        indicators_df = indicators_df if isinstance(indicators_df, pd.DataFrame) else pd.DataFrame()
+
+        decoration_result = None
+        if isinstance(decoration_payload, dict):
+            detail_df = decoration_payload.get("detail_df")
+            decoration_df = decoration_payload.get("decoration_df")
+            decoration_result = SheetOosDecorationResult(
+                raw_measurements_df=raw_measurements_df,
+                detail_df=detail_df if isinstance(detail_df, pd.DataFrame) else pd.DataFrame(),
+                decoration_df=decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame(),
+                detail_path=Path(str(decoration_payload.get("detail_path", ""))),
+                decoration_path=Path(str(decoration_payload.get("decoration_path", ""))),
+            )
+
         return CpmReportViewModel(
-            period_capability_df=pd.DataFrame(),
-            sheet_features_df=pd.DataFrame(),
-            raw_measurements_df=pd.DataFrame(),
-            indicators_df=pd.DataFrame(),
+            period_capability_df=period_capability_df,
+            sheet_features_df=sheet_features_df,
+            raw_measurements_df=raw_measurements_df,
+            indicators_df=indicators_df,
+            sheet_oos_decoration_result=decoration_result,
         )
 
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=1)
-    def get_cpm_report_data(
+    def fetch_cpm_report_payload(
         _db_manager: "DatabaseManager",
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
-    ) -> CpmReportViewModel:
-        """Load SPC data and calculate M/W/D CPM/CPK distribution data."""
+    ) -> dict[str, object]:
+        """Cache only reload-stable CPM/CPK payload values."""
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
             query_config.data_type_filter = "SPC"
         except Exception as e:
             logger.error("[CPM] query config parse failed: %s", e, exc_info=True)
-            return CpmReportService._empty_view_model()
+            return CpmReportService._empty_payload()
 
         try:
             snapshot_dir = Path("data") / query_config.prod_code
@@ -95,7 +133,7 @@ class CpmReportService:
             measurements_df = repo.get_spc_measurements(query_config)
             spec_df = repo.get_spc_spec_limits(query_config.prod_code)
             if measurements_df.empty or spec_df.empty:
-                return CpmReportService._empty_view_model()
+                return CpmReportService._empty_payload()
 
             if "sheet_start_time" in measurements_df.columns:
                 measurements_df = measurements_df.copy()
@@ -109,7 +147,7 @@ class CpmReportService:
                     & (measurements_df["sheet_start_time"] < end_dt)
                 ].copy()
                 if measurements_df.empty:
-                    return CpmReportService._empty_view_model()
+                    return CpmReportService._empty_payload()
 
             decorated_spc_data = prepare_decorated_spc_data(
                 raw_measurements_df=measurements_df,
@@ -119,11 +157,11 @@ class CpmReportService:
             measurements_df = decorated_spc_data.raw_measurements_df
             sheet_features_df = decorated_spc_data.sheet_features_df
             if sheet_features_df.empty:
-                return CpmReportService._empty_view_model()
+                return CpmReportService._empty_payload()
 
             capability_end_date = resolve_period_capability_end_date(sheet_features_df, query_config.end_date)
             if capability_end_date is None:
-                return CpmReportService._empty_view_model()
+                return CpmReportService._empty_payload()
 
             resolved_period_sigma_source = normalize_period_sigma_source(
                 period_sigma_source or ConfigLoader.get_cpm_period_sigma_source()
@@ -145,13 +183,35 @@ class CpmReportService:
                 else pd.DataFrame(columns=["prod_code", "factory", "step_id", "param_name"])
             )
 
-            return CpmReportViewModel(
-                period_capability_df=period_capability_df,
-                sheet_features_df=sheet_features_df,
-                raw_measurements_df=measurements_df,
-                indicators_df=indicators_df,
-                sheet_oos_decoration_result=decorated_spc_data.sheet_oos_decoration_result,
-            )
+            decoration_result = decorated_spc_data.sheet_oos_decoration_result
+            return {
+                "period_capability_df": period_capability_df,
+                "sheet_features_df": sheet_features_df,
+                "raw_measurements_df": measurements_df,
+                "indicators_df": indicators_df,
+                "sheet_oos_decoration": {
+                    "detail_df": decoration_result.detail_df,
+                    "decoration_df": decoration_result.decoration_df,
+                    "detail_path": str(decoration_result.detail_path),
+                    "decoration_path": str(decoration_result.decoration_path),
+                },
+            }
         except Exception as e:
             logger.error("[CPM] report generation failed: %s", e, exc_info=True)
-            return CpmReportService._empty_view_model()
+            return CpmReportService._empty_payload()
+
+    @staticmethod
+    def get_cpm_report_data(
+        _db_manager: "DatabaseManager",
+        query_config_json: str,
+        snapshot_signature: str = "",
+        period_sigma_source: str = "",
+    ) -> CpmReportViewModel:
+        """Load cached CPM data and construct project ViewModels outside the pickle boundary."""
+        payload = CpmReportService.fetch_cpm_report_payload(
+            _db_manager=_db_manager,
+            query_config_json=query_config_json,
+            snapshot_signature=snapshot_signature,
+            period_sigma_source=period_sigma_source,
+        )
+        return CpmReportService._view_model_from_payload(payload)

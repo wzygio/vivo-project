@@ -27,7 +27,8 @@ processing:
 
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.7
+    'S向亮线': 0.6
+    'G向单暗线': 0.5
     # Array_Pixel
     '暗点': 2
     '群暗点': 1.5
@@ -35,7 +36,9 @@ processing:
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
+    'G向带状Mura': 0
     # OLED_Mura
+    '通道间短路': 0.5
   
   sheet_hotspot_config: 
     enable: True
