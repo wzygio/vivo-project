@@ -62,6 +62,33 @@
 - The maintainer confirmed daily-only alerts, every below-threshold daily row, and the exact five-column display contract. The delivered builder performs a numeric CPK coercion, strict threshold comparison, and newest-date-first stable sort.
 - The page-level execution contract proves `get_cpm_report_data()` is called once, then alerts render before filters and query-gated charts. No additional cache decorator or database call was introduced.
 
+## PRD, Issue, and planning terminology request
+
+- `to-prd` synthesizes the current conversation and codebase context into one product requirements document: problem, solution, user stories, implementation/testing decisions, out-of-scope boundaries, and notes. It is a requirements/specification artifact, not a task-sequencing log.
+- `to-issues` consumes an existing plan, specification, or PRD and splits it into independently deliverable vertical-slice work items. It is not limited to debugging; feature, migration, refactor, and bug work can all be issues.
+- `create-local-markdown-issue` is the repository-specific single-card intake path for a raw request. It establishes facts, scope, acceptance criteria, questions, and initial triage metadata in the Local Markdown tracker; it complements rather than duplicates `to-issues`.
+- `grill-me` interrogates a plan or design to resolve decisions. `grill-with-docs` adds domain-document and terminology checks, with inline `CONTEXT.md` updates and optional ADR suggestions. Neither is primarily an execution-plan writer.
+- `planning-with-files` is the complementary execution-coordination tool: `.planning/<plan-id>/task_plan.md` carries sequence/status, `findings.md` carries evidence, and `progress.md` carries the work log. It is separate from Matt's PRD/Issue lifecycle skills.
+
+## Harness Skill architecture audit
+
+- The current repository already expresses the user's workflow cleanly: design artifacts in root `.scratch/` plus `docs/PRD/`; execution state in `.planning/`; runtime code in `app/` and `src/`; durable decisions in `docs/ADR/`; supporting knowledge in `references/design_references/`, `references/dev_references/`, and `references/test_references/`.
+- This topology is nonstandard only in naming. Its separation of deliverables from reusable guidance is coherent and easy to route. No severe project-side defect is evident yet.
+- Both Harness Skills currently hard-code one older architecture in multiple layers: SKILL.md prose, separate JSON configs, Python constants/templates, reference architecture docs, and the generated checker. Creator and refactor duplicate several identical reference files.
+- The old topology conflicts with this project: it expects `references/design/`, `references/project-info/`, `references/project-conf/`, `references/plans/`, and `references/exec-plans/`, while the desired workflow uses `references/design_references/`, root `.planning/`, root `.scratch/`, and `docs/PRD/`/`docs/ADR/`.
+- A shared architecture profile is required. Creator/refactor-specific behavior should remain separate, but both must load the same profile so later path/workflow changes require editing one data file rather than scripts and docs.
+- `skill-creator` confirms the intended separation: concise SKILL.md orchestration, detailed architecture in one-level `references/`, deterministic scripts, synchronized `agents/openai.yaml`, and executable validation. Existing Skill names remain valid, so initialization is correctly skipped and update/validation steps apply.
+- The current repository implementation has stale generated routing from the old Harness: `references/index.md` still lists removed `references/design/`, `project-info/`, `project-conf/`, `plans/`, and `exec-plans/`; `ARCHITECTURE.md` lists the same old tree. This is a real routing defect, but conceptual workflow remains sound. It will be reported separately; current task does not require mutating project Harness files.
+- The current repository has no `scripts/harness_check.py`, so its stale router/index state is not currently executable as a self-check. This is implementation drift rather than a flaw in the four-stage architecture.
+- The isolated default-profile test generated 28 files and passed every generated check. Refactor dry-run detected legacy input without mutation; additive write preserved existing AGENTS and legacy source; two explicit overwrite runs created distinct archives and still passed the checker.
+
+## Summary references micro-adjustment
+
+- `references/summary_references/` exists with an empty `index.md`; it should become a reusable-summary knowledge route, not an additional artifact store.
+- The user defines `references/retrospective.md` as the router into durable artifacts under `docs/`. Its existing content is obsolete Harness generation history and should be replaced by routes to the currently existing `docs/PRD/`, `docs/ADR/`, `docs/dev_docs/`, `docs/agents/`, and `docs/others/` folders.
+- The shared profile currently gives the summary stage no references and omits `references/summary_references/` from root indexes and required paths. This is exactly a profile-only architecture change; Creator/Refactor code need not change.
+- During verification, the former `roots.feedback` implementation exposed an additional coupling: Creator generated a retrospective log and Refactor appended run history to it. The profile now owns an `artifact_router` definition for `references/retrospective.md`; Refactor operational history moves to `references/generated/harness-refactor-log.md`. This repair is necessary for the original “architecture is independently modifiable” guarantee.
+
 - Post-change AST audit reports no `st.cache_data` function annotated with a project-defined return class.
 - Touched production and test modules compile successfully.
 - Focused CPM, critical-parts, page-header, SPC decoration/dashboard/config, auto-warning, and calculator suite: `60 passed`.
