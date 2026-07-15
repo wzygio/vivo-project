@@ -21,6 +21,14 @@ Daily rotated logs may appear as `logs/*.YYYY-MM-DD`. Treat logs as runtime arti
 ## Smoke And Test Commands
 
 ```powershell
+# Fast domain smoke (explicit opt-in; does not replace complete regression)
+uv run --no-sync python tools/smoke.py spc
+uv run --no-sync python tools/smoke.py yield
+uv run --no-sync python tools/smoke.py equipment
+
+# Conservative default: complete unit suite
+uv run --no-sync python tools/smoke.py
+
 # Unit tests
 $env:PYTHONUTF8='1'; $env:PYTHONPATH='D:\wzy\Python\vivo-project\src;D:\wzy\Python\vivo-project'; uv run pytest tests/unit/ -v --tb=short
 
@@ -31,10 +39,18 @@ $env:PYTHONUTF8='1'; $env:PYTHONPATH='D:\wzy\Python\vivo-project\src;D:\wzy\Pyth
 uv run streamlit run app/Home.py --server.headless true --server.port 8503
 ```
 
+The smoke runner prints every pytest target before execution. Fast scopes are
+explicit because they can miss cross-domain regressions. Use `all` (the default)
+for shared-kernel or uncertain changes, and run the complete suite before
+release. Pytest's non-zero result, including zero collection, is preserved.
+
 ## Known Collection Risks
 
 - Some legacy tests import modules as `yield_domain.*`, so set `PYTHONPATH` to include both repo root and `src`.
 - Streamlit component import checks can fail during pytest collection when `streamlit-echarts` component metadata is incomplete in the local environment.
+- The current unit baseline also contains existing failures and a stale
+  `test_override_logic.py` import. Domain smoke must surface relevant existing
+  failures; do not change business behavior merely to make the smoke green.
 - Treat these as environment/collection blockers unless the current task edits the affected tests or component configuration.
 
 ## UI Verification

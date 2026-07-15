@@ -198,18 +198,16 @@ def build_all_available_period_axis(sheet_features: pd.DataFrame, end_date: date
     if sheet_features.empty or "sheet_start_time" not in sheet_features.columns:
         return build_period_axis(end_date)
 
-    df = sheet_features.copy()
-    df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
-    df = df.dropna(subset=["sheet_start_time"]).copy()
+    timestamps = pd.to_datetime(sheet_features["sheet_start_time"], errors="coerce").dropna()
     window_start = pd.Timestamp(get_period_window_start(end_date))
     end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1)
-    df = df[(df["sheet_start_time"] >= window_start) & (df["sheet_start_time"] < end_ts)].copy()
-    if df.empty:
+    timestamps = timestamps[(timestamps >= window_start) & (timestamps < end_ts)]
+    if timestamps.empty:
         return build_period_axis(end_date)
 
     records: list[dict[str, object]] = []
 
-    month_periods = sorted(df["sheet_start_time"].dt.to_period("M").dropna().unique())
+    month_periods = sorted(timestamps.dt.to_period("M").unique())
     for index, month_period in enumerate(month_periods, start=1):
         month_start = month_period.to_timestamp().date()
         next_month = date(month_start.year + (month_start.month // 12), (month_start.month % 12) + 1, 1)
@@ -224,7 +222,8 @@ def build_all_available_period_axis(sheet_features: pd.DataFrame, end_date: date
             }
         )
 
-    week_starts = sorted({_start_of_week(ts.date()) for ts in df["sheet_start_time"]})
+    unique_days = timestamps.dt.normalize().drop_duplicates()
+    week_starts = sorted({_start_of_week(ts.date()) for ts in unique_days})
     for index, week_start in enumerate(week_starts, start=1):
         iso_week = week_start.isocalendar()
         records.append(
@@ -237,7 +236,7 @@ def build_all_available_period_axis(sheet_features: pd.DataFrame, end_date: date
             }
         )
 
-    days = sorted({ts.date() for ts in df["sheet_start_time"]})
+    days = sorted({ts.date() for ts in unique_days})
     for index, day in enumerate(days, start=1):
         records.append(
             {
@@ -316,16 +315,23 @@ def _build_period_measurement_stats(raw_measurements: pd.DataFrame | None, end_d
         return {}
 
     group_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label"]
-    stats: dict[tuple[object, ...], dict[str, float]] = {}
-    for keys, group in period_df.groupby(group_cols, dropna=False, sort=True):
-        values = pd.to_numeric(group["param_value"], errors="coerce").dropna()
-        if values.empty:
-            continue
-        stats[keys] = {
-            "point_count": int(len(values)),
-            "std_value": float(values.std(ddof=1)),
+    aggregated = (
+        period_df.groupby(group_cols, dropna=False, sort=True, as_index=False)
+        .agg(
+            point_count=("param_value", "count"),
+            # Keep Series.std's exact floating-point behavior from the legacy
+            # per-group implementation; pandas' native groupby std can round
+            # near-constant values to zero and change CPK from finite to inf.
+            std_value=("param_value", lambda values: float(values.std(ddof=1))),
+        )
+    )
+    return {
+        tuple(row[: len(group_cols)]): {
+            "point_count": int(row.point_count),
+            "std_value": float(row.std_value),
         }
-    return stats
+        for row in aggregated.itertuples(index=False)
+    }
 
 
 def normalize_period_sigma_source(value: object) -> str:
@@ -380,58 +386,101 @@ def build_period_capability_report(
         if resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
         else {}
     )
-    records: list[dict[str, object]] = []
-    for keys, group in df.groupby(group_cols, dropna=False, sort=True):
-        valid = group.dropna(subset=["sheet_mean", "usl", "lsl"])
-        if valid.empty:
-            continue
+    valid_df = df.dropna(subset=["sheet_mean", "usl", "lsl"])
+    if valid_df.empty:
+        return pd.DataFrame()
 
-        prod_code, factory, step_id, param_name, period_type, period_label, period_sort = keys
-        mean_value = float(valid["sheet_mean"].mean())
-        sheet_std_value = float(valid["sheet_mean"].std(ddof=1))
-        stats_key = (prod_code, factory, step_id, param_name, period_type, period_label)
-        stats = measurement_stats.get(stats_key, {})
-        point_count = int(stats.get("point_count", 0))
-        if resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE and "std_value" in stats:
-            std_value = float(stats["std_value"])
-            effective_sigma_source = PERIOD_SIGMA_SOURCE_POINT_VALUE
-        else:
-            std_value = sheet_std_value
-            effective_sigma_source = PERIOD_SIGMA_SOURCE_SHEET_MEAN
-        usl = float(valid["usl"].dropna().iloc[0])
-        lsl = float(valid["lsl"].dropna().iloc[0])
-        ucl = valid["ucl"].dropna().iloc[0] if valid["ucl"].notna().any() else np.nan
-        lcl = valid["lcl"].dropna().iloc[0] if valid["lcl"].notna().any() else np.nan
-        target_value = valid["target"].dropna().iloc[0] if valid["target"].notna().any() else np.nan
-        target = float(target_value) if pd.notna(target_value) else (usl + lsl) / 2.0
-
-        records.append(
-            {
-                "prod_code": prod_code,
-                "factory": factory,
-                "step_id": step_id,
-                "param_name": param_name,
-                "period_type": period_type,
-                "period_label": period_label,
-                "period_sort": int(period_sort),
-                "period_start": pd.to_datetime(valid["sheet_start_time"], errors="coerce").min(),
-                "period_end": pd.to_datetime(valid["sheet_start_time"], errors="coerce").max(),
-                "sample_count": int(valid["sheet_id"].nunique()),
-                "point_count": point_count if point_count > 0 else np.nan,
-                "sigma_source": effective_sigma_source,
-                "mean_value": mean_value,
-                "std_value": std_value,
-                "usl": usl,
-                "lsl": lsl,
-                "ucl": float(ucl) if pd.notna(ucl) else np.nan,
-                "lcl": float(lcl) if pd.notna(lcl) else np.nan,
-                "target": target,
-                "cpm": calculate_cpm(mean_value, std_value, usl, lsl, target),
-                "cpk": calculate_cpk(mean_value, std_value, usl, lsl),
-            }
+    result = (
+        valid_df.groupby(group_cols, dropna=False, sort=True, as_index=False)
+        .agg(
+            period_start=("sheet_start_time", "min"),
+            period_end=("sheet_start_time", "max"),
+            sample_count=("sheet_id", "nunique"),
+            # These call the same Series reducers as the former Python loop.
+            # Native groupby reducers use a different floating-point order.
+            mean_value=("sheet_mean", lambda values: float(values.mean())),
+            sheet_std_value=("sheet_mean", lambda values: float(values.std(ddof=1))),
+            usl=("usl", "first"),
+            lsl=("lsl", "first"),
+            ucl=("ucl", "first"),
+            lcl=("lcl", "first"),
+            target=("target", "first"),
         )
+    )
 
-    result = pd.DataFrame(records)
+    stats_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label"]
+    stats_rows = [
+        measurement_stats.get(tuple(keys), {})
+        for keys in result[stats_cols].itertuples(index=False, name=None)
+    ]
+    use_point_sigma = [
+        resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE and "std_value" in stats
+        for stats in stats_rows
+    ]
+
+    result["point_count"] = [
+        int(stats["point_count"]) if int(stats.get("point_count", 0)) > 0 else np.nan
+        for stats in stats_rows
+    ]
+    result["sigma_source"] = [
+        PERIOD_SIGMA_SOURCE_POINT_VALUE if use_point else PERIOD_SIGMA_SOURCE_SHEET_MEAN
+        for use_point in use_point_sigma
+    ]
+    result["std_value"] = [
+        float(stats["std_value"]) if use_point else float(sheet_std)
+        for stats, use_point, sheet_std in zip(
+            stats_rows,
+            use_point_sigma,
+            result["sheet_std_value"],
+            strict=True,
+        )
+    ]
+    result["usl"] = [float(value) for value in result["usl"]]
+    result["lsl"] = [float(value) for value in result["lsl"]]
+    result["ucl"] = [float(value) if pd.notna(value) else np.nan for value in result["ucl"]]
+    result["lcl"] = [float(value) if pd.notna(value) else np.nan for value in result["lcl"]]
+    result["target"] = [
+        float(target) if pd.notna(target) else (usl + lsl) / 2.0
+        for target, usl, lsl in result[["target", "usl", "lsl"]].itertuples(index=False, name=None)
+    ]
+    result["cpm"] = [
+        calculate_cpm(mean_value, std_value, usl, lsl, target)
+        for mean_value, std_value, usl, lsl, target in result[
+            ["mean_value", "std_value", "usl", "lsl", "target"]
+        ].itertuples(index=False, name=None)
+    ]
+    result["cpk"] = [
+        calculate_cpk(mean_value, std_value, usl, lsl)
+        for mean_value, std_value, usl, lsl in result[
+            ["mean_value", "std_value", "usl", "lsl"]
+        ].itertuples(index=False, name=None)
+    ]
+    result = result.drop(columns=["sheet_std_value"])
+    result = result[
+        [
+            "prod_code",
+            "factory",
+            "step_id",
+            "param_name",
+            "period_type",
+            "period_label",
+            "period_sort",
+            "period_start",
+            "period_end",
+            "sample_count",
+            "point_count",
+            "sigma_source",
+            "mean_value",
+            "std_value",
+            "usl",
+            "lsl",
+            "ucl",
+            "lcl",
+            "target",
+            "cpm",
+            "cpk",
+        ]
+    ]
     if result.empty:
         return result
     return result.sort_values(["factory", "step_id", "param_name", "period_sort"]).reset_index(drop=True)

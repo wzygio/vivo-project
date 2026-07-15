@@ -6,6 +6,7 @@ import pandas as pd
 from src.spc_domain.core.cpm_calculator import (
     PERIOD_SIGMA_SOURCE_POINT_VALUE,
     PERIOD_SIGMA_SOURCE_SHEET_MEAN,
+    build_all_available_period_axis,
     build_available_period_axis,
     build_period_axis,
     build_period_capability_report,
@@ -101,6 +102,37 @@ def test_build_available_period_axis_uses_recent_periods_with_data_not_continuou
         "2026-07-01",
         "2026-07-02",
     ]
+
+
+def test_build_all_available_period_axis_uses_unique_dates_inside_query_window() -> None:
+    sheet_features = pd.DataFrame(
+        {
+            "sheet_start_time": [
+                "2026-04-30",
+                "2026-05-02",
+                "2026-05-02 12:00:00",
+                "invalid",
+                "2026-06-30",
+                "2026-07-01",
+            ]
+        }
+    )
+
+    axis = build_all_available_period_axis(
+        sheet_features,
+        pd.Timestamp("2026-06-30").date(),
+    )
+
+    assert axis["period_type"].tolist() == ["month", "month", "week", "week", "day", "day"]
+    assert axis["period_label"].tolist() == [
+        "2026-05",
+        "2026-06",
+        "2026-W18",
+        "2026-W27",
+        "2026-05-02",
+        "2026-06-30",
+    ]
+    assert axis["period_sort"].tolist() == [101, 102, 201, 202, 301, 302]
 
 
 def test_build_lot_cpm_report_groups_by_lot_and_indicator() -> None:
@@ -341,6 +373,7 @@ def test_build_period_capability_report_uses_sheet_mean_for_mu_and_point_values_
 
     assert day_row["sample_count"] == 2
     assert day_row["point_count"] == 4
+    assert report["point_count"].dtype == np.dtype("int64")
     assert day_row["sigma_source"] == PERIOD_SIGMA_SOURCE_POINT_VALUE
     assert day_row["mean_value"] == expected_mean
     assert day_row["std_value"] == expected_point_std
@@ -500,3 +533,190 @@ def test_build_period_capability_report_keeps_older_days_for_metric_backfill() -
     assert pd.notna(first_day["cpm"])
     assert latest_day["sample_count"] == 1
     assert pd.isna(latest_day["cpm"])
+
+
+def test_build_period_capability_report_filters_before_taking_first_limits() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "INVALID",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 07:00:00",
+                "sheet_mean": np.nan,
+                "usl": 999.0,
+                "lsl": 0.0,
+                "ucl": 998.0,
+                "lcl": 1.0,
+                "target": 500.0,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 08:00:00",
+                "sheet_mean": 49.0,
+                "usl": 55.0,
+                "lsl": 45.0,
+                "ucl": np.nan,
+                "lcl": 46.0,
+                "target": np.nan,
+            },
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000102",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 09:00:00",
+                "sheet_mean": 51.0,
+                "usl": 56.0,
+                "lsl": 44.0,
+                "ucl": 54.0,
+                "lcl": 47.0,
+                "target": 52.0,
+            },
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+    )
+    day_row = report[report["period_type"] == "day"].iloc[0]
+
+    assert day_row["sample_count"] == 2
+    assert day_row["usl"] == 55.0
+    assert day_row["lsl"] == 45.0
+    assert day_row["ucl"] == 54.0
+    assert day_row["lcl"] == 46.0
+    assert day_row["target"] == 52.0
+
+
+def test_build_period_capability_report_keeps_nan_group_keys() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": np.nan,
+                "sheet_id": f"LOT0000010{index}",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": f"2026-06-25 0{index}:00:00",
+                "sheet_mean": value,
+                "usl": 55.0,
+                "lsl": 45.0,
+            }
+            for index, value in enumerate((49.0, 51.0), start=1)
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+    )
+
+    assert len(report) == 3
+    assert report["factory"].isna().all()
+    assert report["sample_count"].tolist() == [2, 2, 2]
+
+
+def test_build_period_capability_report_falls_back_per_group_when_point_stats_missing() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": f"LOT0000010{sheet_index}",
+                "step_id": "S1",
+                "param_name": param_name,
+                "sheet_start_time": f"2026-06-25 0{sheet_index}:00:00",
+                "sheet_mean": value,
+                "usl": 55.0,
+                "lsl": 45.0,
+            }
+            for param_name in ("CD", "THK")
+            for sheet_index, value in enumerate((49.0, 51.0), start=1)
+        ]
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "LOT00000101",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 01:00:00",
+                "param_value": value,
+            }
+            for value in (48.0, 50.0, 52.0)
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+        raw_measurements=raw_measurements,
+        sigma_source=PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    )
+    day_rows = report[report["period_type"] == "day"].set_index("param_name")
+
+    assert day_rows.loc["THK", "sigma_source"] == PERIOD_SIGMA_SOURCE_POINT_VALUE
+    assert day_rows.loc["THK", "point_count"] == 3
+    assert day_rows.loc["THK", "std_value"] == 2.0
+    assert day_rows.loc["CD", "sigma_source"] == PERIOD_SIGMA_SOURCE_SHEET_MEAN
+    assert pd.isna(day_rows.loc["CD", "point_count"])
+    assert day_rows.loc["CD", "std_value"] == math.sqrt(2.0)
+    assert report["point_count"].dtype == np.dtype("float64")
+
+
+def test_build_period_capability_report_isolates_point_sigma_by_factory() -> None:
+    sheet_features = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": factory,
+                "sheet_id": f"{factory}{sheet_index}",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": f"2026-06-25 0{sheet_index}:00:00",
+                "sheet_mean": value,
+                "usl": 55.0,
+                "lsl": 45.0,
+            }
+            for factory in ("ARRAY", "OLED")
+            for sheet_index, value in enumerate((49.0, 51.0), start=1)
+        ]
+    )
+    raw_measurements = pd.DataFrame(
+        [
+            {
+                "prod_code": "P1",
+                "factory": "ARRAY",
+                "sheet_id": "ARRAY1",
+                "step_id": "S1",
+                "param_name": "THK",
+                "sheet_start_time": "2026-06-25 01:00:00",
+                "param_value": value,
+            }
+            for value in (48.0, 50.0, 52.0)
+        ]
+    )
+
+    report = build_period_capability_report(
+        sheet_features,
+        end_date=pd.Timestamp("2026-06-25").date(),
+        raw_measurements=raw_measurements,
+        sigma_source=PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    )
+    day_rows = report[report["period_type"] == "day"].set_index("factory")
+
+    assert day_rows.loc["ARRAY", "sigma_source"] == PERIOD_SIGMA_SOURCE_POINT_VALUE
+    assert day_rows.loc["ARRAY", "point_count"] == 3
+    assert day_rows.loc["OLED", "sigma_source"] == PERIOD_SIGMA_SOURCE_SHEET_MEAN
+    assert pd.isna(day_rows.loc["OLED", "point_count"])
