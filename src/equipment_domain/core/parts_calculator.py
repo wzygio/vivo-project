@@ -10,6 +10,7 @@
 """
 
 import hashlib
+from dataclasses import dataclass
 from typing import Optional, Sequence
 
 import numpy as np
@@ -20,15 +21,25 @@ STATUS_OVER = "超规"
 STATUS_WARNING = "预警"
 STATUS_NORMAL = "正常"
 
-# 阈值常量
-WARNING_THRESHOLD = 90.0   # > 90% → 预警
-OVER_THRESHOLD = 100.0     # > 100% → 超规
 
-# 超规数据修饰常量
-DECORATION_GROWTH_RATIO = 1.01
-DECORATION_MIN_RATIO = 0.90
-DECORATION_MAX_RATIO = 0.95
-DISPLAY_PROGRESS_MAX_RATIO = 0.96
+@dataclass(frozen=True)
+class PartsAlertPolicy:
+    """Alert and display-decoration parameters injected by the application layer."""
+
+    warning_threshold: float
+    over_threshold: float
+    decoration_growth_ratio: float
+    decoration_min_ratio: float
+    decoration_max_ratio: float
+    display_progress_max_ratio: float
+
+    def __post_init__(self) -> None:
+        if self.warning_threshold >= self.over_threshold:
+            raise ValueError("warning_threshold must be lower than over_threshold")
+        if self.decoration_min_ratio > self.decoration_max_ratio:
+            raise ValueError("decoration_min_ratio must not exceed decoration_max_ratio")
+        if not 0 < self.display_progress_max_ratio < 1:
+            raise ValueError("display_progress_max_ratio must be between 0 and 1")
 
 RAW_VALUE_COLUMN = "原始测量值"
 OVER_SPEC_COLUMN = "是否超规"
@@ -97,15 +108,16 @@ def calculate_decorated_over_spec_value(
     actual_value: Optional[float],
     spec_limit: Optional[float],
     previous_value: Optional[float],
-    spec_ratio: float = DECORATION_MIN_RATIO,
+    policy: PartsAlertPolicy,
+    spec_ratio: Optional[float] = None,
 ) -> float:
     """
     对超规测量值进行修饰。
 
     规则:
     - 未超规时返回原始测量值
-    - 超规时返回 max(上一个有效值 * 1.01, ratio * 规格线)
-    - ratio 会被约束在 [0.90, 0.95]
+    - 超规时返回 max(上一个有效值 * 配置增长比例, ratio * 规格线)
+    - ratio 会被约束在配置的修饰比例范围内
 
     Args:
         actual_value: 原始测量值
@@ -125,17 +137,22 @@ def calculate_decorated_over_spec_value(
     if numeric_actual <= numeric_spec:
         return numeric_actual
 
-    bounded_ratio = min(max(spec_ratio, DECORATION_MIN_RATIO), DECORATION_MAX_RATIO)
+    effective_ratio = policy.decoration_min_ratio if spec_ratio is None else spec_ratio
+    bounded_ratio = min(
+        max(effective_ratio, policy.decoration_min_ratio),
+        policy.decoration_max_ratio,
+    )
     spec_candidate = numeric_spec * bounded_ratio
     numeric_previous = _coerce_float(previous_value)
     if numeric_previous is None:
         return spec_candidate
-    return max(numeric_previous * DECORATION_GROWTH_RATIO, spec_candidate)
+    return max(numeric_previous * policy.decoration_growth_ratio, spec_candidate)
 
 
 def cap_display_value_below_visible_100(
     actual_value: Optional[float],
     spec_limit: Optional[float],
+    policy: PartsAlertPolicy,
 ) -> float:
     """
     将展示测量值限制在不会被整数百分比渲染成 100% 的范围内。
@@ -145,7 +162,7 @@ def cap_display_value_below_visible_100(
         spec_limit: 寿命规格
 
     Returns:
-        float: 若进度过高则压到 DISPLAY_PROGRESS_MAX_RATIO * 规格线
+        float: 若进度过高则压到配置的展示进度上限 * 规格线
     """
     numeric_actual = _coerce_float(actual_value)
     numeric_spec = _coerce_float(spec_limit)
@@ -153,18 +170,18 @@ def cap_display_value_below_visible_100(
         return 0.0
     if numeric_spec is None or numeric_spec <= 0:
         return numeric_actual
-    display_cap = numeric_spec * DISPLAY_PROGRESS_MAX_RATIO
+    display_cap = numeric_spec * policy.display_progress_max_ratio
     if numeric_actual > display_cap:
         return display_cap
     return numeric_actual
 
 
-def _stable_spec_ratio(seed_value: object) -> float:
-    """根据行标识稳定生成 [0.90, 0.95] 区间内的修饰比例。"""
+def _stable_spec_ratio(seed_value: object, policy: PartsAlertPolicy) -> float:
+    """根据行标识稳定生成配置修饰比例区间内的值。"""
     digest = hashlib.md5(str(seed_value).encode("utf-8")).hexdigest()
     normalized = int(digest[:8], 16) / 0xFFFFFFFF
-    return DECORATION_MIN_RATIO + (
-        normalized * (DECORATION_MAX_RATIO - DECORATION_MIN_RATIO)
+    return policy.decoration_min_ratio + (
+        normalized * (policy.decoration_max_ratio - policy.decoration_min_ratio)
     )
 
 
@@ -194,6 +211,7 @@ def apply_over_spec_alert_and_decoration(
     decoration_col: str = DECORATION_COLUMN,
     group_cols: Optional[Sequence[str]] = None,
     sort_col: Optional[str] = None,
+    policy: Optional[PartsAlertPolicy] = None,
 ) -> pd.DataFrame:
     """
     先记录原始超规状态，再对超过规格线的数据进行修饰。
@@ -212,6 +230,8 @@ def apply_over_spec_alert_and_decoration(
     Returns:
         pd.DataFrame: 增加原始值、超规标记，并修饰 value_col 后的新 DataFrame
     """
+    if policy is None:
+        raise ValueError("policy is required for equipment alert calculation")
     if report_df.empty:
         return report_df.copy()
     if value_col not in report_df.columns or spec_col not in report_df.columns:
@@ -245,16 +265,18 @@ def apply_over_spec_alert_and_decoration(
             actual_value = _coerce_float(row[value_col])
             spec_limit = _coerce_float(row[spec_col])
             if bool(row[over_spec_col]):
-                ratio = _stable_spec_ratio(_build_seed(row, row_index))
+                ratio = _stable_spec_ratio(_build_seed(row, row_index), policy)
                 decorated_value = calculate_decorated_over_spec_value(
                     actual_value=actual_value,
                     spec_limit=spec_limit,
                     previous_value=previous_value,
+                    policy=policy,
                     spec_ratio=ratio,
                 )
                 capped_value = cap_display_value_below_visible_100(
                     actual_value=decorated_value,
                     spec_limit=spec_limit,
+                    policy=policy,
                 )
                 result.at[row_index, value_col] = capped_value
                 result.at[row_index, decoration_col] = DECORATION_STATUS_DECORATED
@@ -263,6 +285,7 @@ def apply_over_spec_alert_and_decoration(
                 capped_value = cap_display_value_below_visible_100(
                     actual_value=actual_value,
                     spec_limit=spec_limit,
+                    policy=policy,
                 )
                 if capped_value != actual_value:
                     result.at[row_index, value_col] = capped_value
@@ -274,13 +297,14 @@ def apply_over_spec_alert_and_decoration(
 
 def calculate_warning_status(
     usage_progress: float,
+    policy: PartsAlertPolicy,
 ) -> str:
     """
     根据使用进度判定预警状态。
 
     规则:
-    - usage_progress > 100% → STATUS_OVER (超规)
-    - usage_progress > 90%  → STATUS_WARNING (预警)
+    - usage_progress > 配置超规阈值 → STATUS_OVER (超规)
+    - usage_progress > 配置预警阈值 → STATUS_WARNING (预警)
     - 否则                   → STATUS_NORMAL (正常)
 
     Args:
@@ -289,14 +313,17 @@ def calculate_warning_status(
     Returns:
         str: STATUS_OVER / STATUS_WARNING / STATUS_NORMAL
     """
-    if usage_progress > OVER_THRESHOLD:
+    if usage_progress > policy.over_threshold:
         return STATUS_OVER
-    if usage_progress > WARNING_THRESHOLD:
+    if usage_progress > policy.warning_threshold:
         return STATUS_WARNING
     return STATUS_NORMAL
 
 
-def batch_calculate_progress_and_status(report_df: pd.DataFrame) -> pd.DataFrame:
+def batch_calculate_progress_and_status(
+    report_df: pd.DataFrame,
+    policy: PartsAlertPolicy,
+) -> pd.DataFrame:
     """
     批量计算 DataFrame 中所有行的使用进度和预警状态。
 
@@ -320,8 +347,8 @@ def batch_calculate_progress_and_status(report_df: pd.DataFrame) -> pd.DataFrame
     report_df["使用进度"] = report_df["使用进度"].fillna(0.0)
 
     conditions = [
-        report_df["使用进度"] > OVER_THRESHOLD,
-        report_df["使用进度"] > WARNING_THRESHOLD,
+        report_df["使用进度"] > policy.over_threshold,
+        report_df["使用进度"] > policy.warning_threshold,
     ]
     choices = [STATUS_OVER, STATUS_WARNING]
     report_df["预警状态"] = np.select(conditions, choices, default=STATUS_NORMAL)

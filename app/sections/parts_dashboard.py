@@ -8,6 +8,13 @@ import pandas as pd
 from typing import List
 
 
+PARTS_TABLE_COLUMN_ORDER = (
+    "厂别", "备件类型", "设备类型", "膜层", "制程",
+    "寿命规格", "站点", "机台号-腔室",
+    "测量值", "使用进度", "预警状态", "测量时间",
+)
+
+
 def render_parts_header(title: str):
     """渲染页面标题行。"""
     st.title(title)
@@ -103,13 +110,7 @@ def render_parts_table(df: pd.DataFrame):
         ),
     }
 
-    column_order = [
-        "厂别", "备件类型", "设备类型", "膜层", "制程",
-        "寿命规格", "站点", "机台号-腔室",
-        "测量值", "使用进度", "预警状态", "测量时间",
-    ]
-
-    valid_columns = [col for col in column_order if col in df.columns]
+    valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     st.dataframe(
         df,
@@ -159,13 +160,7 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
         ),
     }
 
-    column_order = [
-        "厂别", "备件类型", "设备类型", "膜层", "制程",
-        "寿命规格", "站点", "机台号-腔室",
-        "测量值", "使用进度", "预警状态", "测量时间",
-    ]
-
-    valid_columns = [col for col in column_order if col in df.columns]
+    valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     selected_rows = st.dataframe(
         df,

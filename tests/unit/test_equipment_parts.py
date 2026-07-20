@@ -8,16 +8,15 @@
 """
 
 from pathlib import Path
+from dataclasses import replace
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from src.equipment_domain.core.parts_calculator import (
-    DECORATION_MAX_RATIO,
-    DECORATION_MIN_RATIO,
-    DISPLAY_PROGRESS_MAX_RATIO,
     OVER_SPEC_COLUMN,
+    PartsAlertPolicy,
     RAW_VALUE_COLUMN,
     STATUS_NORMAL,
     STATUS_OVER,
@@ -33,10 +32,22 @@ from src.equipment_domain.core.parts_matcher import (
     build_and_match_all,
     find_matching_db_record,
 )
+from src.equipment_domain.core.parts_identity import build_fabricated_param_name
 from src.equipment_domain.infrastructure.data_loader import (
     REQUIRED_BASELINE_COLUMNS,
+    _expand_baseline_rows_from_sheets,
+    _generate_baseline_csv_from_excel,
     load_spec_baseline,
 )
+from src.equipment_domain.infrastructure import data_loader
+from src.shared_kernel.config import ConfigLoader
+
+
+def _alert_policy() -> PartsAlertPolicy:
+    """Load the same alert policy used by the production application."""
+    from src.equipment_domain.config import get_equipment_runtime_config
+
+    return get_equipment_runtime_config().alert_policy
 
 
 @pytest.fixture
@@ -111,10 +122,25 @@ class TestLoadSpecBaseline:
             assert col in df.columns
         assert df["寿命规格"].tolist() == [41000.0, 21000.0, 840.0]
 
-    def test_file_not_found_without_excel_fallback(self) -> None:
+    def test_file_not_found_without_excel_fallback(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """原始 Excel 也不存在时，加载缺失 CSV 会抛出 FileNotFoundError。"""
+        from src.equipment_domain.config import get_equipment_runtime_config
+
+        missing_source_config = replace(
+            get_equipment_runtime_config(),
+            source_excel_path=tmp_path / "missing-source.xlsx",
+        )
+        monkeypatch.setattr(
+            data_loader,
+            "get_equipment_runtime_config",
+            lambda: missing_source_config,
+        )
         with pytest.raises(FileNotFoundError):
-            load_spec_baseline("/nonexistent/path.csv")
+            load_spec_baseline(tmp_path / "missing-baseline.csv")
 
     def test_missing_columns(self, tmp_path: Path) -> None:
         """缺少必要列时抛出 ValueError。"""
@@ -124,6 +150,105 @@ class TestLoadSpecBaseline:
 
         with pytest.raises(ValueError, match="Missing columns"):
             load_spec_baseline(file_path)
+
+    def test_expands_and_merges_rows_from_multiple_configured_sheets(self) -> None:
+        """多个规格 Sheet 的行会展开并合并为同一份基线表。"""
+        common_prefix = ["Array", "Target", "PVD", "MO", "Mo DEPO", "41000KWH"]
+        rows = _expand_baseline_rows_from_sheets(
+            {
+                "Array规格表1": [
+                    common_prefix + ["1K200\n1K201", "PM1", "%LIFE_A%"],
+                ],
+                "Array规格表2": [
+                    common_prefix + ["1K300", "PM2\nPM3", "%LIFE_B%"],
+                ],
+            }
+        )
+
+        assert len(rows) == 4
+        assert {row["站点"] for row in rows} == {"1K200", "1K201", "1K300"}
+        assert {row["机台号-腔室"] for row in rows} == {"PM1", "PM2", "PM3"}
+
+    def test_generate_baseline_csv_merges_all_configured_sheets(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CSV 生成入口会读取配置中的每个 Sheet 并写入同一份规格表。"""
+        from src.equipment_domain.config import get_equipment_runtime_config
+
+        source_excel = tmp_path / "source.xlsx"
+        source_excel.touch()
+        runtime_config = replace(
+            get_equipment_runtime_config(),
+            source_excel_path=source_excel,
+            source_sheet_names=("规格表A", "规格表B"),
+        )
+        monkeypatch.setattr(
+            data_loader,
+            "get_equipment_runtime_config",
+            lambda: runtime_config,
+        )
+        def fake_sheet_reader(excel_path: Path, sheet_names: tuple[str, ...]) -> dict[str, list[list[str]]]:
+            assert excel_path == source_excel
+            assert sheet_names == ("规格表A", "规格表B")
+            return {
+                "规格表A": [["Array", "Target", "PVD", "MO", "DEPO", "100", "S1", "M1", "%A%"]],
+                "规格表B": [["Array", "Mask", "PVD", "MO", "DEPO", "200", "S2", "M2", "%B%"]],
+            }
+
+        monkeypatch.setattr(data_loader, "_read_baseline_sheets_from_excel", fake_sheet_reader)
+        output_path = tmp_path / "critical_parts_baseline.csv"
+
+        _generate_baseline_csv_from_excel(output_path)
+
+        result = pd.read_csv(output_path, dtype=str, encoding="utf-8-sig")
+        assert result["参数名称"].tolist() == ["%A%", "%B%"]
+
+    def test_equipment_config_is_loaded_from_project_config(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """关键备件运行参数统一从 equipment_config.yaml 读取。"""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "equipment_config.yaml").write_text(
+            """
+equipment:
+  baseline:
+    source_excel_path: resources/source.xlsx
+    source_sheet_names: [规格表A, 规格表B]
+  snapshot:
+    directory: data/custom-equipment
+    ttl_hours: 12
+  query:
+    lookback_days: 30
+  alert:
+    warning_threshold: 85
+    over_threshold: 110
+    decoration_growth_ratio: 1.02
+    decoration_min_ratio: 0.88
+    decoration_max_ratio: 0.94
+    display_progress_max_ratio: 0.95
+  fabrication:
+    random_seed: 7
+    normal_share: 0.6
+    warning_share: 0.25
+    over_share: 0.15
+    normal_ratio_range: [0.35, 0.85]
+    warning_ratio_range: [0.91, 0.99]
+    over_ratio_range: [1.01, 1.15]
+""".strip(),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+
+        config = ConfigLoader.get_equipment_config()
+
+        assert config["baseline"]["source_sheet_names"] == ["规格表A", "规格表B"]
+        assert config["snapshot"]["ttl_hours"] == 12
+        assert config["alert"]["warning_threshold"] == 85.0
 
 
 class TestPartsMatcher:
@@ -152,6 +277,64 @@ class TestPartsMatcher:
 
         assert find_matching_db_record(spec_row, snapshot_df) is None
 
+    @pytest.mark.parametrize("blank_param", ["", " ", None, np.nan, pd.NA])
+    def test_blank_parameter_matches_only_its_internal_fabricated_key(
+        self,
+        blank_param: object,
+    ) -> None:
+        """空参数规格只精确命中自己的内部合成键。"""
+        spec_row = pd.Series({
+            "厂别": "TP",
+            "备件类型": "陶瓷",
+            "设备类型": "ETCH",
+            "膜层": "ITO",
+            "制程": "ETCH",
+            "寿命规格": 400.0,
+            "站点": "S4",
+            "机台号-腔室": "EQ4-PM6",
+            "参数名称": blank_param,
+        })
+        synthetic_key = build_fabricated_param_name(spec_row)
+        snapshot = pd.DataFrame({
+            "step_id": ["S4", "S4"],
+            "sub_equip_id": ["EQ4-PM6", "EQ4-PM6"],
+            "param_name": ["UNRELATED_REAL_PARAM", synthetic_key],
+            "value": [9999.0, 250.0],
+            "glass_start_time": pd.to_datetime([
+                "2026-07-15 09:00:00",
+                "2026-07-15 08:30:00",
+            ]),
+        })
+
+        matched = find_matching_db_record(spec_row, snapshot)
+
+        assert matched is not None
+        assert matched["param_name"] == synthetic_key
+        assert matched["value"] == 250.0
+
+    def test_blank_parameter_does_not_fallback_to_station_machine_match(self) -> None:
+        """真实快照没有内部键时，空参数规格不能任意取同机台记录。"""
+        spec_row = pd.Series({
+            "厂别": "TP",
+            "备件类型": "陶瓷",
+            "设备类型": "ETCH",
+            "膜层": "ITO",
+            "制程": "ETCH",
+            "寿命规格": 400.0,
+            "站点": "S4",
+            "机台号-腔室": "EQ4-PM6",
+            "参数名称": "",
+        })
+        snapshot = pd.DataFrame({
+            "step_id": ["S4"],
+            "sub_equip_id": ["EQ4-PM6"],
+            "param_name": ["REAL_DATABASE_PARAM"],
+            "value": [9999.0],
+            "glass_start_time": pd.to_datetime(["2026-07-15 09:00:00"]),
+        })
+
+        assert find_matching_db_record(spec_row, snapshot) is None
+
     def test_build_and_match_all_keeps_spec_rows(
         self,
         spec_df: pd.DataFrame,
@@ -172,9 +355,10 @@ class TestPartsCalculator:
     def test_usage_status_thresholds(self) -> None:
         """使用进度按 90/100 阈值判定正常、预警、超规。"""
         assert calculate_usage_progress(80.0, 100.0) == 80.0
-        assert calculate_warning_status(80.0) == STATUS_NORMAL
-        assert calculate_warning_status(95.0) == STATUS_WARNING
-        assert calculate_warning_status(101.0) == STATUS_OVER
+        policy = _alert_policy()
+        assert calculate_warning_status(80.0, policy) == STATUS_NORMAL
+        assert calculate_warning_status(95.0, policy) == STATUS_WARNING
+        assert calculate_warning_status(101.0, policy) == STATUS_OVER
 
     def test_is_over_spec_uses_raw_value(self) -> None:
         """超规预警器直接比较原始测量值和规格线。"""
@@ -189,6 +373,7 @@ class TestPartsCalculator:
             actual_value=150.0,
             spec_limit=100.0,
             previous_value=94.0,
+            policy=_alert_policy(),
             spec_ratio=0.93,
         )
 
@@ -200,11 +385,13 @@ class TestPartsCalculator:
             actual_value=150.0,
             spec_limit=100.0,
             previous_value=None,
+            policy=_alert_policy(),
             spec_ratio=0.99,
         )
 
-        assert decorated == pytest.approx(DECORATION_MAX_RATIO * 100.0)
-        assert DECORATION_MIN_RATIO * 100.0 <= decorated <= DECORATION_MAX_RATIO * 100.0
+        policy = _alert_policy()
+        assert decorated == pytest.approx(policy.decoration_max_ratio * 100.0)
+        assert policy.decoration_min_ratio * 100.0 <= decorated <= policy.decoration_max_ratio * 100.0
 
     def test_frontend_status_uses_decorated_measurement_source(self) -> None:
         """前端状态、进度、测量值必须来自同一份修饰后数据。"""
@@ -221,12 +408,15 @@ class TestPartsCalculator:
         decorated = apply_over_spec_alert_and_decoration(
             df,
             group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+            policy=_alert_policy(),
         )
-        calculated = batch_calculate_progress_and_status(decorated)
+        calculated = batch_calculate_progress_and_status(decorated, policy=_alert_policy())
 
         assert decorated[OVER_SPEC_COLUMN].tolist() == [False, True]
         assert decorated.loc[1, RAW_VALUE_COLUMN] == 105.0
-        assert decorated.loc[1, "测量值"] == pytest.approx(95.0 * 1.01)
+        assert decorated.loc[1, "测量值"] == pytest.approx(
+            95.0 * _alert_policy().decoration_growth_ratio
+        )
         assert calculated.loc[1, "使用进度"] == pytest.approx(95.95)
         assert calculated.loc[1, "预警状态"] == STATUS_WARNING
 
@@ -245,11 +435,12 @@ class TestPartsCalculator:
         decorated = apply_over_spec_alert_and_decoration(
             df,
             group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+            policy=_alert_policy(),
         )
-        calculated = batch_calculate_progress_and_status(decorated)
+        calculated = batch_calculate_progress_and_status(decorated, policy=_alert_policy())
 
         assert calculated["使用进度"].max() == pytest.approx(
-            DISPLAY_PROGRESS_MAX_RATIO * 100.0
+            _alert_policy().display_progress_max_ratio * 100.0
         )
         assert calculated["使用进度"].max() <= 96.0
         rendered_progress = [round(progress) for progress in calculated["使用进度"]]

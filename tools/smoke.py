@@ -16,7 +16,7 @@ SMOKE_PATTERNS: dict[str, tuple[str, ...]] = {
         "tests/unit/test_spc_*.py",
     ),
     "equipment": (
-        "tests/unit/test_equipment_parts.py",
+        "tests/unit/test_equipment_*.py",
         "tests/unit/test_parts_service_cache.py",
     ),
     "yield": (

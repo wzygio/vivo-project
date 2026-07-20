@@ -23,10 +23,9 @@ def test_spc_smoke_resolves_only_existing_spc_and_cpm_tests() -> None:
 def test_equipment_smoke_resolves_core_and_service_contracts() -> None:
     targets = resolve_smoke_targets("equipment", Path.cwd())
 
-    assert targets == (
-        Path("tests/unit/test_equipment_parts.py"),
-        Path("tests/unit/test_parts_service_cache.py"),
-    )
+    assert Path("tests/unit/test_equipment_parts.py") in targets
+    assert Path("tests/unit/test_equipment_data_fabricator.py") in targets
+    assert Path("tests/unit/test_parts_service_cache.py") in targets
 
 
 def test_yield_smoke_resolves_yield_contracts_without_spc_tests() -> None:

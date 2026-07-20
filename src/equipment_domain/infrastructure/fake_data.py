@@ -1,0 +1,251 @@
+"""Deterministic current-value dataset fabrication for critical parts."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import hashlib
+from pathlib import Path
+import re
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+from src.equipment_domain.core.parts_matcher import _compile_like_pattern
+from src.equipment_domain.core.parts_identity import build_fabricated_param_name
+
+
+SNAPSHOT_COLUMNS = [
+    "step_id",
+    "sub_equip_id",
+    "param_name",
+    "value",
+    "glass_start_time",
+]
+
+
+@dataclass(frozen=True)
+class FabricationPolicy:
+    """Validated distribution and value ranges for fabricated measurements."""
+
+    random_seed: int
+    normal_share: float
+    warning_share: float
+    over_share: float
+    normal_ratio_range: tuple[float, float]
+    warning_ratio_range: tuple[float, float]
+    over_ratio_range: tuple[float, float]
+
+    def __post_init__(self) -> None:
+        shares = (self.normal_share, self.warning_share, self.over_share)
+        if any(share < 0 for share in shares):
+            raise ValueError("fabrication shares must be non-negative")
+        if not np.isclose(sum(shares), 1.0):
+            raise ValueError("fabrication shares must sum to 1")
+
+        ranges = (
+            self.normal_ratio_range,
+            self.warning_ratio_range,
+            self.over_ratio_range,
+        )
+        if any(len(ratio_range) != 2 for ratio_range in ranges):
+            raise ValueError("fabrication ratio ranges must contain two values")
+        if any(low <= 0 or low > high for low, high in ranges):
+            raise ValueError("fabrication ratio ranges must be positive and ordered")
+        if not (
+            self.normal_ratio_range[1] < self.warning_ratio_range[0]
+            and self.warning_ratio_range[1] < self.over_ratio_range[0]
+        ):
+            raise ValueError("fabrication ratio ranges must not overlap")
+
+
+@dataclass(frozen=True)
+class FabricationResult:
+    """Fabricated snapshot and its auditable generation summary."""
+
+    snapshot_df: pd.DataFrame
+    summary: dict[str, Any]
+
+
+def materialize_param_name(like_pattern: str, machine_chamber: str) -> str:
+    """Materialize one of the baseline's known SQL LIKE parameter patterns."""
+    pattern = str(like_pattern).strip()
+    chamber_match = re.search(r"PM(\d+)", str(machine_chamber), flags=re.IGNORECASE)
+    if chamber_match is None:
+        raise ValueError(f"machine chamber has no PM identifier: {machine_chamber!r}")
+    chamber_number = chamber_match.group(1)
+
+    upper_pattern = pattern.upper()
+    if "TRGTLIFE" in upper_pattern:
+        param_name = f"P{chamber_number}_TRGTLIFE_G_MAX"
+    elif "MASKLIFE" in upper_pattern:
+        param_name = f"P{chamber_number}_MASKLIFE_G_MAX"
+    elif "PRE_SPRT_KWH" in upper_pattern:
+        param_name = f"PM{chamber_number}_1_PRE_SPRT_KWH"
+    else:
+        raise ValueError(f"unsupported parameter LIKE pattern: {like_pattern!r}")
+
+    if _compile_like_pattern(pattern).fullmatch(param_name) is None:
+        raise ValueError(
+            f"materialized parameter {param_name!r} does not match {like_pattern!r}"
+        )
+    return param_name
+
+
+def _allocate_statuses(row_count: int, policy: FabricationPolicy) -> list[str]:
+    labels = np.array(["normal", "warning", "over"], dtype=object)
+    shares = np.array(
+        [policy.normal_share, policy.warning_share, policy.over_share],
+        dtype=float,
+    )
+    exact_counts = shares * row_count
+    counts = np.floor(exact_counts).astype(int)
+    remainder = row_count - int(counts.sum())
+    if remainder:
+        order = np.argsort(-(exact_counts - counts), kind="stable")
+        counts[order[:remainder]] += 1
+    return [
+        str(label)
+        for label, count in zip(labels, counts, strict=True)
+        for _ in range(int(count))
+    ]
+
+
+def _status_ratio_range(
+    status: str,
+    policy: FabricationPolicy,
+) -> tuple[float, float]:
+    if status == "normal":
+        return policy.normal_ratio_range
+    if status == "warning":
+        return policy.warning_ratio_range
+    return policy.over_ratio_range
+
+
+def fabricate_current_snapshot(
+    spec_df: pd.DataFrame,
+    policy: FabricationPolicy,
+    *,
+    as_of: pd.Timestamp,
+) -> FabricationResult:
+    """Generate one current record for every unique monitorable specification key."""
+    required = {"站点", "机台号-腔室", "参数名称", "寿命规格"}
+    missing = sorted(required.difference(spec_df.columns))
+    if missing:
+        raise ValueError(f"missing fabrication specification columns: {missing}")
+
+    timestamp = pd.Timestamp(as_of)
+    if pd.isna(timestamp):
+        raise ValueError("as_of must be a valid timestamp")
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.tz_localize(None)
+
+    work = spec_df.copy()
+    work["参数名称"] = work["参数名称"].fillna("").astype(str).str.strip()
+    work["寿命规格"] = pd.to_numeric(work["寿命规格"], errors="coerce")
+    blank_param_mask = work["参数名称"].eq("")
+    valid_spec_mask = work["寿命规格"].gt(0) & np.isfinite(work["寿命规格"])
+    valid_identity_mask = (
+        work["站点"].fillna("").astype(str).str.strip().ne("")
+        & work["机台号-腔室"].fillna("").astype(str).str.strip().ne("")
+    )
+    monitorable_mask = valid_spec_mask & valid_identity_mask
+    monitorable = work[monitorable_mask].copy()
+    monitorable["_resolved_param_name"] = monitorable.apply(
+        lambda row: (
+            build_fabricated_param_name(row)
+            if not row["参数名称"]
+            else materialize_param_name(row["参数名称"], row["机台号-腔室"])
+        ),
+        axis=1,
+    )
+
+    key_columns = ["站点", "机台号-腔室", "_resolved_param_name"]
+    conflict_counts = monitorable.groupby(key_columns, dropna=False)["寿命规格"].nunique()
+    conflicting_keys = conflict_counts[conflict_counts > 1]
+    if not conflicting_keys.empty:
+        raise ValueError(
+            "conflicting life specifications for one bottom key: "
+            f"{list(conflicting_keys.index[:5])}"
+        )
+
+    unique_specs = monitorable.drop_duplicates(key_columns, keep="first")
+    unique_specs = unique_specs.sort_values(key_columns, kind="mergesort").reset_index(drop=True)
+    statuses = _allocate_statuses(len(unique_specs), policy)
+    rng = np.random.default_rng(policy.random_seed)
+    if statuses:
+        statuses = list(rng.permutation(statuses))
+
+    records: list[dict[str, Any]] = []
+    status_counts = {"normal": 0, "warning": 0, "over": 0}
+    for (_, spec_row), status in zip(unique_specs.iterrows(), statuses, strict=True):
+        low, high = _status_ratio_range(status, policy)
+        value_ratio = float(rng.uniform(low, high))
+        value = float(spec_row["寿命规格"]) * value_ratio
+        records.append(
+            {
+                "step_id": str(spec_row["站点"]).strip(),
+                "sub_equip_id": str(spec_row["机台号-腔室"]).strip(),
+                "param_name": str(spec_row["_resolved_param_name"]),
+                "value": value,
+                "glass_start_time": timestamp,
+            }
+        )
+        status_counts[status] += 1
+
+    snapshot_df = pd.DataFrame.from_records(records, columns=SNAPSHOT_COLUMNS)
+    if snapshot_df.empty:
+        snapshot_df = pd.DataFrame(
+            {
+                "step_id": pd.Series(dtype=object),
+                "sub_equip_id": pd.Series(dtype=object),
+                "param_name": pd.Series(dtype=object),
+                "value": pd.Series(dtype=float),
+                "glass_start_time": pd.Series(dtype="datetime64[ns]"),
+            }
+        )
+    else:
+        snapshot_df["value"] = snapshot_df["value"].astype(float)
+        snapshot_df["glass_start_time"] = pd.to_datetime(snapshot_df["glass_start_time"])
+
+    summary: dict[str, Any] = {
+        "source_rows": int(len(spec_df)),
+        "monitorable_rows": int(monitorable_mask.sum()),
+        "generated_rows": int(len(snapshot_df)),
+        "synthetic_param_rows": int((blank_param_mask & monitorable_mask).sum()),
+        "skipped_blank_param_rows": 0,
+        "skipped_invalid_spec_rows": int((~valid_spec_mask).sum()),
+        "skipped_invalid_identity_rows": int((valid_spec_mask & ~valid_identity_mask).sum()),
+        "raw_status_counts": status_counts,
+        "random_seed": int(policy.random_seed),
+        "as_of": str(timestamp),
+    }
+    return FabricationResult(snapshot_df=snapshot_df, summary=summary)
+
+
+def calculate_spec_signature(spec_df: pd.DataFrame) -> str:
+    """Return the same content signature used by the production snapshot loader."""
+    return hashlib.md5(
+        pd.util.hash_pandas_object(spec_df, index=True).values.tobytes()
+    ).hexdigest()[:12]
+
+
+def write_fabricated_snapshot(
+    snapshot_df: pd.DataFrame,
+    spec_df: pd.DataFrame,
+    *,
+    output_dir: str | Path,
+    overwrite: bool = False,
+) -> Path:
+    """Write a production-named Parquet snapshot without silent replacement."""
+    missing = [column for column in SNAPSHOT_COLUMNS if column not in snapshot_df.columns]
+    if missing:
+        raise ValueError(f"missing fabricated snapshot columns: {missing}")
+    output_path = Path(output_dir) / (
+        f"part_life_snapshot_{calculate_spec_signature(spec_df)}.parquet"
+    )
+    if output_path.exists() and not overwrite:
+        raise FileExistsError(f"fabricated snapshot already exists: {output_path}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_df.loc[:, SNAPSHOT_COLUMNS].to_parquet(output_path, index=False)
+    return output_path

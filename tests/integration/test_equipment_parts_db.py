@@ -24,6 +24,7 @@ from src.equipment_domain.infrastructure.data_loader import (
     load_part_life_snapshot,
     load_spec_baseline,
 )
+from src.equipment_domain.config import get_equipment_runtime_config
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -128,8 +129,12 @@ class TestPartsPipeline:
         report_df = apply_over_spec_alert_and_decoration(
             report_df,
             group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+            policy=get_equipment_runtime_config().alert_policy,
         )
-        report_df = batch_calculate_progress_and_status(report_df)
+        report_df = batch_calculate_progress_and_status(
+            report_df,
+            policy=get_equipment_runtime_config().alert_policy,
+        )
 
         assert len(report_df) == len(spec_df)
         assert {"测量值", "使用进度", "预警状态", "是否超规"}.issubset(

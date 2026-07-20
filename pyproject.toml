@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 # 核心运行依赖：这些是代码中直接 import 的顶级包
 dependencies = [
+    "fr-common-utils[excel]>=0.2.0",
     "pandas>=2.3.1",
     "numpy>=2.3.2",
     "streamlit>=1.49.0",
@@ -53,3 +54,6 @@ reportGeneralTypeIssues = "none"
 reportCallIssue = "none"
 reportOptionalMemberAccess = "none"
 reportReturnType = "none"
+
+[tool.uv.sources]
+fr-common-utils = { path = "../packages/common_utils", editable = true }

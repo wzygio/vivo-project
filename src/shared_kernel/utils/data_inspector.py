@@ -5,6 +5,7 @@ import pandas as pd
 import logging
 import re
 from pathlib import Path
+from fr_common_utils.excel import xlsx_to_csv
 from src.shared_kernel.config import ConfigLoader
 
 # [Phase 1] 调试追踪专用 Logger
@@ -48,7 +49,6 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
         # xlsx 读取成功时，自动转换为 csv 备用
         if not targets_df.empty and csv_fallback.exists() is False:
             try:
-                from src.shared_kernel.utils.excel_tools import xlsx_to_csv
                 xlsx_to_csv(target_file, csv_fallback.parent)
             except Exception as e:
                 trace_logger.debug(f"🚧 [ScrapTrace][Probe] 自动转换探针目标表为 csv 备份失败: {e}")

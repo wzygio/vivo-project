@@ -5,7 +5,6 @@
 数据源: 从 Parquet 快照 (data/equipment/) 读取真实数据。
 """
 
-import glob
 import logging
 import re
 from datetime import datetime, timedelta
@@ -19,11 +18,9 @@ from src.equipment_domain.core.parts_calculator import (
     OVER_SPEC_COLUMN,
     apply_over_spec_alert_and_decoration,
 )
+from src.equipment_domain.config import get_equipment_runtime_config
 
 logger = logging.getLogger(__name__)
-
-SNAPSHOT_GLOB = "data/equipment/part_life_snapshot_*.parquet"
-
 
 def generate_trend_data(
     factory: str,
@@ -32,7 +29,7 @@ def generate_trend_data(
     spec_df: pd.DataFrame,
     station: str = "",
     machine: str = "",
-    days: int = 90,
+    days: int | None = None,
 ) -> pd.DataFrame:
     """
     从 Parquet 快照加载指定备件的真实趋势数据。
@@ -52,6 +49,8 @@ def generate_trend_data(
     """
     if spec_df is None or spec_df.empty:
         return pd.DataFrame()
+    runtime_config = get_equipment_runtime_config()
+    days = runtime_config.query_lookback_days if days is None else days
 
     # 查找匹配的规格行
     matched_spec = spec_df[
@@ -79,13 +78,13 @@ def generate_trend_data(
     try:
         spec_limit = float(re.sub(r"[^\d.]", "", raw_spec))
     except (ValueError, TypeError):
-        spec_limit = 840.0
+        return pd.DataFrame()
     if pd.isna(spec_limit) or spec_limit <= 0:
-        spec_limit = 840.0
-    warn_line = spec_limit * 0.9
+        return pd.DataFrame()
+    warn_line = spec_limit * (runtime_config.alert_policy.warning_threshold / 100)
 
     # 查找快照文件
-    snapshot_files = glob.glob(SNAPSHOT_GLOB)
+    snapshot_files = list(runtime_config.snapshot_dir.glob("part_life_snapshot_*.parquet"))
     if not snapshot_files:
         return pd.DataFrame()
 
@@ -157,6 +156,7 @@ def generate_trend_data(
         spec_col="寿命规格",
         raw_value_col="原始实际数据",
         sort_col="日期",
+        policy=runtime_config.alert_policy,
     )
 
     # 格式化日期为字符串

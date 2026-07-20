@@ -232,3 +232,17 @@ class ConfigLoader:
             logging.error(f"❌ 读取 scrap_factory_mapping.yaml 失败: {e}")
             
         return {"default_prefix_rules": {}, "mappings": {}}
+
+    @classmethod
+    def get_equipment_config(cls) -> dict[str, Any]:
+        """Load the critical-parts configuration from equipment_config.yaml."""
+        yaml_path = cls.get_project_root() / "config" / "equipment_config.yaml"
+        config = cls._load_yaml(yaml_path)
+        equipment = config.get("equipment", {})
+        if not isinstance(equipment, dict):
+            raise ValueError("equipment_config.yaml: 'equipment' must be a mapping")
+        if not equipment:
+            raise ValueError(
+                f"equipment_config.yaml is missing required 'equipment' settings: {yaml_path}"
+            )
+        return equipment

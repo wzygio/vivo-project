@@ -1,0 +1,27 @@
+equipment:
+  baseline:
+    source_excel_path: docs/others/北极星-关键备件/供应商关键备件寿命管控清单-0604.xlsx
+    source_sheet_names:
+      - Array规格表1
+    csv_encoding: utf-8-sig
+  snapshot:
+    directory: data/equipment
+    ttl_hours: 8
+  query:
+    lookback_days: 90
+    source_table: eda.ARRAY_PDS_RESULT_T
+  alert:
+    warning_threshold: 90.0
+    over_threshold: 100.0
+    decoration_growth_ratio: 1.01
+    decoration_min_ratio: 0.90
+    decoration_max_ratio: 0.95
+    display_progress_max_ratio: 0.96
+  fabrication:
+    random_seed: 20260715
+    normal_share: 0.60
+    warning_share: 0.25
+    over_share: 0.15
+    normal_ratio_range: [0.35, 0.85]
+    warning_ratio_range: [0.91, 0.99]
+    over_ratio_range: [1.01, 1.15]

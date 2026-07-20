@@ -13,36 +13,33 @@ import logging
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Mapping
 
 import pandas as pd
 from sqlalchemy import text
+
+from src.equipment_domain.config import get_equipment_runtime_config
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
-REQUIRED_BASELINE_COLUMNS: List[str] = [
+REQUIRED_BASELINE_COLUMNS: list[str] = [
     "厂别", "备件类型", "设备类型",
     "膜层", "制程", "寿命规格",
     "站点", "机台号-腔室", "参数名称",
 ]
 
-ORIGINAL_EXCEL_PATH: str = "resources/关键备件/供应商关键备件寿命管控清单 - new.xlsx"
-ORIGINAL_SHEET_NAME: str = "规格表"
-SNAPSHOT_DIR: str = "data/equipment"
-SNAPSHOT_TTL_HOURS: int = 8
-QUERY_LOOKBACK_DAYS: int = 90
-
 def load_spec_baseline(baseline_path: str | Path) -> pd.DataFrame:
     """Load spec baseline config. Prefer CSV, fallback to encrypted Excel."""
+    runtime_config = get_equipment_runtime_config()
     path = Path(baseline_path)
     if not path.exists():
         logger.info(f"CSV not found, generating from encrypted Excel")
         _generate_baseline_csv_from_excel(path)
     logger.info(f"Loading spec baseline CSV: {path}")
-    df = pd.read_csv(path, dtype=str, encoding="utf-8-sig")
+    df = pd.read_csv(path, dtype=str, encoding=runtime_config.csv_encoding)
     missing_cols = [col for col in REQUIRED_BASELINE_COLUMNS if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing columns: {missing_cols}. Current: {list(df.columns)}")
@@ -60,10 +57,11 @@ def load_part_life_snapshot(
     spec_hash = hashlib.md5(
         pd.util.hash_pandas_object(spec_df, index=True).values.tobytes()
     ).hexdigest()[:12]
-    snapshot_path = Path(SNAPSHOT_DIR) / f"part_life_snapshot_{spec_hash}.parquet"
+    runtime_config = get_equipment_runtime_config()
+    snapshot_path = runtime_config.snapshot_dir / f"part_life_snapshot_{spec_hash}.parquet"
     if snapshot_path.exists():
         mtime = datetime.fromtimestamp(snapshot_path.stat().st_mtime)
-        if (datetime.now() - mtime).total_seconds() < SNAPSHOT_TTL_HOURS * 3600:
+        if (datetime.now() - mtime).total_seconds() < runtime_config.snapshot_ttl_hours * 3600:
             logger.info(f"Loading from Parquet snapshot: {snapshot_path}")
             df = pd.read_parquet(snapshot_path)
             logger.info(f"Loaded {len(df)} records from snapshot")
@@ -80,71 +78,105 @@ def load_part_life_snapshot(
     return df
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:
-    """Read encrypted Excel via COM, split multi-value cells, generate flat CSV."""
-    excel_path = Path(ORIGINAL_EXCEL_PATH)
+    """Read configured Excel sheets via COM and generate one flattened CSV."""
+    runtime_config = get_equipment_runtime_config()
+    excel_path = runtime_config.source_excel_path
     if not excel_path.exists():
         raise FileNotFoundError(f"Original Excel not found: {excel_path}")
     logger.info(f"Reading encrypted Excel via COM: {excel_path}")
+    sheet_rows = _read_baseline_sheets_from_excel(
+        excel_path,
+        runtime_config.source_sheet_names,
+    )
+    expanded_rows = _expand_baseline_rows_from_sheets(sheet_rows)
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(csv_path, "w", newline="", encoding=runtime_config.csv_encoding) as f:
+        writer = csv.DictWriter(f, fieldnames=REQUIRED_BASELINE_COLUMNS)
+        writer.writeheader()
+        writer.writerows(expanded_rows)
+    source_rows = sum(len(rows) for rows in sheet_rows.values())
+    logger.info(
+        "Generated CSV from %s sheets: %s source rows -> %s expanded rows",
+        len(sheet_rows), source_rows, len(expanded_rows),
+    )
+
+
+def _read_baseline_sheets_from_excel(
+    excel_path: Path,
+    sheet_names: tuple[str, ...],
+) -> dict[str, list[list[str]]]:
+    """Read the raw data rows from each configured encrypted Excel sheet."""
     try:
         import pythoncom
         import win32com.client
     except ImportError as e:
         raise ImportError(f"pywin32 required: {e}")
+    excel = None
+    wb = None
     pythoncom.CoInitialize()
     try:
         excel = win32com.client.Dispatch("Excel.Application")
         excel.Visible = False
         excel.DisplayAlerts = False
         wb = excel.Workbooks.Open(str(excel_path.resolve()))
-        target_sheet = None
-        for i in range(1, wb.Sheets.Count + 1):
-            if wb.Sheets(i).Name == ORIGINAL_SHEET_NAME:
-                target_sheet = wb.Sheets(i)
-                break
-        if target_sheet is None:
-            sheet_names = [wb.Sheets(i).Name for i in range(1, wb.Sheets.Count + 1)]
-            wb.Close(False)
-            excel.Quit()
-            raise ValueError(f"Sheet not found: {ORIGINAL_SHEET_NAME}")
-        ws = target_sheet
-        rows = ws.UsedRange.Rows.Count
-        cols = ws.UsedRange.Columns.Count
-        if rows < 2:
-            wb.Close(False)
-            excel.Quit()
-            raise ValueError(f"Empty spec table ({rows} rows)")
-        all_rows: list[list[str]] = []
-        for r in range(2, rows + 1):
-            vals = []
-            for c in range(1, cols + 1):
-                v = ws.Cells(r, c).Value
-                vals.append(str(v).strip() if v is not None else "")
-            all_rows.append(vals)
-        wb.Close(False)
-        excel.Quit()
+        available_sheet_names = [wb.Sheets(i).Name for i in range(1, wb.Sheets.Count + 1)]
+        missing_sheet_names = [
+            name for name in sheet_names
+            if name not in available_sheet_names
+        ]
+        if missing_sheet_names:
+            raise ValueError(
+                f"Configured sheets not found: {missing_sheet_names}. "
+                f"Available sheets: {available_sheet_names}"
+            )
+
+        sheet_rows: dict[str, list[list[str]]] = {}
+        for sheet_name in sheet_names:
+            ws = wb.Sheets(sheet_name)
+            rows = ws.UsedRange.Rows.Count
+            cols = ws.UsedRange.Columns.Count
+            if rows < 2:
+                raise ValueError(f"Empty spec table in sheet '{sheet_name}' ({rows} rows)")
+            raw_rows: list[list[str]] = []
+            for row_number in range(2, rows + 1):
+                raw_rows.append([
+                    str(ws.Cells(row_number, column_number).Value).strip()
+                    if ws.Cells(row_number, column_number).Value is not None else ""
+                    for column_number in range(1, cols + 1)
+                ])
+            sheet_rows[sheet_name] = raw_rows
     finally:
+        if wb is not None:
+            wb.Close(False)
+        if excel is not None:
+            excel.Quit()
         pythoncom.CoUninitialize()
-    expanded_rows: list[dict] = []
-    for vals in all_rows:
-        stations = [s.strip() for s in vals[6].split("\n") if s.strip()]
-        machines = [m.strip() for m in vals[7].split("\n") if m.strip()]
-        if not stations:
-            stations = [vals[6]]
-        if not machines:
-            machines = [vals[7]]
-        for st in stations:
-            for mc in machines:
-                expanded_rows.append({
-                    "厂别": vals[0], "备件类型": vals[1], "设备类型": vals[2],
-                    "膜层": vals[3], "制程": vals[4], "寿命规格": vals[5],
-                    "站点": st, "机台号-腔室": mc, "参数名称": vals[8],
-                })
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=REQUIRED_BASELINE_COLUMNS)
-        writer.writeheader()
-        writer.writerows(expanded_rows)
-    logger.info(f"Generated CSV: {len(all_rows)} orig -> {len(expanded_rows)} rows")
+    return sheet_rows
+
+
+def _expand_baseline_rows_from_sheets(
+    sheet_rows: Mapping[str, list[list[str]]],
+) -> list[dict[str, str]]:
+    """Expand station/machine cells and merge all configured sheet rows."""
+    expanded_rows: list[dict[str, str]] = []
+    for sheet_name, rows in sheet_rows.items():
+        for row_number, values in enumerate(rows, start=2):
+            if len(values) < len(REQUIRED_BASELINE_COLUMNS):
+                raise ValueError(
+                    f"Sheet '{sheet_name}' row {row_number} has {len(values)} columns; "
+                    f"expected at least {len(REQUIRED_BASELINE_COLUMNS)}"
+                )
+            vals = values[:len(REQUIRED_BASELINE_COLUMNS)]
+            stations = [station.strip() for station in vals[6].split("\n") if station.strip()] or [vals[6]]
+            machines = [machine.strip() for machine in vals[7].split("\n") if machine.strip()] or [vals[7]]
+            for station in stations:
+                for machine in machines:
+                    expanded_rows.append(dict(zip(
+                        REQUIRED_BASELINE_COLUMNS,
+                        [*vals[:6], station, machine, vals[8]],
+                        strict=True,
+                    )))
+    return expanded_rows
 
 
 def _query_part_life_from_db(
@@ -161,7 +193,8 @@ def _query_part_life_from_db(
     if not unique_stations or not unique_machines:
         logger.warning("No valid pairs in spec table.")
         return pd.DataFrame()
-    cutoff_date = (datetime.now() - timedelta(days=QUERY_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    runtime_config = get_equipment_runtime_config()
+    cutoff_date = (datetime.now() - timedelta(days=runtime_config.query_lookback_days)).strftime("%Y-%m-%d")
     st_ph = ",".join([f":st{i}" for i in range(len(unique_stations))])
     mc_ph = ",".join([f":mc{i}" for i in range(len(unique_machines))])
 
@@ -174,7 +207,7 @@ def _query_part_life_from_db(
 
     sql = f"""
         SELECT step_id, sub_equip_id, param_name, value, glass_start_time
-        FROM eda.ARRAY_PDS_RESULT_T
+        FROM {runtime_config.query_source_table}
         WHERE step_id IN ({st_ph})
           AND sub_equip_id IN ({mc_ph})
           AND glass_start_time >= TO_DATE(:cutoff_date, 'YYYY-MM-DD')
@@ -250,17 +283,22 @@ class PartsRepository:
         snapshot_df = repo.get_snapshot()
     """
 
-    SNAPSHOT_TTL_HOURS = 8
-
     def __init__(
         self,
         db_manager: "DatabaseManager",
         spec_df: pd.DataFrame,
-        snapshot_dir: str = SNAPSHOT_DIR,
+        snapshot_dir: str | Path | None = None,
+        snapshot_ttl_hours: int | None = None,
     ):
+        runtime_config = get_equipment_runtime_config()
         self._db = db_manager
         self._spec_df = spec_df
-        self._snapshot_dir = Path(snapshot_dir)
+        self._snapshot_dir = Path(snapshot_dir) if snapshot_dir is not None else runtime_config.snapshot_dir
+        self._snapshot_ttl_hours = (
+            snapshot_ttl_hours
+            if snapshot_ttl_hours is not None
+            else runtime_config.snapshot_ttl_hours
+        )
 
         # 计算规格签名
         self._spec_hash = hashlib.md5(
@@ -313,4 +351,4 @@ class PartsRepository:
         if not self._snapshot_path.exists():
             return False
         mtime = datetime.fromtimestamp(self._snapshot_path.stat().st_mtime)
-        return (datetime.now() - mtime).total_seconds() < self.SNAPSHOT_TTL_HOURS * 3600
+        return (datetime.now() - mtime).total_seconds() < self._snapshot_ttl_hours * 3600

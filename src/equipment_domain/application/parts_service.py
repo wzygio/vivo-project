@@ -25,6 +25,7 @@ from src.equipment_domain.core.parts_calculator import (
     apply_over_spec_alert_and_decoration,
     batch_calculate_progress_and_status,
 )
+from src.equipment_domain.config import get_equipment_runtime_config
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -103,15 +104,17 @@ class PartsReportService:
 
         # 3. 批量匹配（使用预建索引，O(n) 而非 O(n*m)）
         report_df = build_and_match_all(spec_df, snapshot_df)
+        alert_policy = get_equipment_runtime_config().alert_policy
 
         # 4. 先保留原始超规判断，再对展示测量值做修饰
         report_df = apply_over_spec_alert_and_decoration(
             report_df,
             group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+            policy=alert_policy,
         )
 
         # 5. 计算使用进度和预警状态
-        report_df = batch_calculate_progress_and_status(report_df)
+        report_df = batch_calculate_progress_and_status(report_df, policy=alert_policy)
 
         # 6. 统计信息
         over_count = int((report_df["预警状态"] == "超规").sum())

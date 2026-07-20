@@ -14,6 +14,8 @@ from typing import Optional
 
 import pandas as pd
 
+from src.equipment_domain.core.parts_identity import build_fabricated_param_name
+
 
 def _build_snapshot_index(
     snapshot_df: pd.DataFrame,
@@ -86,9 +88,14 @@ def find_matching_db_record(
 
     station = str(spec_row.get("站点", "")).strip()
     machine_chamber = str(spec_row.get("机台号-腔室", "")).strip()
-    param_pattern = str(spec_row.get("参数名称", "")).strip()
+    raw_param_pattern = spec_row.get("参数名称", "")
+    param_pattern = (
+        ""
+        if raw_param_pattern is None or bool(pd.isna(raw_param_pattern))
+        else str(raw_param_pattern).strip()
+    )
 
-    if not station or not machine_chamber or not param_pattern:
+    if not station or not machine_chamber:
         return None
 
     # 使用预建索引 O(1) 查找
@@ -104,9 +111,13 @@ def find_matching_db_record(
         if subset.empty:
             return None
 
-    # 参数名称 LIKE 模式匹配
-    like_re = _compile_like_pattern(param_pattern)
-    param_mask = subset["param_name"].astype(str).str.match(like_re, na=False)
+    # 非空参数沿用 LIKE；空参数只精确匹配仿造数据内部键。
+    if param_pattern:
+        like_re = _compile_like_pattern(param_pattern)
+        param_mask = subset["param_name"].astype(str).str.match(like_re, na=False)
+    else:
+        fabricated_param_name = build_fabricated_param_name(spec_row)
+        param_mask = subset["param_name"].astype(str).eq(fabricated_param_name)
     matched = subset[param_mask]
 
     if matched.empty:

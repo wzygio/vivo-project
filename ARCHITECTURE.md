@@ -19,6 +19,11 @@
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
+- Plain Excel-to-CSV export used by the SPC probe workflow comes from the local
+  `fr-common-utils[excel]` dependency through `fr_common_utils.excel`. The
+  project-specific encrypted-workbook COM fallback, configuration models,
+  database singleton/retry policy, application setup, and domain adapters stay
+  locally owned.
 
 ## Project Map
 
