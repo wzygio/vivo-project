@@ -180,7 +180,6 @@ def create_ctq_period_overview_chart(
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     title: str,
-    chart_type: str,
     period_box_source: str = "point_value",
 ) -> go.Figure:
     """Create a capability-free CTQ month/week/day distribution figure."""
@@ -189,7 +188,6 @@ def create_ctq_period_overview_chart(
         period_capability_df=pd.DataFrame(),
         raw_measurements_df=raw_measurements_df,
         period_box_source=period_box_source,
-        chart_type=chart_type,
         title=title,
     )
 
@@ -222,7 +220,6 @@ def render_ctq_indicator_sections(
                 sheet_features_df=indicator_features_df,
                 raw_measurements_df=indicator_raw_df,
                 title=f"{label} | 月周天分布",
-                chart_type=chart_type,
                 period_box_source=period_box_source,
             )
             chamber_figure, time_figure = _create_sheet_points_box_charts(

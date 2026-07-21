@@ -19,6 +19,12 @@
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
+- The equipment report keeps database and fabricated current-value snapshots in
+  independent signature-addressed files. Its application service matches each
+  specification against the database snapshot first and consults the fabricated
+  snapshot only when no real record matches. Fabricated generation and 24-hour
+  update are explicit, separate command workflows; report reads never mutate
+  either snapshot. See `docs/ADR/0003-equipment-real-first-fabricated-fallback.md`.
 - Inline report services own their data-type boundary: the SPC report forces
   `SPC` and adds CPM/CPK capability output, while the CTQ report forces `CTQ`
   and exposes only Sheet/point distributions plus backend-selected chart type.
@@ -124,6 +130,10 @@
 - Service tests prove refresh injects validated config into a policy-versioned
   bottom data provider.
 - CTQ tests prove forced `CTQ` repository queries, capability-free payloads,
-  isolated OOS files, UNI point-line rendering, native-cache hot reload, and
-  independent Streamlit page behavior; the Inline `spc` smoke scope includes
-  both CTQ and SPC report tests.
+  isolated OOS files, UNI Sheet point-line rendering from every raw point,
+  month/week/day box distributions, native-cache hot reload, and independent
+  Streamlit page behavior; the Inline `spc` smoke scope includes both CTQ and
+  SPC report tests.
+- The SPC page renders exact factory/station/parameter combinations from daily
+  CPK alerts before the manual cascade filters, reusing the standard indicator
+  chart renderer for both automatic and user-selected views.

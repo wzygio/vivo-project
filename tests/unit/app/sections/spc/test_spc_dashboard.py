@@ -11,12 +11,14 @@ from app.sections.spc.spc_dashboard import (
     _create_sheet_points_box_chart,
     _create_sheet_points_box_charts,
     build_daily_cpk_alerts,
+    filter_spc_report_by_alerts,
     filter_spc_report,
     get_available_factories,
     get_default_spc_start_date,
     get_params_for_factory_steps,
     get_steps_for_factory,
     render_cpk_alert_center,
+    render_cpk_alert_indicator_sections,
     render_spc_decoration_admin,
     render_spc_indicator_sections,
 )
@@ -100,6 +102,60 @@ def test_build_daily_cpk_alerts_returns_every_daily_value_below_threshold() -> N
             "CPK值": 1.20,
         },
     ]
+
+
+def test_filter_spc_report_by_alerts_matches_exact_indicator_combinations() -> None:
+    report_df = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P1", "value": 1},
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P2", "value": 2},
+            {"factory": "ARRAY", "step_id": "S2", "param_name": "P2", "value": 3},
+            {"factory": "OLED", "step_id": "S1", "param_name": "P1", "value": 4},
+        ]
+    )
+    alerts_df = pd.DataFrame(
+        [
+            {"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规日期": "2026-07-20"},
+            {"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规日期": "2026-07-21"},
+            {"厂别": "ARRAY", "站点": "S2", "参数名称": "P2", "超规日期": "2026-07-21"},
+        ]
+    )
+
+    result = filter_spc_report_by_alerts(report_df, alerts_df)
+
+    assert result["value"].tolist() == [1, 3]
+
+
+def test_render_cpk_alert_indicator_sections_renders_only_alerted_indicators(monkeypatch) -> None:
+    alerts_df = pd.DataFrame(
+        [{"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规日期": "2026-07-21"}]
+    )
+    report_df = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P1", "value": 1},
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P2", "value": 2},
+        ]
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(spc_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        spc_dashboard,
+        "render_spc_indicator_sections",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    render_cpk_alert_indicator_sections(
+        alerts_df=alerts_df,
+        period_capability_df=report_df,
+        sheet_features_df=report_df,
+        raw_measurements_df=report_df,
+        period_box_source="point_value",
+    )
+
+    assert captured["period_box_source"] == "point_value"
+    for frame_name in ["period_capability_df", "sheet_features_df", "raw_measurements_df"]:
+        assert captured[frame_name]["param_name"].tolist() == ["P1"]
 
 
 def test_render_cpk_alert_center_expands_and_displays_alert_details(monkeypatch) -> None:
@@ -399,16 +455,15 @@ def test_period_overview_chart_uses_box_without_metric_lines() -> None:
     assert fig.layout.height <= 480
 
 
-def test_period_overview_chart_uses_point_lines_when_backend_chart_type_is_line() -> None:
+def test_period_overview_chart_is_always_a_box_distribution() -> None:
     fig = _create_period_overview_chart(
         sheet_features_df=_sample_sheet_features(),
         period_capability_df=_sample_period_capability(),
         title="ARRAY | 15260 | 4PP_UNI",
-        chart_type="line",
     )
 
-    assert not [trace for trace in fig.data if trace.type == "box"]
-    assert [trace.mode for trace in fig.data if trace.type == "scatter"] == ["lines+markers"] * 2
+    assert [trace for trace in fig.data if trace.type == "box"]
+    assert not [trace for trace in fig.data if trace.type == "scatter"]
 
 
 def test_period_overview_chart_uses_all_measurement_points_in_point_value_mode() -> None:
@@ -552,7 +607,7 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
         raw_measurements_df=raw_measurements,
     )
 
-    assert captured["period"]["chart_type"] == "line"
+    assert "chart_type" not in captured["period"]
     assert captured["sheet"]["chart_type"] == "line"
 
 
@@ -879,11 +934,63 @@ def test_sheet_points_box_chart_draws_only_upper_lines_when_lsl_is_zero() -> Non
     assert annotation_texts == {"USL: 8", "UCL: 6"}
 
 
+def test_sheet_points_box_chart_preserves_tiny_upper_spec_values_in_labels() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-01", "param_value": 3.0e-12},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-02", "param_value": 3.2e-12},
+        ]
+    )
+    spec_df = pd.DataFrame(
+        [
+            {
+                "usl": 1.6e-11,
+                "lsl": 0.0,
+                "ucl": 9.7e-12,
+                "lcl": 0.0,
+                "target": 0.0,
+            }
+        ]
+    )
+
+    figure = _create_sheet_points_box_chart(
+        raw_measurements_df,
+        sort_mode="按过货时间排序",
+        title="Sheet点位分布",
+        spec_df=spec_df,
+    )
+
+    annotation_texts = {annotation.text for annotation in figure.layout.annotations}
+    assert annotation_texts == {"USL: 1.6e-11", "UCL: 9.7e-12"}
+
+
 def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line() -> None:
     raw_measurements_df = pd.DataFrame(
         [
-            {"sheet_id": "S1", "sheet_start_time": "2026-06-01 08:00:00", "param_value": 3.0},
-            {"sheet_id": "S2", "sheet_start_time": "2026-06-02 09:00:00", "param_value": 4.0},
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-06-01 08:00:00",
+                "site_name": "P1",
+                "param_value": 3.0,
+            },
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-06-01 08:00:00",
+                "site_name": "P2",
+                "param_value": 5.0,
+            },
+            {
+                "sheet_id": "S2",
+                "sheet_start_time": "2026-06-02 09:00:00",
+                "site_name": "P1",
+                "param_value": 4.0,
+            },
+            {
+                "sheet_id": "S2",
+                "sheet_start_time": "2026-06-02 09:00:00",
+                "site_name": "P2",
+                "param_value": 6.0,
+            },
         ]
     )
 
@@ -895,7 +1002,10 @@ def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line
     )
 
     assert not [trace for trace in fig.data if trace.type == "box"]
-    assert [trace.mode for trace in fig.data if trace.type == "scatter"] == ["lines+markers"]
+    line_trace = next(trace for trace in fig.data if trace.type == "scatter")
+    assert line_trace.mode == "lines+markers"
+    assert list(line_trace.y) == [3.0, 5.0, 4.0, 6.0]
+    assert line_trace.name == "Point Value"
 
 
 def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:

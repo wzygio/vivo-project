@@ -18,6 +18,7 @@ import streamlit as st
 from src.equipment_domain.infrastructure.data_loader import (
     load_spec_baseline,
     load_part_life_snapshot,
+    load_fabricated_part_life_snapshot,
     PartsRepository,
 )
 from src.equipment_domain.core.parts_matcher import build_and_match_all
@@ -101,9 +102,14 @@ class PartsReportService:
 
         # 2. 查询数据库快照数据
         snapshot_df = load_part_life_snapshot(_db_manager, spec_df)
+        fabricated_snapshot_df = load_fabricated_part_life_snapshot(spec_df)
 
-        # 3. 批量匹配（使用预建索引，O(n) 而非 O(n*m)）
-        report_df = build_and_match_all(spec_df, snapshot_df)
+        # 3. 真实记录优先；仅真实缺失时使用独立仿造快照。
+        report_df = build_and_match_all(
+            spec_df,
+            snapshot_df,
+            fallback_snapshot_df=fabricated_snapshot_df,
+        )
         alert_policy = get_equipment_runtime_config().alert_policy
 
         # 4. 先保留原始超规判断，再对展示测量值做修饰

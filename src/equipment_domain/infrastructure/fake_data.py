@@ -26,37 +26,27 @@ SNAPSHOT_COLUMNS = [
 
 @dataclass(frozen=True)
 class FabricationPolicy:
-    """Validated distribution and value ranges for fabricated measurements."""
+    """Validated generation and update rules for fabricated measurements."""
 
     random_seed: int
-    normal_share: float
-    warning_share: float
-    over_share: float
-    normal_ratio_range: tuple[float, float]
-    warning_ratio_range: tuple[float, float]
-    over_ratio_range: tuple[float, float]
+    initial_value_ratio_range: tuple[float, float]
+    initial_lookback_days: int
+    update_increment_ratio: float
+    reset_ratio_range: tuple[float, float]
+    snapshot_ttl_hours: int
 
     def __post_init__(self) -> None:
-        shares = (self.normal_share, self.warning_share, self.over_share)
-        if any(share < 0 for share in shares):
-            raise ValueError("fabrication shares must be non-negative")
-        if not np.isclose(sum(shares), 1.0):
-            raise ValueError("fabrication shares must sum to 1")
-
-        ranges = (
-            self.normal_ratio_range,
-            self.warning_ratio_range,
-            self.over_ratio_range,
-        )
-        if any(len(ratio_range) != 2 for ratio_range in ranges):
+        ranges = (self.initial_value_ratio_range, self.reset_ratio_range)
+        if any(len(value_range) != 2 for value_range in ranges):
             raise ValueError("fabrication ratio ranges must contain two values")
-        if any(low <= 0 or low > high for low, high in ranges):
-            raise ValueError("fabrication ratio ranges must be positive and ordered")
-        if not (
-            self.normal_ratio_range[1] < self.warning_ratio_range[0]
-            and self.warning_ratio_range[1] < self.over_ratio_range[0]
-        ):
-            raise ValueError("fabrication ratio ranges must not overlap")
+        if any(low < 0 or low > high or high > 1 for low, high in ranges):
+            raise ValueError("fabrication ratio ranges must be ordered within [0, 1]")
+        if self.initial_lookback_days <= 0:
+            raise ValueError("initial lookback days must be positive")
+        if self.update_increment_ratio <= 0:
+            raise ValueError("update increment ratio must be positive")
+        if self.snapshot_ttl_hours <= 0:
+            raise ValueError("fabricated snapshot TTL must be positive")
 
 
 @dataclass(frozen=True)
@@ -92,43 +82,13 @@ def materialize_param_name(like_pattern: str, machine_chamber: str) -> str:
     return param_name
 
 
-def _allocate_statuses(row_count: int, policy: FabricationPolicy) -> list[str]:
-    labels = np.array(["normal", "warning", "over"], dtype=object)
-    shares = np.array(
-        [policy.normal_share, policy.warning_share, policy.over_share],
-        dtype=float,
-    )
-    exact_counts = shares * row_count
-    counts = np.floor(exact_counts).astype(int)
-    remainder = row_count - int(counts.sum())
-    if remainder:
-        order = np.argsort(-(exact_counts - counts), kind="stable")
-        counts[order[:remainder]] += 1
-    return [
-        str(label)
-        for label, count in zip(labels, counts, strict=True)
-        for _ in range(int(count))
-    ]
-
-
-def _status_ratio_range(
-    status: str,
-    policy: FabricationPolicy,
-) -> tuple[float, float]:
-    if status == "normal":
-        return policy.normal_ratio_range
-    if status == "warning":
-        return policy.warning_ratio_range
-    return policy.over_ratio_range
-
-
-def fabricate_current_snapshot(
+def generate_fabricated_snapshot(
     spec_df: pd.DataFrame,
     policy: FabricationPolicy,
     *,
     as_of: pd.Timestamp,
 ) -> FabricationResult:
-    """Generate one current record for every unique monitorable specification key."""
+    """Generate an initial record for every unique monitorable specification key."""
     required = {"站点", "机台号-腔室", "参数名称", "寿命规格"}
     missing = sorted(required.difference(spec_df.columns))
     if missing:
@@ -171,27 +131,24 @@ def fabricate_current_snapshot(
 
     unique_specs = monitorable.drop_duplicates(key_columns, keep="first")
     unique_specs = unique_specs.sort_values(key_columns, kind="mergesort").reset_index(drop=True)
-    statuses = _allocate_statuses(len(unique_specs), policy)
     rng = np.random.default_rng(policy.random_seed)
-    if statuses:
-        statuses = list(rng.permutation(statuses))
 
     records: list[dict[str, Any]] = []
-    status_counts = {"normal": 0, "warning": 0, "over": 0}
-    for (_, spec_row), status in zip(unique_specs.iterrows(), statuses, strict=True):
-        low, high = _status_ratio_range(status, policy)
+    lookback_seconds = policy.initial_lookback_days * 24 * 60 * 60
+    for _, spec_row in unique_specs.iterrows():
+        low, high = policy.initial_value_ratio_range
         value_ratio = float(rng.uniform(low, high))
         value = float(spec_row["寿命规格"]) * value_ratio
+        age_seconds = int(rng.integers(0, lookback_seconds + 1))
         records.append(
             {
                 "step_id": str(spec_row["站点"]).strip(),
                 "sub_equip_id": str(spec_row["机台号-腔室"]).strip(),
                 "param_name": str(spec_row["_resolved_param_name"]),
                 "value": value,
-                "glass_start_time": timestamp,
+                "glass_start_time": timestamp - pd.Timedelta(seconds=age_seconds),
             }
         )
-        status_counts[status] += 1
 
     snapshot_df = pd.DataFrame.from_records(records, columns=SNAPSHOT_COLUMNS)
     if snapshot_df.empty:
@@ -216,11 +173,20 @@ def fabricate_current_snapshot(
         "skipped_blank_param_rows": 0,
         "skipped_invalid_spec_rows": int((~valid_spec_mask).sum()),
         "skipped_invalid_identity_rows": int((valid_spec_mask & ~valid_identity_mask).sum()),
-        "raw_status_counts": status_counts,
         "random_seed": int(policy.random_seed),
         "as_of": str(timestamp),
     }
     return FabricationResult(snapshot_df=snapshot_df, summary=summary)
+
+
+def fabricate_current_snapshot(
+    spec_df: pd.DataFrame,
+    policy: FabricationPolicy,
+    *,
+    as_of: pd.Timestamp,
+) -> FabricationResult:
+    """Backward-compatible alias for initial fabricated snapshot generation."""
+    return generate_fabricated_snapshot(spec_df, policy, as_of=as_of)
 
 
 def calculate_spec_signature(spec_df: pd.DataFrame) -> str:
@@ -228,6 +194,16 @@ def calculate_spec_signature(spec_df: pd.DataFrame) -> str:
     return hashlib.md5(
         pd.util.hash_pandas_object(spec_df, index=True).values.tobytes()
     ).hexdigest()[:12]
+
+
+def build_fabricated_snapshot_path(
+    spec_df: pd.DataFrame,
+    output_dir: str | Path,
+) -> Path:
+    """Return the isolated path for one specification's fabricated snapshot."""
+    return Path(output_dir) / (
+        f"part_life_fabricated_{calculate_spec_signature(spec_df)}.parquet"
+    )
 
 
 def write_fabricated_snapshot(
@@ -241,9 +217,7 @@ def write_fabricated_snapshot(
     missing = [column for column in SNAPSHOT_COLUMNS if column not in snapshot_df.columns]
     if missing:
         raise ValueError(f"missing fabricated snapshot columns: {missing}")
-    output_path = Path(output_dir) / (
-        f"part_life_snapshot_{calculate_spec_signature(spec_df)}.parquet"
-    )
+    output_path = build_fabricated_snapshot_path(spec_df, output_dir)
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"fabricated snapshot already exists: {output_path}")
     output_path.parent.mkdir(parents=True, exist_ok=True)

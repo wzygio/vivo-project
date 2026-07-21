@@ -1,10 +1,9 @@
-"""Generate a current-value critical-parts snapshot from the specification baseline."""
+"""Update an existing fabricated critical-parts snapshot under its 24-hour TTL."""
 
 from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from dataclasses import replace
 import json
 from pathlib import Path
 import sys
@@ -20,15 +19,14 @@ for import_path in (REPO_ROOT, REPO_ROOT / "src"):
 
 from src.equipment_domain.config import get_equipment_runtime_config
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
-from src.equipment_domain.infrastructure.fake_data import (
-    generate_fabricated_snapshot,
-    write_fabricated_snapshot,
+from src.equipment_domain.infrastructure.fake_data_updater import (
+    update_fabricated_snapshot_file,
 )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Generate an initial fabricated critical-parts snapshot.",
+        description="Update an existing fabricated critical-parts snapshot.",
     )
     parser.add_argument(
         "--baseline",
@@ -36,30 +34,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path("resources/critical_parts_baseline.csv"),
     )
     parser.add_argument("--output-dir", type=Path)
-    parser.add_argument("--seed", type=int)
     parser.add_argument(
-        "--as-of",
-        help="Generation cutoff; each row receives a random time within the preceding two days.",
+        "--now",
+        help="ISO timestamp used for the 24-hour freshness check; defaults to local time.",
     )
-    parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
     runtime = get_equipment_runtime_config()
-    policy = runtime.fabrication_policy
-    if args.seed is not None:
-        policy = replace(policy, random_seed=args.seed)
-    as_of = pd.Timestamp(args.as_of) if args.as_of else pd.Timestamp.now().floor("s")
-    output_dir = args.output_dir or runtime.snapshot_dir
-
     spec_df = load_spec_baseline(args.baseline)
-    result = generate_fabricated_snapshot(spec_df, policy, as_of=as_of)
-    output_path = write_fabricated_snapshot(
-        result.snapshot_df,
+    now = pd.Timestamp(args.now) if args.now else pd.Timestamp.now().floor("s")
+    outcome = update_fabricated_snapshot_file(
         spec_df,
-        output_dir=output_dir,
-        overwrite=args.overwrite,
+        runtime.fabrication_policy,
+        output_dir=args.output_dir or runtime.snapshot_dir,
+        now=now,
+        force=args.force,
     )
-    summary = {**result.summary, "output_path": str(output_path.resolve())}
+    summary = {
+        **outcome.summary,
+        "updated": outcome.updated,
+        "output_path": str(outcome.path.resolve()),
+    }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
 

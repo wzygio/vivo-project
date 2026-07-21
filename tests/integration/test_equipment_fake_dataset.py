@@ -8,7 +8,9 @@ from src.equipment_domain.config import get_equipment_runtime_config
 from src.equipment_domain.infrastructure import data_loader
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
 from src.equipment_domain.infrastructure.fake_data import (
-    fabricate_current_snapshot,
+    calculate_spec_signature,
+    generate_fabricated_snapshot,
+    materialize_param_name,
     write_fabricated_snapshot,
 )
 
@@ -17,7 +19,7 @@ class _OfflineDatabase:
     engine = None
 
 
-def test_real_baseline_fabrication_is_consumable_by_report_service(
+def test_report_service_prefers_real_snapshot_and_fills_its_gaps_from_fabrication(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -25,7 +27,7 @@ def test_real_baseline_fabrication_is_consumable_by_report_service(
     spec_df = load_spec_baseline(baseline_path)
     runtime = get_equipment_runtime_config()
     as_of = pd.Timestamp("2026-07-15 08:30:00")
-    result = fabricate_current_snapshot(
+    result = generate_fabricated_snapshot(
         spec_df,
         runtime.fabrication_policy,
         as_of=as_of,
@@ -34,6 +36,22 @@ def test_real_baseline_fabrication_is_consumable_by_report_service(
         result.snapshot_df,
         spec_df,
         output_dir=tmp_path,
+    )
+    first_spec = spec_df.iloc[0]
+    real_value = float(first_spec["寿命规格"]) * 0.42
+    real_snapshot = pd.DataFrame({
+        "step_id": [str(first_spec["站点"])],
+        "sub_equip_id": [str(first_spec["机台号-腔室"])],
+        "param_name": [materialize_param_name(
+            str(first_spec["参数名称"]),
+            str(first_spec["机台号-腔室"]),
+        )],
+        "value": [real_value],
+        "glass_start_time": [as_of],
+    })
+    real_snapshot.to_parquet(
+        tmp_path / f"part_life_snapshot_{calculate_spec_signature(spec_df)}.parquet",
+        index=False,
     )
     test_runtime = replace(runtime, snapshot_dir=tmp_path)
     monkeypatch.setattr(data_loader, "get_equipment_runtime_config", lambda: test_runtime)
@@ -54,10 +72,9 @@ def test_real_baseline_fabrication_is_consumable_by_report_service(
     assert len(measured) == 1781
     assert not view_model.report_df["测量值"].isna().any()
     assert not view_model.report_df["测量时间"].isna().any()
+    assert view_model.report_df.loc[0, "原始测量值"] == real_value
     assert measured["原始测量值"].notna().all()
-    assert measured["是否超规"].any()
-    assert (measured["数据修饰"] == "超规修饰").any()
     assert measured["使用进度"].max() <= runtime.alert_policy.display_progress_max_ratio * 100
     assert view_model.last_update == str(as_of)
     assert view_model.normal_count > 0
-    assert view_model.warning_count > 0
+    assert output_path.name.startswith("part_life_fabricated_")

@@ -134,6 +134,7 @@ def find_matching_db_record(
 def build_and_match_all(
     spec_df: pd.DataFrame,
     snapshot_df: pd.DataFrame,
+    fallback_snapshot_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     批量匹配：对规格表所有行匹配快照数据，返回合并后的报表 DataFrame。
@@ -142,12 +143,18 @@ def build_and_match_all(
 
     Args:
         spec_df: 规格基线 DataFrame
-        snapshot_df: DB 快照 DataFrame
+        snapshot_df: 真实 DB 快照 DataFrame
+        fallback_snapshot_df: 仅在真实记录缺失时使用的仿造快照 DataFrame
 
     Returns:
         pd.DataFrame: 合并后的报表明细（含测量值、测量时间、匹配参数名）
     """
-    if snapshot_df.empty:
+    fallback_snapshot = (
+        fallback_snapshot_df
+        if isinstance(fallback_snapshot_df, pd.DataFrame)
+        else pd.DataFrame()
+    )
+    if snapshot_df.empty and fallback_snapshot.empty:
         # 无数据时仍返回完整规格行（测量值为空）
         result = spec_df.copy()
         result["测量值"] = None
@@ -156,10 +163,17 @@ def build_and_match_all(
         return result
 
     snapshot_index = _build_snapshot_index(snapshot_df)
+    fallback_index = _build_snapshot_index(fallback_snapshot)
 
     rows = []
     for _, spec_row in spec_df.iterrows():
         matched = find_matching_db_record(spec_row, snapshot_df, snapshot_index)
+        if matched is None and not fallback_snapshot.empty:
+            matched = find_matching_db_record(
+                spec_row,
+                fallback_snapshot,
+                fallback_index,
+            )
 
         row = {
             "厂别": spec_row.get("厂别"),

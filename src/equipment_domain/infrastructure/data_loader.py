@@ -19,6 +19,10 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.equipment_domain.config import get_equipment_runtime_config
+from src.equipment_domain.infrastructure.fake_data import (
+    SNAPSHOT_COLUMNS,
+    build_fabricated_snapshot_path,
+)
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -76,6 +80,21 @@ def load_part_life_snapshot(
     df.to_parquet(snapshot_path, index=False)
     logger.info(f"Saved snapshot: {snapshot_path} ({len(df)} records)")
     return df
+
+
+def load_fabricated_part_life_snapshot(spec_df: pd.DataFrame) -> pd.DataFrame:
+    """Load the isolated fabricated snapshot used only for real-data gaps."""
+    runtime_config = get_equipment_runtime_config()
+    snapshot_path = build_fabricated_snapshot_path(spec_df, runtime_config.snapshot_dir)
+    if not snapshot_path.exists():
+        logger.info("Fabricated snapshot not found: %s", snapshot_path)
+        return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+    df = pd.read_parquet(snapshot_path)
+    missing = [column for column in SNAPSHOT_COLUMNS if column not in df.columns]
+    if missing:
+        raise ValueError(f"Missing fabricated snapshot columns: {missing}")
+    logger.info("Loaded %s fabricated fallback records from %s", len(df), snapshot_path)
+    return df.loc[:, SNAPSHOT_COLUMNS].copy()
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:
     """Read configured Excel sheets via COM and generate one flattened CSV."""

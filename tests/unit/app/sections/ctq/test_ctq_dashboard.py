@@ -1,6 +1,6 @@
-import pandas as pd
-import plotly.graph_objects as go
 from contextlib import nullcontext
+
+import pandas as pd
 
 from app.sections.ctq import ctq_dashboard
 from app.sections.ctq.ctq_dashboard import (
@@ -9,7 +9,7 @@ from app.sections.ctq.ctq_dashboard import (
 )
 
 
-def test_ctq_period_overview_uses_backend_line_chart_without_capability_data() -> None:
+def test_ctq_period_overview_stays_box_for_uni_parameters() -> None:
     sheet_features_df = pd.DataFrame(
         [
             {
@@ -48,12 +48,10 @@ def test_ctq_period_overview_uses_backend_line_chart_without_capability_data() -
         sheet_features_df=sheet_features_df,
         raw_measurements_df=raw_measurements_df,
         title="ARRAY | 12140 | SE_L1T_UNI | 月周天分布",
-        chart_type="line",
     )
 
-    assert [trace.type for trace in figure.data] == ["scatter", "scatter", "scatter"]
-    assert all(isinstance(trace, go.Scatter) for trace in figure.data)
-    assert [trace.name for trace in figure.data] == ["月", "周", "日"]
+    assert [trace for trace in figure.data if trace.type == "box"]
+    assert not [trace for trace in figure.data if trace.type == "scatter"]
 
 
 def test_ctq_indicator_sections_render_distributions_without_capability_widgets(monkeypatch) -> None:
@@ -112,7 +110,7 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     )
 
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
-    assert captured["chart_type"] == "line"
+    assert "chart_type" not in captured
     assert captured["sheet_chart_type"] == "line"
 
 
@@ -138,11 +136,37 @@ def test_ctq_chart_with_zero_lsl_draws_only_upper_spec_lines() -> None:
         sheet_features_df=sheet_features_df,
         raw_measurements_df=raw_measurements_df,
         title="ARRAY | 12140 | THK | 月周天分布",
-        chart_type="box",
     )
 
     annotation_texts = {annotation.text for annotation in figure.layout.annotations}
     assert annotation_texts == {"USL: 12", "UCL: 10"}
+
+
+def test_ctq_period_chart_preserves_tiny_upper_spec_values_in_labels() -> None:
+    sheet_features_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-07-01",
+                "sheet_mean": 3.0e-12,
+                "usl": 1.6e-11,
+                "lsl": 0.0,
+                "ucl": 9.7e-12,
+                "lcl": 0.0,
+                "target": 0.0,
+            }
+        ]
+    )
+    raw_measurements_df = sheet_features_df.rename(columns={"sheet_mean": "param_value"})
+
+    figure = create_ctq_period_overview_chart(
+        sheet_features_df=sheet_features_df,
+        raw_measurements_df=raw_measurements_df,
+        title="ARRAY | 1B990 | TFT_7_IOFF1 | 月周天分布",
+    )
+
+    annotation_texts = {annotation.text for annotation in figure.layout.annotations}
+    assert annotation_texts == {"USL: 1.6e-11", "UCL: 9.7e-12"}
 
 
 def test_ctq_indicator_sections_report_empty_filter_results(monkeypatch) -> None:
@@ -180,4 +204,3 @@ def test_ctq_admin_panel_contains_only_the_namespaced_oos_modifier(monkeypatch) 
         "report_name": "CTQ",
         "key_prefix": "ctq",
     }
-

@@ -9,6 +9,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from app.components.distribution_charts import (
+    create_box_distribution_trace,
+    create_point_line_trace,
+)
 from src.inline_domain.core.spc.spc_calculator import (
     build_available_period_axis,
     build_period_axis,
@@ -39,6 +43,11 @@ PERIOD_FILL_COLORS = {
 SHEET_BOX_PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0f766e", "#dc2626", "#64748b"]
 CPK_ALERT_THRESHOLD = 1.33
 CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规日期", "CPK值"]
+CPK_ALERT_KEY_COLUMN_MAP = {
+    "厂别": "factory",
+    "站点": "step_id",
+    "参数名称": "param_name",
+}
 CHART_TYPE_BOX = "box"
 CHART_TYPE_LINE = "line"
 
@@ -104,6 +113,31 @@ def render_cpk_alert_center(
             st.success("当前产品日 CPK 均不低于 1.33。")
         else:
             st.info("当前产品暂无可计算的日 CPK 数据。")
+
+
+def filter_spc_report_by_alerts(
+    report_df: pd.DataFrame,
+    alerts_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Keep only exact factory/station/parameter combinations present in CPK alerts."""
+    if report_df.empty or alerts_df.empty:
+        return report_df.iloc[0:0].copy()
+
+    alert_columns = set(CPK_ALERT_KEY_COLUMN_MAP)
+    report_columns = set(CPK_ALERT_KEY_COLUMN_MAP.values())
+    if not alert_columns.issubset(alerts_df.columns) or not report_columns.issubset(report_df.columns):
+        return report_df.iloc[0:0].copy()
+
+    alert_keys_df = (
+        alerts_df[list(CPK_ALERT_KEY_COLUMN_MAP)]
+        .rename(columns=CPK_ALERT_KEY_COLUMN_MAP)
+        .astype(str)
+        .drop_duplicates()
+    )
+    report_keys_df = report_df[list(CPK_ALERT_KEY_COLUMN_MAP.values())].astype(str)
+    alert_key_index = pd.MultiIndex.from_frame(alert_keys_df)
+    report_key_index = pd.MultiIndex.from_frame(report_keys_df)
+    return report_df.loc[report_key_index.isin(alert_key_index)].copy().reset_index(drop=True)
 
 
 def _normalise_selection(selection: Iterable[str], available: list[str]) -> list[str]:
@@ -537,7 +571,11 @@ def _format_spec_value(value: object) -> str:
     numeric_value = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     if pd.isna(numeric_value):
         return "-"
-    value_text = f"{float(numeric_value):.3f}".rstrip("0").rstrip(".")
+    float_value = float(numeric_value)
+    absolute_value = abs(float_value)
+    if float_value != 0.0 and (absolute_value < 0.001 or absolute_value >= 1_000_000):
+        return f"{float_value:.4g}"
+    value_text = f"{float_value:.3f}".rstrip("0").rstrip(".")
     return value_text if value_text else "0"
 
 
@@ -697,9 +735,8 @@ def _create_period_overview_chart(
     title: str,
     raw_measurements_df: pd.DataFrame | None = None,
     period_box_source: str = "sheet_mean",
-    chart_type: str = CHART_TYPE_BOX,
 ) -> go.Figure:
-    """Create Figure1: M/W/D boxes or point-line trends from backend-selected data."""
+    """Create Figure1: month/week/day box distributions."""
     fig = go.Figure()
 
     axis_end_date = _infer_period_axis_end_date(sheet_features_df, period_capability_df)
@@ -714,51 +751,20 @@ def _create_period_overview_chart(
         value_column = "sheet_mean"
         value_label = "Sheet Mean"
     ordered_labels = period_axis_df["display_label"].tolist()
-    available_capability_periods = (
-        set(period_capability_df["period_type"].dropna().astype(str))
-        if "period_type" in period_capability_df.columns
-        else set()
-    )
-    available_line_periods = available_capability_periods or set(
-        points_df["period_type"].dropna().astype(str)
-    )
-
     for period_type in ["month", "week", "day"]:
         type_points = points_df[points_df["period_type"] == period_type]
         labels = period_axis_df[period_axis_df["period_type"] == period_type]["display_label"].tolist()
-        if chart_type == CHART_TYPE_LINE:
-            if period_type not in available_line_periods:
-                continue
-            trend_points = (
-                type_points.groupby(["display_label", "period_sort"], as_index=False)[value_column]
-                .mean()
-                .sort_values("period_sort")
-            )
-            if not trend_points.empty:
-                fig.add_trace(
-                    go.Scatter(
-                        x=trend_points["display_label"],
-                        y=trend_points[value_column],
-                        mode="lines+markers",
-                        name=PERIOD_LABELS.get(period_type, period_type),
-                        line={"color": PERIOD_COLORS.get(period_type, "#2563eb"), "width": 2},
-                        marker={"size": 7},
-                        hovertemplate=f"%{{x}}<br>{value_label}=%{{y:.4f}}<extra></extra>",
-                    )
-                )
-            continue
         for label in labels:
             y_values = type_points[type_points["display_label"] == label][value_column]
             if y_values.empty:
                 continue
             fig.add_trace(
-                go.Box(
-                    x=[label] * len(y_values),
-                    y=y_values,
+                create_box_distribution_trace(
+                    x_values=[label] * len(y_values),
+                    y_values=y_values,
                     name=label,
-                    boxpoints=False,
+                    color=PERIOD_COLORS.get(period_type, "#2563eb"),
                     fillcolor=PERIOD_FILL_COLORS.get(period_type, "rgba(37, 99, 235, 0.18)"),
-                    line={"color": PERIOD_COLORS.get(period_type, "#2563eb"), "width": 1.4},
                     showlegend=False,
                     width=0.42,
                     hovertemplate=f"{label}<br>{value_label}=%{{y:.4f}}<extra></extra>",
@@ -840,19 +846,13 @@ def _create_sheet_points_box_chart(
         sorted_df = df.sort_values(["sheet_start_time", "sheet_id"], na_position="last")
         group_labels = _sheet_id_order(sorted_df)
         if chart_type == CHART_TYPE_LINE:
-            trend_points = (
-                sorted_df.groupby("sheet_id", as_index=False, sort=False)["param_value"]
-                .mean()
-                .assign(sheet_id=lambda frame: frame["sheet_id"].astype(str))
-            )
+            trend_points = sorted_df.assign(sheet_id=lambda frame: frame["sheet_id"].astype(str))
             fig.add_trace(
-                go.Scatter(
-                    x=trend_points["sheet_id"],
-                    y=trend_points["param_value"],
-                    mode="lines+markers",
-                    name="Sheet Mean",
-                    line={"color": "#1d4ed8", "width": 2},
-                    marker={"size": 7},
+                create_point_line_trace(
+                    x_values=trend_points["sheet_id"],
+                    y_values=trend_points["param_value"],
+                    name="Point Value",
+                    color="#1d4ed8",
                     hovertemplate="Sheet=%{x}<br>Param Value=%{y:.4f}<extra></extra>",
                 )
             )
@@ -860,11 +860,10 @@ def _create_sheet_points_box_chart(
             for sheet_id in group_labels:
                 y_values = sorted_df[sorted_df["sheet_id"].astype(str) == sheet_id]["param_value"]
                 fig.add_trace(
-                    go.Box(
-                        y=y_values,
+                    create_box_distribution_trace(
+                        y_values=y_values,
                         name=sheet_id,
-                        boxpoints=False,
-                        marker_color="#1d4ed8",
+                        color="#1d4ed8",
                         showlegend=False,
                     )
                 )
@@ -884,20 +883,17 @@ def _create_sheet_points_box_chart(
         }
         if chart_type == CHART_TYPE_LINE:
             for chamber in chamber_order:
-                trend_points = (
-                    sorted_df[sorted_df["chamber_label"] == chamber]
-                    .groupby("sheet_id", as_index=False, sort=False)["param_value"]
-                    .mean()
-                    .assign(sheet_id=lambda frame: frame["sheet_id"].astype(str))
+                trend_points = sorted_df[
+                    sorted_df["chamber_label"] == chamber
+                ].assign(
+                    sheet_id=lambda frame: frame["sheet_id"].astype(str)
                 )
                 fig.add_trace(
-                    go.Scatter(
-                        x=trend_points["sheet_id"],
-                        y=trend_points["param_value"],
-                        mode="lines+markers",
+                    create_point_line_trace(
+                        x_values=trend_points["sheet_id"],
+                        y_values=trend_points["param_value"],
                         name=chamber,
-                        line={"color": chamber_colors.get(chamber, SHEET_BOX_PALETTE[0]), "width": 2},
-                        marker={"size": 7},
+                        color=chamber_colors.get(chamber, SHEET_BOX_PALETTE[0]),
                         hovertemplate=f"Chamber={chamber}<br>Sheet=%{{x}}<br>Param Value=%{{y:.4f}}<extra></extra>",
                     )
                 )
@@ -911,13 +907,11 @@ def _create_sheet_points_box_chart(
                 y_values = sheet_rows["param_value"]
                 color = chamber_colors.get(chamber, SHEET_BOX_PALETTE[0])
                 fig.add_trace(
-                    go.Box(
-                        x=[sheet_id] * len(y_values),
-                        y=y_values,
+                    create_box_distribution_trace(
+                        x_values=[sheet_id] * len(y_values),
+                        y_values=y_values,
                         name=chamber,
-                        boxpoints=False,
-                        marker_color=color,
-                        line={"color": color, "width": 1.4},
+                        color=color,
                         legendgroup=chamber,
                         showlegend=chamber not in shown_chambers,
                     )
@@ -1025,7 +1019,6 @@ def render_spc_indicator_sections(
                 period_capability_df=indicator_capability_df,
                 raw_measurements_df=indicator_raw_df,
                 period_box_source=period_box_source,
-                chart_type=chart_type,
                 title=f"{label} | 月周天分布",
             )
             chamber_fig, time_fig = _create_sheet_points_box_charts(
@@ -1049,3 +1042,31 @@ def render_spc_indicator_sections(
 
             st.plotly_chart(chamber_fig, width="stretch")
             st.plotly_chart(time_fig, width="stretch")
+
+
+def render_cpk_alert_indicator_sections(
+    alerts_df: pd.DataFrame,
+    period_capability_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
+) -> None:
+    """Render every alerted indicator directly, without requiring filter interaction."""
+    if alerts_df.empty:
+        return
+
+    alert_capability_df = filter_spc_report_by_alerts(period_capability_df, alerts_df)
+    alert_sheet_features_df = filter_spc_report_by_alerts(sheet_features_df, alerts_df)
+    alert_raw_measurements_df = filter_spc_report_by_alerts(raw_measurements_df, alerts_df)
+    if alert_sheet_features_df.empty:
+        st.warning("预警指标暂无可绘制的 Sheet 数据。")
+        return
+
+    st.markdown("### 自动预警指标图像")
+    st.caption("以下图像由日 CPK 预警自动匹配，无需通过筛选器查询。")
+    render_spc_indicator_sections(
+        period_capability_df=alert_capability_df,
+        sheet_features_df=alert_sheet_features_df,
+        raw_measurements_df=alert_raw_measurements_df,
+        period_box_source=period_box_source,
+    )

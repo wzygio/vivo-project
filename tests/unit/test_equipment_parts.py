@@ -224,6 +224,7 @@ equipment:
     ttl_hours: 12
   query:
     lookback_days: 30
+    source_table: eda.ARRAY_PDS_RESULT_T
   alert:
     warning_threshold: 85
     over_threshold: 110
@@ -233,12 +234,11 @@ equipment:
     display_progress_max_ratio: 0.95
   fabrication:
     random_seed: 7
-    normal_share: 0.6
-    warning_share: 0.25
-    over_share: 0.15
-    normal_ratio_range: [0.35, 0.85]
-    warning_ratio_range: [0.91, 0.99]
-    over_ratio_range: [1.01, 1.15]
+    initial_value_ratio_range: [0.0, 1.0]
+    initial_lookback_days: 2
+    update_increment_ratio: 0.3
+    reset_ratio_range: [0.0, 0.3]
+    snapshot_ttl_hours: 24
 """.strip(),
             encoding="utf-8",
         )
@@ -249,6 +249,11 @@ equipment:
         assert config["baseline"]["source_sheet_names"] == ["规格表A", "规格表B"]
         assert config["snapshot"]["ttl_hours"] == 12
         assert config["alert"]["warning_threshold"] == 85.0
+        from src.equipment_domain.config import get_equipment_runtime_config
+
+        runtime = get_equipment_runtime_config()
+        assert runtime.fabrication_policy.snapshot_ttl_hours == 24
+        assert runtime.fabrication_policy.update_increment_ratio == 0.3
 
 
 class TestPartsMatcher:
@@ -347,6 +352,38 @@ class TestPartsMatcher:
         assert result.loc[0, "测量值"] == 32000.0
         assert result.loc[1, "测量值"] == 22000.0
         assert result.loc[2, "测量值"] == 900.0
+
+    def test_batch_match_prefers_real_records_and_uses_fabricated_only_for_gaps(
+        self,
+        spec_df: pd.DataFrame,
+    ) -> None:
+        """真实记录优先；仅真实缺失的规格才使用仿造记录。"""
+        real_snapshot = pd.DataFrame({
+            "step_id": ["1K200"],
+            "sub_equip_id": ["3AFS01-SPU-PM5"],
+            "param_name": ["P5_TRGTLIFE_G_MAX"],
+            "value": [111.0],
+            "glass_start_time": pd.to_datetime(["2026-07-20 08:00:00"]),
+        })
+        fabricated_snapshot = pd.DataFrame({
+            "step_id": ["1K200", "1K200"],
+            "sub_equip_id": ["3AFS01-SPU-PM5", "3AFS01-SPU-PM5"],
+            "param_name": ["P5_TRGTLIFE_G_MAX", "P5_MASKLIFE_G_MAX"],
+            "value": [999.0, 222.0],
+            "glass_start_time": pd.to_datetime([
+                "2026-07-21 08:00:00",
+                "2026-07-21 09:00:00",
+            ]),
+        })
+
+        result = build_and_match_all(
+            spec_df,
+            real_snapshot,
+            fallback_snapshot_df=fabricated_snapshot,
+        )
+
+        assert result["测量值"].tolist()[:2] == [111.0, 222.0]
+        assert pd.isna(result.loc[2, "测量值"])
 
 
 class TestPartsCalculator:

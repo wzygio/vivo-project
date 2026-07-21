@@ -77,6 +77,12 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     )
     monkeypatch.setattr(
         spc_dashboard,
+        "render_cpk_alert_indicator_sections",
+        lambda **_kwargs: events.append("alert_charts"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        spc_dashboard,
         "render_spc_filters",
         lambda **_kwargs: events.append("filters") or ("ARRAY", ["4PP_Rs"], ["15260"], True),
     )
@@ -90,4 +96,4 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     runpy.run_path(str(page_path), run_name="__main__")
 
     assert load_count == 1
-    assert events == ["alerts", "filters", "charts"]
+    assert events == ["alerts", "alert_charts", "filters", "charts"]

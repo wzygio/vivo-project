@@ -82,11 +82,14 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
         ),
         fabrication_policy=FabricationPolicy(
             random_seed=int(fabrication["random_seed"]),
-            normal_share=float(fabrication["normal_share"]),
-            warning_share=float(fabrication["warning_share"]),
-            over_share=float(fabrication["over_share"]),
-            normal_ratio_range=tuple(float(value) for value in fabrication["normal_ratio_range"]),
-            warning_ratio_range=tuple(float(value) for value in fabrication["warning_ratio_range"]),
-            over_ratio_range=tuple(float(value) for value in fabrication["over_ratio_range"]),
+            initial_value_ratio_range=tuple(
+                float(value) for value in fabrication["initial_value_ratio_range"]
+            ),
+            initial_lookback_days=int(fabrication["initial_lookback_days"]),
+            update_increment_ratio=float(fabrication["update_increment_ratio"]),
+            reset_ratio_range=tuple(
+                float(value) for value in fabrication["reset_ratio_range"]
+            ),
+            snapshot_ttl_hours=int(fabrication["snapshot_ttl_hours"]),
         ),
     )

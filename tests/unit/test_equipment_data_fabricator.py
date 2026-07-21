@@ -9,7 +9,8 @@ from src.equipment_domain.core.parts_matcher import _compile_like_pattern
 from src.equipment_domain.core.parts_identity import build_fabricated_param_name
 from src.equipment_domain.infrastructure.fake_data import (
     FabricationPolicy,
-    fabricate_current_snapshot,
+    calculate_spec_signature,
+    generate_fabricated_snapshot,
     materialize_param_name,
     write_fabricated_snapshot,
 )
@@ -18,12 +19,11 @@ from src.equipment_domain.infrastructure.fake_data import (
 def _policy() -> FabricationPolicy:
     return FabricationPolicy(
         random_seed=20260715,
-        normal_share=0.60,
-        warning_share=0.25,
-        over_share=0.15,
-        normal_ratio_range=(0.35, 0.85),
-        warning_ratio_range=(0.91, 0.99),
-        over_ratio_range=(1.01, 1.15),
+        initial_value_ratio_range=(0.0, 1.0),
+        initial_lookback_days=2,
+        update_increment_ratio=0.30,
+        reset_ratio_range=(0.0, 0.30),
+        snapshot_ttl_hours=24,
     )
 
 
@@ -72,11 +72,11 @@ def test_blank_parameter_identity_is_stable_and_uses_business_fields() -> None:
     assert build_fabricated_param_name(changed) != first
 
 
-def test_fabrication_is_deterministic_and_emits_one_current_row_per_unique_key() -> None:
+def test_generation_is_reproducible_with_values_under_spec_and_times_in_last_two_days() -> None:
     as_of = pd.Timestamp("2026-07-15 08:30:00")
 
-    first = fabricate_current_snapshot(_spec_rows(), _policy(), as_of=as_of)
-    second = fabricate_current_snapshot(_spec_rows(), _policy(), as_of=as_of)
+    first = generate_fabricated_snapshot(_spec_rows(), _policy(), as_of=as_of)
+    second = generate_fabricated_snapshot(_spec_rows(), _policy(), as_of=as_of)
 
     pd.testing.assert_frame_equal(first.snapshot_df, second.snapshot_df)
     assert list(first.snapshot_df.columns) == [
@@ -91,8 +91,23 @@ def test_fabrication_is_deterministic_and_emits_one_current_row_per_unique_key()
         "glass_start_time": "datetime64[ns]",
     }
     assert not first.snapshot_df.isna().any().any()
-    assert first.snapshot_df["glass_start_time"].eq(as_of).all()
+    times = first.snapshot_df["glass_start_time"]
+    assert times.between(as_of - pd.Timedelta(days=2), as_of, inclusive="both").all()
+    assert times.nunique() > 1
     assert np.isfinite(first.snapshot_df["value"]).all()
+    specs_by_key = {
+        ("S1", "EQ1-PM3", "P3_TRGTLIFE_G_MAX"): 100.0,
+        ("S2", "EQ2-PM4", "P4_MASKLIFE_G_MAX"): 200.0,
+        ("S3", "EQ3-PM5", "PM5_1_PRE_SPRT_KWH"): 300.0,
+        (
+            "S4",
+            "EQ4-PM6",
+            build_fabricated_param_name(_spec_rows().iloc[-1]),
+        ): 400.0,
+    }
+    for row in first.snapshot_df.itertuples(index=False):
+        spec = specs_by_key[(row.step_id, row.sub_equip_id, row.param_name)]
+        assert 0.0 <= row.value <= spec
     assert first.summary["source_rows"] == 5
     assert first.summary["monitorable_rows"] == 5
     assert first.summary["generated_rows"] == 4
@@ -102,7 +117,6 @@ def test_fabrication_is_deterministic_and_emits_one_current_row_per_unique_key()
         first.snapshot_df["param_name"].str.startswith("__FABRICATED_PART__")
     ]
     assert len(synthetic_rows) == 1
-    assert set(first.summary["raw_status_counts"]) == {"normal", "warning", "over"}
 
 
 def test_conflicting_specs_for_one_bottom_key_are_rejected() -> None:
@@ -112,16 +126,21 @@ def test_conflicting_specs_for_one_bottom_key_are_rejected() -> None:
     specs = pd.concat([specs, conflict], ignore_index=True)
 
     with pytest.raises(ValueError, match="conflicting life specifications"):
-        fabricate_current_snapshot(specs, _policy(), as_of=pd.Timestamp("2026-07-15"))
+        generate_fabricated_snapshot(specs, _policy(), as_of=pd.Timestamp("2026-07-15"))
 
 
-def test_snapshot_writer_uses_production_signature_and_refuses_overwrite(tmp_path: Path) -> None:
+def test_fabricated_snapshot_writer_uses_independent_signature_and_preserves_real_snapshot(
+    tmp_path: Path,
+) -> None:
     specs = _spec_rows()
-    result = fabricate_current_snapshot(
+    result = generate_fabricated_snapshot(
         specs,
         _policy(),
         as_of=pd.Timestamp("2026-07-15 08:30:00"),
     )
+    signature = calculate_spec_signature(specs)
+    real_snapshot = tmp_path / f"part_life_snapshot_{signature}.parquet"
+    real_snapshot.write_bytes(b"real-snapshot-sentinel")
 
     output_path = write_fabricated_snapshot(
         result.snapshot_df,
@@ -130,13 +149,14 @@ def test_snapshot_writer_uses_production_signature_and_refuses_overwrite(tmp_pat
     )
 
     assert output_path.parent == tmp_path
-    assert output_path.name.startswith("part_life_snapshot_")
+    assert output_path.name == f"part_life_fabricated_{signature}.parquet"
     assert output_path.suffix == ".parquet"
+    assert real_snapshot.read_bytes() == b"real-snapshot-sentinel"
     pd.testing.assert_frame_equal(pd.read_parquet(output_path), result.snapshot_df)
     with pytest.raises(FileExistsError):
         write_fabricated_snapshot(result.snapshot_df, specs, output_dir=tmp_path)
 
 
-def test_fabrication_policy_rejects_invalid_distribution() -> None:
-    with pytest.raises(ValueError, match="sum to 1"):
-        replace(_policy(), normal_share=0.70)
+def test_fabrication_policy_rejects_ratio_outside_zero_to_one() -> None:
+    with pytest.raises(ValueError, match=r"within \[0, 1\]"):
+        replace(_policy(), initial_value_ratio_range=(0.0, 1.1))
