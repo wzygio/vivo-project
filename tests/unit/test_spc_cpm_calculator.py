@@ -35,6 +35,12 @@ def test_calculate_cpm_returns_nan_for_single_sided_specs() -> None:
     assert math.isnan(cpm)
 
 
+def test_calculate_cpm_returns_nan_when_zero_lsl_marks_an_upper_only_spec() -> None:
+    cpm = calculate_cpm(mean_value=3.0, std_value=0.5, usl=8.0, lsl=0.0, target=4.0)
+
+    assert math.isnan(cpm)
+
+
 def test_calculate_cpk_uses_nearest_spec_distance() -> None:
     centered_cpk = calculate_cpk(mean_value=50.0, std_value=1.0, usl=55.0, lsl=45.0)
     drifted_cpk = calculate_cpk(mean_value=54.0, std_value=1.0, usl=55.0, lsl=45.0)

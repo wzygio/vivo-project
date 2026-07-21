@@ -721,6 +721,37 @@ def test_sheet_points_box_chart_draws_spec_lines_and_single_color_for_time_sort(
     assert {"USL: 12", "LSL: 8", "UCL: 11", "LCL: 9"}.issubset(annotation_texts)
 
 
+def test_sheet_points_box_chart_draws_only_upper_lines_when_lsl_is_zero() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-01 08:00:00", "param_value": 3.0},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-02 09:00:00", "param_value": 4.0},
+        ]
+    )
+    spec_df = pd.DataFrame(
+        [
+            {
+                "usl": 8.0,
+                "lsl": 0.0,
+                "ucl": 6.0,
+                "lcl": 0.0,
+                "target": 4.0,
+            }
+        ]
+    )
+
+    fig = _create_sheet_points_box_chart(
+        raw_measurements_df,
+        sort_mode="\u6309\u8fc7\u8d27\u65f6\u95f4\u6392\u5e8f",
+        title="Sheet\u70b9\u4f4d\u5206\u5e03",
+        spec_df=spec_df,
+    )
+
+    annotation_texts = {annotation.text for annotation in fig.layout.annotations}
+
+    assert annotation_texts == {"USL: 8", "UCL: 6"}
+
+
 def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:
     raw_measurements_df = pd.DataFrame(
         [

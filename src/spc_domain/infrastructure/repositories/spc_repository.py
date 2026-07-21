@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import numpy as np
 import logging, re
@@ -36,6 +37,70 @@ class SpcRepository:
         self.snapshot_dir = snapshot_dir
         self.use_snapshot = use_snapshot
         self.db = db_manager
+
+    @staticmethod
+    def _load_step_id_data_type_mapping() -> dict[str, set[str]] | None:
+        """Load the user-maintained station classification mapping."""
+        mapping_path = (
+            ConfigLoader.get_project_root()
+            / "references"
+            / "design_references"
+            / "domain"
+            / "step_id_data_type_mapping.json"
+        )
+        try:
+            payload = json.loads(mapping_path.read_text(encoding="utf-8"))
+            raw_mapping = payload["step_id_to_data_types"]
+        except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+            logging.error("[SpcRepo] Unable to read station type mapping %s: %s", mapping_path, exc)
+            return None
+
+        mapping: dict[str, set[str]] = {}
+        for step_id, data_types in raw_mapping.items():
+            if isinstance(data_types, str):
+                data_types = [data_types]
+            if not isinstance(data_types, list):
+                continue
+            mapping[str(step_id).strip().upper()] = {
+                str(data_type).strip().upper()
+                for data_type in data_types
+                if str(data_type).strip()
+            }
+        return mapping
+
+    @classmethod
+    def filter_measurements_by_step_data_type(
+        cls,
+        measurements_df: pd.DataFrame,
+        data_type_filter: str | None,
+    ) -> pd.DataFrame:
+        """Filter measurements by station type rather than parameter type."""
+        requested_type = str(data_type_filter or "ALL").strip().upper()
+        if measurements_df.empty or requested_type == "ALL":
+            return measurements_df
+        if "step_id" not in measurements_df.columns:
+            logging.error("[SpcRepo] Station type filtering requires a step_id column")
+            return measurements_df.iloc[0:0].copy()
+
+        mapping = cls._load_step_id_data_type_mapping()
+        if mapping is None:
+            # An explicitly requested type must not expose unclassified stations.
+            return measurements_df.iloc[0:0].copy()
+
+        allowed_step_ids = {
+            step_id
+            for step_id, data_types in mapping.items()
+            if requested_type in data_types
+        }
+        step_ids = measurements_df["step_id"].astype(str).str.strip().str.upper()
+        filtered_df = measurements_df[step_ids.isin(allowed_step_ids)].copy()
+        logging.info(
+            "[SpcRepo] Filtered measurements by station type %s: %s -> %s",
+            requested_type,
+            len(measurements_df),
+            len(filtered_df),
+        )
+        return filtered_df
 
     # ==========================================
     # 🆕 新增接口：规格线数据拉取代理
@@ -254,7 +319,6 @@ class SpcRepository:
             # =================================================================
             # [重构] 白名单过滤：DAO 裸查询 → Core 分类 → Repo 筛选 + merge
             # =================================================================
-            data_type_filter = getattr(config, "data_type_filter", "ALL")
             raw_whitelist = load_param_whitelist(self.db, config.prod_code)
 
             if raw_whitelist is not None:
@@ -262,14 +326,8 @@ class SpcRepository:
                     # 1. Core 层：对原始 data_type 进行分类映射
                     raw_whitelist["data_type"] = raw_whitelist["data_type"].apply(classify_param_type)
 
-                    # 2. Repo 层：按前端筛选条件过滤（不下沉到 DAO）
-                    filter_upper = data_type_filter.upper() if data_type_filter else "ALL"
-                    if filter_upper != "ALL":
-                        before_count = len(raw_whitelist)
-                        raw_whitelist = raw_whitelist[raw_whitelist["data_type"] == filter_upper].copy()
-                        logging.info(f"[SpcRepo] 按 data_type_filter={filter_upper} 筛选白名单: {before_count} → {len(raw_whitelist)}")
-
-                    # 3. 内存 merge：既过滤了不合规参数，又注入 data_type 标签
+                    # 2. 合并白名单以过滤不合规参数并注入参数类型标签。
+                    # 站点类型筛选在 merge 后单独应用，避免将参数类型误作站点类型。
                     df_filtered["param_name_upper"] = df_filtered["param_name"].str.upper()
                     df_filtered = df_filtered.merge(
                         raw_whitelist,
@@ -287,6 +345,10 @@ class SpcRepository:
                 logging.error("[SpcRepo] 严重警告：拉取参数白名单失败，下发全量参数并标记未知类型。")
                 df_filtered["data_type"] = "UNKNOWN"
 
+            df_filtered = self.filter_measurements_by_step_data_type(
+                df_filtered,
+                getattr(config, "data_type_filter", "ALL"),
+            )
             df_filtered = self._apply_outlier_filters(df_filtered, config.prod_code)
 
             # 原有的维度过滤

@@ -461,6 +461,10 @@ def _apply_measurement_spec_lines(fig: go.Figure, spec_df: pd.DataFrame, row: in
         else (lambda value, label, color: _add_plain_spec_line(fig, value, label, color))
     )
     line_func(spec_row.get("usl"), "USL", "#dc2626")
+    if float(spec_row.get("lsl")) == 0.0:
+        line_func(spec_row.get("ucl"), "UCL", "#16a34a")
+        return
+
     line_func(spec_row.get("lsl"), "LSL", "#dc2626")
     line_func(spec_row.get("ucl"), "UCL", "#16a34a")
     line_func(spec_row.get("lcl"), "LCL", "#16a34a")

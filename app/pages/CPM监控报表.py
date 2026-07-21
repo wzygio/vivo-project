@@ -81,10 +81,10 @@ indicator_df = view_model.indicators_df
 period_capability_df = view_model.period_capability_df
 
 cpk_alerts_df = build_daily_cpk_alerts(period_capability_df)
-# render_cpk_alert_center(
-#     cpk_alerts_df,
-#     has_capability_data=not period_capability_df.empty,
-# )
+render_cpk_alert_center(
+    cpk_alerts_df,
+    has_capability_data=not period_capability_df.empty,
+)
 
 if sheet_features_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示 CPM/CPK 分布的 SPC 数据。")

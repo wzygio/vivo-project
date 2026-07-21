@@ -2,7 +2,7 @@
 
 > **领域代码**: `spc_domain`  
 > **对应目录**: [`src/spc_domain/`](../../src/spc_domain/)  
-> **最后更新**: 2026-05-29
+> **最后更新**: 2026-07-21
 
 ---
 
@@ -227,3 +227,27 @@ Repository spc_repository.py                   ← 筛选在此层消费
 
 
 > **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+
+---
+
+## 9. Station type filtering
+
+`references/design_references/domain/step_id_data_type_mapping.json` is the
+user-maintained source of truth for `Step_ID` classifications. Its
+`step_id_to_data_types` values are arrays because a station can belong to more
+than one report type. This supersedes the earlier use of the parameter
+whitelist's `data_type` as a report-type filter in section 8.
+
+- `SpcRepository.filter_measurements_by_step_data_type()` loads this mapping
+  and applies `SpcQueryConfig.data_type_filter` after the parameter whitelist
+  has been merged into the measurements.
+- `ALL` leaves the measurements unchanged. For a requested type such as `SPC`,
+  unmapped stations are excluded; if the mapping cannot be loaded, the result
+  is empty rather than exposing unclassified stations.
+- This is a **station** filter. `IMP_SPC_TZBJX.data_type` remains a
+  **parameter** classification used for whitelist validation and the returned
+  `data_type` label; it must not be used to decide whether a `Step_ID` belongs
+  to an SPC, CTQ, AOI, or RS report.
+- `data_loader.py` continues to perform database access only. The repository
+  owns the mapping read and in-memory filter so future CTQ/AOI/RS reports can
+  reuse the same query contract.

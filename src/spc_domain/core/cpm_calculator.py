@@ -36,6 +36,11 @@ def calculate_cpm(
     if any(pd.isna(value) for value in values):
         return float("nan")
 
+    # An LSL of zero is the source-system marker for an upper-only specification.
+    # Taguchi CPM requires a two-sided specification.
+    if float(lsl) == 0.0:
+        return float("nan")
+
     if usl <= lsl:
         return float("nan")
 

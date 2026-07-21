@@ -2,7 +2,7 @@ spc:
   cpm_cpk:
     # sheet_mean: original mode, sigma uses period Sheet Mean std.
     # point_value: hidden comparison mode, sigma uses period point-level param_value std.
-    period_sigma_source: "sheet_mean"
+    period_sigma_source: "point_value"
     # sheet_mean: one Sheet Mean per Sheet; point_value: every valid measurement point.
     period_box_source: "point_value"
   sheet_oos_decoration:
