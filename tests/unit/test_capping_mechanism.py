@@ -11,18 +11,19 @@ class TestCappingMechanism:
     目标：证明超规数据会被'软着陆'到 Spec 线下方，而不是硬切在 Spec 线上。
     """
 
-    def test_capping_upper_bound_strictness(self):
+    def test_capping_allows_slight_lot_over_spec(self):
         """
-        测试 1: 严格验证上限
+        测试 1: 验证允许轻微超规的截断区间
         输入: 良率 1.5% (严重超标)
         Spec: 1.0%
-        预期: 结果必须 <= 0.95% (即 0.0095)，且 >= 0.8% (0.008)
+        预期: 结果在规格线的 95% 至 105% 区间内。
         """
         input_rate = 0.015  # 1.5%
         spec_limit = 0.010  # 1.0%
+        capped_values = []
         rng = np.random.default_rng(42) # 固定种子方便复现
 
-        # 模拟运行 100 次，确保每一次都落在安全区间
+        # 模拟运行 100 次，确保每一次都落在允许区间。
         for i in range(100):
             capped_val = _apply_random_cap_and_floor(
                 rate=input_rate,
@@ -30,17 +31,20 @@ class TestCappingMechanism:
                 lower_threshold=0.001,
                 rng=rng
             )
+            capped_values.append(capped_val)
             
-            # 验证 A: 必须小于 Spec (绝不能齐平)
-            assert capped_val < spec_limit, \
-                f"第 {i} 次失败: 结果 {capped_val} 没有低于 Spec {spec_limit}"
+            # 验证 A: 不超过允许的规格线 +5% 上限。
+            assert capped_val <= spec_limit * 1.05, \
+                f"第 {i} 次失败: 结果 {capped_val} 高于允许上限 {spec_limit * 1.05}"
                 
-            # 验证 B: 必须在 80% ~ 95% 的区间内
-            lower_bound = spec_limit * 0.8
-            upper_bound_internal = spec_limit * 0.95
+            # 验证 B: 截断值在规格线的 95% ~ 105% 区间内。
+            lower_bound = spec_limit * 0.95
+            upper_bound_internal = spec_limit * 1.05
             
             assert lower_bound <= capped_val <= upper_bound_internal + 1e-9, \
                 f"第 {i} 次失败: 结果 {capped_val:.5f} 超出了内部安全区 [{lower_bound:.5f}, {upper_bound_internal:.5f}]"
+
+        assert any(value > spec_limit for value in capped_values)
 
     def test_capping_randomness(self):
         """

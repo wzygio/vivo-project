@@ -117,7 +117,8 @@ def _apply_random_cap_and_floor(
 
     if rate > upper_threshold:
         # 上限保护：在 Spec 的 80% ~ 95% 之间随机浮动
-        safe_rate = rng.uniform(upper_threshold * 0.8, upper_threshold * 0.9)
+        # Retain a ±5% tolerance around the spec so Lots may be slightly out of spec.
+        safe_rate = rng.uniform(upper_threshold * 0.95, upper_threshold * 1.05)
         if panels is None or current_count is None:
             return float(safe_rate)
 

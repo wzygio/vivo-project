@@ -1,0 +1,2 @@
+warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
+2026-07-21 13:06:07.567 Port 8503 is not available

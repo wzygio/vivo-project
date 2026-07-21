@@ -151,31 +151,31 @@ class ConfigLoader:
         return {"default": False, "rules": {}}
 
     @classmethod
-    def get_cpm_period_sigma_source(cls) -> str:
-        """Read the hidden CPM/CPK period sigma source from spc_config.yaml."""
+    def get_spc_period_sigma_source(cls) -> str:
+        """Read the SPC capability period sigma source from spc_config.yaml."""
         root_dir = cls.get_project_root()
         global_yaml_path = root_dir / "config" / "spc_config.yaml"
 
         try:
             global_conf = cls._load_yaml(global_yaml_path)
             spc_conf = global_conf.get("spc", {})
-            cpm_conf = spc_conf.get("cpm_cpk", {})
-            return str(cpm_conf.get("period_sigma_source", "sheet_mean")).strip().lower()
+            report_conf = spc_conf.get("spc_cpk", {})
+            return str(report_conf.get("period_sigma_source", "sheet_mean")).strip().lower()
         except Exception as e:
-            logging.error(f"❌ 读取 CPM/CPK 周期能力口径配置失败: {e}")
+            logging.error(f"❌ 读取 SPC 周期能力口径配置失败: {e}")
             return "sheet_mean"
 
     @classmethod
-    def get_cpm_period_box_source(cls) -> str:
-        """Read the CPM/CPK period boxplot sample source from spc_config.yaml."""
+    def get_spc_period_box_source(cls) -> str:
+        """Read the SPC capability period boxplot sample source from spc_config.yaml."""
         yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
         try:
             spc_conf = cls._load_yaml(yaml_path).get("spc", {})
-            cpm_conf = spc_conf.get("cpm_cpk", {})
-            source = str(cpm_conf.get("period_box_source", "point_value")).strip().lower()
+            report_conf = spc_conf.get("spc_cpk", {})
+            source = str(report_conf.get("period_box_source", "point_value")).strip().lower()
             return source if source in {"sheet_mean", "point_value"} else "point_value"
         except Exception as e:
-            logging.error(f"❌ 读取 CPM/CPK 周期箱线图数据源配置失败: {e}")
+            logging.error(f"❌ 读取 SPC 周期箱线图数据源配置失败: {e}")
             return "point_value"
 
     @classmethod

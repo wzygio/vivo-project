@@ -1,4 +1,4 @@
-# src/equipment_domain/infrastructure/data_loader.py
+# src/equipment_domain/infrastructure/spc/data_loader.py
 """
 [Data Access Layer / DAO] Critical parts report data loader.
 
@@ -276,7 +276,7 @@ class PartsRepository:
     [仓储层] 关键备件数据仓储。
 
     职责：封装快照 TTL 检查、过期重查、签名管理。
-    参考 src/spc_domain/infrastructure/repositories/spc_repository.py 的 SpcRepository 模式。
+    参考 src/inline_domain/infrastructure/spc/repositories/spc_repository.py 的 SpcRepository 模式。
 
     用法:
         repo = PartsRepository(db_manager, spec_df)

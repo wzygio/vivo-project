@@ -152,6 +152,16 @@ class ExcelService:
     #                      Excel 覆盖适配器 (Adapter)
     # ==============================================================================
     @staticmethod
+    def _read_override_excel_via_com(excel_path: Path) -> Dict[str, pd.DataFrame]:
+        """Read the known trend-override sheets through Excel COM."""
+        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+
+        return {
+            sheet_name: _read_encrypted_xlsx_via_com(excel_path, sheet_name=sheet_name)
+            for sheet_name in ("Group级", "Code级")
+        }
+
+    @staticmethod
     def _parse_override_excel(excel_path: Path) -> Dict[str, Dict[str, Dict[str, float]]]:
         """解析双Sheet页的覆盖配置Excel为嵌套字典格式"""
         overrides = {
@@ -162,7 +172,14 @@ class ExcelService:
             return overrides
 
         try:
-            xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
+            try:
+                xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
+            except Exception as openpyxl_error:
+                logging.warning(
+                    "读取趋势覆盖 Excel 失败，尝试 Excel COM 解密读取: %s",
+                    openpyxl_error,
+                )
+                xls = ExcelService._read_override_excel_via_com(excel_path)
             
             def _parse_sheet(df, level_prefix):
                 if df.empty: return

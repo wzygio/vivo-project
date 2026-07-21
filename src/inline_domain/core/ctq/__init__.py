@@ -1,0 +1,2 @@
+"""CTQ domain rules."""
+

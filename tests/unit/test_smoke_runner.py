@@ -10,12 +10,14 @@ def test_smoke_defaults_to_complete_unit_suite() -> None:
     assert resolve_smoke_targets("all", Path.cwd()) == (Path("tests/unit"),)
 
 
-def test_spc_smoke_resolves_only_existing_spc_and_cpm_tests() -> None:
+def test_spc_smoke_resolves_only_existing_inline_tests() -> None:
     targets = resolve_smoke_targets("spc", Path.cwd())
     target_names = {target.name for target in targets}
 
-    assert "test_spc_cpm_calculator.py" in target_names
-    assert "test_cpm_page_alerts.py" in target_names
+    assert "test_spc_calculator.py" in target_names
+    assert "test_spc_page_alerts.py" in target_names
+    assert "test_ctq_page.py" in target_names
+    assert "test_ctq_dashboard.py" in target_names
     assert all("yield" not in name for name in target_names)
     assert all((Path.cwd() / target).is_file() for target in targets)
 
@@ -48,10 +50,10 @@ def test_empty_domain_target_cannot_pass_silently(tmp_path: Path) -> None:
 
 
 def test_pytest_args_keep_native_exit_semantics() -> None:
-    args = build_pytest_args((Path("tests/unit/test_spc_cpm_calculator.py"),))
+    args = build_pytest_args((Path("tests/unit/inline_domain/core/spc/test_spc_calculator.py"),))
 
     assert args[:2] == ("-q", "--tb=short")
-    assert "tests/unit/test_spc_cpm_calculator.py" in args
+    assert "tests/unit/inline_domain/core/spc/test_spc_calculator.py" in args
 
 
 def test_smoke_configures_repo_and_src_import_paths(monkeypatch, tmp_path: Path) -> None:

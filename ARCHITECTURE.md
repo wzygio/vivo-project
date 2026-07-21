@@ -19,6 +19,11 @@
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
+- Inline report services own their data-type boundary: the SPC report forces
+  `SPC` and adds CPM/CPK capability output, while the CTQ report forces `CTQ`
+  and exposes only Sheet/point distributions plus backend-selected chart type.
+  Both reuse the physical `SpcRepository`; CTQ OOS resources are isolated under
+  `resources/<product>/ctq/`.
 - Plain Excel-to-CSV export used by the SPC probe workflow comes from the local
   `fr-common-utils[excel]` dependency through `fr_common_utils.excel`. The
   project-specific encrypted-workbook COM fallback, configuration models,
@@ -36,6 +41,7 @@
 | `app/components/` | Project subarea. |
 | `app/pages/` | Project subarea. |
 | `app/sections/` | Project subarea. |
+| `app/sections/ctq/` | Capability-free CTQ report presentation. |
 | `app/utils/` | Project subarea. |
 | `config/` | Project area. |
 | `config/products/` | Project subarea. |
@@ -89,7 +95,9 @@
 | `src/` | Project area. |
 | `src/equipment_domain/` | Project subarea. |
 | `src/shared_kernel/` | Project subarea. |
-| `src/spc_domain/` | Project subarea. |
+| `src/inline_domain/` | Project subarea. |
+| `src/inline_domain/application/ctq/` | CTQ query, cache payload, ViewModel, and OOS orchestration. |
+| `src/inline_domain/core/ctq/` | CTQ-owned indicator presentation rules. |
 | `src/yield_domain/` | Project subarea. |
 | `tests/` | Project area. |
 | `tests/__pycache__/` | Project subarea. |
@@ -103,6 +111,9 @@
 - Yield Application composes dynamic queries and static policy. Infrastructure
   owns database constraints, snapshots, incremental refresh, degradation, and
   the final data-policy application. Core and UI do not load configuration files.
+- Inline UI selects products and report filters but does not choose business
+  data types or infer UNI chart behavior. CTQ/SPC application and core services
+  make those decisions before returning page data.
 
 ## Verification
 
@@ -112,3 +123,7 @@
   Defect Group values remain intact in snapshots.
 - Service tests prove refresh injects validated config into a policy-versioned
   bottom data provider.
+- CTQ tests prove forced `CTQ` repository queries, capability-free payloads,
+  isolated OOS files, UNI point-line rendering, native-cache hot reload, and
+  independent Streamlit page behavior; the Inline `spc` smoke scope includes
+  both CTQ and SPC report tests.

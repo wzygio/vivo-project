@@ -117,7 +117,7 @@
 
 ## 5. 基础设施层 (Infrastructure)
 
-### 5.1 [`data_loader.py`](../../src/yield_domain/infrastructure/data_loader.py)
+### 5.1 [`data_loader.py`](../../src/yield_domain/infrastructure/spc/data_loader.py)
 
 DAO 层职责：
 - PostgreSQL SQL 查询（Panel 级明细）
@@ -171,4 +171,4 @@ Streamlit Pages  (可视化呈现)
 
 ---
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`spc_domain.md`](./spc_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`inline_domain.md`](./inline_domain.md) · [`shared_kernel.md`](./shared_kernel.md)

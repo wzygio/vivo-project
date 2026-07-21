@@ -10,13 +10,13 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.spc_dashboard import (
+from app.sections.monitor.monitor_dashboard import (
     get_cached_alarm_detail_tables,
     render_alarm_detail_tables,
-    render_spc_control_panel,
-    render_spc_summary_chart,
+    render_monitor_control_panel,
+    render_monitor_summary_chart,
     render_station_top10_section,
-    filter_and_rollup_spc_data
+    filter_and_rollup_monitor_data,
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
 from app.compliance.compliance_manager import (
@@ -24,18 +24,18 @@ from app.compliance.compliance_manager import (
 )
 
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
-from src.spc_domain.application.spc_service import SpcAnalysisService
-from src.spc_domain.infrastructure.data_loader import SpcQueryConfig
+from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
-SPC_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
-SPC_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
+MONITOR_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
+MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 
 
 @st.cache_data(show_spinner=False)
 def get_cached_query_window() -> tuple[str, str]:
     """Keep this page's time window stable until the user clears cache."""
-    start_dt, end_dt = SpcAnalysisService.get_time_window()
+    start_dt, end_dt = MonitorAnalysisService.get_time_window()
     return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
 
 
@@ -68,7 +68,7 @@ except Exception as e:
         st.code(traceback.format_exc())
     st.stop()
 
-funcs_to_clear = extract_cached_funcs(SpcAnalysisService) + [
+funcs_to_clear = extract_cached_funcs(MonitorAnalysisService) + [
     get_cached_query_window,
     get_cached_alarm_detail_tables,
 ]
@@ -77,7 +77,7 @@ render_page_header(
     config=active_config,
     cached_funcs=funcs_to_clear,
     refresh_handlers=[
-        lambda: SpcAnalysisService.safe_refresh_snapshots(
+        lambda: MonitorAnalysisService.safe_refresh_snapshots(
             db_manager,
             header_query_config.model_dump_json(),
         )
@@ -88,10 +88,10 @@ render_page_header(
 # 页面积木组装层 (UI Assembly)
 # --------------------------------------------------------------------------
 available_products = SessionManager.AVAILABLE_PRODUCTS
-available_factories = SPC_FACTORY_OPTIONS
+available_factories = MONITOR_FACTORY_OPTIONS
 
 # 4. 组装积木: 渲染控制台
-filter_state = render_spc_control_panel(available_products, available_factories)
+filter_state = render_monitor_control_panel(available_products, available_factories)
 
 # [新增] 渲染数据修饰配置面板（仅管理员可见）
 if is_admin:
@@ -109,13 +109,13 @@ with st.spinner("正在加载 ALL 监控数据..."):
         end_date=end_date_str,
         data_type_filter="ALL",
     )
-    view_model = SpcAnalysisService.get_spc_dashboard_data(
+    view_model = MonitorAnalysisService.get_monitor_dashboard_data(
         _db_manager=db_manager,
         query_config_json=query_config_all.model_dump_json(),
         time_type='MIXED',
         force_compliant=True,
         data_type_filter="ALL",
-        snapshot_signature=SPC_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=MONITOR_PAGE_CACHE_SIGNATURE,
     )
 
 # 更新数据引用
@@ -123,12 +123,12 @@ detail_df = getattr(view_model, "detail_df", pd.DataFrame())
 global_summary_df = getattr(view_model, "global_summary_df", pd.DataFrame())
 station_detail_df = getattr(view_model, "station_detail_df", pd.DataFrame())
 
-filtered_summary_df, filtered_detail_df, filtered_station_df = filter_and_rollup_spc_data(
+filtered_summary_df, filtered_detail_df, filtered_station_df = filter_and_rollup_monitor_data(
     detail_df, global_summary_df, station_detail_df, filter_state
 )
 
 # 5. 组装积木: 仅保留图表，移除旧的汇总/透视明细表
-render_spc_summary_chart(filtered_summary_df, filter_state.data_type_filter)
+render_monitor_summary_chart(filtered_summary_df, filter_state.data_type_filter)
 
 st.divider()
 
@@ -146,6 +146,6 @@ if is_admin:
         db_manager=db_manager,
         query_config_json=query_config_all.model_dump_json(),
         filter_state=filter_state,
-        snapshot_signature=SPC_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=MONITOR_PAGE_CACHE_SIGNATURE,
         is_admin=is_admin,
     )

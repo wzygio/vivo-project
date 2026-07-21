@@ -11,8 +11,12 @@ import sys
 
 SMOKE_PATTERNS: dict[str, tuple[str, ...]] = {
     "spc": (
-        "tests/unit/test_cpm_*.py",
-        "tests/unit/test_indicator_spec_comparison.py",
+        "tests/unit/app/pages/test_spc_*.py",
+        "tests/unit/app/pages/test_ctq_*.py",
+        "tests/unit/app/sections/ctq/test_ctq_*.py",
+        "tests/unit/app/sections/monitor/test_monitor_*.py",
+        "tests/unit/app/sections/spc/test_spc_*.py",
+        "tests/unit/inline_domain/**/*.py",
         "tests/unit/test_spc_*.py",
     ),
     "equipment": (

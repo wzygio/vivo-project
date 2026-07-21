@@ -1,0 +1,337 @@
+- generic [ref=e2]:
+  - generic [ref=e6]:
+    - generic:
+      - list:
+        - listitem:
+          - link "Home" [ref=e7] [cursor=pointer]:
+            - /url: http://localhost:8503/
+            - generic:
+              - generic:
+                - paragraph: Home
+        - listitem:
+          - link "CTQ监控报表" [ref=e8] [cursor=pointer]:
+            - /url: http://localhost:8503/CTQ监控报表
+            - generic:
+              - generic:
+                - paragraph: CTQ监控报表
+        - listitem:
+          - link "SPC监控报表" [ref=e9] [cursor=pointer]:
+            - /url: http://localhost:8503/SPC监控报表
+            - generic:
+              - generic:
+                - paragraph: SPC监控报表
+        - listitem:
+          - link "专项资料-台账周报" [ref=e10] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-台账周报
+            - generic:
+              - generic:
+                - paragraph: 专项资料-台账周报
+        - listitem:
+          - link "专项资料-解析报告" [ref=e11] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-解析报告
+            - generic:
+              - generic:
+                - paragraph: 专项资料-解析报告
+        - listitem:
+          - link "入库不良率ByLot明细表" [ref=e12] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率ByLot明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率ByLot明细表
+        - listitem:
+          - link "入库不良率BySheet明细表" [ref=e13] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率BySheet明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率BySheet明细表
+        - listitem:
+          - link "入库不良率分析看板" [ref=e14] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率分析看板
+            - generic:
+              - generic:
+                - paragraph: 入库不良率分析看板
+        - listitem:
+          - link "关键备件报表" [ref=e15] [cursor=pointer]:
+            - /url: http://localhost:8503/关键备件报表
+            - generic:
+              - generic:
+                - paragraph: 关键备件报表
+        - listitem:
+          - link "自动预警看板" [ref=e16] [cursor=pointer]:
+            - /url: http://localhost:8503/自动预警看板
+            - generic:
+              - generic:
+                - paragraph: 自动预警看板
+  - generic [ref=e3]:
+    - banner [ref=e19]:
+      - generic [ref=e21]:
+        - button "keyboard_double_arrow_right" [ref=e24] [cursor=pointer]
+        - generic [ref=e27]:
+          - button "Deploy" [ref=e38] [cursor=pointer]
+          - button "Main menu" [ref=e42] [cursor=pointer]
+    - generic [ref=e46]:
+      - heading "CTQ监控报表" [level=1] [ref=e51]:
+        - text: CTQ监控报表
+        - generic [ref=e52]:
+          - link "Link to heading":
+            - /url: "#ctq"
+      - generic [ref=e56]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - generic [ref=e64]: M626
+            - combobox "Selected M626. 📦 当前产品型号" [ref=e66]
+          - img "open" [ref=e68]
+        - button [ref=e79] [cursor=pointer]:
+          - paragraph [ref=e83]: 🔄 刷新数据
+        - button [ref=e91] [cursor=pointer]:
+          - paragraph [ref=e95]: 🔄 刷新缓存
+      - generic [ref=e108]:
+        - heading "筛选" [level=4] [ref=e114]:
+          - text: 筛选
+          - generic [ref=e115]:
+            - link "Link to heading":
+              - /url: "#b7246533"
+        - generic [ref=e117]:
+          - generic [ref=e121]:
+            - paragraph [ref=e125]: 厂别
+            - generic [ref=e127]:
+              - generic [ref=e128]:
+                - generic [ref=e129]: ARRAY
+                - combobox "Selected ARRAY. 厂别" [ref=e131]
+              - img "open" [ref=e133]
+          - generic [ref=e138]:
+            - paragraph [ref=e142]: 站点
+            - generic [ref=e145]:
+              - generic [ref=e146]:
+                - button "15260, close by backspace":
+                  - generic "15260"
+                - combobox "Selected 15260. 站点" [ref=e245]
+              - generic [ref=e149]:
+                - button "Clear all" [ref=e246] [cursor=pointer]
+                - img "open" [ref=e150] [cursor=pointer]
+          - generic [ref=e155]:
+            - paragraph [ref=e159]: 参数名称
+            - generic [ref=e162]:
+              - generic [ref=e163]:
+                - button "4PP_Rs, close by backspace":
+                  - generic "4PP_Rs"
+                - button "4PP_UNI, close by backspace":
+                  - generic "4PP_UNI"
+                - combobox "Selected 4PP_Rs, 4PP_UNI. 参数名称" [ref=e254]
+              - generic [ref=e166]:
+                - button "Clear all" [ref=e255] [cursor=pointer]
+                - img "open" [ref=e167] [cursor=pointer]
+          - button [active] [ref=e173] [cursor=pointer]:
+            - paragraph [ref=e177]: 查询
+      - group [ref=e264]:
+        - generic "keyboard_arrow_down ARRAY | 15260 | 4PP_Rs" [ref=e265] [cursor=pointer]:
+          - generic [ref=e266]:
+            - generic [ref=e267]: keyboard_arrow_down
+            - paragraph [ref=e271]: ARRAY | 15260 | 4PP_Rs
+        - generic [ref=e273]:
+          - generic [ref=e279]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: 月 | 2026-06
+                    - generic: 周 | 2026-W24
+                    - generic: 日 | 2026-06-09
+                  - generic:
+                    - generic: "0.035"
+                    - generic: "0.04"
+                    - generic: "0.045"
+                    - generic: "0.05"
+            - img:
+              - generic:
+                - generic: ARRAY | 15260 | 4PP_Rs | 月周天分布
+                - generic: Point Value
+                - generic: "USL: 0.052"
+                - generic: "LSL: 0.034"
+                - generic: "UCL: 0.047"
+                - generic: "LCL: 0.039"
+                - generic: "Target: 0.043"
+                - generic: "CL: 0.043"
+            - toolbar [ref=e293]:
+              - button "Download plot as a PNG" [ref=e295] [cursor=pointer]
+              - generic [ref=e298]:
+                - button "Zoom" [ref=e299] [cursor=pointer]
+                - button "Pan" [ref=e302] [cursor=pointer]
+              - generic [ref=e305]:
+                - button "Zoom in" [ref=e306] [cursor=pointer]
+                - button "Zoom out" [ref=e309] [cursor=pointer]
+                - button "Autoscale" [ref=e312] [cursor=pointer]
+                - button "Reset axes" [ref=e315] [cursor=pointer]
+              - button "Fullscreen" [ref=e319] [cursor=pointer]
+          - generic [ref=e327]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: L3MY6501N01
+                    - generic: L3MY6501N15
+                    - generic: L3MY6501N30
+                  - generic:
+                    - generic: "0.035"
+                    - generic: "0.04"
+                    - generic: "0.045"
+                    - generic: "0.05"
+            - img:
+              - generic:
+                - generic [ref=e341]: 3AMR01
+                - generic: ARRAY | 15260 | 4PP_Rs | Sheet点位分布 By腔室
+                - generic: Param Value
+                - generic: "USL: 0.052"
+                - generic: "LSL: 0.034"
+                - generic: "UCL: 0.047"
+                - generic: "LCL: 0.039"
+                - generic: "Target: 0.043"
+                - generic: "CL: 0.043"
+            - toolbar [ref=e352]:
+              - button "Download plot as a PNG" [ref=e354] [cursor=pointer]
+              - generic [ref=e357]:
+                - button "Zoom" [ref=e358] [cursor=pointer]
+                - button "Pan" [ref=e361] [cursor=pointer]
+              - generic [ref=e364]:
+                - button "Zoom in" [ref=e365] [cursor=pointer]
+                - button "Zoom out" [ref=e368] [cursor=pointer]
+                - button "Autoscale" [ref=e371] [cursor=pointer]
+                - button "Reset axes" [ref=e374] [cursor=pointer]
+              - button "Fullscreen" [ref=e378] [cursor=pointer]
+          - generic [ref=e386]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: L3MY6501N01
+                    - generic: L3MY6501N15
+                    - generic: L3MY6501N30
+                  - generic:
+                    - generic: "0.035"
+                    - generic: "0.04"
+                    - generic: "0.045"
+                    - generic: "0.05"
+            - img:
+              - generic:
+                - generic: ARRAY | 15260 | 4PP_Rs | Sheet点位分布 By过货时间
+                - generic: Param Value
+                - generic: "USL: 0.052"
+                - generic: "LSL: 0.034"
+                - generic: "UCL: 0.047"
+                - generic: "LCL: 0.039"
+                - generic: "Target: 0.043"
+                - generic: "CL: 0.043"
+            - toolbar [ref=e400]:
+              - button "Download plot as a PNG" [ref=e402] [cursor=pointer]
+              - generic [ref=e405]:
+                - button "Zoom" [ref=e406] [cursor=pointer]
+                - button "Pan" [ref=e409] [cursor=pointer]
+              - generic [ref=e412]:
+                - button "Zoom in" [ref=e413] [cursor=pointer]
+                - button "Zoom out" [ref=e416] [cursor=pointer]
+                - button "Autoscale" [ref=e419] [cursor=pointer]
+                - button "Reset axes" [ref=e422] [cursor=pointer]
+              - button "Fullscreen" [ref=e426] [cursor=pointer]
+      - group [ref=e431]:
+        - generic "keyboard_arrow_down ARRAY | 15260 | 4PP_UNI" [ref=e432] [cursor=pointer]:
+          - generic [ref=e433]:
+            - generic [ref=e434]: keyboard_arrow_down
+            - paragraph [ref=e438]: ARRAY | 15260 | 4PP_UNI
+        - generic [ref=e440]:
+          - generic [ref=e446]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: 月 | 2026-06
+                    - generic: 周 | 2026-W24
+                    - generic: 日 | 2026-06-09
+                  - generic:
+                    - generic: "0"
+                    - generic: "5"
+                    - generic: "10"
+                    - generic: "15"
+                    - generic: "20"
+            - img:
+              - generic:
+                - generic [ref=e463]:
+                  - generic [ref=e464]: 月
+                  - generic [ref=e471]: 周
+                  - generic [ref=e478]: 日
+                - generic: ARRAY | 15260 | 4PP_UNI | 月周天分布
+                - generic: Point Value
+                - generic: "USL: 20"
+                - generic: "UCL: 12"
+            - toolbar [ref=e485]:
+              - button "Download plot as a PNG" [ref=e487] [cursor=pointer]
+              - generic [ref=e490]:
+                - button "Zoom" [ref=e491] [cursor=pointer]
+                - button "Pan" [ref=e494] [cursor=pointer]
+              - generic [ref=e497]:
+                - button "Zoom in" [ref=e498] [cursor=pointer]
+                - button "Zoom out" [ref=e501] [cursor=pointer]
+                - button "Autoscale" [ref=e504] [cursor=pointer]
+                - button "Reset axes" [ref=e507] [cursor=pointer]
+              - button "Fullscreen" [ref=e511] [cursor=pointer]
+          - generic [ref=e519]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: L3MY6501N01
+                    - generic: L3MY6501N15
+                    - generic: L3MY6501N30
+                  - generic:
+                    - generic: "0"
+                    - generic: "5"
+                    - generic: "10"
+                    - generic: "15"
+                    - generic: "20"
+            - img:
+              - generic:
+                - generic: ARRAY | 15260 | 4PP_UNI | Sheet点位分布 By腔室
+                - generic: Param Value
+                - generic: "USL: 20"
+                - generic: "UCL: 12"
+            - toolbar [ref=e533]:
+              - button "Download plot as a PNG" [ref=e535] [cursor=pointer]
+              - generic [ref=e538]:
+                - button "Zoom" [ref=e539] [cursor=pointer]
+                - button "Pan" [ref=e542] [cursor=pointer]
+              - generic [ref=e545]:
+                - button "Zoom in" [ref=e546] [cursor=pointer]
+                - button "Zoom out" [ref=e549] [cursor=pointer]
+                - button "Autoscale" [ref=e552] [cursor=pointer]
+                - button "Reset axes" [ref=e555] [cursor=pointer]
+              - button "Fullscreen" [ref=e559] [cursor=pointer]
+          - generic [ref=e567]:
+            - img:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: L3MY6501N01
+                    - generic: L3MY6501N15
+                    - generic: L3MY6501N30
+                  - generic:
+                    - generic: "0"
+                    - generic: "5"
+                    - generic: "10"
+                    - generic: "15"
+                    - generic: "20"
+            - img:
+              - generic:
+                - generic: ARRAY | 15260 | 4PP_UNI | Sheet点位分布 By过货时间
+                - generic: Param Value
+                - generic: "USL: 20"
+                - generic: "UCL: 12"
+            - toolbar [ref=e581]:
+              - button "Download plot as a PNG" [ref=e583] [cursor=pointer]
+              - generic [ref=e586]:
+                - button "Zoom" [ref=e587] [cursor=pointer]
+                - button "Pan" [ref=e590] [cursor=pointer]
+              - generic [ref=e593]:
+                - button "Zoom in" [ref=e594] [cursor=pointer]
+                - button "Zoom out" [ref=e597] [cursor=pointer]
+                - button "Autoscale" [ref=e600] [cursor=pointer]
+                - button "Reset axes" [ref=e603] [cursor=pointer]
+              - button "Fullscreen" [ref=e607] [cursor=pointer]

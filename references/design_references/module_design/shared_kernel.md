@@ -92,7 +92,7 @@ config.processing['defect_capping']       # 处理参数
 | 日志文件 | 领域 |
 |----------|------|
 | `app_yield.log` | `yield_domain` |
-| `app_spc.log` | `spc_domain` |
+| `app_spc.log` | `inline_domain` |
 | `app_shared.log` | `shared_kernel` |
 
 ### 3.2 级别隔离（横轴）
@@ -137,4 +137,4 @@ config.processing['defect_capping']       # 处理参数
 
 ---
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`yield_domain.md`](./yield_domain.md) · [`spc_domain.md`](./spc_domain.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`yield_domain.md`](./yield_domain.md) · [`inline_domain.md`](./inline_domain.md)

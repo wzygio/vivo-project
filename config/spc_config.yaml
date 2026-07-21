@@ -1,5 +1,5 @@
 spc:
-  cpm_cpk:
+  spc_cpk:
     # sheet_mean: original mode, sigma uses period Sheet Mean std.
     # point_value: hidden comparison mode, sigma uses period point-level param_value std.
     period_sigma_source: "point_value"

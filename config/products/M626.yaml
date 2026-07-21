@@ -36,8 +36,9 @@ processing:
     'S向ELA Mura': 0
     'G向ELA Mura': 0
     'G向带状Mura': 0
+    'S向线状Mura': 0.2
     # OLED_Mura
-    '彩斑Mura': 0.4
+    '彩斑Mura': 0.5
     'S向边缘Mura': 0.6
 
   # 6. sheet/lot波动调节

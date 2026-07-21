@@ -1,0 +1,141 @@
+- generic [active]:
+  - generic:
+    - generic [ref=f2e2]:
+      - generic [ref=f2e6]:
+        - generic:
+          - list:
+            - listitem:
+              - link "Home" [ref=f2e7] [cursor=pointer]:
+                - /url: http://localhost:8503/
+                - generic:
+                  - generic:
+                    - paragraph: Home
+            - listitem:
+              - link "CTQ监控报表" [ref=f2e8] [cursor=pointer]:
+                - /url: http://localhost:8503/CTQ监控报表
+                - generic:
+                  - generic:
+                    - paragraph: CTQ监控报表
+            - listitem:
+              - link "SPC监控报表" [ref=f2e9] [cursor=pointer]:
+                - /url: http://localhost:8503/SPC监控报表
+                - generic:
+                  - generic:
+                    - paragraph: SPC监控报表
+            - listitem:
+              - link "专项资料-台账周报" [ref=f2e10] [cursor=pointer]:
+                - /url: http://localhost:8503/专项资料-台账周报
+                - generic:
+                  - generic:
+                    - paragraph: 专项资料-台账周报
+            - listitem:
+              - link "专项资料-解析报告" [ref=f2e11] [cursor=pointer]:
+                - /url: http://localhost:8503/专项资料-解析报告
+                - generic:
+                  - generic:
+                    - paragraph: 专项资料-解析报告
+            - listitem:
+              - link "入库不良率ByLot明细表" [ref=f2e12] [cursor=pointer]:
+                - /url: http://localhost:8503/入库不良率ByLot明细表
+                - generic:
+                  - generic:
+                    - paragraph: 入库不良率ByLot明细表
+            - listitem:
+              - link "入库不良率BySheet明细表" [ref=f2e13] [cursor=pointer]:
+                - /url: http://localhost:8503/入库不良率BySheet明细表
+                - generic:
+                  - generic:
+                    - paragraph: 入库不良率BySheet明细表
+            - listitem:
+              - link "入库不良率分析看板" [ref=f2e14] [cursor=pointer]:
+                - /url: http://localhost:8503/入库不良率分析看板
+                - generic:
+                  - generic:
+                    - paragraph: 入库不良率分析看板
+            - listitem:
+              - link "关键备件报表" [ref=f2e15] [cursor=pointer]:
+                - /url: http://localhost:8503/关键备件报表
+                - generic:
+                  - generic:
+                    - paragraph: 关键备件报表
+            - listitem:
+              - link "自动预警看板" [ref=f2e16] [cursor=pointer]:
+                - /url: http://localhost:8503/自动预警看板
+                - generic:
+                  - generic:
+                    - paragraph: 自动预警看板
+      - generic [ref=f2e3]:
+        - banner [ref=f2e19]:
+          - generic [ref=f2e21]:
+            - button "keyboard_double_arrow_right" [ref=f2e24] [cursor=pointer]
+            - generic [ref=f2e27]:
+              - button "Deploy" [ref=f2e29] [cursor=pointer]
+              - button "Main menu" [ref=f2e33] [cursor=pointer]
+        - generic [ref=f2e37]:
+          - heading "CTQ监控报表" [level=1] [ref=f2e42]:
+            - text: CTQ监控报表
+            - generic [ref=f2e43]:
+              - link "Link to heading":
+                - /url: "#ctq"
+          - generic [ref=f2e47]:
+            - generic [ref=f2e53]:
+              - generic [ref=f2e54]:
+                - generic [ref=f2e55]: M678
+                - combobox "Selected M678. 📦 当前产品型号" [ref=f2e197]
+              - img "open" [ref=f2e59]
+            - button [ref=f2e70] [cursor=pointer]:
+              - paragraph [ref=f2e74]: 🔄 刷新数据
+            - button [ref=f2e82] [cursor=pointer]:
+              - paragraph [ref=f2e86]: 🔄 刷新缓存
+          - generic [ref=f2e88]:
+            - heading "筛选" [level=4] [ref=f2e94]:
+              - text: 筛选
+              - generic [ref=f2e95]:
+                - link "Link to heading":
+                  - /url: "#b7246533"
+            - generic [ref=f2e97]:
+              - generic [ref=f2e101]:
+                - paragraph [ref=f2e105]: 厂别
+                - generic [ref=f2e107]:
+                  - generic [ref=f2e108]:
+                    - generic [ref=f2e109]: ARRAY
+                    - combobox "Selected ARRAY. 厂别" [ref=f2e111]
+                  - img "open" [ref=f2e113]
+              - generic [ref=f2e118]:
+                - paragraph [ref=f2e122]: 站点
+                - generic [ref=f2e125]:
+                  - generic [ref=f2e126]:
+                    - button "12140, close by backspace":
+                      - generic "12140"
+                    - combobox "Selected 12140. 站点" [expanded] [ref=f2e257]
+                  - generic [ref=f2e129]:
+                    - button "Clear all" [ref=f2e258] [cursor=pointer]
+                    - img "open" [ref=f2e130] [cursor=pointer]
+              - generic [ref=f2e135]:
+                - paragraph [ref=f2e139]: 参数名称
+                - generic [ref=f2e142]:
+                  - generic [ref=f2e143]:
+                    - button "SE_L1T, close by backspace":
+                      - generic "SE_L1T"
+                    - button "SE_L1T_UNI, close by backspace":
+                      - generic "SE_L1T_UNI"
+                    - combobox "Selected SE_L1T, SE_L1T_UNI. 参数名称" [ref=f2e266]
+                  - generic [ref=f2e146]:
+                    - button "Clear all" [ref=f2e267] [cursor=pointer]
+                    - img "open" [ref=f2e147] [cursor=pointer]
+              - button [ref=f2e153] [cursor=pointer]:
+                - paragraph [ref=f2e157]: 查询
+          - alert [ref=f2e160]:
+            - paragraph [ref=f2e165]: 当前筛选条件尚未查询。
+    - list [ref=f2e201]:
+      - generic [ref=f2e203]:
+        - option "Select all" [ref=f2e204] [cursor=pointer]
+        - option "10140" [ref=f2e209] [cursor=pointer]
+        - option "10840" [ref=f2e214] [cursor=pointer]
+        - option "10841" [ref=f2e219] [cursor=pointer]
+        - option "11140" [ref=f2e224] [cursor=pointer]
+        - option "11450" [ref=f2e229] [cursor=pointer]
+        - option "11650" [ref=f2e234] [cursor=pointer]
+        - option "12260" [selected] [ref=f2e244] [cursor=pointer]
+        - option "12450" [ref=f2e249] [cursor=pointer]
+        - option "12650" [ref=f2e269] [cursor=pointer]

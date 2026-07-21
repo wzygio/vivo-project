@@ -31,7 +31,7 @@ spc:
     ]
 
 
-def test_get_cpm_period_box_source_reads_supported_value(
+def test_get_spc_period_box_source_reads_supported_value(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -40,17 +40,17 @@ def test_get_cpm_period_box_source_reads_supported_value(
     (config_dir / "spc_config.yaml").write_text(
         """
 spc:
-  cpm_cpk:
+  spc_cpk:
     period_box_source: sheet_mean
 """.strip(),
         encoding="utf-8",
     )
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 
-    assert ConfigLoader.get_cpm_period_box_source() == "sheet_mean"
+    assert ConfigLoader.get_spc_period_box_source() == "sheet_mean"
 
 
-def test_get_cpm_period_box_source_defaults_to_point_values_for_unknown_value(
+def test_get_spc_period_box_source_defaults_to_point_values_for_unknown_value(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -59,11 +59,11 @@ def test_get_cpm_period_box_source_defaults_to_point_values_for_unknown_value(
     (config_dir / "spc_config.yaml").write_text(
         """
 spc:
-  cpm_cpk:
+  spc_cpk:
     period_box_source: unknown
 """.strip(),
         encoding="utf-8",
     )
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 
-    assert ConfigLoader.get_cpm_period_box_source() == "point_value"
+    assert ConfigLoader.get_spc_period_box_source() == "point_value"

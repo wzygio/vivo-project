@@ -24,7 +24,7 @@
 │  app/  ── Streamlit 页面、可复用组件、图表渲染                │
 ├─────────────────────────────────────────────────────────────┤
 │  Domain Layer  (领域层)                                      │
-│  src/spc_domain/    ── SPC 统计过程控制领域                 │
+│  src/inline_domain/    ── SPC 统计过程控制领域                 │
 │  src/yield_domain/  ── 入库不良率 & 自动预警领域            │
 │    ├── application/     应用服务 (编排用例、DTO 转换)        │
 │    ├── core/            领域核心 (算法、规则、状态计算)      │
@@ -40,7 +40,7 @@
 | 目录 | 层级 | 职责 |
 |------|------|------|
 | `app/` | **Presentation Layer** | 仅负责页面渲染与用户交互。包含 Streamlit 的 `pages/` 页面脚本、`components/` 可复用组件（如 `spc_sections.py`、`yield_sections.py`）以及 `charts/` 图表封装。禁止直接调用数据库或包含业务规则。 |
-| `src/spc_domain/` | **Domain Layer** | SPC 领域逻辑。`application/spc_service.py` 暴露用例接口；`core/spc_calculator.py` 封装 SPC 算法；`infrastructure/` 负责 SPC 原始数据的加载与仓储。 |
+| `src/inline_domain/` | **Domain Layer** | SPC 领域逻辑。`application/monitor/monitor_service.py` 暴露用例接口；`core/monitor/monitor_calculator.py` 封装 SPC 算法；`infrastructure/` 负责 SPC 原始数据的加载与仓储。 |
 | `src/yield_domain/` | **Domain Layer** | Yield 领域逻辑。`application/` 提供良率分析、异常预警、Excel/PDF/PPT 导出等应用服务；`core/` 包含 `abnormal_detector.py`、`batch_statistics.py` 等核心算法；`infrastructure/` 负责 Yield 数据持久化。 |
 | `src/shared_kernel/` | **Shared Kernel** | 被多个领域共享的通用能力。包括 `config.py` 全局配置、`db_handler.py` 统一数据库连接、`excel_tools.py` 等通用工具。 |
 
@@ -71,7 +71,7 @@ vivo-project/
 │       └── sheet_lot_chart.py
 │
 ├── src/                              # 领域层 (核心业务逻辑)
-│   ├── spc_domain/                   # SPC 领域
+│   ├── inline_domain/                   # SPC 领域
 │   │   ├── application/
 │   │   ├── core/
 │   │   └── infrastructure/

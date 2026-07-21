@@ -3,7 +3,7 @@ import logging
 import hashlib
 from pathlib import Path
 
-def deep_reload_modules(root_package_names=("src", "app", "spc_domain", "yield_domain", "shared_kernel")):
+def deep_reload_modules(root_package_names=("src", "app", "inline_domain", "yield_domain", "shared_kernel")):
     """
     [V2.0 DDD 适配版] 强制热重载指定包名下的所有子模块。
     允许传入元组，覆盖 sys.modules 中可能出现的所有顶层包名。

@@ -1,0 +1,119 @@
+- generic [ref=f2e2]:
+  - generic [ref=f2e6]:
+    - generic:
+      - list:
+        - listitem:
+          - link "Home" [ref=f2e7] [cursor=pointer]:
+            - /url: http://localhost:8503/
+            - generic:
+              - generic:
+                - paragraph: Home
+        - listitem:
+          - link "CTQ监控报表" [ref=f2e8] [cursor=pointer]:
+            - /url: http://localhost:8503/CTQ监控报表
+            - generic:
+              - generic:
+                - paragraph: CTQ监控报表
+        - listitem:
+          - link "SPC监控报表" [ref=f2e9] [cursor=pointer]:
+            - /url: http://localhost:8503/SPC监控报表
+            - generic:
+              - generic:
+                - paragraph: SPC监控报表
+        - listitem:
+          - link "专项资料-台账周报" [ref=f2e10] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-台账周报
+            - generic:
+              - generic:
+                - paragraph: 专项资料-台账周报
+        - listitem:
+          - link "专项资料-解析报告" [ref=f2e11] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-解析报告
+            - generic:
+              - generic:
+                - paragraph: 专项资料-解析报告
+        - listitem:
+          - link "入库不良率ByLot明细表" [ref=f2e12] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率ByLot明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率ByLot明细表
+        - listitem:
+          - link "入库不良率BySheet明细表" [ref=f2e13] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率BySheet明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率BySheet明细表
+        - listitem:
+          - link "入库不良率分析看板" [ref=f2e14] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率分析看板
+            - generic:
+              - generic:
+                - paragraph: 入库不良率分析看板
+        - listitem:
+          - link "关键备件报表" [ref=f2e15] [cursor=pointer]:
+            - /url: http://localhost:8503/关键备件报表
+            - generic:
+              - generic:
+                - paragraph: 关键备件报表
+        - listitem:
+          - link "自动预警看板" [ref=f2e16] [cursor=pointer]:
+            - /url: http://localhost:8503/自动预警看板
+            - generic:
+              - generic:
+                - paragraph: 自动预警看板
+  - generic [ref=f2e3]:
+    - banner [ref=f2e19]:
+      - generic [ref=f2e21]:
+        - button "keyboard_double_arrow_right" [ref=f2e24] [cursor=pointer]
+        - generic [ref=f2e27]:
+          - button "Deploy" [ref=f2e29] [cursor=pointer]
+          - button "Main menu" [ref=f2e33] [cursor=pointer]
+    - generic [ref=f2e37]:
+      - heading "CTQ监控报表" [level=1] [ref=f2e42]:
+        - text: CTQ监控报表
+        - generic [ref=f2e43]:
+          - link "Link to heading":
+            - /url: "#ctq"
+      - generic [ref=f2e47]:
+        - generic [ref=f2e53]:
+          - generic [ref=f2e54]:
+            - generic [ref=f2e55]: M678
+            - combobox "Selected M678. 📦 当前产品型号" [active] [ref=f2e197]
+          - img "open" [ref=f2e59]
+        - button [ref=f2e70] [cursor=pointer]:
+          - paragraph [ref=f2e74]: 🔄 刷新数据
+        - button [ref=f2e82] [cursor=pointer]:
+          - paragraph [ref=f2e86]: 🔄 刷新缓存
+      - generic [ref=f2e88]:
+        - heading "筛选" [level=4] [ref=f2e94]:
+          - text: 筛选
+          - generic [ref=f2e95]:
+            - link "Link to heading":
+              - /url: "#b7246533"
+        - generic [ref=f2e97]:
+          - generic [ref=f2e101]:
+            - paragraph [ref=f2e105]: 厂别
+            - generic [ref=f2e107]:
+              - generic [ref=f2e108]:
+                - generic [ref=f2e109]: ARRAY
+                - combobox "Selected ARRAY. 厂别" [ref=f2e111]
+              - img "open" [ref=f2e113]
+          - generic [ref=f2e118]:
+            - paragraph [ref=f2e122]: 站点
+            - generic [ref=f2e125]:
+              - generic [ref=f2e126]:
+                - combobox "站点" [ref=f2e128]
+                - generic: Choose options
+              - img "open" [ref=f2e130] [cursor=pointer]
+          - generic [ref=f2e135]:
+            - paragraph [ref=f2e139]: 参数名称
+            - generic [ref=f2e142]:
+              - generic [ref=f2e143]:
+                - combobox "参数名称" [disabled] [ref=f2e145]
+                - generic: No options to select
+              - img "open" [ref=f2e147] [cursor=pointer]
+          - button [disabled] [ref=f2e153]:
+            - paragraph [ref=f2e157]: 查询
+      - alert [ref=f2e160]:
+        - paragraph [ref=f2e165]: 当前筛选条件尚未查询。

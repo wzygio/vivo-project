@@ -15,7 +15,8 @@ const LINKS = {
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
     CRITICAL_PARTS: "http://10.72.26.31:8503/关键备件报表",
-    CPM_REPORT: "http://10.72.26.31:8503/CPM监控报表",
+    SPC_REPORT: "http://10.72.26.31:8503/SPC监控报表",
+    CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
@@ -66,9 +67,8 @@ const APP_CONFIG = {
             children: [
                 { name: "AOI", url: LINKS.AOI },
                 { name: "AOI_RS", url: LINKS.AOI_RS },
-                // { name: "SPC", url: LINKS.SPC },
-                { name: "CTQ", url: LINKS.CTQ },
-                { name: "CPM", url: LINKS.CPM_REPORT },
+                { name: "CTQ", url: LINKS.CTQ_REPORT },
+                { name: "SPC", url: LINKS.SPC_REPORT },
             ]
         },
         {
@@ -119,8 +119,8 @@ const APP_CONFIG = {
                 {l:'', v:'AOI', url: LINKS.AOI } ,
                 {l:'', v:'AOI_RS', url: LINKS.AOI_RS },
                 // {l:'', v:'SPC', url: LINKS.SPC }, 
-                {l:'', v:'CTQ', url: LINKS.CTQ },
-                {l:'', v:'SPC-CPM', url: LINKS.CPM_REPORT },
+                {l:'', v:'CTQ', url: LINKS.CTQ_REPORT },
+                {l:'', v:'SPC', url: LINKS.SPC_REPORT },
             ]
         },
         { 

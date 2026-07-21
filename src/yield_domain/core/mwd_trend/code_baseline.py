@@ -51,6 +51,28 @@ def defect_multipliers_signature(config: AppConfig | None) -> str:
     return ";".join(signature_parts)
 
 
+def changed_defect_multiplier_codes(
+    previous_signature: str,
+    current_signature: str,
+) -> set[str]:
+    """Return the Code names whose normalized multiplier changed."""
+    def _parse(signature: str) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for item in signature.split(";"):
+            code, separator, factor = item.rpartition("=")
+            if separator and code:
+                values[code] = factor
+        return values
+
+    previous = _parse(previous_signature)
+    current = _parse(current_signature)
+    return {
+        code
+        for code in previous.keys() | current.keys()
+        if previous.get(code) != current.get(code)
+    }
+
+
 def build_code_baseline(
     df: pd.DataFrame,
     as_of: dt | pd.Timestamp | None = None,
@@ -113,6 +135,20 @@ def code_baseline_source_window(df: pd.DataFrame) -> Tuple[str, str]:
     return dates.min().strftime('%Y-%m-%d'), dates.max().strftime('%Y-%m-%d')
 
 
+def _read_code_baseline_sheet(path: Path, sheet_name: str) -> pd.DataFrame:
+    """Read a baseline sheet, including enterprise-encrypted workbooks."""
+    try:
+        return pd.read_excel(path, sheet_name=sheet_name)
+    except Exception as openpyxl_error:
+        logging.warning(
+            "[Baseline Loader] Standard Excel read failed; trying Excel COM: %s",
+            openpyxl_error,
+        )
+        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+
+        return _read_encrypted_xlsx_via_com(path, sheet_name=sheet_name)
+
+
 def write_code_baseline_file(
     out_path: Path,
     baseline: pd.DataFrame,
@@ -145,7 +181,7 @@ def read_code_baseline_metadata(path: Path) -> Dict[str, str]:
     if not path.exists():
         return {}
     try:
-        metadata_df = pd.read_excel(path, sheet_name=CODE_BASELINE_METADATA_SHEET)
+        metadata_df = _read_code_baseline_sheet(path, CODE_BASELINE_METADATA_SHEET)
         if not {'key', 'value'}.issubset(metadata_df.columns):
             return {}
         return {
@@ -186,7 +222,7 @@ def load_code_baseline_frame(path: Path) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
     try:
-        df = pd.read_excel(path, sheet_name=CODE_BASELINE_SHEET)
+        df = _read_code_baseline_sheet(path, CODE_BASELINE_SHEET)
         if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
             return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
         df = df.copy()
@@ -299,6 +335,42 @@ def ensure_code_baseline_current(
         existing_multiplier_signature != defect_multipliers_signature
         and (existing_multiplier_signature or defect_multipliers_signature)
     ):
+        # Older workbooks without a recorded snapshot cannot be safely diffed.
+        if 'defect_multipliers_signature' in metadata:
+            changed_codes = changed_defect_multiplier_codes(
+                existing_multiplier_signature,
+                defect_multipliers_signature,
+            )
+            if changed_codes:
+                unchanged_existing = existing_scoped.loc[
+                    ~existing_scoped['defect_desc'].astype(str).isin(changed_codes)
+                ]
+                refreshed_changed_codes = current_baseline.loc[
+                    current_baseline['defect_desc'].astype(str).isin(changed_codes)
+                ]
+                missing_unchanged_codes = current_baseline.loc[
+                    current_baseline.apply(
+                        lambda row: (
+                            str(row['baseline_month']).strip(),
+                            str(row['defect_desc']),
+                        )
+                        in missing_keys,
+                        axis=1,
+                    )
+                    & ~current_baseline['defect_desc'].astype(str).isin(changed_codes)
+                ]
+                merged = pd.concat(
+                    [unchanged_existing, refreshed_changed_codes, missing_unchanged_codes],
+                    ignore_index=True,
+                )
+                return generate_code_baseline(
+                    df,
+                    prod_code,
+                    generated_at=now,
+                    refresh_reason="multiplier_changed_codes",
+                    defect_multipliers_signature=defect_multipliers_signature,
+                    baseline=merged,
+                )
         reason = "multiplier_changed"
     elif is_legacy_code_baseline_frame(existing):
         reason = "legacy_schema"
@@ -411,4 +483,3 @@ def resolve_code_baseline_rate(
             return first_stable_nonzero_day_rate(counts, totals)
         return rate
     return first_stable_nonzero_day_rate(counts, totals)
-

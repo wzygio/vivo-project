@@ -49,7 +49,7 @@ def setup_logging(base_filename: str = "app"):
             path = record.pathname.replace("\\", "/")
             return not any(m in path for m in self.domain_markers)
 
-    DOMAIN_MARKERS = ["spc_domain", "yield_domain", "shared_kernel"]
+    DOMAIN_MARKERS = ["inline_domain", "yield_domain", "shared_kernel"]
 
     try:
         # =========================================================
