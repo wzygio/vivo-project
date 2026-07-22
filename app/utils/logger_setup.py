@@ -5,6 +5,7 @@ from pathlib import Path
 import streamlit as st
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.output_paths import OutputLayout
 
 @st.cache_resource
 def setup_logging(base_filename: str = "app"):
@@ -13,8 +14,7 @@ def setup_logging(base_filename: str = "app"):
     支持按天自动切分、过期日志自动清理、按级别物理隔离。
     """
     project_root = ConfigLoader.get_project_root()
-    log_dir = project_root / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = OutputLayout.from_project_root(project_root).ensure().logs
 
     log_format = '%(asctime)s - %(levelname)s - [%(module)s] - %(message)s'
     log_date_format = '%Y-%m-%d %H:%M:%S'

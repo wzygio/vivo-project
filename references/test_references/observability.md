@@ -4,18 +4,23 @@ This is the Harness entrypoint for traces, logs, smoke checks, and diagnostics.
 
 ## Runtime Logs
 
-- `logs/app.log_error.log`: application errors and boundary failures.
-- `logs/app.log_info.log`: general application info.
-- `logs/app.log_shared.log`: shared-kernel logs.
-- `logs/app.log_spc.log`: SPC-domain logs.
-- `logs/app.log_yield.log`: Yield-domain logs.
-- `logs/app.log_trace.log`: detailed trace/probe output.
+- `output/logs/app.log_error.log`: application errors and boundary failures.
+- `output/logs/app.log_info.log`: general application info.
+- `output/logs/app.log_shared.log`: shared-kernel logs.
+- `output/logs/app.log_spc.log`: SPC-domain logs.
+- `output/logs/app.log_yield.log`: Yield-domain logs.
+- `output/logs/app.log_trace.log`: detailed trace/probe output.
 
-Daily rotated logs may appear as `logs/*.YYYY-MM-DD`. Treat logs as runtime artifacts unless a task explicitly asks to preserve an excerpt in `docs/generated/`.
+Daily rotated logs may appear as `output/logs/*.YYYY-MM-DD`. Treat logs as runtime artifacts unless a task explicitly asks to preserve an excerpt in `docs/generated/`.
 
 ## Generated Outputs
 
-- `output/`: task outputs, smoke artifacts, generated reports, and analysis products.
+- `output/`: the canonical generated-artifact root; see `output/README.md` for category ownership.
+- `output/reports/`: generated business reports, analysis tables, and charts.
+- `output/screenshots/`: browser screenshots and document-preview images.
+- `output/test-results/`: test reports, traces, videos, and coverage artifacts.
+- `output/decrypted_files/`: temporary decrypted or normalized working copies.
+- `output/logs/`: runtime logs and probe exports.
 - `docs/generated/`: rebuildable Harness audits and repository facts only.
 
 ## Smoke And Test Commands

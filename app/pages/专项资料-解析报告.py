@@ -25,7 +25,7 @@ render_page_header("📋 解析资料", active_config)
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = product_dir / "analysis_files"
 doc_source_dir.mkdir(parents=True, exist_ok=True)
-img_cache_rel_dir = "data/doc_cache" # 缓存目录依然放在外层共用
+img_cache_rel_dir = "output/screenshots/document-preview"
 
 # --- 3. 状态管理 ---
 if 'viewing_file' not in st.session_state:

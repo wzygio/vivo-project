@@ -28,7 +28,7 @@ render_page_header("📋 专项资料", active_config)
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = resource_dir / "project_files"
 doc_source_dir.mkdir(parents=True, exist_ok=True)
-img_cache_rel_dir = "data/doc_cache"
+img_cache_rel_dir = "output/screenshots/document-preview"
 
 # --- 3. 状态管理初始化 (已清理掉不需要的 active_upload_file 状态) ---
 if 'viewing_file' not in st.session_state: st.session_state.viewing_file = None

@@ -28,6 +28,7 @@ SMOKE_PATTERNS: dict[str, tuple[str, ...]] = {
         "tests/unit/test_capping_mechanism.py",
         "tests/unit/test_code_*.py",
         "tests/unit/test_compliance_*.py",
+        "tests/unit/test_defect_panel_count_alignment.py",
         "tests/unit/test_mapping_*.py",
         "tests/unit/test_override_logic.py",
         "tests/unit/test_shadow_ema.py",

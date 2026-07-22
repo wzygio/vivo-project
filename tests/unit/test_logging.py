@@ -22,7 +22,7 @@ def test_logging():
         
         # 获取日志路径
         root = ConfigLoader.get_project_root()
-        log_path = root / "logs" / test_log_file
+        log_path = root / "output" / "logs" / test_log_file
         print(f"   -> 日志文件路径: {log_path}")
         
     except Exception as e:

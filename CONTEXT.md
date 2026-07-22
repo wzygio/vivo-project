@@ -9,7 +9,7 @@
 - Presentation lives under `app/` as Streamlit pages, sections, components, and chart adapters.
 - Domain logic lives under `src/` and follows the Application -> Core -> Infrastructure layering described in `ARCHITECTURE.md`.
 - Stable project knowledge should be routed through `AGENTS.md`, `docs/design/index.md`, `docs/plans/index.md`, `docs/exec-plans/`, `docs/observability.md`, `docs/references/`, `docs/generated/`, and `specs/`.
-- Rebuildable outputs belong under `output/`; logs belong under `logs/`; source business fixtures belong under `resources/` or `docs/project_files/` when intentionally preserved.
+- Rebuildable outputs, runtime logs, previews, downloads, test artifacts, and temporary normalized files belong under the categorized subdirectories of `output/`; source business fixtures belong under `resources/` or `docs/project_files/` when intentionally preserved.
 
 ## Hard Boundaries
 
@@ -28,4 +28,3 @@
 - Rebuildable scans and audits: `docs/generated/`
 - External/vendor references: `docs/references/`
 - User-maintainable contracts and task specs: `specs/`
-

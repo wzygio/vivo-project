@@ -134,7 +134,7 @@ def render_micro_trend_section(mwd_code_data: dict, curr_code: str, curr_warning
                     st.info(f"暂无{title}数据")
 
 # ==============================================================================
-#  3. Lot 集中性 (Row B: 批次维度)
+#  3. Lot 集中性 (Row B: 时间趋势)
 # ==============================================================================
 def render_lot_distribution_section(lot_data: dict, curr_code: str, curr_warning: float) -> str:
     """渲染 Lot 集中性图表，并返回用户点击选中的 target_lot"""

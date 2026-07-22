@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from yield_domain.core.mapping import mapping_processor as mapping_module
 from yield_domain.core.mapping.mapping_processor import apply_hotspot_modification_to_matrix
 
 
@@ -257,3 +258,34 @@ def test_multiplicative_mode_applies_multiple_hotspot_rules_but_first_normal_mul
     assert modified.loc[0, 0] == 20
     assert modified.loc[0, 1] == 30
     assert modified.loc[0, 2] == 5
+
+
+def test_mapping_rate_cascade_keeps_existing_theoretical_ceiling(monkeypatch) -> None:
+    panel_rows = []
+    batches = ["2026/01/01", "2026/01/02", "2026/01/03"]
+    for batch_no in batches:
+        for panel_number in range(100):
+            panel_rows.append(
+                {
+                    "batch_no": batch_no,
+                    "panel_id": f"{batch_no}-P{panel_number:03d}",
+                    "defect_desc": "CodeA" if panel_number < 20 else None,
+                }
+            )
+    monkeypatch.setattr(
+        mapping_module,
+        "_get_deterministically_modified_panel_id",
+        lambda panel_id, batch_no: panel_id,
+    )
+
+    result = mapping_module.prepare_mapping_data(
+        pd.DataFrame(panel_rows),
+        scaling_factor=0.5,
+    )
+
+    assert result.groupby("batch_no").size().reindex(batches).tolist() == [10, 9, 9]
+    assert result.groupby("batch_no")["batch_total_input"].first().tolist() == [
+        100,
+        100,
+        100,
+    ]

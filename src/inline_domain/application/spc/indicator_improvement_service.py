@@ -92,6 +92,7 @@ class IndicatorImprovementService:
         self,
         source_dir: Path,
         output_dir: Path,
+        normalized_workbook_dir: Path,
         products: tuple[str, ...] = PRODUCT_ORDER,
         early_version_product_map: Optional[dict[str, str]] = None,
     ) -> None:
@@ -99,7 +100,7 @@ class IndicatorImprovementService:
         self.output_dir = output_dir
         self.products = products
         self.early_version_product_map = early_version_product_map or EARLY_VERSION_PRODUCT_MAP
-        self.normalized_workbook_dir = self.output_dir / "decrypted_workbooks"
+        self.normalized_workbook_dir = normalized_workbook_dir
 
     def run(self) -> IndicatorAnalysisResult:
         try:

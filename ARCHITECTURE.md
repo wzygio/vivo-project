@@ -16,6 +16,11 @@
   injected Defect Group policy once before returning data to upper layers.
 - Yield services, alerts, and pages consume the resulting data without repeating
   the global Defect Group filter.
+- Code-level MWD treats the post-`defect_multipliers` Panel detail as its monthly
+  integer count authority: EMA defines the daily shape, monthly reconciliation
+  restores each Code total, manual month/week/day overrides run afterward, and
+  final week/month outputs are rebuilt from daily data. Batch Mapping remains an
+  independent rate-decay and coordinate-modification pipeline.
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
@@ -52,7 +57,6 @@
 | `config/` | Project area. |
 | `config/products/` | Project subarea. |
 | `data/` | Project area. |
-| `data/doc_cache/` | Project subarea. |
 | `data/equipment/` | Project subarea. |
 | `data/M626/` | Project subarea. |
 | `data/M673/` | Project subarea. |
@@ -69,11 +73,17 @@
 | `docs/prompt/` | Project subarea. |
 | `docs/references/` | Project subarea. |
 | `docs/spec/` | Project subarea. |
-| `logs/` | Project area. |
 | `OfflineRepo/` | Project area. |
 | `OfflineRepo/wheels/` | Project subarea. |
-| `output/` | Project area. |
-| `output/task-Indicator_Improvement/` | Project subarea. |
+| `output/` | Canonical root for rebuildable runtime and development artifacts. |
+| `output/reports/` | Generated reports, analysis tables, charts, and conversion results. |
+| `output/downloads/` | User-initiated and tool-generated downloads. |
+| `output/decrypted_files/` | Temporary decrypted or normalized working copies. |
+| `output/rpa_downloads/` | Browser and RPA downloads. |
+| `output/screenshots/` | Browser screenshots and document-preview images. |
+| `output/test-results/` | Test reports, traces, videos, and coverage artifacts. |
+| `output/logs/` | Runtime logs, rotated logs, probes, and diagnostic exports. |
+| `output/tmp/` | Short-lived intermediate files. |
 | `references/` | Project area. |
 | `references/design/` | Project subarea. |
 | `references/dev_references/` | Project subarea. |
@@ -84,7 +94,6 @@
 | `references/project-info/` | Project subarea. |
 | `references/test_references/` | Project subarea. |
 | `resources/` | Project area. |
-| `resources/decrypted_files/` | Project subarea. |
 | `resources/M626/` | Project subarea. |
 | `resources/M673/` | Project subarea. |
 | `resources/M678/` | Project subarea. |

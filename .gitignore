@@ -4,7 +4,9 @@
 OfflineRepo/
 
 # 日志和输出
-output/
+output/*
+!output/README.md
+# Legacy writers may recreate this while an older process is still running.
 logs/
 
 # Python 缓存

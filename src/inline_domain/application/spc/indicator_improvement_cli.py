@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 
 from src.inline_domain.application.spc.indicator_improvement_service import IndicatorImprovementService
+from src.shared_kernel.output_paths import OutputLayout
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run PNL indicator improvement analysis.")
     parser.add_argument(
         "--source-dir",
@@ -17,16 +18,31 @@ def main() -> int:
     )
     parser.add_argument(
         "--output-dir",
-        default="output/task-Indicator_Improvement",
+        default="output/reports/indicator-improvement",
         help="Directory for all generated tables, config, and chart images.",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--decrypted-dir",
+        default="output/decrypted_files/indicator-improvement",
+        help="Directory for normalized source workbooks.",
+    )
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     project_root = _find_project_root(Path.cwd())
+    OutputLayout.from_project_root(project_root).ensure()
     source_dir = (project_root / args.source_dir).resolve()
     output_dir = (project_root / args.output_dir).resolve()
+    decrypted_dir = (project_root / args.decrypted_dir).resolve()
 
-    service = IndicatorImprovementService(source_dir=source_dir, output_dir=output_dir)
+    service = IndicatorImprovementService(
+        source_dir=source_dir,
+        output_dir=output_dir,
+        normalized_workbook_dir=decrypted_dir,
+    )
     result = service.run()
     payload = {
         "output_dir": str(result.output_dir),

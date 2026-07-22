@@ -19,7 +19,7 @@ col1, col2 = st.columns(2)
 
 cwd = Path.cwd()
 project_root = ConfigLoader.get_project_root()
-log_dir = project_root / "logs"
+log_dir = project_root / "output" / "logs"
 log_file = log_dir / "app.log"
 
 with col1:

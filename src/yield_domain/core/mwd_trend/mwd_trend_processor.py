@@ -19,7 +19,216 @@ from src.yield_domain.core.mwd_trend.code_baseline import (
     resolve_code_baseline_rate as _resolve_code_baseline_rate,
 )
 
+
+def _allocate_integer_counts(
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    target_total: int,
+) -> np.ndarray:
+    """Allocate an integer total by weight without exceeding row capacities."""
+    safe_capacities = np.floor(
+        np.nan_to_num(capacities, nan=0.0, posinf=0.0, neginf=0.0)
+    ).astype(int)
+    safe_capacities = np.clip(safe_capacities, 0, None)
+    effective_target = min(max(0, int(target_total)), int(safe_capacities.sum()))
+    if effective_target == 0:
+        return np.zeros(len(safe_capacities), dtype=int)
+
+    safe_weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+    safe_weights = np.clip(safe_weights.astype(float), 0.0, None)
+    exact_allocations = np.zeros(len(safe_capacities), dtype=float)
+    remaining_target = float(effective_target)
+    active = safe_capacities > 0
+
+    while remaining_target > 0 and active.any():
+        active_weights = np.where(active, safe_weights, 0.0)
+        if active_weights.sum() <= 0:
+            active_weights = np.where(active, safe_capacities - exact_allocations, 0.0)
+
+        shares = remaining_target * active_weights / active_weights.sum()
+        remaining_capacity = safe_capacities - exact_allocations
+        saturated = active & (shares >= remaining_capacity)
+        if saturated.any():
+            exact_allocations[saturated] += remaining_capacity[saturated]
+            remaining_target -= float(remaining_capacity[saturated].sum())
+            active[saturated] = False
+            continue
+
+        exact_allocations[active] += shares[active]
+        remaining_target = 0.0
+
+    allocated = np.floor(exact_allocations).astype(int)
+    remainder = effective_target - int(allocated.sum())
+    if remainder > 0:
+        fractional = exact_allocations - allocated
+        eligible = allocated < safe_capacities
+        order = np.argsort(-fractional, kind='stable')
+        for idx in order:
+            if remainder == 0:
+                break
+            if eligible[idx]:
+                allocated[idx] += 1
+                remainder -= 1
+
+    return allocated
+
 class MWDTrendProcessor:
+
+    @staticmethod
+    def reconcile_code_daily_counts(
+        daily_df: pd.DataFrame,
+        raw_daily_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Reconcile Code daily integers to post-multiplier raw monthly totals."""
+        if daily_df.empty:
+            return daily_df.copy()
+
+        result = daily_df.copy()
+        result['warehousing_time'] = pd.to_datetime(result['warehousing_time'])
+        result['_month'] = result['warehousing_time'].dt.to_period('M')
+
+        raw = raw_daily_df.copy()
+        raw['warehousing_time'] = pd.to_datetime(raw['warehousing_time'])
+        raw['_month'] = raw['warehousing_time'].dt.to_period('M')
+        targets = raw.groupby(
+            ['defect_group', 'defect_desc', '_month'],
+            dropna=False,
+        )['defect_panel_count'].sum()
+
+        group_columns = ['defect_group', 'defect_desc', '_month']
+        for group_key, group_rows in result.groupby(group_columns, sort=False):
+            row_indices = group_rows.index
+            target_total = max(0, int(targets.get(group_key, 0)))
+            current_counts = pd.to_numeric(
+                group_rows['defect_panel_count'], errors='coerce'
+            ).fillna(0).clip(lower=0)
+            current_total = float(current_counts.sum())
+            capacities = pd.to_numeric(
+                group_rows['total_panels'], errors='coerce'
+            ).fillna(0).clip(lower=0).to_numpy(dtype=float)
+
+            if target_total == 0:
+                allocated = np.zeros(len(group_rows), dtype=int)
+            elif current_total > 0:
+                allocated = _allocate_integer_counts(
+                    current_counts.to_numpy(dtype=float),
+                    capacities,
+                    target_total,
+                )
+            else:
+                allocated = _allocate_integer_counts(
+                    capacities,
+                    capacities,
+                    target_total,
+                )
+
+            result.loc[row_indices, 'defect_panel_count'] = allocated
+
+        result['defect_panel_count'] = result['defect_panel_count'].astype(int)
+        return result.drop(columns=['_month'])
+
+    @staticmethod
+    def apply_code_manual_overrides_to_daily(
+        daily_df: pd.DataFrame,
+        monthly_values: dict,
+        weekly_values: dict,
+        daily_values: dict,
+    ) -> pd.DataFrame:
+        """Apply manual rates after calibration with daily-over-weekly precedence."""
+        if daily_df.empty:
+            return daily_df.copy()
+
+        result = daily_df.copy()
+        result['warehousing_time'] = pd.to_datetime(result['warehousing_time'])
+
+        def _normalized_period_key(value: object, period_type: str) -> str | None:
+            text = str(value).strip().upper()
+            try:
+                if period_type == 'monthly':
+                    year_text, month_text = text.replace('月', '').split('-', maxsplit=1)
+                    return f'{int(year_text):04d}-{int(month_text):02d}'
+                year_text, week_text = text.split('-W', maxsplit=1)
+                return f'{int(year_text):04d}-W{int(week_text):02d}'
+            except (TypeError, ValueError):
+                return None
+
+        def _apply_period_overrides(values: dict, period_type: str) -> None:
+            if not values:
+                return
+
+            if period_type == 'monthly':
+                period_keys = result['warehousing_time'].dt.strftime('%Y-%m')
+            else:
+                iso = result['warehousing_time'].dt.isocalendar()
+                period_keys = iso.year.astype(str) + '-W' + iso.week.map('{:02d}'.format)
+
+            for code, configured_periods in values.items():
+                code_mask = result['defect_desc'] == code
+                if not code_mask.any() or not isinstance(configured_periods, dict):
+                    continue
+                for configured_period, configured_rate in configured_periods.items():
+                    period_key = _normalized_period_key(configured_period, period_type)
+                    if period_key is None:
+                        continue
+                    period_mask = code_mask & (period_keys == period_key)
+                    if not period_mask.any():
+                        continue
+                    try:
+                        rate = float(configured_rate)
+                    except (TypeError, ValueError):
+                        continue
+                    if not np.isfinite(rate):
+                        continue
+                    rate = max(0.0, rate)
+
+                    period_rows = result.loc[period_mask]
+                    capacities = pd.to_numeric(
+                        period_rows['total_panels'], errors='coerce'
+                    ).fillna(0).clip(lower=0).to_numpy(dtype=float)
+                    target_total = int(np.round(rate * capacities.sum()))
+                    weights = pd.to_numeric(
+                        period_rows['defect_panel_count'], errors='coerce'
+                    ).fillna(0).clip(lower=0).to_numpy(dtype=float)
+                    result.loc[period_mask, 'defect_panel_count'] = _allocate_integer_counts(
+                        weights,
+                        capacities,
+                        target_total,
+                    )
+
+        _apply_period_overrides(monthly_values, 'monthly')
+        _apply_period_overrides(weekly_values, 'weekly')
+
+        for code, configured_days in (daily_values or {}).items():
+            if not isinstance(configured_days, dict):
+                continue
+            for configured_day, configured_rate in configured_days.items():
+                try:
+                    target_day = pd.to_datetime(configured_day).normalize()
+                    rate = float(configured_rate)
+                except (TypeError, ValueError):
+                    continue
+                if not np.isfinite(rate):
+                    continue
+                rate = max(0.0, rate)
+                day_mask = (
+                    (result['defect_desc'] == code)
+                    & (result['warehousing_time'].dt.normalize() == target_day)
+                )
+                if not day_mask.any():
+                    continue
+                capacities = pd.to_numeric(
+                    result.loc[day_mask, 'total_panels'], errors='coerce'
+                ).fillna(0).clip(lower=0).astype(int)
+                day_counts = np.round(rate * capacities).astype(int)
+                result.loc[day_mask, 'defect_panel_count'] = np.minimum(
+                    day_counts,
+                    capacities,
+                )
+
+        result['defect_panel_count'] = pd.to_numeric(
+            result['defect_panel_count'], errors='coerce'
+        ).fillna(0).clip(lower=0).astype(int)
+        return result
 
     # ==========================================================================
     #  主入口 1: Group 级趋势分析
@@ -115,14 +324,14 @@ class MWDTrendProcessor:
             d_vals = config.processing.get('code_daily_values', {})
 
             prod_code = config.data_source.product_code
-            monthly, weekly, daily = _execute_unified_pipeline(
+            _, _, automatic_daily = _execute_unified_pipeline(
                 raw_daily_df=raw_daily,
                 last_day=last_day,
                 calc_daily_ema_func=lambda df: _calc_code_ema_noise(df, ema_span, scaling_factor, volatility, config=config, prod_code=prod_code),
                 agg_funcs=(agg_monthly_func, agg_weekly_func),
                 reg_func=TrendRegulator.regulate_code_daily_base,
                 override_funcs=(_apply_code_manual_overrides, _apply_code_manual_overrides),
-                override_vals=(m_vals, w_vals),
+                override_vals=({}, {}),
                 gen_daily_func=_generate_code_daily_from_weekly_baseline,
                 scaling_factor=1.0, 
                 volatility=volatility,
@@ -131,13 +340,56 @@ class MWDTrendProcessor:
                 config=config
             )
 
-            daily = _apply_code_daily_manual_overrides(daily, d_vals)
+            calibrated_daily = MWDTrendProcessor.reconcile_code_daily_counts(
+                automatic_daily,
+                raw_daily,
+            )
+            daily = MWDTrendProcessor.apply_code_manual_overrides_to_daily(
+                calibrated_daily,
+                monthly_values=m_vals,
+                weekly_values=w_vals,
+                daily_values=d_vals,
+            )
+            monthly = agg_monthly_func(daily, last_day)
+            weekly = agg_weekly_func(daily, last_day)
             return _format_code_results(monthly, weekly, daily)
 
         except Exception as e:
             logging.error(f"Code趋势分析出错: {e}", exc_info=True)
             return None
         
+
+def create_mwd_trend_data(
+    panel_details_df: pd.DataFrame,
+    config: AppConfig,
+    resource_dir: Path | None = None,
+    ema_span: int = 7,
+    scaling_factor: float = 1.0,
+    volatility: float = 0.1,
+    target_end_date: dt | None = None,
+) -> Dict[str, pd.DataFrame] | None:
+    """Run the current Code-to-Group pipeline through the legacy public entrypoint."""
+    del resource_dir
+    code_results = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details_df=panel_details_df,
+        config=config,
+        ema_span=ema_span,
+        scaling_factor=scaling_factor,
+        volatility=volatility,
+        warning_lines={},
+        target_end_date=target_end_date,
+    )
+    if code_results is None:
+        return None
+    return MWDTrendProcessor.create_mwd_trend_data(
+        panel_details_df=panel_details_df,
+        mwd_code_data=code_results,
+        config=config,
+        scaling_factor=scaling_factor,
+        volatility=volatility,
+        target_end_date=target_end_date,
+    )
+
 
 def _execute_unified_pipeline(
     raw_daily_df: pd.DataFrame,
@@ -218,31 +470,25 @@ def _execute_unified_pipeline(
             # ================= [Code 级逻辑 (长表)] =================
             daily_skeleton = df_processing[['warehousing_time', 'total_panels']].drop_duplicates()
             
-            # [核心修复 1] 连坐阻断：只截取被覆盖的 Code 送去重塑
             weekly_to_rebuild = final_weekly[final_weekly['defect_desc'].isin(overridden_keys)].copy()
             
             if not weekly_to_rebuild.empty:
                 generated_daily = gen_daily_func(daily_skeleton, weekly_to_rebuild, **kwargs)
                 
                 if not generated_daily.empty:
-                    # [核心修复 2] 黑洞阻断：彻底放弃 update()，改用物理剔除 + 物理追加 (concat)
-                    # 先将旧的 EMA 大盘中被覆盖的 Code 连根拔起
                     final_daily = final_daily[~final_daily['defect_desc'].isin(overridden_keys)].copy()
-                    # 再把重塑出来的（包含新增日期行）的完整新数据追加进去
                     final_daily = pd.concat([final_daily, generated_daily], ignore_index=True)
                     
         else:
             # ================= [Group 级逻辑 (宽表)] =================
             daily_skeleton = df_processing[['total_panels']].copy()
             
-            # [核心修复 1] 连坐阻断：动态修改目标参数，让正弦波只重塑被覆盖的 Group 列
             kwargs_for_group = kwargs.copy()
             kwargs_for_group['target_defects'] = overridden_keys 
             
             generated_daily = gen_daily_func(daily_skeleton, final_weekly, **kwargs_for_group)
             
             if not generated_daily.empty:
-                # [核心修复 2] 宽表直接按列暴力覆盖，不存在黑洞问题
                 for g in overridden_keys:
                     if g in generated_daily.columns:
                         final_daily[g] = generated_daily[g]

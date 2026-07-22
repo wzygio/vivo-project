@@ -5,6 +5,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from src.shared_kernel.config import ConfigLoader
+from yield_domain.core.mwd_trend import mwd_trend_processor as trend_module
 from yield_domain.core.mwd_trend.mwd_trend_processor import create_mwd_trend_data
 
 # 1. 模拟输入数据 (Panel Level)
@@ -30,7 +31,7 @@ def mock_panel_df():
             
     return pd.DataFrame(data)
 
-def test_integration_override_logic(mock_panel_df):
+def test_integration_override_logic(mock_panel_df, monkeypatch):
     """
     [集成测试] 验证从 create_mwd_trend_data 入口调用时，配置覆盖是否生效。
     这将检测：数据清洗 -> Shadow EMA -> 聚合 -> 覆盖 的全流程。
@@ -47,12 +48,23 @@ def test_integration_override_logic(mock_panel_df):
     except Exception as e:
         pytest.fail(f"配置加载失败: {e}")
 
-    # 2. 验证配置中是否存在覆盖项
-    override_val = config.processing.get('group_monthly_values', {}).get('Array_Line', {}).get('2025-10')
-    print(f"📋 配置文件中 'Array_Line' 在 '2025-10' 的目标覆盖值: {override_val}")
-    
-    if override_val is None:
-        pytest.fail("❌ 测试前提失败：配置文件 M678.yaml 中未找到 Array_Line 2025-10 的覆盖值！")
+    # 2. 在测试内显式注入覆盖值，避免依赖可变的本地配置快照
+    override_val = 0.025
+    config.processing['group_monthly_values'] = {
+        'Array_Line': {'2025-11': override_val}
+    }
+    empty_baseline = pd.DataFrame(columns=trend_module.CODE_BASELINE_COLUMNS)
+    monkeypatch.setattr(
+        trend_module,
+        '_ensure_code_baseline_current',
+        lambda *args, **kwargs: empty_baseline,
+    )
+    monkeypatch.setattr(
+        trend_module,
+        '_load_code_baseline_frame',
+        lambda *args, **kwargs: empty_baseline,
+    )
+    print(f"📋 测试注入 'Array_Line' 在 '2025-11' 的目标覆盖值: {override_val}")
 
     # 3. 执行核心处理函数
     # 模拟 Service 层的调用方式
@@ -81,17 +93,17 @@ def test_integration_override_logic(mock_panel_df):
     print(df_monthly[['time_period', 'defect_group', 'defect_rate', 'total_panels']])
 
     # 5. 断言验证
-    # 找到 2025-10月, Array_Line 的数据
+    # 找到 2025-11月, Array_Line 的数据
     target_row = df_monthly[
-        (df_monthly['time_period'] == '2025-10月') & 
+        (df_monthly['time_period'] == '2025-11月') &
         (df_monthly['defect_group'] == 'Array_Line')
     ]
     
     if target_row.empty:
         # 可能是日期格式化问题 (%Y-%m月 vs %Y-%m)
-        print("⚠️ 未找到 '2025-10月' 的行，尝试模糊匹配...")
+        print("⚠️ 未找到 '2025-11月' 的行，尝试模糊匹配...")
         print("当前所有的 time_period:", df_monthly['time_period'].unique())
-        pytest.fail("❌ 结果中缺失 2025-10 数据行")
+        pytest.fail("❌ 结果中缺失 2025-11 数据行")
 
     actual_rate = target_row.iloc[0]['defect_rate']
     total_panels = target_row.iloc[0]['total_panels']

@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from fr_common_utils.excel import xlsx_to_csv
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.output_paths import OutputLayout
 
 # [Phase 1] 调试追踪专用 Logger
 trace_logger = logging.getLogger("trace")
@@ -14,7 +15,7 @@ trace_logger = logging.getLogger("trace")
 def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
     """
     [全链路数据探针 - 单文件多 Sheet 模式]
-    读取本地名单拦截目标数据，并将不同探针的数据输出到 logs/spc_probe_results.xlsx 
+    读取本地名单拦截目标数据，并将不同探针的数据输出到 output/logs/spc_probe_results.xlsx
     的不同 Sheet 中。永远不带时间戳，同名 Sheet 自动覆盖保留最新。
     """
     if df is None or df.empty:
@@ -92,8 +93,7 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
         if final_mask.any():
             hit_data = df[final_mask]
             
-            logs_dir = root_dir / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
+            logs_dir = OutputLayout.from_project_root(root_dir).ensure().logs
             
             # [核心改动 1] 固定输出文件名称，去除时间戳
             export_path = logs_dir / "spc_probe_results.xlsx"
@@ -111,7 +111,7 @@ def export_probed_details(df: pd.DataFrame, probe_name: str) -> None:
                 with pd.ExcelWriter(export_path, engine='openpyxl', mode='w') as writer:
                     hit_data.to_excel(writer, sheet_name=safe_sheet_name, index=False)
             
-            trace_logger.warning(f"🚨 [{probe_name}] 成功捕获 {len(hit_data)} 条明细！已覆盖更新至 logs/spc_probe_results.xlsx (Sheet: {safe_sheet_name})")
+            trace_logger.warning(f"🚨 [{probe_name}] 成功捕获 {len(hit_data)} 条明细！已覆盖更新至 output/logs/spc_probe_results.xlsx (Sheet: {safe_sheet_name})")
 
     except Exception as e:
         trace_logger.error(f"🚨 [{probe_name}] 探针导出异常: {e}")
