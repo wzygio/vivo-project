@@ -30,6 +30,10 @@ dependencies = [
     "pywin32>=311",
 ]
 
+[tool.pytest.ini_options]
+# src 布局：测试运行时同时可导入 src 下的顶级包与项目根目录的应用模块。
+pythonpath = ["src", "."]
+
 [tool.uv]
 # 开发依赖：仅在本地开发和测试时需要
 dev-dependencies = [

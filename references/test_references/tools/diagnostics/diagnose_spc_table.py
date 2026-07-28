@@ -1,13 +1,11 @@
 # 🎯 Target File: tests/integration/diagnose_spc_table.py
 
-import sys
-from pathlib import Path
 import pandas as pd
 from sqlalchemy import text
+from _bootstrap import configure_project_imports
 
 # 将项目根目录加入 sys.path
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root))
+project_root = configure_project_imports(__file__)
 
 from shared_kernel.infrastructure.db_handler import DatabaseManager
 

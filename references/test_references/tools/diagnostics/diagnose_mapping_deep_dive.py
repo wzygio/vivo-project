@@ -1,7 +1,10 @@
 # tests/diagnose_mapping_deep_dive.py
 import pandas as pd
-import sys
 import logging
+from _bootstrap import configure_project_imports
+
+configure_project_imports(__file__)
+
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.yield_service import YieldAnalysisService
 
@@ -14,7 +17,7 @@ from yield_domain.core.mapping.mapping_processor import (
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-def test_deep_dive():
+def run_deep_dive_diagnosis():
     print("\n" + "="*80)
     print("🔬 Mapping 核心数据“核磁共振”诊断")
     print("="*80)
@@ -109,4 +112,4 @@ def test_deep_dive():
         print(f"❌ 执行崩溃: {e}")
 
 if __name__ == "__main__":
-    test_deep_dive()
+    run_deep_dive_diagnosis()

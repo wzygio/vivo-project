@@ -1,14 +1,11 @@
 # tests/diagnose_config.py
-import sys
 import pandas as pd
 import logging
-from pathlib import Path
 from datetime import datetime
+from _bootstrap import configure_project_imports
 
 # 1. 确保能导入 src 目录
-current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
-sys.path.append(str(project_root / "src"))
+project_root = configure_project_imports(__file__)
 
 # 配置日志输出到控制台
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -22,9 +19,9 @@ try:
     from yield_domain.core.mwd_trend.mwd_trend_processor import _apply_manual_overrides
 except ImportError as e:
     print(f"❌ 导入失败，请检查环境: {e}")
-    sys.exit(1)
+    raise RuntimeError("诊断脚本导入失败，请检查环境") from e
 
-def test_config_injection():
+def run_config_injection_diagnosis():
     print("\n" + "="*50)
     print("🕵️‍♂️ 开始配置加载与覆盖逻辑集成测试")
     print("="*50)
@@ -117,4 +114,4 @@ def test_config_injection():
         print(f"❌ 覆盖逻辑执行崩溃: {e}")
 
 if __name__ == "__main__":
-    test_config_injection()
+    run_config_injection_diagnosis()

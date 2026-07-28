@@ -1,9 +1,11 @@
 # tests/diagnose_streamlit_env.py
 import streamlit as st
 import os
-import sys
 import logging
 from pathlib import Path
+from _bootstrap import configure_project_imports
+
+configure_project_imports(__file__)
 
 # 引入项目配置
 from src.shared_kernel.config import ConfigLoader

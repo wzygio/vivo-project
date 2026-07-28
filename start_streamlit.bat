@@ -22,7 +22,7 @@ IF EXIST "Vivo_project\Scripts\activate.bat" (
 )
 
 REM ========================================================
-REM 3. 启动 Streamlit (使用 pythonw)
+REM 3. 启动 Streamlit
 REM ========================================================
 ECHO [INFO] Step 2: Starting Integrated Portal on Port 8503...
 uv run streamlit run app/Home.py --server.headless true --server.port 8503

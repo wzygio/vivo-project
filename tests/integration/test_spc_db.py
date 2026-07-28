@@ -1,13 +1,10 @@
-import sys
 from pathlib import Path
 import pandas as pd
 from sqlalchemy import text
 import pytest # 引入 pytest 用于断言和测试控制
 from dotenv import load_dotenv
 
-# 动态将项目根目录加入 sys.path，确保能够正常 import src 模块
 project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 # =========================================================================
 # [核心修复] 在导入 DatabaseManager 之前，强制把 .env 文件注入到环境变量中

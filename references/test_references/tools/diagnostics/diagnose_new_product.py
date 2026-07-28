@@ -1,8 +1,9 @@
 # tests/diagnose_new_product.py
-import sys
 import logging
-from pathlib import Path
 import pandas as pd
+from _bootstrap import configure_project_imports
+
+configure_project_imports(__file__)
 
 # 引入核心组件
 from src.shared_kernel.config import ConfigLoader
@@ -12,7 +13,7 @@ from yield_domain.application.yield_service import YieldAnalysisService
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-def test_new_product_integration(target_product: str = "C472"):
+def run_new_product_diagnosis(target_product: str = "C472"):
     print("\n" + "="*60)
     print(f"🚀 新产品集成诊断: {target_product}")
     print("="*60)
@@ -82,4 +83,4 @@ def test_new_product_integration(target_product: str = "C472"):
 
 if __name__ == "__main__":
     # 您可以在这里修改要测试的产品型号
-    test_new_product_integration("C472")
+    run_new_product_diagnosis("C472")

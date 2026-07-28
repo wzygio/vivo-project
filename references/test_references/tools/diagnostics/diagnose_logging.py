@@ -1,14 +1,15 @@
 # tests/diagnose_logging_standalone.py
 import logging
 import time
-import sys
-from pathlib import Path
+from _bootstrap import configure_project_imports
+
+configure_project_imports(__file__)
 
 # 引入项目模块
 from app.utils.logger_setup import setup_logging
 from src.shared_kernel.config import ConfigLoader
 
-def test_logging():
+def run_logging_diagnosis():
     print("="*60)
     print("📋 日志系统独立诊断 (Standalone Mode)")
     print("="*60)
@@ -69,4 +70,4 @@ def test_logging():
         print("👉 可能原因：文件流被缓冲(Buffer)未刷新，或者 Handler 配置被意外修改。")
 
 if __name__ == "__main__":
-    test_logging()
+    run_logging_diagnosis()

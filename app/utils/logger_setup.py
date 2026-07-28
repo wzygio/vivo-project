@@ -1,11 +1,24 @@
 import logging
-from logging.handlers import TimedRotatingFileHandler # 引入企业级的时间轮转 Handler
+from logging.handlers import TimedRotatingFileHandler  # 引入企业级的时间轮转 Handler
 import sys
-from pathlib import Path
+
 import streamlit as st
 
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.output_paths import OutputLayout
+
+
+def _write_logging_setup_error(error: Exception) -> None:
+    """Report a handler-setup failure without depending on the console encoding."""
+    message = f"Logging file-handler setup failed; using console-only logging: {error!r}\n"
+    stderr_buffer = getattr(sys.stderr, "buffer", None)
+    if stderr_buffer is not None:
+        stderr_buffer.write(message.encode("utf-8", errors="backslashreplace"))
+        stderr_buffer.flush()
+        return
+
+    sys.stderr.write(message)
+
 
 @st.cache_resource
 def setup_logging(base_filename: str = "app"):
@@ -51,6 +64,7 @@ def setup_logging(base_filename: str = "app"):
 
     DOMAIN_MARKERS = ["inline_domain", "yield_domain", "shared_kernel"]
 
+    handler_setup_error: Exception | None = None
     try:
         # =========================================================
         #  通道 1：全量流水日志 (按天轮转)
@@ -119,8 +133,12 @@ def setup_logging(base_filename: str = "app"):
         trace_handler.setFormatter(formatter)
         trace_logger.addHandler(trace_handler)
 
-    except Exception as e:
-        print(f"❌ 严重错误：无法初始化企业级日志 Handler: {e}")
+    except Exception as error:
+        handler_setup_error = error
+        for handler in root_logger.handlers[:]:
+            handler.close()
+            root_logger.removeHandler(handler)
+        _write_logging_setup_error(error)
 
     # 控制台 Handler (供开发者本地实时观测)
     if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
@@ -128,6 +146,12 @@ def setup_logging(base_filename: str = "app"):
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
 
-    logging.info("✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)")
+    if handler_setup_error is None:
+        logging.info("✅ 企业级日志系统已启动 (用途 × 领域 二维隔离 | 午夜自动轮转)")
+    else:
+        logging.error(
+            "Logging file handlers are unavailable; console-only logging is active: %r",
+            handler_setup_error,
+        )
     
     return root_logger
