@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+import hashlib
 import logging
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 import streamlit as st
 
@@ -8,12 +11,87 @@ from src.shared_kernel.config_model import AppConfig
 from app.utils.session_manager import SessionManager
 
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
+PRODUCT_CACHE_REVISION_DIR = Path("output") / "tmp" / "product_cache_revisions"
+
+
+def _product_cache_revision_path(
+    product_code: str,
+    revision_dir: Path = PRODUCT_CACHE_REVISION_DIR,
+) -> Path:
+    normalized_product = str(product_code).strip().upper()
+    product_digest = hashlib.sha256(normalized_product.encode("utf-8")).hexdigest()[:16]
+    return revision_dir / f"{product_digest}.revision"
+
+
+def get_product_cache_revision(
+    product_code: str,
+    *,
+    revision_dir: Path = PRODUCT_CACHE_REVISION_DIR,
+) -> str:
+    """Return the shared invalidation revision for one product."""
+    revision_path = _product_cache_revision_path(product_code, revision_dir)
+    try:
+        revision = revision_path.read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, OSError):
+        return "0"
+    return revision or "0"
+
+
+def bump_product_cache_revision(
+    product_code: str,
+    *,
+    revision_dir: Path = PRODUCT_CACHE_REVISION_DIR,
+) -> str:
+    """Invalidate one product's versioned cache keys without touching other products."""
+    revision_path = _product_cache_revision_path(product_code, revision_dir)
+    revision_path.parent.mkdir(parents=True, exist_ok=True)
+    revision = uuid4().hex
+    temporary_path = revision_path.with_name(f"{revision_path.name}.{revision}.tmp")
+    temporary_path.write_text(revision, encoding="utf-8")
+    temporary_path.replace(revision_path)
+    return revision
+
+
+def build_product_cache_signature(
+    base_signature: str,
+    product_code: str,
+    *,
+    revision_dir: Path = PRODUCT_CACHE_REVISION_DIR,
+) -> str:
+    """Attach the selected product's shared revision to a page cache signature."""
+    normalized_product = str(product_code).strip().upper()
+    revision = get_product_cache_revision(
+        normalized_product,
+        revision_dir=revision_dir,
+    )
+    return f"{base_signature}|product={normalized_product}|revision={revision}"
+
+
+def invalidate_page_cache(
+    cached_funcs: list | None = None,
+    *,
+    product_code: str | None = None,
+) -> str:
+    """Invalidate one product when scoped, otherwise preserve legacy global clearing."""
+    if product_code:
+        bump_product_cache_revision(product_code)
+        return "product"
+
+    if cached_funcs:
+        for func in cached_funcs:
+            if hasattr(func, "clear"):
+                func.clear()
+    else:
+        st.cache_data.clear()
+        st.cache_resource.clear()
+    return "global"
 
 def render_page_header(
     title: Optional[str] = None, 
     config: AppConfig = None, 
     cached_funcs: list = None,
-    refresh_handlers: list = None
+    refresh_handlers: list = None,
+    product_cache_scope: str | None = None,
 ):
     # =========================================================================
     # [新增] Admin 隐身模式 (Stealth Mode)
@@ -57,35 +135,28 @@ def render_page_header(
         st.toast("✅ 数据快照刷新完成。需要重读页面缓存时，请点击“刷新缓存”。", icon="🎉")
         logging.info("🔄 [UI] L1 数据快照刷新完毕，未清除 Streamlit L2 缓存。")
 
-    # [企业级] 精准 "刷新缓存 + 模块重载" 回调
-    #
-    # 执行顺序必须严格保持以下链条：
-    #   1. func.clear()         ─ 旧模块函数尚存活，.clear() 正常生效
-    #   2. deep_reload_modules()─ 卸载 sys.modules 中的旧模块
-    #   3. 清除页面视图缓存      ─ 强制下次重算 view model
-    #   4. st.rerun()           ─ 重新 import → 加载新代码 → 重新渲染页面
+    # 产品页面通过共享版本键仅失效当前产品；聚合/无产品页面保留旧的
+    # func.clear() + 模块重载行为。
     def _hard_reset_callback():
-        # ---- 阶段 1: 清除数据缓存 (旧模块函数仍有效) ----
-        if cached_funcs:
-            for func in cached_funcs:
-                if hasattr(func, "clear"):
-                    func.clear()
-        else:
-            st.cache_data.clear()
-            st.cache_resource.clear()
+        # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
+        cache_scope = invalidate_page_cache(
+            cached_funcs,
+            product_code=product_cache_scope,
+        )
         
         # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
         for key in list(st.session_state.keys()):
             if "view_model" in key: # type: ignore
                 del st.session_state[key]
         
-        # ---- 阶段 3: 卸载旧模块，强制下次 import 读取磁盘新代码 ----
-        try:
-            from app.utils.reloader import deep_reload_modules
-            deep_reload_modules()
-            logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
-        except ImportError:
-            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
+        # ---- 阶段 3: 全量模式继续热重载；产品模式不扰动其它产品/会话 ----
+        if cache_scope == "global":
+            try:
+                from app.utils.reloader import deep_reload_modules
+                deep_reload_modules()
+                logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
+            except ImportError:
+                logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
         
         # ---- 阶段 4: 清除页面级签名/视图状态，按钮点击后才允许缓存失效 ----
         for key in list(st.session_state.keys()):
@@ -98,8 +169,10 @@ def render_page_header(
             ):
                 del st.session_state[key]
         
-        st.toast("🔄 缓存已刷新 · 模块已重载", icon="✅")
-        st.rerun()
+        if cache_scope == "product":
+            st.toast(f"🔄 {product_cache_scope} 缓存已刷新", icon="✅")
+        else:
+            st.toast("🔄 缓存已刷新 · 模块已重载", icon="✅")
 
     # --- 渲染控制栏 ---
     with st.container(border=True):
@@ -137,7 +210,11 @@ def render_page_header(
                 key=f"btn_clear_{title}",
                 on_click=_hard_reset_callback,
                 use_container_width=True,
-                help="清除当前报表缓存并重载代码；普通浏览器刷新不会触发。"
+                help=(
+                    f"仅刷新产品 {product_cache_scope} 的当前报表缓存。"
+                    if product_cache_scope
+                    else "清除当前报表缓存并重载代码；普通浏览器刷新不会触发。"
+                )
             )
 
 def extract_cached_funcs(*services) -> list:

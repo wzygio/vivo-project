@@ -40,11 +40,12 @@ processing:
     'G向单亮线': 0.5
     'G向单暗线': 0.8
     # Array_Pixel
-    '暗点': 0.7
+    '暗点': 0.5
     '群暗点': 0.8
     'G3亮点': 0.2
     '群亮点': 0.3
     '大面积亮点': 0
+    'HBM亮点': 0
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0

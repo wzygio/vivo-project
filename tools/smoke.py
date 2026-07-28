@@ -32,7 +32,7 @@ SMOKE_PATTERNS: dict[str, tuple[str, ...]] = {
         "tests/unit/test_mapping_*.py",
         "tests/unit/test_override_logic.py",
         "tests/unit/test_shadow_ema.py",
-        "tests/unit/test_sheet_lot_processor.py",
+        "tests/unit/test_sheet_lot_*.py",
         "tests/unit/test_yield_*.py",
     ),
 }

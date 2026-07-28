@@ -19,11 +19,31 @@
 - Code-level MWD treats the post-`defect_multipliers` Panel detail as its monthly
   integer count authority: EMA defines the daily shape, monthly reconciliation
   restores each Code total, manual month/week/day overrides run afterward, and
-  final week/month outputs are rebuilt from daily data. Batch Mapping remains an
-  independent rate-decay and coordinate-modification pipeline.
+  final week/month outputs are rebuilt from daily data. Its `weekly_full` output
+  retains the complete three-calendar-month calculation window for downstream
+  consumers, while `weekly` remains the latest three periods for presentation.
+  Batch Mapping remains an independent rate-decay and coordinate-modification
+  pipeline. Mapping resolves
+  one effective product/Code/batch modification plan before coordinate handling.
+  With no matching configuration it uses the deterministic position offset;
+  explicit `original`, `random`, additive, and multiplicative plans preserve
+  source Panel coordinates and execute only their selected matrix behavior.
+  Mapping row/column labels come from the product `processing.mapping_layout`;
+  products without it use the standard 10 × 19 layout.
+- Lot-level Yield simulation maps each Lot's warehousing date to its owning ISO
+  week and uses the matching Code-level MWD `weekly_full` rate as its baseline.
+  It does not fall back to raw Lot defects when a period is absent. For each
+  Code-week it rounds only the aggregate expected defect total, then distributes
+  those integer tokens across Lots with stable weighted noise.
+  Capping and explicit overrides run afterward; Sheet allocation continues to
+  consume the resulting Lot token counts.
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
+- Product-aware report pages include a shared per-product revision in their
+  Streamlit cache signatures. The page-header cache action advances only the
+  selected product revision; aggregate and non-product reports retain the
+  legacy whole-function clear behavior.
 - The equipment report keeps database and fabricated current-value snapshots in
   independent signature-addressed files. Its application service matches each
   specification against the database snapshot first and consults the fabricated
@@ -35,6 +55,11 @@
   and exposes only Sheet/point distributions plus backend-selected chart type.
   Both reuse the physical `SpcRepository`; CTQ OOS resources are isolated under
   `resources/<product>/ctq/`.
+- SPC treats `resources/<product>/spc_cpk_decoration.xlsx` as user-maintained
+  state. It joins `cpk_corrected` and `flag` onto freshly generated CPK details
+  by the six period key columns, reads enterprise-encrypted workbooks through
+  the local Excel COM fallback, and never regenerates an existing decoration
+  file during report refresh.
 - Plain Excel-to-CSV export used by the SPC probe workflow comes from the local
   `fr-common-utils[excel]` dependency through `fr_common_utils.excel`. The
   project-specific encrypted-workbook COM fallback, configuration models,

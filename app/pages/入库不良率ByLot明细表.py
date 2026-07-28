@@ -6,7 +6,11 @@ from app.utils.session_manager import SessionManager
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 from yield_domain.application.yield_service import YieldAnalysisService
-from app.components.page_header import extract_cached_funcs, render_page_header
+from app.components.page_header import (
+    build_product_cache_signature,
+    extract_cached_funcs,
+    render_page_header,
+)
 
 # 引入区块渲染组件
 from app.sections.table_details import (
@@ -23,6 +27,10 @@ active_config = SessionManager.get_active_config()
 product_dir = SessionManager.get_product_dir()
 
 YIELD_LOT_DETAIL_CACHE_SIGNATURE = "yield_lot_detail_manual_refresh_v1"
+product_cache_signature = build_product_cache_signature(
+    YIELD_LOT_DETAIL_CACHE_SIGNATURE,
+    active_config.data_source.product_code,
+)
 
 db_manager = DatabaseManager()
 
@@ -30,6 +38,7 @@ render_page_header(
     "📋 入库不良率ByLot明细表",
     active_config,
     cached_funcs=extract_cached_funcs(YieldAnalysisService),
+    product_cache_scope=active_config.data_source.product_code,
     refresh_handlers=[
         lambda: YieldAnalysisService.safe_refresh_snapshots(
             db_manager,
@@ -44,7 +53,7 @@ all_data = YieldAnalysisService.get_lot_defect_rates(
     config=active_config,
     product_dir=product_dir,
     _db_manager=db_manager,
-    snapshot_signature=YIELD_LOT_DETAIL_CACHE_SIGNATURE
+    snapshot_signature=product_cache_signature
 )
 
 # --- 4. 页面积木式调度 ---

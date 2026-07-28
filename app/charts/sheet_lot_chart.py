@@ -4,6 +4,11 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+from yield_domain.core.mapping.layout import resolve_mapping_layout
+from yield_domain.core.mapping.panel_position import (
+    parse_panel_id_to_coords as _parse_panel_id_to_coords,
+)
+
 # -----------------------------------------------------------------------------
 #  Lot 级图表 (ByCode 查询 Lot 集中性)
 # -----------------------------------------------------------------------------
@@ -185,36 +190,39 @@ MAPPING_HEATMAP_COLOR_SCALE = [
 ]
 
 
-def parse_panel_id_to_coords(panel_id: str) -> tuple | None:
+def parse_panel_id_to_coords(
+    panel_id: str,
+    mapping_layout: dict | None = None,
+) -> tuple | None:
     """解析 Panel ID 为 (row, col) 坐标"""
-    if not isinstance(panel_id, str) or len(panel_id) < 15: return None
-    row_code, col_code = panel_id[11:13], panel_id[13:15]
-    row_map = {'1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4, '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9}
-    
-    try:
-        col_char = col_code[0]
-        col_map_index = ord(col_char) - ord('A')
-        row_index = row_map.get(row_code)
-        if row_index is not None and 0 <= col_map_index < 19:
-            return (row_index, col_map_index)
-    except:
-        return None
-    return None
+    return _parse_panel_id_to_coords(panel_id, mapping_layout)
 
-def create_mapping_heatmap(matrix_df: pd.DataFrame, title: str, global_max_value: int) -> go.Figure:
+
+def create_mapping_heatmap(
+    matrix_df: pd.DataFrame,
+    title: str,
+    global_max_value: int,
+    mapping_layout: dict | None = None,
+) -> go.Figure:
     """绘制 Mapping 热力图"""
+    layout = resolve_mapping_layout(mapping_layout)
     fig = px.imshow(
         matrix_df, text_auto=True, aspect="auto",
         color_continuous_scale=MAPPING_HEATMAP_COLOR_SCALE,
         labels=dict(x="列 (Column)", y="行 (Row)", color="不良数"), title=title,
         zmin=0, zmax=max(1, global_max_value)
     )
-    row_labels = ['1A', '1B', '1C', '1D', '1E', '2A', '2B', '2C', '2D', '2E']
-    col_labels = [f"{chr(ord('A') + i)}0" for i in range(19)]
-    
     fig.update_layout(
-        xaxis=dict(tickmode='array', tickvals=list(range(19)), ticktext=col_labels),
-        yaxis=dict(tickmode='array', tickvals=list(range(10)), ticktext=row_labels),
+        xaxis=dict(
+            tickmode='array',
+            tickvals=list(range(len(layout.column_labels))),
+            ticktext=list(layout.column_labels),
+        ),
+        yaxis=dict(
+            tickmode='array',
+            tickvals=list(range(len(layout.row_labels))),
+            ticktext=list(layout.row_labels),
+        ),
         xaxis_side='top', height=450
     )
     fig.update_yaxes(autorange="reversed")

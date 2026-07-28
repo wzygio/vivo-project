@@ -36,6 +36,7 @@ def test_yield_smoke_resolves_yield_contracts_without_spc_tests() -> None:
 
     assert "test_yield_global_data_policy.py" in target_names
     assert "test_mapping_random_modification.py" in target_names
+    assert "test_sheet_lot_weekly_baseline.py" in target_names
     assert all(not name.startswith("test_spc_") for name in target_names)
 
 

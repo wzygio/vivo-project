@@ -217,7 +217,11 @@ class YieldAnalysisService:
         _, target_end_dt = YieldAnalysisService.get_time_window()
         
         # [新增] 提前加载警戒线配置，准备下发给底层调节器
-        warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
+        warning_lines = YieldAnalysisService.load_static_warning_lines(
+            config,
+            product_dir,
+            snapshot_signature,
+        )
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
@@ -248,13 +252,22 @@ class YieldAnalysisService:
 
         # 1. 独立获取 Array Time (不再依赖 Sheet 结果)
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config, _db_manager)
+        array_times_df = YieldAnalysisService._get_array_times(
+            tuple(lot_ids),
+            config,
+            _db_manager,
+            snapshot_signature,
+        )
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config, product_dir, _db_manager, snapshot_signature, ema_span, scaling_factor
         )
-        warning_lines = YieldAnalysisService.load_static_warning_lines(config, product_dir)
+        warning_lines = YieldAnalysisService.load_static_warning_lines(
+            config,
+            product_dir,
+            snapshot_signature,
+        )
 
         # 3. 核心计算
         return calculate_lot_defect_rates(
@@ -280,7 +293,12 @@ class YieldAnalysisService:
         if panel_df.empty: return None
 
         lot_ids = panel_df['lot_id'].unique().tolist()
-        array_times_df = YieldAnalysisService._get_array_times(tuple(lot_ids), config, _db_manager)
+        array_times_df = YieldAnalysisService._get_array_times(
+            tuple(lot_ids),
+            config,
+            _db_manager,
+            snapshot_signature,
+        )
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
@@ -305,14 +323,25 @@ class YieldAnalysisService:
         """准备 Mapping 数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return pd.DataFrame()
-        return prepare_mapping_data(panel_details_df=panel_df, scaling_factor=scaling_factor)
+        return prepare_mapping_data(
+            panel_details_df=panel_df,
+            scaling_factor=scaling_factor,
+            hotspot_scripts=config.processing.get('mapping_hotspot_script', []),
+            product_code=config.data_source.product_code,
+            mapping_layout=config.processing.get('mapping_layout'),
+        )
 
     # ==========================================================================
     #  内部辅助方法 (依然需要缓存)
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def _get_array_times(lot_ids: Tuple[str, ...], config: AppConfig, _db_manager: Optional['DatabaseManager'] = None) -> pd.DataFrame:
+    def _get_array_times(
+        lot_ids: Tuple[str, ...],
+        config: AppConfig,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+    ) -> pd.DataFrame:
         """独立的 Array Time 查询缓存"""
         if not lot_ids: return pd.DataFrame()
         
@@ -336,7 +365,11 @@ class YieldAnalysisService:
     
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def load_static_warning_lines(config: AppConfig, product_dir: Path) -> Dict[str, Any]:
+    def load_static_warning_lines(
+        config: AppConfig,
+        product_dir: Path,
+        snapshot_signature: str = "",
+    ) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
         读取警戒线配置 (完全依赖注入，重构为高内聚的列提取逻辑)

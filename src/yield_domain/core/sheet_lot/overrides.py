@@ -9,6 +9,8 @@ import comtypes.client
 import numpy as np
 import pandas as pd
 
+from src.yield_domain.core.sheet_lot.simulation import _to_iso_week_keys
+
 def _load_override_excel(
     override_file_path: Optional[Path],
     override_sheet_name: str
@@ -115,7 +117,7 @@ def _calculate_lot_override_rate_heuristic(
 ) -> pd.DataFrame:
     """
     [新增 V1.0 - 启发式公式] 计算 Lot 级覆盖良损。
-    公式: LotRate = 当月良损 + (同卡Sheet良损之和) / (30 + 同卡Sheet数)
+    公式: LotRate = 所属周良损 + (同卡Sheet良损之和) / (30 + 同卡Sheet数)
     """
     logging.info("开始使用启发式公式计算 Lot 级覆盖不良率...")
     
@@ -131,9 +133,9 @@ def _calculate_lot_override_rate_heuristic(
             sheet_count='count'
         ).reset_index()
         
-        # 2. 准备 "当月良损" (Base Rate)
+        # 2. 准备 Lot 所属 ISO 周的良损基准
         # -----------------------------------------------------------
-        # 需要先获取每个 Lot 的时间，以便匹配月度数据
+        # 需要先获取每个 Lot 的时间，以便匹配周度数据
         if lot_base_info_df is not None and not lot_base_info_df.empty:
             # 仅保留需要的列
             lot_dates = lot_base_info_df[['lot_id', 'warehousing_time']].drop_duplicates()
@@ -141,29 +143,41 @@ def _calculate_lot_override_rate_heuristic(
             lot_stats = pd.merge(lot_stats, lot_dates, on='lot_id', how='left')
         else:
             lot_stats['warehousing_time'] = pd.NaT
-            logging.warning("缺少 Lot 基础信息，无法匹配当月良损，将默认当月良损为 0。")
+            logging.warning("缺少 Lot 基础信息，无法匹配所属周良损，将默认基准为 0。")
 
-        # 将时间转换为 YYYY-MM 格式以匹配 mwd_code_data
-        lot_stats['time_period'] = pd.to_datetime(
-            lot_stats['warehousing_time'], format='%Y%m%d', errors='coerce'
-        ).dt.strftime('%Y-%m月')
+        lot_stats["time_period"] = _to_iso_week_keys(
+            lot_stats["warehousing_time"]
+        )
         
-        # 从 mwd_code_data 中提取月度基准
-        monthly_map = {}
-        if mwd_code_data and 'monthly' in mwd_code_data:
-            df_monthly = mwd_code_data['monthly']
-            if not df_monthly.empty and {'time_period', 'defect_desc', 'defect_rate'}.issubset(df_monthly.columns):
-                # 构建查找字典: (时间, 描述) -> 率
-                # 预处理：确保 rate 是 float
-                df_monthly['defect_rate'] = pd.to_numeric(df_monthly['defect_rate'], errors='coerce').fillna(0)
-                monthly_map = df_monthly.set_index(['time_period', 'defect_desc'])['defect_rate'].to_dict()
+        weekly_map = {}
+        df_weekly = None
+        if mwd_code_data:
+            df_weekly = mwd_code_data.get("weekly_full")
+            if df_weekly is None or df_weekly.empty:
+                df_weekly = mwd_code_data.get("weekly")
+        if df_weekly is not None:
+            df_weekly = df_weekly.copy()
+            required_columns = {"time_period", "defect_desc", "defect_rate"}
+            if not df_weekly.empty and required_columns.issubset(df_weekly.columns):
+                df_weekly["time_period"] = (
+                    df_weekly["time_period"]
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
+                df_weekly["defect_rate"] = pd.to_numeric(
+                    df_weekly["defect_rate"], errors="coerce"
+                ).fillna(0)
+                weekly_map = df_weekly.set_index(
+                    ["time_period", "defect_desc"]
+                )["defect_rate"].to_dict()
             else:
-                logging.warning("月度趋势数据格式不正确或为空。")
+                logging.warning("周度趋势数据格式不正确或为空。")
 
         # 定义查找函数
         def get_base_rate(row):
             key = (row.get('time_period'), row['defect_desc'])
-            return monthly_map.get(key, 0.0)
+            return weekly_map.get(key, 0.0)
 
         # 应用查找
         lot_stats['base_rate'] = lot_stats.apply(get_base_rate, axis=1)

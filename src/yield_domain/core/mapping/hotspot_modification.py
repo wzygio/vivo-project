@@ -1,10 +1,27 @@
 import hashlib
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
+
+from src.yield_domain.core.mapping.layout import resolve_mapping_layout
+
+
+_LINE_HOTSPOT_RANDOM_MAX = 2
+DEFAULT_POSITION_MODIFICATION_MODE = 'deterministic_position'
+
+
+@dataclass(frozen=True)
+class MappingModificationPlan:
+    mode: str
+    scripts: tuple[dict[str, Any], ...] = ()
+
+    @property
+    def applies_default_position_modification(self) -> bool:
+        return self.mode == DEFAULT_POSITION_MODIFICATION_MODE
 
 
 @staticmethod
@@ -16,6 +33,7 @@ def apply_hotspot_modification_to_matrix(
     total_batches: int,         # [新增] 批次总数，用于解析负索引
     script_config_list: list,
     product_code: Optional[str] = None,
+    mapping_layout: Optional[dict[str, Any]] = None,
 ) -> pd.DataFrame:
     """
     [V4.0 - 产品/Code/批次精确匹配 + 多模式修饰]
@@ -28,34 +46,29 @@ def apply_hotspot_modification_to_matrix(
     """
     try:
         # --- [核心逻辑 1] 搜索匹配的脚本 ---
-        matched_scripts = []
-        for script in script_config_list:
-            if not _mapping_script_matches(
-                script=script,
-                product_code=product_code,
-                code_desc=code_desc,
-                batch_no=batch_no,
-                batch_position=batch_position,
-                total_batches=total_batches,
-            ):
-                continue
-            matched_scripts.append(script)
+        plan = resolve_mapping_modification_plan(
+            script_config_list=script_config_list,
+            product_code=product_code,
+            code_desc=code_desc,
+            batch_no=batch_no,
+            batch_position=batch_position,
+            total_batches=total_batches,
+        )
 
-        # 如果没有匹配的脚本，则返回原始矩阵
-        if not matched_scripts:
-            logging.debug(f"未找到 Code '{code_desc}' / 位置({batch_position}/{total_batches}) 的匹配修饰脚本，跳过。")
+        if plan.applies_default_position_modification:
+            logging.debug(
+                f"Code '{code_desc}' / 位置({batch_position}/{total_batches}) "
+                "使用默认确定性坐标偏移，无需矩阵修饰。"
+            )
             return heatmap_matrix
 
         logging.info(f"为批次 {batch_no} (Code: {code_desc}) 应用匹配的Mapping热点修饰脚本...")
 
         # --- [核心逻辑 2] 使用匹配到的脚本字典执行操作 ---
-        # 1. 加载第一个匹配模式；同一模式的后续脚本可叠加热点规则。
-        first_script = matched_scripts[0]
-        mode = _normalize_mapping_mode(first_script.get('mode', 'multiplicative'))
-        mode_scripts = [
-            script for script in matched_scripts
-            if _normalize_mapping_mode(script.get('mode', 'multiplicative')) == mode
-        ]
+        # 1. 修饰方案已锁定唯一模式，并仅保留最高优先级同层的同模式脚本。
+        first_script = plan.scripts[0]
+        mode = plan.mode
+        mode_scripts = list(plan.scripts)
 
         if mode in {'original', 'raw', 'none'}:
             return heatmap_matrix
@@ -74,12 +87,16 @@ def apply_hotspot_modification_to_matrix(
                 variation=random_variation,
             )
 
-        # 2. 准备“翻译器” (10行 x 21列) - (保持不变)
+        # 2. 使用产品 Mapping 布局建立坐标翻译器
+        layout = resolve_mapping_layout(mapping_layout)
         row_name_to_index = {
-            '1A': 0, '1B': 1, '1C': 2, '1D': 3, '1E': 4,
-            '2A': 5, '2B': 6, '2C': 7, '2D': 8, '2E': 9
+            label: index
+            for index, label in enumerate(layout.row_labels)
         }
-        col_name_to_index = {f"{chr(ord('A') + i)}0": i for i in range(21)} # 确认是21列
+        col_name_to_index = {
+            label: index
+            for index, label in enumerate(layout.column_labels)
+        }
 
         # 3. 创建“高发区蒙版” (保持不变)
         def _build_hotspot_mask(rules: list) -> pd.DataFrame:
@@ -109,6 +126,12 @@ def apply_hotspot_modification_to_matrix(
                                hotspot_mask.iloc[row_idx, col_idx] = True # 使用 iloc
             return hotspot_mask
 
+        line_hotspot_mask = pd.DataFrame(
+            np.full(heatmap_matrix.shape, False),
+            index=heatmap_matrix.index,
+            columns=heatmap_matrix.columns,
+        )
+
         # 5. 根据模式，应用数学逻辑
         if mode == 'additive':
             norm_add = _to_number(first_script.get('normal_multiplier_in_add_mode'), 0)
@@ -125,11 +148,19 @@ def apply_hotspot_modification_to_matrix(
                 columns=heatmap_matrix.columns,
             )
             for script in mode_scripts:
-                hotspot_mask = _build_hotspot_mask(script.get('hotspot_rules', []))
+                hotspot_rules = script.get('hotspot_rules', [])
+                hotspot_mask = _build_hotspot_mask(hotspot_rules)
                 new_hotspots = hotspot_mask & ~assigned_hotspots
                 if new_hotspots.to_numpy().any():
                     hot_add = _to_number(script.get('hotspot_adder'), 0)
                     add_matrix = add_matrix.mask(new_hotspots, hot_add)
+                    line_rules = [
+                        rule for rule in hotspot_rules
+                        if rule.get('type') in {'row', 'col'}
+                    ]
+                    line_hotspot_mask = line_hotspot_mask | (
+                        _build_hotspot_mask(line_rules) & new_hotspots
+                    )
                     assigned_hotspots = assigned_hotspots | new_hotspots
 
             modified_matrix = heatmap_matrix + add_matrix
@@ -149,13 +180,31 @@ def apply_hotspot_modification_to_matrix(
                 columns=heatmap_matrix.columns,
             )
             for script in mode_scripts:
-                hotspot_mask = _build_hotspot_mask(script.get('hotspot_rules', []))
+                hotspot_rules = script.get('hotspot_rules', [])
+                hotspot_mask = _build_hotspot_mask(hotspot_rules)
                 new_hotspots = hotspot_mask & ~assigned_hotspots
                 if new_hotspots.to_numpy().any():
                     hot_multi = _to_number(script.get('hotspot_multiplier'), 1.0)
                     multiplier_matrix = multiplier_matrix.mask(new_hotspots, hot_multi)
+                    line_rules = [
+                        rule for rule in hotspot_rules
+                        if rule.get('type') in {'row', 'col'}
+                    ]
+                    line_hotspot_mask = line_hotspot_mask | (
+                        _build_hotspot_mask(line_rules) & new_hotspots
+                    )
                     assigned_hotspots = assigned_hotspots | new_hotspots
             modified_matrix = heatmap_matrix * multiplier_matrix
+
+        modified_matrix = _add_line_hotspot_random_perturbation(
+            modified_matrix=modified_matrix,
+            line_hotspot_mask=line_hotspot_mask,
+            product_code=product_code,
+            batch_no=batch_no,
+            code_desc=code_desc,
+            mode=mode,
+            seed=first_script.get('random_seed'),
+        )
 
         # 6. 确保结果为非负整数 (保持不变)
         return modified_matrix.astype(int).clip(lower=0)
@@ -169,6 +218,13 @@ def _normalize_mapping_mode(mode: Any) -> str:
     mode_text = str(mode or 'multiplicative').strip().lower()
     if mode_text == 'addtive':
         return 'additive'
+    if mode_text in {
+        'default',
+        'deterministic',
+        'deterministic_position',
+        'position_offset',
+    }:
+        return DEFAULT_POSITION_MODIFICATION_MODE
     return mode_text
 
 
@@ -206,6 +262,100 @@ def _mapping_script_matches(
         index_matches = _matches_batch_index(target_batch_index, batch_position, total_batches)
 
     return batch_matches and index_matches
+
+
+def resolve_mapping_modification_plan(
+    script_config_list: list,
+    product_code: Optional[str],
+    code_desc: str,
+    batch_no: str,
+    batch_position: int,
+    total_batches: int,
+) -> MappingModificationPlan:
+    matched_scripts = _get_ordered_matching_mapping_scripts(
+        script_config_list=script_config_list,
+        product_code=product_code,
+        code_desc=code_desc,
+        batch_no=batch_no,
+        batch_position=batch_position,
+        total_batches=total_batches,
+    )
+    if not matched_scripts:
+        return MappingModificationPlan(mode=DEFAULT_POSITION_MODIFICATION_MODE)
+
+    highest_priority = _mapping_script_priority(matched_scripts[0])
+    highest_priority_scripts = [
+        script
+        for script in matched_scripts
+        if _mapping_script_priority(script) == highest_priority
+    ]
+    mode = _normalize_mapping_mode(
+        highest_priority_scripts[0].get('mode', 'multiplicative')
+    )
+    mode_scripts = tuple(
+        script
+        for script in highest_priority_scripts
+        if _normalize_mapping_mode(script.get('mode', 'multiplicative')) == mode
+    )
+    return MappingModificationPlan(mode=mode, scripts=mode_scripts)
+
+
+def _get_ordered_matching_mapping_scripts(
+    script_config_list: list,
+    product_code: Optional[str],
+    code_desc: str,
+    batch_no: str,
+    batch_position: int,
+    total_batches: int,
+) -> list:
+    matched_scripts = [
+        script
+        for script in script_config_list
+        if _mapping_script_matches(
+            script=script,
+            product_code=product_code,
+            code_desc=code_desc,
+            batch_no=batch_no,
+            batch_position=batch_position,
+            total_batches=total_batches,
+        )
+    ]
+    matched_scripts.sort(key=_mapping_script_priority, reverse=True)
+    return matched_scripts
+
+
+def _mapping_script_priority(
+    script: dict[str, Any],
+) -> tuple[int, int, int, int, int]:
+    product_specificity = _mapping_target_specificity(
+        script.get('target_product')
+    )
+    code_specificity = _mapping_target_specificity(script.get('target_code'))
+    target_batch = script.get('target_batch', script.get('target_batches'))
+    batch_specificity = _mapping_target_specificity(target_batch)
+    index_specificity = _mapping_target_specificity(
+        script.get('target_batch_index')
+    )
+    return (
+        product_specificity
+        + code_specificity
+        + batch_specificity
+        + index_specificity,
+        batch_specificity,
+        index_specificity,
+        product_specificity,
+        code_specificity,
+    )
+
+
+def _mapping_target_specificity(target: Any) -> int:
+    if target is None:
+        return 0
+    if isinstance(target, (list, tuple, set)):
+        if not target or any(_mapping_target_specificity(item) == 0 for item in target):
+            return 0
+        return 1
+    return 0 if str(target).strip().upper() == 'ALL' else 1
 
 
 def _matches_target(target: Any, actual: Optional[str]) -> bool:
@@ -278,6 +428,41 @@ def _stable_mapping_seed(*parts: Any) -> int:
     seed_text = '|'.join(str(part) for part in parts)
     digest = hashlib.sha256(seed_text.encode('utf-8')).hexdigest()
     return int(digest[:16], 16) % (2**32 - 1)
+
+
+def _add_line_hotspot_random_perturbation(
+    modified_matrix: pd.DataFrame,
+    line_hotspot_mask: pd.DataFrame,
+    product_code: Optional[str],
+    batch_no: str,
+    code_desc: str,
+    mode: str,
+    seed: Any = None,
+) -> pd.DataFrame:
+    perturbable_mask = line_hotspot_mask & (modified_matrix > 0)
+    if not perturbable_mask.to_numpy().any():
+        return modified_matrix
+
+    seed_part = seed if seed is not None else 'line-hotspot'
+    rng_seed = _stable_mapping_seed(
+        product_code or 'ALL',
+        batch_no,
+        code_desc,
+        mode,
+        seed_part,
+    )
+    rng = np.random.default_rng(rng_seed)
+    random_additions = rng.integers(
+        0,
+        _LINE_HOTSPOT_RANDOM_MAX + 1,
+        size=modified_matrix.shape,
+    )
+    perturbation_matrix = pd.DataFrame(
+        np.where(perturbable_mask, random_additions, 0),
+        index=modified_matrix.index,
+        columns=modified_matrix.columns,
+    )
+    return modified_matrix + perturbation_matrix
 
 
 def _apply_random_mapping_distribution(

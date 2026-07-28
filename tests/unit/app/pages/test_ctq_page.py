@@ -19,6 +19,8 @@ from src.shared_kernel.infrastructure import db_handler
 def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypatch) -> None:
     events: list[str] = []
     loaded_queries: list[SpcQueryConfig] = []
+    loaded_signatures: list[str] = []
+    header_kwargs: dict[str, object] = {}
     report = SimpleNamespace(
         indicators_df=pd.DataFrame(
             [
@@ -61,11 +63,21 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
         staticmethod(lambda: (pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-21"))),
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(page_header, "render_page_header", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        page_header,
+        "build_product_cache_signature",
+        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+    )
+    monkeypatch.setattr(
+        page_header,
+        "render_page_header",
+        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+    )
     monkeypatch.setattr(ConfigLoader, "get_spc_period_box_source", staticmethod(lambda: "point_value"))
 
     def fake_load_report(**kwargs):
         loaded_queries.append(SpcQueryConfig.model_validate_json(kwargs["query_config_json"]))
+        loaded_signatures.append(kwargs["snapshot_signature"])
         return report
 
     monkeypatch.setattr(CtqReportService, "get_ctq_report_data", staticmethod(fake_load_report))
@@ -84,6 +96,8 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
     runpy.run_path(str(page_path), run_name="__main__")
 
     assert [query.data_type_filter for query in loaded_queries] == ["CTQ"]
+    assert loaded_signatures == ["ctq_distribution_report_v1|scoped=M678"]
+    assert header_kwargs["product_cache_scope"] == "M678"
     assert events == ["filters", "charts"]
     assert not hasattr(report, "period_capability_df")
 
@@ -95,4 +109,3 @@ def test_portal_navigation_points_ctq_to_the_streamlit_page() -> None:
     assert 'CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表"' in config_text
     assert '{ name: "CTQ", url: LINKS.CTQ_REPORT }' in config_text
     assert "{l:'', v:'CTQ', url: LINKS.CTQ_REPORT }" in config_text
-

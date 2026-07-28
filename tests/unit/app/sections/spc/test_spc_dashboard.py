@@ -38,33 +38,9 @@ def _sample_report_df() -> pd.DataFrame:
     )
 
 
-def test_build_daily_cpk_alerts_returns_every_daily_value_below_threshold() -> None:
+def test_build_daily_cpk_alerts_returns_only_values_from_previous_week() -> None:
     period_capability_df = pd.DataFrame(
         [
-            {
-                "factory": "ARRAY",
-                "step_id": "15260",
-                "param_name": "4PP_Rs",
-                "period_type": "day",
-                "period_label": "2026-07-13",
-                "cpk": 1.20,
-            },
-            {
-                "factory": "OLED",
-                "step_id": "21200",
-                "param_name": "PPA_B_X",
-                "period_type": "day",
-                "period_label": "2026-07-14",
-                "cpk": 1.10,
-            },
-            {
-                "factory": "ARRAY",
-                "step_id": "15260",
-                "param_name": "4PP_Rs",
-                "period_type": "day",
-                "period_label": "2026-07-14",
-                "cpk": 1.33,
-            },
             {
                 "factory": "ARRAY",
                 "step_id": "15260",
@@ -74,31 +50,98 @@ def test_build_daily_cpk_alerts_returns_every_daily_value_below_threshold() -> N
                 "cpk": 0.80,
             },
             {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpk": 0.90,
+            },
+            {
+                "prod_code": "M673",
+                "factory": "TP",
+                "step_id": "41260",
+                "param_name": "4PP_Rs",
+                "period_type": "day",
+                "period_label": "2026-07-22",
+                "cpk": 1.278,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "MONDAY_BOUNDARY",
+                "period_type": "day",
+                "period_label": "2026-07-20",
+                "cpk": 1.20,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41140",
+                "param_name": "SUNDAY_BOUNDARY",
+                "period_type": "day",
+                "period_label": "2026-07-26",
+                "cpk": 1.05,
+            },
+            {
+                "factory": "OLED",
+                "step_id": "21200",
+                "param_name": "BEFORE_PREVIOUS_WEEK",
+                "period_type": "day",
+                "period_label": "2026-07-19",
+                "cpk": 0.90,
+            },
+            {
+                "factory": "OLED",
+                "step_id": "21200",
+                "param_name": "CURRENT_WEEK",
+                "period_type": "day",
+                "period_label": "2026-07-27",
+                "cpk": 0.80,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "AT_THRESHOLD",
+                "period_type": "day",
+                "period_label": "2026-07-22",
+                "cpk": 1.33,
+            },
+            {
                 "factory": "TP",
                 "step_id": "41140",
                 "param_name": "SE_L1T",
                 "period_type": "day",
-                "period_label": "2026-07-14",
+                "period_label": "2026-07-22",
                 "cpk": "not-a-number",
             },
         ]
     )
 
-    alerts_df = build_daily_cpk_alerts(period_capability_df)
+    alerts_df = build_daily_cpk_alerts(
+        period_capability_df,
+        reference_date=date(2026, 7, 28),
+    )
 
     assert alerts_df.to_dict("records") == [
         {
-            "厂别": "OLED",
-            "站点": "21200",
-            "参数名称": "PPA_B_X",
-            "超规日期": "2026-07-14",
-            "CPK值": 1.10,
+            "厂别": "TP",
+            "站点": "41140",
+            "参数名称": "SUNDAY_BOUNDARY",
+            "超规日期": "2026-07-26",
+            "CPK值": 1.05,
+        },
+        {
+            "厂别": "TP",
+            "站点": "41260",
+            "参数名称": "4PP_Rs",
+            "超规日期": "2026-07-22",
+            "CPK值": 1.278,
         },
         {
             "厂别": "ARRAY",
             "站点": "15260",
-            "参数名称": "4PP_Rs",
-            "超规日期": "2026-07-13",
+            "参数名称": "MONDAY_BOUNDARY",
+            "超规日期": "2026-07-20",
             "CPK值": 1.20,
         },
     ]
@@ -188,8 +231,8 @@ def test_render_cpk_alert_center_expands_and_displays_alert_details(monkeypatch)
 
     render_cpk_alert_center(alerts_df, has_capability_data=True)
 
-    assert expander_calls == [("CPK预警中心（日CPK < 1.33）", True)]
-    assert error_messages == ["检测到 1 条日 CPK 预警，请关注。"]
+    assert expander_calls == [("CPK预警中心（CPK < 1.33）", True)]
+    assert error_messages == ["检测到 1 条 CPK 预警，请关注。"]
     assert rendered_tables[0].equals(alerts_df)
 
 
@@ -203,7 +246,7 @@ def test_render_cpk_alert_center_distinguishes_missing_capability_data(monkeypat
 
     render_cpk_alert_center(pd.DataFrame(), has_capability_data=False)
 
-    assert info_messages == ["当前产品暂无可计算的日 CPK 数据。"]
+    assert info_messages == ["当前产品暂无可计算的 CPK 数据。"]
     assert success_messages == []
 
 
@@ -217,7 +260,7 @@ def test_render_cpk_alert_center_shows_all_clear_when_daily_cpk_is_normal(monkey
 
     render_cpk_alert_center(pd.DataFrame(), has_capability_data=True)
 
-    assert success_messages == ["当前产品日 CPK 均不低于 1.33。"]
+    assert success_messages == ["未发现低于 1.33 的 CPK。"]
     assert info_messages == []
 
 

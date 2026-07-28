@@ -18,23 +18,34 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) -> None:
     events: list[str] = []
     load_count = 0
+    loaded_signatures: list[str] = []
+    header_kwargs: dict[str, object] = {}
+    rendered_alerts: list[pd.DataFrame] = []
     period_capability_df = pd.DataFrame(
         [
             {
-                "factory": "ARRAY",
-                "step_id": "15260",
+                "factory": "TP",
+                "step_id": "41260",
+                "param_name": "4PP_Rs",
+                "period_type": "month",
+                "period_label": "2026-07",
+                "cpk": 1.536,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41260",
                 "param_name": "4PP_Rs",
                 "period_type": "day",
-                "period_label": "2026-07-14",
-                "cpk": 1.20,
-            }
+                "period_label": "2026-07-22",
+                "cpk": 1.278,
+            },
         ]
     )
     indicator_df = pd.DataFrame(
-        [{"prod_code": "M626", "factory": "ARRAY", "step_id": "15260", "param_name": "4PP_Rs"}]
+        [{"prod_code": "M673", "factory": "TP", "step_id": "41260", "param_name": "4PP_Rs"}]
     )
     sheet_features_df = pd.DataFrame(
-        [{"factory": "ARRAY", "step_id": "15260", "param_name": "4PP_Rs", "sheet_id": "S1"}]
+        [{"factory": "TP", "step_id": "41260", "param_name": "4PP_Rs", "sheet_id": "S1"}]
     )
     report = SimpleNamespace(
         period_capability_df=period_capability_df,
@@ -51,29 +62,42 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     monkeypatch.setattr(
         SessionManager,
         "get_active_config",
-        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M626"))),
+        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M673"))),
     )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(
         MonitorAnalysisService,
         "get_time_window",
-        staticmethod(lambda: (pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-14"))),
+        staticmethod(lambda: (pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-28"))),
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(page_header, "render_page_header", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        page_header,
+        "build_product_cache_signature",
+        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+    )
+    monkeypatch.setattr(
+        page_header,
+        "render_page_header",
+        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+    )
     monkeypatch.setattr(ConfigLoader, "get_spc_period_sigma_source", staticmethod(lambda: "point_value"))
     monkeypatch.setattr(ConfigLoader, "get_spc_period_box_source", staticmethod(lambda: "point_value"))
 
-    def fake_load_report(**_kwargs):
+    def fake_load_report(**kwargs):
         nonlocal load_count
         load_count += 1
+        loaded_signatures.append(kwargs["snapshot_signature"])
         return report
 
     monkeypatch.setattr(SpcReportService, "get_spc_report_data", staticmethod(fake_load_report))
     monkeypatch.setattr(
         spc_dashboard,
         "render_cpk_alert_center",
-        lambda *_args, **_kwargs: events.append("alerts"),
+        lambda alerts_df, **_kwargs: (
+            rendered_alerts.append(alerts_df.copy()),
+            events.append("alerts"),
+        ),
     )
     monkeypatch.setattr(
         spc_dashboard,
@@ -84,7 +108,7 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     monkeypatch.setattr(
         spc_dashboard,
         "render_spc_filters",
-        lambda **_kwargs: events.append("filters") or ("ARRAY", ["4PP_Rs"], ["15260"], True),
+        lambda **_kwargs: events.append("filters") or ("TP", ["4PP_Rs"], ["41260"], True),
     )
     monkeypatch.setattr(
         spc_dashboard,
@@ -96,4 +120,17 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     runpy.run_path(str(page_path), run_name="__main__")
 
     assert load_count == 1
+    assert loaded_signatures == [
+        "spc_capability_distribution_report_v1|scoped=M673"
+    ]
+    assert header_kwargs["product_cache_scope"] == "M673"
+    assert rendered_alerts[0].to_dict("records") == [
+        {
+            "厂别": "TP",
+            "站点": "41260",
+            "参数名称": "4PP_Rs",
+            "超规日期": "2026-07-22",
+            "CPK值": 1.278,
+        }
+    ]
     assert events == ["alerts", "alert_charts", "filters", "charts"]

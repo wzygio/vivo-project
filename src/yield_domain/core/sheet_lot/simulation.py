@@ -6,6 +6,25 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+
+def _to_iso_week_keys(values: pd.Series) -> pd.Series:
+    """Convert compact or standard date values to normalized ISO week keys."""
+    text_values = values.astype("string").str.strip()
+    parsed = pd.to_datetime(text_values, format="%Y%m%d", errors="coerce")
+    fallback_mask = parsed.isna() & text_values.notna()
+    if fallback_mask.any():
+        parsed.loc[fallback_mask] = pd.to_datetime(
+            text_values.loc[fallback_mask], errors="coerce"
+        )
+
+    iso_calendar = parsed.dt.isocalendar()
+    return (
+        iso_calendar.year.astype("string").str.zfill(4)
+        + "-W"
+        + iso_calendar.week.astype("string").str.zfill(2)
+    )
+
+
 def _distribute_sheet_from_lot(
     sheet_raw_results: Dict[str, Any],
     lot_results: Dict[str, Any],
@@ -130,30 +149,34 @@ def _distribute_sheet_from_lot(
 #                      辅助函数：模拟数据
 # ==============================================================================
 
-def _expand_code_rows_to_positive_daily_entities(
+def _expand_code_rows_to_positive_period_entities(
     df_code: pd.DataFrame,
     base_info_df: pd.DataFrame,
-    date_map_str: pd.Series,
+    entity_period_map: pd.Series,
     lookup_dict: Dict[str, float],
     entity_id_col: str,
     code_desc: Any,
 ) -> pd.DataFrame:
-    """Add same-day entities when a Code has positive EMA daily rate."""
+    """Add entities whose mapped trend period has a positive Code rate."""
     if df_code.empty or not lookup_dict or entity_id_col not in base_info_df.columns:
         return df_code
 
-    positive_dates = {str(date_key) for date_key, rate in lookup_dict.items() if float(rate) > 0}
-    if not positive_dates:
+    positive_periods = {
+        str(period_key)
+        for period_key, rate in lookup_dict.items()
+        if float(rate) > 0
+    }
+    if not positive_periods:
         return df_code
 
-    entity_date_map = {
-        str(entity_id).strip(): date_key
-        for entity_id, date_key in date_map_str.dropna().items()
+    normalized_entity_period_map = {
+        str(entity_id).strip(): period_key
+        for entity_id, period_key in entity_period_map.dropna().items()
     }
     roster = base_info_df.copy()
     roster["_entity_key"] = roster[entity_id_col].astype(str).str.strip()
-    roster["_date_key"] = roster["_entity_key"].map(entity_date_map)
-    roster = roster[roster["_date_key"].isin(positive_dates)].copy()
+    roster["_period_key"] = roster["_entity_key"].map(normalized_entity_period_map)
+    roster = roster[roster["_period_key"].isin(positive_periods)].copy()
     if roster.empty:
         return df_code
 
@@ -163,7 +186,7 @@ def _expand_code_rows_to_positive_daily_entities(
         return df_code
 
     defect_group = df_code["defect_group"].dropna().iloc[0] if "defect_group" in df_code else ""
-    new_rows = roster.drop(columns=["_entity_key", "_date_key"], errors="ignore")
+    new_rows = roster.drop(columns=["_entity_key", "_period_key"], errors="ignore")
     new_rows["defect_group"] = defect_group
     new_rows["defect_desc"] = code_desc
     new_rows["defect_panel_count"] = 0
@@ -176,6 +199,101 @@ def _expand_code_rows_to_positive_daily_entities(
     return pd.concat([df_code, new_rows[df_code.columns]], ignore_index=True)
 
 
+def _expand_code_rows_to_positive_daily_entities(
+    df_code: pd.DataFrame,
+    base_info_df: pd.DataFrame,
+    date_map_str: pd.Series,
+    lookup_dict: Dict[str, float],
+    entity_id_col: str,
+    code_desc: Any,
+) -> pd.DataFrame:
+    """Compatibility wrapper for callers using the former daily helper."""
+    return _expand_code_rows_to_positive_period_entities(
+        df_code=df_code,
+        base_info_df=base_info_df,
+        entity_period_map=date_map_str,
+        lookup_dict=lookup_dict,
+        entity_id_col=entity_id_col,
+        code_desc=code_desc,
+    )
+
+
+def _allocate_weekly_defect_tokens(
+    df_code: pd.DataFrame,
+    rng: np.random.Generator,
+) -> pd.Series:
+    """Allocate each week's integer defect total across its eligible entities."""
+    allocated = pd.Series(0, index=df_code.index, dtype="int64")
+
+    for _, week_indices in df_code.groupby("week_key", sort=False).groups.items():
+        week_frame = df_code.loc[week_indices]
+        base_rate = float(week_frame["weekly_base_rate"].iloc[0])
+        if base_rate <= 0:
+            continue
+
+        capacities = (
+            pd.to_numeric(week_frame["total_panels"], errors="coerce")
+            .fillna(0)
+            .clip(lower=0)
+            .astype(int)
+            .to_numpy()
+        )
+        total_capacity = int(capacities.sum())
+        target_total = min(
+            int(np.rint(total_capacity * base_rate)),
+            total_capacity,
+        )
+        if target_total <= 0:
+            continue
+
+        weights = capacities.astype(float) * rng.uniform(
+            0.8,
+            1.2,
+            size=len(week_frame),
+        )
+        week_allocation = np.zeros(len(week_frame), dtype=int)
+        remaining = target_total
+
+        while remaining > 0:
+            available = capacities - week_allocation
+            active = available > 0
+            if not active.any():
+                break
+
+            active_weights = np.where(active, weights, 0.0)
+            if active_weights.sum() <= 0:
+                active_weights = available.astype(float)
+
+            exact_shares = remaining * active_weights / active_weights.sum()
+            additions = np.minimum(
+                np.floor(exact_shares).astype(int),
+                available,
+            )
+            week_allocation += additions
+            remaining -= int(additions.sum())
+            if remaining <= 0:
+                break
+
+            available = capacities - week_allocation
+            fractional = exact_shares - np.floor(exact_shares)
+            candidates = np.flatnonzero(available > 0)
+            if not len(candidates):
+                break
+
+            order = candidates[
+                np.argsort(-fractional[candidates], kind="stable")
+            ]
+            for position in order:
+                if remaining <= 0:
+                    break
+                week_allocation[position] += 1
+                remaining -= 1
+
+        allocated.loc[week_indices] = week_allocation
+
+    return allocated
+
+
 def _simulate_concentration(
     raw_results: Dict[str, Any],
     mwd_code_data: Dict[str, pd.DataFrame] | None,
@@ -183,10 +301,16 @@ def _simulate_concentration(
     entity_id_col: str = 'sheet_id'
 ) -> Dict[str, Any]:
     """
-    [核心重构 V4.3 - 带深度调试导出 & 实体级微观扰动]
-    引入稳定的微观随机噪声，打破同一天数据一模一样的“阶梯状”失真。
+    Lot 级模拟以所属 ISO 周的 Code MWD 良损为基准。
+
+    每个 Lot 继续使用固定种子的微观随机扰动，避免同一周内完全同值。
+    优先读取三个月完整的 ``weekly_full``；``weekly`` 仅作为旧调用方兼容。
+    完整周度中未命中的期间按 0 处理，不回退到原始 Lot 或日度趋势。
     """
-    logging.info(f"开始执行 {entity_id_col} 级不良率模拟调度 (V4.3 - 微观扰动版)...")
+    logging.info(
+        "开始执行 %s 级不良率模拟调度（ISO 周基准 + 微观扰动）...",
+        entity_id_col,
+    )
     try:
         config = processing_config.get('sheet_hotspot_config', {})
         if not config.get('enable', False):
@@ -194,21 +318,39 @@ def _simulate_concentration(
         
         sim_code_details = raw_results["code_level_details"].copy()
         base_info_df = raw_results.get("group_level_summary_for_chart")
+
+        df_weekly = None
+        if mwd_code_data:
+            df_weekly = mwd_code_data.get("weekly_full")
+            if df_weekly is None or df_weekly.empty:
+                df_weekly = mwd_code_data.get("weekly")
+        weekly_columns = {"time_period", "defect_desc", "defect_rate"}
+        if (
+            df_weekly is None
+            or df_weekly.empty
+            or not weekly_columns.issubset(df_weekly.columns)
+        ):
+            logging.warning(
+                "Weekly MWD trend is unavailable; preserving raw %s values.",
+                entity_id_col,
+            )
+            return {
+                group: frame.copy()
+                for group, frame in raw_results["code_level_details"].items()
+            }
         
         if base_info_df is None:
             logging.error("缺少基础汇总数据，模拟终止。")
             return sim_code_details
 
-        # --- 0. 预先构建日期映射表 ---
+        # --- 0. 预先构建实体所属 ISO 周映射表 ---
         if entity_id_col not in base_info_df.columns and base_info_df.index.name == entity_id_col:
             base_info_temp = base_info_df.reset_index()
         else:
             base_info_temp = base_info_df
         
         date_map_raw = base_info_temp.drop_duplicates(subset=[entity_id_col]).set_index(entity_id_col)['warehousing_time']
-        date_map_str = pd.to_datetime(date_map_raw, errors='coerce').dt.strftime('%Y%m%d')
-
-        df_daily_ema = mwd_code_data.get('daily_full') if mwd_code_data else None
+        week_map_str = _to_iso_week_keys(date_map_raw)
 
         # [新增修复] 初始化一个稳定的随机数生成器，保证每次刷新页面波动形态固定
         seed = config.get('random_seed', 2026)
@@ -224,43 +366,51 @@ def _simulate_concentration(
             processed_codes_list = []
             for code_desc, df_code in df_all_codes_in_group.groupby('defect_desc'):
                 df_code_mod = df_code.copy()
-                lookup_dict = {}
-                if df_daily_ema is not None:
-                    code_ema_data = df_daily_ema[df_daily_ema['defect_desc'] == code_desc].copy()
-                    code_ema_data['date_key'] = code_ema_data['time_period'].astype(str).str.replace('-', '')
-                    lookup_dict = code_ema_data.set_index('date_key')['defect_rate'].to_dict()
+                code_weekly_data = df_weekly[
+                    df_weekly["defect_desc"] == code_desc
+                ].copy()
+                if "defect_group" in code_weekly_data.columns:
+                    code_weekly_data = code_weekly_data[
+                        code_weekly_data["defect_group"] == group
+                    ]
+                code_weekly_data["week_key"] = (
+                    code_weekly_data["time_period"]
+                    .astype(str)
+                    .str.strip()
+                    .str.upper()
+                )
+                code_weekly_data["defect_rate"] = pd.to_numeric(
+                    code_weekly_data["defect_rate"], errors="coerce"
+                ).fillna(0.0)
+                lookup_dict = code_weekly_data.set_index("week_key")[
+                    "defect_rate"
+                ].to_dict()
+                if not lookup_dict:
+                    processed_codes_list.append(df_code_mod)
+                    continue
 
-                df_code_mod = _expand_code_rows_to_positive_daily_entities(
+                df_code_mod = _expand_code_rows_to_positive_period_entities(
                     df_code=df_code_mod,
                     base_info_df=base_info_temp,
-                    date_map_str=date_map_str,
+                    entity_period_map=week_map_str,
                     lookup_dict=lookup_dict,
                     entity_id_col=entity_id_col,
                     code_desc=code_desc,
                 )
-                df_code_mod['date_key'] = df_code_mod[entity_id_col].map(date_map_str)
+                df_code_mod["week_key"] = df_code_mod[entity_id_col].map(
+                    week_map_str
+                )
 
-                # 🚀 核心映射：获取当日大盘基准
-                df_code_mod['daily_base_rate'] = df_code_mod['date_key'].map(lookup_dict).fillna(0.0)
+                # 核心映射：获取 Lot 所属 ISO 周的 Code 基准。
+                df_code_mod["weekly_base_rate"] = (
+                    df_code_mod["week_key"].map(lookup_dict).fillna(0.0)
+                )
                 
-                # =========================================================
-                # 🚀 [核心修复：微观扰动] 
-                # 为同一天内的每个 Lot/Sheet 赋予 ±30% 的随机浮动，打破阶梯状
-                # =========================================================
-                # 只有当基准率大于 0 时才施加扰动，提升计算效率
-                mask_positive = df_code_mod['daily_base_rate'] > 0
-                if mask_positive.any():
-                    noise_factors = rng.uniform(0.8, 1.2, size=mask_positive.sum())
-                    df_code_mod.loc[mask_positive, 'daily_base_rate'] *= noise_factors
-                # =========================================================
-
-                df_code_mod['defect_panel_count'] = np.round(
-                    df_code_mod['total_panels'] * df_code_mod['daily_base_rate']
-                ).astype(int)
-                
-                df_code_mod['defect_panel_count'] = np.minimum(
-                    df_code_mod['defect_panel_count'], 
-                    df_code_mod['total_panels']
+                # 先锁定 Code × 周的整数总量，再按 Lot 面积与 ±20% 权重分配。
+                # 避免低良损率在每个 Lot 上独立四舍五入后全部归零。
+                df_code_mod["defect_panel_count"] = _allocate_weekly_defect_tokens(
+                    df_code_mod,
+                    rng,
                 )
                 
                 df_code_mod['defect_rate'] = np.where(
@@ -274,13 +424,17 @@ def _simulate_concentration(
                 # =========================================================
                 if entity_id_col == 'lot_id':
                     debug_df = df_code_mod[[
-                        'lot_id', 'defect_desc', 'date_key', 'total_panels', 
-                        'daily_base_rate', 'defect_panel_count', 'defect_rate'
+                        'lot_id', 'defect_desc', 'week_key', 'total_panels',
+                        'weekly_base_rate', 'defect_panel_count', 'defect_rate'
                     ]].copy()
                     debug_lot_frames.append(debug_df)
                 # =========================================================
                 
-                df_code_mod.drop(columns=['date_key', 'daily_base_rate'], inplace=True, errors='ignore')
+                df_code_mod.drop(
+                    columns=["week_key", "weekly_base_rate"],
+                    inplace=True,
+                    errors="ignore",
+                )
                 processed_codes_list.append(df_code_mod)
             
             if processed_codes_list:
@@ -293,7 +447,7 @@ def _simulate_concentration(
             try:
                 final_debug_df = pd.concat(debug_lot_frames, ignore_index=True)
                 # 转为易读格式
-                final_debug_df['daily_base_rate'] = final_debug_df['daily_base_rate'].apply(lambda x: f"{x:.5%}")
+                final_debug_df['weekly_base_rate'] = final_debug_df['weekly_base_rate'].apply(lambda x: f"{x:.5%}")
                 final_debug_df['defect_rate'] = final_debug_df['defect_rate'].apply(lambda x: f"{x:.5%}")
                 
                 out_path = Path("output/logs/sheet_lot_processor-lot_rate.csv")

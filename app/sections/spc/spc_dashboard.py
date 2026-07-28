@@ -60,21 +60,38 @@ def get_default_spc_start_date(end_date: date) -> date:
 def build_daily_cpk_alerts(
     period_capability_df: pd.DataFrame,
     threshold: float = CPK_ALERT_THRESHOLD,
+    reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return every daily CPK record strictly below the alert threshold."""
+    """Return below-threshold daily CPK records from the previous full week."""
     required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", "cpk"}
     if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
         return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
 
-    capability_df = period_capability_df.copy()
+    reference_day = pd.Timestamp(reference_date or date.today()).normalize()
+    current_week_start = reference_day - pd.Timedelta(days=reference_day.weekday())
+    week_start = current_week_start - pd.Timedelta(days=7)
+    week_end = week_start + pd.Timedelta(days=6)
+
+    capability_df = period_capability_df[
+        period_capability_df["period_type"].astype(str).eq("day")
+    ].copy()
+    if capability_df.empty:
+        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+
     capability_df["cpk"] = pd.to_numeric(capability_df["cpk"], errors="coerce")
+    capability_df["_alert_date"] = pd.to_datetime(
+        capability_df["period_label"],
+        format="%Y-%m-%d",
+        errors="coerce",
+    ).dt.normalize()
     alert_rows = capability_df[
-        capability_df["period_type"].astype(str).eq("day")
-        & capability_df["cpk"].lt(threshold)
+        capability_df["cpk"].lt(threshold)
+        & capability_df["_alert_date"].between(week_start, week_end, inclusive="both")
     ].copy()
     if alert_rows.empty:
         return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
 
+    alert_rows["period_label"] = alert_rows["_alert_date"].dt.strftime("%Y-%m-%d")
     alerts_df = alert_rows.rename(
         columns={
             "factory": "厂别",
@@ -98,11 +115,14 @@ def render_cpk_alert_center(
     has_capability_data: bool,
     threshold: float = CPK_ALERT_THRESHOLD,
 ) -> None:
-    """Render the product-level daily CPK alert summary and details."""
+    """Render the product-level CPK alert summary and details."""
     has_alerts = not alerts_df.empty
-    with st.expander(f"CPK预警中心（日CPK < {threshold:.2f}）", expanded=has_alerts):
+    with st.expander(
+        f"CPK预警中心（CPK < {threshold:.2f}）",
+        expanded=has_alerts,
+    ):
         if has_alerts:
-            st.error(f"检测到 {len(alerts_df)} 条日 CPK 预警，请关注。")
+            st.error(f"检测到 {len(alerts_df)} 条 CPK 预警，请关注。")
             st.dataframe(
                 alerts_df,
                 column_config={"CPK值": st.column_config.NumberColumn("CPK值", format="%.3f")},
@@ -110,9 +130,9 @@ def render_cpk_alert_center(
                 use_container_width=True,
             )
         elif has_capability_data:
-            st.success("当前产品日 CPK 均不低于 1.33。")
+            st.success(f"未发现低于 {threshold:.2f} 的 CPK。")
         else:
-            st.info("当前产品暂无可计算的日 CPK 数据。")
+            st.info("当前产品暂无可计算的 CPK 数据。")
 
 
 def filter_spc_report_by_alerts(
@@ -375,7 +395,7 @@ def render_cpk_decoration_admin(
     )
     container = st.expander("开发者后台：SPC CPK 修饰", expanded=False) if show_expander else nullcontext()
     with container:
-        st.caption("默认 flag=False，CPK 显示真实计算值；启用后显示 OOS 修饰后的重算值。")
+        st.caption("默认 flag=False，CPK 显示真实计算值；启用后显示修饰表中的 cpk_corrected。")
         st.caption(f"明细文件：{decoration_result.detail_path}")
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_detail, c_decoration, c_upload = st.columns([1, 1, 1.2])
@@ -420,7 +440,7 @@ def render_cpk_decoration_admin(
                 ):
                     try:
                         uploaded_df = pd.read_excel(BytesIO(uploaded_bytes), engine="openpyxl")
-                        required_columns = {*CPK_KEY_COLUMNS, "flag"}
+                        required_columns = {*CPK_KEY_COLUMNS, "cpk_corrected", "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
@@ -1063,7 +1083,7 @@ def render_cpk_alert_indicator_sections(
         return
 
     st.markdown("### 自动预警指标图像")
-    st.caption("以下图像由日 CPK 预警自动匹配，无需通过筛选器查询。")
+    st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询。")
     render_spc_indicator_sections(
         period_capability_df=alert_capability_df,
         sheet_features_df=alert_sheet_features_df,

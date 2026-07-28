@@ -28,18 +28,19 @@ processing:
   defect_multipliers:
     # Array_Line
     'S向亮线': 0.6
-    'G向单暗线': 0.5
     # Array_Pixel
     '暗点': 2
-    '群暗点': 1.5
+    '群暗点': 3.5
     '群亮点': 2
+    'B暗点': 0.7
+    '单亮点': 0
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
     'G向带状Mura': 0
     # OLED_Mura
-    '通道间短路': 0.5
-  
+    '彩斑Mura': 0.4
+
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025

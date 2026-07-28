@@ -36,6 +36,9 @@
 4. payload 缓存函数需要保持为可被 `extract_cached_funcs` 发现的公开方法，或者由页面显式注册，以保证“刷新缓存”仍能清除实际 L2 缓存。
 5. DataFrame 报表继续使用 `st.cache_data`。不得为规避 pickle 而改用 `st.cache_resource`，因为后者会把可变对象作为跨会话共享实例。
 6. 新增或修改此类服务时，必须有模块重载发生在缓存填充期间的回归测试，而不只测试冷态 `pickle.dumps`。
+7. 产品级页面必须把共享产品缓存版本写入 `snapshot_signature`。页头“刷新缓存”
+   只推进当前产品版本，不调用无参数 `func.clear()`，从而避免清除其他产品的缓存条目；
+   `ALL` 聚合页面和无产品分区页面继续使用全量清理。
 
 当前实现：
 
@@ -43,6 +46,8 @@
 - 关键备件：`fetch_report_payload()` 缓存 DataFrame 与统计标量，`get_report_data()` 在缓存外构造 `PartsReportViewModel`。
 - 自动预警：继续沿用既有的 dict 缓存与缓存外 ViewModel 组装模式。
 - 良率及其他页面：当前缓存返回 DataFrame、原生 dict、tuple 或标量，无需迁移。
+- SPC、CTQ 与良率产品页面：使用 `output/tmp/product_cache_revisions/`
+  下的共享版本文件生成产品级缓存签名；版本提升后仅该产品产生缓存 miss。
 
 ## Consequences
 
@@ -84,6 +89,8 @@ Rejected。`frozen`、`slots` 等选项不能解决模块重载后的类身份�
 - CPM 模块重载竞态回归：通过。
 - 关键备件模块重载竞态回归：通过。
 - 页头缓存函数发现契约：通过。
+- 页头产品版本隔离测试：刷新一个产品不会改变另一产品的缓存签名，也不会执行
+  整函数缓存清理。
 - 页面相关集中回归：`60 passed`。
 - 扩展 unit 回归：`124 passed, 2 failed`；两个失败均为本变更前已存在、与缓存边界无关的 Shadow EMA 测试。
 

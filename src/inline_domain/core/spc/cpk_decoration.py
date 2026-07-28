@@ -7,6 +7,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+
 logger = logging.getLogger(__name__)
 
 CPK_DETAIL_FILE_NAME = "spc_cpk_detail.xlsx"
@@ -32,7 +34,7 @@ CPK_DECORATION_COLUMNS = [*CPK_DETAIL_COLUMNS, "flag"]
 
 @dataclass(frozen=True)
 class CpkDecorationResult:
-    """CPK values selected from real or OOS-corrected period calculations."""
+    """CPK values selected from real calculations or user-maintained corrections."""
 
     period_capability_df: pd.DataFrame
     detail_df: pd.DataFrame
@@ -79,7 +81,15 @@ def _parse_flag(value: object) -> bool:
         return False
     if isinstance(value, bool):
         return value
-    return str(value).strip().lower() in {"true", "1", "yes", "y", "是", "修饰"}
+    return str(value).strip().lower() in {
+        "true",
+        "ture",  # Backward-compatible with existing manually maintained workbooks.
+        "1",
+        "yes",
+        "y",
+        "是",
+        "修饰",
+    }
 
 
 def build_cpk_detail(
@@ -117,16 +127,25 @@ def load_cpk_decoration(product_dir: Path) -> pd.DataFrame:
         return _empty_decoration_frame()
     try:
         loaded_df = pd.read_excel(path, engine="openpyxl")
-    except Exception as exc:
-        logger.warning("[SPC] failed to read CPK decoration file %s: %s", path, exc)
-        return _empty_decoration_frame()
+    except Exception as excel_exc:
+        try:
+            loaded_df = _read_encrypted_xlsx_via_com(path)
+            logger.info("[SPC] loaded enterprise-encrypted CPK decoration file via Excel COM: %s", path)
+        except Exception as com_exc:
+            logger.warning(
+                "[SPC] failed to read CPK decoration file %s with openpyxl (%s) and Excel COM (%s)",
+                path,
+                excel_exc,
+                com_exc,
+            )
+            return _empty_decoration_frame()
     if loaded_df.empty:
         return _empty_decoration_frame()
     return _ordered_existing_columns(_normalize_key_columns(loaded_df), CPK_DECORATION_COLUMNS)
 
 
 def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decoration_df: pd.DataFrame) -> pd.DataFrame:
-    """Attach opt-in flags; no CPK period is decorated until an admin enables it."""
+    """Attach user-maintained corrected values and opt-in flags to current details."""
     if detail_df.empty:
         return _empty_decoration_frame()
 
@@ -136,12 +155,21 @@ def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decorat
         result["flag"] = False
         return result[CPK_DECORATION_COLUMNS]
 
-    flags_df = _normalize_key_columns(existing_decoration_df)[[*CPK_KEY_COLUMNS, "flag"]].copy()
-    flags_df["flag"] = flags_df["flag"].apply(_parse_flag)
-    flags_df = flags_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
-    result = detail_df.merge(flags_df, on=CPK_KEY_COLUMNS, how="left")
+    user_values_df = _normalize_key_columns(
+        _ordered_existing_columns(existing_decoration_df, CPK_DECORATION_COLUMNS)
+    )[[*CPK_KEY_COLUMNS, "cpk_corrected", "flag"]].copy()
+    user_values_df = user_values_df.rename(
+        columns={"cpk_corrected": "_user_cpk_corrected"}
+    )
+    user_values_df["flag"] = user_values_df["flag"].apply(_parse_flag)
+    user_values_df = user_values_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
+    result = detail_df.merge(user_values_df, on=CPK_KEY_COLUMNS, how="left")
+    user_corrected_values = pd.to_numeric(result["_user_cpk_corrected"], errors="coerce")
+    result.loc[user_corrected_values.notna(), "cpk_corrected"] = user_corrected_values[
+        user_corrected_values.notna()
+    ]
     result["flag"] = result["flag"].apply(_parse_flag)
-    return result[CPK_DECORATION_COLUMNS]
+    return result.drop(columns=["_user_cpk_corrected"])[CPK_DECORATION_COLUMNS]
 
 
 def persist_cpk_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
@@ -149,15 +177,20 @@ def persist_cpk_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFram
     detail_path = get_cpk_detail_path(product_dir)
     decoration_path = get_cpk_decoration_path(product_dir)
     detail_to_write = _ordered_existing_columns(detail_df, CPK_DETAIL_COLUMNS)
-    decoration_to_write = merge_detail_with_decoration_flags(detail_to_write, load_cpk_decoration(product_dir))
+    decoration_file_exists = decoration_path.exists()
+    decoration_to_write = merge_detail_with_decoration_flags(
+        detail_to_write,
+        load_cpk_decoration(product_dir),
+    )
     try:
         detail_to_write.to_excel(detail_path, index=False)
     except PermissionError as exc:
         logger.warning("[SPC] CPK detail file is locked, skipped writing %s: %s", detail_path, exc)
-    try:
-        decoration_to_write.to_excel(decoration_path, index=False)
-    except PermissionError as exc:
-        logger.warning("[SPC] CPK decoration file is locked, skipped writing %s: %s", decoration_path, exc)
+    if not decoration_file_exists:
+        try:
+            decoration_to_write.to_excel(decoration_path, index=False)
+        except PermissionError as exc:
+            logger.warning("[SPC] CPK decoration file is locked, skipped writing %s: %s", decoration_path, exc)
     return decoration_to_write
 
 
@@ -166,7 +199,7 @@ def apply_cpk_decoration(
     corrected_period_capability_df: pd.DataFrame,
     decoration_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Use real CPK by default and replace only admin-enabled rows with corrected CPK."""
+    """Use real CPK by default and apply only admin-enabled user corrections."""
     result = real_period_capability_df.copy()
     if result.empty:
         result["cpk_decorated"] = pd.Series(dtype="bool")
@@ -198,7 +231,7 @@ def prepare_cpk_decoration(
     product_dir: Path,
     persist_files: bool = True,
 ) -> CpkDecorationResult:
-    """Build the admin CPK file and return chart-ready values selected by its flags."""
+    """Build current details and return chart-ready values selected by the user file."""
     detail_df = build_cpk_detail(real_period_capability_df, corrected_period_capability_df)
     decoration_df = (
         persist_cpk_files(product_dir, detail_df)

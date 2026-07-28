@@ -929,6 +929,7 @@ def _format_code_results(monthly, weekly, daily):
     return {
         'monthly': _fmt(monthly, '%Y-%m月', 3),
         'weekly': _fmt(weekly, 'ISO', 3),
+        'weekly_full': _fmt(weekly, 'ISO', 9999),
         'daily_full': _fmt(daily, '%Y-%m-%d', 9999),
         'daily': _fmt(daily, '%m-%d', 7)
     }

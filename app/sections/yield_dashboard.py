@@ -18,6 +18,7 @@ from app.charts.sheet_lot_chart import (
     create_sheet_stack_chart
 )
 from app.constants import COLOR_MAP
+from yield_domain.core.mapping.layout import resolve_mapping_layout
 from yield_domain.core.mapping.mapping_processor import apply_hotspot_modification_to_matrix
 
 # ==============================================================================
@@ -264,6 +265,7 @@ def render_mapping_section(
     curr_code: str,
     hotspot_scripts: list,
     product_code: Optional[str] = None,
+    mapping_layout: Optional[dict] = None,
 ):
     """处理矩阵变换与热区应用，渲染 Mapping"""
     with st.container(border=True):
@@ -293,15 +295,25 @@ def render_mapping_section(
         tabs = st.tabs(tab_labels)
         matrices_cache = {}
         g_max = 0
+        resolved_layout = resolve_mapping_layout(mapping_layout)
         
         for i, b in enumerate(batches):
             d = df_map[df_map['batch_no'] == b]
-            coords = d['panel_id'].apply(parse_panel_id_to_coords)
+            coords = d['panel_id'].apply(
+                lambda panel_id: parse_panel_id_to_coords(
+                    panel_id,
+                    mapping_layout,
+                )
+            )
             d_c = d.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r','c'])
             d_c[['r','c']] = d_c[['r','c']].astype(int)
             
             mat = pd.pivot_table(d_c, values='panel_id', index='r', columns='c', aggfunc='count', fill_value=0)
-            mat = mat.reindex(index=range(10), columns=range(19), fill_value=0)
+            mat = mat.reindex(
+                index=range(len(resolved_layout.row_labels)),
+                columns=range(len(resolved_layout.column_labels)),
+                fill_value=0,
+            )
             
             # [修改] 传递数字位置而非字符串：i=0(最旧), i=total-1(最新), i=中间位置
             mat = apply_hotspot_modification_to_matrix(
@@ -309,6 +321,7 @@ def render_mapping_section(
                 batch_position=i, total_batches=total_batches,
                 script_config_list=hotspot_scripts,
                 product_code=product_code,
+                mapping_layout=mapping_layout,
             )
 
             matrices_cache[b] = mat
@@ -316,7 +329,12 @@ def render_mapping_section(
         
         for i, b in enumerate(batches):
             with tabs[i]:
-                fig_map = create_mapping_heatmap(matrices_cache[b], f"批次 {b} 热力图", g_max)
+                fig_map = create_mapping_heatmap(
+                    matrices_cache[b],
+                    f"批次 {b} 热力图",
+                    g_max,
+                    mapping_layout=mapping_layout,
+                )
                 st.plotly_chart(fig_map, use_container_width=True)
 
 
@@ -400,6 +418,7 @@ def _prepare_mapping_matrices(
     curr_code: str,
     hotspot_scripts: list,
     product_code: Optional[str],
+    mapping_layout: Optional[dict] = None,
 ) -> tuple[List[str], Dict[str, pd.DataFrame], int, List[str]]:
     df_map = mapping_data[
         (mapping_data['defect_group'] == curr_group) &
@@ -413,13 +432,19 @@ def _prepare_mapping_matrices(
     tab_labels: List[str] = []
     matrices_cache: Dict[str, pd.DataFrame] = {}
     global_max = 0
+    resolved_layout = resolve_mapping_layout(mapping_layout)
 
     for i, batch_no in enumerate(batches):
         batch_df = df_map[df_map['batch_no'] == batch_no]
         total_in = batch_df['batch_total_input'].iloc[0] if 'batch_total_input' in batch_df.columns else 0
         tab_labels.append(f"{batch_no} ({int(total_in):,})" if total_in else str(batch_no))
 
-        coords = batch_df['panel_id'].apply(parse_panel_id_to_coords)
+        coords = batch_df['panel_id'].apply(
+            lambda panel_id: parse_panel_id_to_coords(
+                panel_id,
+                mapping_layout,
+            )
+        )
         coord_df = batch_df.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r', 'c'])
         coord_df[['r', 'c']] = coord_df[['r', 'c']].astype(int)
 
@@ -431,7 +456,11 @@ def _prepare_mapping_matrices(
             aggfunc='count',
             fill_value=0,
         )
-        matrix = matrix.reindex(index=range(10), columns=range(19), fill_value=0)
+        matrix = matrix.reindex(
+            index=range(len(resolved_layout.row_labels)),
+            columns=range(len(resolved_layout.column_labels)),
+            fill_value=0,
+        )
         matrix = apply_hotspot_modification_to_matrix(
             heatmap_matrix=matrix,
             batch_no=batch_no,
@@ -440,6 +469,7 @@ def _prepare_mapping_matrices(
             total_batches=total_batches,
             script_config_list=hotspot_scripts,
             product_code=product_code,
+            mapping_layout=mapping_layout,
         )
         matrices_cache[batch_no] = matrix
         global_max = max(global_max, int(matrix.max().max()))
@@ -453,6 +483,7 @@ def _render_compact_mapping_section(
     curr_code: str,
     hotspot_scripts: list,
     product_code: Optional[str],
+    mapping_layout: Optional[dict] = None,
 ) -> None:
     st.markdown("**B. Mapping集中性**")
     if mapping_data is None or mapping_data.empty:
@@ -465,6 +496,7 @@ def _render_compact_mapping_section(
         curr_code=curr_code,
         hotspot_scripts=hotspot_scripts,
         product_code=product_code,
+        mapping_layout=mapping_layout,
     )
     if not batches:
         st.warning("该 Code 在 Mapping 数据源中无记录。")
@@ -475,7 +507,12 @@ def _render_compact_mapping_section(
     key_fragment = _state_key_fragment(curr_group, curr_code)
     for i, batch_no in enumerate(batches):
         with tabs[i]:
-            fig_map = create_mapping_heatmap(matrices_cache[batch_no], f"批次 {batch_no} 热力图", global_max)
+            fig_map = create_mapping_heatmap(
+                matrices_cache[batch_no],
+                f"批次 {batch_no} 热力图",
+                global_max,
+                mapping_layout=mapping_layout,
+            )
             st.plotly_chart(
                 _apply_compact_chart_layout(fig_map, 345),
                 use_container_width=True,
@@ -737,6 +774,7 @@ def render_code_compact_expander(
     curr_warning: float,
     hotspot_scripts: list,
     product_code: Optional[str] = None,
+    mapping_layout: Optional[dict] = None,
     expanded: bool = False,
 ) -> None:
     label = _build_code_expander_label(mwd_code_data, curr_code, curr_warning)
@@ -751,6 +789,7 @@ def render_code_compact_expander(
                 curr_code=curr_code,
                 hotspot_scripts=hotspot_scripts,
                 product_code=product_code,
+                mapping_layout=mapping_layout,
             )
 
         target_lot = _render_compact_lot_chart(

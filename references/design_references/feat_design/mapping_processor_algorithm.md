@@ -10,13 +10,14 @@ panel_details_df
   -> prepare_mapping_data
        有效批次筛选
        最新五批排序
-       Panel 坐标确定性偏移
+       解析唯一 Mapping 修饰方案
+       默认方案执行 Panel 坐标确定性偏移
        By Code 的 Rate-Based 级联衰减
        固定种子抽样
   -> Panel ID 解析为矩阵坐标
   -> 按 Batch × Code 聚合 heatmap_matrix
   -> apply_hotspot_modification_to_matrix
-       original / random / additive / multiplicative
+       deterministic_position / original / random / additive / multiplicative
 ```
 
 Task2 不修改 Mapping 级联逻辑；本文记录当前实际行为。
@@ -25,9 +26,11 @@ Task2 不修改 Mapping 级联逻辑；本文记录当前实际行为。
 
 ### `prepare_mapping_data`
 
-输入：Panel 明细、首批缩放因子 `scaling_factor`、最小批次投入阈值 `min_panel_threshold`。
+输入：Panel 明细、首批缩放因子 `scaling_factor`、最小批次投入阈值
+`min_panel_threshold`、Mapping 修饰脚本、产品编码和可选产品 Mapping 布局。
 
-输出：经过坐标偏移和级联抽样后的不良 Panel 记录，并附加 `batch_total_input`。
+输出：经过唯一修饰方案对应的坐标处理和级联抽样后的不良 Panel 记录，并附加
+`batch_total_input`。
 
 处理步骤如下。
 
@@ -45,9 +48,23 @@ Task2 不修改 Mapping 级联逻辑；本文记录当前实际行为。
 
 只保留目标批次且 `defect_desc.notna()` 的记录。良品参与批次投入分母，但不进入 Mapping 点位和不良数分子。
 
-#### 2.4 确定性坐标偏移
+#### 2.4 唯一修饰方案与坐标处理
 
-逐批次调用 `get_deterministically_modified_panel_id(panel_id, batch_no)`。可解析坐标在行、列方向分别偏移 `[-2, 2]`，并裁剪到 10 × 19 的有效范围；无法解析或偏移为零时保留原 Panel ID。
+逐批次、逐 Code 调用 `resolve_mapping_modification_plan`。无匹配脚本时返回
+默认 `deterministic_position` 方案，并调用
+`get_deterministically_modified_panel_id(panel_id, batch_no)`；可解析坐标在
+行、列方向分别偏移 `[-2, 2]`，并裁剪到产品布局的有效范围。未配置布局时
+使用标准 10 × 19。
+
+#### 2.5 产品布局
+
+`processing.mapping_layout` 使用明确的 `row_labels` 和 `column_labels` 列表作为
+坐标解析、Panel ID 重建、热点规则和前端刻度的共同真值。例如 Z517 为
+`1A–1D, 2A–2D` 与 `A0–H0, J0–L0`，因此矩阵为 8 × 11 且跳过 `I0`。
+
+显式命中 `original`、`random`、`additive` 或 `multiplicative` 时保留原
+Panel ID，后续只执行该方案对应的矩阵行为。前置坐标处理和后置矩阵处理共用
+同一个方案解析器，不会叠加默认坐标偏移与显式矩阵修饰。
 
 #### 2.5 Rate-Based 级联衰减
 
@@ -137,12 +154,13 @@ defect_rate = defect_count / total_input
 
 输入是已按 Panel 坐标聚合的二维矩阵，以及产品、批次、Code、批次位置和修饰脚本列表。
 
-1. `_mapping_script_matches` 筛选启用且产品、Code、批次/批次位置均匹配的脚本；
-2. 无匹配脚本时原样返回；
-3. 以第一个匹配脚本决定模式，只叠加相同模式的后续热点规则；
-4. 执行模式运算；
-5. 普通加值/倍率模式最终转成整数并截断到非负；随机模式自身直接输出整数守恒矩阵；
-6. 异常时记录日志并返回原矩阵。
+1. `resolve_mapping_modification_plan` 统一筛选并排序匹配脚本；
+2. 无匹配脚本时锁定默认 `deterministic_position`，矩阵阶段原样返回；
+3. 有匹配脚本时只保留最高优先级层级；
+4. 该层第一行锁定唯一模式，只合并同层且同模式的后续热点规则；
+5. 执行模式运算；
+6. 普通加值/倍率模式最终转成整数并截断到非负；随机模式自身直接输出整数守恒矩阵；
+7. 异常时记录日志并返回原矩阵。
 
 矩阵修饰发生在 `prepare_mapping_data` 级联抽样之后，只改变热图格点数量或分布，不反向改变级联状态。
 
@@ -158,6 +176,18 @@ defect_rate = defect_count / total_input
 - `target_batch_index`。
 
 显式批次条件和批次位置条件同时存在时，两者必须都匹配。
+
+### 匹配优先级
+
+匹配完成后计算产品、Code、批次和批次位置四个维度的具体程度：
+
+1. 非 `ALL` / 非空条件每个记一个具体维度，具体维度更多者优先；
+2. 具体维度数量相同时，依次比较批次、批次位置、产品、Code；
+3. 优先级完全相同时保留 Mapping 配置表中的原始行序。
+
+只保留最高优先级层级，低优先级 `ALL` 规则不会再补充或叠加。该层第一行
+锁定唯一模式和普通区域参数；同层且同模式的后续行可继续补充热点膜位，同层
+但不同模式的行不执行。未命中特定条件时，`ALL` 规则继续作为回退。
 
 ### `_matches_target`
 
@@ -182,9 +212,16 @@ defect_rate = defect_count / total_input
 
 ## 6. 修饰模式
 
+### deterministic_position（默认）
+
+仅在没有匹配配置，或显式配置 `default` / `deterministic` /
+`deterministic_position` / `position_offset` 时启用。它在
+`prepare_mapping_data` 阶段执行确定性 Panel 坐标偏移，矩阵阶段不再修改。
+
 ### original / raw / none
 
-直接返回原矩阵。
+在 `prepare_mapping_data` 阶段跳过确定性坐标偏移，并在矩阵修饰阶段直接返回
+聚合矩阵。Rate-Based 级联抽样仍按正常流程执行。
 
 ### multiplicative
 
@@ -203,6 +240,11 @@ defect_rate = defect_count / total_input
 - `position`：单个行列坐标。
 
 脚本配置字典使用 10 行 × 21 列名称映射，但只对实际矩阵中存在的行列生效；当前 Panel 坐标矩阵通常为 10 × 19。
+
+`row` / `col` 命中的正数膜位在完成热点加值或倍率计算后，会独立增加
+`0..2` 的整数扰动。扰动种子由产品、批次、Code、模式和可选
+`random_seed` 稳定生成，因此同一输入可复现；行列交叉膜位只扰动一次。
+结果为 0 的膜位不新增 Panel，`position` 单点修饰仍保持配置的精确值。
 
 ## 7. 随机分布模式
 
@@ -254,8 +296,8 @@ scale = variation²
 ## 8. 守恒与非守恒边界
 
 - `prepare_mapping_data` 的级联抽样会减少不良 Panel 记录数，这是设计行为；
+- 默认 `deterministic_position` 只修改 Panel 坐标，不修改矩阵格点总数；
 - random 矩阵修饰严格保持进入修饰器时的矩阵总数；
 - additive 和 multiplicative 会改变矩阵总数；
-- original 不改变矩阵；
+- original 不执行坐标偏移，也不改变聚合后的矩阵；级联抽样仍可能减少记录数；
 - Mapping 数量不要求与 MWD 月度数量相等，也不建立月度到批次的换算依赖。
-

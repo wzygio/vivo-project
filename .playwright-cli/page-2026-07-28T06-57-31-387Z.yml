@@ -1,0 +1,135 @@
+- generic [ref=e2]:
+  - generic [ref=e6]:
+    - generic:
+      - list:
+        - listitem:
+          - link "Home" [ref=e7] [cursor=pointer]:
+            - /url: http://localhost:8503/
+            - generic:
+              - generic:
+                - paragraph: Home
+        - listitem:
+          - link "CTQ监控报表" [ref=e8] [cursor=pointer]:
+            - /url: http://localhost:8503/CTQ监控报表
+            - generic:
+              - generic:
+                - paragraph: CTQ监控报表
+        - listitem:
+          - link "SPC监控报表" [ref=e9] [cursor=pointer]:
+            - /url: http://localhost:8503/SPC监控报表
+            - generic:
+              - generic:
+                - paragraph: SPC监控报表
+        - listitem:
+          - link "专项资料-台账周报" [ref=e10] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-台账周报
+            - generic:
+              - generic:
+                - paragraph: 专项资料-台账周报
+        - listitem:
+          - link "专项资料-解析报告" [ref=e11] [cursor=pointer]:
+            - /url: http://localhost:8503/专项资料-解析报告
+            - generic:
+              - generic:
+                - paragraph: 专项资料-解析报告
+        - listitem:
+          - link "入库不良率ByLot明细表" [ref=e12] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率ByLot明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率ByLot明细表
+        - listitem:
+          - link "入库不良率BySheet明细表" [ref=e13] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率BySheet明细表
+            - generic:
+              - generic:
+                - paragraph: 入库不良率BySheet明细表
+        - listitem:
+          - link "入库不良率分析看板" [ref=e14] [cursor=pointer]:
+            - /url: http://localhost:8503/入库不良率分析看板
+            - generic:
+              - generic:
+                - paragraph: 入库不良率分析看板
+        - listitem:
+          - link "关键备件报表" [ref=e15] [cursor=pointer]:
+            - /url: http://localhost:8503/关键备件报表
+            - generic:
+              - generic:
+                - paragraph: 关键备件报表
+        - listitem:
+          - link "自动预警看板" [ref=e16] [cursor=pointer]:
+            - /url: http://localhost:8503/自动预警看板
+            - generic:
+              - generic:
+                - paragraph: 自动预警看板
+  - generic [ref=e3]:
+    - banner [ref=e19]:
+      - generic [ref=e21]:
+        - button "keyboard_double_arrow_right" [ref=e24] [cursor=pointer]
+        - generic [ref=e27]:
+          - generic [ref=e204]:
+            - img "Running..." [ref=e205]
+            - button "Stop" [ref=e210] [cursor=pointer]
+          - button "Deploy" [ref=e37] [cursor=pointer]
+          - button "Main menu" [ref=e41] [cursor=pointer]
+    - generic [ref=e45]:
+      - heading "SPC监控报表" [level=1] [ref=e50]:
+        - text: SPC监控报表
+        - generic [ref=e51]:
+          - link "Link to heading":
+            - /url: "#spc"
+      - generic [ref=e55]:
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: Z571
+            - combobox "Selected Z571. 📦 当前产品型号" [ref=e202]
+          - img "open" [ref=e67]
+        - button [ref=e78] [cursor=pointer]:
+          - paragraph [ref=e82]: 🔄 刷新数据
+        - button [ref=e90] [cursor=pointer]:
+          - paragraph [ref=e94]: 🔄 刷新缓存
+      - paragraph [ref=e218]: 正在加载 SPC 分布数据...
+      - group [ref=e105]:
+        - generic "keyboard_arrow_down CPK预警中心（CPK < 1.33）" [active] [ref=e238] [cursor=pointer]:
+          - generic [ref=e107]:
+            - generic [ref=e239]: keyboard_arrow_down
+            - paragraph [ref=e112]: CPK预警中心（CPK < 1.33）
+        - alert [ref=e245]:
+          - paragraph [ref=e250]: 未发现低于 1.33 的 CPK。
+      - group [ref=e115]:
+        - generic "keyboard_arrow_right 开发者后台：SPC 数据修饰" [ref=e116] [cursor=pointer]:
+          - generic [ref=e117]:
+            - generic [ref=e118]: keyboard_arrow_right
+            - paragraph [ref=e122]: 开发者后台：SPC 数据修饰
+      - generic [ref=e124]:
+        - heading "筛选" [level=4] [ref=e130]:
+          - text: 筛选
+          - generic [ref=e131]:
+            - link "Link to heading":
+              - /url: "#b7246533"
+        - generic [ref=e133]:
+          - generic [ref=e137]:
+            - paragraph [ref=e141]: 厂别
+            - generic [ref=e143]:
+              - generic [ref=e144]:
+                - generic [ref=e145]: ARRAY
+                - combobox "Selected ARRAY. 厂别" [ref=e147]
+              - img "open" [ref=e149]
+          - generic [ref=e154]:
+            - paragraph [ref=e158]: 站点
+            - generic [ref=e161]:
+              - generic [ref=e162]:
+                - combobox "站点" [ref=e164]
+                - generic: Choose options
+              - img "open" [ref=e166] [cursor=pointer]
+          - generic [ref=e171]:
+            - paragraph [ref=e175]: 参数名称
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - combobox "参数名称" [disabled] [ref=e181]
+                - generic: No options to select
+              - img "open" [ref=e183] [cursor=pointer]
+          - button [disabled] [ref=e189]:
+            - paragraph [ref=e193]: 查询
+      - alert [ref=e196]:
+        - paragraph [ref=e201]: 当前筛选条件尚未查询。

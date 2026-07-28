@@ -14,7 +14,11 @@ from yield_domain.application.excel_service import ExcelService
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
-from app.components.page_header import render_page_header, extract_cached_funcs
+from app.components.page_header import (
+    build_product_cache_signature,
+    extract_cached_funcs,
+    render_page_header,
+)
 from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
 from app.components.file_uploader import render_trend_override_uploader
@@ -35,6 +39,10 @@ YIELD_DASHBOARD_CACHE_SIGNATURE = "yield_dashboard_manual_refresh_v1"
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
 product_dir = SessionManager.get_product_dir()
+product_cache_signature = build_product_cache_signature(
+    YIELD_DASHBOARD_CACHE_SIGNATURE,
+    active_config.data_source.product_code,
+)
 
 # 依赖注入：初始化数据库连接
 db_manager = DatabaseManager()
@@ -53,6 +61,7 @@ render_page_header(
     config=active_config,
     cached_funcs=funcs_to_clear,
     refresh_handlers=refresh_handlers,
+    product_cache_scope=active_config.data_source.product_code,
 )
 
 # [Refactor] 4. 渲染趋势图覆盖文件上传组件
@@ -69,33 +78,35 @@ with st.spinner("正在加载全维度分析数据..."):
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
+        snapshot_signature=product_cache_signature
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
+        snapshot_signature=product_cache_signature
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE,
+        snapshot_signature=product_cache_signature,
     )
     sheet_data = YieldAnalysisService.get_sheet_defect_rates(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE,
+        snapshot_signature=product_cache_signature,
     )
     mapping_data = YieldAnalysisService.get_mapping_data(
         active_config,
         _db_manager=db_manager,
-        snapshot_signature=YIELD_DASHBOARD_CACHE_SIGNATURE
+        snapshot_signature=product_cache_signature
     )
     warning_lines = YieldAnalysisService.load_static_warning_lines(
-        active_config, product_dir
+        active_config,
+        product_dir,
+        product_cache_signature,
     )
 
 # 基础校验
@@ -200,5 +211,6 @@ for group_index, curr_group in enumerate(selected_groups):
             curr_warning=float(curr_warning.get('upper', 0.002)),
             hotspot_scripts=hotspot_scripts,
             product_code=active_config.data_source.product_code,
+            mapping_layout=active_config.processing.get('mapping_layout'),
             expanded=True,
         )

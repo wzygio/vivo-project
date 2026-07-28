@@ -1,0 +1,26 @@
+[     904ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/health:0
+[     907ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/host-config:0
+[    1098ms] [ERROR] Failed to load resource: net::ERR_ACCESS_DENIED @ https://data.streamlit.io/metrics.json:0
+[    1098ms] [ERROR] Failed to fetch metrics config: TypeError: Failed to fetch
+    at MetricsManager.requestDefaultMetricsConfig (http://localhost:8503/static/js/index.RuhrnD1v.js:141:12838)
+    at MetricsManager.initialize (http://localhost:8503/static/js/index.RuhrnD1v.js:141:12150)
+    at App.handleInitialization (http://localhost:8503/static/js/index.RuhrnD1v.js:141:28627)
+    at App.handleNewSession (http://localhost:8503/static/js/index.RuhrnD1v.js:141:27397)
+    at Object.newSession (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22107)
+    at e (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22018)
+    at App.handleMessage [as onMessage] (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22076)
+    at WebsocketConnection.handleMessage (http://localhost:8503/static/js/index.RuhrnD1v.js:137:4043) @ http://localhost:8503/static/js/index.RuhrnD1v.js:140
+[    1098ms] [ERROR] Undefined metrics config - deactivating metrics tracking. @ http://localhost:8503/static/js/index.RuhrnD1v.js:140
+[   48891ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/health:0
+[   48892ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/host-config:0
+[   49072ms] [ERROR] Failed to load resource: net::ERR_ACCESS_DENIED @ https://data.streamlit.io/metrics.json:0
+[   49072ms] [ERROR] Failed to fetch metrics config: TypeError: Failed to fetch
+    at MetricsManager.requestDefaultMetricsConfig (http://localhost:8503/static/js/index.RuhrnD1v.js:141:12838)
+    at MetricsManager.initialize (http://localhost:8503/static/js/index.RuhrnD1v.js:141:12150)
+    at App.handleInitialization (http://localhost:8503/static/js/index.RuhrnD1v.js:141:28627)
+    at App.handleNewSession (http://localhost:8503/static/js/index.RuhrnD1v.js:141:27397)
+    at Object.newSession (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22107)
+    at e (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22018)
+    at App.handleMessage [as onMessage] (http://localhost:8503/static/js/index.RuhrnD1v.js:141:22076)
+    at WebsocketConnection.handleMessage (http://localhost:8503/static/js/index.RuhrnD1v.js:137:4043) @ http://localhost:8503/static/js/index.RuhrnD1v.js:140
+[   49072ms] [ERROR] Undefined metrics config - deactivating metrics tracking. @ http://localhost:8503/static/js/index.RuhrnD1v.js:140

@@ -2,8 +2,12 @@
 import pandas as pd
 import logging
 import re
+from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
-from src.yield_domain.core.mapping.hotspot_modification import apply_hotspot_modification_to_matrix
+from src.yield_domain.core.mapping.hotspot_modification import (
+    apply_hotspot_modification_to_matrix,
+    resolve_mapping_modification_plan,
+)
 from src.yield_domain.core.mapping.panel_position import (
     get_deterministically_modified_panel_id as _get_deterministically_modified_panel_id,
     parse_panel_id_to_coords as _parse_panel_id_to_coords,
@@ -17,7 +21,10 @@ from src.yield_domain.core.mapping.panel_position import (
 def prepare_mapping_data(
     panel_details_df: pd.DataFrame,
     scaling_factor: float,
-    min_panel_threshold: int = 0
+    min_panel_threshold: int = 0,
+    hotspot_scripts: Optional[list[dict[str, Any]]] = None,
+    product_code: Optional[str] = None,
+    mapping_layout: Optional[dict[str, Any]] = None,
 ) -> pd.DataFrame:
     """
     [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
@@ -85,14 +92,39 @@ def prepare_mapping_data(
 
         if df_defective_panels.empty: return pd.DataFrame()
 
-        # --- 步骤2: 位置随机化 (保持不变) ---
+        # --- 步骤2: 按唯一修饰方案执行默认位置修饰 ---
         batches_after_pos_modification: list[pd.DataFrame] = []
-        for batch_no in sorted_batches:
+        total_batches = len(sorted_batches)
+        for batch_position, batch_no in enumerate(sorted_batches):
             df_current_batch = df_defective_panels[df_defective_panels['batch_no'] == batch_no].copy()
-            df_current_batch['panel_id'] = df_current_batch.apply(
-                lambda row: _get_deterministically_modified_panel_id(row['panel_id'], row['batch_no']),
-                axis=1
-            )
+            for code_desc in df_current_batch['defect_desc'].unique():
+                modification_plan = resolve_mapping_modification_plan(
+                    script_config_list=hotspot_scripts or [],
+                    product_code=product_code,
+                    code_desc=code_desc,
+                    batch_no=batch_no,
+                    batch_position=batch_position,
+                    total_batches=total_batches,
+                )
+                if not modification_plan.applies_default_position_modification:
+                    continue
+
+                code_mask = df_current_batch['defect_desc'] == code_desc
+                def _modify_panel_position(row: pd.Series) -> str:
+                    if mapping_layout:
+                        return _get_deterministically_modified_panel_id(
+                            row['panel_id'],
+                            row['batch_no'],
+                            mapping_layout,
+                        )
+                    return _get_deterministically_modified_panel_id(
+                        row['panel_id'],
+                        row['batch_no'],
+                    )
+
+                df_current_batch.loc[code_mask, 'panel_id'] = df_current_batch.loc[
+                    code_mask
+                ].apply(_modify_panel_position, axis=1)
             batches_after_pos_modification.append(df_current_batch) 
         
         if not batches_after_pos_modification:

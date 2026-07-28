@@ -84,7 +84,14 @@
 **核心算法**：泊松散布 + 多项式分配 + 软熔断
 
 - 输入：Panel 级缺陷数据
-- 计算：`_simulate_concentration` → `_distribute_sheet_from_lot`
+- MWD 周度契约：`weekly_full` 保存三个月计算窗口，供 Lot 等下游逻辑使用；
+  `weekly` 仅保留最近三周供界面展示
+- Lot 基准：按入库日期映射所属 ISO 周，读取同 Code 的 MWD `weekly_full` 良损；
+  先按 Code × 周汇总并四舍五入整数不良总数，再按 Lot 面积及固定种子的
+  ±20% 权重分配，避免稀有不良在每个 Lot 独立取整后全部归零
+- 完整周度中未命中的周：按 0 生成，不使用原始 Lot 或 `daily_full` 兜底
+- 外部 Lot 覆盖：启发式公式的 Base 同样使用所属周良损
+- 计算：`_simulate_concentration` → 规格截断/覆盖 → `_distribute_sheet_from_lot`
 - 输出：Lot 级 / Sheet 级不良率
 - **红线**：禁止静态重构 `_simulate_concentration` 和 `_distribute_sheet_from_lot`
 
@@ -93,7 +100,9 @@
 **核心算法**：级联衰减 + 热点修饰脚本
 
 - 输入：Sheet 级坐标数据
-- 计算：基于坐标解析 `_parse_panel_id_to_coords`，Rate-Based 级联衰减
+- 布局：产品可通过 `processing.mapping_layout.row_labels/column_labels`
+  声明物理膜位；未配置时使用标准 10 × 19
+- 计算：布局感知的坐标解析、确定性偏移与热点修饰，随后执行 Rate-Based 级联衰减
 - 输出：Mapping 热力图数据
 - **红线**：禁止静态重构级联衰减逻辑
 

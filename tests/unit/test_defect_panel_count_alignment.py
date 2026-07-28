@@ -5,6 +5,42 @@ from yield_domain.core.mwd_trend import mwd_trend_processor as trend_module
 from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
 
 
+def test_code_formatter_exposes_full_weekly_history_but_keeps_ui_at_three_weeks() -> None:
+    weekly = pd.DataFrame(
+        {
+            "warehousing_time": pd.date_range(
+                "2026-05-24",
+                periods=6,
+                freq="7D",
+            ),
+            "total_panels": [10_000] * 6,
+            "defect_group": ["Array_Line"] * 6,
+            "defect_desc": ["CodeA"] * 6,
+            "defect_panel_count": [1, 2, 3, 4, 5, 6],
+        }
+    )
+
+    result = trend_module._format_code_results(
+        monthly=pd.DataFrame(),
+        weekly=weekly,
+        daily=pd.DataFrame(),
+    )
+
+    assert result["weekly"]["time_period"].astype(str).unique().tolist() == [
+        "2026-W24",
+        "2026-W25",
+        "2026-W26",
+    ]
+    assert result["weekly_full"]["time_period"].astype(str).unique().tolist() == [
+        "2026-W21",
+        "2026-W22",
+        "2026-W23",
+        "2026-W24",
+        "2026-W25",
+        "2026-W26",
+    ]
+
+
 def test_code_daily_counts_are_reconciled_to_raw_monthly_integer_total() -> None:
     daily = pd.DataFrame(
         {

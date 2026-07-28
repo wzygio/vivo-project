@@ -17,7 +17,11 @@ if project_root:
 
 import streamlit as st
 
-from app.components.page_header import extract_cached_funcs, render_page_header
+from app.components.page_header import (
+    build_product_cache_signature,
+    extract_cached_funcs,
+    render_page_header,
+)
 from app.sections.spc.spc_dashboard import (
     build_daily_cpk_alerts,
     filter_spc_report,
@@ -44,6 +48,10 @@ AppSetup.initialize_app()
 
 active_config = SessionManager.get_active_config()
 current_product = active_config.data_source.product_code
+product_cache_signature = build_product_cache_signature(
+    SPC_PAGE_CACHE_SIGNATURE,
+    current_product,
+)
 db_manager = DatabaseManager()
 
 _, default_end_dt = MonitorAnalysisService.get_time_window()
@@ -60,6 +68,7 @@ render_page_header(
     title="SPC监控报表",
     config=active_config,
     cached_funcs=extract_cached_funcs(SpcReportService),
+    product_cache_scope=current_product,
     refresh_handlers=[
         lambda: MonitorAnalysisService.safe_refresh_snapshots(
             db_manager,
@@ -72,7 +81,7 @@ with st.spinner("正在加载 SPC 分布数据..."):
     view_model = SpcReportService.get_spc_report_data(
         _db_manager=db_manager,
         query_config_json=query_config.model_dump_json(),
-        snapshot_signature=SPC_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=product_cache_signature,
         period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
     )
 
@@ -81,7 +90,10 @@ raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
 period_capability_df = view_model.period_capability_df
 
-cpk_alerts_df = build_daily_cpk_alerts(period_capability_df)
+cpk_alerts_df = build_daily_cpk_alerts(
+    period_capability_df,
+    reference_date=default_end_dt.date(),
+)
 render_cpk_alert_center(
     cpk_alerts_df,
     has_capability_data=not period_capability_df.empty,

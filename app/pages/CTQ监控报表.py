@@ -17,7 +17,11 @@ if project_root:
 
 import streamlit as st
 
-from app.components.page_header import extract_cached_funcs, render_page_header
+from app.components.page_header import (
+    build_product_cache_signature,
+    extract_cached_funcs,
+    render_page_header,
+)
 from app.sections.ctq.ctq_dashboard import (
     filter_ctq_report,
     get_default_ctq_start_date,
@@ -41,6 +45,10 @@ AppSetup.initialize_app()
 
 active_config = SessionManager.get_active_config()
 current_product = active_config.data_source.product_code
+product_cache_signature = build_product_cache_signature(
+    CTQ_PAGE_CACHE_SIGNATURE,
+    current_product,
+)
 db_manager = DatabaseManager()
 
 _, default_end_dt = MonitorAnalysisService.get_time_window()
@@ -56,6 +64,7 @@ render_page_header(
     title="CTQ监控报表",
     config=active_config,
     cached_funcs=extract_cached_funcs(CtqReportService),
+    product_cache_scope=current_product,
     refresh_handlers=[
         lambda: MonitorAnalysisService.safe_refresh_snapshots(
             db_manager,
@@ -68,7 +77,7 @@ with st.spinner("正在加载 CTQ 分布数据..."):
     view_model = CtqReportService.get_ctq_report_data(
         _db_manager=db_manager,
         query_config_json=query_config.model_dump_json(),
-        snapshot_signature=CTQ_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=product_cache_signature,
     )
 
 sheet_features_df = view_model.sheet_features_df
@@ -111,4 +120,3 @@ render_ctq_indicator_sections(
     raw_measurements_df=filtered_raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
 )
-
