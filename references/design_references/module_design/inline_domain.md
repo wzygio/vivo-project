@@ -140,6 +140,7 @@ DAO 层职责（纯数据访问，无业务逻辑）：
 
 `SpcRepository` 职责：
 - Parquet 格式快照缓存（L1 缓存，TTL 8h）
+- 参数筛选策略版本校验；版本变化时全量刷新，数据库不可用时仍降级到旧快照
 - **参数白名单过滤**（三步：DAO 裸查 → Core 分类 → Repo 筛选 + merge）
 - 异常值过滤（Outlier Filter）
 - 规格覆盖（Override from YAML）
@@ -155,6 +156,10 @@ if filter != "ALL":
     raw_whitelist = raw_whitelist[raw_whitelist["data_type"] == filter]  # ③ Repo: 前端筛选
 df_filtered = df_filtered.merge(raw_whitelist, ...)      # ④ 注入 data_type 标签
 ```
+
+参数名包含 `LOSS` 的记录仍在 SQL 与历史快照兜底层统一排除。`MT_CH_*`
+不属于全局排除项，其是否进入 SPC 报表完全由白名单中的标准化 `data_type`
+决定。
 
 ---
 

@@ -15,7 +15,7 @@ from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
 
-def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) -> None:
+def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch) -> None:
     events: list[str] = []
     load_count = 0
     loaded_signatures: list[str] = []
@@ -79,7 +79,10 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
     monkeypatch.setattr(
         page_header,
         "render_page_header",
-        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+        lambda *_args, **kwargs: (
+            header_kwargs.update(kwargs),
+            events.append("header"),
+        ),
     )
     monkeypatch.setattr(ConfigLoader, "get_spc_period_sigma_source", staticmethod(lambda: "point_value"))
     monkeypatch.setattr(ConfigLoader, "get_spc_period_box_source", staticmethod(lambda: "point_value"))
@@ -133,4 +136,4 @@ def test_cpm_page_preloads_once_then_renders_alerts_before_filters(monkeypatch) 
             "CPK值": 1.278,
         }
     ]
-    assert events == ["alerts", "alert_charts", "filters", "charts"]
+    assert events == ["header", "filters", "alerts", "alert_charts", "charts"]

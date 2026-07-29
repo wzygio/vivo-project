@@ -30,12 +30,34 @@ class SpcRepository:
     [仓储层] SPC 数据仓储引擎
     职责：拦截DB直连，维护 Parquet 快照，支持全量刷新。
     """
-    SNAPSHOT_TTL_HOURS = 8 
+    SNAPSHOT_TTL_HOURS = 8
+    SNAPSHOT_POLICY_VERSION = "spc-param-filter-v2"
 
     def __init__(self, snapshot_dir: Path, use_snapshot: bool = True, db_manager: Optional['DatabaseManager'] = None):
         self.snapshot_dir = snapshot_dir
         self.use_snapshot = use_snapshot
         self.db = db_manager
+
+    @classmethod
+    def _snapshot_policy_path(cls, snapshot_path: Path) -> Path:
+        return snapshot_path.with_suffix(".policy")
+
+    @classmethod
+    def _is_snapshot_policy_current(cls, snapshot_path: Path) -> bool:
+        try:
+            return (
+                cls._snapshot_policy_path(snapshot_path).read_text(encoding="utf-8").strip()
+                == cls.SNAPSHOT_POLICY_VERSION
+            )
+        except OSError:
+            return False
+
+    @classmethod
+    def _write_snapshot_policy(cls, snapshot_path: Path) -> None:
+        cls._snapshot_policy_path(snapshot_path).write_text(
+            cls.SNAPSHOT_POLICY_VERSION,
+            encoding="utf-8",
+        )
 
     # ==========================================
     # 🆕 新增接口：规格线数据拉取代理
@@ -194,6 +216,11 @@ class SpcRepository:
                         if "unit_id" not in df_cache.columns:
                             logging.info("🆕 [SpcRepo] SPC 快照缺少 unit_id 字段，触发一次结构刷新。")
                             is_cache_fresh = False
+                        elif not self._is_snapshot_policy_current(snapshot_path):
+                            logging.info(
+                                "🆕 [SpcRepo] SPC 快照参数筛选策略已升级，触发一次全量刷新。"
+                            )
+                            is_cache_fresh = False
                         elif age_hours < self.SNAPSHOT_TTL_HOURS:
                             if df_cache[time_col].max() >= req_end_dt:
                                 is_cache_fresh = True
@@ -242,6 +269,7 @@ class SpcRepository:
                 try:
                     self.snapshot_dir.mkdir(parents=True, exist_ok=True)
                     df_to_save.to_parquet(snapshot_path, index=False)
+                    self._write_snapshot_policy(snapshot_path)
                     logging.info("✅ [SpcRepo] 快照保存完成！")
                 except Exception as e:
                     logging.error(f"❌ 快照保存失败: {e}")

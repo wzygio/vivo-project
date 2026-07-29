@@ -11,7 +11,8 @@ if TYPE_CHECKING:
     # 假设使用已存在的 DB Manager，实际传入的只要带有 .engine 属性的实例即可
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
-SPC_EXCLUDED_PARAM_NAME_KEYWORDS = ("LOSS", "MT_CH_PRESS")
+# MT_CH_* parameters are governed by the whitelist data_type and must remain eligible for SPC.
+SPC_EXCLUDED_PARAM_NAME_KEYWORDS = ("LOSS",)
 
 
 def build_excluded_param_sql_predicates(column_expr: str) -> str:

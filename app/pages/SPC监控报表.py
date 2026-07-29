@@ -90,6 +90,14 @@ raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
 period_capability_df = view_model.period_capability_df
 
+if sheet_features_df.empty or indicator_df.empty:
+    st.info("当前产品暂无可展示的 SPC 数据。")
+    st.stop()
+
+selected_factory, selected_params, selected_steps, should_render_report = render_spc_filters(
+    indicator_df=indicator_df
+)
+
 cpk_alerts_df = build_daily_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
@@ -99,10 +107,6 @@ render_cpk_alert_center(
     has_capability_data=not period_capability_df.empty,
 )
 
-if sheet_features_df.empty or indicator_df.empty:
-    st.info("当前产品暂无可展示的 SPC 数据。")
-    st.stop()
-
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
 if is_admin:
@@ -110,6 +114,7 @@ if is_admin:
         getattr(view_model, "sheet_oos_decoration_result", None),
         getattr(view_model, "cpk_decoration_result", None),
     )
+
 
 render_cpk_alert_indicator_sections(
     alerts_df=cpk_alerts_df,
@@ -119,13 +124,10 @@ render_cpk_alert_indicator_sections(
     period_box_source=ConfigLoader.get_spc_period_box_source(),
 )
 
-selected_factory, selected_params, selected_steps, should_render_report = render_spc_filters(
-    indicator_df=indicator_df
-)
-
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
     st.stop()
+
 
 filtered_period_capability_df = filter_spc_report(
     report_df=period_capability_df,

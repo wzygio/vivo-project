@@ -8,7 +8,7 @@ class DummyDbManager:
         self.engine = object()
 
 
-def test_load_spc_measurements_selects_unit_id_for_chamber_grouping(monkeypatch) -> None:
+def test_load_spc_measurements_keeps_mt_ch_spc_parameters(monkeypatch) -> None:
     captured_sql: dict[str, str] = {}
 
     def fake_read_sql(sql_query, engine) -> pd.DataFrame:
@@ -64,7 +64,7 @@ def test_load_spc_measurements_selects_unit_id_for_chamber_grouping(monkeypatch)
     normalized_sql = " ".join(captured_sql["text"].lower().split())
     assert "t.unit_id" in normalized_sql
     assert "upper(t.param_name) not like '%loss%'" in normalized_sql
-    assert "upper(t.param_name) not like '%mt_ch_press%'" in normalized_sql
+    assert "upper(t.param_name) not like '%mt_ch" not in normalized_sql
     assert "unit_id" in result.columns
     assert result.loc[0, "unit_id"] == "3CEE02-PPA"
-    assert result["param_name"].tolist() == ["PPA_B_X"]
+    assert result["param_name"].tolist() == ["PPA_B_X", "MT_CH_PRESS_A"]

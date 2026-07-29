@@ -22,8 +22,10 @@ textColor = "#334155"
 font = "sans serif"
 
 [server]
-# 禁止 Streamlit 自动打开浏览器 (因为我们要让脚本打开门户页面)
+# 禁止 Streamlit 自动打开浏览器
 headless = true
+# 保存源码后立即触发页面 rerun；深层依赖模块由 setup_hot_reload 负责卸载。
+runOnSave = true
 
 [client]
 # 强制开启开发者工具栏 (恢复 Rerun 按钮)

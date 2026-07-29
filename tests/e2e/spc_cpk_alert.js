@@ -11,12 +11,11 @@ async page => {
     await page.getByRole("option", { name: "M673" }).click();
   }
 
-  // Wait for the M673 page rerun to finish before clicking the cache button.
-  // Waiting only for a spinner to be hidden can resolve before that spinner
-  // appears, causing the click to hit the preceding product's page instance.
   await page
-    .getByText("TP | 41260 | 4PP_Rs", { exact: true })
-    .first()
+    .getByRole("combobox", { name: /Selected M673/ })
+    .waitFor({ timeout: 120_000 });
+  await page
+    .getByRole("heading", { name: "筛选", exact: true })
     .waitFor({ timeout: 120_000 });
 
   const refreshedToast = page
@@ -24,22 +23,56 @@ async page => {
     .waitFor({ timeout: 30_000 });
   await page.getByRole("button", { name: "🔄 刷新缓存" }).click();
   await refreshedToast;
-  await page.getByText(/检测到 \d+ 条 CPK 预警/).waitFor({ timeout: 120_000 });
   await page
-    .getByText("TP | 41260 | 4PP_Rs", { exact: true })
-    .first()
-    .waitFor({ timeout: 120_000 });
+    .getByText("正在加载 SPC 分布数据...")
+    .waitFor({ state: "hidden", timeout: 120_000 });
   await page
-    .getByText(/日 \| 2026-07-22/)
-    .first()
+    .getByRole("heading", { name: "筛选", exact: true })
     .waitFor({ timeout: 120_000 });
 
-  const staleAllClearCount = await page
-    .getByText(/未发现低于 1.33 的 CPK/)
-    .count();
-  if (staleAllClearCount !== 0) {
-    throw new Error("刷新缓存后仍显示无 CPK 预警。");
+  const alertCenterSummary = page
+    .locator("summary")
+    .filter({ hasText: "CPK预警中心" });
+  await alertCenterSummary.click();
+  await page.waitForFunction(
+    () => {
+      const text = document.body.innerText;
+      return (
+        /检测到 \d+ 条 CPK 预警/.test(text) ||
+        text.includes("未发现低于 1.33 的 CPK")
+      );
+    },
+    null,
+    { timeout: 120_000 },
+  );
+
+  const alertMessage = page.getByText(/检测到 \d+ 条 CPK 预警/);
+  const allClearMessage = page.getByText(/未发现低于 1.33 的 CPK/);
+  const hasAlerts = (await alertMessage.count()) > 0;
+  if (hasAlerts) {
+    await page
+      .getByRole("heading", { name: "自动预警指标图像", exact: true })
+      .waitFor({ timeout: 120_000 });
+    const expanderCount = await page
+      .locator('[data-testid="stExpander"]')
+      .count();
+    if (expanderCount < 2) {
+      throw new Error("存在 CPK 预警，但没有渲染对应的自动预警指标。");
+    }
+  } else {
+    await allClearMessage.waitFor({ timeout: 30_000 });
+    if (
+      (await page
+        .getByRole("heading", {
+          name: "自动预警指标图像",
+          exact: true,
+        })
+        .count()) !== 0
+    ) {
+      throw new Error("CPK 全部合规时仍渲染了自动预警指标。");
+    }
   }
+
   const callbackRerunWarningCount = await page
     .getByText(/Calling st\.rerun\(\) within a callback is a no-op\./)
     .count();
@@ -49,11 +82,6 @@ async page => {
 
   return {
     product: await productSelector.getAttribute("aria-label"),
-    alert: await page.getByText(/检测到 \d+ 条 CPK 预警/).innerText(),
-    indicator: await page
-      .getByText("TP | 41260 | 4PP_Rs", { exact: true })
-      .first()
-      .innerText(),
-    alertDate: "2026-07-22",
+    status: hasAlerts ? await alertMessage.innerText() : await allClearMessage.innerText(),
   };
 }

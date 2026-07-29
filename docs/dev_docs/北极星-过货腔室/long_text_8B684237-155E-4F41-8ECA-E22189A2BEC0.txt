@@ -1,0 +1,209 @@
+with prod_code_data as (
+--《V3 SPC监控for北极星-V2》王书
+select distinct B.product_code 
+,A.productspecname 
+from EDA.IMP_SPC_TZBJX A 
+left join DWR_MES_PRODUCTSPEC_V B on A.productspecname =B.prod_id 
+where 1=1
+${IF(LEN(cmcbProdid)=0,"","AND B.product_code IN ('"+cmcbProdid+"')")}  
+)
+,spc_raw_data as (
+	select 'ARRAY'::varchar(100) as factory
+	,a.step_id 
+	,(a.step_id ||'-'|| B.description)::varchar(200) as OPER_NAME
+	,a.sheet_id as mat_id
+	,a.sheet_start_time as start_time
+	,to_char(a.sheet_start_time,'YYYYMMDD')::varchar(100) as date_timekey
+	,a.product_spec 
+	,a.equip_id 
+	,a.pre_sub_unit_id
+	,a.param_name 
+	,c.product_code::varchar(100) as prod_code
+	,a.site_name 
+	,a.param_value 
+	,(dense_rank ()OVER(partition by A.sheet_id,A.step_id,A.param_name order by a.sheet_start_time desc))::numeric as rn
+	from eda.spc_tzbjx_array a
+	left join dwr_mes_processoperationspec_v B on A.step_id =B.oper_code
+	left join dwr_mes_productspec_v c on a.product_spec =c.prod_id 
+	inner join prod_code_data s on a.product_spec =s.productspecname
+	inner join EDA.IMP_SPC_TZBJX x on a.step_id =x.step_id and a.param_name =x.parmtername and x.data_type ='SPC'
+	where 1=1
+	and A.sheet_start_time >='${dtStartDate}'::TIMESTAMP
+	and A.sheet_start_time <='${dtEndDate}'::TIMESTAMP + interval '1day'
+	and B.detail_oper_code_type not in ('VIEW','AOI')
+	and abs(a.param_value) !=299.99
+	${IF(LEN(cmcbStep)=0,"","AND A.step_id IN ('"+cmcbStep+"')")}
+	${IF(LEN(cmcbParamname)=0,"","AND a.param_name IN ('"+cmcbParamname+"')")}
+	${IF(LEN(cmcbFactory)=0,"","AND B.factory IN ('"+cmcbFactory+"')")}
+	union all
+	select 'OLED'::varchar(100) as factory
+	,a.step_id 
+	,(a.step_id ||'-'|| B.description)::varchar(200) as OPER_NAME
+	,a.glass_id  as mat_id
+	,a.glass_start_time  as start_time
+	,to_char(a.glass_start_time,'YYYYMMDD')::varchar(100) as date_timekey
+	,a.product_spec 
+	,a.equip_id 
+	,a.pre_sub_unit_id
+	,a.param_name 
+--	,c.product_code as prod_code
+	,(case when c.product_code ='MQC' then c.product_code ||'-'|| coalesce (G.PRODCODE,'') else c.product_code end)::varchar(100) as prod_code
+	,a.site_name 
+	,a.param_value 
+	,(dense_rank ()OVER(partition by A.glass_id,A.step_id,A.param_name order by a.glass_start_time desc))::numeric  as rn
+	from eda.spc_tzbjx_oled a
+	left join dwr_mes_processoperationspec_v B on A.step_id =B.oper_code 
+	left join dwr_mes_productspec_v c on a.product_spec =c.prod_id 
+	inner join prod_code_data s on a.product_spec =s.productspecname
+	left join dwd_calendar H on to_char(a.glass_start_time,'YYYYMMDD') = H.time_key and H.factory ='ARRAY'
+	left join (select distinct ppid ,prodcode from EDA.IMP_SPC_TZBJX_MQC) G on A.PPID =G.PPID and c.product_code ='MQC' 
+	inner join EDA.IMP_SPC_TZBJX x on a.step_id =x.step_id and a.param_name =x.parmtername and x.data_type ='SPC'
+	where 1=1
+	and A.glass_start_time >='${dtStartDate}'::TIMESTAMP
+	and A.glass_start_time <='${dtEndDate}'::TIMESTAMP + interval '1day'
+	and B.detail_oper_code_type not in ('VIEW','AOI')
+	and abs(a.param_value) !=299.99
+	and case when '${cmcbProdid}' ='MQC' then (c.product_code ||'-'|| coalesce (G.PRODCODE,''))::varchar(100) = '${cmcbMqcProd}' else 1=1 end 
+	${IF(LEN(cmcbStep)=0,"","AND A.step_id IN ('"+cmcbStep+"')")}
+	${IF(LEN(cmcbParamname)=0,"","AND a.param_name IN ('"+cmcbParamname+"')")}
+	${IF(LEN(cmcbFactory)=0,"","AND B.factory IN ('"+cmcbFactory+"')")}
+	and case when (a.step_id ='21230') AND (a.param_name='B_0_CIE_Y') then (a.param_value>0.0415) and (a.param_value<0.0555) 
+		when (a.step_id ='21230') AND (a.param_name='Bi_0') then (a.param_value>114) and (a.param_value<210) 
+		when (a.step_id ='21230') AND (a.param_name='G_0_CIE_X') then (a.param_value>0.2161) and (a.param_value<0.2761) 
+		when (a.step_id ='21230') AND (a.param_name='G_0_E') then (a.param_value>127) and (a.param_value<223) 
+		when (a.step_id ='21230') AND (a.param_name='JNCD_30') then (a.param_value>0) and (a.param_value<100) 
+		when (a.step_id ='21230') AND (a.param_name='JNCD_45') then (a.param_value>0) and (a.param_value<100) 
+		when (a.step_id ='21230') AND (a.param_name='JNCD_60') then (a.param_value>0) and (a.param_value<100) 
+		when (a.step_id ='21230') AND (a.param_name='R_0_CIE_X') then (a.param_value>0.6721) and (a.param_value<0.6861) 
+		when (a.step_id ='21230') AND (a.param_name='R_0_E') then (a.param_value>40) and (a.param_value<100)
+		when (a.step_id ='21200') AND (a.param_name in ('PPA_B_X'
+			,'PPA_B_Y'
+			,'PPA_G1_X'
+			,'PPA_G1_Y'
+			,'PPA_G_X'
+			,'PPA_G_Y'
+			,'PPA_R1_X'
+			,'PPA_R1_Y'
+			,'PPA_R_X'
+			,'PPA_R_Y')) then (a.param_value>=-6) and (a.param_value<=6) 
+		ELSE 1=1
+		end
+	union all
+	select 'TP'::varchar(100) as factory
+	,a.step_id 
+	,(a.step_id ||'-'|| B.description)::varchar(200) as OPER_NAME
+	,a.glass_id  as mat_id
+	,a.glass_start_time  as start_time
+	,to_char(a.glass_start_time,'YYYYMMDD')::varchar(100) as date_timekey
+	,a.product_spec 
+	,a.equip_id 
+	,a.pre_sub_unit_id
+	,a.param_name 
+	,c.product_code::varchar(100) as prod_code
+	,a.site_name 
+	,a.param_value
+	,(dense_rank ()OVER(partition by A.glass_id,A.step_id,A.param_name order by a.glass_start_time desc))::numeric as rn
+	from eda.spc_tzbjx_tsp a
+	left join dwr_mes_processoperationspec_v B on A.step_id =B.oper_code 
+	left join dwr_mes_productspec_v c on a.product_spec =c.prod_id 
+	inner join prod_code_data s on a.product_spec =s.productspecname
+	inner join EDA.IMP_SPC_TZBJX x on a.step_id =x.step_id and a.param_name =x.parmtername and x.data_type ='SPC'
+	where 1=1
+	and A.glass_start_time >='${dtStartDate}'::TIMESTAMP
+	and A.glass_start_time <='${dtEndDate}'::TIMESTAMP + interval '1day'
+	and B.detail_oper_code_type not in ('VIEW','AOI')
+	and abs(a.param_value) !=299.99
+	${IF(LEN(cmcbStep)=0,"","AND A.step_id IN ('"+cmcbStep+"')")}
+	${IF(LEN(cmcbParamname)=0,"","AND a.param_name IN ('"+cmcbParamname+"')")}
+	${IF(LEN(cmcbFactory)=0,"","AND B.factory IN ('"+cmcbFactory+"')")}
+) 
+,FANEL_DATA as (
+select 'DAY'::varchar(100) as DATE_TYPE
+,A.DATE_TIMEKEY::varchar(100) as DATE_VALUE
+,A.factory
+,a.OPER_NAME 
+,a.step_id 
+,a.prod_code
+,a.param_name
+,A.PARAM_VALUE
+,(dense_rank ()OVER(partition by a.step_id,a.param_name order by a.DATE_TIMEKEY desc))::numeric as rn1
+from spc_raw_data a
+left join dwd_calendar b on a.date_timekey = b.time_key and b.factory ='ARRAY'
+where 1=1
+and rn =1
+union all 
+select 'WEEK'::varchar(100) as DATE_TYPE
+,B.week_timekey::varchar(100) as DATE_VALUE
+,A.factory
+,a.OPER_NAME 
+,a.step_id 
+,a.prod_code
+,a.param_name
+,A.PARAM_VALUE
+,(dense_rank ()OVER(partition by a.step_id,a.param_name order by B.week_timekey desc))::numeric as rn1
+from spc_raw_data a
+left join dwd_calendar b on a.date_timekey = b.time_key and b.factory ='ARRAY'
+where 1=1
+and rn =1
+union all 
+select 'MONTH'::varchar(100) as DATE_TYPE
+,B.month_timekey::varchar(100) as DATE_VALUE
+,A.factory
+,a.OPER_NAME 
+,a.step_id 
+,a.prod_code
+,a.param_name
+,A.PARAM_VALUE
+,(dense_rank ()OVER(partition by a.step_id,a.param_name order by B.month_timekey desc))::numeric as rn1
+from spc_raw_data a
+left join dwd_calendar b on a.date_timekey = b.time_key and b.factory ='ARRAY'
+where 1=1
+and rn =1
+)
+select DATE_TYPE
+	,DATE_VALUE
+	,(case when DATE_TYPE in ('DAY') then RIGHT(DATE_VALUE,4) else RIGHT(DATE_VALUE,3) end)::varchar(100) as DATE_KEY
+	,factory
+	,b.prod_code
+	,b.step_id
+	,b.OPER_NAME 
+	,b.param_name
+	,case when max_value > q3_value + 1.5 * (q3_value -q1_value) then q3_value + 1.5 * (q3_value -q1_value) else max_value end as max_value
+	,q3_value
+	,median_value
+	,q1_value
+	,case when min_value < q1_value - 1.5 * (q3_value -q1_value) then q1_value - 1.5 * (q3_value -q1_value) else min_value end as min_value
+from (
+	select DATE_TYPE
+	,DATE_VALUE
+	,factory
+	,a.prod_code
+	,a.step_id
+	,a.OPER_NAME 
+	,a.param_name
+	,percentile_cont(0.25) WITHIN GROUP (ORDER BY PARAM_VALUE) AS q1_value
+	,percentile_cont(0.5) WITHIN GROUP (ORDER BY PARAM_VALUE) AS median_value
+	,percentile_cont(0.75) WITHIN GROUP (ORDER BY PARAM_VALUE) AS q3_value
+	,max(PARAM_VALUE) as max_value
+	,min(PARAM_VALUE) as min_value
+	from FANEL_DATA A 
+	where 1=1
+	and case when DATE_TYPE = 'DAY' then A.RN1 <=${daycnt}
+			when DATE_TYPE = 'WEEK' then A.RN1 <=${weekcnt}
+			when DATE_TYPE = 'MONTH' then A.RN1 <=${monthcnt} end 
+	group by DATE_TYPE
+		,DATE_VALUE
+		,factory
+		,a.prod_code
+		,a.step_id
+		,a.OPER_NAME 
+		,a.param_name
+) b	
+order by b.prod_code
+	,b.step_id
+	,b.OPER_NAME 
+	,b.param_name
+	,case when DATE_TYPE ='DAY' then 3
+			 when DATE_TYPE ='WEEK' then 2
+			  when DATE_TYPE ='MONTH' then 1 end 
+,DATE_VALUE

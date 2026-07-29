@@ -40,6 +40,10 @@
 - Page-facing Streamlit data services cache only reload-stable native payloads
   and construct project ViewModels outside `st.cache_data`; see
   `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`.
+- Development hot reload uses Streamlit `server.runOnSave` to schedule a script
+  rerun after source changes. The shared page header and portal entrypoint then
+  compare the project revision, unload project-owned dependency modules, and
+  request one clean rerun so existing Python import references are replaced.
 - Product-aware report pages include a shared per-product revision in their
   Streamlit cache signatures. The page-header cache action advances only the
   selected product revision; aggregate and non-product reports retain the
@@ -55,6 +59,9 @@
   and exposes only Sheet/point distributions plus backend-selected chart type.
   Both reuse the physical `SpcRepository`; CTQ OOS resources are isolated under
   `resources/<product>/ctq/`.
+- Inline measurement snapshots carry a parameter-filter policy marker. A policy
+  change forces one full refresh, while database failure still degrades to the
+  previous Parquet snapshot.
 - SPC treats `resources/<product>/spc_cpk_decoration.xlsx` as user-maintained
   state. It joins `cpk_corrected` and `flag` onto freshly generated CPK details
   by the six period key columns, reads enterprise-encrypted workbooks through

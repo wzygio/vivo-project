@@ -93,6 +93,9 @@ def render_page_header(
     refresh_handlers: list = None,
     product_cache_scope: str | None = None,
 ):
+    # 每个报表页面都会经过统一页头；在渲染或查询数据前完成依赖模块热重载。
+    setup_hot_reload()
+
     # =========================================================================
     # [新增] Admin 隐身模式 (Stealth Mode)
     # =========================================================================
@@ -238,17 +241,17 @@ def extract_cached_funcs(*services) -> list:
                 
     return auto_cached_funcs
 
-def setup_hot_reload(enable: bool = True):
+def setup_hot_reload(enable: bool = True) -> bool:
     """
     [企业级工具] 底层代码热重载守卫。
     用于在开发态下监控深层依赖模块的变化，一旦发现代码哈希变动，
     立即强制清空 sys.modules，实现后端代码修改后的无缝热生效。
     """
     if not enable:
-        return
+        return False
 
     try:
-        from app.utils.reloader import deep_reload_modules, get_project_revision, get_project_revision
+        from app.utils.reloader import deep_reload_modules, get_project_revision
         from src.shared_kernel.config import ConfigLoader
         
         # 1. 计算当前代码目录的真实哈希指纹
@@ -258,18 +261,20 @@ def setup_hot_reload(enable: bool = True):
         # 2. 从 session_state 获取上一次的指纹
         last_rev = st.session_state.get('last_code_revision')
         
-        # 3. 只有当代码指纹发生变化时，才执行暴力的模块卸载
-        if last_rev is not None and last_rev != current_rev:
-            import logging
-            logging.info("♻️ 探测到后端底层代码库变更，触发 Deep Reload...")
-            deep_reload_modules()
-            
-            # 不在普通 rerun/浏览器刷新链路中清除 st 缓存；需要刷新缓存时请点击页头按钮。
-            
-        # 4. 更新指纹
+        # 3. 先更新指纹，避免 deep reload 后的 rerun 再次触发同一轮变更。
         st.session_state['last_code_revision'] = current_rev
-        
-    except ImportError as e:
-        import logging
-        logging.warning(f"⚠️ 热重载模块依赖缺失，已跳过: {e}")
+
+        if last_rev is None or last_rev == current_rev:
+            return False
+
+        # 4. 卸载深层依赖并立即开始一轮全新的页面执行。
+        # 仅卸载 sys.modules 而不 rerun 时，本轮脚本中的旧函数/类引用仍然有效。
+        logging.info("♻️ 探测到项目文件变更，触发 Deep Reload...")
+        deep_reload_modules()
+        st.rerun()
+        return True
+
+    except (ImportError, OSError) as error:
+        logging.warning(f"⚠️ 热重载检查失败，已跳过: {error}")
+        return False
 
