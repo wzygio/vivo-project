@@ -6,7 +6,7 @@ This is a single-context repository.
 
 1. Read root `CONTEXT.md` for project purpose, operating model and hard boundaries.
 2. When OLED manufacturing terminology is relevant, read
-   `references/design_references/domain/GLOSSARY.md`.
+   `references/domain/GLOSSARY.md`.
 3. Read relevant records under `docs/adr/`.
 
 The glossary supplements `CONTEXT.md`; it does not override its hard boundaries.

@@ -2,11 +2,10 @@
 
 ## Folder Routes
 
-- `references/design_references/`
-- `references/dev_references/`
-- `references/test_references/`
-- `references/summary_references/`
+- `references/domain/`
 
 ## Update Rule
 
-Keep this index folder-only. Do not list individual files here.
+Keep this index folder-only. Do not list individual files here. Shared
+engineering rules are routed through `$ecc-production-rules`, not copied under
+`references/`.
