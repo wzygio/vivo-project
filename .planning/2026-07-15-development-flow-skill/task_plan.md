@@ -1,7 +1,7 @@
 # Task Plan: Build Development Flow Skill
 
 ## Goal
-Create and validate a modular user skill that turns a requirement into a ready issue, file-based plan, tested implementation, and ADR, with optional per-module sub-agent execution.
+Create and validate a modular user skill that turns a requirement into a ready issue, file-based plan, tested implementation, and adr, with optional per-module sub-agent execution.
 
 ## Current Phase
 Complete

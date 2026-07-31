@@ -95,7 +95,7 @@ Related: `.scratch/equipment-data-fabrication/issues/02-fabricate-blank-paramete
 
 - 当前同签名文件曾由仿造器生成 1,685 条单时间点记录，现已被数据库刷新为 2,501,155 条、覆盖近 90 天的真实查询结果，确认存在文件名和生命周期冲突。
 - 匹配器已有空参数合成键能力，可作为仿造补缺契约继续复用。
-- ADR-0001 要求页面缓存只返回 DataFrame、原生容器和标量；本需求不改变该边界。
+- adr-0001 要求页面缓存只返回 DataFrame、原生容器和标量；本需求不改变该边界。
 
 ### 2026-07-21 — Triage outcome
 
@@ -103,7 +103,7 @@ Related: `.scratch/equipment-data-fabrication/issues/02-fabricate-blank-paramete
 
 - 分类为 `enhancement`：新增独立仿造快照生命周期与真实优先回填能力。
 - 数据契约、边界值、失败行为、兼容范围和测试入口均可从用户要求与现有实现确定。
-- 未发现 out-of-scope 或 ADR 冲突；ADR-0001 的缓存载荷约束已写入兼容要求。
+- 未发现 out-of-scope 或 adr 冲突；adr-0001 的缓存载荷约束已写入兼容要求。
 - 状态从 `needs-triage` 转为 `ready-for-agent`。
 
 ### 2026-07-21 — Delivery evidence
@@ -115,4 +115,4 @@ Related: `.scratch/equipment-data-fabrication/issues/02-fabricate-blank-paramete
 - 首次生成和 24 小时更新分别由 `tools/fabricate_equipment_data.py` 与 `tools/update_fabricated_equipment_data.py` 提供，缺失/无效输入、TTL 跳过和显式强制均有自动化测试。
 - Focused 回归 32 项、更新器补充回归 3 项、真实规格集成 1 项、Equipment smoke 34 项全部通过；Python 编译和范围内 diff 检查通过。
 - 关键备件页面浏览器烟测通过：Array/TP 筛选、指标、表格、桌面/窄屏、内部滚动和参数列隐藏均符合预期；无可见应用执行异常。
-- 设计决策沉淀于 `docs/ADR/0003-equipment-real-first-fabricated-fallback.md`。
+- 设计决策沉淀于 `docs/adr/0003-equipment-real-first-fabricated-fallback.md`。

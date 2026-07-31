@@ -99,7 +99,7 @@ Related: `.scratch/equipment-data-fabrication/issues/01-fabricate-current-equipm
 
 - 分类为 `enhancement`：这是对现有仿造数据覆盖范围和前端展示契约的增强。
 - 稳定业务身份、禁止模糊回退、快照规模、兼容边界和验证入口均已有代码与数据证据，无待确认决策。
-- 未发现 ADR 或 out-of-scope 冲突；状态由 `needs-triage` 转为 `ready-for-agent`。
+- 未发现 adr 或 out-of-scope 冲突；状态由 `needs-triage` 转为 `ready-for-agent`。
 
 ### 2026-07-15 — Delivery evidence
 

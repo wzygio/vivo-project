@@ -9,8 +9,7 @@ loaded from installed Skills; temporary task state belongs in `.scratch/` and
 
 ## Artifact Routes
 
-- `docs/PRD/` — approved requirement and product-specification documents.
-- `docs/ADR/` — durable architectural decisions and their consequences.
+- `docs/adr/` — durable architectural decisions and their consequences.
 - `docs/dev_docs/` — development prompts, tutorials, and generated engineering guidance.
 - `docs/agents/` — repository-specific Agent/Harness operating configuration.
 - `docs/others/` — retained project documents that do not belong to the above artifact classes.

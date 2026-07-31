@@ -1,4 +1,4 @@
-# ADR-0002：以显式领域烟测和等价聚合缩短反馈周期
+# adr-0002：以显式领域烟测和等价聚合缩短反馈周期
 
 - Status: Accepted
 - Date: 2026-07-14
@@ -52,7 +52,7 @@ CPM 运行期另有独立的纯计算热点。仓库内 M626 快照包含 1,041,
 - 快速领域烟测不能证明跨领域回归不存在，仍需完整验证。
 - 测试文件新增或重命名时必须维护领域模式。
 - 为保持逐位浮点行为，均值/标准差仍通过每组 `Series` reducer 执行；性能低于完全原生 groupby，但满足收益门槛且避免数值风险。
-- 仓库既有失败与 Yield 过期导入会继续使相关完整/领域验证返回非零；本 ADR 不通过改业务代码掩盖这些信号。
+- 仓库既有失败与 Yield 过期导入会继续使相关完整/领域验证返回非零；本 adr 不通过改业务代码掩盖这些信号。
 
 ## Alternatives considered
 
@@ -91,4 +91,4 @@ Rejected。它们位于明确保护或有状态业务边界；关键备件真实
 - `.scratch/project-performance-optimization/issues/01-domain-scoped-smoke-entrypoint.md`
 - `.scratch/project-performance-optimization/issues/02-vectorize-cpm-period-aggregation.md`
 - `.scratch/project-performance-optimization/risk-checklist.md`
-- `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`
+- `docs/adr/0001-streamlit-cache-native-payload-boundary.md`

@@ -15,11 +15,11 @@
 - The physical repository already applies `SpcQueryConfig.data_type_filter` through a whitelist; existing tests include both `SPC` and `CTQ` rows.
 - The SPC report service forcibly replaces the query filter with `SPC`, then adds period capability, CPK alert, and CPK/OOS decoration responsibilities.
 - The SPC page uses a native cached payload facade, Monitor service time/refresh helpers, product Header, admin decoration UI, filters, and chart sections.
-- ADR-0001 requires `st.cache_data` functions to return only native payloads and requires cache-fill/module-reload regression tests for modified services.
+- adr-0001 requires `st.cache_data` functions to return only native payloads and requires cache-fill/module-reload regression tests for modified services.
 - The existing dashboard already supports backend `chart_type` metadata and line-vs-box indicator rendering, but some helpers assume period capability data and require a capability-free CTQ path.
 - No `.out-of-scope/` records conflict with the requested enhancement.
 - The project Streamlit installation predates 1.57, so the version-matched bundled skill references are unavailable. Preserve the installed version and use official documentation plus established repository patterns.
-- Streamlit's official `st.cache_data` reference confirms cached returns are pickled and copied per caller, and per-function caches can be cleared with `func.clear()`; this reinforces ADR-0001's native payload and refresh design.
+- Streamlit's official `st.cache_data` reference confirms cached returns are pickled and copied per caller, and per-function caches can be cleared with `func.clear()`; this reinforces adr-0001's native payload and refresh design.
 - Streamlit's official multipage reference confirms that Python files placed directly in `pages/` are automatically discovered, while subdirectories are ignored; the CTQ entrypoint must therefore be a direct `app/pages/*.py` file.
 - `SpcReportService.fetch_spc_report_payload()` combines repository loading, OOS decoration, capability calculation, CPK decoration, and native serialization. CTQ should copy the outer cache/facade pattern but stop after OOS-decorated Sheet/raw/indicator data.
 - `prepare_decorated_spc_data()` already accepts an explicit product directory. A CTQ adapter can reuse this proven engine with `resources/<product>/ctq`, giving separate persistence without changing the SPC OOS core or filenames.
@@ -54,7 +54,7 @@
 
 - `.scratch/ctq-monitoring-report/issues/01-create-ctq-monitoring-report.md`
 - `docs/dev_docs/dev_prompt/opt-SPC.md`
-- `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`
+- `docs/adr/0001-streamlit-cache-native-payload-boundary.md`
 - `ARCHITECTURE.md`, `CONTEXT.md`, `references/design_references/domain/GLOSSARY.md`
 
 ## Visual/browser findings

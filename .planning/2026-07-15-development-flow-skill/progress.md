@@ -9,7 +9,7 @@
 ### Actions Taken
 - Read `skill-creator`, its OpenAI YAML reference, and every named dependency skill.
 - Inspected existing modular/orchestration skills and confirmed a thin parent plus isolated module contracts is consistent with the user's pattern.
-- Reviewed the flow for critical gaps; no blocking design flaw found, but added approval gates, handoff contracts, UI detection, non-UI verification, failure stops, and ADR eligibility rules.
+- Reviewed the flow for critical gaps; no blocking design flaw found, but added approval gates, handoff contracts, UI detection, non-UI verification, failure stops, and adr eligibility rules.
 - Initialized `C:\Users\V0141351\.agents\skills\development-flow` with the official `init_skill.py`.
 - Implemented a thin mother flow and four independently editable module references.
 - Added default inline execution plus opt-in, fresh, sequential sub-agent execution per module.

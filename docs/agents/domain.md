@@ -12,6 +12,6 @@ This is a single-context repository.
 The glossary supplements `CONTEXT.md`; it does not override its hard boundaries.
 Use the established glossary vocabulary in issue titles, plans, hypotheses and tests.
 
-If an ADR conflicts with a proposed change, surface the conflict explicitly.
+If an adr conflicts with a proposed change, surface the conflict explicitly.
 If a needed term is absent, record it for a `/grill-with-docs` discussion rather
 than silently inventing inconsistent terminology.

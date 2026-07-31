@@ -5,7 +5,7 @@
 - **Status:** complete
 - Read the user-selected `development-flow` skill and its requirements/planning references.
 - Read and applied the required local-issue, triage, and planning-with-files dependency skills.
-- Verified project context, domain glossary, issue policy, triage policy, relevant cache ADR, and the absence of CodeGraph.
+- Verified project context, domain glossary, issue policy, triage policy, relevant cache adr, and the absence of CodeGraph.
 - Created and triaged `.scratch/ctq-monitoring-report/issues/01-create-ctq-monitoring-report.md` to `ready-for-agent`.
 - Captured the user's explicit default-recommendation/execute-through authorization as plan approval.
 - Created this isolated plan and switched `.planning/.active_plan` to it.
@@ -42,7 +42,7 @@
 - Added a CTQ public-chart boundary test for the established `lsl=0` rule: only USL/UCL lines may be drawn.
 - Zero-LSL chart boundary passes (`1 passed` in 0.60s); added the separate empty-filter-result behavior check.
 - Empty-result behavior passes (`1 passed` in 0.51s); added the admin contract check requiring a CTQ-keyed OOS modifier and forbidding CPK tabs.
-- CTQ-only admin contract passes (`1 passed` in 0.51s); added the ADR-0001 cache-fill/module-reload regression for the CTQ public service.
+- CTQ-only admin contract passes (`1 passed` in 0.51s); added the adr-0001 cache-fill/module-reload regression for the CTQ public service.
 - Cache-fill/module-reload regression passes (`1 passed` in 0.78s); added CTQ to the Header cache-discovery contract while excluding its ViewModel facade.
 - Header cache discovery passes (`1 passed` in 0.72s). Phase 3 is complete; moving to focused/regression/runtime verification.
 - Focused CTQ plus affected SPC regression passed: `43 passed` in 2.82s. This command includes the cache-fill/module-reload test and shared chart/OOS regressions.
@@ -70,7 +70,7 @@
 - Exact non-recursive removal was also policy-blocked. Cleanup attempts stopped; generated CTQ OOS workbooks and `.playwright-cli` evidence remain untracked and will be disclosed.
 - Updated `ARCHITECTURE.md` and the Inline domain design reference with CTQ ownership, forced data-type, capability exclusion, native cache, and OOS isolation boundaries.
 - Final expanded Inline/SPC smoke passed: `90 passed` in 4.55s. Targeted compile and `git diff --check` passed again.
-- Development/testing remains `in_progress` only because the development-flow complete-regression gate cannot be met by the repository's pre-existing cross-domain failures/timeouts. CTQ implementation and all CTQ/SPC/browser evidence are complete; ADR creation is intentionally not entered.
+- Development/testing remains `in_progress` only because the development-flow complete-regression gate cannot be met by the repository's pre-existing cross-domain failures/timeouts. CTQ implementation and all CTQ/SPC/browser evidence are complete; adr creation is intentionally not entered.
 - Marked all CTQ issue acceptance criteria fulfilled and appended delivery evidence. Reviewed the dirty worktree without resetting prior monitor/SPC rename or unrelated user changes.
 - Generated browser artifacts remain untracked at `.playwright-cli/` and `resources/{M626,M673,M678,Z517}/ctq/` because both cleanup attempts were policy-blocked; the CTQ workbooks are reproducible OOS audit outputs.
 

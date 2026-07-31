@@ -25,7 +25,7 @@ Related: `CONTEXT.md`、Yield Domain 设计参考、配置加载与快照回退�
 - Yield 查询 DTO 同时携带动态查询条件和静态数据策略；页面、应用服务、DAO、Repository、告警服务和展示层均直接或间接消费相同字段。
 - 数据库新查路径会在 DAO 抹除非目标 Defect Group，快照命中路径又在 Repository 重复抹除；这使快照可能持久化不可逆的、依赖当时配置的结果。
 - Session 配置热重载目前只观察产品 YAML；配置移入全局 YAML 后，修改全局策略不会触发会话配置刷新。
-- 未发现与本需求冲突的 ADR。Yield 核心良率散布、Mapping 级联衰减、数据库单例和 Streamlit 页面缓存均为既有红线，不在本次改动范围。
+- 未发现与本需求冲突的 adr。Yield 核心良率散布、Mapping 级联衰减、数据库单例和 Streamlit 页面缓存均为既有红线，不在本次改动范围。
 
 ## Desired outcome
 

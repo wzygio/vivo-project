@@ -3,7 +3,7 @@
 ## Requirements
 - Input: one development requirement.
 - Four modules: requirement formulation, planning, development/testing, project sedimentation.
-- Outputs: `.scratch/` issue, `.planning/` plan and checklist, code plus test evidence, `docs/ADR/` decision record.
+- Outputs: `.scratch/` issue, `.planning/` plan and checklist, code plus test evidence, `docs/adr/` decision record.
 - Invoke the installed dependency skills; do not duplicate their internal workflows.
 - Each module must be independently editable and optionally executable by a sub-agent; default execution stays in the main agent.
 
@@ -14,7 +14,7 @@
 - `tdd` requires vertical red-green cycles and expects interface/behavior approval before coding.
 - `playwright-interactive` requires a QA inventory and separate functional, visual, viewport-fit, and exploratory browser checks.
 - Existing user skills favor a thin orchestration entry point and delegate specialized behavior to named skills; runtime modules own their own execution.
-- The current repo uses `.scratch/`, `.planning/`, and `docs/ADR/` (uppercase ADR).
+- The current repo uses `.scratch/`, `.planning/`, and `docs/adr/` (uppercase adr).
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -27,7 +27,7 @@
 | Issue | Resolution |
 |-------|------------|
 | Dependency skills contain deliberate human approval gates | Model them as stop/resume gates; do not bypass or duplicate them. |
-| ADR output path casing varies across repositories | Prefer repository convention when present; for this requested flow default to `docs/ADR/`. |
+| adr output path casing varies across repositories | Prefer repository convention when present; for this requested flow default to `docs/adr/`. |
 
 ## Resources
 - `C:\Users\V0141351\.codex\skills\.system\skill-creator\SKILL.md`

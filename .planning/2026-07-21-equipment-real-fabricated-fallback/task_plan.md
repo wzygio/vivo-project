@@ -19,7 +19,7 @@ Complete — implementation, dataset audit, automated regression, browser smoke,
 
 - [x] Create one enhancement issue, triage it to `ready-for-agent`, and record complete acceptance criteria and Agent Brief.
 - [x] Verify current collision: database and fabricated data share one production-signature path.
-- [x] Record ADR-0001 cache constraints and explicit user execution approval.
+- [x] Record adr-0001 cache constraints and explicit user execution approval.
 - **Status:** complete
 
 ### Phase 2: TDD tracer bullet — independent fabrication lifecycle
@@ -54,7 +54,7 @@ Complete — implementation, dataset audit, automated regression, browser smoke,
 ### Phase 5: Records and delivery
 
 - [x] Update `ARCHITECTURE.md` for independent snapshot ownership and real-first fallback.
-- [x] Write ADR after scoped automated and browser smoke pass, including lifecycle, precedence, failure behavior, and rollback.
+- [x] Write adr after scoped automated and browser smoke pass, including lifecycle, precedence, failure behavior, and rollback.
 - [x] Mark issue acceptance criteria with evidence and finalize checklist.
 - [x] Review dirty worktree; preserve unrelated CTQ/SPC/user changes.
 - **Status:** complete

@@ -12,7 +12,7 @@ Complete
 
 ### Phase 1: Baseline and bottleneck discovery
 
-- [x] Read architecture, domain, ADR, validation, smoke, and command references.
+- [x] Read architecture, domain, adr, validation, smoke, and command references.
 - [x] Map expensive execution paths and distinguish architecture overhead from algorithmic cost.
 - [x] Establish representative timing and output-equivalence baselines.
 - **Status:** completed
@@ -49,10 +49,10 @@ Complete
 - [x] Preserve boundary, null, ordering, dtype, and numerical-tolerance behavior.
 - **Status:** completed
 
-### Phase 7: Verification, ADR, and risk register
+### Phase 7: Verification, adr, and risk register
 
 - [x] Run focused, smoke, and broad regressions plus before/after benchmarks.
-- [x] Record successful design decisions under `docs/ADR/`.
+- [x] Record successful design decisions under `docs/adr/`.
 - [x] Publish a consolidated post-optimization risk checklist.
 - **Status:** completed
 

@@ -59,7 +59,7 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 - 返回 Sheet 特征、原始点位、指标元数据和 OOS 修饰结果；契约中不包含 CPM/CPK、CPK 预警或 CPK 修饰。
 - 参数名称包含 `UNI` 时由 Core 标记 `chart_type = "line"`，其他参数标记为 `box`。
 - OOS 修饰文件位于 `resources/<product>/ctq/`，与 SPC 产品根目录资源隔离。
-- 页面缓存遵守 ADR-0001：只缓存 DataFrame/原生容器/标量，并在缓存外构造 `CtqReportViewModel`。
+- 页面缓存遵守 adr-0001：只缓存 DataFrame/原生容器/标量，并在缓存外构造 `CtqReportViewModel`。
 
 ### 3.4 `infrastructure/spc/data_loader.py` 中的 `SpcQueryConfig`
 

@@ -19,7 +19,7 @@ Phase 2 — TDD tracer bullet.
 ### Phase 1: Requirements, discovery, and plan
 
 - [x] Convert Task3 into one `enhancement` issue with `ready-for-agent` status, complete acceptance criteria, Agent Brief, and no unresolved question.
-- [x] Verify the shared physical repository supports a `CTQ` whitelist and record ADR-0001's native-cache-payload boundary.
+- [x] Verify the shared physical repository supports a `CTQ` whitelist and record adr-0001's native-cache-payload boundary.
 - [x] Approve the default architecture and validation priority from the user's explicit authorization.
 - **Status:** complete
 
@@ -52,7 +52,7 @@ Phase 2 — TDD tracer bullet.
 ### Phase 5: Records and delivery
 
 - [x] Update architecture/design records for the separate CTQ application/UI ownership and shared physical repository boundary.
-- [ ] Create an ADR only after automated and browser checks pass, recording CTQ isolation, repository reuse, capability exclusion, cache contract, and rollback boundary.
+- [ ] Create an adr only after automated and browser checks pass, recording CTQ isolation, repository reuse, capability exclusion, cache contract, and rollback boundary.
 - [x] Mark every fulfilled issue acceptance criterion and add delivery evidence without changing the approved scope.
 - [x] Review the dirty worktree, preserve unrelated user changes, and report changed files, tests, known exclusions, and any pre-existing failure.
 - **Status:** pending
@@ -78,7 +78,7 @@ Phase 2 — TDD tracer bullet.
 | Reuse the existing physical SPC repository but override caller query type to `CTQ` in the CTQ service | Prevents UI business logic and guards against accidental cross-type reads |
 | Reuse generic visualization/OOS primitives through CTQ-owned adapters, with CTQ-specific persisted resources | Keeps behavior aligned without coupling CTQ resources to SPC state |
 | Omit capability payload fields entirely instead of returning empty CPM/CPK frames | Makes the exclusion enforceable at the type/API boundary |
-| Keep the page cache native and build CTQ ViewModel outside cache | Required by ADR-0001 and Streamlit module reload safety |
+| Keep the page cache native and build CTQ ViewModel outside cache | Required by adr-0001 and Streamlit module reload safety |
 | Preserve the backend-owned `UNI` chart-type decision | UI remains free of parameter-name business rules |
 
 ## Out-of-scope guardrails

@@ -8,8 +8,8 @@
 - Existing fabrication writer uses the same path. The formerly fabricated `e1f06d78da21` file is now a 2,501,155-row DB snapshot spanning 2026-04-22 through 2026-07-21, proving overwrite/collision.
 - Existing blank-parameter matching uses deterministic `__FABRICATED_PART__...` identities; non-empty parameters use SQL LIKE semantics.
 - Full real baseline contains 1,781 rows and produces 1,685 unique monitorable bottom keys.
-- ADR-0001 requires cached page payloads to contain only DataFrames, native containers, and scalars; ViewModel construction stays outside `st.cache_data`.
-- Worktree contains unrelated active CTQ/SPC changes. Only equipment files, new artifacts, architecture record, issue, plan, and ADR are in scope.
+- adr-0001 requires cached page payloads to contain only DataFrames, native containers, and scalars; ViewModel construction stays outside `st.cache_data`.
+- Worktree contains unrelated active CTQ/SPC changes. Only equipment files, new artifacts, architecture record, issue, plan, and adr are in scope.
 
 ## Decisions
 
