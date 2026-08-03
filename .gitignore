@@ -18,7 +18,8 @@ __pycache__/
 .idea/
 
 # 敏感信息
-# .env
+.env
+.env.*
 
 # 临时数据
 data/
