@@ -140,3 +140,11 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 
 - 性能敏感的 SPC 周期能力聚合和 smoke 范围约束见
   `docs/adr/0002-performance-safe-smoke-and-cpm-aggregation.md`。
+
+### MWD 趋势模块职责
+
+`src/yield_domain/core/mwd_trend/mwd_trend_processor.py` 仅作为 MWD 趋势
+门面，负责调用顺序和对外兼容入口。数据准备、聚合与整数分配、EMA、人工
+覆盖与日度重建、结果格式化分别由同目录下的专用模块承担。人工覆盖的顺序
+固定为：周度覆盖先重建日度再聚合月度；月度覆盖只修改最终月度结果，不回写
+日度；日度覆盖完成后重新聚合周度和月度。

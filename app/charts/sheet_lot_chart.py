@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
-from yield_domain.core.mapping.layout import resolve_mapping_layout
+from yield_domain.core.mapping.layout import MappingLayout, resolve_mapping_layout
 from yield_domain.core.mapping.panel_position import (
     parse_panel_id_to_coords as _parse_panel_id_to_coords,
 )
@@ -192,7 +192,7 @@ MAPPING_HEATMAP_COLOR_SCALE = [
 
 def parse_panel_id_to_coords(
     panel_id: str,
-    mapping_layout: dict | None = None,
+    mapping_layout: MappingLayout | dict | None = None,
 ) -> tuple | None:
     """解析 Panel ID 为 (row, col) 坐标"""
     return _parse_panel_id_to_coords(panel_id, mapping_layout)
@@ -202,7 +202,7 @@ def create_mapping_heatmap(
     matrix_df: pd.DataFrame,
     title: str,
     global_max_value: int,
-    mapping_layout: dict | None = None,
+    mapping_layout: MappingLayout | dict | None = None,
 ) -> go.Figure:
     """绘制 Mapping 热力图"""
     layout = resolve_mapping_layout(mapping_layout)

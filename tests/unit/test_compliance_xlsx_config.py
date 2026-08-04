@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import app.compliance.compliance_manager as compliance_manager
+import app.manager.compliance_manager as compliance_manager
 from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
 from src.shared_kernel.config import ConfigLoader

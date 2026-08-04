@@ -35,8 +35,8 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
                 "factory": "TP",
                 "step_id": "41260",
                 "param_name": "4PP_Rs",
-                "period_type": "day",
-                "period_label": "2026-07-22",
+                "period_type": "week",
+                "period_label": "2026-W30",
                 "cpk": 1.278,
             },
         ]
@@ -132,7 +132,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
             "厂别": "TP",
             "站点": "41260",
             "参数名称": "4PP_Rs",
-            "超规日期": "2026-07-22",
+            "超规周次": "2026-W30",
             "CPK值": 1.278,
         }
     ]

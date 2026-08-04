@@ -51,6 +51,16 @@ class _FakeStreamlit:
         return SimpleNamespace(selection={"points": [{"x": "LOT-1"}]})
 
 
+class _SelectionStreamlit(_FakeStreamlit):
+    def __init__(self, points):
+        super().__init__()
+        self.points = points
+
+    def plotly_chart(self, *args, **kwargs):
+        self.plotly_keys.append(kwargs.get("key"))
+        return SimpleNamespace(selection={"points": self.points})
+
+
 def _trend_frame(code: str) -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -161,3 +171,27 @@ def test_compact_mapping_defaults_to_penultimate_batch(monkeypatch):
     )
 
     assert fake_st.tab_defaults == ["BATCH-2 (100)"]
+
+
+def test_compact_lot_blank_click_clears_sheet_selection(monkeypatch):
+    fake_st = _SelectionStreamlit(points=[])
+    selection_key = "compact_sheet_lot_" + yield_dashboard._state_key_fragment(
+        "GROUP-A", "CODE-A"
+    )
+    fake_st.session_state[selection_key] = "LOT-1"
+    monkeypatch.setattr(yield_dashboard, "st", fake_st)
+    monkeypatch.setattr(
+        yield_dashboard,
+        "create_lot_defect_chart",
+        lambda *args, **kwargs: go.Figure(),
+    )
+
+    result = yield_dashboard._render_compact_lot_chart(
+        lot_data={"code_level_details": {"GROUP-A": _lot_frame("CODE-A")}},
+        curr_group="GROUP-A",
+        curr_code="CODE-A",
+        curr_warning=0.001,
+    )
+
+    assert result == ""
+    assert fake_st.session_state[selection_key] == ""

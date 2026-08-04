@@ -1,24 +1,31 @@
+import hashlib
+
 import numpy as np
 
-from src.yield_domain.core.mapping.layout import resolve_mapping_layout
+from yield_domain.core.mapping.layout import MappingLayout, resolve_mapping_layout
+
+
+def _stable_panel_position_seed(panel_id: str, batch_no: str) -> int:
+    seed_text = f"{panel_id}-{batch_no}".encode("utf-8")
+    digest = hashlib.sha256(seed_text).digest()
+    return int.from_bytes(digest[:8], byteorder="big") % (2**32 - 1)
 
 
 def get_deterministically_modified_panel_id(
     panel_id: str,
     batch_no: str,
-    mapping_layout: dict | None = None,
+    mapping_layout: MappingLayout | dict | None = None,
 ) -> str:
     """Apply a reproducible small position offset to a panel id."""
     layout = resolve_mapping_layout(mapping_layout)
-    coords = parse_panel_id_to_coords(panel_id, mapping_layout)
+    coords = parse_panel_id_to_coords(panel_id, layout)
     if coords is None:
         return panel_id
 
     original_row, original_col = coords
-    seed = hash(f"{panel_id}-{batch_no}")
-    np.random.seed(seed % (2**32 - 1))
-    row_offset = np.random.randint(-2, 3)
-    col_offset = np.random.randint(-2, 3)
+    rng = np.random.default_rng(_stable_panel_position_seed(panel_id, batch_no))
+    row_offset = rng.integers(-2, 3)
+    col_offset = rng.integers(-2, 3)
 
     new_row = max(0, min(len(layout.row_labels) - 1, original_row + row_offset))
     new_col = max(
@@ -32,13 +39,13 @@ def get_deterministically_modified_panel_id(
         panel_id,
         new_row,
         new_col,
-        mapping_layout,
+        layout,
     )
 
 
 def parse_panel_id_to_coords(
     panel_id: str,
-    mapping_layout: dict | None = None,
+    mapping_layout: MappingLayout | dict | None = None,
 ) -> tuple[int, int] | None:
     """Parse a panel id into numeric sheet row and column coordinates."""
     if not isinstance(panel_id, str) or len(panel_id) < 15:
@@ -61,7 +68,7 @@ def reconstruct_panel_id(
     original_panel_id: str,
     new_row: int,
     new_col: int,
-    mapping_layout: dict | None = None,
+    mapping_layout: MappingLayout | dict | None = None,
 ) -> str:
     """Rebuild a panel id from numeric sheet row and column coordinates."""
     layout = resolve_mapping_layout(mapping_layout)

@@ -7,7 +7,7 @@ from typing import Any, Optional
 import numpy as np
 import pandas as pd
 
-from src.yield_domain.core.mapping.layout import resolve_mapping_layout
+from yield_domain.core.mapping.layout import MappingLayout, resolve_mapping_layout
 
 
 _LINE_HOTSPOT_RANDOM_MAX = 2
@@ -33,7 +33,7 @@ def apply_hotspot_modification_to_matrix(
     total_batches: int,         # [新增] 批次总数，用于解析负索引
     script_config_list: list,
     product_code: Optional[str] = None,
-    mapping_layout: Optional[dict[str, Any]] = None,
+    mapping_layout: MappingLayout | dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """
     [V4.0 - 产品/Code/批次精确匹配 + 多模式修饰]

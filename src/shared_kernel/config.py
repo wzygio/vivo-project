@@ -136,14 +136,10 @@ class ConfigLoader:
         获取完整的合规配置（xlsx 优先，YAML 仅作兼容兜底）
         """
         root_dir = cls.get_project_root()
-        xlsx_path = root_dir / "config" / "compliance_config.xlsx"
-        yaml_path = root_dir / "config" / "compliance_config.yaml"
-        
+        xlsx_path = root_dir / "resources" / "compliance_config.xlsx"
         try:
             if xlsx_path.exists():
                 return load_compliance_config_from_xlsx(xlsx_path)
-            if yaml_path.exists():
-                return cls._load_yaml(yaml_path)
         except Exception as e:
             import logging
             logging.error(f"❌ 读取 compliance 配置失败: {e}")

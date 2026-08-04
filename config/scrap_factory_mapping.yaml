@@ -9,9 +9,9 @@
 
 # 默认前缀推断规则（当精确匹配未命中时使用）
 default_prefix_rules:
-  A: ARRAY
-  O: OLED
-  T: TP
+  "1": ARRAY
+  "2": OLED
+  "3": TP
 
 # 精确映射表（优先级高于前缀推断）
 # 格式：站点代码: 厂别

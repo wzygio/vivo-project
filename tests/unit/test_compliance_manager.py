@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import app.compliance.compliance_manager as compliance_manager
+import app.manager.compliance_manager as compliance_manager
 
 
 def _write_config(path: Path, rules: dict[str, bool], default: bool = False) -> None:

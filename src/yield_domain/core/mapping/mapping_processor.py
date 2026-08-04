@@ -4,11 +4,12 @@ import logging
 import re
 from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
-from src.yield_domain.core.mapping.hotspot_modification import (
+from yield_domain.core.mapping.hotspot_modification import (
     apply_hotspot_modification_to_matrix,
     resolve_mapping_modification_plan,
 )
-from src.yield_domain.core.mapping.panel_position import (
+from yield_domain.core.mapping.layout import resolve_mapping_layout
+from yield_domain.core.mapping.panel_position import (
     get_deterministically_modified_panel_id as _get_deterministically_modified_panel_id,
     parse_panel_id_to_coords as _parse_panel_id_to_coords,
     reconstruct_panel_id as _reconstruct_panel_id,
@@ -37,6 +38,7 @@ def prepare_mapping_data(
     if panel_details_df.empty: return pd.DataFrame()
     
     try:
+        resolved_layout = resolve_mapping_layout(mapping_layout)
         FIRST_REDUCTION_FACTOR = scaling_factor
         SECOND_REDUCTION_FACTOR = 0.95
         SEED = 42
@@ -111,15 +113,15 @@ def prepare_mapping_data(
 
                 code_mask = df_current_batch['defect_desc'] == code_desc
                 def _modify_panel_position(row: pd.Series) -> str:
-                    if mapping_layout:
+                    if mapping_layout is None:
                         return _get_deterministically_modified_panel_id(
                             row['panel_id'],
                             row['batch_no'],
-                            mapping_layout,
                         )
                     return _get_deterministically_modified_panel_id(
                         row['panel_id'],
                         row['batch_no'],
+                        resolved_layout,
                     )
 
                 df_current_batch.loc[code_mask, 'panel_id'] = df_current_batch.loc[

@@ -37,9 +37,11 @@ DEFAULT_MAPPING_LAYOUT = MappingLayout(
 
 
 def resolve_mapping_layout(
-    config: Mapping[str, Any] | None,
+    config: Mapping[str, Any] | MappingLayout | None,
 ) -> MappingLayout:
     """Return a validated product Mapping layout or the standard 10×19 layout."""
+    if isinstance(config, MappingLayout):
+        return config
     if not isinstance(config, Mapping):
         return DEFAULT_MAPPING_LAYOUT
 

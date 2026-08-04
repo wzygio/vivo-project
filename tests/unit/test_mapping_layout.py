@@ -1,9 +1,17 @@
 import pandas as pd
 
+import app.sections.yield_dashboard as yield_dashboard
 from app.charts.sheet_lot_chart import create_mapping_heatmap
 from app.sections.yield_dashboard import _prepare_mapping_matrices
 from src.shared_kernel.config import ConfigLoader
-from yield_domain.core.mapping.panel_position import parse_panel_id_to_coords
+from yield_domain.core.mapping.layout import (
+    MappingLayout,
+    resolve_mapping_layout,
+)
+from yield_domain.core.mapping.panel_position import (
+    _stable_panel_position_seed,
+    parse_panel_id_to_coords,
+)
 
 
 Z517_MAPPING_LAYOUT = {
@@ -89,3 +97,59 @@ def test_z517_product_config_declares_its_mapping_layout() -> None:
     config = ConfigLoader.load_config("Z517")
 
     assert config.processing["mapping_layout"] == Z517_MAPPING_LAYOUT
+
+
+def test_resolving_an_existing_mapping_layout_is_idempotent() -> None:
+    layout = resolve_mapping_layout(Z517_MAPPING_LAYOUT)
+
+    assert isinstance(layout, MappingLayout)
+    assert resolve_mapping_layout(layout) is layout
+
+
+def test_panel_position_seed_does_not_depend_on_python_hash_randomization() -> None:
+    first_seed = _stable_panel_position_seed("SHEET0000012DL0", "2026/07/01")
+    second_seed = _stable_panel_position_seed("SHEET0000012DL0", "2026/07/01")
+
+    assert first_seed == second_seed
+
+
+def test_compact_mapping_section_passes_resolved_layout_to_heatmap(monkeypatch) -> None:
+    class _Tab:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(yield_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(yield_dashboard.st, "warning", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        yield_dashboard.st,
+        "tabs",
+        lambda labels, **_kwargs: [_Tab() for _ in labels],
+    )
+    monkeypatch.setattr(yield_dashboard.st, "plotly_chart", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        yield_dashboard,
+        "create_mapping_heatmap",
+        lambda *_args, mapping_layout=None, **_kwargs: captured.setdefault(
+            "mapping_layout", mapping_layout
+        ),
+    )
+    monkeypatch.setattr(
+        yield_dashboard,
+        "_apply_compact_chart_layout",
+        lambda figure, _height: figure,
+    )
+
+    yield_dashboard._render_compact_mapping_section(
+        mapping_data=_mapping_data("SHEET0000012DL0"),
+        curr_group="Array_Line",
+        curr_code="CodeA",
+        hotspot_scripts=[],
+        product_code="Z517",
+        mapping_layout=Z517_MAPPING_LAYOUT,
+    )
+
+    assert isinstance(captured["mapping_layout"], MappingLayout)

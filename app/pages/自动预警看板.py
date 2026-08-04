@@ -19,7 +19,7 @@ from app.sections.monitor.monitor_dashboard import (
     filter_and_rollup_monitor_data,
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
-from app.compliance.compliance_manager import (
+from app.manager.compliance_manager import (
     render_compliance_config_panel,
 )
 

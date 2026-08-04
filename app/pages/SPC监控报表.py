@@ -23,7 +23,7 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.spc.spc_dashboard import (
-    build_daily_cpk_alerts,
+    build_weekly_cpk_alerts,
     filter_spc_report,
     get_default_spc_start_date,
     render_cpk_alert_center,
@@ -98,7 +98,7 @@ selected_factory, selected_params, selected_steps, should_render_report = render
     indicator_df=indicator_df
 )
 
-cpk_alerts_df = build_daily_cpk_alerts(
+cpk_alerts_df = build_weekly_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
 )

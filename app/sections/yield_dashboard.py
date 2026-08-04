@@ -183,12 +183,20 @@ def render_lot_distribution_section(lot_data: dict, curr_code: str, curr_warning
             fig_lot = create_lot_defect_chart(df_lot_curr, x_lbl, df_lot_curr['lot_id'].tolist(), curr_warning)
             event = st.plotly_chart(fig_lot, use_container_width=True, on_select="rerun", selection_mode="points")
             
-            if event and event.selection and event.selection["points"]: # type: ignore
-                clicked_lot = event.selection["points"][0]["x"] # type: ignore
-                if st.session_state.get("unified_sheet_lot_input") != clicked_lot:
-                    st.session_state["unified_sheet_lot_input"] = clicked_lot
-                    st.toast(f"已锁定 Lot: {clicked_lot}", icon="🔒")
-                    st.rerun()
+            # Plotly 的空白点击会触发 rerun，但 points 为空；此时必须清除
+            # 上一次选择，否则 Sheet 图表会一直沿用旧 Lot。
+            if event is not None:
+                selection = getattr(event, "selection", None)
+                points = selection.get("points", []) if selection else []
+                if points:
+                    clicked_lot = points[0]["x"]
+                    if st.session_state.get("unified_sheet_lot_input") != clicked_lot:
+                        st.session_state["unified_sheet_lot_input"] = clicked_lot
+                        st.toast(f"已锁定 Lot: {clicked_lot}", icon="🔒")
+                        st.rerun()
+                else:
+                    st.session_state["unified_sheet_lot_input"] = ""
+                    st.session_state["sheet_lot_input_box"] = ""
 
     return st.session_state.get("unified_sheet_lot_input", "")
 
@@ -302,7 +310,7 @@ def render_mapping_section(
             coords = d['panel_id'].apply(
                 lambda panel_id: parse_panel_id_to_coords(
                     panel_id,
-                    mapping_layout,
+                    resolved_layout,
                 )
             )
             d_c = d.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r','c'])
@@ -321,7 +329,7 @@ def render_mapping_section(
                 batch_position=i, total_batches=total_batches,
                 script_config_list=hotspot_scripts,
                 product_code=product_code,
-                mapping_layout=mapping_layout,
+                mapping_layout=resolved_layout,
             )
 
             matrices_cache[b] = mat
@@ -333,7 +341,7 @@ def render_mapping_section(
                     matrices_cache[b],
                     f"批次 {b} 热力图",
                     g_max,
-                    mapping_layout=mapping_layout,
+                    mapping_layout=resolved_layout,
                 )
                 st.plotly_chart(fig_map, use_container_width=True)
 
@@ -442,7 +450,7 @@ def _prepare_mapping_matrices(
         coords = batch_df['panel_id'].apply(
             lambda panel_id: parse_panel_id_to_coords(
                 panel_id,
-                mapping_layout,
+                resolved_layout,
             )
         )
         coord_df = batch_df.assign(r=coords.str[0], c=coords.str[1]).dropna(subset=['r', 'c'])
@@ -469,7 +477,7 @@ def _prepare_mapping_matrices(
             total_batches=total_batches,
             script_config_list=hotspot_scripts,
             product_code=product_code,
-            mapping_layout=mapping_layout,
+            mapping_layout=resolved_layout,
         )
         matrices_cache[batch_no] = matrix
         global_max = max(global_max, int(matrix.max().max()))
@@ -490,13 +498,14 @@ def _render_compact_mapping_section(
         st.warning("Mapping 数据源为空。")
         return
 
+    resolved_layout = resolve_mapping_layout(mapping_layout)
     batches, matrices_cache, global_max, tab_labels = _prepare_mapping_matrices(
         mapping_data=mapping_data,
         curr_group=curr_group,
         curr_code=curr_code,
         hotspot_scripts=hotspot_scripts,
         product_code=product_code,
-        mapping_layout=mapping_layout,
+        mapping_layout=resolved_layout,
     )
     if not batches:
         st.warning("该 Code 在 Mapping 数据源中无记录。")
@@ -511,7 +520,7 @@ def _render_compact_mapping_section(
                 matrices_cache[batch_no],
                 f"批次 {batch_no} 热力图",
                 global_max,
-                mapping_layout=mapping_layout,
+                mapping_layout=resolved_layout,
             )
             st.plotly_chart(
                 _apply_compact_chart_layout(fig_map, 345),
@@ -586,9 +595,16 @@ def _render_compact_lot_chart(
         key=f"compact_lot_chart_{key_fragment}",
     )
 
-    if event and event.selection and event.selection["points"]:  # type: ignore
-        clicked_lot = str(event.selection["points"][0]["x"])  # type: ignore
-        st.session_state[selected_lot_key] = clicked_lot
+    # 空白点击会产生 points=[]。显式清除选择，才能让联动的 Sheet 图表消失。
+    # event=None 表示普通 rerun，不能误清除当前 Lot。
+    if event is not None:
+        selection = getattr(event, "selection", None)
+        points = selection.get("points", []) if selection else []
+        if points:
+            clicked_lot = str(points[0]["x"])
+            st.session_state[selected_lot_key] = clicked_lot
+        else:
+            st.session_state[selected_lot_key] = ""
 
     return str(st.session_state.get(selected_lot_key, ""))
 

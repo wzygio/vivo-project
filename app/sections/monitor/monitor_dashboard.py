@@ -22,7 +22,7 @@ ALARM_DETAIL_STATUS_OPTIONS = ["OOC", "OOS"]
 def _get_compliance_file_signature() -> str:
     """Return a small cache-busting signature for compliance config changes."""
     try:
-        from app.compliance.compliance_manager import CONFIG_PATH
+        from app.manager.compliance_manager import CONFIG_PATH
 
         stat = CONFIG_PATH.stat()
         return f"{stat.st_mtime_ns}:{stat.st_size}"
@@ -332,7 +332,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     
     # 3. 业务数据调取与渲染逻辑
     # [新增] 从配置文件获取当前组合的修饰配置
-    from app.compliance.compliance_manager import get_compliance_config
+    from app.manager.compliance_manager import get_compliance_config
     force_compliant = get_compliance_config(data_type_filter, prod, factory)
 
     selected_time = "ALL"

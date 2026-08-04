@@ -42,7 +42,7 @@ PERIOD_FILL_COLORS = {
 }
 SHEET_BOX_PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0f766e", "#dc2626", "#64748b"]
 CPK_ALERT_THRESHOLD = 1.33
-CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规日期", "CPK值"]
+CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规周次", "CPK值"]
 CPK_ALERT_KEY_COLUMN_MAP = {
     "厂别": "factory",
     "站点": "step_id",
@@ -57,54 +57,55 @@ def get_default_spc_start_date(end_date: date) -> date:
     return get_period_window_start(end_date)
 
 
-def build_daily_cpk_alerts(
+def build_weekly_cpk_alerts(
     period_capability_df: pd.DataFrame,
     threshold: float = CPK_ALERT_THRESHOLD,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold daily CPK records from the previous full week."""
+    """Return below-threshold, undecorated CPK records from the previous full week."""
     required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", "cpk"}
     if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
         return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
 
     reference_day = pd.Timestamp(reference_date or date.today()).normalize()
     current_week_start = reference_day - pd.Timedelta(days=reference_day.weekday())
-    week_start = current_week_start - pd.Timedelta(days=7)
-    week_end = week_start + pd.Timedelta(days=6)
+    previous_week_start = current_week_start - pd.Timedelta(days=7)
+    iso_week = previous_week_start.isocalendar()
+    target_week_label = f"{iso_week.year}-W{iso_week.week:02d}"
 
     capability_df = period_capability_df[
-        period_capability_df["period_type"].astype(str).eq("day")
+        period_capability_df["period_type"].astype(str).eq("week")
     ].copy()
     if capability_df.empty:
         return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
 
     capability_df["cpk"] = pd.to_numeric(capability_df["cpk"], errors="coerce")
-    capability_df["_alert_date"] = pd.to_datetime(
-        capability_df["period_label"],
-        format="%Y-%m-%d",
-        errors="coerce",
-    ).dt.normalize()
+    is_decorated = (
+        capability_df["cpk_decorated"].fillna(False).astype(bool)
+        if "cpk_decorated" in capability_df.columns
+        else pd.Series(False, index=capability_df.index, dtype=bool)
+    )
     alert_rows = capability_df[
         capability_df["cpk"].lt(threshold)
-        & capability_df["_alert_date"].between(week_start, week_end, inclusive="both")
+        & capability_df["period_label"].astype(str).eq(target_week_label)
+        & ~is_decorated
     ].copy()
     if alert_rows.empty:
         return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
 
-    alert_rows["period_label"] = alert_rows["_alert_date"].dt.strftime("%Y-%m-%d")
     alerts_df = alert_rows.rename(
         columns={
             "factory": "厂别",
             "step_id": "站点",
             "param_name": "参数名称",
-            "period_label": "超规日期",
+            "period_label": "超规周次",
             "cpk": "CPK值",
         }
     )[CPK_ALERT_COLUMNS]
-    alerts_df["超规日期"] = alerts_df["超规日期"].astype(str)
+    alerts_df["超规周次"] = alerts_df["超规周次"].astype(str)
     return alerts_df.sort_values(
-        ["超规日期", "厂别", "站点", "参数名称", "CPK值"],
-        ascending=[False, True, True, True, True],
+        ["厂别", "站点", "参数名称", "CPK值"],
+        ascending=[True, True, True, True],
         kind="stable",
     ).reset_index(drop=True)
 
