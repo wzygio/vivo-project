@@ -4,9 +4,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
-
 import streamlit as st
-
 from src.shared_kernel.config_model import AppConfig
 from app.utils.session_manager import SessionManager
 
