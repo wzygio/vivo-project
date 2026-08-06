@@ -68,7 +68,8 @@ const APP_CONFIG = {
                 { name: "AOI", url: LINKS.AOI },
                 { name: "AOI_RS", url: LINKS.AOI_RS },
                 { name: "CTQ", url: LINKS.CTQ_REPORT },
-                { name: "SPC", url: LINKS.SPC },
+                // { name: "SPC", url: LINKS.SPC},
+                { name: "SPC", url: LINKS.SPC_REPORT },
             ]
         },
         {
@@ -120,7 +121,7 @@ const APP_CONFIG = {
                 {l:'', v:'AOI_RS', url: LINKS.AOI_RS },
                 // {l:'', v:'SPC', url: LINKS.SPC }, 
                 {l:'', v:'CTQ', url: LINKS.CTQ_REPORT },
-                {l:'', v:'SPC', url: LINKS.SPC },
+                {l:'', v:'SPC', url: LINKS.SPC_REPORT },
             ]
         },
         { 

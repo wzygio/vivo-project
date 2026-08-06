@@ -28,7 +28,7 @@ from app.charts.mwd_chart import (
 # [新增引入区块渲染组件]
 from app.sections.yield_dashboard import (
     render_macro_trend_section,
-    render_code_compact_expander,
+    render_code_compact_expanders,
 )
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -187,30 +187,17 @@ if not selected_groups or not codes_by_group:
 hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
 st.markdown(f"### 🎯 当前分析: **{selection.get('total_codes', 0)} 个 Code**")
 
-for group_index, curr_group in enumerate(selected_groups):
-    group_codes = codes_by_group.get(curr_group, [])
-    if not group_codes:
-        continue
-
-    if group_index > 0:
-        st.divider()
-    st.markdown(f"#### {curr_group} · {len(group_codes)} Codes")
-
-    for curr_code in group_codes:
-        curr_warning = warning_lines.get(curr_code) if warning_lines else None
-        if curr_warning is None:
-            curr_warning = {'upper': 0.002, 'lower': 0.0}
-
-        render_code_compact_expander(
-            mwd_code_data=mwd_code_data,
-            lot_data=lot_data,
-            sheet_data=sheet_data,
-            mapping_data=mapping_data,
-            curr_group=str(curr_group),
-            curr_code=str(curr_code),
-            curr_warning=float(curr_warning.get('upper', 0.002)),
-            hotspot_scripts=hotspot_scripts,
-            product_code=active_config.data_source.product_code,
-            mapping_layout=active_config.processing.get('mapping_layout'),
-            expanded=True,
-        )
+# 两阶段渲染：RenderGate 先在统一 spinner 下构建全部 Code 的图表，
+# 再按原顺序集中渲染（分组标题、分隔线、expander 次序与交互保持不变）。
+render_code_compact_expanders(
+    selected_groups=selected_groups,
+    codes_by_group=codes_by_group,
+    warning_lines=warning_lines,
+    mwd_code_data=mwd_code_data,
+    lot_data=lot_data,
+    sheet_data=sheet_data,
+    mapping_data=mapping_data,
+    hotspot_scripts=hotspot_scripts,
+    product_code=active_config.data_source.product_code,
+    mapping_layout=active_config.processing.get('mapping_layout'),
+)

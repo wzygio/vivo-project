@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import date
+from functools import partial
 from typing import Iterable
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from app.manager.render_gate import RenderGate
 from app.sections.spc.spc_dashboard import (
     _create_period_overview_chart,
     _create_sheet_points_box_charts,
@@ -192,16 +194,57 @@ def create_ctq_period_overview_chart(
     )
 
 
+def _build_ctq_indicator_render_payload(
+    label: str,
+    chart_type: str,
+    indicator_features_df: pd.DataFrame,
+    indicator_raw_df: pd.DataFrame,
+    period_box_source: str,
+) -> dict[str, object]:
+    """[RenderGate 阶段1] 纯计算：构建单个指标的全部图表，禁止触碰 st.*。"""
+    period_figure = create_ctq_period_overview_chart(
+        sheet_features_df=indicator_features_df,
+        raw_measurements_df=indicator_raw_df,
+        title=f"{label} | 月周天分布",
+        period_box_source=period_box_source,
+    )
+    chamber_figure, time_figure = _create_sheet_points_box_charts(
+        raw_measurements_df=indicator_raw_df,
+        title_prefix=label,
+        spec_df=indicator_features_df,
+        chart_type=chart_type,
+    )
+    return {
+        "label": label,
+        "period_figure": period_figure,
+        "chamber_figure": chamber_figure,
+        "time_figure": time_figure,
+    }
+
+
+def _render_ctq_indicator_payload(payload: dict[str, object]) -> None:
+    """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
+    with st.expander(payload["label"], expanded=True):
+        st.plotly_chart(payload["period_figure"], width="stretch")
+        st.plotly_chart(payload["chamber_figure"], width="stretch")
+        st.plotly_chart(payload["time_figure"], width="stretch")
+
+
 def render_ctq_indicator_sections(
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
 ) -> None:
-    """Render capability-free CTQ distribution figures by indicator."""
+    """Render capability-free CTQ distribution figures by indicator.
+
+    两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
+    避免图表随计算进度一张一张跳出导致页面抖动卡顿。
+    """
     if sheet_features_df.empty:
         st.info("当前筛选条件下无 CTQ 数据。")
         return
 
+    gate = RenderGate()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
         label = f"{factory} | {step_id} | {param_name}"
@@ -214,20 +257,16 @@ def render_ctq_indicator_sections(
         else:
             indicator_raw_df = pd.DataFrame()
         chart_type = _resolve_chart_type(indicator_features_df, indicator_raw_df)
-
-        with st.expander(label, expanded=True):
-            period_figure = create_ctq_period_overview_chart(
-                sheet_features_df=indicator_features_df,
-                raw_measurements_df=indicator_raw_df,
-                title=f"{label} | 月周天分布",
+        gate.stage(
+            partial(
+                _build_ctq_indicator_render_payload,
+                label=label,
+                chart_type=chart_type,
+                indicator_features_df=indicator_features_df,
+                indicator_raw_df=indicator_raw_df,
                 period_box_source=period_box_source,
             )
-            chamber_figure, time_figure = _create_sheet_points_box_charts(
-                raw_measurements_df=indicator_raw_df,
-                title_prefix=label,
-                spec_df=indicator_features_df,
-                chart_type=chart_type,
-            )
-            st.plotly_chart(period_figure, width="stretch")
-            st.plotly_chart(chamber_figure, width="stretch")
-            st.plotly_chart(time_figure, width="stretch")
+        )
+
+    for payload in gate.collect():
+        _render_ctq_indicator_payload(payload)

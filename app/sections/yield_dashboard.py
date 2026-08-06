@@ -1,8 +1,11 @@
 # src/vivo_project/app/components/view_sections.py
 import streamlit as st
 import pandas as pd
+from functools import partial
 from typing import Dict, List, Optional
 import plotly.graph_objects as go
+
+from app.manager.render_gate import RenderGate
 
 # 引入现有的绘图函数
 from app.charts.mwd_chart import (
@@ -64,6 +67,34 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
             key="macro_group_sel"
         )
 
+    # 两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
+    # 避免月/周/日三张图随计算进度一张一张跳出。
+    gate = RenderGate()
+    gate.stage(
+        partial(
+            _prepare_macro_trend_figures,
+            mwd_group_data=mwd_group_data,
+            sel_grps_macro=sel_grps_macro,
+            dynamic_category_orders=dynamic_category_orders,
+        )
+    )
+    trend_figures = gate.collect()[0]
+
+    gc1, gc2, gc3 = st.columns(3)
+    for (title, fig), col in zip(trend_figures, [gc1, gc2, gc3]):
+        with col:
+            if fig is not None:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(f"{title}数据暂无")
+
+
+def _prepare_macro_trend_figures(
+    mwd_group_data: dict,
+    sel_grps_macro: list,
+    dynamic_category_orders: dict,
+) -> List[tuple]:
+    """[RenderGate 阶段1] 纯计算：构建 Group 级月/周/日趋势图，禁止触碰 st.*。"""
     df_m = slice_recent_data(mwd_group_data.get('monthly'), 3)
     df_w = slice_recent_data(mwd_group_data.get('weekly'), 3)
     df_d = slice_recent_data(mwd_group_data.get('daily'), 7)
@@ -80,25 +111,24 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
             if pd.notna(curr_max): max_rate = max(max_rate, curr_max)
     y_limit = [0, max_rate * 1.2] if max_rate > 0 else [0, 0.1]
 
-    gc1, gc2, gc3 = st.columns(3)
     chart_configs = [
-        (df_m, "月度趋势", False, True, gc1),
-        (df_w, "周度趋势", False, False, gc2),
-        (df_d, "日度趋势", True, False, gc3)
+        (df_m, "月度趋势", False, True),
+        (df_w, "周度趋势", False, False),
+        (df_d, "日度趋势", True, False),
     ]
-    
-    for df, title, show_slider, show_count, col in chart_configs:
-        with col:
-            if df is not None and not df.empty:
-                st.plotly_chart(
-                    create_group_trend_chart(
-                        df, title, show_slider, show_count, y_limit, COLOR_MAP, 
-                        dynamic_category_orders, show_input_count=True
-                    ),
-                    use_container_width=True
-                )
-            else:
-                st.info(f"{title}数据暂无")
+    figures = []
+    for df, title, show_slider, show_count in chart_configs:
+        if df is None or df.empty:
+            figures.append((title, None))
+            continue
+        figures.append((
+            title,
+            create_group_trend_chart(
+                df, title, show_slider, show_count, y_limit, COLOR_MAP,
+                dynamic_category_orders, show_input_count=True
+            ),
+        ))
+    return figures
 
 # ==============================================================================
 #  2. 微观分析区 (Row A: Code 级时间趋势)
@@ -390,34 +420,50 @@ def _get_code_trend_slices(
     return cd_m, cd_w, cd_d, c_ylim
 
 
+def _prepare_compact_trend_figures(
+    mwd_code_data: dict,
+    curr_code: str,
+    curr_warning: float,
+) -> List[tuple]:
+    """[RenderGate 阶段1] 纯计算：构建单个 Code 的月/周/日趋势图，禁止触碰 st.*。"""
+    cd_m, cd_w, cd_d, c_ylim = _get_code_trend_slices(mwd_code_data, curr_code)
+    entries: List[tuple] = []
+    for df, title in [(cd_m, "月度"), (cd_w, "周度"), (cd_d, "日度")]:
+        fig = None
+        if df is not None and not df.empty:
+            fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
+            if fig is not None:
+                fig = _apply_compact_chart_layout(fig, 345)
+        entries.append((title, fig))
+    return entries
+
+
+def _render_compact_trend_entries(entries: List[tuple], key_fragment: str) -> None:
+    """[RenderGate 阶段2] 纯渲染：仅执行 st.* 调用，不做任何重计算。"""
+    st.markdown("**A. 月周天趋势图**")
+    trend_cols = st.columns(3)
+    period_keys = ["monthly", "weekly", "daily"]
+
+    for chart_index, (title, fig) in enumerate(entries):
+        with trend_cols[chart_index]:
+            if fig is None:
+                st.info(f"暂无{title}数据")
+                continue
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"compact_micro_trend_{key_fragment}_{period_keys[chart_index]}",
+            )
+
+
 def _render_compact_micro_trends(
     mwd_code_data: dict,
     curr_group: str,
     curr_code: str,
     curr_warning: float,
 ) -> None:
-    st.markdown("**A. 月周天趋势图**")
-    cd_m, cd_w, cd_d, c_ylim = _get_code_trend_slices(mwd_code_data, curr_code)
-    trend_cols = st.columns(3)
-    chart_configs = [(cd_m, "月度", trend_cols[0]), (cd_w, "周度", trend_cols[1]), (cd_d, "日度", trend_cols[2])]
-
-    key_fragment = _state_key_fragment(curr_group, curr_code)
-    period_keys = ["monthly", "weekly", "daily"]
-
-    for chart_index, (df, title, col) in enumerate(chart_configs):
-        with col:
-            if df is None or df.empty:
-                st.info(f"暂无{title}数据")
-                continue
-            fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
-            if fig is None:
-                st.info(f"暂无{title}数据")
-                continue
-            st.plotly_chart(
-                _apply_compact_chart_layout(fig, 345),
-                use_container_width=True,
-                key=f"compact_micro_trend_{key_fragment}_{period_keys[chart_index]}",
-            )
+    entries = _prepare_compact_trend_figures(mwd_code_data, curr_code, curr_warning)
+    _render_compact_trend_entries(entries, _state_key_fragment(curr_group, curr_code))
 
 
 def _prepare_mapping_matrices(
@@ -485,18 +531,27 @@ def _prepare_mapping_matrices(
     return batches, matrices_cache, global_max, tab_labels
 
 
-def _render_compact_mapping_section(
+def _prepare_compact_mapping_payload(
     mapping_data: Optional[pd.DataFrame],
     curr_group: str,
     curr_code: str,
     hotspot_scripts: list,
     product_code: Optional[str],
     mapping_layout: Optional[dict] = None,
-) -> None:
-    st.markdown("**B. Mapping集中性**")
+) -> dict:
+    """[RenderGate 阶段1] 纯计算：构建 Mapping 各批次热力图，禁止触碰 st.*。"""
+    payload = {
+        "curr_group": curr_group,
+        "curr_code": curr_code,
+        "status": "ok",
+        "batches": [],
+        "tab_labels": [],
+        "default_tab": None,
+        "figures": [],
+    }
     if mapping_data is None or mapping_data.empty:
-        st.warning("Mapping 数据源为空。")
-        return
+        payload["status"] = "empty_source"
+        return payload
 
     resolved_layout = resolve_mapping_layout(mapping_layout)
     batches, matrices_cache, global_max, tab_labels = _prepare_mapping_matrices(
@@ -508,25 +563,67 @@ def _render_compact_mapping_section(
         mapping_layout=resolved_layout,
     )
     if not batches:
-        st.warning("该 Code 在 Mapping 数据源中无记录。")
-        return
+        payload["status"] = "no_records"
+        return payload
 
-    default_tab = tab_labels[-2] if len(tab_labels) >= 2 else tab_labels[-1]
-    tabs = st.tabs(tab_labels, default=default_tab)
-    key_fragment = _state_key_fragment(curr_group, curr_code)
-    for i, batch_no in enumerate(batches):
-        with tabs[i]:
-            fig_map = create_mapping_heatmap(
+    figures = [
+        _apply_compact_chart_layout(
+            create_mapping_heatmap(
                 matrices_cache[batch_no],
                 f"批次 {batch_no} 热力图",
                 global_max,
                 mapping_layout=resolved_layout,
-            )
+            ),
+            345,
+        )
+        for batch_no in batches
+    ]
+    payload["batches"] = batches
+    payload["tab_labels"] = tab_labels
+    payload["default_tab"] = tab_labels[-2] if len(tab_labels) >= 2 else tab_labels[-1]
+    payload["figures"] = figures
+    return payload
+
+
+def _render_compact_mapping_payload(payload: dict) -> None:
+    """[RenderGate 阶段2] 纯渲染：仅执行 st.* 调用，不做任何重计算。"""
+    st.markdown("**B. Mapping集中性**")
+    status = payload["status"]
+    if status == "empty_source":
+        st.warning("Mapping 数据源为空。")
+        return
+    if status == "no_records":
+        st.warning("该 Code 在 Mapping 数据源中无记录。")
+        return
+
+    tabs = st.tabs(payload["tab_labels"], default=payload["default_tab"])
+    key_fragment = _state_key_fragment(payload["curr_group"], payload["curr_code"])
+    for i, batch_no in enumerate(payload["batches"]):
+        with tabs[i]:
             st.plotly_chart(
-                _apply_compact_chart_layout(fig_map, 345),
+                payload["figures"][i],
                 use_container_width=True,
                 key=f"compact_mapping_{key_fragment}_{_state_key_fragment(batch_no)}",
             )
+
+
+def _render_compact_mapping_section(
+    mapping_data: Optional[pd.DataFrame],
+    curr_group: str,
+    curr_code: str,
+    hotspot_scripts: list,
+    product_code: Optional[str],
+    mapping_layout: Optional[dict] = None,
+) -> None:
+    payload = _prepare_compact_mapping_payload(
+        mapping_data=mapping_data,
+        curr_group=curr_group,
+        curr_code=curr_code,
+        hotspot_scripts=hotspot_scripts,
+        product_code=product_code,
+        mapping_layout=mapping_layout,
+    )
+    _render_compact_mapping_payload(payload)
 
 
 def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
@@ -567,28 +664,36 @@ def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
     return df_lot_curr.sort_values('warehousing_time')
 
 
-def _render_compact_lot_chart(
+def _prepare_compact_lot_figure(
     lot_data: dict,
-    curr_group: str,
     curr_code: str,
     curr_warning: float,
-) -> str:
-    st.markdown("**C. Lot集中性**")
+) -> go.Figure | None:
+    """[RenderGate 阶段1] 纯计算：构建 Lot 集中性柱状图，禁止触碰 st.*。"""
     df_lot_curr = _prepare_lot_code_dataframe(lot_data, curr_code)
     if df_lot_curr.empty:
-        st.warning(f"当前 Code ({curr_code}) 在 Lot 级无不良记录。")
+        return None
+    return _apply_compact_chart_layout(
+        create_lot_defect_chart(
+            df_lot_curr,
+            "Lot ID",
+            df_lot_curr['lot_id'].astype(str).tolist(),
+            curr_warning,
+        ),
+        300,
+    )
+
+
+def _render_compact_lot_payload(lot_payload: dict, key_fragment: str) -> str:
+    """[RenderGate 阶段2] 纯渲染 + 选择事件处理，返回当前选中的 target_lot。"""
+    st.markdown("**C. Lot集中性**")
+    if lot_payload["fig"] is None:
+        st.warning(f"当前 Code ({lot_payload['curr_code']}) 在 Lot 级无不良记录。")
         return ""
 
-    fig_lot = create_lot_defect_chart(
-        df_lot_curr,
-        "Lot ID",
-        df_lot_curr['lot_id'].astype(str).tolist(),
-        curr_warning,
-    )
-    key_fragment = _state_key_fragment(curr_group, curr_code)
     selected_lot_key = f"compact_sheet_lot_{key_fragment}"
     event = st.plotly_chart(
-        _apply_compact_chart_layout(fig_lot, 300),
+        lot_payload["fig"],
         use_container_width=True,
         on_select="rerun",
         selection_mode="points",
@@ -607,6 +712,17 @@ def _render_compact_lot_chart(
             st.session_state[selected_lot_key] = ""
 
     return str(st.session_state.get(selected_lot_key, ""))
+
+
+def _render_compact_lot_chart(
+    lot_data: dict,
+    curr_group: str,
+    curr_code: str,
+    curr_warning: float,
+) -> str:
+    fig = _prepare_compact_lot_figure(lot_data, curr_code, curr_warning)
+    lot_payload = {"curr_code": curr_code, "fig": fig}
+    return _render_compact_lot_payload(lot_payload, _state_key_fragment(curr_group, curr_code))
 
 
 def _prepare_sheet_chart_dataframe(
@@ -664,6 +780,28 @@ def _prepare_sheet_chart_dataframe(
     if 'array_input_time' in df_sheet.columns:
         return df_sheet.sort_values('array_input_time')
     return df_sheet.sort_values('sheet_id')
+
+
+def _prepare_compact_sheet_figure(
+    sheet_data: dict,
+    target_lot: str,
+    curr_group: str,
+    curr_code: str,
+) -> go.Figure | None:
+    """[RenderGate 阶段1] 纯计算：构建 Sheet 分布图，禁止触碰 st.*。"""
+    if not target_lot:
+        return None
+    df_sheet = _prepare_sheet_chart_dataframe(sheet_data, target_lot, curr_group, curr_code)
+    if df_sheet.empty:
+        return None
+    return _apply_compact_chart_layout(
+        create_sheet_defect_chart(
+            df=df_sheet,
+            xaxis_label="Sheet ID",
+            sorted_sheet_ids=df_sheet['sheet_id'].astype(str).tolist(),
+        ),
+        300,
+    )
 
 
 def _render_compact_sheet_chart(
@@ -780,6 +918,95 @@ def _build_code_expander_label(
     return f"{curr_code} | 月均 {avg_rate:.2%} | Spec {curr_warning:.2%}"
 
 
+def _build_compact_render_payload(
+    mwd_code_data: dict,
+    lot_data: dict,
+    sheet_data: dict,
+    mapping_data: Optional[pd.DataFrame],
+    curr_group: str,
+    curr_code: str,
+    curr_warning: float,
+    hotspot_scripts: list,
+    product_code: Optional[str] = None,
+    mapping_layout: Optional[dict] = None,
+    expanded: bool = False,
+) -> dict:
+    """[RenderGate 阶段1] 纯计算：构建单个 Code expander 的全部图表与表格材料。
+
+    禁止任何 st.* 渲染调用；仅读取 st.session_state 中上一次 rerun 已固化的
+    Lot 选择（非渲染调用），用于预建 Sheet 分布图。
+    """
+    key_fragment = _state_key_fragment(curr_group, curr_code)
+    target_lot = str(st.session_state.get(f"compact_sheet_lot_{key_fragment}", ""))
+    return {
+        "label": _build_code_expander_label(mwd_code_data, curr_code, curr_warning),
+        "expanded": expanded,
+        "curr_group": curr_group,
+        "curr_code": curr_code,
+        "key_fragment": key_fragment,
+        "trend_entries": _prepare_compact_trend_figures(mwd_code_data, curr_code, curr_warning),
+        "mapping": _prepare_compact_mapping_payload(
+            mapping_data=mapping_data,
+            curr_group=curr_group,
+            curr_code=curr_code,
+            hotspot_scripts=hotspot_scripts,
+            product_code=product_code,
+            mapping_layout=mapping_layout,
+        ),
+        "lot": {
+            "curr_code": curr_code,
+            "fig": _prepare_compact_lot_figure(lot_data, curr_code, curr_warning),
+        },
+        "sheet": {
+            "target_lot": target_lot,
+            "fig": _prepare_compact_sheet_figure(sheet_data, target_lot, curr_group, curr_code),
+        },
+        # 点击 Lot 的 rerun 中，选择事件在渲染阶段才写入 session_state，
+        # 预建 Sheet 图可能过期；保留 sheet_data 引用以便按原路径即时重建。
+        "sheet_data": sheet_data,
+    }
+
+
+def _render_compact_sheet_from_payload(payload: dict, target_lot: str) -> None:
+    """[RenderGate 阶段2] 纯渲染 Sheet 分布区；选择变化导致预建图过期时回退原路径。"""
+    curr_group = payload["curr_group"]
+    curr_code = payload["curr_code"]
+    sheet_info = payload["sheet"]
+    if target_lot != sheet_info["target_lot"]:
+        # 本次 rerun 的 Lot 点击刚改写 session_state，预建图对应旧 Lot，
+        # 按改造前路径即时重建（仅发生在点击/清除选择的那一次 rerun）。
+        _render_compact_sheet_chart(payload["sheet_data"], target_lot, curr_group, curr_code)
+        return
+
+    if not target_lot:
+        st.caption("点击上方 Lot 柱体后显示 Sheet 分布。")
+        return
+
+    st.markdown(f"**D. Sheet分布 | Lot {target_lot}**")
+    if sheet_info["fig"] is None:
+        st.warning(f"未找到 Lot {target_lot} 的 Sheet 级明细。")
+        return
+
+    st.plotly_chart(
+        sheet_info["fig"],
+        use_container_width=True,
+        key=f"compact_sheet_chart_{_state_key_fragment(curr_group, curr_code, target_lot)}",
+    )
+
+
+def _render_compact_payload(payload: dict) -> None:
+    """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
+    with st.expander(payload["label"], expanded=payload["expanded"]):
+        top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
+        with top_trend_col:
+            _render_compact_trend_entries(payload["trend_entries"], payload["key_fragment"])
+        with top_mapping_col:
+            _render_compact_mapping_payload(payload["mapping"])
+
+        target_lot = _render_compact_lot_payload(payload["lot"], payload["key_fragment"])
+        _render_compact_sheet_from_payload(payload, target_lot)
+
+
 def render_code_compact_expander(
     mwd_code_data: dict,
     lot_data: dict,
@@ -793,30 +1020,75 @@ def render_code_compact_expander(
     mapping_layout: Optional[dict] = None,
     expanded: bool = False,
 ) -> None:
-    label = _build_code_expander_label(mwd_code_data, curr_code, curr_warning)
-    with st.expander(label, expanded=expanded):
-        top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
-        with top_trend_col:
-            _render_compact_micro_trends(mwd_code_data, curr_group, curr_code, curr_warning)
-        with top_mapping_col:
-            _render_compact_mapping_section(
-                mapping_data=mapping_data,
-                curr_group=curr_group,
-                curr_code=curr_code,
-                hotspot_scripts=hotspot_scripts,
-                product_code=product_code,
-                mapping_layout=mapping_layout,
-            )
+    payload = _build_compact_render_payload(
+        mwd_code_data=mwd_code_data,
+        lot_data=lot_data,
+        sheet_data=sheet_data,
+        mapping_data=mapping_data,
+        curr_group=curr_group,
+        curr_code=curr_code,
+        curr_warning=curr_warning,
+        hotspot_scripts=hotspot_scripts,
+        product_code=product_code,
+        mapping_layout=mapping_layout,
+        expanded=expanded,
+    )
+    _render_compact_payload(payload)
 
-        target_lot = _render_compact_lot_chart(
-            lot_data=lot_data,
-            curr_group=curr_group,
-            curr_code=curr_code,
-            curr_warning=curr_warning,
-        )
-        _render_compact_sheet_chart(
-            sheet_data=sheet_data,
-            target_lot=target_lot,
-            curr_group=curr_group,
-            curr_code=curr_code,
-        )
+
+def render_code_compact_expanders(
+    selected_groups: list,
+    codes_by_group: dict,
+    warning_lines: Optional[dict],
+    mwd_code_data: dict,
+    lot_data: dict,
+    sheet_data: dict,
+    mapping_data: Optional[pd.DataFrame],
+    hotspot_scripts: list,
+    product_code: Optional[str] = None,
+    mapping_layout: Optional[dict] = None,
+) -> None:
+    """按 Group 批量渲染每个 Code 的紧凑 expander。
+
+    两阶段渲染：先在 RenderGate 统一 spinner 下构建全部 Code 的图表，
+    再按原顺序集中回流渲染（分组标题、分隔线与 expander 次序不变），
+    避免图表随计算进度一张一张跳出导致页面抖动卡顿。
+    """
+    gate = RenderGate()
+    staged_groups: List[tuple] = []
+    for group_index, curr_group in enumerate(selected_groups):
+        group_codes = codes_by_group.get(curr_group, [])
+        if not group_codes:
+            continue
+
+        for curr_code in group_codes:
+            curr_warning = warning_lines.get(curr_code) if warning_lines else None
+            if curr_warning is None:
+                curr_warning = {'upper': 0.002, 'lower': 0.0}
+            gate.stage(
+                partial(
+                    _build_compact_render_payload,
+                    mwd_code_data=mwd_code_data,
+                    lot_data=lot_data,
+                    sheet_data=sheet_data,
+                    mapping_data=mapping_data,
+                    curr_group=str(curr_group),
+                    curr_code=str(curr_code),
+                    curr_warning=float(curr_warning.get('upper', 0.002)),
+                    hotspot_scripts=hotspot_scripts,
+                    product_code=product_code,
+                    mapping_layout=mapping_layout,
+                    expanded=True,
+                )
+            )
+        staged_groups.append((group_index, curr_group, len(group_codes)))
+
+    payloads = gate.collect()
+    offset = 0
+    for group_index, curr_group, code_count in staged_groups:
+        if group_index > 0:
+            st.divider()
+        st.markdown(f"#### {curr_group} · {code_count} Codes")
+        for payload in payloads[offset:offset + code_count]:
+            _render_compact_payload(payload)
+        offset += code_count

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import date
+from functools import partial
 from io import BytesIO
 from typing import Iterable
 
@@ -13,6 +14,7 @@ from app.components.distribution_charts import (
     create_box_distribution_trace,
     create_point_line_trace,
 )
+from app.manager.render_gate import RenderGate
 from src.inline_domain.core.spc.spc_calculator import (
     build_available_period_axis,
     build_period_axis,
@@ -981,17 +983,93 @@ def _create_sheet_points_box_charts(
     return chamber_fig, time_fig
 
 
+def _build_indicator_render_payload(
+    label: str,
+    chart_type: str,
+    indicator_features_df: pd.DataFrame,
+    indicator_capability_df: pd.DataFrame,
+    indicator_raw_df: pd.DataFrame,
+    period_box_source: str,
+) -> dict[str, object]:
+    """[RenderGate 阶段1] 纯计算：构建单个指标的全部图表与表格，禁止触碰 st.*。"""
+    cpk_values = (
+        pd.to_numeric(indicator_capability_df["cpk"], errors="coerce").dropna()
+        if "cpk" in indicator_capability_df.columns
+        else pd.Series(dtype="float64")
+    )
+    cpm_values = (
+        pd.to_numeric(indicator_capability_df["cpm"], errors="coerce").dropna()
+        if "cpm" in indicator_capability_df.columns
+        else pd.Series(dtype="float64")
+    )
+    fig1 = _create_period_overview_chart(
+        sheet_features_df=indicator_features_df,
+        period_capability_df=indicator_capability_df,
+        raw_measurements_df=indicator_raw_df,
+        period_box_source=period_box_source,
+        title=f"{label} | 月周天分布",
+    )
+    chamber_fig, time_fig = _create_sheet_points_box_charts(
+        raw_measurements_df=indicator_raw_df,
+        title_prefix=label,
+        spec_df=indicator_features_df,
+        chart_type=chart_type,
+    )
+    return {
+        "label": label,
+        "cpk_median": _format_metric_value(cpk_values.median() if not cpk_values.empty else pd.NA),
+        "cpk_min": _format_metric_value(cpk_values.min() if not cpk_values.empty else pd.NA),
+        "cpm_median": _format_metric_value(cpm_values.median() if not cpm_values.empty else pd.NA),
+        "cpm_min": _format_metric_value(cpm_values.min() if not cpm_values.empty else pd.NA),
+        "capability_table": _create_period_capability_table(indicator_capability_df),
+        "fig1": fig1,
+        "chamber_fig": chamber_fig,
+        "time_fig": time_fig,
+    }
+
+
+def _render_indicator_payload(payload: dict[str, object]) -> None:
+    """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
+    with st.expander(payload["label"], expanded=True):
+        metric_cols = st.columns(4)
+        metric_cols[0].metric("中位CPK", payload["cpk_median"])
+        metric_cols[1].metric("最小CPK", payload["cpk_min"])
+        metric_cols[2].metric("中位CPM", payload["cpm_median"])
+        metric_cols[3].metric("最小CPM", payload["cpm_min"])
+
+        period_col, capability_col = st.columns([1.15, 1], gap="large")
+        with period_col:
+            st.plotly_chart(payload["fig1"], width="stretch")
+        with capability_col:
+            capability_table = payload["capability_table"]
+            if not capability_table.empty:
+                st.dataframe(
+                    capability_table,
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(420, 38 + 35 * len(capability_table)),
+                )
+
+        st.plotly_chart(payload["chamber_fig"], width="stretch")
+        st.plotly_chart(payload["time_fig"], width="stretch")
+
+
 def render_spc_indicator_sections(
     period_capability_df: pd.DataFrame,
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
 ) -> None:
-    """Render one expander per monitoring indicator with Task2 distribution figures."""
+    """Render one expander per monitoring indicator with Task2 distribution figures.
+
+    两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
+    避免图表随计算进度一张一张跳出导致页面抖动卡顿。
+    """
     if sheet_features_df.empty:
         st.info("当前筛选条件下无 CPM/CPK 数据。")
         return
 
+    gate = RenderGate()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
         label = f"{factory} | {step_id} | {param_name}"
@@ -1016,53 +1094,20 @@ def render_spc_indicator_sections(
             indicator_features_df,
             indicator_raw_df,
         )
-
-        with st.expander(label, expanded=True):
-            cpk_values = (
-                pd.to_numeric(indicator_capability_df["cpk"], errors="coerce").dropna()
-                if "cpk" in indicator_capability_df.columns
-                else pd.Series(dtype="float64")
-            )
-            cpm_values = (
-                pd.to_numeric(indicator_capability_df["cpm"], errors="coerce").dropna()
-                if "cpm" in indicator_capability_df.columns
-                else pd.Series(dtype="float64")
-            )
-            metric_cols = st.columns(4)
-            metric_cols[0].metric("中位CPK", _format_metric_value(cpk_values.median() if not cpk_values.empty else pd.NA))
-            metric_cols[1].metric("最小CPK", _format_metric_value(cpk_values.min() if not cpk_values.empty else pd.NA))
-            metric_cols[2].metric("中位CPM", _format_metric_value(cpm_values.median() if not cpm_values.empty else pd.NA))
-            metric_cols[3].metric("最小CPM", _format_metric_value(cpm_values.min() if not cpm_values.empty else pd.NA))
-
-            capability_table = _create_period_capability_table(indicator_capability_df)
-            fig1 = _create_period_overview_chart(
-                sheet_features_df=indicator_features_df,
-                period_capability_df=indicator_capability_df,
-                raw_measurements_df=indicator_raw_df,
-                period_box_source=period_box_source,
-                title=f"{label} | 月周天分布",
-            )
-            chamber_fig, time_fig = _create_sheet_points_box_charts(
-                raw_measurements_df=indicator_raw_df,
-                title_prefix=label,
-                spec_df=indicator_features_df,
+        gate.stage(
+            partial(
+                _build_indicator_render_payload,
+                label=label,
                 chart_type=chart_type,
+                indicator_features_df=indicator_features_df,
+                indicator_capability_df=indicator_capability_df,
+                indicator_raw_df=indicator_raw_df,
+                period_box_source=period_box_source,
             )
+        )
 
-            period_col, capability_col = st.columns([1.15, 1], gap="large")
-            with period_col:
-                st.plotly_chart(fig1, width="stretch")
-            with capability_col:
-                if not capability_table.empty:
-                    st.dataframe(
-                        capability_table,
-                        hide_index=True,
-                        use_container_width=True,
-                        height=min(420, 38 + 35 * len(capability_table)),
-                    )
-
-            st.plotly_chart(chamber_fig, width="stretch")
-            st.plotly_chart(time_fig, width="stretch")
+    for payload in gate.collect():
+        _render_indicator_payload(payload)
 
 
 def render_cpk_alert_indicator_sections(
@@ -1083,11 +1128,16 @@ def render_cpk_alert_indicator_sections(
         st.warning("预警指标暂无可绘制的 Sheet 数据。")
         return
 
-    st.markdown("### 自动预警指标图像")
-    st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询。")
-    render_spc_indicator_sections(
-        period_capability_df=alert_capability_df,
-        sheet_features_df=alert_sheet_features_df,
-        raw_measurements_df=alert_raw_measurements_df,
-        period_box_source=period_box_source,
+    indicator_count = (
+        alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
+        if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
+        else 0
     )
+    with st.expander(f"🚨 自动预警指标图像（{indicator_count} 个指标）", expanded=False):
+        st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
+        render_spc_indicator_sections(
+            period_capability_df=alert_capability_df,
+            sheet_features_df=alert_sheet_features_df,
+            raw_measurements_df=alert_raw_measurements_df,
+            period_box_source=period_box_source,
+        )
