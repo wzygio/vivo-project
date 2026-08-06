@@ -1,0 +1,13 @@
+[     977ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/host-config:0
+[     977ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8/_stcore/health:0
+[    1152ms] [ERROR] Failed to load resource: net::ERR_ACCESS_DENIED @ https://data.streamlit.io/metrics.json:0
+[    1152ms] [ERROR] Failed to fetch metrics config: TypeError: Failed to fetch
+    at mw.requestDefaultMetricsConfig (http://localhost:8503/static/js/index.BvGIeCyC.js:38:9902)
+    at mw.initialize (http://localhost:8503/static/js/index.BvGIeCyC.js:38:9246)
+    at y.handleInitialization (http://localhost:8503/static/js/index.BvGIeCyC.js:38:25042)
+    at y.handleNewSession (http://localhost:8503/static/js/index.BvGIeCyC.js:38:23802)
+    at Object.newSession (http://localhost:8503/static/js/index.BvGIeCyC.js:38:18511)
+    at t (http://localhost:8503/static/js/index.BvGIeCyC.js:38:18426)
+    at Object.handleMessage [as onMessage] (http://localhost:8503/static/js/index.BvGIeCyC.js:38:18480)
+    at gS.handleMessage (http://localhost:8503/static/js/index.BvGIeCyC.js:34:4644) @ http://localhost:8503/static/js/index.BvGIeCyC.js:37
+[    1152ms] [ERROR] Undefined metrics config - deactivating metrics tracking. @ http://localhost:8503/static/js/index.BvGIeCyC.js:37
