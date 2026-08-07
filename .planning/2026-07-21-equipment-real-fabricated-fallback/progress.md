@@ -4,7 +4,7 @@
 
 - **Status:** complete
 - Applied `development-flow`, `create-local-markdown-issue`, `triage`, and `planning-with-files` in inline mode.
-- Read project context, issue/triage contracts, glossary, architecture, and adr-0001.
+- Read project context, issue/triage contracts, glossary, architecture, and ADR-0001.
 - Created and triaged the issue to `ready-for-agent`; no unresolved decisions.
 - Created this isolated plan and recorded the user's direct execution-through-smoke instruction as approval.
 - No production code changed during requirements/planning.
@@ -38,7 +38,7 @@
 
 - **Status:** complete
 - Updated `ARCHITECTURE.md` with independent snapshot ownership, read-only report flow, and real-first fallback.
-- Added adr-0003 after automated and browser gates passed.
+- Added ADR-0003 after automated and browser gates passed.
 - Updated the local issue acceptance checklist and appended delivery evidence.
 - Reviewed the dirty worktree and left unrelated CTQ/SPC, resources, prompts, and page changes untouched.
 
@@ -52,7 +52,7 @@
 | Mixed-source report | PASS — 248 real + 1,533 fabricated + 0 unmatched; real precedence retained |
 | Equipment smoke | PASS — 34 tests |
 | Browser smoke | PASS — load, metrics, table, filter/reset, hidden parameter columns, desktop/narrow |
-| Project record | PASS — architecture updated and adr-0003 accepted |
+| Project record | PASS — architecture updated and ADR-0003 accepted |
 
 ## Error log
 

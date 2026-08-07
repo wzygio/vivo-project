@@ -1,4 +1,4 @@
-# adr-0006：rerun 减重——图层 memo 与 payload 缓存容量
+# ADR-0006：rerun 减重——图层 memo 与 payload 缓存容量
 
 - Status: Accepted
 - Date: 2026-08-06

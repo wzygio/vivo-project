@@ -6,7 +6,7 @@ Category: `enhancement`
 Status: `ready-for-agent`  
 Created: `2026-07-15`  
 Source: `docs/dev_docs/dev_prompt/feat-equipment_domain.md` — `Task1-opt：规格表格式化`  
-Related: `resources/critical_parts_baseline.csv`, `docs/adr/0001-streamlit-cache-native-payload-boundary.md`
+Related: `resources/critical_parts_baseline.csv`, `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`
 
 ## Current context
 
@@ -93,7 +93,7 @@ None. Task1-opt 已明确目标列契约与拆分规则；参数名称允许为�
 
 - 已通过 Excel COM 读取源工作簿：主 Sheet 为“关键备件寿命规格”；另外存在“数据格式”“Array规格表-1”“Array规格表”。
 - 目标参考文件具有加密头 `00 00 00 00`，以 Excel COM 打开后为 271 行（含表头）× 9 列，格式契约已确认。
-- 未发现 `.out-of-scope/` 中与本需求相同的既有拒绝决策；adr-0001 仅约束页面缓存，不阻塞独立规格格式化能力。
+- 未发现 `.out-of-scope/` 中与本需求相同的既有拒绝决策；ADR-0001 仅约束页面缓存，不阻塞独立规格格式化能力。
 
 ### 2026-07-15 — Triage outcome
 
@@ -101,7 +101,7 @@ None. Task1-opt 已明确目标列契约与拆分规则；参数名称允许为�
 
 - 分类为 `enhancement`：这是对既有关键备件规格读取能力的格式化增强，而非对已验证行为的缺陷修复。
 - 主规格源、目标列契约、展开规则、允许的空参数、不可覆盖文件及验证要求均已有明确证据；无待确认业务决策。
-- 无 adr 或既有 out-of-scope 决策冲突；状态由 `needs-triage` 转为 `ready-for-agent`。
+- 无 ADR 或既有 out-of-scope 决策冲突；状态由 `needs-triage` 转为 `ready-for-agent`。
 
 ### 2026-07-15 — Formatting evidence
 

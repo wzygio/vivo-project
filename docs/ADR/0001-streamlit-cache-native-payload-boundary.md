@@ -1,4 +1,4 @@
-# adr-0001：Streamlit 数据缓存只跨越稳定载荷
+# ADR-0001：Streamlit 数据缓存只跨越稳定载荷
 
 - Status: Accepted
 - Date: 2026-07-14

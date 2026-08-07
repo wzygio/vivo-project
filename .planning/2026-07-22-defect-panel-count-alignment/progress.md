@@ -2,7 +2,7 @@
 
 ## 2026-07-22
 
-- Read Task2, the simplified plan decision, repository coding conventions, relevant adr, and TDD instructions.
+- Read Task2, the simplified plan decision, repository coding conventions, relevant ADR, and TDD instructions.
 - Confirmed existing user edits in `mwd_trend_processor.py` only remove comments in the weekly rebuild block; those edits will be preserved.
 - Confirmed UI smoke is not applicable: requested changes are Core/Application calculations with no presentation changes.
 - Simplified `docs/dev_docs/generated/plan-defect_count_alignment.md` to remove alignment ratios and Mapping monthly dependencies.

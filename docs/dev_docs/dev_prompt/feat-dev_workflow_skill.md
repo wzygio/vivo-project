@@ -22,7 +22,7 @@
    - 需求制定：issue [.scratch](.scratch/) 
    - 计划制定：plan [.planning](.planning/) 
    - 程序开发与测试：程序与测试结果
-   - 项目沉淀：adr [adr](docs/adr/) 
+   - 项目沉淀：ADR [ADR](docs/ADR/) 
 
 ## Workflow
 1. 请先理解我的skill构建模式

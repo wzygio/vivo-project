@@ -30,7 +30,7 @@ SPC/CTQ、自动预警和关键备件寿命管理报表。
 | `output/` | 可重建的报告、下载、日志、截图、测试结果和临时文件。 |
 | `tools/` | 分域 smoke 测试及设备仿造快照维护命令。 |
 | `tests/` | 单元、集成和端到端测试。 |
-| `docs/adr/` | 已接受的架构决策。 |
+| `docs/ADR/` | 已接受的架构决策。 |
 | `docs/agents/` | 本项目的 issue、领域和 triage 协作规则。 |
 | `references/` | 项目自有领域知识与 Harness 演进记录的索引入口。 |
 | `projects/` | 独立交付项目的源文件、分析和导出物。 |
@@ -49,7 +49,7 @@ SPC/CTQ、自动预警和关键备件寿命管理报表。
 
 - 项目目标、目录职责和硬约束：`CONTEXT.md`（本文件）
 - 运行调用流、领域边界、缓存和验证入口：`ARCHITECTURE.md`
-- 架构决策：`docs/adr/`
+- 架构决策：`docs/ADR/`
 - 领域术语（涉及制造数据时必读）：
   `references/domain/GLOSSARY.md`
 - 项目自有领域资料：`references/domain/`

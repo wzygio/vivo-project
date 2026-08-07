@@ -9,7 +9,7 @@
 4. 尝试补充每个issue中的信息，直至可以开发（ready-for-agent）
 5. 调用 [$planning-with-files](C:\\Users\\V0141351\\.agents\\skills\\planning-with-files\\SKILL.md) 构建项目优化计划
 6. 调用 [$tdd](C:\\Users\\V0141351\\.agents\\skills\\tdd\\SKILL.md) ，先进行架构重构（如果有），再进行算法优化（如果有）
-7. 最后总结项目优化点并输出至 [adr](d:/wzy/Python/vivo-project/docs/adr/) 
+7. 最后总结项目优化点并输出至 [ADR](d:/wzy/Python/vivo-project/docs/ADR/) 
 8. 最后汇总每个issue的风险点，输出一份项目优化后的风险点清单
 9. 调用 [$tdd](C:\\Users\\V0141351\\.agents\\skills\\tdd\\SKILL.md) ，针对这些风险点进行逐一排查，如果有则撤回对应issue的改动
 

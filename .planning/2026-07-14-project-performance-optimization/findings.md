@@ -6,7 +6,7 @@
 - Continue only when evidence supports worthwhile optimization.
 - Publish a PRD, split vertical Issues, list per-Issue business/functional risks, and make Issues `ready-for-agent`.
 - Use file-backed planning and TDD; architecture changes precede algorithm changes.
-- Record successful decisions in adr, consolidate risks, test every risk, and withdraw unsafe Issue slices.
+- Record successful decisions in ADR, consolidate risks, test every risk, and withdraw unsafe Issue slices.
 - No business-domain or calculation-logic changes.
 
 ## Research Findings
@@ -59,6 +59,6 @@
 - `ARCHITECTURE.md`
 - `CONTEXT.md`
 - `references/design_references/domain/GLOSSARY.md`
-- `docs/adr/`
+- `docs/ADR/`
 - `references/test_references/`
 - `docs/dev_docs/dev_prompt/refactor-speed_opt.md`

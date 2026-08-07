@@ -3,12 +3,12 @@
 ## 2026-07-14
 
 - Started the CPK alert request under the user-mandated `create-local-markdown-issue` → `triage` → `tdd` workflow; confirmed the repo uses root `.scratch/` Local Markdown cards and canonical Matt triage states.
-- Read the issue-card template, Agent Brief contract, TDD behavior-testing guidance, domain context, architecture, and adr routing. No `.codegraph/` index exists, so targeted `rg` exploration will be used.
+- Read the issue-card template, Agent Brief contract, TDD behavior-testing guidance, domain context, architecture, and ADR routing. No `.codegraph/` index exists, so targeted `rg` exploration will be used.
 - Confirmed the CPM service already preloads and caches raw points, Sheet features, and period capability before the query-gated chart section. The proposed alert should consume that same product-level ViewModel above the filters.
 - Audited the capability and repository schemas. Only `param_name` exists as the parameter field, and the report mixes month/week/day rows; these two output-contract ambiguities will be made explicit in the Issue and triage decision.
 - `create-local-markdown-issue` created `.scratch/cpm-cpk-alert/issues/01-cpk-alert-summary.md` as an `enhancement` in `needs-triage`, with no production-code side effects.
 - A broad repository status search timed out once; the retry was scoped to configured tracker directories and found historical cards under `docs/.scratch/`. The new card follows the current Harness contract at root `.scratch/`.
-- `triage` found no adr/domain/out-of-scope conflict and confirmed the existing cached payload is the correct reuse boundary. The card moved to `needs-info` with AI-disclaimed triage notes; TDD is paused until the three output-contract questions are answered.
+- `triage` found no ADR/domain/out-of-scope conflict and confirmed the existing cached payload is the correct reuse boundary. The card moved to `needs-info` with AI-disclaimed triage notes; TDD is paused until the three output-contract questions are answered.
 - Reporter resolved all triage questions: daily rows only, retain every valid CPK below `1.33`, and expose exactly five columns with one `param_name`-backed parameter-name field. Triage updated the card and Agent Brief to `ready-for-agent`; TDD phase started under explicit development authorization.
 - One combined Issue/plan patch failed atomically because the stored plan contained a real Unicode RED→GREEN arrow while prior terminal output showed mojibake; reread the UTF-8 line and applied the Issue and plan updates separately.
 - TDD slice 1 RED/GREEN complete: the public daily-alert builder now returns every daily CPK below `1.33` in the exact five-column display contract, excludes monthly/boundary rows, and sorts newest dates first.
@@ -33,7 +33,7 @@
 - Recorded the deterministic class-identity pickle reproduction and the existing native-dict precedent.
 - Completed the first AST cache-boundary inventory; identified CPM and critical-parts report ViewModels as the two direct custom-class cache returns.
 - Reviewed Yield nested dictionary returns and confirmed they contain DataFrames/native containers rather than project-defined runtime objects.
-- Confirmed `docs/adr/` exists and is currently empty; adr creation remains gated on successful implementation and verification.
+- Confirmed `docs/ADR/` exists and is currently empty; ADR creation remains gated on successful implementation and verification.
 - CPM tracer-bullet RED reproduced the exact user-facing `UnserializableReturnValueError` through the real `st.cache_data` wrapper while the service module was reimported during a cache miss.
 - CPM GREEN: split the cached native payload from the uncached ViewModel facade; exact regression test passes and `test_spc_cpm_service.py` is `4 passed`.
 - Critical-parts RED reproduced the same `UnserializableReturnValueError` through its real cache boundary during module reimport.
@@ -44,7 +44,7 @@
 - Focused regression suite passed (`60 passed`).
 - Broad unit regression completed with `124 passed, 2 failed`; recorded the two unchanged Shadow EMA failures and did not modify that unrelated module.
 - Broad tests rewrote the tracked Z571 OOS Excel artifacts as a side effect. Confirmed they were clean at task start and restored only those two binary files from `HEAD`; no user-authored changes were affected.
-- Added adr-0001 and linked the reload-stable cache boundary from `ARCHITECTURE.md`.
+- Added ADR-0001 and linked the reload-stable cache boundary from `ARCHITECTURE.md`.
 - Final safety regression passed (`6 passed`); compile and diff checks passed; all plan phases complete.
 - New request: optimize SPC boxplot Expander layout. Added phases 6–7 to the active plan; implementation will preserve report data semantics and use TDD.
 - New documentation request: read the six named Skill contracts and started phases 12–13 to explain their artifact boundaries and recommended Local Markdown workflow.

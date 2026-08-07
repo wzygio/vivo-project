@@ -86,7 +86,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - `tools/fabricate_equipment_data.py` 负责首次生成，
   `tools/update_fabricated_equipment_data.py` 负责显式、受 24 小时新鲜度约束的
   后续更新。该语义见
-  `docs/adr/0003-equipment-real-first-fabricated-fallback.md`。
+  `docs/ADR/0003-equipment-real-first-fabricated-fallback.md`。
 
 ## 缓存、快照与可变资源
 
@@ -101,7 +101,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   通过 `fr-common-utils[excel]` 提供。
 
 缓存边界和产品级失效规则见
-`docs/adr/0001-streamlit-cache-native-payload-boundary.md`。
+`docs/ADR/0001-streamlit-cache-native-payload-boundary.md`。
 
 ## 目录地图
 
@@ -117,7 +117,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 | `data/` | 本地运行时数据与领域 Parquet 快照。 |
 | `tools/` | 分域 smoke 测试和设备仿造数据运维命令。 |
 | `tests/` | 单元、集成和浏览器端到端测试。 |
-| `docs/adr/` | 已接受的架构决策记录。 |
+| `docs/ADR/` | 已接受的架构决策记录。 |
 | `references/` | 项目自有领域知识与 Harness 演进记录。 |
 | `specs/` | 用户维护的规格契约、运行追踪与模板。 |
 | `output/` | 可重建的报告、下载、日志、截图、测试结果与临时文件。 |
@@ -128,7 +128,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   `core/` 或 `application/`，数据访问和快照语义应落在 `infrastructure/`。
 - 不要在没有专门任务和回归证明的情况下重构 Yield 的浓度/Mapping 算法、
   `DatabaseManager` 生命周期或 Parquet 刷新与降级策略。
-- 不要移除页面数据流中的 `st.cache_data`；若修改缓存边界，必须遵守 adr-0001
+- 不要移除页面数据流中的 `st.cache_data`；若修改缓存边界，必须遵守 ADR-0001
   的原生 payload 规则，并覆盖模块热重载场景。
 - 默认单元测试入口为 `pytest`。快速、显式的领域烟测通过：
 
@@ -139,7 +139,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   ```
 
 - 性能敏感的 SPC 周期能力聚合和 smoke 范围约束见
-  `docs/adr/0002-performance-safe-smoke-and-cpm-aggregation.md`。
+  `docs/ADR/0002-performance-safe-smoke-and-cpm-aggregation.md`。
 
 ### MWD 趋势模块职责
 

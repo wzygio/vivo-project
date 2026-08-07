@@ -5,10 +5,10 @@
 ### Project performance optimization
 
 - **Status:** completed
-- Started the user-mandated `to-prd → to-issues → planning-with-files → tdd → adr → risk-directed tdd` workflow.
+- Started the user-mandated `to-prd → to-issues → planning-with-files → tdd → ADR → risk-directed tdd` workflow.
 - Read all named Skill contracts and TDD guidance; created a dedicated active plan before repository exploration.
 - Confirmed no CodeGraph index and recorded unrelated dirty-worktree boundaries.
-- Read architecture, domain vocabulary, adr-0001, Local Markdown tracker/triage rules, validation/observability guidance, the persisted user prompt, and pytest configuration.
+- Read architecture, domain vocabulary, ADR-0001, Local Markdown tracker/triage rules, validation/observability guidance, the persisted user prompt, and pytest configuration.
 - Completed initial static hotspot inventory. Identified a likely low-risk architecture slice (fast smoke tier/impact routing) plus candidate numerical kernels; no optimization has been approved or implemented yet.
 - Timed unit collection and the runnable unit baseline. Confirmed that dependency import/collection is the dominant smoke cost and recorded all pre-existing failures without modifying them.
 - Inspected CPM and critical-parts kernels. CPM aggregation remains a candidate; stateful critical-parts decoration is excluded from the initial optimization scope.
@@ -23,7 +23,7 @@
 - Replaced Python record-building loops with batch aggregation. A native groupby reducer initially changed two near-constant CPK values to `inf`; TDD risk audit caught it and that reducer was withdrawn.
 - Retained legacy `Series.mean/std` floating-point behavior inside the batch plan. Final M626 Sheet Mean and Point Value outputs are bitwise identical to HEAD.
 - Final benchmark: Sheet Mean 2.06→0.39 s (81.2% faster); Point Value 6.08→3.29 s (46.0% faster).
-- Added adr-0002 and a consolidated risk checklist. Every listed risk has test, benchmark, diff, or command evidence; both Issues remain and moved to `ready-for-human`.
+- Added ADR-0002 and a consolidated risk checklist. Every listed risk has test, benchmark, diff, or command evidence; both Issues remain and moved to `ready-for-human`.
 - Added internal import-path setup for legacy Yield tests. Moved the smoke tool from ignored `scripts/` to versioned `tools/` after delivery inspection found the ignore rule.
 - Final broad regression: 141 passed and the same 7 pre-existing failures; Python compile and `git diff --check` passed.
 
@@ -67,4 +67,4 @@
 | Where am I going? | User review of two `ready-for-human` Issues |
 | What's the goal? | Faster smoke/runtime paths with unchanged business and numerical behavior |
 | What have I learned? | See `findings.md` |
-| What have I done? | Published PRD/Issues, retained two measured optimizations, completed adr and risk-directed audit |
+| What have I done? | Published PRD/Issues, retained two measured optimizations, completed ADR and risk-directed audit |

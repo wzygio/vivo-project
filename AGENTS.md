@@ -78,5 +78,5 @@ See `docs/agents/triage-labels.md`.
 
 This is a single-context repository. Read root `CONTEXT.md`, then the
 manufacturing glossary at `references/domain/GLOSSARY.md`
-when relevant; consult `docs/adr/` for applicable architectural decisions.
+when relevant; consult `docs/ADR/` for applicable architectural decisions.
 See `docs/agents/domain.md`.

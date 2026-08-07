@@ -17,7 +17,7 @@
 - 当前规格签名为 `e1f06d78da21`，现有目录无对应快照。已有四份快照含 124–293 万行和约 90 天历史，仅适合作为 schema/命名分布参考。
 - 生产快照 schema 为 `step_id/object`, `sub_equip_id/object`, `param_name/object`, `value/float64`, `glass_start_time/datetime64[ns]`，关键字段均非空。
 - 现有设备烟测入口为 `uv run --no-sync python tools/smoke.py equipment`，覆盖设备部件单元测试与缓存边界测试。
-- `.out-of-scope/` 不存在；adr-0001/0002 不阻塞独立数据生成，但必须保留 Streamlit 缓存和既有业务计算。
+- `.out-of-scope/` 不存在；ADR-0001/0002 不阻塞独立数据生成，但必须保留 Streamlit 缓存和既有业务计算。
 - 用户补充要求覆盖全部空参数规格，并明确保留关键备件页面、前端不显示参数名称。
 - 1,519 条空参数规格具有 1,519 个唯一完整业务身份，无重复；稳定 SHA-256 摘要探针无碰撞。
 - 这些规格仅覆盖 463 个站点-机台组合，其中 448 组含多条规格、单组最多 8 条，因此站点-机台模糊回退必然产生错配风险。
