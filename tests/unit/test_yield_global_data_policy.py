@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 import yaml
 
-from app.utils import session_manager
-from app.utils.session_manager import SessionManager
+from app.manager import session_manager
+from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.yield_domain.application.dtos import YieldDataPolicy
 

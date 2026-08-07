@@ -6,7 +6,7 @@ from typing import Optional
 from uuid import uuid4
 import streamlit as st
 from src.shared_kernel.config_model import AppConfig
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
 PRODUCT_CACHE_REVISION_DIR = Path("output") / "tmp" / "product_cache_revisions"
@@ -91,8 +91,9 @@ def render_page_header(
     refresh_handlers: list = None,
     product_cache_scope: str | None = None,
 ):
-    # 每个报表页面都会经过统一页头；在渲染或查询数据前完成依赖模块热重载。
-    setup_hot_reload()
+    # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
+    # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
+    detect_project_changes()
 
     # =========================================================================
     # [新增] Admin 隐身模式 (Stealth Mode)
@@ -144,21 +145,32 @@ def render_page_header(
             cached_funcs,
             product_code=product_cache_scope,
         )
-        
+
         # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
         for key in list(st.session_state.keys()):
             if "view_model" in key: # type: ignore
                 del st.session_state[key]
-        
-        # ---- 阶段 3: 全量模式继续热重载；产品模式不扰动其它产品/会话 ----
-        if cache_scope == "global":
-            try:
-                from app.utils.reloader import deep_reload_modules
-                deep_reload_modules()
-                logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
-            except ImportError:
-                logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
-        
+
+        # ---- 阶段 3: 手动热重载 = 代码重载 + 配置重读（总是执行） ----
+        # 自动热重载已降级为被动检测（detect_project_changes 只置提示标记），
+        # 代码与配置的统一生效全部收敛到本按钮。
+        try:
+            from app.utils.reloader import deep_reload_modules
+            deep_reload_modules()
+            logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
+        except ImportError:
+            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
+
+        try:
+            current_product = st.session_state.get(SessionManager.KEY_PRODUCT)
+            if current_product:
+                SessionManager.load_and_set_config(current_product)
+                logging.info(f"♻️ [Hard Reset] 配置已强制重读: {current_product}")
+        except Exception as exc:
+            logging.warning(f"⚠️ [Hard Reset] 配置重读失败，保留现有配置: {exc}")
+
+        st.session_state.pop("code_update_pending", None)
+
         # ---- 阶段 4: 清除页面级签名/视图状态，按钮点击后才允许缓存失效 ----
         for key in list(st.session_state.keys()):
             key_str = str(key)
@@ -169,11 +181,11 @@ def render_page_header(
                 or key_str == "parts_baseline_sig"
             ):
                 del st.session_state[key]
-        
+
         if cache_scope == "product":
-            st.toast(f"🔄 {product_cache_scope} 缓存已刷新", icon="✅")
+            st.toast(f"🔄 {product_cache_scope} 缓存已刷新 · 代码与配置已重载", icon="✅")
         else:
-            st.toast("🔄 缓存已刷新 · 模块已重载", icon="✅")
+            st.toast("🔄 缓存已刷新 · 代码与配置已重载", icon="✅")
 
     # --- 渲染控制栏 ---
     with st.container(border=True):
@@ -212,11 +224,13 @@ def render_page_header(
                 on_click=_hard_reset_callback,
                 use_container_width=True,
                 help=(
-                    f"仅刷新产品 {product_cache_scope} 的当前报表缓存。"
+                    f"仅刷新产品 {product_cache_scope} 的当前报表缓存，并重载代码与配置。"
                     if product_cache_scope
-                    else "清除当前报表缓存并重载代码；普通浏览器刷新不会触发。"
+                    else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
                 )
             )
+            if st.session_state.get("code_update_pending"):
+                st.caption("⚠️ 检测到项目文件变更，点击「刷新缓存」应用")
 
 def extract_cached_funcs(*services) -> list:
     """
@@ -239,40 +253,44 @@ def extract_cached_funcs(*services) -> list:
                 
     return auto_cached_funcs
 
-def setup_hot_reload(enable: bool = True) -> bool:
+def detect_project_changes(enable: bool = True) -> bool:
     """
-    [企业级工具] 底层代码热重载守卫。
-    用于在开发态下监控深层依赖模块的变化，一旦发现代码哈希变动，
-    立即强制清空 sys.modules，实现后端代码修改后的无缝热生效。
+    [企业级工具] 项目变更被动检测守卫（手动热重载模式）。
+
+    监控代码/配置/资源文件的哈希指纹变化，但绝不打断当前 run：
+    发现变更时仅置位 st.session_state['code_update_pending'] 提示标记，
+    由页头渲染"点击刷新缓存应用"的提示。代码重载、配置重读与缓存失效
+    统一收敛到"刷新缓存"按钮（_hard_reset_callback）手动触发。
+
+    Returns:
+        bool: 本次运行是否检测到了变更（供调用方判断/测试）。
     """
     if not enable:
         return False
 
     try:
-        from app.utils.reloader import deep_reload_modules, get_project_revision
+        from app.utils.reloader import get_project_revision
         from src.shared_kernel.config import ConfigLoader
-        
+
         # 1. 计算当前代码目录的真实哈希指纹
         project_root = ConfigLoader.get_project_root()
         current_rev = get_project_revision(project_root)
-        
+
         # 2. 从 session_state 获取上一次的指纹
         last_rev = st.session_state.get('last_code_revision')
-        
-        # 3. 先更新指纹，避免 deep reload 后的 rerun 再次触发同一轮变更。
+
+        # 3. 先更新指纹，保证同一轮变更只提示一次。
         st.session_state['last_code_revision'] = current_rev
 
         if last_rev is None or last_rev == current_rev:
             return False
 
-        # 4. 卸载深层依赖并立即开始一轮全新的页面执行。
-        # 仅卸载 sys.modules 而不 rerun 时，本轮脚本中的旧函数/类引用仍然有效。
-        logging.info("♻️ 探测到项目文件变更，触发 Deep Reload...")
-        deep_reload_modules()
-        st.rerun()
+        # 4. 仅置提示标记；不卸载模块、不 rerun，绝不打断用户操作。
+        logging.info("🔔 探测到项目文件变更，等待用户点击「刷新缓存」手动应用。")
+        st.session_state['code_update_pending'] = True
         return True
 
     except (ImportError, OSError) as error:
-        logging.warning(f"⚠️ 热重载检查失败，已跳过: {error}")
+        logging.warning(f"⚠️ 项目变更检测失败，已跳过: {error}")
         return False
 

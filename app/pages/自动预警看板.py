@@ -4,7 +4,7 @@ import pandas as pd
 # ==============================================================================
 #  配置与初始化
 # ==============================================================================
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 from app.components.page_header import (
     extract_cached_funcs,

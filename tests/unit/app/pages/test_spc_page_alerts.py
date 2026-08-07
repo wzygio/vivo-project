@@ -8,7 +8,7 @@ import pandas as pd
 from app.components import page_header
 from app.sections.spc import spc_dashboard
 from app.utils.app_setup import AppSetup
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
 from src.inline_domain.application.spc.spc_service import SpcReportService

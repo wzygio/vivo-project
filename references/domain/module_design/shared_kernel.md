@@ -122,10 +122,12 @@ config.processing['defect_capping']       # 处理参数
 - 缓存键：`snapshot_signature` = MD5(文件 mtime+size)
 - 自动失效：快照变更时自动驱逐
 
-### 4.3 代码热重载
+### 4.3 代码热重载（手动模式）
 
-- `deep_reload_modules()` — 强制卸载 `src/`、`app/` 模块
-- `get_project_revision()` — MD5 指纹用于 composite_key 缓存失效
+- `detect_project_changes()` — 被动检测文件指纹变化，仅置位 `code_update_pending` 提示标记，不打断当前 run
+- 页头「刷新缓存」按钮统一手动生效：`deep_reload_modules()` 卸载 `src/`、`app/` 模块 + `SessionManager.load_and_set_config()` 重读配置 + 缓存失效
+- `get_project_revision()` — MD5 指纹（`.py`/`.yaml`/`.xlsx`/`.csv` mtime）用于变更检测
+- 详见 `docs/adr/0005-manual-hot-reload.md`
 
 ---
 

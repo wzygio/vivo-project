@@ -30,7 +30,7 @@ from app.sections.ctq.ctq_dashboard import (
     render_ctq_indicator_sections,
 )
 from app.utils.app_setup import AppSetup
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig

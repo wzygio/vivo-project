@@ -2,7 +2,7 @@
 import streamlit as st
 
 # --- 1. 初始化与配置 ---
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 from yield_domain.application.yield_service import YieldAnalysisService

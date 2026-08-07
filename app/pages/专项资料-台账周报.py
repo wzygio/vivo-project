@@ -7,7 +7,7 @@ import pandas as pd
 import time
 
 # --- 1. 基础配置与导入 ---
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from app.components.page_header import render_page_header
 from yield_domain.application.file_manager_service import FileManagerService

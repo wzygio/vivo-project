@@ -8,7 +8,7 @@ import pandas as pd
 from app.components import page_header
 from app.sections.ctq import ctq_dashboard
 from app.utils.app_setup import AppSetup
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig

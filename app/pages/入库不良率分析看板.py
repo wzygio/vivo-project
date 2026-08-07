@@ -5,7 +5,7 @@ import numpy as np
 # ==============================================================================
 #  配置与初始化
 # ==============================================================================
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 
 from yield_domain.application.alert_service import AlertService

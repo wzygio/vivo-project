@@ -45,3 +45,23 @@ class RenderGate:
             return []
         with st.spinner(self._spinner_text):
             return [job() for job in jobs]
+
+    def collect_memoized(self, state_key: str, signature: str) -> list[Any]:
+        """[可复用机制] 按签名复用构建结果：同一版数据只构建一次。
+
+        签名命中 session_state[state_key] 时直接返回缓存的 payload 列表
+        （无 spinner、不执行任何已注册任务，已注册任务会被丢弃）；
+        未命中时执行 collect() 并把 (signature, payloads) 写入 session_state。
+
+        签名设计约定：必须包含产品缓存 revision（见
+        app.components.page_header.build_product_cache_signature），
+        保证"刷新缓存"后签名必变、必重建，不存在旧数据复用路径。
+        """
+        memo = st.session_state.get(state_key)
+        if isinstance(memo, dict) and memo.get("signature") == signature:
+            self._jobs = []
+            return memo.get("payloads", [])
+
+        payloads = self.collect()
+        st.session_state[state_key] = {"signature": signature, "payloads": payloads}
+        return payloads

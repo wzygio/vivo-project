@@ -33,7 +33,7 @@ from app.sections.spc.spc_dashboard import (
     render_spc_decoration_admin,
 )
 from app.utils.app_setup import AppSetup
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.inline_domain.application.spc.spc_service import SpcReportService

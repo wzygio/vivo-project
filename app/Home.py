@@ -39,7 +39,7 @@ def _inject_project_roots():
 _inject_project_roots()
 
 from app.utils.app_setup import AppSetup
-from app.components.page_header import setup_hot_reload
+from app.components.page_header import detect_project_changes
 from src.shared_kernel.config import ConfigLoader
 
 @st.cache_resource
@@ -52,7 +52,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-setup_hot_reload()
+detect_project_changes()
 
 # ==============================================================================
 #  核心魔法：CSS 样式注入 (去除 Streamlit 所有原生 UI，实现真·全屏)

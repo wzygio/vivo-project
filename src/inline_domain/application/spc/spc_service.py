@@ -167,14 +167,19 @@ class SpcReportService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=1)
+    @st.cache_data(show_spinner=False, max_entries=3, ttl=4 * 60 * 60)
     def fetch_spc_report_payload(
         _db_manager: "DatabaseManager",
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
     ) -> dict[str, object]:
-        """Cache only reload-stable CPM/CPK payload values."""
+        """Cache only reload-stable CPM/CPK payload values.
+
+        max_entries=3：缓存为进程级共享，多标签/多产品同时使用时避免互相驱逐
+        导致每次 rerun 全量重建；ttl=4h：跨日日期窗口变化与"刷新缓存"换 key
+        产生的孤儿条目由 TTL 兜底回收，内存有界。
+        """
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
             query_config.data_type_filter = "SPC"

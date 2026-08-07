@@ -1117,3 +1117,69 @@ def test_sheet_points_box_charts_returns_chamber_and_time_views() -> None:
     assert [list(trace.x)[0] for trace in chamber_fig.data if trace.type == "box"] == ["S1", "S2"]
     assert [trace.name for trace in chamber_fig.data if trace.type == "box"] == ["3CEE01", "3CEE02"]
     assert [trace.name for trace in time_fig.data if trace.type == "box"] == ["S1", "S2"]
+
+
+def test_render_cpk_alert_indicator_sections_reuses_memoized_charts(monkeypatch) -> None:
+    """同一版预警数据重复渲染时不应重建图表（memo 命中）。"""
+    build_calls: list[str] = []
+
+    class FakeColumn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def metric(self, *_args, **_kwargs):
+            return None
+
+    def fake_build(**kwargs):
+        build_calls.append(kwargs["label"])
+        return {
+            "label": kwargs["label"],
+            "cpk_median": "-",
+            "cpk_min": "-",
+            "cpm_median": "-",
+            "cpm_min": "-",
+            "capability_table": pd.DataFrame(),
+            "fig1": object(),
+            "chamber_fig": object(),
+            "time_fig": object(),
+        }
+
+    monkeypatch.setattr(spc_dashboard.st, "session_state", {})
+    monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        spc_dashboard.st,
+        "columns",
+        lambda spec, **_kwargs: [FakeColumn() for _ in range(spec if isinstance(spec, int) else len(spec))],
+    )
+    monkeypatch.setattr(spc_dashboard.st, "plotly_chart", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard, "_build_indicator_render_payload", fake_build)
+
+    alerts_df = pd.DataFrame([{"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规周次": "2026-W29"}])
+    report_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "S1",
+                "param_name": "P1",
+                "prod_code": "M626",
+                "sheet_start_time": "2026-07-21",
+                "param_value": 1.0,
+            }
+        ]
+    )
+
+    kwargs = dict(
+        alerts_df=alerts_df,
+        period_capability_df=report_df,
+        sheet_features_df=report_df,
+        raw_measurements_df=report_df,
+    )
+    render_cpk_alert_indicator_sections(**kwargs)
+    assert len(build_calls) == 1  # 首次：构建一次
+
+    render_cpk_alert_indicator_sections(**kwargs)
+    assert len(build_calls) == 1  # 第二次：memo 命中，不再构建

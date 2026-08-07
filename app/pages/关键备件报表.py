@@ -37,7 +37,7 @@ import pandas as pd
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
 from app.components.page_header import extract_cached_funcs, render_page_header
-from app.utils.session_manager import SessionManager
+from app.manager.session_manager import SessionManager
 from app.sections.parts_dashboard import (
     render_factory_filter,
     render_parts_metrics,

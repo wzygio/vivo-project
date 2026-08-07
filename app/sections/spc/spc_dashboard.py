@@ -5,6 +5,7 @@ from datetime import date
 from functools import partial
 from io import BytesIO
 from typing import Iterable
+import hashlib
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,6 +15,7 @@ from app.components.distribution_charts import (
     create_box_distribution_trace,
     create_point_line_trace,
 )
+from app.components.page_header import build_product_cache_signature
 from app.manager.render_gate import RenderGate
 from src.inline_domain.core.spc.spc_calculator import (
     build_available_period_axis,
@@ -1059,11 +1061,17 @@ def render_spc_indicator_sections(
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
+    memo_signature: str | None = None,
+    memo_state_key: str = "spc_alert_charts_memo",
 ) -> None:
     """Render one expander per monitoring indicator with Task2 distribution figures.
 
     两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
     避免图表随计算进度一张一张跳出导致页面抖动卡顿。
+
+    传入 memo_signature 时（自动预警区），构建结果按签名缓存在 session_state：
+    同一版数据重复 rerun 只渲染不重建；签名含产品缓存 revision，
+    点"刷新缓存"后签名必变、必重建。
     """
     if sheet_features_df.empty:
         st.info("当前筛选条件下无 CPM/CPK 数据。")
@@ -1106,8 +1114,32 @@ def render_spc_indicator_sections(
             )
         )
 
-    for payload in gate.collect():
+    payloads = (
+        gate.collect()
+        if memo_signature is None
+        else gate.collect_memoized(memo_state_key, memo_signature)
+    )
+    for payload in payloads:
         _render_indicator_payload(payload)
+
+
+def _alert_charts_signature(alerts_df: pd.DataFrame, alert_sheet_features_df: pd.DataFrame) -> str:
+    """自动预警图表的构建签名：产品缓存 revision + 预警内容指纹。
+
+    点"刷新缓存"会 bump 产品 revision，签名必变、图表必重建；
+    同一版数据重复 rerun 时签名稳定，命中 memo 直接复用构建结果。
+    """
+    product_code = ""
+    if "prod_code" in alert_sheet_features_df.columns and not alert_sheet_features_df.empty:
+        product_code = str(alert_sheet_features_df["prod_code"].iloc[0])
+    if product_code:
+        base = build_product_cache_signature("spc_alert_charts", product_code)
+    else:
+        base = "spc_alert_charts|product=unknown"
+    fingerprint = hashlib.sha256(
+        f"{len(alerts_df)}|{alerts_df.astype(str).to_csv(index=False)}".encode("utf-8")
+    ).hexdigest()[:16]
+    return f"{base}|alerts={fingerprint}"
 
 
 def render_cpk_alert_indicator_sections(
@@ -1140,4 +1172,5 @@ def render_cpk_alert_indicator_sections(
             sheet_features_df=alert_sheet_features_df,
             raw_measurements_df=alert_raw_measurements_df,
             period_box_source=period_box_source,
+            memo_signature=_alert_charts_signature(alerts_df, alert_sheet_features_df),
         )
