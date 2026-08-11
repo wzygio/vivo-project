@@ -36,11 +36,19 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
-from src.inline_domain.application.spc.spc_service import SpcReportService
+from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
+SpcReportService = spc_service.SpcReportService
+_spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
+SPC_DECORATION_FILE_ERRORS = (
+    (_spc_decoration_file_error,)
+    if isinstance(_spc_decoration_file_error, type)
+    and issubclass(_spc_decoration_file_error, BaseException)
+    else ()
+)
 
 
 st.set_page_config(page_title="SPC监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -77,13 +85,20 @@ render_page_header(
     ],
 )
 
-with st.spinner("正在加载 SPC 分布数据..."):
-    view_model = SpcReportService.get_spc_report_data(
-        _db_manager=db_manager,
-        query_config_json=query_config.model_dump_json(),
-        snapshot_signature=product_cache_signature,
-        period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
+try:
+    with st.spinner("正在加载 SPC 分布数据..."):
+        view_model = SpcReportService.get_spc_report_data(
+            _db_manager=db_manager,
+            query_config_json=query_config.model_dump_json(),
+            snapshot_signature=product_cache_signature,
+            period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
+        )
+except SPC_DECORATION_FILE_ERRORS:
+    st.error(
+        "SPC 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
+        "然后点击页头“刷新缓存”重试。"
     )
+    st.stop()
 
 sheet_features_df = view_model.sheet_features_df
 raw_measurements_df = view_model.raw_measurements_df

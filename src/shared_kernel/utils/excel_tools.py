@@ -36,18 +36,22 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
             "或确保在解密环境中运行 xlsx_to_csv。"
         )
     
-    # [修复] Streamlit 等多线程环境中 COM 可能未初始化
+    com_initialized = False
     try:
         pythoncom.CoInitialize()
+        com_initialized = True
     except Exception:
         pass
-    
-    excel = win32com.client.Dispatch('Excel.Application')
-    excel.Visible = False
-    excel.DisplayAlerts = False
-    
+
+    excel = None
+    wb = None
+    ws = None
+    used_range = None
     try:
-        wb = excel.Workbooks.Open(str(xlsx_path.resolve()))
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
         if sheet_name:
             ws = wb.Worksheets(sheet_name)
         else:
@@ -55,28 +59,41 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
         
         used_range = ws.UsedRange
         data = used_range.Value
-        
+
         if data is None or len(data) < 1:
-            wb.Close(SaveChanges=False)
             return pd.DataFrame()
-        
+
         # COM 返回 tuple of tuples，首行为表头
         headers = list(data[0])
         rows = [list(row) for row in data[1:]]
         df = pd.DataFrame(rows, columns=headers)
-        
-        wb.Close(SaveChanges=False)
+
         logging.info(f"[xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 {xlsx_path.name} 成功, shape={df.shape}")
         return df
-    
+
     except Exception as e:
         logging.error(f"[xlsx_to_csv] COM 读取加密文件失败: {e}")
         raise
     finally:
+        if wb is not None:
+            try:
+                wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+        used_range = None
+        ws = None
+        wb = None
         try:
-            excel.Quit()
+            if excel is not None:
+                excel.Quit()
         except Exception:
             pass
+        excel = None
+        if com_initialized:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
 
 
 def xlsx_to_csv(

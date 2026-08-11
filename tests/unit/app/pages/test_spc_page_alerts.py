@@ -11,11 +11,13 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
+from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
 
 def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch) -> None:
+    monkeypatch.delattr(spc_service, "SpcDecorationFileError")
     events: list[str] = []
     load_count = 0
     loaded_signatures: list[str] = []

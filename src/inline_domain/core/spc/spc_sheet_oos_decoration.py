@@ -8,6 +8,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+
 logger = logging.getLogger(__name__)
 
 OOS_DETAIL_FILE_NAME = "spc_sheet_oos_detail.xlsx"
@@ -28,6 +30,11 @@ OOS_DETAIL_COLUMNS = [
     "oos_type",
 ]
 OOS_DECORATION_COLUMNS = [*OOS_DETAIL_COLUMNS, "flag"]
+DELETE_ACTION = "Delete"
+
+
+class SheetOosDecorationReadError(RuntimeError):
+    """Raised when an existing user-maintained decoration file cannot be read safely."""
 
 
 @dataclass(frozen=True)
@@ -79,6 +86,14 @@ def _parse_flag(value: object) -> bool:
     if text in {"false", "0", "no", "n", "否", "不修饰", "不截断"}:
         return False
     return True
+
+
+def _is_delete_action(value: object) -> bool:
+    return not pd.isna(value) and str(value).strip().lower() == DELETE_ACTION.lower()
+
+
+def _normalize_flag_action(value: object) -> bool | str:
+    return DELETE_ACTION if _is_delete_action(value) else _parse_flag(value)
 
 
 def _stable_fraction(parts: Iterable[object]) -> float:
@@ -177,9 +192,23 @@ def load_sheet_oos_decoration(product_dir: Path) -> pd.DataFrame:
         return _empty_decoration_frame()
     try:
         df = pd.read_excel(decoration_path, engine="openpyxl")
-    except Exception as exc:
-        logger.warning("[CPM] failed to read Sheet OOS decoration file %s: %s", decoration_path, exc)
-        return _empty_decoration_frame()
+    except Exception as excel_exc:
+        try:
+            df = _read_encrypted_xlsx_via_com(decoration_path)
+            logger.info(
+                "[SPC] loaded enterprise-encrypted Sheet OOS decoration file via Excel COM: %s",
+                decoration_path,
+            )
+        except Exception as com_exc:
+            logger.error(
+                "[CPM] failed to read Sheet OOS decoration file %s with openpyxl (%s) and Excel COM (%s)",
+                decoration_path,
+                excel_exc,
+                com_exc,
+            )
+            raise SheetOosDecorationReadError(
+                f"Unable to read existing Sheet OOS decoration file: {decoration_path}"
+            ) from com_exc
     if df.empty:
         return _empty_decoration_frame()
     df = _normalize_key_columns(df)
@@ -198,11 +227,38 @@ def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decorat
         return result[OOS_DECORATION_COLUMNS]
 
     flags_df = _normalize_key_columns(existing_decoration_df).copy()
-    flags_df["flag"] = flags_df["flag"].apply(_parse_flag)
+    flags_df["flag"] = flags_df["flag"].apply(_normalize_flag_action)
     flags_df = flags_df[OOS_KEY_COLUMNS + ["flag"]].drop_duplicates(OOS_KEY_COLUMNS, keep="last")
     result = detail_df.merge(flags_df, on=OOS_KEY_COLUMNS, how="left")
-    result["flag"] = result["flag"].apply(_parse_flag)
+    result["flag"] = result["flag"].apply(_normalize_flag_action)
     return result[OOS_DECORATION_COLUMNS]
+
+
+def _exclude_delete_flagged_measurements(
+    raw_measurements_df: pd.DataFrame,
+    decoration_df: pd.DataFrame,
+) -> pd.DataFrame:
+    required_columns = set(OOS_KEY_COLUMNS)
+    if not required_columns.issubset(raw_measurements_df.columns):
+        return raw_measurements_df.copy()
+
+    delete_keys = decoration_df.loc[
+        decoration_df["flag"].apply(_is_delete_action),
+        OOS_KEY_COLUMNS,
+    ].drop_duplicates(OOS_KEY_COLUMNS)
+    if delete_keys.empty:
+        return raw_measurements_df.copy()
+
+    delete_keys = _normalize_key_columns(delete_keys).assign(_delete_action=True)
+    result = _normalize_key_columns(raw_measurements_df).merge(
+        delete_keys,
+        on=OOS_KEY_COLUMNS,
+        how="left",
+        validate="many_to_one",
+    )
+    return result.loc[result["_delete_action"].ne(True)].drop(
+        columns="_delete_action"
+    )
 
 
 def persist_sheet_oos_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
@@ -232,7 +288,7 @@ def apply_sheet_oos_decoration(
     decoration_df: pd.DataFrame | None = None,
     clip_rules: Iterable[dict[str, object]] | None = None,
 ) -> pd.DataFrame:
-    """Clip out-of-spec point values for flagged Sheet records before boxplot rendering."""
+    """Apply Sheet actions: Delete excludes points, True clips OOS points, False keeps them."""
     if raw_measurements_df.empty or "param_value" not in raw_measurements_df.columns:
         return raw_measurements_df
 
@@ -245,9 +301,13 @@ def apply_sheet_oos_decoration(
     else:
         decoration_df = merge_detail_with_decoration_flags(detail_df, decoration_df)
 
-    active_df = decoration_df[decoration_df["flag"].apply(_parse_flag)].copy()
-    if active_df.empty:
-        return raw_measurements_df.copy()
+    df = _exclude_delete_flagged_measurements(raw_measurements_df, decoration_df)
+    active_df = decoration_df[
+        ~decoration_df["flag"].apply(_is_delete_action)
+        & decoration_df["flag"].apply(_parse_flag)
+    ].copy()
+    if active_df.empty or df.empty:
+        return df
 
     spec_cols = [*OOS_KEY_COLUMNS, "usl", "lsl"]
     spec_df = _apply_clip_rules(
@@ -256,7 +316,7 @@ def apply_sheet_oos_decoration(
     ).rename(
         columns={"usl": "_oos_usl", "lsl": "_oos_lsl"}
     )
-    df = _normalize_key_columns(raw_measurements_df.copy())
+    df = _normalize_key_columns(df)
     df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
     df = df.merge(spec_df, on=OOS_KEY_COLUMNS, how="left")
 
@@ -277,7 +337,7 @@ def prepare_sheet_oos_decoration(
     persist_files: bool = True,
     clip_rules: Iterable[dict[str, object]] | None = None,
 ) -> SheetOosDecorationResult:
-    """Build files and return chart-ready raw measurements for the CPM page."""
+    """Build files and return chart-ready measurements after tri-state Sheet actions."""
     detail_df = build_sheet_oos_detail(sheet_features_df)
     if persist_files:
         decoration_df = persist_sheet_oos_files(product_dir, detail_df)

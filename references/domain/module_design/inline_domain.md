@@ -51,6 +51,8 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 
 - 在服务边界强制 `data_type_filter = "SPC"`。
 - 生成 Sheet/点位分布、月/周/日 CPM/CPK、CPK 预警及 OOS/CPK 修饰结果。
+- Sheet OOS 修饰表的 `flag` 为三态：`True` 修饰超规点、`False` 保留真实值、`Delete` 按产品/站点/参数/Sheet 四键从图表点位中排除；修改表内 `sheet_min/max/mean` 不改变计算结果。
+- 修饰表支持标准或企业加密 XLSX；已有文件双重读取失败时必须中止本次报表重建并保留原文件。直接编辑文件后按 ADR-0005 通过页头“刷新缓存”手动生效。
 - 缓存函数只返回原生 payload，ViewModel 在缓存外构造。
 
 ### 3.3 `ctq/ctq_service.py` — CTQ 分布报表

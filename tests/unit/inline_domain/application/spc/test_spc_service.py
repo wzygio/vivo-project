@@ -5,11 +5,15 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc import spc_data_decoration
 from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
 from src.inline_domain.application.spc.spc_service import assign_indicator_chart_type
+from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+    SheetOosDecorationReadError,
+)
 from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 
 
@@ -94,6 +98,37 @@ class FakeSpcRepository:
                 }
             ]
         )
+
+
+def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
+    monkeypatch,
+) -> None:
+    SpcReportService.fetch_spc_report_payload.clear()
+    monkeypatch.setattr(spc_service, "SpcRepository", FakeSpcRepository)
+    calls = 0
+
+    def fail_decoration(**_kwargs):
+        nonlocal calls
+        calls += 1
+        raise SheetOosDecorationReadError("unreadable decoration file")
+
+    monkeypatch.setattr(spc_service, "prepare_decorated_spc_data", fail_decoration)
+    query = SpcQueryConfig(
+        prod_code="M626",
+        start_date="2026-06-01",
+        end_date="2026-06-07",
+        data_type_filter="SPC",
+    )
+
+    for _ in range(2):
+        with pytest.raises(spc_service.SpcDecorationFileError):
+            SpcReportService.get_spc_report_data(
+                _db_manager=object(),
+                query_config_json=query.model_dump_json(),
+                snapshot_signature="unreadable-decoration",
+            )
+
+    assert calls == 2
 
 
 def test_assign_indicator_chart_type_marks_uni_parameters_for_line_charts() -> None:

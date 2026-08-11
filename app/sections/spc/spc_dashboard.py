@@ -23,6 +23,7 @@ from src.inline_domain.core.spc.spc_calculator import (
     get_period_window_start,
 )
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+    DELETE_ACTION,
     OOS_DECORATION_COLUMNS,
     OOS_DETAIL_COLUMNS,
     OOS_KEY_COLUMNS,
@@ -322,6 +323,11 @@ def render_sheet_oos_decoration_admin(
         else nullcontext()
     )
     with container:
+        st.caption(
+            f"flag 支持 True（修饰）、False（保留原值）、{DELETE_ACTION}"
+            "（不显示该 Sheet 的当前参数记录）；修改后请上传并确认刷新，"
+            "或点击页头“刷新缓存”。"
+        )
         st.caption(f"明细文件：{decoration_result.detail_path}")
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_detail, c_decoration, c_upload = st.columns([1, 1, 1.2])

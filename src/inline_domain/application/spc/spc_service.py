@@ -12,7 +12,10 @@ from src.inline_domain.core.spc.spc_calculator import (
     build_period_capability_report,
     normalize_period_sigma_source,
 )
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+    SheetOosDecorationReadError,
+    SheetOosDecorationResult,
+)
 from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult, prepare_cpk_decoration
 from src.inline_domain.application.spc.spc_data_decoration import (
     prepare_decorated_spc_data,
@@ -31,6 +34,10 @@ INDICATOR_CHART_TYPE_COLUMN = "chart_type"
 INDICATOR_CHART_TYPE_BOX = "box"
 INDICATOR_CHART_TYPE_LINE = "line"
 CPM_CPK_EXCLUDED_PARAMETER_TOKEN = "PPA"
+
+
+class SpcDecorationFileError(RuntimeError):
+    """Raised when the SPC decoration workbook cannot be read safely."""
 
 
 def assign_indicator_chart_type(indicator_df: pd.DataFrame) -> pd.DataFrame:
@@ -291,6 +298,15 @@ class SpcReportService:
                     "decoration_path": str(cpk_decoration_result.decoration_path),
                 },
             }
+        except SheetOosDecorationReadError as exc:
+            logger.error(
+                "[SPC] sheet OOS decoration workbook read failed: %s",
+                exc,
+                exc_info=True,
+            )
+            raise SpcDecorationFileError(
+                "SPC sheet OOS decoration workbook could not be read."
+            ) from exc
         except Exception as e:
             logger.error("[CPM] report generation failed: %s", e, exc_info=True)
             return SpcReportService._empty_payload()

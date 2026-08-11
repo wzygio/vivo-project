@@ -134,3 +134,47 @@ def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path
 
     assert result.raw_measurements_df["param_value"].max() == 8.0
     assert result.sheet_features_df["sheet_max"].iloc[0] == 8.0
+
+
+def test_prepare_decorated_spc_data_removes_delete_flagged_sheet_from_report(
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "resources" / "Z571"
+    product_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "factory": "OLED",
+                "prod_code": "Z571",
+                "step_id": "21200",
+                "param_name": "PPA_B_X",
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-07-01 08:00:00",
+                "sheet_max": 8.0,
+                "sheet_min": 0.0,
+                "sheet_mean": 4.0,
+                "usl": 6.0,
+                "lsl": -6.0,
+                "oos_type": "USL",
+                "flag": "Delete",
+            }
+        ]
+    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False)
+
+    result = prepare_decorated_spc_data(
+        raw_measurements_df=_raw_measurements(),
+        spec_df=_spec_limits(),
+        prod_code="Z571",
+        product_dir=product_dir,
+    )
+
+    assert result.raw_measurements_df.empty
+    assert result.sheet_features_df.empty
+    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == [
+        "Delete"
+    ]
+    persisted = pd.read_excel(
+        product_dir / OOS_DECORATION_FILE_NAME,
+        engine="openpyxl",
+    )
+    assert persisted["flag"].tolist() == ["Delete"]

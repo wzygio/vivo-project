@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
+from src.inline_domain.core.spc import spc_sheet_oos_decoration
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
     OOS_DETAIL_FILE_NAME,
@@ -152,6 +154,112 @@ def test_apply_sheet_oos_decoration_keeps_real_values_when_flag_false() -> None:
 
     assert decorated.loc[decorated["sheet_id"] == "S1", "param_value"].iloc[0] == 7.5
     assert decorated.loc[decorated["sheet_id"] == "S2", "param_value"].iloc[0] > -6.0
+
+
+def test_apply_sheet_oos_decoration_excludes_delete_flagged_sheet_points() -> None:
+    decoration_df = build_sheet_oos_detail(_sheet_features())
+    decoration_df["flag"] = [" Delete ", True]
+    s1_point = _raw_measurements().iloc[[0]]
+    raw_measurements = pd.concat(
+        [
+            _raw_measurements(),
+            s1_point.assign(param_name="OTHER_PARAM"),
+            s1_point.assign(step_id="OTHER_STEP"),
+            s1_point.assign(prod_code="OTHER_PRODUCT"),
+        ],
+        ignore_index=True,
+    )
+
+    decorated = apply_sheet_oos_decoration(
+        raw_measurements,
+        _sheet_features(),
+        decoration_df,
+    )
+
+    assert set(decorated["sheet_id"]) == {"S1", "S2"}
+    s1_rows = decorated.loc[decorated["sheet_id"] == "S1"]
+    assert len(s1_rows) == 3
+    assert "OTHER_PARAM" in set(s1_rows["param_name"])
+    assert "OTHER_STEP" in set(s1_rows["step_id"])
+    assert "OTHER_PRODUCT" in set(s1_rows["prod_code"])
+    assert decorated.loc[decorated["sheet_id"] == "S2", "param_value"].iloc[0] > -6.0
+
+
+def test_merge_detail_preserves_delete_action_but_ignores_edited_statistics() -> None:
+    detail = build_sheet_oos_detail(_sheet_features())
+    existing = detail.copy()
+    existing["flag"] = [" delete ", False]
+    existing.loc[existing["sheet_id"] == "S1", ["sheet_min", "sheet_max", "sheet_mean"]] = [
+        -999.0,
+        999.0,
+        123.0,
+    ]
+
+    merged = spc_sheet_oos_decoration.merge_detail_with_decoration_flags(
+        detail,
+        existing,
+    )
+    s1 = merged.loc[merged["sheet_id"] == "S1"].iloc[0]
+    original_s1 = detail.loc[detail["sheet_id"] == "S1"].iloc[0]
+
+    assert s1["flag"] == "Delete"
+    assert s1[["sheet_min", "sheet_max", "sheet_mean"]].to_dict() == original_s1[
+        ["sheet_min", "sheet_max", "sheet_mean"]
+    ].to_dict()
+
+
+def test_load_sheet_oos_decoration_falls_back_to_excel_com_for_encrypted_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "resources" / "M678"
+    product_dir.mkdir(parents=True)
+    decoration_path = product_dir / OOS_DECORATION_FILE_NAME
+    decoration_path.write_bytes(b"\x00\x00\x00\x00enterprise-encrypted")
+    expected = build_sheet_oos_detail(_sheet_features()).assign(flag=["Delete", False])
+
+    monkeypatch.setattr(
+        spc_sheet_oos_decoration.pd,
+        "read_excel",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("not a zip file")),
+    )
+    monkeypatch.setattr(
+        spc_sheet_oos_decoration,
+        "_read_encrypted_xlsx_via_com",
+        lambda path: expected if path == decoration_path else pd.DataFrame(),
+        raising=False,
+    )
+
+    loaded = load_sheet_oos_decoration(product_dir)
+
+    assert loaded["flag"].tolist() == ["Delete", False]
+
+
+def test_persist_sheet_oos_files_does_not_overwrite_unreadable_existing_file(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    product_dir = tmp_path / "resources" / "M678"
+    product_dir.mkdir(parents=True)
+    decoration_path = product_dir / OOS_DECORATION_FILE_NAME
+    original_bytes = b"\x00\x00\x00\x00enterprise-encrypted"
+    decoration_path.write_bytes(original_bytes)
+
+    monkeypatch.setattr(
+        spc_sheet_oos_decoration.pd,
+        "read_excel",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("not a zip file")),
+    )
+    monkeypatch.setattr(
+        spc_sheet_oos_decoration,
+        "_read_encrypted_xlsx_via_com",
+        lambda path: (_ for _ in ()).throw(RuntimeError("Excel unavailable")),
+    )
+
+    with pytest.raises(spc_sheet_oos_decoration.SheetOosDecorationReadError):
+        persist_sheet_oos_files(product_dir, build_sheet_oos_detail(_sheet_features()))
+
+    assert decoration_path.read_bytes() == original_bytes
 
 
 def test_persist_sheet_oos_files_writes_product_scoped_detail_and_preserves_flags(tmp_path: Path) -> None:
