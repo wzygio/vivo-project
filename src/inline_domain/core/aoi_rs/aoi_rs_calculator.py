@@ -137,8 +137,66 @@ def build_sheet_point_df(rs_details_df: pd.DataFrame) -> pd.DataFrame:
     return sheets
 
 
-def attach_spec_values(
-    df: pd.DataFrame,
+def build_period_throughput_df(
+    rs_details_df: pd.DataFrame,
+    pass_through_df: pd.DataFrame,
+    end_date: date,
+) -> pd.DataFrame:
+    """按 period × (厂别+站点) 计算过货量（distinct sheet/glass 数），供趋势图柱状图。
+
+    覆盖 period 轴上的全部 period（无过货记 0），与具体 Code 无关；
+    period 轴仍由 RS 明细可用性决定（与 build_period_trend_df 同轴）。
+    """
+    columns = ["period_type", "period_label", "period_sort", "factory", "step_id", "sheet_qty"]
+    if rs_details_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    details = rs_details_df.copy()
+    details["start_time"] = pd.to_datetime(details["start_time"], errors="coerce")
+    details = details.dropna(subset=["start_time"])
+    if details.empty:
+        return pd.DataFrame(columns=columns)
+
+    axis_input = details[["start_time"]].rename(columns={"start_time": "sheet_start_time"})
+    axis = build_available_period_axis(axis_input, end_date)
+
+    pass_df = pd.DataFrame(columns=["factory", "step_id", "sheet_id", "start_time"])
+    if not pass_through_df.empty:
+        pass_df = pass_through_df.copy()
+        pass_df["start_time"] = pd.to_datetime(pass_df["start_time"], errors="coerce")
+        pass_df = pass_df.dropna(subset=["start_time"])
+
+    step_groups = details[["factory", "step_id"]].drop_duplicates()
+    records: list[dict[str, object]] = []
+    for period in axis.itertuples(index=False):
+        window_start = pd.Timestamp(period.period_start)
+        window_end = pd.Timestamp(period.period_end) + pd.Timedelta(days=1)
+        if pass_df.empty:
+            period_pass = pass_df
+        else:
+            period_pass = pass_df[
+                (pass_df["start_time"] >= window_start) & (pass_df["start_time"] < window_end)
+            ]
+        counts = (
+            period_pass.groupby(["factory", "step_id"])["sheet_id"]
+            .nunique()
+            .to_dict()
+        )
+        for group in step_groups.itertuples(index=False):
+            records.append(
+                {
+                    "period_type": period.period_type,
+                    "period_label": period.period_label,
+                    "period_sort": period.period_sort,
+                    "factory": group.factory,
+                    "step_id": group.step_id,
+                    "sheet_qty": int(counts.get((group.factory, group.step_id), 0)),
+                }
+            )
+    return pd.DataFrame(records, columns=columns)
+
+
+def attach_spec_values(    df: pd.DataFrame,
     spec_df: pd.DataFrame,
     *,
     chart_kind: str,

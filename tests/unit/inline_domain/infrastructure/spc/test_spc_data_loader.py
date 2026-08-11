@@ -11,7 +11,7 @@ class DummyDbManager:
 def test_load_spc_measurements_keeps_mt_ch_spc_parameters(monkeypatch) -> None:
     captured_sql: dict[str, str] = {}
 
-    def fake_read_sql(sql_query, engine) -> pd.DataFrame:
+    def fake_read_sql(sql_query, engine, **_kwargs) -> pd.DataFrame:
         captured_sql["text"] = str(sql_query)
         return pd.DataFrame(
             [
@@ -68,3 +68,48 @@ def test_load_spc_measurements_keeps_mt_ch_spc_parameters(monkeypatch) -> None:
     assert "unit_id" in result.columns
     assert result.loc[0, "unit_id"] == "3CEE02-PPA"
     assert result["param_name"].tolist() == ["PPA_B_X", "MT_CH_PRESS_A"]
+
+
+def test_load_spc_spec_limits_returns_normalized_main_process_route(monkeypatch) -> None:
+    captured_sql: dict[str, str] = {}
+
+    def fake_read_sql(sql_query, engine, **_kwargs) -> pd.DataFrame:
+        captured_sql["text"] = str(sql_query)
+        return pd.DataFrame(
+            [
+                {
+                    "prod_code": "M626",
+                    "step_id": "15260",
+                    "param_name": "4PP_Rs",
+                    "usl": "1.5",
+                    "lsl": "0.5",
+                    "ucl": "1.3",
+                    "lcl": "0.7",
+                    "main_step_id": "15100",
+                    "main_eqp_type": "CHAMBER",
+                },
+                {
+                    "prod_code": "M626",
+                    "step_id": "15270",
+                    "param_name": "CD",
+                    "usl": "2.0",
+                    "lsl": None,
+                    "ucl": None,
+                    "lcl": None,
+                    "main_step_id": None,
+                    "main_eqp_type": " ",
+                },
+            ]
+        )
+
+    monkeypatch.setattr(data_loader.pd, "read_sql", fake_read_sql)
+
+    result = data_loader.load_spc_spec_limits(DummyDbManager(), "M626")
+
+    normalized_sql = " ".join(captured_sql["text"].lower().split())
+    assert "main_step_id" in normalized_sql
+    assert "main_eqp_type" in normalized_sql
+    assert result[["main_step_id", "main_eqp_type"]].to_dict("records") == [
+        {"main_step_id": "15100", "main_eqp_type": "CHAMBER"},
+        {"main_step_id": "15270", "main_eqp_type": "EQP"},
+    ]

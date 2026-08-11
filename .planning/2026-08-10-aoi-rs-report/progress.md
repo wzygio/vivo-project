@@ -11,3 +11,10 @@
 - Phase 4a 完成：全量单测 283 passed / 5 failed（5 个均为既有跨域失败：code_selector×2、compliance_xlsx×1、yield_global_data_policy×2；另有既有 test_shadow_ema 收集错误按 CTQ 先例排除）。
 - Phase 4b 完成：Streamlit(8503) + playwright-cli 烟测全项通过；修复 1 个视觉缺陷（图例压标题→图例移至图下）；截图证据在 `output/screenshots/aoi_rs_*.png`。
 - 下一步：development-flow 模块 4（ADR 沉淀）。
+
+## 2026-08-10 Session 2 — Task1 报表优化（issue 02）
+
+- 需求：趋势图加过货量柱状（双轴）、月周天视觉分组、按 Code 拆 Expander 三图并列。
+- 交付：`build_period_throughput_df`（core，全 period 轴分母 0 填充）；`create_aoi_rs_trend_chart` 重构（make_subplots 双 Y 轴、组间零宽空格留白、柱按粒度配色）；`render_aoi_rs_indicator_sections` 重构（每站点+Code 一个 expanded Expander，columns(3) 并列）。
+- 证据：相关单测 85 passed；全量 288 passed / 5 failed（同一批既有跨域失败，无新增）；E2E 复验通过（4 Code → 12 图，截图 output/screenshots/aoi_rs_task1_expander.png）。
+- 口径未变，ADR-0007 继续有效，未新增 ADR。

@@ -67,7 +67,9 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 ### SPC、CTQ 与自动预警
 
 - `SpcRepository` 是 SPC/CTQ/监控共用的数据边界：读取规格与测量数据、
-  应用产品规格覆盖和异常值过滤，并维护带策略标记的快照。
+  应用产品规格覆盖和异常值过滤，并维护带策略标记的快照。SPC 原始点位刷新时，
+  `infrastructure/spc/main_process_trace.py` 按规格主工序路由三厂 OUT 履历，
+  将主制程设备/腔室追溯字段写入同一快照；旧结构快照会触发刷新。
 - `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
   图表类型；CPK 人工修饰文件
   `resources/<product>/spc_cpk_decoration.xlsx` 是用户维护状态，只按周期键

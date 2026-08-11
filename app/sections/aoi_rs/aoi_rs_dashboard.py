@@ -15,11 +15,13 @@ from datetime import date
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 from app.components.distribution_charts import create_point_line_trace
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
     build_lot_point_df,
+    build_period_throughput_df,
     build_period_trend_df,
     build_sheet_point_df,
 )
@@ -27,6 +29,14 @@ from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 
 AOI_RS_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 CODE_PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0f766e", "#dc2626", "#64748b"]
+PERIOD_BAR_COLORS = {
+    "month": "rgba(37, 99, 235, 0.55)",
+    "week": "rgba(22, 163, 74, 0.55)",
+    "day": "rgba(245, 158, 11, 0.55)",
+}
+PERIOD_TYPE_NAMES = {"month": "月", "week": "周", "day": "天"}
+# 月/周/天组间留白：零宽空格分隔符，两个间隙用不同数量避免 category 轴合并
+_PERIOD_SEPARATORS = ["​", "​​"]
 
 
 def get_default_aoi_rs_start_date(end_date: date) -> date:
@@ -198,46 +208,89 @@ def _add_spec_trace(
 def create_aoi_rs_trend_chart(
     *,
     trend_df: pd.DataFrame,
-    code_specs: dict[str, float | None],
-    code_names: dict[str, str],
+    throughput_df: pd.DataFrame,
+    spec_value: float | None,
+    code_name: str,
     title: str,
 ) -> go.Figure:
-    """月周天趋势图：x = period_label（2月→3周→7天），每个 Code 一条比值线 + 规格线。"""
-    figure = go.Figure()
+    """单 Code 月周天趋势图：双 Y 轴（左=RS/片比值线+规格，右=过货量柱）。
+
+    x 轴按 period_sort 排列（2月→3周→7天），月/周/天组间插入零宽空格留白，
+    柱状按 period_type 分组配色以区分粒度。
+    """
+    figure = make_subplots(specs=[[{"secondary_y": True}]])
+
+    axis_source = throughput_df if not throughput_df.empty else trend_df
     axis = (
-        trend_df[["period_label", "period_sort"]]
+        axis_source[["period_type", "period_label", "period_sort"]]
         .drop_duplicates()
         .sort_values("period_sort", kind="stable")
     )
-    x_labels = axis["period_label"].astype(str).tolist()
-    if not x_labels:
+    if axis.empty:
         return figure
 
-    codes = sorted(trend_df["rs_code"].astype(str).unique().tolist())
-    colors = _code_color_map(codes)
-    for code in codes:
-        code_df = trend_df[trend_df["rs_code"].astype(str) == code].set_index("period_label")
-        y_values = [
-            (float(code_df.loc[label, "value"]) if label in code_df.index and pd.notna(code_df.loc[label, "value"]) else None)
-            for label in x_labels
-        ]
+    grouped_labels: list[tuple[str, list[str]]] = []
+    for period_type in ("month", "week", "day"):
+        labels = axis[axis["period_type"] == period_type]["period_label"].astype(str).tolist()
+        if labels:
+            grouped_labels.append((period_type, labels))
+
+    x_labels: list[str] = []
+    separator_positions: list[int] = []
+    for group_index, (_period_type, labels) in enumerate(grouped_labels):
+        if group_index > 0:
+            separator_positions.append(len(x_labels))
+            x_labels.append(_PERIOD_SEPARATORS[(group_index - 1) % len(_PERIOD_SEPARATORS)])
+        x_labels.extend(labels)
+
+    # 过货量柱状（次 Y 轴，按粒度分组配色）
+    throughput_map = (
+        throughput_df.set_index("period_label")["sheet_qty"].to_dict()
+        if not throughput_df.empty
+        else {}
+    )
+    for period_type, labels in grouped_labels:
         figure.add_trace(
-            create_point_line_trace(
-                x_values=x_labels,
-                y_values=y_values,
-                name=code_names.get(code, code),
-                color=colors[code],
-                hovertemplate="%{x}<br>RS/片: %{y:.3f}<extra></extra>",
-            )
+            go.Bar(
+                x=labels,
+                y=[int(throughput_map.get(label, 0)) for label in labels],
+                name=f"过货量（{PERIOD_TYPE_NAMES[period_type]}）",
+                marker_color=PERIOD_BAR_COLORS[period_type],
+                hovertemplate="%{x}<br>过货量: %{y} 片<extra></extra>",
+            ),
+            secondary_y=True,
         )
-        spec_value = code_specs.get(code)
-        if spec_value is not None and pd.notna(spec_value):
-            _add_spec_trace(figure, x_labels, float(spec_value), f"{code_names.get(code, code)} 规格", colors[code])
+
+    # 单 Code 比值线（主 Y 轴），分隔位断开
+    trend_map = (
+        trend_df.set_index("period_label")["value"].to_dict() if not trend_df.empty else {}
+    )
+    y_values = []
+    for position, label in enumerate(x_labels):
+        if position in separator_positions:
+            y_values.append(None)
+            continue
+        value = trend_map.get(label)
+        y_values.append(float(value) if value is not None and pd.notna(value) else None)
+    figure.add_trace(
+        create_point_line_trace(
+            x_values=x_labels,
+            y_values=y_values,
+            name=code_name,
+            color=CODE_PALETTE[0],
+            hovertemplate="%{x}<br>RS/片: %{y:.3f}<extra></extra>",
+        ),
+        secondary_y=False,
+    )
+
+    if spec_value is not None and pd.notna(spec_value):
+        _add_spec_trace(figure, x_labels, float(spec_value), f"{code_name} 规格", CODE_PALETTE[0])
 
     figure.update_layout(
         title=title,
         xaxis={"type": "category", "title": "期间（月/周/天）"},
         yaxis={"title": "平均每片 RS 个数"},
+        yaxis2={"title": "过货量（片）", "overlaying": "y", "side": "right", "showgrid": False},
         legend={"orientation": "h", "yanchor": "top", "y": -0.22},
         margin={"l": 40, "r": 20, "t": 60, "b": 130},
         height=460,
@@ -332,12 +385,13 @@ def render_aoi_rs_indicator_sections(
     indicators_df: pd.DataFrame,
     end_date: date,
 ) -> None:
-    """按（厂别+站点）分组渲染三张图：月周天趋势 / By Lot / By Sheet。"""
+    """按（厂别+站点）分组，组内每个 Code 一个默认展开的 Expander，并列渲染三张图。"""
     if rs_details_df.empty or indicators_df.empty:
         st.info("当前筛选条件下暂无 AOI RS 数据。")
         return
 
     trend_df = build_period_trend_df(rs_details_df, pass_through_df, end_date)
+    throughput_df = build_period_throughput_df(rs_details_df, pass_through_df, end_date)
     lot_df = build_lot_point_df(rs_details_df)
     sheet_df = build_sheet_point_df(rs_details_df)
     code_names = _code_display_names(indicators_df)
@@ -355,46 +409,63 @@ def render_aoi_rs_indicator_sections(
         ]
         st.subheader(f"{factory} | 站点 {step_id}")
 
-        with st.container(border=True):
-            st.plotly_chart(
-                create_aoi_rs_trend_chart(
-                    trend_df=trend_df[
-                        (trend_df["factory"].astype(str) == factory)
-                        & (trend_df["step_id"].astype(str) == step_id)
-                    ],
-                    code_specs=_code_spec_map(group_indicators, spec_df, "mwd"),
-                    code_names=code_names,
-                    title="月周天趋势（平均每片 RS 个数）",
-                ),
-                width="stretch",
-            )
-        with st.container(border=True):
-            st.plotly_chart(
-                create_aoi_rs_point_chart(
-                    point_df=lot_df[
-                        (lot_df["factory"].astype(str) == factory)
-                        & (lot_df["step_id"].astype(str) == step_id)
-                    ],
-                    id_col="lot_id",
-                    code_specs=_code_spec_map(group_indicators, spec_df, "lot"),
-                    code_names=code_names,
-                    title="By Lot（每个 Lot 的 RS 个数）",
-                    y_title="RS 个数",
-                ),
-                width="stretch",
-            )
-        with st.container(border=True):
-            st.plotly_chart(
-                create_aoi_rs_point_chart(
-                    point_df=sheet_df[
-                        (sheet_df["factory"].astype(str) == factory)
-                        & (sheet_df["step_id"].astype(str) == step_id)
-                    ],
-                    id_col="sheet_id",
-                    code_specs=_code_spec_map(group_indicators, spec_df, "sheet"),
-                    code_names=code_names,
-                    title="By Sheet（每片的 RS 个数）",
-                    y_title="RS 个数",
-                ),
-                width="stretch",
-            )
+        step_trend = trend_df[
+            (trend_df["factory"].astype(str) == factory)
+            & (trend_df["step_id"].astype(str) == step_id)
+        ]
+        step_throughput = throughput_df[
+            (throughput_df["factory"].astype(str) == factory)
+            & (throughput_df["step_id"].astype(str) == step_id)
+        ]
+        step_lot = lot_df[
+            (lot_df["factory"].astype(str) == factory)
+            & (lot_df["step_id"].astype(str) == step_id)
+        ]
+        step_sheet = sheet_df[
+            (sheet_df["factory"].astype(str) == factory)
+            & (sheet_df["step_id"].astype(str) == step_id)
+        ]
+        mwd_specs = _code_spec_map(group_indicators, spec_df, "mwd")
+        lot_specs = _code_spec_map(group_indicators, spec_df, "lot")
+        sheet_specs = _code_spec_map(group_indicators, spec_df, "sheet")
+
+        for indicator in group_indicators.itertuples(index=False):
+            code = str(indicator.rs_code)
+            code_name = code_names.get(code, code)
+            with st.expander(f"{code_name} | 站点 {step_id}", expanded=True):
+                c_trend, c_lot, c_sheet = st.columns(3)
+                with c_trend:
+                    st.plotly_chart(
+                        create_aoi_rs_trend_chart(
+                            trend_df=step_trend[step_trend["rs_code"].astype(str) == code],
+                            throughput_df=step_throughput,
+                            spec_value=mwd_specs.get(code),
+                            code_name=code_name,
+                            title="月周天趋势（平均每片 RS 个数）",
+                        ),
+                        width="stretch",
+                    )
+                with c_lot:
+                    st.plotly_chart(
+                        create_aoi_rs_point_chart(
+                            point_df=step_lot[step_lot["rs_code"].astype(str) == code],
+                            id_col="lot_id",
+                            code_specs={code: lot_specs.get(code)},
+                            code_names=code_names,
+                            title="By Lot（每个 Lot 的 RS 个数）",
+                            y_title="RS 个数",
+                        ),
+                        width="stretch",
+                    )
+                with c_sheet:
+                    st.plotly_chart(
+                        create_aoi_rs_point_chart(
+                            point_df=step_sheet[step_sheet["rs_code"].astype(str) == code],
+                            id_col="sheet_id",
+                            code_specs={code: sheet_specs.get(code)},
+                            code_names=code_names,
+                            title="By Sheet（每片的 RS 个数）",
+                            y_title="RS 个数",
+                        ),
+                        width="stretch",
+                    )

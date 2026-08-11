@@ -739,6 +739,50 @@ def test_render_indicator_sections_places_sheet_distributions_on_full_width_rows
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
 
 
+def test_indicator_payload_assigns_unique_plotly_keys_across_page_sections(monkeypatch) -> None:
+    rendered_keys: list[str | None] = []
+    shared_figure = object()
+
+    class FakeColumn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def metric(self, *_args, **_kwargs):
+            return None
+
+    payload = {
+        "label": "ARRAY | 15260 | 4PP_Rs",
+        "cpk_median": "-",
+        "cpk_min": "-",
+        "cpm_median": "-",
+        "cpm_min": "-",
+        "capability_table": pd.DataFrame(),
+        "fig1": shared_figure,
+        "chamber_fig": shared_figure,
+        "time_fig": shared_figure,
+    }
+    monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(
+        spc_dashboard.st,
+        "columns",
+        lambda spec, **_kwargs: [FakeColumn() for _ in range(spec if isinstance(spec, int) else len(spec))],
+    )
+    monkeypatch.setattr(
+        spc_dashboard.st,
+        "plotly_chart",
+        lambda _figure, **kwargs: rendered_keys.append(kwargs.get("key")),
+    )
+
+    spc_dashboard._render_indicator_payload(payload, chart_key_prefix="spc_alert")
+    spc_dashboard._render_indicator_payload(payload, chart_key_prefix="spc_report")
+
+    assert all(rendered_keys)
+    assert len(rendered_keys) == len(set(rendered_keys)) == 6
+
+
 def test_period_capability_table_shows_cpm_and_cpk_together() -> None:
     table = _create_period_capability_table(_sample_full_period_capability())
 
@@ -853,7 +897,7 @@ def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_
     assert fig.layout.yaxis.range[1] > 15.0
 
 
-def test_sheet_points_box_chart_uses_site_name_as_chamber_fallback() -> None:
+def test_sheet_points_box_chart_marks_unknown_when_main_process_trace_is_missing() -> None:
     raw_measurements_df = pd.DataFrame(
         [
             {
@@ -875,10 +919,10 @@ def test_sheet_points_box_chart_uses_site_name_as_chamber_fallback() -> None:
 
     assert all(trace.type == "box" for trace in fig.data)
     assert all(trace.boxpoints is False for trace in fig.data)
-    assert [trace.name for trace in fig.data] == ["P1", "P2"]
+    assert [trace.name for trace in fig.data] == ["UNKNOWN", "UNKNOWN"]
 
 
-def test_sheet_points_box_chart_derives_chamber_from_unit_id_before_site_name() -> None:
+def test_sheet_points_box_chart_does_not_use_measurement_unit_as_main_process_trace() -> None:
     raw_measurements_df = pd.DataFrame(
         [
             {
@@ -909,10 +953,41 @@ def test_sheet_points_box_chart_derives_chamber_from_unit_id_before_site_name() 
 
     box_traces = [trace for trace in fig.data if trace.type == "box"]
     assert [list(trace.x)[0] for trace in box_traces] == ["S1", "S2", "S3"]
-    assert [trace.name for trace in box_traces] == ["3CEE02", "3CEE02", "3CEE03"]
+    assert [trace.name for trace in box_traces] == ["UNKNOWN", "UNKNOWN", "UNKNOWN"]
     assert [list(trace.y) for trace in box_traces] == [[10.0], [11.0], [12.0]]
     assert box_traces[0].marker.color == box_traces[1].marker.color
-    assert box_traces[1].marker.color != box_traces[2].marker.color
+    assert box_traces[1].marker.color == box_traces[2].marker.color
+
+
+def test_sheet_points_box_chart_uses_full_main_process_unit_instead_of_measurement_unit() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-06-02 08:00:00",
+                "unit_id": "MEASURE-EQP-02",
+                "main_process_unit_id": "MAIN-CVD-CH02",
+                "param_value": 10.0,
+            },
+            {
+                "sheet_id": "S2",
+                "sheet_start_time": "2026-06-02 09:00:00",
+                "unit_id": "MEASURE-EQP-01",
+                "main_process_unit_id": "MAIN-CVD-CH01",
+                "param_value": 11.0,
+            },
+        ]
+    )
+
+    fig = _create_sheet_points_box_chart(
+        raw_measurements_df,
+        sort_mode="按腔室排序",
+        title="Sheet点位分布 By主站点设备/腔室",
+    )
+
+    box_traces = [trace for trace in fig.data if trace.type == "box"]
+    assert [list(trace.x)[0] for trace in box_traces] == ["S2", "S1"]
+    assert [trace.name for trace in box_traces] == ["MAIN-CVD-CH01", "MAIN-CVD-CH02"]
 
 
 def test_sheet_points_box_chart_sorts_sheet_boxes_by_chamber_then_time() -> None:
@@ -1095,12 +1170,14 @@ def test_sheet_points_box_charts_returns_chamber_and_time_views() -> None:
                 "sheet_id": "S2",
                 "sheet_start_time": "2026-06-02 09:00:00",
                 "unit_id": "3CEE02-PPA",
+                "main_process_unit_id": "MAIN-CH02",
                 "param_value": 11.0,
             },
             {
                 "sheet_id": "S1",
                 "sheet_start_time": "2026-06-01 08:00:00",
                 "unit_id": "3CEE01-PPA",
+                "main_process_unit_id": "MAIN-CH01",
                 "param_value": 10.0,
             },
         ]
@@ -1112,10 +1189,10 @@ def test_sheet_points_box_charts_returns_chamber_and_time_views() -> None:
         spec_df=None,
     )
 
-    assert chamber_fig.layout.title.text.endswith("By腔室")
+    assert chamber_fig.layout.title.text.endswith("By主站点设备/腔室")
     assert time_fig.layout.title.text.endswith("By过货时间")
     assert [list(trace.x)[0] for trace in chamber_fig.data if trace.type == "box"] == ["S1", "S2"]
-    assert [trace.name for trace in chamber_fig.data if trace.type == "box"] == ["3CEE01", "3CEE02"]
+    assert [trace.name for trace in chamber_fig.data if trace.type == "box"] == ["MAIN-CH01", "MAIN-CH02"]
     assert [trace.name for trace in time_fig.data if trace.type == "box"] == ["S1", "S2"]
 
 

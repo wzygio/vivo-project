@@ -173,8 +173,7 @@ def load_spc_spec_limits(
     """
     logging.info(f"开始提取产品 {prod_code} 的管控规格基准数据...")
 
-    # [BugFix] 移除 main_eqp_type 字段的查询，确保返回的粒度是严格的 (产品+站点+参数) 级别，防止合并出多余记录
-    sql_query = f"""
+    sql_query = """
     SELECT 
         prod_code, 
         step_id, 
@@ -182,9 +181,11 @@ def load_spc_spec_limits(
         usl, 
         lsl, 
         ucl, 
-        lcl 
-    FROM dwd_imp_dv_param_spec 
-    WHERE prod_code = '{prod_code}'
+        lcl,
+        main_step_id,
+        main_eqp_type
+    FROM mdw.dwd_imp_dv_param_spec
+    WHERE prod_code = :prod_code
     """
 
     try:
@@ -192,7 +193,11 @@ def load_spc_spec_limits(
             raise ValueError("数据库引擎未初始化。")
 
         logging.info("执行管控规格基准 SQL 查询...")
-        spec_df = pd.read_sql(text(sql_query), db_manager.engine)
+        spec_df = pd.read_sql(
+            text(sql_query),
+            db_manager.engine,
+            params={"prod_code": prod_code},
+        )
         spec_df.columns = spec_df.columns.str.lower()
         
         if not spec_df.empty:
@@ -201,6 +206,17 @@ def load_spc_spec_limits(
             for col in limit_cols:
                 if col in spec_df.columns:
                     spec_df[col] = pd.to_numeric(spec_df[col], errors='coerce') 
+
+            normalized_main_steps = spec_df["main_step_id"].astype("string").str.strip()
+            spec_df["main_step_id"] = normalized_main_steps.mask(
+                normalized_main_steps.eq("")
+            ).fillna(spec_df["step_id"].astype(str))
+
+            normalized_route_types = spec_df["main_eqp_type"].astype("string").str.strip().str.upper()
+            spec_df["main_eqp_type"] = normalized_route_types.where(
+                normalized_route_types.isin({"EQP", "CHAMBER"}),
+                "EQP",
+            )
 
         logging.info(f"成功提取 {len(spec_df)} 条管控规格规则。")
         return spec_df

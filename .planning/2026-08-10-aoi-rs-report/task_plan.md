@@ -65,6 +65,14 @@
 - [x] 更新 issue checklist 与 Comments（交付证据，2026-08-10）。
 - [x] 移交 development-flow 模块 4（ADR）：`docs/ADR/0007-aoi-rs-report-data-source-and-counting.md` 已创建。
 
+### Phase 6 — Task1 报表优化（issue 02，2026-08-10）
+- [x] RED→GREEN：core 新增 `build_period_throughput_df`（全 period 轴过货量，0 填充）。证据：`test_aoi_rs_throughput.py` 3 passed。
+- [x] RED→GREEN：趋势图重构——双 Y 轴（比值线+规格 / 过货量柱），月周天组间零宽空格留白+柱按组配色（月蓝/周绿/天橙）。证据：`test_trend_chart_has_bars_line_spec_and_grouped_axis`、`test_trend_chart_without_spec_draws_no_spec_line` passed。
+- [x] RED→GREEN：渲染结构重构——每（站点+Code）一个默认展开 Expander，`st.columns(3)` 并列三图。证据：`test_render_sections_expander_per_code_with_three_side_by_side_charts` passed（3 Code → 3 expander × 3 图）。
+- [x] 回归：`tests/unit/inline_domain + app/sections + app/pages` 85 passed；全量 `tests/unit`（排除既有 test_shadow_ema 收集错误）**288 passed / 5 failed**，5 个失败与 Phase 4 登记的既有跨域失败完全相同，无新增。
+- [x] E2E 复验（playwright-cli @ 8503，M626/ARRAY/11629 多 Code）：4 个 Code → 12 张图（每 Code 一 Expander 三图并列）；趋势图柱（分组配色）+双轴+规格线正确；控制台仅基础设施噪音。截图 `output/screenshots/aoi_rs_task1_expander.png`。
+- [x] 更新 issue 02 checklist 与交付证据。
+
 ## Errors Encountered
 
 | Error | Attempt | Resolution |

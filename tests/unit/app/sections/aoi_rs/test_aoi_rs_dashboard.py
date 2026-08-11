@@ -82,26 +82,63 @@ def test_filter_report_by_factory_codes_steps() -> None:
     assert list(out["v"]) == [1]
 
 
-def test_trend_chart_has_line_per_code_and_spec_lines_ordered_axis() -> None:
-    figure = create_aoi_rs_trend_chart(
-        trend_df=_trend_df(),
-        code_specs={"A1PPS": 0.8, "A2CIP": None},
-        code_names={"A1PPS": "A1PPS（d1）", "A2CIP": "A2CIP"},
-        title="ARRAY | 11629 | 月周天趋势",
+def test_trend_chart_has_bars_line_spec_and_grouped_axis() -> None:
+    trend_df = _trend_df()
+    trend_df = trend_df[trend_df["rs_code"] == "A1PPS"]
+    throughput_df = (
+        trend_df[["period_type", "period_label", "period_sort", "factory", "step_id", "sheet_qty"]]
+        .drop_duplicates()
     )
 
-    scatter_traces = [t for t in figure.data if t.type == "scatter" and t.mode == "lines+markers"]
-    assert {t.name for t in scatter_traces} == {"A1PPS（d1）", "A2CIP"}
-    spec_traces = [t for t in figure.data if t.type == "scatter" and t.name and "规格" in t.name]
-    # 仅 A1PPS 有规格线；A2CIP 规格为 None 不画
+    figure = create_aoi_rs_trend_chart(
+        trend_df=trend_df,
+        throughput_df=throughput_df,
+        spec_value=0.8,
+        code_name="A1PPS（d1）",
+        title="月周天趋势",
+    )
+
+    bar_traces = [t for t in figure.data if t.type == "bar"]
+    # 月/周/天各一组柱状（分组配色区分粒度）
+    assert len(bar_traces) == 3
+    assert {t.name for t in bar_traces} == {"过货量（月）", "过货量（周）", "过货量（天）"}
+    assert len({t.marker.color for t in bar_traces}) == 3
+    # 柱状在次 Y 轴，不与比值线互相压扁
+    assert all(t.yaxis == "y2" for t in bar_traces)
+    # 单 Code 一条比值线 + 一条规格虚线
+    lines = [t for t in figure.data if t.type == "scatter" and t.mode == "lines+markers"]
+    assert [t.name for t in lines] == ["A1PPS（d1）"]
+    spec_traces = [t for t in figure.data if t.type == "scatter" and "规格" in (t.name or "")]
     assert len(spec_traces) == 1
-    assert "A1PPS" in spec_traces[0].name
-    # x 轴顺序：2 月 → 3 周 → 7 天
-    x_labels = list(figure.data[0].x)
+    # x 轴：2 月 + 分隔 + 3 周 + 分隔 + 7 天 = 14 个类目，组间留白
+    x_labels = list(lines[0].x)
+    assert len(x_labels) == 14
     assert x_labels[0] == "2026-07" and x_labels[1] == "2026-08"
-    assert x_labels[2].startswith("2026-W")
+    assert x_labels[3].startswith("2026-W")
     assert x_labels[-1] == "2026-08-10"
-    assert len(x_labels) == 12
+    # 分隔位置无线值（断开），但有柱位（2月+sep+3周+sep+7天 → 索引 2 与 6）
+    sep_indices = [2, 6]
+    assert all(pd.isna(lines[0].y[i]) for i in sep_indices)
+    # 月组柱子带全月过货量
+    month_bar = [t for t in bar_traces if t.name == "过货量（月）"][0]
+    assert list(month_bar.y) == [10, 10]
+
+
+def test_trend_chart_without_spec_draws_no_spec_line() -> None:
+    trend_df = _trend_df()
+    trend_df = trend_df[trend_df["rs_code"] == "A1PPS"]
+    throughput_df = (
+        trend_df[["period_type", "period_label", "period_sort", "factory", "step_id", "sheet_qty"]]
+        .drop_duplicates()
+    )
+    figure = create_aoi_rs_trend_chart(
+        trend_df=trend_df,
+        throughput_df=throughput_df,
+        spec_value=None,
+        code_name="A1PPS",
+        title="月周天趋势",
+    )
+    assert not [t for t in figure.data if t.type == "scatter" and "规格" in (t.name or "")]
 
 
 def test_point_chart_orders_x_by_first_time_and_draws_spec() -> None:
@@ -126,18 +163,42 @@ def test_point_chart_orders_x_by_first_time_and_draws_spec() -> None:
     assert any("规格" in (t.name or "") for t in figure.data)
 
 
-def test_render_sections_renders_three_charts_per_step(monkeypatch) -> None:
+def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkeypatch) -> None:
     rendered: list[object] = []
-    headers: list[str] = []
-    monkeypatch.setattr(aoi_rs_dashboard.st, "subheader", lambda text, **_kw: headers.append(text))
+    expander_titles: list[str] = []
+    expander_expanded: list[bool] = []
+
+    class _FakeExpander:
+        def __init__(self, title, expanded):
+            self.title = title
+            self.expanded = expanded
+        def __enter__(self):
+            expander_titles.append(self.title)
+            expander_expanded.append(self.expanded)
+            return self
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        aoi_rs_dashboard.st,
+        "expander",
+        lambda title, expanded=False, **_kw: _FakeExpander(title, expanded),
+    )
     monkeypatch.setattr(aoi_rs_dashboard.st, "plotly_chart", lambda fig, **_kw: rendered.append(fig))
+    monkeypatch.setattr(
+        aoi_rs_dashboard.st,
+        "columns",
+        lambda n, **_kw: [nullcontext() for _ in range(n if isinstance(n, int) else len(n))],
+    )
+    monkeypatch.setattr(aoi_rs_dashboard.st, "subheader", lambda *_a, **_kw: None)
     monkeypatch.setattr(aoi_rs_dashboard.st, "container", lambda **_kw: nullcontext())
     monkeypatch.setattr(aoi_rs_dashboard.st, "info", lambda *_a, **_kw: None)
 
     details = pd.DataFrame(
         [
             {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:00"), "sheet_id": "S1", "lot_id": "L1", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 3},
-            {"factory": "TP", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 09:00"), "sheet_id": "G1", "lot_id": "L9", "step_id": "43629", "rs_code": "T3DMR", "code_qty": 2},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 09:00"), "sheet_id": "S2", "lot_id": "L2", "step_id": "11629", "rs_code": "A2CIP", "code_qty": 1},
+            {"factory": "TP", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 10:00"), "sheet_id": "G1", "lot_id": "L9", "step_id": "43629", "rs_code": "T3DMR", "code_qty": 2},
         ]
     )
     pass_through = pd.DataFrame(
@@ -149,6 +210,7 @@ def test_render_sections_renders_three_charts_per_step(monkeypatch) -> None:
     indicators = pd.DataFrame(
         [
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11629", "rs_code": "A1PPS", "code_desc": "PHT责M1残留"},
+            {"prod_code": "M678", "factory": "ARRAY", "step_id": "11629", "rs_code": "A2CIP", "code_desc": None},
             {"prod_code": "M678", "factory": "TP", "step_id": "43629", "rs_code": "T3DMR", "code_desc": None},
         ]
     )
@@ -161,7 +223,10 @@ def test_render_sections_renders_three_charts_per_step(monkeypatch) -> None:
         end_date=date(2026, 8, 10),
     )
 
-    # 两个站点分组 × 三张图
-    assert len(rendered) == 6
-    assert len(headers) == 2
-    assert any("11629" in h for h in headers)
+    # 每个（站点+Code）一个默认展开的 Expander：3 个 Code → 3 个 expander × 3 图 = 9 张图
+    assert len(expander_titles) == 3
+    assert all(expander_expanded)
+    assert len(rendered) == 9
+    # Expander 标题含站点与 Code（带中文名）
+    assert any("11629" in t and "A1PPS" in t and "PHT责M1残留" in t for t in expander_titles)
+    assert any("43629" in t and "T3DMR" in t for t in expander_titles)

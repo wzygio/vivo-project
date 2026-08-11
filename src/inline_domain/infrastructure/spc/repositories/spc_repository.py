@@ -16,6 +16,9 @@ from src.inline_domain.infrastructure.spc.data_loader import(
     load_spc_spec_limits, 
     load_param_whitelist
 )
+from src.inline_domain.infrastructure.spc.main_process_trace import (
+    enrich_measurements_with_main_process_trace,
+)
 from src.inline_domain.core.monitor.monitor_param_classifier import classify_param_type
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
@@ -31,7 +34,14 @@ class SpcRepository:
     职责：拦截DB直连，维护 Parquet 快照，支持全量刷新。
     """
     SNAPSHOT_TTL_HOURS = 8
-    SNAPSHOT_POLICY_VERSION = "spc-param-filter-v2"
+    SNAPSHOT_POLICY_VERSION = "spc-main-process-trace-v2"
+    TRACE_SNAPSHOT_COLUMNS = {
+        "main_step_id",
+        "main_eqp_type",
+        "main_process_unit_id",
+        "main_process_event_time",
+        "main_process_trace_source",
+    }
 
     def __init__(self, snapshot_dir: Path, use_snapshot: bool = True, db_manager: Optional['DatabaseManager'] = None):
         self.snapshot_dir = snapshot_dir
@@ -216,6 +226,9 @@ class SpcRepository:
                         if "unit_id" not in df_cache.columns:
                             logging.info("🆕 [SpcRepo] SPC 快照缺少 unit_id 字段，触发一次结构刷新。")
                             is_cache_fresh = False
+                        elif not self.TRACE_SNAPSHOT_COLUMNS.issubset(df_cache.columns):
+                            logging.info("🆕 [SpcRepo] SPC 快照缺少主制程追溯字段，触发一次结构刷新。")
+                            is_cache_fresh = False
                         elif not self._is_snapshot_policy_current(snapshot_path):
                             logging.info(
                                 "🆕 [SpcRepo] SPC 快照参数筛选策略已升级，触发一次全量刷新。"
@@ -244,6 +257,15 @@ class SpcRepository:
                     df_final[time_col] = pd.to_datetime(df_final[time_col])
                     df_final.drop_duplicates(
                         subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
+                    if not self.TRACE_SNAPSHOT_COLUMNS.issubset(df_final.columns):
+                        spec_df = load_spc_spec_limits(self.db, config.prod_code)
+                        df_final = enrich_measurements_with_main_process_trace(
+                            self.db,
+                            df_final,
+                            spec_df,
+                            history_start=req_start_dt - relativedelta(months=1),
+                            history_end=req_end_dt,
+                        )
                     need_save = True
                 elif cache_exists and not df_cache.empty:
                     # [容灾防线] 数据库假死返回空，无损回退

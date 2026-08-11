@@ -822,22 +822,7 @@ def _create_period_overview_chart(
 
 
 def _resolve_chamber_column(df: pd.DataFrame) -> str:
-    for column in ["unit_id", "chamber", "chamber_id", "sub_equip_id", "eqp_id", "main_eqp_type", "site_name"]:
-        if column in df.columns:
-            return column
-    return ""
-
-
-def _derive_chamber_label(value: object) -> str:
-    if pd.isna(value):
-        return "UNKNOWN"
-    value_text = str(value).strip()
-    if not value_text:
-        return "UNKNOWN"
-    if "-" in value_text:
-        chamber = value_text.split("-", 1)[0].strip()
-        return chamber or "UNKNOWN"
-    return value_text[:6] if len(value_text) > 6 else value_text
+    return "main_process_unit_id" if "main_process_unit_id" in df.columns else ""
 
 
 def _sheet_id_order(df: pd.DataFrame) -> list[str]:
@@ -894,10 +879,11 @@ def _create_sheet_points_box_chart(
                 )
     else:
         chamber_col = _resolve_chamber_column(df)
-        if chamber_col == "unit_id":
-            df["chamber_label"] = df[chamber_col].apply(_derive_chamber_label)
-        else:
-            df["chamber_label"] = df[chamber_col].fillna("UNKNOWN").astype(str) if chamber_col else "UNKNOWN"
+        df["chamber_label"] = (
+            df[chamber_col].fillna("UNKNOWN").astype(str)
+            if chamber_col
+            else "UNKNOWN"
+        )
         df["chamber_label"] = df["chamber_label"].fillna("UNKNOWN").astype(str)
         sorted_df = df.sort_values(["chamber_label", "sheet_start_time", "sheet_id"], na_position="last")
         sheet_order = _sheet_id_order(sorted_df)
@@ -971,7 +957,7 @@ def _create_sheet_points_box_charts(
     chamber_fig = _create_sheet_points_box_chart(
         raw_measurements_df=raw_measurements_df,
         sort_mode="按腔室排序",
-        title=f"{title_prefix} | Sheet点位分布 By腔室",
+        title=f"{title_prefix} | Sheet点位分布 By主站点设备/腔室",
         spec_df=spec_df,
         chart_type=chart_type,
     )
@@ -1030,7 +1016,16 @@ def _build_indicator_render_payload(
     }
 
 
-def _render_indicator_payload(payload: dict[str, object]) -> None:
+def _build_indicator_chart_key(chart_key_prefix: str, label: object, chart_slot: str) -> str:
+    """Return a stable key that is unique to a page section, indicator, and chart."""
+    indicator_digest = hashlib.sha256(str(label).encode("utf-8")).hexdigest()[:16]
+    return f"{chart_key_prefix}_{indicator_digest}_{chart_slot}"
+
+
+def _render_indicator_payload(
+    payload: dict[str, object],
+    chart_key_prefix: str = "spc_report",
+) -> None:
     """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
     with st.expander(payload["label"], expanded=True):
         metric_cols = st.columns(4)
@@ -1041,19 +1036,31 @@ def _render_indicator_payload(payload: dict[str, object]) -> None:
 
         period_col, capability_col = st.columns([1.15, 1], gap="large")
         with period_col:
-            st.plotly_chart(payload["fig1"], width="stretch")
+            st.plotly_chart(
+                payload["fig1"],
+                width="stretch",
+                key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "period"),
+            )
         with capability_col:
             capability_table = payload["capability_table"]
             if not capability_table.empty:
                 st.dataframe(
                     capability_table,
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                     height=min(420, 38 + 35 * len(capability_table)),
                 )
 
-        st.plotly_chart(payload["chamber_fig"], width="stretch")
-        st.plotly_chart(payload["time_fig"], width="stretch")
+        st.plotly_chart(
+            payload["chamber_fig"],
+            width="stretch",
+            key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "chamber"),
+        )
+        st.plotly_chart(
+            payload["time_fig"],
+            width="stretch",
+            key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "time"),
+        )
 
 
 def render_spc_indicator_sections(
@@ -1063,6 +1070,7 @@ def render_spc_indicator_sections(
     period_box_source: str = "point_value",
     memo_signature: str | None = None,
     memo_state_key: str = "spc_alert_charts_memo",
+    chart_key_prefix: str = "spc_report",
 ) -> None:
     """Render one expander per monitoring indicator with Task2 distribution figures.
 
@@ -1120,7 +1128,7 @@ def render_spc_indicator_sections(
         else gate.collect_memoized(memo_state_key, memo_signature)
     )
     for payload in payloads:
-        _render_indicator_payload(payload)
+        _render_indicator_payload(payload, chart_key_prefix=chart_key_prefix)
 
 
 def _alert_charts_signature(alerts_df: pd.DataFrame, alert_sheet_features_df: pd.DataFrame) -> str:
@@ -1173,4 +1181,5 @@ def render_cpk_alert_indicator_sections(
             raw_measurements_df=alert_raw_measurements_df,
             period_box_source=period_box_source,
             memo_signature=_alert_charts_signature(alerts_df, alert_sheet_features_df),
+            chart_key_prefix="spc_alert",
         )

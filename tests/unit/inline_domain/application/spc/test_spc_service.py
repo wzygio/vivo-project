@@ -70,6 +70,13 @@ class FakeSpcRepository:
                     "data_type": "SPC",
                 },
             ]
+        ).assign(
+            unit_id="MEASURE-EQP",
+            main_step_id="M1",
+            main_eqp_type="EQP",
+            main_process_unit_id="MAIN-EQP-01",
+            main_process_event_time=pd.Timestamp("2026-05-31 12:00:00"),
+            main_process_trace_source="array_sht",
         )
 
     def get_spc_spec_limits(self, prod_code: str) -> pd.DataFrame:
@@ -144,6 +151,8 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
     assert set(report.period_capability_df["sigma_source"]) == {"sheet_mean"}
     assert set(report.period_capability_df["cpk_decorated"]) == {False}
     assert set(report.raw_measurements_df["data_type"]) == {"SPC"}
+    assert set(report.raw_measurements_df["main_process_unit_id"]) == {"MAIN-EQP-01"}
+    assert set(report.raw_measurements_df["main_process_trace_source"]) == {"array_sht"}
     assert report.sheet_oos_decoration_result is not None
     assert report.cpk_decoration_result is not None
 

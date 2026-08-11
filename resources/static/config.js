@@ -18,6 +18,7 @@ const LINKS = {
     SPC_REPORT: "http://10.72.26.31:8503/SPC监控报表",
     CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",
     AOI_RS_REPORT: "http://10.72.26.31:8503/AOI_RS监控报表",
+    AOI_TT_REPORT: "http://10.72.26.31:8503/AOI_TT监控报表",
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
@@ -68,6 +69,7 @@ const APP_CONFIG = {
             children: [
                 { name: "AOI", url: LINKS.AOI },
                 { name: "AOI_RS", url: LINKS.AOI_RS_REPORT },
+                { name: "AOI_TT", url: LINKS.AOI_TT_REPORT },
                 { name: "CTQ", url: LINKS.CTQ_REPORT },
                 // { name: "SPC", url: LINKS.SPC},
                 { name: "SPC", url: LINKS.SPC_REPORT },
@@ -120,6 +122,7 @@ const APP_CONFIG = {
             subs: [ 
                 {l:'', v:'AOI', url: LINKS.AOI } ,
                 {l:'', v:'AOI_RS', url: LINKS.AOI_RS_REPORT },
+                {l:'', v:'AOI_TT', url: LINKS.AOI_TT_REPORT },
                 // {l:'', v:'SPC', url: LINKS.SPC }, 
                 {l:'', v:'CTQ', url: LINKS.CTQ_REPORT },
                 {l:'', v:'SPC', url: LINKS.SPC_REPORT },
