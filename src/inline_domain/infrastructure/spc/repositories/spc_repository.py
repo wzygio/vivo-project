@@ -22,7 +22,6 @@ from src.inline_domain.infrastructure.spc.main_process_trace import (
 from src.inline_domain.core.monitor.monitor_param_classifier import classify_param_type
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
-from src.shared_kernel.utils.data_inspector import export_probed_details
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -212,11 +211,6 @@ class SpcRepository:
                     df_cache[time_col] = pd.to_datetime(df_cache[time_col])
                     cache_exists = True
                     
-                    # ==============================================================
-                    # 🚨 [通用探针] 检查本地旧快照中的数据驻留情况
-                    # ==============================================================
-                    export_probed_details(df_cache, "02_Repo层-历史Parquet缓存")
-
                     # [核心] 拦截强刷指令
                     if force_refresh:
                         logging.info(f"⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！")
@@ -345,11 +339,6 @@ class SpcRepository:
             if config.param_name:
                 df_filtered = df_filtered[df_filtered['param_name'] == config.param_name]
 
-            # =================================================================
-            # 🚨 [追踪矩阵 1]：Repo 层彻底处理完毕，即将离开 Repo 
-            # =================================================================
-            export_probed_details(df_filtered, "Track_01_Repo即将返回")
-
             return df_filtered.reset_index(drop=True)
 
         return df_final
@@ -371,7 +360,7 @@ class SpcRepository:
         # 1. 路径锁定
         project_root = ConfigLoader.get_project_root()
         rule_file = project_root / "resources" / "spc_outlier_filters.xlsx"
-        csv_fallback = project_root / "resources" / "xlsx_to_csv" / "spc_outlier_filters.csv"
+        csv_fallback = project_root / "output" / "decrypted_files" / "spc_outlier_filters.csv"
         
         if df.empty:
             return df

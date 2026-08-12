@@ -59,7 +59,7 @@ RS_DETAIL_COLUMNS = [
     "code_qty",
 ]
 
-PASS_THROUGH_COLUMNS = ["factory", "prod_code", "start_time", "sheet_id", "step_id"]
+PASS_THROUGH_COLUMNS = ["factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id"]
 
 
 class AoiRsQueryConfig(BaseModel):
@@ -145,6 +145,7 @@ def load_pass_through(
             P.productcode AS prod_code,
             T.{time_col} AS start_time,
             T.{id_col} AS sheet_id,
+            T.lot_id,
             T.step_id
         FROM eda.{view_name} T
         JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname

@@ -169,7 +169,7 @@ def batch_export_spc_rules_to_csv(
 ) -> list[Path]:
     """
     [批量导出] 将 SPC 相关的加密 xlsx 规则文件批量导出为 csv。
-    目标文件：spc_outlier_filters.xlsx、spc_probe_targets.xlsx
+    目标文件：spc_outlier_filters.xlsx
 
     应在能透明解密企业加密文件的环境中执行一次，
     之后生产代码即可通过 csv fallback 读取规则。
@@ -180,7 +180,7 @@ def batch_export_spc_rules_to_csv(
     if resource_dir is None:
         resource_dir = ConfigLoader.get_project_root() / "resources"
 
-    target_files = ["spc_outlier_filters.xlsx", "spc_probe_targets.xlsx"]
+    target_files = ["spc_outlier_filters.xlsx"]
     csv_dir = resource_dir / csv_subdir
     exported: list[Path] = []
 

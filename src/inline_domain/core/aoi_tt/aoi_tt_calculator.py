@@ -4,7 +4,8 @@
 - 月周天趋势：每个 period 的值 = Σtt_qty ÷ 同 period 同站点 distinct sheet/glass 数（AOI 检测片数，
   分母取自 TT 测量表自身——TDSUM/DSUM 每片必测；过货视图不含 AOI 站点记录，不可用）；
   period 轴复用 SPC 的 build_available_period_axis（跳过空值向前补全，最近 2 月/3 周/7 天）。
-- By Lot / By Sheet：每个 lot / sheet 的 TT 个数 = Σtt_qty（每 (step,sheet,param) 恰一行，By Sheet 即原值）。
+- By Lot：每个 lot 的 Lot 内平均每片 TT 个数 = Σtt_qty ÷ 该 lot 内 distinct sheet 数；
+  By Sheet：每个 sheet 的 TT 个数 = Σtt_qty（每 (step,sheet,param) 恰一行，By Sheet 即原值）。
 - 规格线：mdw.dwd_imp_dv_param_spec 的 usl/ucl（越小越好型上限），按 (step_id, tt_name) 匹配，
   三张图共用；无规格时不画线（NaN）。
 """
@@ -95,17 +96,30 @@ def build_period_trend_df(
 
 
 def build_lot_point_df(tt_details_df: pd.DataFrame) -> pd.DataFrame:
-    """By Lot：每个 lot 的 TT 个数（Σtt_qty），按首次过货时间排序。"""
+    """By Lot：每个 lot 的 Lot 内平均每片 TT 个数 = Σtt_qty ÷ 该 lot 内 distinct sheet 数。
+
+    分母取自 TT 测量表自身（TDSUM/DSUM 每片必测，含 tt_qty=0 的片）；
+    lot 有记录即分母 ≥1，不存在除零。按首次过货时间排序。
+    """
     if tt_details_df.empty:
         return pd.DataFrame(
-            columns=[*_INDICATOR_KEYS, "lot_id", "tt_qty", "first_start_time"]
+            columns=[*_INDICATOR_KEYS, "lot_id", "tt_qty", "sheet_qty", "value", "first_start_time"]
         )
     lots = (
         tt_details_df.groupby([*_INDICATOR_KEYS, "lot_id"], as_index=False)
-        .agg(tt_qty=("tt_qty", "sum"), first_start_time=("start_time", "min"))
+        .agg(
+            tt_qty=("tt_qty", "sum"),
+            sheet_qty=("sheet_id", "nunique"),
+            first_start_time=("start_time", "min"),
+        )
         .sort_values([*_INDICATOR_KEYS, "first_start_time"], kind="stable")
         .reset_index(drop=True)
     )
+    lots["value"] = lots.apply(
+        lambda row: row["tt_qty"] / row["sheet_qty"] if row["sheet_qty"] > 0 else pd.NA,
+        axis=1,
+    )
+    lots["value"] = pd.to_numeric(lots["value"], errors="coerce")
     return lots
 
 

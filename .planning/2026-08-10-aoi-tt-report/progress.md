@@ -16,7 +16,7 @@
   - `src/inline_domain/application/aoi_tt/aoi_tt_service.py`（缓存 payload→ViewModel，ADR-0001）；
   - `app/sections/aoi_tt/aoi_tt_dashboard.py`（筛选级联+查询门控+三图，USL 红虚线/UCL 橙点线）；
   - `app/pages/AOI_TT监控报表.py`（固定窗口，签名 aoi_tt_report_v1）；
-  - `resources/static/config.js` 注册 AOI_TT_REPORT（SPC监控 分组两处）。
+  - `app/static/config.js` 注册 AOI_TT_REPORT（SPC监控 分组两处）。
   - 导入冒烟 + 计算器/图表手工验证通过（trend 6 traces、lot 3 traces，比值/规格数值正确）。
 - E2E（playwright-cli + Streamlit 8503，`tests/e2e/aoi_tt_report.js`）：
   - 第 1 次失败：站点选择后未等 Code 自动全选即查按钮状态（竞态），且首个 option 为"全选"伪选项；

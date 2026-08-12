@@ -4,7 +4,7 @@
 问题背景：
 - 4月30日起日志反复出现：❌ [SpcRepo] 物理过滤执行失败: File is not a zip file
 - 4月27日及之前物理过滤正常执行（成功剔除数万个异常点）
-- 根因：resources/spc_outlier_filters.xlsx 与 spc_probe_targets.xlsx 被企业加密软件加密，
+- 根因：resources/spc_outlier_filters.xlsx 被企业加密软件加密，
         当前运行环境无法透明解密，openpyxl 读取时抛出 BadZipFile
 
 本测试程序目标（不修改原始代码）：
@@ -68,17 +68,6 @@ class TestDiagnoseEncryptedXlsx:
         rule_file = resource_dir / "spc_outlier_filters.xlsx"
         with pytest.raises(zipfile.BadZipFile, match="File is not a zip file"):
             pd.read_excel(rule_file, engine="openpyxl")
-
-    def test_probe_target_file_also_encrypted(self, resource_dir):
-        """
-        【扩展诊断】spc_probe_targets.xlsx 同样被加密。
-        说明加密策略是统一施加在特定 xlsx 文件上的。
-        """
-        probe_file = resource_dir / "spc_probe_targets.xlsx"
-        assert probe_file.exists()
-        with open(probe_file, "rb") as f:
-            header = f.read(16)
-        assert not header.startswith(b"PK"), "spc_probe_targets.xlsx 同样被加密"
 
     def test_scrap_sheets_is_normal_xlsx(self, resource_dir):
         """

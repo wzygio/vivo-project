@@ -46,7 +46,7 @@
 - [x] 筛选框：厂别 selectbox、站点 multiselect、Code 名称 multiselect（rs_code，图例带 code_desc），查询按钮门控与 SPC 一致（AC4）。
 - [x] 三图渲染：按（厂别+站点）分组，月周天趋势（按 Code 分线 + MWD_RATIO 规格线）、By Lot、By Sheet 点线图（AC2/AC3）。
 - [x] 页面集成：`app/pages/AOI_RS监控报表.py`，Header/产品切换/缓存签名/空态（AC1/AC6/AC7）；固定时间窗=上一自然月1日~当前（AC1，页面测试断言 2026-07-01~2026-08-10 且无 date_input）。
-- [x] 门户注册：`resources/static/config.js` 新增 `AOI_RS_REPORT` 并把侧边栏/技能树 AOI_RS 指向 Streamlit 页面（CTQ 先例）。
+- [x] 门户注册：`app/static/config.js` 新增 `AOI_RS_REPORT` 并把侧边栏/技能树 AOI_RS 指向 Streamlit 页面（CTQ 先例）。
 - 验证：`test_aoi_rs_dashboard.py` 6 passed、`test_aoi_rs_page.py` 2 passed。
 
 ### Phase 4 — 回归与 E2E

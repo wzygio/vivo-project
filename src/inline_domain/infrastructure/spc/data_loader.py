@@ -5,7 +5,6 @@ from sqlalchemy import text
 from typing import TYPE_CHECKING, Optional
 from pydantic import BaseModel, Field
 
-from src.shared_kernel.utils.data_inspector import export_probed_details
 # 仅在类型检查时导入，避免运行时产生循环依赖或强耦合 yield_domain
 if TYPE_CHECKING:
     # 假设使用已存在的 DB Manager，实际传入的只要带有 .engine 属性的实例即可
@@ -151,11 +150,6 @@ def load_spc_measurements(
             measure_df = measure_df.dropna(subset=['param_value']) 
             measure_df = filter_excluded_spc_param_names(measure_df)
 
-        # ==============================================================
-        # 🚨 [通用探针] 检查刚执行完的 SQL 真实提取了多少条记录
-        # ==============================================================
-        export_probed_details(measure_df, "01_DAO层-SQL真实返回")
-        
         logging.info(f"[DAO] 成功提取并清洗 {len(measure_df)} 条底层大宽表数据。")
         return measure_df
         

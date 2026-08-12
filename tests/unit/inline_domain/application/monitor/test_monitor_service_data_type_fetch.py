@@ -115,7 +115,6 @@ def test_repository_filters_by_whitelist_parameter_data_type(tmp_path: Path) -> 
         patch.object(spc_repository, "load_spc_measurements", return_value=measurements),
         patch.object(spc_repository, "load_param_whitelist", return_value=whitelist),
         patch.object(SpcRepository, "_apply_outlier_filters", lambda self, df, prod_code: df),
-        patch.object(spc_repository, "export_probed_details"),
     ):
         result = SpcRepository(snapshot_dir=tmp_path, use_snapshot=False, db_manager=object()).get_spc_measurements(
             query

@@ -39,7 +39,7 @@
 - 负面/后续约束：
   - `code_qty=0` 行的业务语义（复判无缺陷？）未经业务确认，当前按加和口径处理；若业务重定义，仅需调整 data_loader 过滤。
   - 规格线与图类型通过 `type_flag` 硬映射耦合；规格表新增 type_flag 时需同步 `SPEC_TYPE_BY_CHART`。
-  - By Lot/By Sheet 指标按任务文档取"个数"（Σcode_qty），而规格名 LOT_RATIO 暗示比率语义；若后续确认规格为比率口径，需同步调整指标计算。
+  - ~~By Lot/By Sheet 指标按任务文档取"个数"（Σcode_qty），而规格名 LOT_RATIO 暗示比率语义；若后续确认规格为比率口径，需同步调整指标计算。~~ **已于 2026-08-11 兑现并修正**：By Lot 改为 Lot 内平均每片（Σcode_qty ÷ 该 Lot 同站点过货 distinct sheet/glass 数，分母 0 记 NaN），与 LOT_RATIO 比率语义对齐；By Sheet 保持每片个数（对应 SHEET_ID/GLASS_ID 规格）。
   - 任务文档的 TP 视图笔误已在 `references/domain/aoi_rs/spec-data_source.md` 第 2 节登记，后续报表引用文档时以 spec 为准。
 
 ## Traceability

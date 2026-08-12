@@ -118,12 +118,14 @@ def test_period_throughput_empty_input_returns_empty() -> None:
     assert throughput.empty
 
 
-def test_lot_point_aggregates_qty_per_lot_ordered_by_first_time() -> None:
+def test_lot_point_computes_avg_per_sheet_within_lot() -> None:
     details = _details(
         [
+            # LOT-B：两片（S1/S3）共 5 个；LOT-A：一片（S2）1 个；tt_qty=0 的片也计入分母
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 08:00", "sheet_id": "S1", "lot_id": "LOT-B", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 2},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-01 08:00", "sheet_id": "S2", "lot_id": "LOT-A", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 1},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-03 08:00", "sheet_id": "S3", "lot_id": "LOT-B", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 3},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-03 09:00", "sheet_id": "S4", "lot_id": "LOT-B", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 0},
         ]
     )
 
@@ -131,6 +133,10 @@ def test_lot_point_aggregates_qty_per_lot_ordered_by_first_time() -> None:
 
     assert list(lots["lot_id"]) == ["LOT-A", "LOT-B"]  # 按首次过货时间排序
     assert list(lots["tt_qty"]) == [1, 5]
+    # 分母 = Lot 内 distinct sheet 数（TDSUM 每片必测，测量表自身即可作分母）
+    assert list(lots["sheet_qty"]) == [1, 3]
+    # Lot 内平均每片 = Σtt_qty ÷ sheet_qty
+    assert list(lots["value"]) == [1.0, 5 / 3]
 
 
 def test_sheet_point_aggregates_qty_per_sheet() -> None:

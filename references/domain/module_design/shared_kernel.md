@@ -8,7 +8,7 @@
 
 ## 1. 概述
 
-共享内核（Shared Kernel）是连接各业务域的通用基础设施层，提供配置管理、数据库连接、数据探针、文件处理等公共能力。采用 DDD 中 Shared Kernel 模式，确保各域之间的统一性和可维护性。
+共享内核（Shared Kernel）是连接各业务域的通用基础设施层，提供配置管理、数据库连接、文件处理等公共能力。采用 DDD 中 Shared Kernel 模式，确保各域之间的统一性和可维护性。
 
 ---
 
@@ -60,17 +60,7 @@ config.processing['defect_capping']       # 处理参数
 - 断线重连：连接中断后自动恢复
 - **红线**：禁止修改单例模式
 
-### 2.4 [`data_inspector.py`](../../src/shared_kernel/utils/data_inspector.py) — 数据探针
-
-**角色**: 调试与数据导出工具
-
-**功能**：
-- `export_probed_details()` — 全链路数据导出
-- 配合 `spc_probe_targets.xlsx` 名单
-- 支持单文件多 Sheet 导出
-- 条件捕获：仅导出匹配条件的记录
-
-### 2.5 [`excel_tools.py`](../../src/shared_kernel/utils/excel_tools.py) — Excel 工具
+### 2.4 [`excel_tools.py`](../../src/shared_kernel/utils/excel_tools.py) — Excel 工具
 
 **角色**: xlsx→csv 转换（含加密文件 fallback）
 

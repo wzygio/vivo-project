@@ -103,7 +103,7 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
 
 
 def test_portal_navigation_points_ctq_to_the_streamlit_page() -> None:
-    config_path = Path(__file__).parents[4] / "resources" / "static" / "config.js"
+    config_path = Path(__file__).parents[4] / "app" / "static" / "config.js"
     config_text = config_path.read_text(encoding="utf-8")
 
     assert 'CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表"' in config_text

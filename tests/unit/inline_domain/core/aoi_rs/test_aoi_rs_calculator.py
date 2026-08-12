@@ -88,19 +88,49 @@ def test_period_trend_zero_denominator_yields_nan_not_exception() -> None:
     assert (trend["sheet_qty"] == 0).all()
 
 
-def test_lot_point_aggregates_qty_per_lot_ordered_by_first_time() -> None:
+def test_lot_point_computes_avg_per_sheet_using_pass_through_denominator() -> None:
     details = _details(
         [
+            # LOT-B：两片共 5 个；LOT-A：一片 1 个
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 08:00", "sheet_id": "S1", "lot_id": "LOT-B", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 2},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-01 08:00", "sheet_id": "S2", "lot_id": "LOT-A", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 1},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-03 08:00", "sheet_id": "S3", "lot_id": "LOT-B", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 3},
         ]
     )
+    pass_through = _details(
+        [
+            # LOT-B 实际过货 4 片（含无 RS 记录的片），LOT-A 过货 2 片
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 07:00", "sheet_id": "S1", "step_id": "11629", "lot_id": "LOT-B"},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 07:10", "sheet_id": "S3", "step_id": "11629", "lot_id": "LOT-B"},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 07:20", "sheet_id": "S4", "step_id": "11629", "lot_id": "LOT-B"},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 07:30", "sheet_id": "S5", "step_id": "11629", "lot_id": "LOT-B"},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-01 07:00", "sheet_id": "S2", "step_id": "11629", "lot_id": "LOT-A"},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-01 07:10", "sheet_id": "S6", "step_id": "11629", "lot_id": "LOT-A"},
+        ]
+    )
 
-    lots = build_lot_point_df(details)
+    lots = build_lot_point_df(details, pass_through)
 
     assert list(lots["lot_id"]) == ["LOT-A", "LOT-B"]  # 按首次过货时间排序
     assert list(lots["rs_qty"]) == [1, 5]
+    assert list(lots["sheet_qty"]) == [2, 4]
+    assert list(lots["value"]) == [0.5, 1.25]  # Σcode_qty ÷ Lot 内过货片数
+
+
+def test_lot_point_zero_denominator_yields_nan() -> None:
+    details = _details(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-02 08:00", "sheet_id": "S1", "lot_id": "LOT-B", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 2},
+        ]
+    )
+    pass_through = pd.DataFrame(
+        columns=["factory", "prod_code", "start_time", "sheet_id", "step_id", "lot_id"]
+    )
+
+    lots = build_lot_point_df(details, pass_through)
+
+    assert lots["sheet_qty"].iloc[0] == 0
+    assert pd.isna(lots["value"].iloc[0])
 
 
 def test_sheet_point_aggregates_qty_per_sheet() -> None:

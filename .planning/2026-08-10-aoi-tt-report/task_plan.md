@@ -16,7 +16,7 @@
    - `application/aoi_tt/aoi_tt_service.py`（缓存 payload→ViewModel，ADR-0001）；
    - `app/sections/aoi_tt/aoi_tt_dashboard.py`（筛选级联+查询门控+三图，USL/UCL 双虚线）；
    - `app/pages/AOI_TT监控报表.py`（固定窗口，缓存签名 `aoi_tt_report_v1`）；
-   - `resources/static/config.js` 门户注册 `AOI_TT_REPORT`。
+   - `app/static/config.js` 门户注册 `AOI_TT_REPORT`。
 5. **Phase 4 验证**：inline_domain 回归 + 全量单测对照基线；Streamlit(8503) + playwright-cli E2E 烟测（页面发现/筛选门控/三图渲染/产品切换），截图存 `output/screenshots/aoi_tt_*.png`。
 6. **Phase 5 沉淀**：ADR（数据源与口径决策：TT 识别规则、分母口径）。
 

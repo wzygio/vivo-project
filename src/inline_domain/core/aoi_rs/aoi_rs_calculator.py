@@ -107,19 +107,42 @@ def build_period_trend_df(
     return pd.DataFrame(records, columns=columns)
 
 
-def build_lot_point_df(rs_details_df: pd.DataFrame) -> pd.DataFrame:
-    """By Lot：每个 lot 的 RS 个数（Σcode_qty），按首次过货时间排序。"""
+def build_lot_point_df(
+    rs_details_df: pd.DataFrame,
+    pass_through_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """By Lot：每个 lot 的 Lot 内平均每片 RS 个数 = Σcode_qty ÷ 该 lot 同站点过货 distinct sheet 数。
+
+    分母口径与月周天趋势一致（过货视图 distinct sheet/glass）；分母为 0 记 NaN。
+    按首次过货时间排序。
+    """
+    columns = [*_INDICATOR_KEYS, "lot_id", "rs_qty", "sheet_qty", "value", "first_start_time"]
     if rs_details_df.empty:
-        return pd.DataFrame(
-            columns=[*_INDICATOR_KEYS, "lot_id", "rs_qty", "first_start_time"]
-        )
+        return pd.DataFrame(columns=columns)
+
     lots = (
         rs_details_df.groupby([*_INDICATOR_KEYS, "lot_id"], as_index=False)
         .agg(rs_qty=("code_qty", "sum"), first_start_time=("start_time", "min"))
         .sort_values([*_INDICATOR_KEYS, "first_start_time"], kind="stable")
         .reset_index(drop=True)
     )
-    return lots
+
+    if not pass_through_df.empty and "lot_id" in pass_through_df.columns:
+        denominator = (
+            pass_through_df.groupby(["factory", "step_id", "lot_id"])["sheet_id"]
+            .nunique()
+            .reset_index(name="sheet_qty")
+        )
+        lots = lots.merge(denominator, on=["factory", "step_id", "lot_id"], how="left")
+    else:
+        lots["sheet_qty"] = 0
+    lots["sheet_qty"] = lots["sheet_qty"].fillna(0).astype(int)
+    lots["value"] = lots.apply(
+        lambda row: row["rs_qty"] / row["sheet_qty"] if row["sheet_qty"] > 0 else pd.NA,
+        axis=1,
+    )
+    lots["value"] = pd.to_numeric(lots["value"], errors="coerce")
+    return lots[columns]
 
 
 def build_sheet_point_df(rs_details_df: pd.DataFrame) -> pd.DataFrame:

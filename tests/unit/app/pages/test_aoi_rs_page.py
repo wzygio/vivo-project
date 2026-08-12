@@ -114,7 +114,7 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
 
 
 def test_portal_navigation_points_aoi_rs_to_the_streamlit_page() -> None:
-    config_path = Path(__file__).parents[4] / "resources" / "static" / "config.js"
+    config_path = Path(__file__).parents[4] / "app" / "static" / "config.js"
     config_text = config_path.read_text(encoding="utf-8")
 
     assert 'AOI_RS_REPORT: "http://10.72.26.31:8503/AOI_RS监控报表"' in config_text

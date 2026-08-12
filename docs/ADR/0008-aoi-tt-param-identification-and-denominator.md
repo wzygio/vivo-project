@@ -42,6 +42,6 @@
 - Issue: `.scratch/aoi-tt-report/issues/01-create-aoi-tt-report.md`
 - Plan: `.planning/2026-08-10-aoi-tt-report/`
 - 数据源 spec: `references/domain/aoi_tt/spec-data_source.md`
-- 关键代码: `src/inline_domain/infrastructure/aoi_tt/data_loader.py`、`src/inline_domain/core/aoi_tt/aoi_tt_calculator.py`、`src/inline_domain/application/aoi_tt/aoi_tt_service.py`、`app/sections/aoi_tt/aoi_tt_dashboard.py`、`app/pages/AOI_TT监控报表.py`、`resources/static/config.js`（门户注册 AOI_TT_REPORT）
+- 关键代码: `src/inline_domain/infrastructure/aoi_tt/data_loader.py`、`src/inline_domain/core/aoi_tt/aoi_tt_calculator.py`、`src/inline_domain/application/aoi_tt/aoi_tt_service.py`、`app/sections/aoi_tt/aoi_tt_dashboard.py`、`app/pages/AOI_TT监控报表.py`、`app/static/config.js`（门户注册 AOI_TT_REPORT）
 - 测试: `tests/unit/inline_domain/{infrastructure,application,core}/aoi_tt/`、`tests/unit/app/sections/aoi_tt/`、`tests/unit/app/pages/test_aoi_tt_page.py`（新增 31 项全绿；inline_domain+app 171 passed；全量 319 passed / 5 个既有跨域失败与 RS 交付登记一致）
 - E2E: `tests/e2e/aoi_tt_report.js`（playwright-cli，localhost:8503，通过），截图 `output/screenshots/aoi_tt_e2e.png`

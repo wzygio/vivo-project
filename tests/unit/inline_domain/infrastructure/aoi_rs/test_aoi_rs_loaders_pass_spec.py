@@ -25,7 +25,7 @@ def _fake_db_manager() -> SimpleNamespace:
             conn.execute(
                 text(
                     f"CREATE TABLE eda.{view} ("
-                    f"{id_col} TEXT, {time_col} TEXT, step_id TEXT, product_spec TEXT)"
+                    f"{id_col} TEXT, {time_col} TEXT, step_id TEXT, product_spec TEXT, lot_id TEXT)"
                 )
             )
         conn.execute(
@@ -45,15 +45,15 @@ def _fake_db_manager() -> SimpleNamespace:
         conn.execute(
             text(
                 "INSERT INTO eda.spot_eda_array_view_sht_v VALUES"
-                " ('SHT-A01', '2026-07-15 08:00:00', '11629', 'SPEC-M678'),"
-                " ('SHT-A02', '2026-07-15 09:00:00', '11629', 'SPEC-M678'),"
-                " ('SHT-A99', '2026-07-15 09:30:00', '11629', 'SPEC-M626')"
+                " ('SHT-A01', '2026-07-15 08:00:00', '11629', 'SPEC-M678', 'LOT-A1'),"
+                " ('SHT-A02', '2026-07-15 09:00:00', '11629', 'SPEC-M678', 'LOT-A1'),"
+                " ('SHT-A99', '2026-07-15 09:30:00', '11629', 'SPEC-M626', 'LOT-A9')"
             )
         )
         conn.execute(
             text(
                 "INSERT INTO eda.spot_eda_tp_view_gls_v VALUES"
-                " ('GLS-T01', '2026-08-02 11:00:00', '43629', 'SPEC-M678')"
+                " ('GLS-T01', '2026-08-02 11:00:00', '43629', 'SPEC-M678', 'LOT-T1')"
             )
         )
         conn.execute(
@@ -80,6 +80,9 @@ def test_load_pass_through_uses_tp_view_and_product_join() -> None:
     assert row_tp["sheet_id"] == "GLS-T01"
     assert row_tp["step_id"] == "43629"
     assert pd.api.types.is_datetime64_any_dtype(df["start_time"])
+    # By Lot 均值的分母需要按 Lot 统计过货片数
+    assert "lot_id" in df.columns
+    assert row_tp["lot_id"] == "LOT-T1"
 
 
 def test_load_rs_spec_limits_filters_product_and_coerces_spec() -> None:

@@ -17,7 +17,6 @@ from dataclasses import dataclass
 
 # 引入底层配置与仓储层
 from src.shared_kernel.config_model import AppConfig
-from src.shared_kernel.utils.data_inspector import export_probed_details
 from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
 from src.inline_domain.application.spc.spc_data_decoration import prepare_decorated_spc_data

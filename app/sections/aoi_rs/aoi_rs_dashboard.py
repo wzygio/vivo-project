@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import pandas as pd
@@ -192,6 +193,7 @@ def _add_spec_trace(
     spec_value: float,
     name: str,
     color: str,
+    showlegend: bool = True,
 ) -> None:
     figure.add_trace(
         go.Scatter(
@@ -200,6 +202,7 @@ def _add_spec_trace(
             mode="lines",
             name=name,
             line={"color": color, "width": 1.5, "dash": "dash"},
+            showlegend=showlegend,
             hovertemplate=f"{name}: %{{y}}<extra></extra>",
         )
     )
@@ -235,13 +238,20 @@ def create_aoi_rs_trend_chart(
         if labels:
             grouped_labels.append((period_type, labels))
 
+    # 显示标签去掉年份前缀（2026-07→07、2026-W31→W31、2026-08-10→08-10），值映射仍用原始标签
+    def _display(label: str) -> str:
+        return re.sub(r"^\d{4}-", "", label)
+
     x_labels: list[str] = []
+    raw_labels: list[str] = []
     separator_positions: list[int] = []
     for group_index, (_period_type, labels) in enumerate(grouped_labels):
         if group_index > 0:
             separator_positions.append(len(x_labels))
             x_labels.append(_PERIOD_SEPARATORS[(group_index - 1) % len(_PERIOD_SEPARATORS)])
-        x_labels.extend(labels)
+            raw_labels.append("")
+        x_labels.extend(_display(label) for label in labels)
+        raw_labels.extend(labels)
 
     # 过货量柱状（次 Y 轴，按粒度分组配色）
     throughput_map = (
@@ -252,7 +262,7 @@ def create_aoi_rs_trend_chart(
     for period_type, labels in grouped_labels:
         figure.add_trace(
             go.Bar(
-                x=labels,
+                x=[_display(label) for label in labels],
                 y=[int(throughput_map.get(label, 0)) for label in labels],
                 name=f"过货量（{PERIOD_TYPE_NAMES[period_type]}）",
                 marker_color=PERIOD_BAR_COLORS[period_type],
@@ -261,30 +271,31 @@ def create_aoi_rs_trend_chart(
             secondary_y=True,
         )
 
-    # 单 Code 比值线（主 Y 轴），分隔位断开
+    # 单 Code 比值线（主 Y 轴），分隔位断开；折线与规格线不进图注
     trend_map = (
         trend_df.set_index("period_label")["value"].to_dict() if not trend_df.empty else {}
     )
     y_values = []
-    for position, label in enumerate(x_labels):
+    for position, raw_label in enumerate(raw_labels):
         if position in separator_positions:
             y_values.append(None)
             continue
-        value = trend_map.get(label)
+        value = trend_map.get(raw_label)
         y_values.append(float(value) if value is not None and pd.notna(value) else None)
-    figure.add_trace(
-        create_point_line_trace(
-            x_values=x_labels,
-            y_values=y_values,
-            name=code_name,
-            color=CODE_PALETTE[0],
-            hovertemplate="%{x}<br>RS/片: %{y:.3f}<extra></extra>",
-        ),
-        secondary_y=False,
+    line_trace = create_point_line_trace(
+        x_values=x_labels,
+        y_values=y_values,
+        name=code_name,
+        color=CODE_PALETTE[0],
+        hovertemplate="%{x}<br>RS/片: %{y:.3f}<extra></extra>",
     )
+    line_trace.showlegend = False
+    figure.add_trace(line_trace, secondary_y=False)
 
     if spec_value is not None and pd.notna(spec_value):
-        _add_spec_trace(figure, x_labels, float(spec_value), f"{code_name} 规格", CODE_PALETTE[0])
+        _add_spec_trace(
+            figure, x_labels, float(spec_value), f"{code_name} 规格", CODE_PALETTE[0], showlegend=False
+        )
 
     figure.update_layout(
         title=title,
@@ -306,8 +317,12 @@ def create_aoi_rs_point_chart(
     code_names: dict[str, str],
     title: str,
     y_title: str,
+    y_col: str = "rs_qty",
 ) -> go.Figure:
-    """By Lot / By Sheet 点线图：x 按首次过货时间排序，每个 Code 一条线 + 规格线。"""
+    """By Lot / By Sheet 点线图：x 按首次过货时间排序，每个 Code 一条线 + 规格线。
+
+    y_col 指定纵轴列：By Sheet 用 "rs_qty"（每片个数），By Lot 用 "value"（Lot 内平均每片）。
+    """
     figure = go.Figure()
     if point_df.empty:
         return figure
@@ -324,7 +339,8 @@ def create_aoi_rs_point_chart(
     for code in codes:
         code_df = point_df[point_df["rs_code"].astype(str) == code].set_index(id_col)
         y_values = [
-            (float(code_df.loc[x, "rs_qty"]) if x in code_df.index else None) for x in x_order
+            (float(code_df.loc[x, y_col]) if x in code_df.index and pd.notna(code_df.loc[x, y_col]) else None)
+            for x in x_order
         ]
         figure.add_trace(
             create_point_line_trace(
@@ -332,7 +348,7 @@ def create_aoi_rs_point_chart(
                 y_values=y_values,
                 name=code_names.get(code, code),
                 color=colors[code],
-                hovertemplate="%{x}<br>RS个数: %{y}<extra></extra>",
+                hovertemplate=f"%{{x}}<br>{y_title}: %{{y}}<extra></extra>",
             )
         )
         spec_value = code_specs.get(code)
@@ -343,9 +359,9 @@ def create_aoi_rs_point_chart(
         title=title,
         xaxis={"type": "category", "title": id_col},
         yaxis={"title": y_title},
-        legend={"orientation": "h", "yanchor": "top", "y": -0.22},
-        margin={"l": 40, "r": 20, "t": 60, "b": 130},
-        height=460,
+        legend={"orientation": "h", "yanchor": "top", "y": -0.5},
+        margin={"l": 40, "r": 20, "t": 60, "b": 200},
+        height=520,
     )
     return figure
 
@@ -392,7 +408,7 @@ def render_aoi_rs_indicator_sections(
 
     trend_df = build_period_trend_df(rs_details_df, pass_through_df, end_date)
     throughput_df = build_period_throughput_df(rs_details_df, pass_through_df, end_date)
-    lot_df = build_lot_point_df(rs_details_df)
+    lot_df = build_lot_point_df(rs_details_df, pass_through_df)
     sheet_df = build_sheet_point_df(rs_details_df)
     code_names = _code_display_names(indicators_df)
 
@@ -452,8 +468,9 @@ def render_aoi_rs_indicator_sections(
                             id_col="lot_id",
                             code_specs={code: lot_specs.get(code)},
                             code_names=code_names,
-                            title="By Lot（每个 Lot 的 RS 个数）",
-                            y_title="RS 个数",
+                            title="By Lot（Lot 内平均每片 RS 个数）",
+                            y_title="平均每片 RS 个数",
+                            y_col="value",
                         ),
                         width="stretch",
                     )

@@ -4,12 +4,13 @@
 1. By 月周天趋势图（两月、三周、七天，跳过空值向前补全）：
    值 = Σtt_qty ÷ 同 period 同站点检测 distinct sheet/glass 数，按 TT 分线，
    叠加 USL/UCL 规格线，双 Y 轴检测片数柱状。
-2. By Lot 别点线图：每 lot Σtt_qty，叠加 USL/UCL。
+2. By Lot 别点线图：每 lot 的 Lot 内平均每片 TT 个数（Σtt_qty ÷ Lot 内检测片数），叠加 USL/UCL。
 3. By Sheet 别点线图：每 sheet/glass 的 TT 个数，叠加 USL/UCL。
 """
 
 from __future__ import annotations
 
+import re
 from datetime import date
 
 import pandas as pd
@@ -191,6 +192,7 @@ def _add_spec_trace(
     name: str,
     color: str,
     dash: str = "dash",
+    showlegend: bool = True,
 ) -> None:
     figure.add_trace(
         go.Scatter(
@@ -199,6 +201,7 @@ def _add_spec_trace(
             mode="lines",
             name=name,
             line={"color": color, "width": 1.5, "dash": dash},
+            showlegend=showlegend,
             hovertemplate=f"{name}: %{{y}}<extra></extra>",
         )
     )
@@ -210,11 +213,12 @@ def _add_usl_ucl_traces(
     usl: float | None,
     ucl: float | None,
     prefix: str,
+    showlegend: bool = True,
 ) -> None:
     if usl is not None and pd.notna(usl):
-        _add_spec_trace(figure, x_values, float(usl), f"{prefix} USL", USL_COLOR, "dash")
+        _add_spec_trace(figure, x_values, float(usl), f"{prefix} USL", USL_COLOR, "dash", showlegend)
     if ucl is not None and pd.notna(ucl):
-        _add_spec_trace(figure, x_values, float(ucl), f"{prefix} UCL", UCL_COLOR, "dot")
+        _add_spec_trace(figure, x_values, float(ucl), f"{prefix} UCL", UCL_COLOR, "dot", showlegend)
 
 
 def create_aoi_tt_trend_chart(
@@ -248,13 +252,20 @@ def create_aoi_tt_trend_chart(
         if labels:
             grouped_labels.append((period_type, labels))
 
+    # 显示标签去掉年份前缀（2026-07→07、2026-W31→W31、2026-08-10→08-10），值映射仍用原始标签
+    def _display(label: str) -> str:
+        return re.sub(r"^\d{4}-", "", label)
+
     x_labels: list[str] = []
+    raw_labels: list[str] = []
     separator_positions: list[int] = []
     for group_index, (_period_type, labels) in enumerate(grouped_labels):
         if group_index > 0:
             separator_positions.append(len(x_labels))
             x_labels.append(_PERIOD_SEPARATORS[(group_index - 1) % len(_PERIOD_SEPARATORS)])
-        x_labels.extend(labels)
+            raw_labels.append("")
+        x_labels.extend(_display(label) for label in labels)
+        raw_labels.extend(labels)
 
     # 检测片数柱状（次 Y 轴，按粒度分组配色）
     throughput_map = (
@@ -265,7 +276,7 @@ def create_aoi_tt_trend_chart(
     for period_type, labels in grouped_labels:
         figure.add_trace(
             go.Bar(
-                x=labels,
+                x=[_display(label) for label in labels],
                 y=[int(throughput_map.get(label, 0)) for label in labels],
                 name=f"检测片数（{PERIOD_TYPE_NAMES[period_type]}）",
                 marker_color=PERIOD_BAR_COLORS[period_type],
@@ -274,29 +285,28 @@ def create_aoi_tt_trend_chart(
             secondary_y=True,
         )
 
-    # 单 TT 比值线（主 Y 轴），分隔位断开
+    # 单 TT 比值线（主 Y 轴），分隔位断开；折线与 USL/UCL 不进图注
     trend_map = (
         trend_df.set_index("period_label")["value"].to_dict() if not trend_df.empty else {}
     )
     y_values = []
-    for position, label in enumerate(x_labels):
+    for position, raw_label in enumerate(raw_labels):
         if position in separator_positions:
             y_values.append(None)
             continue
-        value = trend_map.get(label)
+        value = trend_map.get(raw_label)
         y_values.append(float(value) if value is not None and pd.notna(value) else None)
-    figure.add_trace(
-        create_point_line_trace(
-            x_values=x_labels,
-            y_values=y_values,
-            name=code_name,
-            color=CODE_PALETTE[0],
-            hovertemplate="%{x}<br>TT/片: %{y:.3f}<extra></extra>",
-        ),
-        secondary_y=False,
+    line_trace = create_point_line_trace(
+        x_values=x_labels,
+        y_values=y_values,
+        name=code_name,
+        color=CODE_PALETTE[0],
+        hovertemplate="%{x}<br>TT/片: %{y:.3f}<extra></extra>",
     )
+    line_trace.showlegend = False
+    figure.add_trace(line_trace, secondary_y=False)
 
-    _add_usl_ucl_traces(figure, x_labels, usl, ucl, code_name)
+    _add_usl_ucl_traces(figure, x_labels, usl, ucl, code_name, showlegend=False)
 
     figure.update_layout(
         title=title,
@@ -317,8 +327,12 @@ def create_aoi_tt_point_chart(
     code_specs: dict[str, tuple[float | None, float | None]],
     title: str,
     y_title: str,
+    y_col: str = "tt_qty",
 ) -> go.Figure:
-    """By Lot / By Sheet 点线图：x 按首次过货时间排序，每个 TT 一条线 + USL/UCL。"""
+    """By Lot / By Sheet 点线图：x 按首次过货时间排序，每个 TT 一条线 + USL/UCL。
+
+    y_col 指定纵轴列：By Sheet 用 "tt_qty"（每片个数），By Lot 用 "value"（Lot 内平均每片）。
+    """
     figure = go.Figure()
     if point_df.empty:
         return figure
@@ -335,7 +349,8 @@ def create_aoi_tt_point_chart(
     for code in codes:
         code_df = point_df[point_df["tt_name"].astype(str) == code].set_index(id_col)
         y_values = [
-            (float(code_df.loc[x, "tt_qty"]) if x in code_df.index else None) for x in x_order
+            (float(code_df.loc[x, y_col]) if x in code_df.index and pd.notna(code_df.loc[x, y_col]) else None)
+            for x in x_order
         ]
         figure.add_trace(
             create_point_line_trace(
@@ -343,7 +358,7 @@ def create_aoi_tt_point_chart(
                 y_values=y_values,
                 name=code,
                 color=colors[code],
-                hovertemplate="%{x}<br>TT个数: %{y}<extra></extra>",
+                hovertemplate=f"%{{x}}<br>{y_title}: %{{y}}<extra></extra>",
             )
         )
         usl, ucl = code_specs.get(code, (None, None))
@@ -353,9 +368,9 @@ def create_aoi_tt_point_chart(
         title=title,
         xaxis={"type": "category", "title": id_col},
         yaxis={"title": y_title},
-        legend={"orientation": "h", "yanchor": "top", "y": -0.22},
-        margin={"l": 40, "r": 20, "t": 60, "b": 130},
-        height=460,
+        legend={"orientation": "h", "yanchor": "top", "y": -0.5},
+        margin={"l": 40, "r": 20, "t": 60, "b": 200},
+        height=520,
     )
     return figure
 
@@ -454,8 +469,9 @@ def render_aoi_tt_indicator_sections(
                             point_df=step_lot[step_lot["tt_name"].astype(str) == code],
                             id_col="lot_id",
                             code_specs={code: (usl, ucl)},
-                            title="By Lot（每个 Lot 的 TT 个数）",
-                            y_title="TT 个数",
+                            title="By Lot（Lot 内平均每片 TT 个数）",
+                            y_title="平均每片 TT 个数",
+                            y_col="value",
                         ),
                         width="stretch",
                     )

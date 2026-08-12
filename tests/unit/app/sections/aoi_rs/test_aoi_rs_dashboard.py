@@ -105,17 +105,21 @@ def test_trend_chart_has_bars_line_spec_and_grouped_axis() -> None:
     assert len({t.marker.color for t in bar_traces}) == 3
     # 柱状在次 Y 轴，不与比值线互相压扁
     assert all(t.yaxis == "y2" for t in bar_traces)
+    # 只有过货量柱保留图注；折线与规格线的图注被去掉
+    assert all(t.showlegend is not False for t in bar_traces)
     # 单 Code 一条比值线 + 一条规格虚线
     lines = [t for t in figure.data if t.type == "scatter" and t.mode == "lines+markers"]
     assert [t.name for t in lines] == ["A1PPS（d1）"]
     spec_traces = [t for t in figure.data if t.type == "scatter" and "规格" in (t.name or "")]
     assert len(spec_traces) == 1
-    # x 轴：2 月 + 分隔 + 3 周 + 分隔 + 7 天 = 14 个类目，组间留白
+    assert all(not t.showlegend for t in lines + spec_traces)
+    # x 轴：2 月 + 分隔 + 3 周 + 分隔 + 7 天 = 14 个类目，组间留白；标签不含年份
     x_labels = list(lines[0].x)
     assert len(x_labels) == 14
-    assert x_labels[0] == "2026-07" and x_labels[1] == "2026-08"
-    assert x_labels[3].startswith("2026-W")
-    assert x_labels[-1] == "2026-08-10"
+    assert x_labels[0] == "07" and x_labels[1] == "08"
+    assert x_labels[3] == "W30"
+    assert x_labels[-1] == "08-10"
+    assert not any("2026" in label for label in x_labels)
     # 分隔位置无线值（断开），但有柱位（2月+sep+3周+sep+7天 → 索引 2 与 6）
     sep_indices = [2, 6]
     assert all(pd.isna(lines[0].y[i]) for i in sep_indices)
@@ -161,6 +165,31 @@ def test_point_chart_orders_x_by_first_time_and_draws_spec() -> None:
     assert list(scatter.x) == ["LOT-A", "LOT-B"]
     assert list(scatter.y) == [1, 5]
     assert any("规格" in (t.name or "") for t in figure.data)
+    # 图注下移到底部边距内，不遮挡竖排的 ID 标签
+    assert figure.layout.legend.y <= -0.45
+    assert figure.layout.margin.b >= 180
+
+
+def test_point_chart_supports_value_column_for_lot_average() -> None:
+    lot_df = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A1PPS", "lot_id": "LOT-B", "rs_qty": 5, "sheet_qty": 4, "value": 1.25, "first_start_time": pd.Timestamp("2026-08-02")},
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A1PPS", "lot_id": "LOT-A", "rs_qty": 1, "sheet_qty": 2, "value": 0.5, "first_start_time": pd.Timestamp("2026-08-01")},
+        ]
+    )
+    figure = create_aoi_rs_point_chart(
+        point_df=lot_df,
+        id_col="lot_id",
+        code_specs={"A1PPS": 3},
+        code_names={"A1PPS": "A1PPS"},
+        title="By Lot",
+        y_title="平均每片 RS 个数",
+        y_col="value",
+    )
+
+    scatter = [t for t in figure.data if t.mode == "lines+markers"][0]
+    assert list(scatter.x) == ["LOT-A", "LOT-B"]
+    assert list(scatter.y) == [0.5, 1.25]  # 画的是 Lot 内平均每片，而非 Σcode_qty
 
 
 def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkeypatch) -> None:

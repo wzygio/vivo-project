@@ -2,7 +2,6 @@ import sys
 import os
 from pathlib import Path
 import streamlit as st
-import streamlit.components.v1 as components
 
 # =====================================================================
 # 1. 动态锚定项目根目录与环境变量注入 (SOTA 架构基石)
@@ -40,7 +39,9 @@ _inject_project_roots()
 
 from app.utils.app_setup import AppSetup
 from app.components.page_header import detect_project_changes
-from src.shared_kernel.config import ConfigLoader
+
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 @st.cache_resource
 def init_portal_resources():
@@ -94,11 +95,9 @@ st.markdown(FULL_SCREEN_CSS, unsafe_allow_html=True)
 # ==============================================================================
 #  资源加载逻辑
 # ==============================================================================
-def load_resource(filename):
-    """读取 resources/static 下的文件内容"""
-    project_root = ConfigLoader.get_project_root()
-    static_dir = project_root / "resources" / "static"
-    file_path = static_dir / filename
+def load_resource(filename: str) -> str:
+    """读取与主页入口共同维护的 app/static 资源。"""
+    file_path = STATIC_DIR / filename
     
     if not file_path.exists():
         st.error(f"Error: 找不到文件 {file_path}")
@@ -131,7 +130,7 @@ def render_portal():
 
     # 3. 渲染组件
     # height=1080 只是保底值，CSS 中的 100vh !important 会覆盖它实现全屏
-    components.html(final_html, height=1080, scrolling=False)
+    st.iframe(final_html, height=1080)
 
 if __name__ == "__main__":
     render_portal()
