@@ -43,8 +43,8 @@ class SheetOosDecorationResult:
     decoration_path: Path
 
 
-def get_sheet_oos_decoration_path(product_dir: Path) -> Path:
-    return product_dir / OOS_DECORATION_FILE_NAME
+def get_sheet_oos_decoration_path(product_dir: Path, file_name: str = OOS_DECORATION_FILE_NAME) -> Path:
+    return product_dir / file_name
 
 
 def _empty_detail_frame() -> pd.DataFrame:
@@ -178,9 +178,9 @@ def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def load_sheet_oos_decoration(product_dir: Path) -> pd.DataFrame:
+def load_sheet_oos_decoration(product_dir: Path, file_name: str = OOS_DECORATION_FILE_NAME) -> pd.DataFrame:
     """Load the user-editable decoration flag file for one product."""
-    decoration_path = get_sheet_oos_decoration_path(product_dir)
+    decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
     if not decoration_path.exists():
         return _empty_decoration_frame()
     try:
@@ -254,12 +254,16 @@ def _exclude_delete_flagged_measurements(
     )
 
 
-def persist_sheet_oos_decoration(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
+def persist_sheet_oos_decoration(
+    product_dir: Path,
+    detail_df: pd.DataFrame,
+    file_name: str = OOS_DECORATION_FILE_NAME,
+) -> pd.DataFrame:
     """Refresh the user-maintained Sheet OOS decoration workbook."""
     product_dir.mkdir(parents=True, exist_ok=True)
-    decoration_path = get_sheet_oos_decoration_path(product_dir)
+    decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
 
-    existing_decoration = load_sheet_oos_decoration(product_dir)
+    existing_decoration = load_sheet_oos_decoration(product_dir, file_name)
     decoration_to_write = merge_detail_with_decoration_flags(detail_df, existing_decoration)
 
     try:
@@ -323,13 +327,17 @@ def prepare_sheet_oos_decoration(
     product_dir: Path,
     persist_files: bool = True,
     clip_rules: Iterable[dict[str, object]] | None = None,
+    decoration_file_name: str = OOS_DECORATION_FILE_NAME,
 ) -> SheetOosDecorationResult:
     """Return chart-ready measurements after applying tri-state Sheet actions."""
     detail_df = build_sheet_oos_detail(sheet_features_df)
     if persist_files:
-        decoration_df = persist_sheet_oos_decoration(product_dir, detail_df)
+        decoration_df = persist_sheet_oos_decoration(product_dir, detail_df, decoration_file_name)
     else:
-        decoration_df = merge_detail_with_decoration_flags(detail_df, load_sheet_oos_decoration(product_dir))
+        decoration_df = merge_detail_with_decoration_flags(
+            detail_df,
+            load_sheet_oos_decoration(product_dir, decoration_file_name),
+        )
 
     decorated_df = apply_sheet_oos_decoration(
         raw_measurements_df,
@@ -340,5 +348,5 @@ def prepare_sheet_oos_decoration(
     return SheetOosDecorationResult(
         raw_measurements_df=decorated_df,
         decoration_df=decoration_df,
-        decoration_path=get_sheet_oos_decoration_path(product_dir),
+        decoration_path=get_sheet_oos_decoration_path(product_dir, decoration_file_name),
     )

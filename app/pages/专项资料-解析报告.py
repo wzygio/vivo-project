@@ -9,21 +9,16 @@ from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.ppt_service import PPTService
 from yield_domain.application.pdf_service import PDFService
-from app.components.page_header import render_page_header
 
 # 页面基础设置
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 # --- 2. 获取动态上下文与路径 ---
-active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
-product_dir = SessionManager.get_product_dir()  # 动态获取当前产品目录
-
-# 渲染页头
-render_page_header("📋 解析资料", active_config)
+resource_dir = SessionManager.get_resource_dir()
 
 # 动态构建绝对路径 (取代全局变量)
-doc_source_dir = product_dir / "analysis_files"
+doc_source_dir = resource_dir / "analysis_files"
 doc_source_dir.mkdir(parents=True, exist_ok=True)
 img_cache_rel_dir = "output/screenshots/document-preview"
 
@@ -31,7 +26,7 @@ img_cache_rel_dir = "output/screenshots/document-preview"
 if 'viewing_file' not in st.session_state:
     st.session_state.viewing_file = None
 
-# [防护机制]：如果切换了产品，导致当前正在查看的文件在当前产品目录下不存在了，则自动关闭预览
+# [防护机制]：如果当前正在查看的文件不存在了，则自动关闭预览
 if st.session_state.viewing_file and not (doc_source_dir / st.session_state.viewing_file).exists():
     st.session_state.viewing_file = None
 
@@ -47,7 +42,7 @@ def get_service_by_filename(filename, output_dir_name):
 # ==============================================================================
 #  界面区域 A: 统一上传接口
 # ==============================================================================
-st.caption(f"下载或在线预览当前产品 ({active_config.data_source.product_code}) 的分析报告 (支持 PPTX 和 PDF)。")
+st.caption("下载或在线预览各产品的分析报告 (支持 PPTX 和 PDF)。")
 
 with st.expander("📤 上传新解析报告", expanded=False):
     uploaded_files = st.file_uploader(
@@ -82,7 +77,7 @@ st.divider()
 # ==============================================================================
 #  界面区域 B: 列表
 # ==============================================================================
-# 读取当前产品的文件列表
+# 读取文件列表
 if doc_source_dir.exists():
     all_files = [f for f in os.listdir(doc_source_dir) if f.lower().endswith(('.pptx', '.ppt', '.pdf'))]
 else:

@@ -15,6 +15,8 @@ from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
+CTQ_OOS_DECORATION_FILE_NAME = "ctq_sheet_oos_decoration.xlsx"
+
 
 @dataclass(frozen=True)
 class DecoratedCtqData:
@@ -26,10 +28,10 @@ class DecoratedCtqData:
 
 
 def resolve_ctq_product_resource_dir(prod_code: str, product_dir: Path | None = None) -> Path:
-    """Resolve the CTQ-specific product resource directory."""
+    """Resolve the product resource directory shared by CTQ decoration files."""
     if product_dir is not None:
         return product_dir
-    return ConfigLoader.get_project_root() / "resources" / str(prod_code) / "ctq"
+    return ConfigLoader.get_project_root() / "resources" / str(prod_code)
 
 
 def _preprocess_sheet_features_by_type(
@@ -68,6 +70,7 @@ def prepare_decorated_ctq_data(
         product_dir=resolve_ctq_product_resource_dir(prod_code, product_dir),
         persist_files=persist_decoration,
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
+        decoration_file_name=CTQ_OOS_DECORATION_FILE_NAME,
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
         decoration_result.raw_measurements_df,

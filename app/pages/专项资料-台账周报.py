@@ -9,7 +9,6 @@ import time
 # --- 1. 基础配置与导入 ---
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
-from app.components.page_header import render_page_header
 from yield_domain.application.file_manager_service import FileManagerService
 from yield_domain.application.excel_service import ExcelService
 from yield_domain.application.ppt_service import PPTService
@@ -18,12 +17,8 @@ from yield_domain.application.pdf_service import PDFService
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 # --- 2. 获取动态上下文与路径 ---
-active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
-resource_dir = SessionManager.get_resource_dir() # 动态获取当前产品目录
-
-# 渲染页头
-render_page_header("📋 专项资料", active_config)
+resource_dir = SessionManager.get_resource_dir()
 
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = resource_dir / "project_files"
@@ -37,7 +32,7 @@ if 'editor_data' not in st.session_state: st.session_state.editor_data = None
 if 'editor_timestamp' not in st.session_state: st.session_state.editor_timestamp = 0.0
 if 'editor_file_ref' not in st.session_state: st.session_state.editor_file_ref = None
 
-# [防护机制]：如果切换了产品导致正在预览的文件不存在，则清空状态
+# [防护机制]：如果正在预览的文件不存在，则清空状态
 if st.session_state.viewing_file and not (doc_source_dir / st.session_state.viewing_file).exists():
     st.session_state.viewing_file = None
     st.session_state.editor_data = None
@@ -55,7 +50,7 @@ category_map = [
 # ==============================================================================
 #  界面区域 A: 统一上传接口
 # ==============================================================================
-st.caption(f"浏览、下载或在线预览当前产品 ({active_config.data_source.product_code}) 的各类分析报告与台账。")
+st.caption("浏览、下载或在线预览各产品的分析报告与台账。")
 
 with st.expander("📤 上传新台账/周报/专项资料", expanded=False):
     uploaded_files = st.file_uploader(
