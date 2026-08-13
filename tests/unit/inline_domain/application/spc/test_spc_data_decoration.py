@@ -56,7 +56,7 @@ def _spec_limits() -> pd.DataFrame:
 
 
 def test_prepare_decorated_spc_data_clips_points_and_recomputes_sheet_features(tmp_path: Path) -> None:
-    product_dir = tmp_path / "resources" / "Z571"
+    product_dir = tmp_path / "resources"
 
     result = prepare_decorated_spc_data(
         raw_measurements_df=_raw_measurements(),
@@ -68,6 +68,7 @@ def test_prepare_decorated_spc_data_clips_points_and_recomputes_sheet_features(t
     assert result.original_sheet_features_df["sheet_max"].iloc[0] == 8.0
     assert not (product_dir / "spc_sheet_oos_detail.xlsx").exists()
     assert result.sheet_oos_decoration_result.decoration_path.exists()
+    assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
     assert result.raw_measurements_df["param_value"].max() < 6.0
     assert result.sheet_features_df["sheet_max"].iloc[0] < 6.0
 
@@ -93,7 +94,7 @@ def test_prepare_decorated_spc_data_applies_configured_clip_rules(monkeypatch, t
         raw_measurements_df=raw_measurements,
         spec_df=_spec_limits(),
         prod_code="Z571",
-        product_dir=tmp_path / "resources" / "Z571",
+        product_dir=tmp_path / "resources",
         persist_files=False,
     )
 
@@ -102,7 +103,7 @@ def test_prepare_decorated_spc_data_applies_configured_clip_rules(monkeypatch, t
 
 
 def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path: Path) -> None:
-    product_dir = tmp_path / "resources" / "Z571"
+    product_dir = tmp_path / "resources"
     product_dir.mkdir(parents=True)
     pd.DataFrame(
         [
@@ -122,7 +123,7 @@ def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path
                 "flag": False,
             }
         ]
-    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False)
+    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False, sheet_name="Z571")
 
     result = prepare_decorated_spc_data(
         raw_measurements_df=_raw_measurements(),
@@ -138,7 +139,7 @@ def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path
 def test_prepare_decorated_spc_data_removes_delete_flagged_sheet_from_report(
     tmp_path: Path,
 ) -> None:
-    product_dir = tmp_path / "resources" / "Z571"
+    product_dir = tmp_path / "resources"
     product_dir.mkdir(parents=True)
     pd.DataFrame(
         [
@@ -158,7 +159,7 @@ def test_prepare_decorated_spc_data_removes_delete_flagged_sheet_from_report(
                 "flag": "Delete",
             }
         ]
-    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False)
+    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False, sheet_name="Z571")
 
     result = prepare_decorated_spc_data(
         raw_measurements_df=_raw_measurements(),
@@ -172,8 +173,9 @@ def test_prepare_decorated_spc_data_removes_delete_flagged_sheet_from_report(
     assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == [
         "Delete"
     ]
+    assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
     persisted = pd.read_excel(
         product_dir / OOS_DECORATION_FILE_NAME,
-        engine="openpyxl",
+        sheet_name="Z571",
     )
     assert persisted["flag"].tolist() == ["Delete"]

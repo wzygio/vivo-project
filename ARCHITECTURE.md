@@ -81,10 +81,10 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
   图表类型；CPK 人工修饰文件
-  `resources/<product>/spc_cpk_decoration.xlsx` 是用户维护状态，只按周期键
-  合并到新结果，刷新时不会重建既有文件。
+  `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
+  合并到新结果，刷新时不会重建既有 sheet。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端
-  选定的图表类型；CTQ OOS 文件隔离在 `resources/<product>/ctq/`。
+  选定的图表类型；CTQ OOS 修饰保存在共享工作簿 `resources/ctq_sheet_oos_decoration.xlsx` 的产品 sheet 中。
 - `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
   和规格口径仍遵循 ADR-0008。
 - `MonitorAnalysisService` 基于同一 SPC 数据源完成时间桶映射、规则判定和

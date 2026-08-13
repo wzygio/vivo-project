@@ -6,7 +6,12 @@ from pathlib import Path
 from typing import Optional
 
 from src.shared_kernel.config_model import AppConfig
+from src.shared_kernel.utils.excel_tools import read_workbook_sheet, replace_workbook_sheet
 from src.yield_domain.application.excel_service import ExcelService
+
+def _product_sheet_name(prod_code: str, template_sheet_name: str) -> str:
+    """按汇总规则派生产品在共享工作簿中的 sheet 名：Sheet1 -> 产品号，其余 -> <产品号>_<原名>。"""
+    return prod_code if template_sheet_name == "Sheet1" else f"{prod_code}_{template_sheet_name}"
 
 def render_trend_override_uploader(config: AppConfig, product_dir: Path):
     """
@@ -174,9 +179,13 @@ def _render_file_manager_tab(
         return
     
     if target_path is None:
+        # 按产品 sheet 汇总模式：共享工作簿位于 resources 根目录，本产品数据在各自的 sheet 中
+        per_product_sheets = True
         file_name = override_res.file_name
-        target_path = product_dir / file_name
+        target_path = product_dir.parent / file_name
+        prod_code = config.data_source.product_code
     else:
+        per_product_sheets = False
         file_name = target_path.name
 
     col1, col2 = st.columns([1, 1])
@@ -188,7 +197,12 @@ def _render_file_manager_tab(
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            if target_path.exists():
+            if per_product_sheets:
+                # 共享工作簿：只提取本产品的 sheets，并映射回模板原名；缺失时下发模板
+                for tpl_name, df_template in template_dfs.items():
+                    df_sheet = read_workbook_sheet(target_path, _product_sheet_name(prod_code, tpl_name))
+                    (df_sheet if not df_sheet.empty else df_template).to_excel(writer, index=False, sheet_name=tpl_name)
+            elif target_path.exists():
                 try:
                     # 如果已有文件，提供现存文件下载
                     existing_xls = pd.read_excel(target_path, sheet_name=None, engine='openpyxl')
@@ -218,18 +232,30 @@ def _render_file_manager_tab(
         if uploaded_file is not None:
             if st.button(f"🚀 确认覆盖并刷新 ({file_name})", type="primary", use_container_width=True, key=f"btn_{config_key}"):
                 try:
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    if target_path.exists():
-                        try:
-                            target_path.unlink()  
-                            logging.info(f"已成功删除旧的配置文件: {target_path.name}")
-                        except PermissionError:
-                            st.error("❌ 无法删除旧文件，它可能正被其他程序（如 Excel）打开，请关闭后重试。")
+                    if per_product_sheets:
+                        # 共享工作簿：按模板 sheet 名映射写回本产品对应的 sheet，不影响其他产品
+                        uploaded_xls = pd.read_excel(io.BytesIO(uploaded_file.getbuffer()), sheet_name=None)
+                        written_sheets = 0
+                        for tpl_name in template_dfs:
+                            if tpl_name in uploaded_xls:
+                                replace_workbook_sheet(target_path, _product_sheet_name(prod_code, tpl_name), uploaded_xls[tpl_name])
+                                written_sheets += 1
+                        if written_sheets == 0:
+                            st.error(f"上传文件中未找到任何预期的 Sheet 页（{list(template_dfs)}），未做修改。")
                             return
-                    
-                    with open(target_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                    else:
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        if target_path.exists():
+                            try:
+                                target_path.unlink()  
+                                logging.info(f"已成功删除旧的配置文件: {target_path.name}")
+                            except PermissionError:
+                                st.error("❌ 无法删除旧文件，它可能正被其他程序（如 Excel）打开，请关闭后重试。")
+                                return
+                        
+                        with open(target_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
                     
                     st.success(f"✅ 成功覆盖文件: {file_name}")
                     

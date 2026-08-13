@@ -39,8 +39,10 @@ def test_cpk_decoration_defaults_to_real_cpk_until_an_admin_enables_a_row(tmp_pa
         corrected_period_capability_df=corrected_df,
         product_dir=tmp_path,
         persist_files=False,
+        sheet_name="M678",
     )
 
+    assert result.decoration_sheet == "M678"
     assert result.decoration_df["flag"].tolist() == [False]
     assert result.period_capability_df["cpk"].tolist() == [0.82]
     assert result.period_capability_df["cpk_decorated"].tolist() == [False]
@@ -72,8 +74,7 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    product_dir = tmp_path / "Z571"
-    product_dir.mkdir()
+    product_dir = tmp_path
     decoration_path = product_dir / cpk_decoration.CPK_DECORATION_FILE_NAME
     decoration_path.write_bytes(b"\x00\x00\x00\x00enterprise-encrypted")
     expected_df = prepare_cpk_decoration(
@@ -91,15 +92,15 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     monkeypatch.setattr(
         cpk_decoration,
         "_read_encrypted_xlsx_via_com",
-        lambda path: expected_df if path == decoration_path else pd.DataFrame(),
+        lambda path, sheet_name=None: expected_df if path == decoration_path else pd.DataFrame(),
     )
 
-    loaded_df = load_cpk_decoration(product_dir)
+    loaded_df = load_cpk_decoration(product_dir, sheet_name="M678")
 
     assert loaded_df.equals(expected_df)
 
 
-def test_prepare_cpk_decoration_never_rewrites_an_existing_user_file(tmp_path: Path) -> None:
+def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: Path) -> None:
     real_df = _capability_frame(0.82)
     corrected_df = _capability_frame(1.46)
     decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
@@ -109,19 +110,27 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_file(tmp_path: P
         product_dir=tmp_path,
         persist_files=False,
     ).decoration_df.assign(cpk_corrected=1.72, flag="TURE")
-    existing_df.to_excel(decoration_path, index=False)
+    other_sheet_df = pd.DataFrame([{"prod_code": "OTHER", "note": "keep-me"}])
+    with pd.ExcelWriter(decoration_path, engine="openpyxl") as writer:
+        existing_df.to_excel(writer, index=False, sheet_name="M678")
+        other_sheet_df.to_excel(writer, index=False, sheet_name="OTHER")
     original_bytes = decoration_path.read_bytes()
 
     result = prepare_cpk_decoration(
         real_period_capability_df=real_df,
         corrected_period_capability_df=corrected_df,
         product_dir=tmp_path,
+        sheet_name="M678",
     )
 
     assert decoration_path.read_bytes() == original_bytes
     assert not (tmp_path / "spc_cpk_detail.xlsx").exists()
+    assert result.decoration_sheet == "M678"
     assert result.period_capability_df["cpk"].tolist() == [1.72]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True]
+    # 共享工作簿中的其他 sheet 不受影响
+    other_loaded = pd.read_excel(decoration_path, sheet_name="OTHER")
+    assert other_loaded["note"].tolist() == ["keep-me"]
 
 
 def test_prepare_cpk_decoration_preserves_an_unreadable_existing_user_file(
@@ -146,6 +155,7 @@ def test_prepare_cpk_decoration_preserves_an_unreadable_existing_user_file(
         real_period_capability_df=_capability_frame(0.82),
         corrected_period_capability_df=_capability_frame(1.46),
         product_dir=tmp_path,
+        sheet_name="M678",
     )
 
     assert decoration_path.read_bytes() == encrypted_bytes

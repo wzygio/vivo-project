@@ -2,6 +2,7 @@
 当前`resources`路径下的文件太过复杂，By产品区分。每个产品下有多个文件，这样不方便维护，需要进行汇总。
 
 ## Task1：基础整理
+> ✅ 已完成（2026-08-13）。ctq 输出路径上移至产品目录，ctq 文件重命名为 `ctq_` 前缀；`analysis_files` / `project_files` 已汇总至 resources 根目录，两个专项资料页面已移除 page_header。
 1. 将ctq文件的输出路径转移至每个产品的文件夹下。
     - 例如从`resources\M626\ctq`转移至`resources\M626\`
     - 完成后，请修正相应程序中的路径：`src\inline_domain\application\ctq\ctq_data_decoration.py`
@@ -11,6 +12,8 @@
     - 完成后，请删除以下两个页面中的page_header，因为它们不再需要区分产品：`app\pages\专项资料-台账周报.py`、`app\pages\专项资料-解析报告.py`
 
 ## Task2：深入整理
+> ✅ 已完成（2026-08-13）。汇总范围经确认为 4 类用户配置（codebaseline / 入库不良率规格 / 趋势图人工修正 / override_rates）+ 3 类 decoration（spc_cpk / spc_sheet_oos / ctq_sheet_oos），detail 明细文件保留在各产品目录。sheet 命名规则：主数据 sheet（原 Sheet1）→ 产品号，辅助 sheet → `<产品号>_<原sheet名>`；decoration 单 sheet 文件统一命名为产品号。迁移与逐 sheet 校验由 `tools/consolidate_resources.py` 完成，源文件已删除。路径解析改为 resources 根目录共享工作簿 + 按产品 sheet 读写（`excel_tools.read_workbook_sheet` / `replace_workbook_sheet`），涉及 yaml `paths`、code_baseline、excel_service、yield_service、sheet_lot_processor、spc/ctq decoration、spc_dashboard 与 file_uploader。
+
 1. 将resources下，每个产品的配置文件都汇总到一个文件中，每个产品对应一个单独的sheet页
     - 例如，将`resources\M626\M626_codebaseline.xlsx`汇总至`resources\codebaseline.xlsx`，By产品分为不同的sheet页。
 2. 如果当前一个配置文件中有多个sheet，那就By Sheet进行汇总。

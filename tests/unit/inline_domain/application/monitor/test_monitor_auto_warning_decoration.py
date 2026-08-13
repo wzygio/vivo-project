@@ -96,6 +96,6 @@ def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_pat
     detail_df = result["detail_df"]
     station_detail_df = result["station_detail_df"]
 
-    assert not (tmp_path / "resources" / "Z571" / "spc_sheet_oos_detail.xlsx").exists()
+    assert not (tmp_path / "resources" / "spc_sheet_oos_detail.xlsx").exists()
     assert station_detail_df.empty
     assert detail_df[["OOS片数", "OOC片数", "SOOS片数"]].fillna(0).sum().sum() == 0

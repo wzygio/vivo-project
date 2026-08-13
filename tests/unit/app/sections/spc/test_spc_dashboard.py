@@ -295,11 +295,13 @@ def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(mon
         raw_measurements_df=pd.DataFrame(),
         decoration_df=pd.DataFrame(),
         decoration_path=tmp_path / "spc_sheet_oos_decoration.xlsx",
+        decoration_sheet="M678",
     )
     cpk_result = CpkDecorationResult(
         period_capability_df=pd.DataFrame(),
         decoration_df=pd.DataFrame(),
         decoration_path=tmp_path / "spc_cpk_decoration.xlsx",
+        decoration_sheet="M678",
     )
 
     monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())

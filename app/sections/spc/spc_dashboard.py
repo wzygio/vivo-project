@@ -33,6 +33,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     CPK_KEY_COLUMNS,
     CpkDecorationResult,
 )
+from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
 
 SPC_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 PERIOD_LABELS = {"month": "月", "week": "周", "day": "日"}
@@ -332,7 +333,7 @@ def render_sheet_oos_decoration_admin(
             st.download_button(
                 label="下载修饰表",
                 data=_excel_bytes({"修饰表": decoration_download_df}),
-                file_name=decoration_result.decoration_path.name,
+                file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_oos_decoration_download",
                 use_container_width=True,
@@ -347,7 +348,6 @@ def render_sheet_oos_decoration_admin(
                 label_visibility="collapsed",
             )
             if uploaded_file is not None:
-                uploaded_bytes = uploaded_file.getvalue()
                 if st.button(
                     "确认覆盖并刷新",
                     type="primary",
@@ -355,16 +355,18 @@ def render_sheet_oos_decoration_admin(
                     use_container_width=True,
                 ):
                     try:
-                        uploaded_df = pd.read_excel(BytesIO(uploaded_bytes), engine="openpyxl")
+                        uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
                         required_columns = {*OOS_KEY_COLUMNS, "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
                             return
 
-                        decoration_result.decoration_path.parent.mkdir(parents=True, exist_ok=True)
-                        with open(decoration_result.decoration_path, "wb") as file:
-                            file.write(uploaded_bytes)
+                        replace_workbook_sheet(
+                            decoration_result.decoration_path,
+                            decoration_result.decoration_sheet,
+                            uploaded_df,
+                        )
                         st.success("修饰表已覆盖，正在刷新缓存。")
                         st.cache_data.clear()
                         st.rerun()
@@ -394,7 +396,7 @@ def render_cpk_decoration_admin(
             st.download_button(
                 label="下载修饰表",
                 data=_excel_bytes({"CPK修饰表": decoration_download_df}),
-                file_name=decoration_result.decoration_path.name,
+                file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="spc_cpk_decoration_download",
                 use_container_width=True,
@@ -409,7 +411,6 @@ def render_cpk_decoration_admin(
                 label_visibility="collapsed",
             )
             if uploaded_file is not None:
-                uploaded_bytes = uploaded_file.getvalue()
                 if st.button(
                     "确认覆盖并刷新",
                     type="primary",
@@ -417,16 +418,18 @@ def render_cpk_decoration_admin(
                     use_container_width=True,
                 ):
                     try:
-                        uploaded_df = pd.read_excel(BytesIO(uploaded_bytes), engine="openpyxl")
+                        uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
                         required_columns = {*CPK_KEY_COLUMNS, "cpk_corrected", "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
                             return
 
-                        decoration_result.decoration_path.parent.mkdir(parents=True, exist_ok=True)
-                        with open(decoration_result.decoration_path, "wb") as file:
-                            file.write(uploaded_bytes)
+                        replace_workbook_sheet(
+                            decoration_result.decoration_path,
+                            decoration_result.decoration_sheet,
+                            uploaded_df,
+                        )
                         st.success("CPK 修饰表已覆盖，正在刷新缓存。")
                         st.cache_data.clear()
                         st.rerun()

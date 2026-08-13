@@ -1,4 +1,5 @@
 from pathlib import Path
+from zipfile import BadZipFile
 
 import pandas as pd
 import pytest
@@ -211,7 +212,7 @@ def test_load_sheet_oos_decoration_falls_back_to_excel_com_for_encrypted_file(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    product_dir = tmp_path / "resources" / "M678"
+    product_dir = tmp_path / "resources"
     product_dir.mkdir(parents=True)
     decoration_path = product_dir / OOS_DECORATION_FILE_NAME
     decoration_path.write_bytes(b"\x00\x00\x00\x00enterprise-encrypted")
@@ -220,16 +221,16 @@ def test_load_sheet_oos_decoration_falls_back_to_excel_com_for_encrypted_file(
     monkeypatch.setattr(
         spc_sheet_oos_decoration.pd,
         "read_excel",
-        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("not a zip file")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(BadZipFile("not a zip file")),
     )
     monkeypatch.setattr(
         spc_sheet_oos_decoration,
         "_read_encrypted_xlsx_via_com",
-        lambda path: expected if path == decoration_path else pd.DataFrame(),
+        lambda path, sheet_name=None: expected if path == decoration_path else pd.DataFrame(),
         raising=False,
     )
 
-    loaded = load_sheet_oos_decoration(product_dir)
+    loaded = load_sheet_oos_decoration(product_dir, sheet_name="M678")
 
     assert loaded["flag"].tolist() == ["Delete", False]
 
@@ -238,7 +239,7 @@ def test_persist_sheet_oos_decoration_does_not_overwrite_unreadable_existing_fil
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    product_dir = tmp_path / "resources" / "M678"
+    product_dir = tmp_path / "resources"
     product_dir.mkdir(parents=True)
     decoration_path = product_dir / OOS_DECORATION_FILE_NAME
     original_bytes = b"\x00\x00\x00\x00enterprise-encrypted"
@@ -247,34 +248,44 @@ def test_persist_sheet_oos_decoration_does_not_overwrite_unreadable_existing_fil
     monkeypatch.setattr(
         spc_sheet_oos_decoration.pd,
         "read_excel",
-        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("not a zip file")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(BadZipFile("not a zip file")),
     )
     monkeypatch.setattr(
         spc_sheet_oos_decoration,
         "_read_encrypted_xlsx_via_com",
-        lambda path: (_ for _ in ()).throw(RuntimeError("Excel unavailable")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("Excel unavailable")),
     )
 
     with pytest.raises(spc_sheet_oos_decoration.SheetOosDecorationReadError):
-        persist_sheet_oos_decoration(product_dir, build_sheet_oos_detail(_sheet_features()))
+        persist_sheet_oos_decoration(
+            product_dir,
+            build_sheet_oos_detail(_sheet_features()),
+            sheet_name="M678",
+        )
 
     assert decoration_path.read_bytes() == original_bytes
 
 
 def test_persist_sheet_oos_decoration_writes_only_decoration_and_preserves_flags(tmp_path: Path) -> None:
-    product_dir = tmp_path / "resources" / "Z571"
+    product_dir = tmp_path / "resources"
     detail = build_sheet_oos_detail(_sheet_features())
 
-    decoration = persist_sheet_oos_decoration(product_dir, detail)
+    decoration = persist_sheet_oos_decoration(product_dir, detail, sheet_name="Z571")
     assert not (product_dir / "spc_sheet_oos_detail.xlsx").exists()
     assert (product_dir / OOS_DECORATION_FILE_NAME).exists()
     assert decoration["flag"].tolist() == [True, True]
 
     decoration.loc[decoration["sheet_id"] == "S1", "flag"] = False
-    decoration.to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False)
+    other_sheet_df = pd.DataFrame([{"prod_code": "OTHER", "note": "keep-me"}])
+    with pd.ExcelWriter(product_dir / OOS_DECORATION_FILE_NAME, engine="openpyxl") as writer:
+        decoration.to_excel(writer, index=False, sheet_name="Z571")
+        other_sheet_df.to_excel(writer, index=False, sheet_name="OTHER")
 
-    updated = persist_sheet_oos_decoration(product_dir, detail)
-    loaded = load_sheet_oos_decoration(product_dir)
+    updated = persist_sheet_oos_decoration(product_dir, detail, sheet_name="Z571")
+    loaded = load_sheet_oos_decoration(product_dir, sheet_name="Z571")
 
     assert bool(updated.loc[updated["sheet_id"] == "S1", "flag"].iloc[0]) is False
     assert bool(loaded.loc[loaded["sheet_id"] == "S1", "flag"].iloc[0]) is False
+    # 共享工作簿中的其他 sheet 不受影响
+    other_loaded = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="OTHER")
+    assert other_loaded["note"].tolist() == ["keep-me"]
