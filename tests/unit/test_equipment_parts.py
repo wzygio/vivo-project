@@ -37,6 +37,7 @@ from src.equipment_domain.infrastructure.data_loader import (
     REQUIRED_BASELINE_COLUMNS,
     _expand_baseline_rows_from_sheets,
     _generate_baseline_csv_from_excel,
+    filter_recent_part_life_measurements,
     load_spec_baseline,
 )
 from src.equipment_domain.infrastructure import data_loader
@@ -150,6 +151,46 @@ class TestLoadSpecBaseline:
 
         with pytest.raises(ValueError, match="Missing columns"):
             load_spec_baseline(file_path)
+
+    def test_encrypted_csv_is_normalized_before_retrying_read(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        encrypted_path = tmp_path / "critical_parts_baseline.csv"
+        encrypted_path.write_bytes(b"\x00\x00\x00\x00encrypted")
+        expected = pd.DataFrame({
+            "厂别": ["Array"],
+            "备件类型": ["Target"],
+            "设备类型": ["PVD"],
+            "膜层": ["MO"],
+            "制程": ["DEPO"],
+            "寿命规格": ["100KWH"],
+            "站点": ["S1"],
+            "机台号-腔室": ["EQ1-PM3"],
+            "参数名称": ["%TRGTLIFE%_G_MAX"],
+        })
+        decode_error = UnicodeDecodeError("utf-8", b"\xb5", 0, 1, "invalid")
+        read_results = iter([decode_error, expected])
+        normalized: list[Path] = []
+
+        def fake_read_csv(*_args, **_kwargs):
+            result = next(read_results)
+            if isinstance(result, Exception):
+                raise result
+            return result.copy()
+
+        monkeypatch.setattr(data_loader.pd, "read_csv", fake_read_csv)
+        monkeypatch.setattr(
+            data_loader,
+            "_normalize_encrypted_baseline_csv",
+            lambda path, **_kwargs: normalized.append(path),
+        )
+
+        result = load_spec_baseline(encrypted_path)
+
+        assert normalized == [encrypted_path]
+        assert result["寿命规格"].tolist() == [100.0]
 
     def test_expands_and_merges_rows_from_multiple_configured_sheets(self) -> None:
         """多个规格 Sheet 的行会展开并合并为同一份基线表。"""
@@ -384,6 +425,25 @@ class TestPartsMatcher:
 
         assert result["测量值"].tolist()[:2] == [111.0, 222.0]
         assert pd.isna(result.loc[2, "测量值"])
+
+    def test_stale_real_measurements_are_excluded_before_fabricated_fallback(self) -> None:
+        snapshot = pd.DataFrame({
+            "value": [10.0, 20.0, 30.0, 40.0],
+            "glass_start_time": pd.to_datetime([
+                "2026-08-09 11:59:59",
+                "2026-08-09 12:00:00",
+                "2026-08-12 12:00:00",
+                "2026-08-12 12:00:01",
+            ]),
+        })
+
+        recent = filter_recent_part_life_measurements(
+            snapshot,
+            as_of=pd.Timestamp("2026-08-12 12:00:00"),
+            max_age_days=3,
+        )
+
+        assert recent["value"].tolist() == [20.0, 30.0]
 
 
 class TestPartsCalculator:

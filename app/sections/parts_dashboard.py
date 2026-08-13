@@ -24,22 +24,16 @@ def render_parts_refresh_button() -> bool:
     """渲染数据刷新按钮。"""
     col_title, col_refresh = st.columns([6, 1])
     with col_refresh:
-        clicked = st.button("🔄 刷新数据", use_container_width=True)
+        clicked = st.button("🔄 刷新数据", width="stretch")
     return clicked
 
 
 def render_factory_filter(available_factories: List[str]) -> str:
-    """渲染厂别下拉筛选器。"""
+    """渲染旧版厂别筛选器，保留给外部兼容调用。"""
     if not available_factories:
         st.warning("无可用的厂别数据。")
         return ""
-    default_idx = 0
-    selected = st.selectbox(
-        "🔽 厂别筛选",
-        options=available_factories,
-        index=default_idx,
-    )
-    return selected
+    return st.selectbox("🔽 厂别筛选", options=available_factories, index=0)
 
 
 def render_parts_metrics(
@@ -117,7 +111,7 @@ def render_parts_table(df: pd.DataFrame):
         column_config=column_config,
         column_order=valid_columns,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -167,9 +161,10 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
         column_config=column_config,
         column_order=valid_columns,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         selection_mode="single-row",
+        key="parts_life_table",
     )
 
     return selected_rows

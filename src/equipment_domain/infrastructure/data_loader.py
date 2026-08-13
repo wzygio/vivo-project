@@ -11,6 +11,7 @@ import csv
 import hashlib
 import logging
 import re
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Mapping
@@ -21,7 +22,9 @@ from sqlalchemy import text
 from src.equipment_domain.config import get_equipment_runtime_config
 from src.equipment_domain.infrastructure.fake_data import (
     SNAPSHOT_COLUMNS,
-    build_fabricated_snapshot_path,
+)
+from src.equipment_domain.infrastructure.fake_data_updater import (
+    ensure_fabricated_snapshot_file,
 )
 
 if TYPE_CHECKING:
@@ -35,6 +38,7 @@ REQUIRED_BASELINE_COLUMNS: list[str] = [
     "站点", "机台号-腔室", "参数名称",
 ]
 
+
 def load_spec_baseline(baseline_path: str | Path) -> pd.DataFrame:
     """Load spec baseline config. Prefer CSV, fallback to encrypted Excel."""
     runtime_config = get_equipment_runtime_config()
@@ -43,7 +47,14 @@ def load_spec_baseline(baseline_path: str | Path) -> pd.DataFrame:
         logger.info(f"CSV not found, generating from encrypted Excel")
         _generate_baseline_csv_from_excel(path)
     logger.info(f"Loading spec baseline CSV: {path}")
-    df = pd.read_csv(path, dtype=str, encoding=runtime_config.csv_encoding)
+    try:
+        df = pd.read_csv(path, dtype=str, encoding=runtime_config.csv_encoding)
+    except UnicodeDecodeError:
+        _normalize_encrypted_baseline_csv(
+            path,
+            encoding=runtime_config.csv_encoding,
+        )
+        df = pd.read_csv(path, dtype=str, encoding=runtime_config.csv_encoding)
     missing_cols = [col for col in REQUIRED_BASELINE_COLUMNS if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing columns: {missing_cols}. Current: {list(df.columns)}")
@@ -52,6 +63,92 @@ def load_spec_baseline(baseline_path: str | Path) -> pd.DataFrame:
     df = df.dropna(how="all").reset_index(drop=True)
     logger.info(f"Loaded {len(df)} spec baseline records")
     return df
+
+
+def _normalize_encrypted_baseline_csv(
+    csv_path: Path,
+    *,
+    encoding: str,
+) -> None:
+    """Export an enterprise-encrypted CSV workbook as validated plain CSV."""
+    if csv_path.read_bytes()[:4] != b"\x00\x00\x00\x00":
+        raise ValueError(
+            f"Baseline CSV is not UTF-8 and has no recognized encrypted header: {csv_path}"
+        )
+    rows = _read_encrypted_csv_rows_via_excel(csv_path)
+    if not rows:
+        raise ValueError(f"Encrypted baseline CSV is empty: {csv_path}")
+    header = [str(value).strip() for value in rows[0][: len(REQUIRED_BASELINE_COLUMNS)]]
+    if header != REQUIRED_BASELINE_COLUMNS:
+        raise ValueError(
+            "Encrypted baseline CSV columns do not match the required schema: "
+            f"{header}"
+        )
+
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            newline="",
+            encoding=encoding,
+            dir=csv_path.parent,
+            prefix=f".{csv_path.stem}-",
+            suffix=csv_path.suffix,
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            writer = csv.writer(temporary_file)
+            writer.writerow(REQUIRED_BASELINE_COLUMNS)
+            for row in rows[1:]:
+                writer.writerow(list(row[: len(REQUIRED_BASELINE_COLUMNS)]))
+        validation_df = pd.read_csv(temporary_path, dtype=str, encoding=encoding)
+        missing = [
+            column for column in REQUIRED_BASELINE_COLUMNS
+            if column not in validation_df.columns
+        ]
+        if missing or validation_df.empty:
+            raise ValueError(
+                f"Decrypted baseline CSV failed validation; missing={missing}"
+            )
+        temporary_path.replace(csv_path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def _read_encrypted_csv_rows_via_excel(csv_path: Path) -> list[tuple[str, ...]]:
+    """Read a rights-managed CSV container through the local Excel client."""
+    try:
+        import pythoncom
+        import win32com.client
+    except ImportError as error:
+        raise ImportError(f"pywin32 required to decrypt baseline CSV: {error}") from error
+
+    pythoncom.CoInitialize()
+    excel = None
+    workbook = None
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        workbook = excel.Workbooks.Open(str(csv_path.resolve()))
+        worksheet = workbook.Worksheets(1)
+        raw_values = worksheet.UsedRange.Value
+        if raw_values is None:
+            return []
+        return [
+            tuple("" if value is None else str(value).strip() for value in row)
+            for row in raw_values
+        ]
+    finally:
+        if workbook is not None:
+            workbook.Close(False)
+        if excel is not None:
+            excel.Quit()
+        pythoncom.CoUninitialize()
+
 
 def load_part_life_snapshot(
     db_manager: "DatabaseManager",
@@ -82,19 +179,63 @@ def load_part_life_snapshot(
     return df
 
 
-def load_fabricated_part_life_snapshot(spec_df: pd.DataFrame) -> pd.DataFrame:
-    """Load the isolated fabricated snapshot used only for real-data gaps."""
+def load_fabricated_part_life_snapshot(
+    spec_df: pd.DataFrame,
+    *,
+    now: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Create/update and load the fabricated snapshot used for real-data gaps."""
     runtime_config = get_equipment_runtime_config()
-    snapshot_path = build_fabricated_snapshot_path(spec_df, runtime_config.snapshot_dir)
-    if not snapshot_path.exists():
-        logger.info("Fabricated snapshot not found: %s", snapshot_path)
-        return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+    current_time = pd.Timestamp.now().floor("s") if now is None else pd.Timestamp(now)
+    outcome = ensure_fabricated_snapshot_file(
+        spec_df,
+        runtime_config.fabrication_policy,
+        output_dir=runtime_config.snapshot_dir,
+        now=current_time,
+    )
+    snapshot_path = outcome.path
+    logger.info(
+        "Fabricated snapshot maintenance: path=%s reason=%s",
+        snapshot_path,
+        outcome.summary["reason"],
+    )
     df = pd.read_parquet(snapshot_path)
     missing = [column for column in SNAPSHOT_COLUMNS if column not in df.columns]
     if missing:
         raise ValueError(f"Missing fabricated snapshot columns: {missing}")
     logger.info("Loaded %s fabricated fallback records from %s", len(df), snapshot_path)
     return df.loc[:, SNAPSHOT_COLUMNS].copy()
+
+
+def filter_recent_part_life_measurements(
+    snapshot_df: pd.DataFrame,
+    *,
+    as_of: pd.Timestamp,
+    max_age_days: int,
+) -> pd.DataFrame:
+    """Keep measurements inside the report freshness window."""
+    if max_age_days <= 0:
+        raise ValueError("measurement maximum age must be positive")
+    if snapshot_df.empty:
+        return snapshot_df.copy()
+    if "glass_start_time" not in snapshot_df.columns:
+        raise ValueError("part-life snapshot is missing glass_start_time")
+    current_time = pd.Timestamp(as_of)
+    if pd.isna(current_time):
+        raise ValueError("as_of must be a valid timestamp")
+    if current_time.tzinfo is not None:
+        current_time = current_time.tz_localize(None)
+    measurement_times = pd.to_datetime(
+        snapshot_df["glass_start_time"],
+        errors="coerce",
+    )
+    cutoff = current_time - pd.Timedelta(days=max_age_days)
+    recent_mask = measurement_times.between(
+        cutoff,
+        current_time,
+        inclusive="both",
+    )
+    return snapshot_df.loc[recent_mask].copy()
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:
     """Read configured Excel sheets via COM and generate one flattened CSV."""

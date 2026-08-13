@@ -1,6 +1,6 @@
 # ADR-0003：关键备件采用真实快照优先、独立仿造快照补缺
 
-- Status: Accepted
+- Status: Superseded in part by ADR-0010（第 2、3、6 点）和 ADR-0011（第 4 点）
 - Date: 2026-07-21
 - Scope: `equipment_domain` 当前值快照的生成、更新、加载与关键备件报表匹配
 

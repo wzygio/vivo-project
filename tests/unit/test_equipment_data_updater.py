@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import os
 
 import pandas as pd
 import pytest
 
+from src.equipment_domain.config import get_equipment_runtime_config
+from src.equipment_domain.infrastructure import data_loader
 from src.equipment_domain.infrastructure.fake_data import (
     FabricationPolicy,
+    build_fabricated_snapshot_path,
     generate_fabricated_snapshot,
     write_fabricated_snapshot,
 )
 from src.equipment_domain.infrastructure.fake_data_updater import (
+    ensure_fabricated_snapshot_file,
     update_fabricated_snapshot,
     update_fabricated_snapshot_file,
 )
@@ -41,7 +46,7 @@ def _specs() -> pd.DataFrame:
     )
 
 
-def test_update_advances_one_day_adds_thirty_percent_and_resets_crossed_values() -> None:
+def test_update_advances_with_a_deterministic_near_arithmetic_sequence() -> None:
     original = pd.DataFrame(
         {
             "step_id": ["S1", "S2", "S3"],
@@ -51,7 +56,7 @@ def test_update_advances_one_day_adds_thirty_percent_and_resets_crossed_values()
                 "P4_MASKLIFE_G_MAX",
                 "PM5_1_PRE_SPRT_KWH",
             ],
-            "value": [20.0, 70.0, 80.0],
+            "value": [20.0, 60.0, 97.0],
             "glass_start_time": pd.to_datetime(
                 ["2026-07-18 08:00:00", "2026-07-18 09:00:00", "2026-07-18 10:00:00"]
             ),
@@ -59,6 +64,7 @@ def test_update_advances_one_day_adds_thirty_percent_and_resets_crossed_values()
     )
 
     result = update_fabricated_snapshot(original, _specs(), _policy())
+    repeated = update_fabricated_snapshot(original, _specs(), _policy())
 
     assert result.snapshot_df[["step_id", "sub_equip_id", "param_name"]].equals(
         original[["step_id", "sub_equip_id", "param_name"]]
@@ -66,9 +72,14 @@ def test_update_advances_one_day_adds_thirty_percent_and_resets_crossed_values()
     assert result.snapshot_df["glass_start_time"].equals(
         original["glass_start_time"] + pd.Timedelta(days=1)
     )
-    assert result.snapshot_df.loc[0, "value"] == 50.0
-    assert result.snapshot_df.loc[1, "value"] == 100.0
-    assert 0.0 <= result.snapshot_df.loc[2, "value"] <= 30.0
+    increments = (
+        result.snapshot_df["value"].to_numpy()
+        - original["value"].to_numpy()
+    ) % 100.0
+    assert all(28.5 <= increment <= 31.5 for increment in increments)
+    assert len({round(increment, 6) for increment in increments}) > 1
+    assert 25.5 <= result.snapshot_df.loc[2, "value"] <= 28.5
+    pd.testing.assert_frame_equal(result.snapshot_df, repeated.snapshot_df)
     assert result.summary["updated_rows"] == 3
     assert result.summary["reset_rows"] == 1
 
@@ -93,7 +104,7 @@ def test_file_update_skips_fresh_snapshot_updates_at_ttl_and_allows_force(tmp_pa
     assert skipped.updated is False
     pd.testing.assert_frame_equal(pd.read_parquet(snapshot_path), generated.snapshot_df)
 
-    expired_mtime = (now - pd.Timedelta(hours=24)).to_pydatetime().timestamp()
+    expired_mtime = (now - pd.Timedelta(hours=49)).to_pydatetime().timestamp()
     os.utime(snapshot_path, (expired_mtime, expired_mtime))
     expired = update_fabricated_snapshot_file(
         _specs(),
@@ -103,8 +114,9 @@ def test_file_update_skips_fresh_snapshot_updates_at_ttl_and_allows_force(tmp_pa
     )
     assert expired.updated is True
     assert (pd.read_parquet(snapshot_path)["glass_start_time"] == (
-        generated.snapshot_df["glass_start_time"] + pd.Timedelta(days=1)
+        generated.snapshot_df["glass_start_time"] + pd.Timedelta(days=2)
     )).all()
+    assert expired.summary["update_periods"] == 2
 
     forced = update_fabricated_snapshot_file(
         _specs(),
@@ -115,6 +127,42 @@ def test_file_update_skips_fresh_snapshot_updates_at_ttl_and_allows_force(tmp_pa
     )
     assert forced.updated is True
     assert forced.summary["reason"] == "forced"
+
+
+def test_ensure_bootstraps_missing_snapshot_and_loader_maintains_it_automatically(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    now = pd.Timestamp("2026-07-21 12:00:00")
+
+    created = ensure_fabricated_snapshot_file(
+        _specs(),
+        _policy(),
+        output_dir=tmp_path,
+        now=now,
+    )
+
+    assert created.created is True
+    assert created.updated is False
+    assert created.summary["reason"] == "snapshot-created"
+    assert created.path == build_fabricated_snapshot_path(_specs(), tmp_path)
+
+    runtime = replace(
+        get_equipment_runtime_config(),
+        snapshot_dir=tmp_path,
+        fabrication_policy=_policy(),
+    )
+    monkeypatch.setattr(data_loader, "get_equipment_runtime_config", lambda: runtime)
+    stale_mtime = (now - pd.Timedelta(hours=25)).to_pydatetime().timestamp()
+    os.utime(created.path, (stale_mtime, stale_mtime))
+    before = pd.read_parquet(created.path)
+
+    loaded = data_loader.load_fabricated_part_life_snapshot(
+        _specs(),
+        now=now,
+    )
+
+    assert (loaded["glass_start_time"] == before["glass_start_time"] + pd.Timedelta(days=1)).all()
 
 
 def test_update_rejects_malformed_and_unmappable_snapshots() -> None:

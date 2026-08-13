@@ -1,6 +1,6 @@
 equipment:
   baseline:
-    source_excel_path: docs/others/北极星-关键备件/供应商关键备件寿命管控清单-0604.xlsx
+    source_excel_path: docs/project_files/北极星-关键备件/供应商关键备件寿命管控清单-0604.xlsx
     source_sheet_names:
       - Array规格表1
     csv_encoding: utf-8-sig
@@ -9,6 +9,7 @@ equipment:
     ttl_hours: 8
   query:
     lookback_days: 90
+    measurement_max_age_days: 3
     source_table: eda.ARRAY_PDS_RESULT_T
   alert:
     warning_threshold: 90.0

@@ -20,6 +20,7 @@ class EquipmentRuntimeConfig:
     snapshot_dir: Path
     snapshot_ttl_hours: int
     query_lookback_days: int
+    measurement_max_age_days: int
     query_source_table: str
     alert_policy: PartsAlertPolicy
     fabrication_policy: FabricationPolicy
@@ -56,11 +57,16 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     snapshot_dir = Path(str(snapshot["directory"]))
     snapshot_ttl_hours = int(snapshot["ttl_hours"])
     query_lookback_days = int(query["lookback_days"])
+    measurement_max_age_days = int(query.get("measurement_max_age_days", 3))
     source_table = str(query["source_table"]).strip()
     if snapshot_ttl_hours <= 0:
         raise ValueError("equipment_config.yaml: 'snapshot.ttl_hours' must be positive")
     if query_lookback_days <= 0:
         raise ValueError("equipment_config.yaml: 'query.lookback_days' must be positive")
+    if measurement_max_age_days <= 0:
+        raise ValueError(
+            "equipment_config.yaml: 'query.measurement_max_age_days' must be positive"
+        )
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$#]*(?:\.[A-Za-z_][A-Za-z0-9_$#]*)?", source_table):
         raise ValueError("equipment_config.yaml: 'query.source_table' is not a valid SQL identifier")
 
@@ -71,6 +77,7 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
         snapshot_dir=(root / snapshot_dir if not snapshot_dir.is_absolute() else snapshot_dir),
         snapshot_ttl_hours=snapshot_ttl_hours,
         query_lookback_days=query_lookback_days,
+        measurement_max_age_days=measurement_max_age_days,
         query_source_table=source_table,
         alert_policy=PartsAlertPolicy(
             warning_threshold=float(alert["warning_threshold"]),

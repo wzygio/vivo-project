@@ -7,8 +7,8 @@
 2. 查询 PostgreSQL eda.ARRAY_PDS_RESULT_T（最新实测值）→ Parquet 快照
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
 4. 渲染卡片：总备件数、超规、预警、正常、最后更新
-5. 中部渲染明细表，支持多维度厂别筛选
-6. 点击联动：点击表格任一备件行，底部展开该备件 30 天趋势曲线
+5. 中部渲染明细表，支持厂别、设备类型、备件类型多选筛选
+6. 点击联动：仅在勾选表格备件行后，底部展开该备件趋势曲线
 """
 
 import sys
@@ -32,14 +32,18 @@ if project_root:
         sys.path.insert(0, src_str)
 
 import streamlit as st
-import pandas as pd
 
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
+from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
 from app.components.page_header import extract_cached_funcs, render_page_header
 from app.manager.session_manager import SessionManager
+from app.sections.parts_filters import (
+    apply_parts_filters,
+    get_selected_parts_row,
+    render_parts_filters,
+)
 from app.sections.parts_dashboard import (
-    render_factory_filter,
     render_parts_metrics,
     render_parts_table_selectable,
 )
@@ -78,20 +82,18 @@ render_page_header(
 
 
 # ==============================================================================
-#  获取厂别、膜层、备件类型列表（用于筛选器与联动）
+#  加载规格并渲染级联筛选器
 # ==============================================================================
 
 try:
-    spec_df = pd.read_csv(BASELINE_PATH, encoding="utf-8-sig")
-    available_factories = sorted(spec_df["厂别"].dropna().unique().tolist())
-    available_layers = sorted(spec_df["膜层"].dropna().unique().tolist())
-    available_part_types = sorted(spec_df["备件类型"].dropna().unique().tolist())
-except Exception:
-    available_factories = []
-    available_layers = []
-    available_part_types = []
+    spec_df = load_spec_baseline(BASELINE_PATH)
+except Exception as error:
+    st.error(f"❌ 规格基线加载失败: {error}")
+    st.stop()
 
-selected_factory = render_factory_filter(available_factories)
+selected_factories, selected_equipment_types, selected_part_types = (
+    render_parts_filters(spec_df)
+)
 
 
 # ==============================================================================
@@ -111,15 +113,15 @@ with st.spinner("正在从数据库加载备件寿命数据..."):
 
 
 # ==============================================================================
-#  厂别过滤
+#  多维筛选
 # ==============================================================================
 
-if selected_factory and not view_model.report_df.empty:
-    filtered_df = view_model.report_df[
-        view_model.report_df["厂别"] == selected_factory
-    ].copy()
-else:
-    filtered_df = view_model.report_df.copy()
+filtered_df = apply_parts_filters(
+    view_model.report_df,
+    selected_factories=selected_factories,
+    selected_equipment_types=selected_equipment_types,
+    selected_part_types=selected_part_types,
+)
 
 
 # ==============================================================================
@@ -147,13 +149,7 @@ selected_rows_dict = render_parts_table_selectable(filtered_df)
 #  [点击联动] 表格与趋势图点击联动
 # ==============================================================================
 
-selected_row_data = None
-if not filtered_df.empty:
-    rows_list = selected_rows_dict.get("selection", {}).get("rows", [])
-    if rows_list:
-        selected_row_data = filtered_df.iloc[rows_list[0]]
-    else:
-        selected_row_data = filtered_df.iloc[0]
+selected_row_data = get_selected_parts_row(filtered_df, selected_rows_dict)
 
 if selected_row_data is not None:
     trend_factory = selected_row_data["厂别"]
@@ -184,4 +180,4 @@ if selected_row_data is not None:
             part_type=trend_part_type,
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")

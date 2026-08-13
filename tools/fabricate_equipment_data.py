@@ -39,7 +39,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--seed", type=int)
     parser.add_argument(
         "--as-of",
-        help="Generation cutoff; each row receives a random time within the preceding two days.",
+        help=(
+            "Generation cutoff; each row receives a stable key-derived time "
+            "within the configured lookback window."
+        ),
     )
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)

@@ -16,6 +16,7 @@ import pandas as pd
 import streamlit as st
 
 from src.equipment_domain.infrastructure.data_loader import (
+    filter_recent_part_life_measurements,
     load_spec_baseline,
     load_part_life_snapshot,
     load_fabricated_part_life_snapshot,
@@ -75,7 +76,7 @@ class PartsReportService:
             return False
 
     @staticmethod
-    @st.cache_data  # L2 缓存（遵循项目红线纪律，不可移除）
+    @st.cache_data(ttl=3600)  # 每小时重入 L1，由快照自身的 TTL 决定是否更新
     def fetch_report_payload(
         _db_manager,
         baseline_path: str,
@@ -101,7 +102,13 @@ class PartsReportService:
         spec_df = load_spec_baseline(baseline_path)
 
         # 2. 查询数据库快照数据
+        runtime_config = get_equipment_runtime_config()
         snapshot_df = load_part_life_snapshot(_db_manager, spec_df)
+        snapshot_df = filter_recent_part_life_measurements(
+            snapshot_df,
+            as_of=pd.Timestamp.now().floor("s"),
+            max_age_days=runtime_config.measurement_max_age_days,
+        )
         fabricated_snapshot_df = load_fabricated_part_life_snapshot(spec_df)
 
         # 3. 真实记录优先；仅真实缺失时使用独立仿造快照。
@@ -110,7 +117,7 @@ class PartsReportService:
             snapshot_df,
             fallback_snapshot_df=fabricated_snapshot_df,
         )
-        alert_policy = get_equipment_runtime_config().alert_policy
+        alert_policy = runtime_config.alert_policy
 
         # 4. 先保留原始超规判断，再对展示测量值做修饰
         report_df = apply_over_spec_alert_and_decoration(

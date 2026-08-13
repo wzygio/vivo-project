@@ -82,6 +82,13 @@ def materialize_param_name(like_pattern: str, machine_chamber: str) -> str:
     return param_name
 
 
+def stable_unit_fraction(*parts: object, seed: int) -> float:
+    """Map stable business inputs to a reproducible fraction in ``[0, 1)``."""
+    payload = "\x1f".join([str(seed), *(str(part) for part in parts)])
+    digest = hashlib.sha256(payload.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], byteorder="big") / 2**64
+
+
 def generate_fabricated_snapshot(
     spec_df: pd.DataFrame,
     policy: FabricationPolicy,
@@ -131,15 +138,25 @@ def generate_fabricated_snapshot(
 
     unique_specs = monitorable.drop_duplicates(key_columns, keep="first")
     unique_specs = unique_specs.sort_values(key_columns, kind="mergesort").reset_index(drop=True)
-    rng = np.random.default_rng(policy.random_seed)
-
     records: list[dict[str, Any]] = []
     lookback_seconds = policy.initial_lookback_days * 24 * 60 * 60
     for _, spec_row in unique_specs.iterrows():
+        key = tuple(str(spec_row[column]).strip() for column in key_columns)
         low, high = policy.initial_value_ratio_range
-        value_ratio = float(rng.uniform(low, high))
+        value_ratio = low + (high - low) * stable_unit_fraction(
+            "initial-value",
+            *key,
+            seed=policy.random_seed,
+        )
         value = float(spec_row["寿命规格"]) * value_ratio
-        age_seconds = int(rng.integers(0, lookback_seconds + 1))
+        age_seconds = int(
+            stable_unit_fraction(
+                "initial-time",
+                *key,
+                seed=policy.random_seed,
+            )
+            * (lookback_seconds + 1)
+        )
         records.append(
             {
                 "step_id": str(spec_row["站点"]).strip(),
@@ -174,6 +191,7 @@ def generate_fabricated_snapshot(
         "skipped_invalid_spec_rows": int((~valid_spec_mask).sum()),
         "skipped_invalid_identity_rows": int((valid_spec_mask & ~valid_identity_mask).sum()),
         "random_seed": int(policy.random_seed),
+        "generation_mode": "stable-key-phase",
         "as_of": str(timestamp),
     }
     return FabricationResult(snapshot_df=snapshot_df, summary=summary)

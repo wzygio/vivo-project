@@ -6,6 +6,7 @@ Rebuildable generated summaries, scans, and audit outputs live here.
 
 - `harness-audit.md`: output from `harness-builder` audit for the current repository.
 - `harness-garbage-collection.md`: cleanup loop for stale Harness content.
+- `monitor-data-decoration-chain.md`: current automatic-warning data decoration and compliance visibility chain.
 
 ## Rules
 

@@ -84,11 +84,15 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - 规格基线来自 `resources/critical_parts_baseline.csv`；数据库快照和仿造
   快照分别以规格签名命名，互不覆盖。
 - 报表按每条规格先匹配真实数据库快照；无真实匹配时才使用仿造快照。报表
-  读取不会生成或更新仿造数据。
-- `tools/fabricate_equipment_data.py` 负责首次生成，
-  `tools/update_fabricated_equipment_data.py` 负责显式、受 24 小时新鲜度约束的
-  后续更新。该语义见
-  `docs/ADR/0003-equipment-real-first-fabricated-fallback.md`。
+  载荷每小时重新进入快照层；仿造快照缺失时自动生成，超过 24 小时 TTL 时
+  自动按完整过期周期推进。
+- 报表只允许三天新鲜度窗口内的真实测量参与优先匹配；陈旧真实记录被排除，
+  再由新鲜仿造快照补缺，确保最终展示时间满足当前性约束。该语义见
+  `docs/ADR/0011-equipment-measurement-freshness-fallback.md`。
+- 仿造测量值采用确定性的近似等差日推进，越过寿命规格后保留溢出量作为新
+  备件起点；运维生成/更新命令仍保留用于诊断和人工维护。来源优先级见
+  `docs/ADR/0003-equipment-real-first-fabricated-fallback.md`，自动维护语义见
+  `docs/ADR/0010-equipment-fabricated-snapshot-auto-maintenance.md`。
 
 ## 缓存、快照与可变资源
 
