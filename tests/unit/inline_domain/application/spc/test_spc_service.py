@@ -14,7 +14,7 @@ from src.inline_domain.application.spc.spc_service import assign_indicator_chart
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
     SheetOosDecorationReadError,
 )
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class FakeSpcRepository:
@@ -104,7 +104,6 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
     monkeypatch,
 ) -> None:
     SpcReportService.fetch_spc_report_payload.clear()
-    monkeypatch.setattr(spc_service, "SpcRepository", FakeSpcRepository)
     calls = 0
 
     def fail_decoration(**_kwargs):
@@ -123,7 +122,7 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
     for _ in range(2):
         with pytest.raises(spc_service.SpcDecorationFileError):
             SpcReportService.get_spc_report_data(
-                _db_manager=object(),
+                _data_port=FakeSpcRepository(Path("data"), True, object()),
                 query_config_json=query.model_dump_json(),
                 snapshot_signature="unreadable-decoration",
             )
@@ -149,7 +148,6 @@ def test_assign_indicator_chart_type_marks_uni_parameters_for_line_charts() -> N
 def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypatch, tmp_path: Path) -> None:
     SpcReportService.fetch_spc_report_payload.clear()
     FakeSpcRepository.seen_data_type_filters = []
-    monkeypatch.setattr(spc_service, "SpcRepository", FakeSpcRepository)
     monkeypatch.setattr(
         spc_service.ConfigLoader,
         "get_spc_period_sigma_source",
@@ -169,7 +167,7 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
     )
 
     report = SpcReportService.get_spc_report_data(
-        _db_manager=object(),
+        _data_port=FakeSpcRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="unit-test",
     )
@@ -195,7 +193,6 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
 def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypatch, tmp_path: Path) -> None:
     SpcReportService.fetch_spc_report_payload.clear()
     FakeSpcRepository.seen_data_type_filters = []
-    monkeypatch.setattr(spc_service, "SpcRepository", FakeSpcRepository)
     monkeypatch.setattr(
         spc_service.ConfigLoader,
         "get_spc_period_sigma_source",
@@ -215,7 +212,7 @@ def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypat
     )
 
     report = SpcReportService.get_spc_report_data(
-        _db_manager=object(),
+        _data_port=FakeSpcRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="unit-test-point-sigma",
     )
@@ -243,7 +240,6 @@ def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
             return spec_df.assign(param_name="PPA_THK")
 
     SpcReportService.fetch_spc_report_payload.clear()
-    monkeypatch.setattr(spc_service, "SpcRepository", PpaOnlySpcRepository)
     monkeypatch.setattr(
         spc_service.ConfigLoader,
         "get_spc_period_sigma_source",
@@ -262,7 +258,7 @@ def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
     )
 
     report = SpcReportService.get_spc_report_data(
-        _db_manager=object(),
+        _data_port=PpaOnlySpcRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="ppa-excluded-from-capability",
     )
@@ -305,7 +301,6 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     original_module = spc_service
     original_service = original_module.SpcReportService
     original_service.fetch_spc_report_payload.clear()
-    monkeypatch.setattr(original_module, "SpcRepository", BlockingSpcRepository)
     monkeypatch.setattr(
         original_module.ConfigLoader,
         "get_spc_period_sigma_source",
@@ -327,7 +322,7 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     def load_report() -> None:
         try:
             outcome["report"] = original_service.get_spc_report_data(
-                _db_manager=object(),
+                _data_port=BlockingSpcRepository(Path("data"), True, object()),
                 query_config_json=query.model_dump_json(),
                 snapshot_signature="reload-during-cache-fill",
             )

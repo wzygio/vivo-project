@@ -66,18 +66,32 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 
 ### SPC、CTQ 与自动预警
 
-- `SpcRepository` 是 SPC/CTQ/监控共用的数据边界：读取规格与测量数据、
-  应用产品规格覆盖和异常值过滤，并维护带策略标记的快照。SPC 原始点位刷新时，
-  `infrastructure/spc/main_process_trace.py` 按规格主工序路由三厂 OUT 履历，
-  将主制程设备/腔室追溯字段写入同一快照；旧结构快照会触发刷新。
+- `infrastructure/measurement/` 拥有三厂 Inline 测量事实的数据库读取和产品级
+  Parquet 快照。共享快照只保存预处理前的稳定字段超集；TTL、策略版本、强制
+  刷新、原子写入和数据库失败降级均在这一适配器内完成。
+- `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
+  组合根。SPC、CTQ、AOI_TT 应用服务只依赖端口，不读取 Parquet，也不构造
+  基础设施仓储。
+- `infrastructure/spc/`、`infrastructure/ctq/` 和 `infrastructure/aoi_tt/`
+  分别从共享测量事实派生各自的数据契约。SPC 负责参数分类、异常值过滤、查询
+  维度过滤和主制程追溯；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
+  `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
+- 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
+  所有；`infrastructure/spc/main_process_trace.py` 仅执行规格路由和 DataFrame
+  匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
   图表类型；CPK 人工修饰文件
   `resources/<product>/spc_cpk_decoration.xlsx` 是用户维护状态，只按周期键
   合并到新结果，刷新时不会重建既有文件。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端
   选定的图表类型；CTQ OOS 文件隔离在 `resources/<product>/ctq/`。
+- `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
+  和规格口径仍遵循 ADR-0008。
 - `MonitorAnalysisService` 基于同一 SPC 数据源完成时间桶映射、规则判定和
-  汇总，自动预警页面再叠加合规配置的可见性规则。
+  汇总，自动预警页面再叠加合规配置的可见性规则。该服务只依赖
+  `MonitorSpcRepositoryFactory`；页面通过 `composition.py` 注入
+  `infrastructure/monitor/monitor_repository.py` 中的 monitor 专属仓储门面，
+  application 层不得直接导入 infrastructure。
 
 ### 关键备件
 
@@ -108,6 +122,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 
 缓存边界和产品级失效规则见
 `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`。
+共享 Inline 原始快照和派生适配器边界见
+`docs/ADR/0012-shared-inline-measurement-snapshot.md`。
 
 ## 目录地图
 

@@ -2,232 +2,106 @@
 数据修饰配置文件管理模块 (Compliance Config Manager)
 
 功能：
-1. 从本地 YAML 文件读取修饰配置
+1. 从共享 Excel 文件读取四维修饰配置
 2. 提供只读界面展示当前配置
 3. 支持下载/上传配置文件（管理员）
-4. 彻底避开 Streamlit 状态同步问题
+4. 统一运行时配置路径与缓存失效签名
 """
 
-import streamlit as st
-import yaml
 import logging
-import pandas as pd
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Tuple, Optional, List
-from datetime import datetime
+
+import pandas as pd
+import streamlit as st
 
 from src.shared_kernel.compliance_config_excel import (
+    build_compliance_config_dataframe,
+    compliance_rule_matches,
     compliance_config_to_xlsx_bytes,
     load_compliance_config_from_xlsx,
     write_compliance_config_to_xlsx,
 )
+from src.shared_kernel.config import ConfigLoader
 
-# 配置文件路径
-CONFIG_PATH = Path("config/compliance_config.xlsx")
-LEGACY_YAML_CONFIG_PATH = Path("config/compliance_config.yaml")
+# 管理界面与运行时修饰引擎共用唯一配置文件。
+CONFIG_PATH = ConfigLoader.get_compliance_config_path()
 
 # 报废Sheet路径
 SCRAP_SHEET_PATH = Path("resources/scrap_sheets.xlsx")
 
 
 def _ensure_config_exists():
-    """确保配置文件存在，不存在则创建默认配置"""
+    """Create an empty four-column workbook when no configuration exists."""
     if CONFIG_PATH.exists():
         return
-
-    default_config = {
-        "default": False,
-        "rules": {}
-    }
-
-    if CONFIG_PATH.suffix.lower() in {".yaml", ".yml"}:
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            yaml.dump(default_config, f, allow_unicode=True, default_flow_style=False)
-        logging.info(f"[ComplianceConfig] 创建默认 YAML 配置文件: {CONFIG_PATH}")
-        return
-
-    if LEGACY_YAML_CONFIG_PATH.exists():
-        try:
-            with open(LEGACY_YAML_CONFIG_PATH, 'r', encoding='utf-8') as f:
-                legacy_config = yaml.safe_load(f) or default_config
-            write_compliance_config_to_xlsx(legacy_config, CONFIG_PATH)
-            logging.info(f"[ComplianceConfig] 已从 YAML 迁移到 xlsx: {CONFIG_PATH}")
-            return
-        except Exception as e:
-            logging.error(f"[ComplianceConfig] YAML 迁移 xlsx 失败: {e}", exc_info=True)
-
-    write_compliance_config_to_xlsx(default_config, CONFIG_PATH)
-    logging.info(f"[ComplianceConfig] 创建默认 xlsx 配置文件: {CONFIG_PATH}")
+    write_compliance_config_to_xlsx({"rules": []}, CONFIG_PATH)
+    logging.info("[ComplianceConfig] 创建空配置文件: %s", CONFIG_PATH)
 
 
-def load_compliance_config() -> Dict:
-    """
-    加载修饰配置文件
-    
-    Returns:
-        dict: 配置内容 {default: bool, rules: dict}
-    """
+def load_compliance_config() -> dict:
+    """Load the shared four-dimension compliance configuration."""
     _ensure_config_exists()
-    
     try:
-        if CONFIG_PATH.suffix.lower() == ".xlsx":
-            return load_compliance_config_from_xlsx(CONFIG_PATH)
-
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f) or {}
-            if not isinstance(config, dict):
-                config = {}
-            return {
-                "default": config.get("default", False),
-                "rules": config.get("rules") or {}
-            }
-    except Exception as e:
-        logging.error(f"[ComplianceConfig] 加载配置失败: {e}")
-        return {"default": False, "rules": {}}
-
-
-def _rule_matches_context(
-    rule_key: str,
-    data_type: str,
-    prod_code: str,
-    factory: str,
-    month: Optional[int] = None,
-    week: Optional[int] = None,
-) -> bool:
-    """Return whether a 1-5 segment rule key matches the supplied context."""
-    parts = [part.strip().upper() for part in rule_key.split("-") if part.strip()]
-    if not 1 <= len(parts) <= 5:
-        return False
-
-    context = [
-        str(data_type).upper(),
-        str(prod_code).upper(),
-        str(factory).upper(),
-    ]
-
-    if len(parts) >= 4:
-        if month is None:
-            return False
-        context.append(f"M{month:02d}")
-
-    if len(parts) >= 5:
-        if week is None:
-            return False
-        context.append(f"W{week:02d}")
-
-    for index, rule_part in enumerate(parts):
-        if rule_part == "ALL":
-            continue
-        if index >= len(context) or rule_part != context[index]:
-            return False
-
-    return True
-
-
-def _rule_priority(rule_key: str, order_index: int) -> tuple[int, int, int]:
-    """Rank matching rules: deeper keys, fewer wildcards, later entries win."""
-    parts = [part.strip().upper() for part in rule_key.split("-") if part.strip()]
-    specific_parts = sum(1 for part in parts if part != "ALL")
-    return (len(parts), specific_parts, order_index)
+        return load_compliance_config_from_xlsx(CONFIG_PATH)
+    except Exception as error:
+        logging.error("[ComplianceConfig] 加载配置失败: %s", error, exc_info=True)
+        return {"rules": []}
 
 
 def get_compliance_config(
+    factory: str,
+    prod_code: str,
     data_type: str,
-    prod_code: str = "ALL",
-    factory: str = "ALL",
-    month: Optional[int] = None,
-    week: Optional[int] = None
+    month: int | str | None,
 ) -> bool:
-    """
-    获取指定组合的修饰状态（1-5段键级联查找）
-    
-    Args:
-        data_type: 监控类型 (SPC/CTQ/AOI/ALL)
-        prod_code: 产品型号 (默认 ALL)
-        factory: 厂别 (默认 ALL)
-        month: ISO 月份 (可选，1-12)
-        week: ISO 周号 (可选，1-53)
-    
-    Returns:
-        bool: True = 显示修饰数据, False = 显示真实数据
-    
-    优先级: 5段 > 4段 > 3段 > 2段 > 1段 > default
-    """
-    config = load_compliance_config()
-    rules = config.get("rules") or {}
-    default_value = bool(config.get("default", False))
-
-    best_match: Optional[tuple[tuple[int, int, int], bool]] = None
-    for order_index, (rule_key, is_enabled) in enumerate(rules.items()):
-        if not _rule_matches_context(rule_key, data_type, prod_code, factory, month, week):
-            continue
-
-        priority = _rule_priority(rule_key, order_index)
-        if best_match is None or priority > best_match[0]:
-            best_match = (priority, bool(is_enabled))
-
-    if best_match is not None:
-        return best_match[1]
-
-    return default_value
+    """Return True when any enabled four-dimension row matches the context."""
+    return any(
+        compliance_rule_matches(
+            rule,
+            factory=factory,
+            prod_code=prod_code,
+            data_type=data_type,
+            month=month,
+        )
+        for rule in load_compliance_config().get("rules", [])
+    )
 
 
-def save_compliance_config(config: Dict):
-    """保存配置到文件"""
+def save_compliance_config(config: dict) -> bool:
+    """Persist the shared four-column workbook."""
     try:
-        if CONFIG_PATH.suffix.lower() == ".xlsx":
-            write_compliance_config_to_xlsx(config, CONFIG_PATH)
-            logging.info(f"[ComplianceConfig] xlsx 配置已保存")
-            return True
-
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-        logging.info(f"[ComplianceConfig] 配置已保存")
+        write_compliance_config_to_xlsx(config, CONFIG_PATH)
+        logging.info("[ComplianceConfig] 配置已保存: %s", CONFIG_PATH)
         return True
-    except Exception as e:
-        logging.error(f"[ComplianceConfig] 保存配置失败: {e}")
+    except Exception as error:
+        logging.error("[ComplianceConfig] 保存配置失败: %s", error, exc_info=True)
         return False
 
 
-def compute_global_compliance_status(
+def get_compliance_file_signature() -> str:
+    """Return the active workbook signature used to invalidate Streamlit caches."""
+    try:
+        stat = CONFIG_PATH.stat()
+        return f"{stat.st_mtime_ns}:{stat.st_size}"
+    except OSError:
+        return "missing"
+
+
+def _filter_rules_for_selection(
+    config: dict,
     data_type: str,
-    selected_products: list,
-    selected_factories: list
-) -> bool:
-    """
-    计算全局修饰状态（1-5段键通配感知）
-    
-    策略：对每个已选 type * prod * factory 组合，遍历所有规则键。
-    段0(type) 必须匹配 data_type（或为 ALL），段1(prod) 匹配产品（或为 ALL/不存在），
-    段2(fac) 匹配厂别（或为 ALL/不存在），月/周段忽略。任一命中即返回 True。
-    """
-    config = load_compliance_config()
-    
-    for prod in selected_products:
-        for factory in selected_factories:
-            for rule_key, is_enabled in config["rules"].items():
-                if not is_enabled:
-                    continue
-                parts = rule_key.split("-")
-                
-                # 段 0: type 必须匹配 data_type (或为 ALL)
-                if parts[0].upper() not in (data_type.upper(), "ALL"):
-                    continue
-                
-                # 段 1: prod 必须匹配 (或为 ALL，或规则只有 1 段 = 通配 prod)
-                if len(parts) >= 2 and parts[1].upper() not in (prod.upper(), "ALL"):
-                    continue
-                
-                # 段 2: factory 必须匹配 (或为 ALL，或规则只有 <=2 段 = 通配 fac)
-                if len(parts) >= 3 and parts[2].upper() not in (factory.upper(), "ALL"):
-                    continue
-                
-                # 段 3+(月/周): 忽略，不影响全局状态判定
-                return True
-    
-    return config["default"]
+    selected_products: list[str],
+    selected_factories: list[str],
+) -> pd.DataFrame:
+    rules_df = build_compliance_config_dataframe(config)
+    if rules_df.empty:
+        return rules_df
+
+    product_mask = rules_df["产品型号"].eq("ALL") | rules_df["产品型号"].isin(selected_products)
+    factory_mask = rules_df["厂别"].eq("ALL") | rules_df["厂别"].isin(selected_factories)
+    type_mask = True if data_type == "ALL" else rules_df["监控类型"].isin(["ALL", data_type])
+    return rules_df[product_mask & factory_mask & type_mask].reset_index(drop=True)
 
 
 def render_compliance_config_panel(
@@ -241,7 +115,7 @@ def render_compliance_config_panel(
     此面板仅用于：
     1. 展示当前配置状态
     2. 管理员下载/上传配置文件
-    3. 不涉及任何状态修改操作
+    3. 上传成功后清除页面数据缓存
     """
     query_params = st.query_params
     is_admin = query_params.get("admin") == "true"
@@ -249,45 +123,17 @@ def render_compliance_config_panel(
     config = load_compliance_config()
     
     with st.expander("🔧 数据修饰配置", expanded=False):
-        st.info("当前配置从 `config/compliance_config.xlsx` 加载，刷新页面后生效")
-        
-        # 显示默认配置
-        default_status = "✅ 启用" if config["default"] else "❌ 禁用"
-        st.write(f"**默认配置**: {default_status}（当特定组合未配置时使用）")
-        
-        st.divider()
-        
-        # 显示当前选中的组合的详细配置
-        st.write("**当前选中组合的配置：**")
-        
-        if selected_products and selected_factories:
-            data = []
-            for prod in selected_products:
-                for factory in selected_factories:
-                    key = f"{data_type}-{prod}-{factory}"
-                    value = config["rules"].get(key, config["default"])
-                    status = "✅ 启用" if value else "❌ 禁用"
-                    data.append({
-                        "组合": f"{data_type} | {prod} | {factory}",
-                        "配置键": key,
-                        "状态": status,
-                        "修饰数据": value
-                    })
-            
-            st.dataframe(
-                data,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "修饰数据": st.column_config.CheckboxColumn(
-                        "修饰数据",
-                        help="True = 显示修饰后的合规数据",
-                        disabled=True  # 只读
-                    )
-                }
-            )
+        st.info("配置来源：`resources/compliance_config.xlsx`。每一行都是启用规则，支持 ALL。")
+        visible_rules = _filter_rules_for_selection(
+            config,
+            data_type,
+            selected_products,
+            selected_factories,
+        )
+        if visible_rules.empty:
+            st.info("当前筛选范围没有启用的数据修饰规则。")
         else:
-            st.warning("未选择产品型号或厂别")
+            st.dataframe(visible_rules, hide_index=True, width="stretch")
         
         # 管理员功能：下载/上传配置文件
         if is_admin:
@@ -319,12 +165,9 @@ def render_compliance_config_panel(
                     try:
                         # 验证 xlsx 格式
                         new_config = load_compliance_config_from_xlsx(uploaded_file)
-                        if "default" not in new_config or "rules" not in new_config:
-                            st.error("配置文件格式错误：必须包含默认配置和规则配置")
-                        else:
-                            # 保存上传的文件
-                            save_compliance_config(new_config)
-                            st.success("✅ 配置已更新，请刷新页面生效")
+                        if save_compliance_config(new_config):
+                            st.cache_data.clear()
+                            st.success("✅ 配置已更新，缓存已清除")
                     except Exception as e:
                         st.error(f"配置文件解析失败: {e}")
             
@@ -394,7 +237,7 @@ def render_scrap_sheet_uploader():
         )
         
         if uploaded is not None:
-            if st.button("🚀 确认覆盖并刷新", type="primary", use_container_width=True, key="btn_scrap_sheet"):
+            if st.button("🚀 确认覆盖并刷新", type="primary", width="stretch", key="btn_scrap_sheet"):
                 try:
                     # 确保目标文件夹存在
                     SCRAP_SHEET_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -430,38 +273,3 @@ def render_scrap_sheet_uploader():
                 except Exception as e:
                     logging.error(f"[ScrapSheet] 保存文件失败: {e}")
                     st.error(f"保存文件失败: {e}")
-
-
-def export_config_template() -> str:
-    """导出配置模板"""
-    template = """# 数据修饰配置文件
-
-# 默认配置（当特定组合未配置时使用）
-default: false
-
-# 精细化配置 (1-5段键通用模型，顺序固定: 监控类型-产品型号-厂别-月份-周别)
-# 每段支持 ALL 通配；段数越多优先级越高
-rules:
-  # 1段键: 匹配该类型下任意筛选条件
-  # CTQ: true
-
-  # 2段键: 匹配指定类型+产品
-  # CTQ-Z571: true
-
-  # 3段键: 匹配指定类型+产品+厂别
-  SPC-M626-ARRAY: false
-  SPC-M626-OLED: true
-  CTQ-M678-ARRAY: false
-
-  # 4段键: 匹配指定类型+产品+厂别+ISO月份
-  # CTQ-Z571-OLED-M05: true   # 仅修饰5月数据
-
-  # 5段键: 匹配指定类型+产品+厂别+ISO月份+ISO周
-  # CTQ-Z571-OLED-M05-W21: true   # 仅修饰5月第21周数据
-  # CTQ-Z571-OLED-M05-W22: false  # 5月第22周显示真实数据
-
-  # ALL 通配示例
-  # ALL-Z571-OLED: true   # 任意监控类型下的 Z571 OLED
-  # CTQ-ALL-OLED: true    # CTQ 下任意产品的 OLED
-"""
-    return template

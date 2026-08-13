@@ -8,7 +8,7 @@ import pandas as pd
 from src.inline_domain.application.ctq import ctq_service
 from src.inline_domain.application.ctq import ctq_data_decoration
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class FakeCtqRepository:
@@ -79,7 +79,6 @@ def test_ctq_service_loads_ctq_distributions_without_capability_fields(
 ) -> None:
     CtqReportService.fetch_ctq_report_payload.clear()
     FakeCtqRepository.seen_data_type_filters = []
-    monkeypatch.setattr(ctq_service, "SpcRepository", FakeCtqRepository)
     monkeypatch.setattr(
         ctq_data_decoration.ConfigLoader,
         "get_project_root",
@@ -93,7 +92,7 @@ def test_ctq_service_loads_ctq_distributions_without_capability_fields(
     )
 
     report = CtqReportService.get_ctq_report_data(
-        _db_manager=object(),
+        _data_port=FakeCtqRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="ctq-tracer",
     )
@@ -107,7 +106,8 @@ def test_ctq_service_loads_ctq_distributions_without_capability_fields(
         "THK": "box",
     }
     assert report.sheet_oos_decoration_result is not None
-    assert report.sheet_oos_decoration_result.detail_path.parent == tmp_path / "resources" / "M678" / "ctq"
+    assert report.sheet_oos_decoration_result.decoration_path.parent == tmp_path / "resources" / "M678" / "ctq"
+    assert not (tmp_path / "resources" / "M678" / "ctq" / "spc_sheet_oos_detail.xlsx").exists()
     assert list((tmp_path / "resources" / "M678").glob("*.xlsx")) == []
     assert not hasattr(report, "period_capability_df")
     assert not hasattr(report, "cpk_decoration_result")
@@ -133,7 +133,6 @@ def test_ctq_report_remains_available_when_service_module_reloads_during_cache_f
     original_module = ctq_service
     original_service = original_module.CtqReportService
     original_service.fetch_ctq_report_payload.clear()
-    monkeypatch.setattr(original_module, "SpcRepository", BlockingCtqRepository)
     monkeypatch.setattr(
         ctq_data_decoration.ConfigLoader,
         "get_project_root",
@@ -150,7 +149,7 @@ def test_ctq_report_remains_available_when_service_module_reloads_during_cache_f
     def load_report() -> None:
         try:
             outcome["report"] = original_service.get_ctq_report_data(
-                _db_manager=object(),
+                _data_port=BlockingCtqRepository(Path("data"), True, object()),
                 query_config_json=query.model_dump_json(),
                 snapshot_signature="ctq-reload-during-cache-fill",
             )
@@ -190,7 +189,6 @@ def test_ctq_service_returns_an_empty_view_model_when_physical_data_is_unavailab
             return pd.DataFrame()
 
     CtqReportService.fetch_ctq_report_payload.clear()
-    monkeypatch.setattr(ctq_service, "SpcRepository", EmptyCtqRepository)
     query = SpcQueryConfig(
         prod_code="NO_CTQ_DATA",
         start_date="2026-07-01",
@@ -199,7 +197,7 @@ def test_ctq_service_returns_an_empty_view_model_when_physical_data_is_unavailab
     )
 
     report = CtqReportService.get_ctq_report_data(
-        _db_manager=object(),
+        _data_port=EmptyCtqRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="ctq-empty-data",
     )

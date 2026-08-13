@@ -12,3 +12,4 @@ class SpcQueryConfig(BaseModel):
     factory: Optional[str] = Field(None, description="工厂分类 (如 ARRAY, OLED)")
     step_id: Optional[str] = Field(None, description="特定站点ID")
     param_name: Optional[str] = Field(None, description="特定参数名称")
+    data_type_filter: Optional[str] = Field("SPC", description="SPC, CTQ, AOI, or ALL")

@@ -1,12 +1,9 @@
 """AOI_TT 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
-from types import SimpleNamespace
-
 import pandas as pd
 
-from src.inline_domain.application.aoi_tt import aoi_tt_service
+from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
-from src.inline_domain.infrastructure.aoi_tt.data_loader import AoiTtQueryConfig
 
 
 def _details_df() -> pd.DataFrame:
@@ -50,9 +47,16 @@ def _spec_df() -> pd.DataFrame:
     )
 
 
-def _patch_loaders(monkeypatch, details, spec) -> None:
-    monkeypatch.setattr(aoi_tt_service, "load_tt_details", lambda *_args, **_kw: details)
-    monkeypatch.setattr(aoi_tt_service, "load_tt_spec_limits", lambda *_args, **_kw: spec)
+class FakeAoiTtPort:
+    def __init__(self, details: pd.DataFrame, spec: pd.DataFrame) -> None:
+        self.details = details
+        self.spec = spec
+
+    def get_tt_details(self, _query) -> pd.DataFrame:
+        return self.details
+
+    def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
+        return self.spec
 
 
 def _config_json() -> str:
@@ -62,11 +66,10 @@ def _config_json() -> str:
 
 
 def test_service_builds_view_model_with_indicators(monkeypatch) -> None:
-    _patch_loaders(monkeypatch, _details_df(), _spec_df())
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 
     view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=FakeAoiTtPort(_details_df(), _spec_df()),
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
@@ -83,11 +86,10 @@ def test_service_builds_view_model_with_indicators(monkeypatch) -> None:
 
 
 def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:
-    _patch_loaders(monkeypatch, pd.DataFrame(), pd.DataFrame())
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 
     view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=FakeAoiTtPort(pd.DataFrame(), pd.DataFrame()),
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
@@ -97,17 +99,37 @@ def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:
 
 
 def test_service_tolerates_loader_exception(monkeypatch) -> None:
-    def _boom(*_args, **_kw):
-        raise RuntimeError("db down")
+    class FailingAoiTtPort(FakeAoiTtPort):
+        def get_tt_details(self, _query) -> pd.DataFrame:
+            raise RuntimeError("db down")
 
-    monkeypatch.setattr(aoi_tt_service, "load_tt_details", _boom)
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 
     view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=FailingAoiTtPort(pd.DataFrame(), pd.DataFrame()),
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
 
     assert view_model.tt_details_df.empty
     assert view_model.indicators_df.empty
+
+
+def test_service_reads_through_application_data_port() -> None:
+    class FakeAoiTtPort:
+        def get_tt_details(self, _query) -> pd.DataFrame:
+            return _details_df()
+
+        def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
+            return _spec_df()
+
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(),
+        query_config_json=_config_json(),
+        snapshot_signature="port-test",
+    )
+
+    assert len(view_model.tt_details_df) == 2
+    assert len(view_model.spec_df) == 1

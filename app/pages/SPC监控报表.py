@@ -37,8 +37,9 @@ from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.inline_domain.application.spc import spc_service
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
 SpcReportService = spc_service.SpcReportService
@@ -71,6 +72,7 @@ query_config = SpcQueryConfig(
     end_date=default_end_dt.strftime("%Y-%m-%d"),
     data_type_filter="SPC",
 )
+spc_data_port = build_spc_repository(db_manager, current_product)
 
 render_page_header(
     title="SPC监控报表",
@@ -78,9 +80,10 @@ render_page_header(
     cached_funcs=extract_cached_funcs(SpcReportService),
     product_cache_scope=current_product,
     refresh_handlers=[
-        lambda: MonitorAnalysisService.safe_refresh_snapshots(
+        lambda: refresh_raw_measurements(
             db_manager,
-            query_config.model_dump_json(),
+            current_product,
+            query_config.end_date,
         )
     ],
 )
@@ -88,7 +91,7 @@ render_page_header(
 try:
     with st.spinner("正在加载 SPC 分布数据..."):
         view_model = SpcReportService.get_spc_report_data(
-            _db_manager=db_manager,
+            _data_port=spc_data_port,
             query_config_json=query_config.model_dump_json(),
             snapshot_signature=product_cache_signature,
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),

@@ -293,16 +293,12 @@ def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(mon
 
     oos_result = SheetOosDecorationResult(
         raw_measurements_df=pd.DataFrame(),
-        detail_df=pd.DataFrame(),
         decoration_df=pd.DataFrame(),
-        detail_path=tmp_path / "spc_sheet_oos_detail.xlsx",
         decoration_path=tmp_path / "spc_sheet_oos_decoration.xlsx",
     )
     cpk_result = CpkDecorationResult(
         period_capability_df=pd.DataFrame(),
-        detail_df=pd.DataFrame(),
         decoration_df=pd.DataFrame(),
-        detail_path=tmp_path / "spc_cpk_detail.xlsx",
         decoration_path=tmp_path / "spc_cpk_decoration.xlsx",
     )
 
@@ -312,7 +308,7 @@ def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(mon
         "tabs",
         lambda labels: tab_labels.extend(labels) or [nullcontext(), nullcontext()],
     )
-    monkeypatch.setattr(spc_dashboard.st, "columns", lambda *_args, **_kwargs: [FakeColumn()] * 3)
+    monkeypatch.setattr(spc_dashboard.st, "columns", lambda *_args, **_kwargs: [FakeColumn()] * 2)
     monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "download_button", lambda *_args, **_kwargs: None)

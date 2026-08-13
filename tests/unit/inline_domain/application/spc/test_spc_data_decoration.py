@@ -66,9 +66,8 @@ def test_prepare_decorated_spc_data_clips_points_and_recomputes_sheet_features(t
     )
 
     assert result.original_sheet_features_df["sheet_max"].iloc[0] == 8.0
-    assert result.sheet_oos_decoration_result.detail_path.exists()
+    assert not (product_dir / "spc_sheet_oos_detail.xlsx").exists()
     assert result.sheet_oos_decoration_result.decoration_path.exists()
-    assert result.sheet_oos_decoration_result.detail_df["sheet_id"].tolist() == ["S1"]
     assert result.raw_measurements_df["param_value"].max() < 6.0
     assert result.sheet_features_df["sheet_max"].iloc[0] < 6.0
 

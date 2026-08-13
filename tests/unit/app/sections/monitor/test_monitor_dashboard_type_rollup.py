@@ -102,10 +102,14 @@ def test_alarm_detail_visibility_filter_hides_compliance_rows(monkeypatch) -> No
         "get_compliance_config",
         staticmethod(
             lambda: {
-                "default": False,
-                "rules": {
-                    "ALL-Z571-ALL-M04": True,
-                },
+                "rules": [
+                    {
+                        "factory": "ALL",
+                        "prod_code": "Z571",
+                        "data_type": "ALL",
+                        "month": "M04",
+                    }
+                ]
             }
         ),
     )

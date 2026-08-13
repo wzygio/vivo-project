@@ -11,11 +11,10 @@ import streamlit as st
 from src.inline_domain.application.ctq.ctq_data_decoration import prepare_decorated_ctq_data
 from src.inline_domain.core.ctq.indicator_chart import assign_ctq_indicator_chart_type
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import SheetOosDecorationResult
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.inline_domain.application.ctq.ports import CtqDataPort
 
 logger = logging.getLogger(__name__)
 
@@ -59,15 +58,12 @@ class CtqReportService:
 
         decoration_result = None
         if isinstance(decoration_payload, dict):
-            detail_df = decoration_payload.get("detail_df")
             decoration_df = decoration_payload.get("decoration_df")
             decoration_result = SheetOosDecorationResult(
                 raw_measurements_df=raw_measurements_df,
-                detail_df=detail_df if isinstance(detail_df, pd.DataFrame) else pd.DataFrame(),
                 decoration_df=(
                     decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame()
                 ),
-                detail_path=Path(str(decoration_payload.get("detail_path", ""))),
                 decoration_path=Path(str(decoration_payload.get("decoration_path", ""))),
             )
 
@@ -81,7 +77,7 @@ class CtqReportService:
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=1)
     def fetch_ctq_report_payload(
-        _db_manager: "DatabaseManager",
+        _data_port: "CtqDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> dict[str, object]:
@@ -94,15 +90,8 @@ class CtqReportService:
             return CtqReportService._empty_payload()
 
         try:
-            snapshot_dir = Path("data") / query_config.prod_code
-            snapshot_dir.mkdir(parents=True, exist_ok=True)
-            repository = SpcRepository(
-                snapshot_dir=snapshot_dir,
-                use_snapshot=True,
-                db_manager=_db_manager,
-            )
-            measurements_df = repository.get_spc_measurements(query_config)
-            spec_df = repository.get_spc_spec_limits(query_config.prod_code)
+            measurements_df = _data_port.get_spc_measurements(query_config)
+            spec_df = _data_port.get_spc_spec_limits(query_config.prod_code)
             if measurements_df.empty or spec_df.empty:
                 return CtqReportService._empty_payload()
 
@@ -146,9 +135,7 @@ class CtqReportService:
                 "raw_measurements_df": raw_measurements_df,
                 "indicators_df": indicators_df,
                 "sheet_oos_decoration": {
-                    "detail_df": decoration_result.detail_df,
                     "decoration_df": decoration_result.decoration_df,
-                    "detail_path": str(decoration_result.detail_path),
                     "decoration_path": str(decoration_result.decoration_path),
                 },
             }
@@ -158,13 +145,13 @@ class CtqReportService:
 
     @staticmethod
     def get_ctq_report_data(
-        _db_manager: "DatabaseManager",
+        _data_port: "CtqDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> CtqReportViewModel:
         """Build the CTQ ViewModel outside the Streamlit pickle boundary."""
         payload = CtqReportService.fetch_ctq_report_payload(
-            _db_manager=_db_manager,
+            _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
         )

@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from functools import partial
 
 # ==============================================================================
 #  配置与初始化
@@ -20,12 +21,14 @@ from app.sections.monitor.monitor_dashboard import (
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
 from app.manager.compliance_manager import (
+    get_compliance_file_signature,
     render_compliance_config_panel,
 )
 
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.composition import build_monitor_repository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 MONITOR_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
@@ -78,7 +81,7 @@ render_page_header(
     cached_funcs=funcs_to_clear,
     refresh_handlers=[
         lambda: MonitorAnalysisService.safe_refresh_snapshots(
-            db_manager,
+            partial(build_monitor_repository, db_manager),
             header_query_config.model_dump_json(),
         )
     ],
@@ -110,12 +113,12 @@ with st.spinner("正在加载 ALL 监控数据..."):
         data_type_filter="ALL",
     )
     view_model = MonitorAnalysisService.get_monitor_dashboard_data(
-        _db_manager=db_manager,
+        _repository_factory=partial(build_monitor_repository, db_manager),
         query_config_json=query_config_all.model_dump_json(),
         time_type='MIXED',
         force_compliant=True,
         data_type_filter="ALL",
-        snapshot_signature=MONITOR_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
     )
 
 # 更新数据引用
@@ -146,6 +149,6 @@ if is_admin:
         db_manager=db_manager,
         query_config_json=query_config_all.model_dump_json(),
         filter_state=filter_state,
-        snapshot_signature=MONITOR_PAGE_CACHE_SIGNATURE,
+        snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
         is_admin=is_admin,
     )

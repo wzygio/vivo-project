@@ -3,20 +3,18 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from src.inline_domain.application.monitor import monitor_service
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.spc_service import SpcReportService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
-import src.inline_domain.infrastructure.spc.repositories.spc_repository as spc_repository
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
 
 
 class _FakeRepository:
     requested_data_types: list[str] = []
 
-    def __init__(self, snapshot_dir: Path, use_snapshot: bool, db_manager: object) -> None:
-        self.snapshot_dir = snapshot_dir
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
 
     def get_spc_measurements(self, config: SpcQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         self.requested_data_types.append(config.data_type_filter or "")
@@ -40,13 +38,12 @@ def test_monitor_service_fetches_all_parameter_types_for_a_ctq_view() -> None:
         data_type_filter="CTQ",
     )
 
-    with patch.object(monitor_service, "SpcRepository", _FakeRepository):
-        MonitorAnalysisService.fetch_dashboard_data_dict(
-            _db_manager=object(),
-            query_config_json=query.model_dump_json(),
-            data_type_filter="CTQ",
-            snapshot_signature="monitor-fetches-all-types",
-        )
+    MonitorAnalysisService.fetch_dashboard_data_dict(
+        _repository_factory=lambda _prod: _FakeRepository(),
+        query_config_json=query.model_dump_json(),
+        data_type_filter="CTQ",
+        snapshot_signature="monitor-fetches-all-types",
+    )
 
     assert _FakeRepository.requested_data_types == ["ALL"]
 
@@ -61,23 +58,22 @@ def test_spc_service_fetches_only_spc_parameters() -> None:
         data_type_filter="CTQ",
     )
 
-    with patch.object(spc_service, "SpcRepository", _SpcOnlyFakeRepository):
-        SpcReportService.fetch_spc_report_payload(
-            _db_manager=object(),
-            query_config_json=query.model_dump_json(),
-            snapshot_signature="spc-fetches-spc-only",
-        )
+    SpcReportService.fetch_spc_report_payload(
+        _data_port=_SpcOnlyFakeRepository(Path("data"), True, object()),
+        query_config_json=query.model_dump_json(),
+        snapshot_signature="spc-fetches-spc-only",
+    )
 
     assert _SpcOnlyFakeRepository.requested_data_types == ["SPC"]
 
 
-def test_repository_filters_by_whitelist_parameter_data_type(tmp_path: Path) -> None:
+def test_repository_filters_by_whitelist_parameter_data_type() -> None:
     measurements = pd.DataFrame(
         [
             {
                 "factory": "ARRAY",
                 "prod_code": "M626",
-                "sheet_start_time": "2026-06-01",
+                "start_time": "2026-06-01",
                 "sheet_id": "S1",
                 "step_id": "ANY_STEP",
                 "param_name": "SPC_PARAM",
@@ -88,7 +84,7 @@ def test_repository_filters_by_whitelist_parameter_data_type(tmp_path: Path) -> 
             {
                 "factory": "ARRAY",
                 "prod_code": "M626",
-                "sheet_start_time": "2026-06-01",
+                "start_time": "2026-06-01",
                 "sheet_id": "S2",
                 "step_id": "ANY_STEP",
                 "param_name": "CTQ_PARAM",
@@ -111,13 +107,26 @@ def test_repository_filters_by_whitelist_parameter_data_type(tmp_path: Path) -> 
         data_type_filter="SPC",
     )
 
-    with (
-        patch.object(spc_repository, "load_spc_measurements", return_value=measurements),
-        patch.object(spc_repository, "load_param_whitelist", return_value=whitelist),
-        patch.object(SpcRepository, "_apply_outlier_filters", lambda self, df, prod_code: df),
+    class Raw:
+        def get_measurements(self, prod_code, end_date, force_refresh=False):
+            return measurements
+
+    class Metadata:
+        def get_parameter_catalog(self, prod_code):
+            return whitelist
+
+        def get_parameter_specs(self, prod_code):
+            return pd.DataFrame()
+
+    class History:
+        def get_main_process_history(self, routed, history_start, history_end):
+            return pd.DataFrame()
+
+    with patch.object(
+        SpcRepository,
+        "_apply_outlier_filters",
+        lambda self, df, prod_code: df,
     ):
-        result = SpcRepository(snapshot_dir=tmp_path, use_snapshot=False, db_manager=object()).get_spc_measurements(
-            query
-        )
+        result = SpcRepository(Raw(), Metadata(), History()).get_spc_measurements(query)
 
     assert result["param_name"].tolist() == ["SPC_PARAM"]

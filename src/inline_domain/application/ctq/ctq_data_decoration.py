@@ -54,15 +54,19 @@ def prepare_decorated_ctq_data(
     spec_df: pd.DataFrame,
     prod_code: str,
     product_dir: Path | None = None,
-    persist_files: bool = True,
+    persist_decoration: bool = True,
 ) -> DecoratedCtqData:
-    """Apply CTQ-scoped OOS flags and recompute Sheet features."""
+    """Apply CTQ-scoped OOS flags without exporting a separate detail workbook.
+
+    Current OOS rows remain an internal matching input for the user-maintained
+    decoration workbook; they are not returned or persisted as detail data.
+    """
     original_features_df = _preprocess_sheet_features_by_type(raw_measurements_df, spec_df)
     decoration_result = prepare_sheet_oos_decoration(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
         product_dir=resolve_ctq_product_resource_dir(prod_code, product_dir),
-        persist_files=persist_files,
+        persist_files=persist_decoration,
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
@@ -70,14 +74,12 @@ def prepare_decorated_ctq_data(
         spec_df,
     )
     logger.info(
-        "[CTQ] Sheet OOS decoration prepared for %s: features=%s, detail=%s",
+        "[CTQ] Sheet OOS decoration prepared for %s: features=%s",
         prod_code,
         len(decorated_features_df),
-        len(decoration_result.detail_df),
     )
     return DecoratedCtqData(
         raw_measurements_df=decoration_result.raw_measurements_df,
         sheet_features_df=decorated_features_df,
         sheet_oos_decoration_result=decoration_result,
     )
-

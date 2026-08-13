@@ -25,13 +25,11 @@ from src.inline_domain.core.spc.spc_calculator import (
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
     DELETE_ACTION,
     OOS_DECORATION_COLUMNS,
-    OOS_DETAIL_COLUMNS,
     OOS_KEY_COLUMNS,
     SheetOosDecorationResult,
 )
 from src.inline_domain.core.spc.cpk_decoration import (
     CPK_DECORATION_COLUMNS,
-    CPK_DETAIL_COLUMNS,
     CPK_KEY_COLUMNS,
     CpkDecorationResult,
 )
@@ -312,9 +310,7 @@ def render_sheet_oos_decoration_admin(
     key_prefix: str = "spc",
 ) -> None:
     """Render the Sheet OOS decorator, optionally inside a parent admin panel."""
-    detail_df = decoration_result.detail_df
     decoration_df = decoration_result.decoration_df
-    detail_download_df = detail_df if not detail_df.empty else pd.DataFrame(columns=OOS_DETAIL_COLUMNS)
     decoration_download_df = decoration_df if not decoration_df.empty else pd.DataFrame(columns=OOS_DECORATION_COLUMNS)
 
     container = (
@@ -328,20 +324,8 @@ def render_sheet_oos_decoration_admin(
             "（不显示该 Sheet 的当前参数记录）；修改后请上传并确认刷新，"
             "或点击页头“刷新缓存”。"
         )
-        st.caption(f"明细文件：{decoration_result.detail_path}")
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
-        c_detail, c_decoration, c_upload = st.columns([1, 1, 1.2])
-
-        with c_detail:
-            st.markdown("#### 下载超规片明细")
-            st.download_button(
-                label="下载明细表",
-                data=_excel_bytes({"超规片明细": detail_download_df}),
-                file_name=decoration_result.detail_path.name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"{key_prefix}_oos_detail_download",
-                use_container_width=True,
-            )
+        c_decoration, c_upload = st.columns([1, 1.2])
 
         with c_decoration:
             st.markdown("#### 下载修饰表")
@@ -394,11 +378,6 @@ def render_cpk_decoration_admin(
     show_expander: bool = True,
 ) -> None:
     """Render the opt-in CPK decoration file controls."""
-    detail_download_df = (
-        decoration_result.detail_df
-        if not decoration_result.detail_df.empty
-        else pd.DataFrame(columns=CPK_DETAIL_COLUMNS)
-    )
     decoration_download_df = (
         decoration_result.decoration_df
         if not decoration_result.decoration_df.empty
@@ -407,20 +386,8 @@ def render_cpk_decoration_admin(
     container = st.expander("开发者后台：SPC CPK 修饰", expanded=False) if show_expander else nullcontext()
     with container:
         st.caption("默认 flag=False，CPK 显示真实计算值；启用后显示修饰表中的 cpk_corrected。")
-        st.caption(f"明细文件：{decoration_result.detail_path}")
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
-        c_detail, c_decoration, c_upload = st.columns([1, 1, 1.2])
-
-        with c_detail:
-            st.markdown("#### 下载 CPK 明细")
-            st.download_button(
-                label="下载明细表",
-                data=_excel_bytes({"CPK明细": detail_download_df}),
-                file_name=decoration_result.detail_path.name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="spc_cpk_detail_download",
-                use_container_width=True,
-            )
+        c_decoration, c_upload = st.columns([1, 1.2])
 
         with c_decoration:
             st.markdown("#### 下载 CPK 修饰表")

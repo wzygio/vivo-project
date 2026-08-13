@@ -1,72 +1,44 @@
 import pandas as pd
 import numpy as np
 import logging, re
-from pathlib import Path
 
 # [Phase 1] 调试追踪专用 Logger
 trace_logger = logging.getLogger("trace")
-from typing import Optional
-from datetime import datetime, timedelta
+from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
-
-from src.inline_domain.infrastructure.spc.data_loader import(
-    filter_excluded_spc_param_names,
-    load_spc_measurements, 
-    load_spc_spec_limits, 
-    load_param_whitelist
-)
 from src.inline_domain.infrastructure.spc.main_process_trace import (
-    enrich_measurements_with_main_process_trace,
+    apply_main_process_history,
+    attach_main_process_spec,
+)
+from src.inline_domain.infrastructure.spc.measurement_preprocessor import (
+    filter_excluded_spc_param_names,
 )
 from src.inline_domain.core.monitor.monitor_param_classifier import classify_param_type
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.application.ports.measurement_snapshot import (
+    MainProcessHistoryPort,
+    MeasurementMetadataPort,
+    MeasurementSnapshotPort,
+)
 from src.shared_kernel.config import ConfigLoader
 
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
-
 class SpcRepository:
-    """
-    [仓储层] SPC 数据仓储引擎
-    职责：拦截DB直连，维护 Parquet 快照，支持全量刷新。
-    """
-    SNAPSHOT_TTL_HOURS = 8
-    SNAPSHOT_POLICY_VERSION = "spc-main-process-trace-v2"
-    TRACE_SNAPSHOT_COLUMNS = {
-        "main_step_id",
-        "main_eqp_type",
-        "main_process_unit_id",
-        "main_process_event_time",
-        "main_process_trace_source",
-    }
+    """Derive the SPC contract from monitor-owned data ports."""
 
-    def __init__(self, snapshot_dir: Path, use_snapshot: bool = True, db_manager: Optional['DatabaseManager'] = None):
-        self.snapshot_dir = snapshot_dir
-        self.use_snapshot = use_snapshot
-        self.db = db_manager
-
-    @classmethod
-    def _snapshot_policy_path(cls, snapshot_path: Path) -> Path:
-        return snapshot_path.with_suffix(".policy")
-
-    @classmethod
-    def _is_snapshot_policy_current(cls, snapshot_path: Path) -> bool:
-        try:
-            return (
-                cls._snapshot_policy_path(snapshot_path).read_text(encoding="utf-8").strip()
-                == cls.SNAPSHOT_POLICY_VERSION
+    def __init__(
+        self,
+        raw_measurements: MeasurementSnapshotPort,
+        metadata: MeasurementMetadataPort,
+        main_process_history: MainProcessHistoryPort,
+    ) -> None:
+        if raw_measurements is None or metadata is None or main_process_history is None:
+            raise ValueError(
+                "SPC repository requires raw measurement, metadata, and history ports"
             )
-        except OSError:
-            return False
-
-    @classmethod
-    def _write_snapshot_policy(cls, snapshot_path: Path) -> None:
-        cls._snapshot_policy_path(snapshot_path).write_text(
-            cls.SNAPSHOT_POLICY_VERSION,
-            encoding="utf-8",
-        )
+        self.raw_measurements = raw_measurements
+        self.metadata = metadata
+        self.main_process_history = main_process_history
 
     # ==========================================
     # 🆕 新增接口：规格线数据拉取代理
@@ -78,11 +50,8 @@ class SpcRepository:
         （由于规格表数据量极小且变动不频繁，此处可选择直接透传或后期加入轻量级缓存）
         """
         logging.info(f"[SpcRepo] 代理拉取 {prod_code} 规格基准线...")
-        if self.db is None:
-            raise ValueError("数据库引擎未初始化。")
-        
         # 1. 从数据库获取原始规格
-        spec_df = load_spc_spec_limits(self.db, prod_code)
+        spec_df = self.metadata.get_parameter_specs(prod_code)
         
         # 2. 从 YAML 配置读取规格覆盖项
         spec_overrides = self._load_spec_overrides_from_yaml(prod_code)
@@ -186,162 +155,72 @@ class SpcRepository:
     # 🔄 优化接口：量测明细拉取 (强制 3 个月看板逻辑)
     # ==========================================
     def get_spc_measurements(self, config: SpcQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
-        """
-        获取量测数据，强制全量刷新。
-        包含: 数据库防断连容灾降级。
-        """
-        req_end_dt = datetime.strptime(config.end_date, "%Y-%m-%d")
-        req_start_dt = req_end_dt - relativedelta(months=3) 
-        actual_start_str = req_start_dt.strftime("%Y-%m-%d")
-        snapshot_path = self.snapshot_dir / f"spc_snapshot_{config.prod_code}.parquet"
+        """Return an SPC projection derived exclusively from monitor-owned ports."""
+        raw = self.raw_measurements.get_measurements(
+            config.prod_code,
+            config.end_date,
+            force_refresh,
+        )
+        return self._prepare_shared_measurements(raw, config)
 
-
-        df_cache = pd.DataFrame()
-        cache_exists, is_cache_fresh = False, False
-        time_col = 'sheet_start_time'
-
-        # --- Phase 1: 加载快照与有效性检查 ---
-        if self.use_snapshot and snapshot_path.exists():
-            try:
-                stat = snapshot_path.stat()
-                age_hours = (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).total_seconds() / 3600
-                
-                df_cache = pd.read_parquet(snapshot_path)
-                if not df_cache.empty and time_col in df_cache.columns:
-                    df_cache[time_col] = pd.to_datetime(df_cache[time_col])
-                    cache_exists = True
-                    
-                    # [核心] 拦截强刷指令
-                    if force_refresh:
-                        logging.info(f"⚡ [SpcRepo] 收到强刷指令，忽略缓存，执行全量刷新！")
-                        cache_exists = False
-                        is_cache_fresh = False
-                    else:
-                        if "unit_id" not in df_cache.columns:
-                            logging.info("🆕 [SpcRepo] SPC 快照缺少 unit_id 字段，触发一次结构刷新。")
-                            is_cache_fresh = False
-                        elif not self.TRACE_SNAPSHOT_COLUMNS.issubset(df_cache.columns):
-                            logging.info("🆕 [SpcRepo] SPC 快照缺少主制程追溯字段，触发一次结构刷新。")
-                            is_cache_fresh = False
-                        elif not self._is_snapshot_policy_current(snapshot_path):
-                            logging.info(
-                                "🆕 [SpcRepo] SPC 快照参数筛选策略已升级，触发一次全量刷新。"
-                            )
-                            is_cache_fresh = False
-                        elif age_hours < self.SNAPSHOT_TTL_HOURS:
-                            if df_cache[time_col].max() >= req_end_dt:
-                                is_cache_fresh = True
-            except Exception as e:
-                logging.warning(f"⚠️ 读取 SPC 快照失败: {e}")
-                cache_exists = False
-
-        # --- Phase 2: 缓存命中 / 全量刷新 / 容灾降级 ---
-        df_final = pd.DataFrame()
-        need_save = False
-
-        if cache_exists and is_cache_fresh:
-            logging.info("🚀 [SpcRepo] 命中 3 个月滚动快照，跳过数据库直连。")
-            df_final = df_cache
+    def _prepare_shared_measurements(
+        self, raw: pd.DataFrame, config: SpcQueryConfig
+    ) -> pd.DataFrame:
+        if raw.empty:
+            return raw.copy()
+        prepared = raw.rename(columns={"start_time": "sheet_start_time"}).copy()
+        prepared["sheet_start_time"] = pd.to_datetime(
+            prepared["sheet_start_time"], errors="coerce"
+        )
+        prepared["param_value"] = pd.to_numeric(
+            prepared["param_value"], errors="coerce"
+        )
+        prepared = prepared.dropna(subset=["sheet_start_time", "param_value"])
+        prepared = filter_excluded_spc_param_names(prepared)
+        prepared = prepared.sort_values("sheet_start_time").drop_duplicates(
+            subset=["prod_code", "factory", "sheet_id", "step_id", "param_name", "site_name"],
+            keep="last",
+        )
+        catalog = self.metadata.get_parameter_catalog(config.prod_code)
+        if catalog is None:
+            prepared["data_type"] = "UNKNOWN"
+        elif catalog.empty:
+            return prepared.iloc[0:0]
         else:
-            # [修改] 去掉增量更新，直接执行全量刷新
-            logging.info(f"🆕 [SpcRepo] 执行全量刷新 ({actual_start_str} 至 {config.end_date})")
-            try:
-                df_final = load_spc_measurements(self.db, actual_start_str, config.end_date, config.prod_code)
-                if not df_final.empty:
-                    df_final[time_col] = pd.to_datetime(df_final[time_col])
-                    df_final.drop_duplicates(
-                        subset=['prod_code', 'factory', 'sheet_id', 'step_id', 'param_name', 'site_name'], keep='last', inplace=True)
-                    if not self.TRACE_SNAPSHOT_COLUMNS.issubset(df_final.columns):
-                        spec_df = load_spc_spec_limits(self.db, config.prod_code)
-                        df_final = enrich_measurements_with_main_process_trace(
-                            self.db,
-                            df_final,
-                            spec_df,
-                            history_start=req_start_dt - relativedelta(months=1),
-                            history_end=req_end_dt,
-                        )
-                    need_save = True
-                elif cache_exists and not df_cache.empty:
-                    # [容灾防线] 数据库假死返回空，无损回退
-                    logging.warning("🚨 数据库全量拉取返回空数据，安全回退至陈旧快照！")
-                    df_final = df_cache
-            except Exception as e:
-                # [容灾防线] 彻底断连，无损回退
-                logging.error(f"❌ 数据库全量拉取崩溃 ({e})")
-                if cache_exists and not df_cache.empty:
-                    logging.warning("🚨 触发极端容灾降级，强行启用本地历史快照续命！")
-                    df_final = df_cache
-
-        # --- Phase 3: 持久化与内存过滤 ---
-        if not df_final.empty:
-            # SQL 层已经下推屏蔽；这里兜底清理历史 Parquet 快照中的旧数据。
-            df_final = filter_excluded_spc_param_names(df_final)
-            if df_final.empty:
-                return df_final
-
-            if need_save and self.use_snapshot:
-                # 滚动抛弃：只保留 req_start_dt 之后的三个月数据写入硬盘（⚠️ 此处写入的是不挑参数的全量数据！）
-                df_to_save = df_final[df_final[time_col] >= req_start_dt]
-                try:
-                    self.snapshot_dir.mkdir(parents=True, exist_ok=True)
-                    df_to_save.to_parquet(snapshot_path, index=False)
-                    self._write_snapshot_policy(snapshot_path)
-                    logging.info("✅ [SpcRepo] 快照保存完成！")
-                except Exception as e:
-                    logging.error(f"❌ 快照保存失败: {e}")
-                df_final = df_to_save
-
-            mask_time = (df_final[time_col] >= req_start_dt) & (df_final[time_col] <= req_end_dt)
-            # 引入 copy() 防止后续赋值触发 Pandas 的 SettingWithCopyWarning
-            df_filtered = df_final[mask_time].copy() 
-
-            # =================================================================
-            # [重构] 白名单过滤：DAO 裸查询 → Core 分类 → Repo 筛选 + merge
-            # =================================================================
-            raw_whitelist = load_param_whitelist(self.db, config.prod_code)
-
-            if raw_whitelist is not None:
-                if not raw_whitelist.empty:
-                    # 1. Core 层：对原始 data_type 进行分类映射
-                    raw_whitelist["data_type"] = raw_whitelist["data_type"].apply(classify_param_type)
-
-                    # 2. Repo 层：按前端筛选条件过滤（不下沉到 DAO）
-                    data_type_filter = getattr(config, "data_type_filter", "ALL")
-                    filter_upper = data_type_filter.upper() if data_type_filter else "ALL"
-                    if filter_upper != "ALL":
-                        raw_whitelist = raw_whitelist[raw_whitelist["data_type"] == filter_upper].copy()
-
-                    # 3. 内存 merge：既过滤了不合规参数，又注入 data_type 标签
-                    df_filtered["param_name_upper"] = df_filtered["param_name"].str.upper()
-                    df_filtered = df_filtered.merge(
-                        raw_whitelist,
-                        left_on="param_name_upper",
-                        right_on="ref_param_name",
-                        how="inner"
-                    )
-                    df_filtered = df_filtered.drop(columns=["param_name_upper", "ref_param_name"])
-
-                    logging.info(f"[SpcRepo] 白名单过滤 + data_type 注入完成，有效参数 {len(raw_whitelist)} 种。")
-                else:
-                    logging.warning(f"[SpcRepo] 警告：产品 {config.prod_code} 查无参数白名单！已清空本批次数据。")
-                    df_filtered = df_filtered.iloc[0:0]
-            else:
-                logging.error("[SpcRepo] 严重警告：拉取参数白名单失败，下发全量参数并标记未知类型。")
-                df_filtered["data_type"] = "UNKNOWN"
-
-            df_filtered = self._apply_outlier_filters(df_filtered, config.prod_code)
-
-            # 原有的维度过滤
-            if config.factory:
-                df_filtered = df_filtered[df_filtered['factory'] == config.factory.upper()]
-            if config.step_id:
-                df_filtered = df_filtered[df_filtered['step_id'] == config.step_id]
-            if config.param_name:
-                df_filtered = df_filtered[df_filtered['param_name'] == config.param_name]
-
-            return df_filtered.reset_index(drop=True)
-
-        return df_final
+            typed = catalog.copy()
+            typed["data_type"] = typed["data_type"].apply(classify_param_type)
+            target = (config.data_type_filter or "ALL").upper()
+            if target != "ALL":
+                typed = typed[typed["data_type"].eq(target)]
+            prepared["param_name_upper"] = prepared["param_name"].astype(str).str.upper()
+            prepared = prepared.merge(
+                typed,
+                left_on="param_name_upper",
+                right_on="ref_param_name",
+                how="inner",
+            ).drop(columns=["param_name_upper", "ref_param_name"])
+        prepared = self._apply_outlier_filters(prepared, config.prod_code)
+        start = pd.Timestamp(config.start_date)
+        end = pd.Timestamp(config.end_date) + pd.Timedelta(days=1)
+        prepared = prepared[
+            prepared["sheet_start_time"].ge(start) & prepared["sheet_start_time"].lt(end)
+        ].copy()
+        if config.factory:
+            prepared = prepared[prepared["factory"].eq(config.factory.upper())]
+        if config.step_id:
+            prepared = prepared[prepared["step_id"].eq(config.step_id)]
+        if config.param_name:
+            prepared = prepared[prepared["param_name"].eq(config.param_name)]
+        if prepared.empty:
+            return prepared.reset_index(drop=True)
+        specs = self.metadata.get_parameter_specs(config.prod_code)
+        routed = attach_main_process_spec(prepared.reset_index(drop=True), specs)
+        history = self.main_process_history.get_main_process_history(
+            routed,
+            history_start=start - relativedelta(months=1),
+            history_end=pd.Timestamp(config.end_date),
+        )
+        return apply_main_process_history(routed, history)
     
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
         """

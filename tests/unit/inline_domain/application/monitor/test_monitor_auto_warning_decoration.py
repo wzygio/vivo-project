@@ -6,15 +6,12 @@ import pandas as pd
 from src.inline_domain.application.monitor import monitor_service
 from src.inline_domain.application.spc import spc_data_decoration
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import OOS_DETAIL_FILE_NAME
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class FakeAutoWarningRepository:
-    def __init__(self, snapshot_dir: Path, use_snapshot: bool, db_manager: object) -> None:
-        self.snapshot_dir = snapshot_dir
-        self.use_snapshot = use_snapshot
-        self.db_manager = db_manager
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
 
     def get_scrap_data(self, prod_code: str) -> pd.DataFrame:
         return pd.DataFrame()
@@ -67,7 +64,6 @@ class FakeAutoWarningRepository:
 
 
 def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(monitor_service, "SpcRepository", FakeAutoWarningRepository)
     monkeypatch.setattr(
         spc_data_decoration.ConfigLoader,
         "get_project_root",
@@ -89,7 +85,7 @@ def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_pat
     )
 
     result = MonitorAnalysisService.fetch_dashboard_data_dict(
-        _db_manager=object(),
+        _repository_factory=lambda _prod: FakeAutoWarningRepository(),
         query_config_json=query.model_dump_json(),
         time_type="MIXED",
         force_compliant=False,
@@ -100,6 +96,6 @@ def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_pat
     detail_df = result["detail_df"]
     station_detail_df = result["station_detail_df"]
 
-    assert (tmp_path / "resources" / "Z571" / OOS_DETAIL_FILE_NAME).exists()
+    assert not (tmp_path / "resources" / "Z571" / "spc_sheet_oos_detail.xlsx").exists()
     assert station_detail_df.empty
     assert detail_df[["OOS片数", "OOC片数", "SOOS片数"]].fillna(0).sum().sum() == 0

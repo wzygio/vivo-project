@@ -1,205 +1,192 @@
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Union
+from typing import Any, BinaryIO, TypedDict, Union
 
 import pandas as pd
 
 
 ExcelSource = Union[Path, BinaryIO, BytesIO]
+COMPLIANCE_EXCEL_COLUMNS = ("厂别", "产品型号", "监控类型", "月份")
 
 
-def load_compliance_config_from_xlsx(excel_path: ExcelSource) -> Dict[str, Any]:
-    """Load SPC compliance rules from an xlsx workbook."""
+class ComplianceRule(TypedDict):
+    factory: str
+    prod_code: str
+    data_type: str
+    month: str
+
+
+def load_compliance_config_from_xlsx(excel_path: ExcelSource) -> dict[str, Any]:
+    """Load enabled four-dimension compliance scopes from an xlsx workbook."""
     try:
-        xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
-    except Exception as e:
-        logging.warning(f"[ComplianceConfig] openpyxl 读取 xlsx 配置失败，尝试 COM 兜底: {e}")
+        sheets = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
+    except Exception as error:
+        logging.warning(
+            "[ComplianceConfig] openpyxl 读取 xlsx 配置失败，尝试 COM 兜底: %s",
+            error,
+        )
         try:
-            xls = _read_compliance_sheets_via_com(excel_path)
+            sheets = _read_compliance_sheets_via_com(excel_path)
         except Exception as com_error:
-            logging.error(f"[ComplianceConfig] 读取 xlsx 配置失败: {com_error}", exc_info=True)
-            return {"default": False, "rules": {}}
+            logging.error(
+                "[ComplianceConfig] 读取 xlsx 配置失败: %s",
+                com_error,
+                exc_info=True,
+            )
+            raise ValueError("无法读取修饰配置工作簿") from com_error
 
-    default_value = _parse_default_sheet(xls.get("默认配置"))
+    rules_df = _select_rule_sheet(sheets)
+    if rules_df.empty:
+        return {"rules": []}
 
-    rules: Dict[str, bool] = {}
-    for rules_df in _iter_rule_sheets(xls):
-        for _, row in rules_df.dropna(how="all").iterrows():
-            rule_key = _build_rule_key(row)
-            if not rule_key:
-                continue
-            is_enabled = _parse_bool(_get_first_value(row, ["启用", "enabled", "enable"]), default=False)
-            rules[rule_key] = is_enabled
+    missing_columns = [
+        column for column in COMPLIANCE_EXCEL_COLUMNS if column not in rules_df.columns
+    ]
+    if missing_columns:
+        raise ValueError(f"修饰配置缺少必要列: {missing_columns}")
 
-    return {"default": default_value, "rules": rules}
+    rules: list[ComplianceRule] = []
+    seen_rules: set[tuple[str, str, str, str]] = set()
+    for row_index, row in rules_df.dropna(how="all").iterrows():
+        rule = _parse_rule_row(row, row_index + 2)
+        identity = tuple(rule.values())
+        if identity in seen_rules:
+            continue
+        seen_rules.add(identity)
+        rules.append(rule)
+
+    return {"rules": rules}
 
 
-def _read_compliance_sheets_via_com(excel_path: ExcelSource) -> Dict[str, pd.DataFrame]:
-    """Read encrypted enterprise Excel config files through the shared COM helper."""
+def _read_compliance_sheets_via_com(excel_path: ExcelSource) -> dict[str, pd.DataFrame]:
+    """Read an enterprise-encrypted workbook through the shared Excel COM helper."""
     if not isinstance(excel_path, (str, Path)):
         raise TypeError("COM fallback only supports filesystem paths")
 
     from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
 
     path = Path(excel_path)
-    sheets: Dict[str, pd.DataFrame] = {}
-    for sheet_name in ("规则配置", "默认配置"):
-        try:
-            sheets[sheet_name] = _read_encrypted_xlsx_via_com(path, sheet_name=sheet_name)
-        except Exception as e:
-            logging.warning(f"[ComplianceConfig] COM 读取 sheet={sheet_name} 失败: {e}")
-
-    if sheets:
-        return sheets
-
-    first_sheet = _read_encrypted_xlsx_via_com(path)
-    return {"规则配置": first_sheet}
+    try:
+        rules_df = _read_encrypted_xlsx_via_com(path, sheet_name="规则配置")
+    except Exception as named_sheet_error:
+        logging.warning(
+            "[ComplianceConfig] COM 按名称读取规则配置失败，回退到第一个 Sheet: %s",
+            named_sheet_error,
+        )
+        rules_df = _read_encrypted_xlsx_via_com(path)
+    return {"规则配置": rules_df}
 
 
-def _iter_rule_sheets(xls: Dict[str, pd.DataFrame]) -> List[pd.DataFrame]:
-    """Yield configured rule sheets, including legacy rule-like default sheets."""
-    if "规则配置" in xls:
-        yield xls["规则配置"]
+def _select_rule_sheet(sheets: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    if "规则配置" in sheets:
+        return sheets["规则配置"]
+    return next(iter(sheets.values()), pd.DataFrame())
 
-    yielded_rule_sheet = "规则配置" in xls
-    for sheet_name, df in xls.items():
-        if sheet_name == "规则配置":
+
+def _parse_rule_row(row: pd.Series, excel_row_number: int) -> ComplianceRule:
+    factory = _normalize_required_dimension(row.get("厂别"), "厂别", excel_row_number)
+    prod_code = _normalize_required_dimension(row.get("产品型号"), "产品型号", excel_row_number)
+    data_type = _normalize_required_dimension(row.get("监控类型"), "监控类型", excel_row_number)
+    month = normalize_compliance_month(row.get("月份"), excel_row_number=excel_row_number)
+    return {
+        "factory": factory,
+        "prod_code": prod_code,
+        "data_type": data_type,
+        "month": month,
+    }
+
+
+def _normalize_required_dimension(value: Any, column: str, excel_row_number: int) -> str:
+    if _is_blank(value):
+        raise ValueError(f"修饰配置第 {excel_row_number} 行的“{column}”不能为空，请显式填写 ALL")
+    return str(value).strip().upper()
+
+
+def normalize_compliance_month(
+    value: Any,
+    *,
+    excel_row_number: int | None = None,
+) -> str:
+    """Normalize a month value to ALL or M01-M12."""
+    if _is_blank(value):
+        location = f"第 {excel_row_number} 行" if excel_row_number is not None else ""
+        raise ValueError(f"修饰配置{location}的“月份”不能为空，请显式填写 ALL")
+
+    text = str(value).strip().upper()
+    if text == "ALL":
+        return text
+    if text.startswith("M"):
+        text = text[1:]
+    try:
+        month = int(float(text))
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"无效月份: {value!r}，应为 ALL、1-12 或 M01-M12") from error
+    if not 1 <= month <= 12:
+        raise ValueError(f"无效月份: {value!r}，应位于 1-12")
+    return f"M{month:02d}"
+
+
+def compliance_rule_matches(
+    rule: ComplianceRule,
+    *,
+    factory: str,
+    prod_code: str,
+    data_type: str,
+    month: int | str | None,
+) -> bool:
+    """Return whether one enabled rule matches a concrete four-dimension context."""
+    context_month = None if month is None else normalize_compliance_month(month)
+    context = {
+        "factory": str(factory).strip().upper(),
+        "prod_code": str(prod_code).strip().upper(),
+        "data_type": str(data_type).strip().upper(),
+        "month": context_month,
+    }
+    for field, rule_value in rule.items():
+        if rule_value == "ALL":
             continue
-        if _looks_like_rule_sheet(df):
-            yield df
-            yielded_rule_sheet = True
-
-    if not yielded_rule_sheet:
-        first_sheet = next(iter(xls.values()), pd.DataFrame())
-        if _looks_like_rule_sheet(first_sheet):
-            yield first_sheet
+        if context[field] is None or rule_value != context[field]:
+            return False
+    return True
 
 
-def _looks_like_rule_sheet(df: pd.DataFrame | None) -> bool:
-    if df is None or df.empty:
-        return False
-    rule_columns = {"规则键", "rule_key", "监控类型", "monitor_type", "data_type"}
-    return any(col in df.columns for col in rule_columns)
-
-
-def write_compliance_config_to_xlsx(config: Dict[str, Any], excel_path: Path) -> None:
-    """Persist a compliance config dict to an xlsx workbook."""
+def write_compliance_config_to_xlsx(config: dict[str, Any], excel_path: Path) -> None:
+    """Persist only the supported four rule columns."""
     excel_path.parent.mkdir(parents=True, exist_ok=True)
-    default_df, rules_df = build_compliance_config_dataframes(config)
+    rules_df = build_compliance_config_dataframe(config)
     with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
         rules_df.to_excel(writer, index=False, sheet_name="规则配置")
-        default_df.to_excel(writer, index=False, sheet_name="默认配置")
 
 
-def compliance_config_to_xlsx_bytes(config: Dict[str, Any]) -> bytes:
-    """Serialize a compliance config dict to xlsx bytes for downloads."""
+def compliance_config_to_xlsx_bytes(config: dict[str, Any]) -> bytes:
+    """Serialize the supported four-column rule table for download."""
     output = BytesIO()
-    default_df, rules_df = build_compliance_config_dataframes(config)
+    rules_df = build_compliance_config_dataframe(config)
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         rules_df.to_excel(writer, index=False, sheet_name="规则配置")
-        default_df.to_excel(writer, index=False, sheet_name="默认配置")
     return output.getvalue()
 
 
-def build_compliance_config_dataframes(config: Dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    default_df = pd.DataFrame([{"默认启用": bool(config.get("default", False))}])
-    rows: List[Dict[str, Any]] = []
-    for rule_key, is_enabled in (config.get("rules") or {}).items():
-        parts = [part.strip() for part in str(rule_key).split("-") if part.strip()]
-        rows.append(
-            {
-                "规则键": rule_key,
-                "监控类型": parts[0] if len(parts) >= 1 else "",
-                "产品型号": parts[1] if len(parts) >= 2 else "",
-                "厂别": parts[2] if len(parts) >= 3 else "",
-                "月份": parts[3] if len(parts) >= 4 else "",
-                "周别": parts[4] if len(parts) >= 5 else "",
-                "启用": bool(is_enabled),
-                "备注": "",
-            }
-        )
-    rules_df = pd.DataFrame(
-        rows,
-        columns=["规则键", "监控类型", "产品型号", "厂别", "月份", "周别", "启用", "备注"],
-    )
-    return default_df, rules_df
-
-
-def _parse_default_sheet(df: pd.DataFrame | None) -> bool:
-    if df is None or df.empty:
-        return False
-    first_row = df.iloc[0]
-    return _parse_bool(_get_first_value(first_row, ["默认启用", "default", "默认"]), default=False)
-
-
-def _build_rule_key(row: pd.Series) -> str:
-    explicit_key = _normalize_text(_get_first_value(row, ["规则键", "rule_key"]))
-    if explicit_key:
-        return explicit_key
-
-    parts = [
-        _normalize_text(_get_first_value(row, ["监控类型", "monitor_type", "data_type"]), default="ALL"),
-        _normalize_text(_get_first_value(row, ["产品型号", "产品", "product"]), default="ALL"),
-        _normalize_text(_get_first_value(row, ["厂别", "factory"]), default="ALL"),
-        _normalize_period(_get_first_value(row, ["月份", "month"]), prefix="M"),
-        _normalize_period(_get_first_value(row, ["周别", "week"]), prefix="W"),
+def build_compliance_config_dataframe(config: dict[str, Any]) -> pd.DataFrame:
+    rows = [
+        {
+            "厂别": rule["factory"],
+            "产品型号": rule["prod_code"],
+            "监控类型": rule["data_type"],
+            "月份": rule["month"],
+        }
+        for rule in config.get("rules", [])
     ]
-
-    last_meaningful_index = 0
-    for index, part in enumerate(parts):
-        if part != "ALL":
-            last_meaningful_index = index
-
-    return "-".join(parts[: last_meaningful_index + 1])
-
-
-def _normalize_period(value: Any, prefix: str) -> str:
-    text = _normalize_text(value, default="ALL").upper()
-    if text == "ALL":
-        return text
-    if text.startswith(prefix):
-        return text
-    try:
-        return f"{prefix}{int(float(text)):02d}"
-    except (TypeError, ValueError):
-        return text
-
-
-def _get_first_value(row: pd.Series, names: List[str]) -> Any:
-    for name in names:
-        if name in row.index:
-            return row.get(name)
-    return None
+    return pd.DataFrame(rows, columns=COMPLIANCE_EXCEL_COLUMNS)
 
 
 def _is_blank(value: Any) -> bool:
     if value is None:
         return True
-    if pd.isna(value):
-        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
     return str(value).strip() == ""
-
-
-def _normalize_text(value: Any, default: str = "") -> str:
-    if _is_blank(value):
-        return default
-    text = str(value).strip()
-    if text.lower() == "nan":
-        return default
-    return text.upper()
-
-
-def _parse_bool(value: Any, default: bool = False) -> bool:
-    if _is_blank(value):
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in {"true", "1", "yes", "y", "启用", "是"}:
-        return True
-    if text in {"false", "0", "no", "n", "禁用", "否"}:
-        return False
-    return default

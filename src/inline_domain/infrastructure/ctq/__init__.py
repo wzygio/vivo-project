@@ -1,0 +1,1 @@
+"""CTQ outbound adapters."""

@@ -60,10 +60,10 @@ def prepare_decorated_spc_data(
     persist_files: bool = True,
 ) -> DecoratedSpcData:
     """
-    Build product OOS files, apply tri-state Sheet actions, and recompute Sheet features.
+    Apply product-scoped tri-state Sheet actions and recompute Sheet features.
 
-    The detail/flag files are generated from the original raw measurements so users can audit
-    the true out-of-spec Sheets. Downstream reports receive recomputed features from the
+    The user-maintained decoration file is matched against the original out-of-spec Sheets.
+    Downstream reports receive recomputed features from the
     decorated point data, making CPM/CPK and auto-warning views share the same backend contract.
     ``flag=Delete`` removes the matching product/station/parameter/Sheet points from charts;
     ``True`` clips OOS points and ``False`` preserves their real values.
@@ -85,11 +85,10 @@ def prepare_decorated_spc_data(
     )
 
     logger.info(
-        "[SPC] Sheet OOS decoration prepared for %s: raw_features=%s, decorated_features=%s, detail=%s",
+        "[SPC] Sheet OOS decoration prepared for %s: raw_features=%s, decorated_features=%s",
         prod_code,
         len(original_features_df),
         len(decorated_features_df),
-        len(decoration_result.detail_df),
     )
     return DecoratedSpcData(
         raw_measurements_df=decoration_result.raw_measurements_df,

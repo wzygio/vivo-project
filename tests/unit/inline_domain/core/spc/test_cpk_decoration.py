@@ -119,6 +119,7 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_file(tmp_path: P
     )
 
     assert decoration_path.read_bytes() == original_bytes
+    assert not (tmp_path / "spc_cpk_detail.xlsx").exists()
     assert result.period_capability_df["cpk"].tolist() == [1.72]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True]
 

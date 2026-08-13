@@ -11,7 +11,6 @@ from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
 
 logger = logging.getLogger(__name__)
 
-CPK_DETAIL_FILE_NAME = "spc_cpk_detail.xlsx"
 CPK_DECORATION_FILE_NAME = "spc_cpk_decoration.xlsx"
 CPK_KEY_COLUMNS = [
     "prod_code",
@@ -37,14 +36,8 @@ class CpkDecorationResult:
     """CPK values selected from real calculations or user-maintained corrections."""
 
     period_capability_df: pd.DataFrame
-    detail_df: pd.DataFrame
     decoration_df: pd.DataFrame
-    detail_path: Path
     decoration_path: Path
-
-
-def get_cpk_detail_path(product_dir: Path) -> Path:
-    return product_dir / CPK_DETAIL_FILE_NAME
 
 
 def get_cpk_decoration_path(product_dir: Path) -> Path:
@@ -172,20 +165,15 @@ def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decorat
     return result.drop(columns=["_user_cpk_corrected"])[CPK_DECORATION_COLUMNS]
 
 
-def persist_cpk_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
+def persist_cpk_decoration(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
+    """Create the user-maintained decoration workbook when it does not exist."""
     product_dir.mkdir(parents=True, exist_ok=True)
-    detail_path = get_cpk_detail_path(product_dir)
     decoration_path = get_cpk_decoration_path(product_dir)
-    detail_to_write = _ordered_existing_columns(detail_df, CPK_DETAIL_COLUMNS)
     decoration_file_exists = decoration_path.exists()
     decoration_to_write = merge_detail_with_decoration_flags(
-        detail_to_write,
+        detail_df,
         load_cpk_decoration(product_dir),
     )
-    try:
-        detail_to_write.to_excel(detail_path, index=False)
-    except PermissionError as exc:
-        logger.warning("[SPC] CPK detail file is locked, skipped writing %s: %s", detail_path, exc)
     if not decoration_file_exists:
         try:
             decoration_to_write.to_excel(decoration_path, index=False)
@@ -231,10 +219,10 @@ def prepare_cpk_decoration(
     product_dir: Path,
     persist_files: bool = True,
 ) -> CpkDecorationResult:
-    """Build current details and return chart-ready values selected by the user file."""
+    """Build chart-ready values selected by the user-maintained decoration file."""
     detail_df = build_cpk_detail(real_period_capability_df, corrected_period_capability_df)
     decoration_df = (
-        persist_cpk_files(product_dir, detail_df)
+        persist_cpk_decoration(product_dir, detail_df)
         if persist_files
         else merge_detail_with_decoration_flags(detail_df, load_cpk_decoration(product_dir))
     )
@@ -245,8 +233,6 @@ def prepare_cpk_decoration(
     )
     return CpkDecorationResult(
         period_capability_df=period_capability_df,
-        detail_df=detail_df,
         decoration_df=decoration_df,
-        detail_path=get_cpk_detail_path(product_dir),
         decoration_path=get_cpk_decoration_path(product_dir),
     )

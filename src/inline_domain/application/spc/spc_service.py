@@ -22,11 +22,10 @@ from src.inline_domain.application.spc.spc_data_decoration import (
     resolve_product_resource_dir,
 )
 from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.inline_domain.application.spc.ports import SpcDataPort
 
 logger = logging.getLogger(__name__)
 
@@ -142,25 +141,19 @@ class SpcReportService:
 
         decoration_result = None
         if isinstance(decoration_payload, dict):
-            detail_df = decoration_payload.get("detail_df")
             decoration_df = decoration_payload.get("decoration_df")
             decoration_result = SheetOosDecorationResult(
                 raw_measurements_df=raw_measurements_df,
-                detail_df=detail_df if isinstance(detail_df, pd.DataFrame) else pd.DataFrame(),
                 decoration_df=decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame(),
-                detail_path=Path(str(decoration_payload.get("detail_path", ""))),
                 decoration_path=Path(str(decoration_payload.get("decoration_path", ""))),
             )
 
         cpk_decoration_result = None
         if isinstance(cpk_decoration_payload, dict):
-            detail_df = cpk_decoration_payload.get("detail_df")
             decoration_df = cpk_decoration_payload.get("decoration_df")
             cpk_decoration_result = CpkDecorationResult(
                 period_capability_df=period_capability_df,
-                detail_df=detail_df if isinstance(detail_df, pd.DataFrame) else pd.DataFrame(),
                 decoration_df=decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame(),
-                detail_path=Path(str(cpk_decoration_payload.get("detail_path", ""))),
                 decoration_path=Path(str(cpk_decoration_payload.get("decoration_path", ""))),
             )
 
@@ -176,7 +169,7 @@ class SpcReportService:
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=3, ttl=4 * 60 * 60)
     def fetch_spc_report_payload(
-        _db_manager: "DatabaseManager",
+        _data_port: "SpcDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
@@ -195,12 +188,8 @@ class SpcReportService:
             return SpcReportService._empty_payload()
 
         try:
-            snapshot_dir = Path("data") / query_config.prod_code
-            snapshot_dir.mkdir(parents=True, exist_ok=True)
-            repo = SpcRepository(snapshot_dir=snapshot_dir, use_snapshot=True, db_manager=_db_manager)
-
-            measurements_df = repo.get_spc_measurements(query_config)
-            spec_df = repo.get_spc_spec_limits(query_config.prod_code)
+            measurements_df = _data_port.get_spc_measurements(query_config)
+            spec_df = _data_port.get_spc_spec_limits(query_config.prod_code)
             if measurements_df.empty or spec_df.empty:
                 return SpcReportService._empty_payload()
 
@@ -286,15 +275,11 @@ class SpcReportService:
                 "raw_measurements_df": measurements_df,
                 "indicators_df": indicators_df,
                 "sheet_oos_decoration": {
-                    "detail_df": decoration_result.detail_df,
                     "decoration_df": decoration_result.decoration_df,
-                    "detail_path": str(decoration_result.detail_path),
                     "decoration_path": str(decoration_result.decoration_path),
                 },
                 "cpk_decoration": {
-                    "detail_df": cpk_decoration_result.detail_df,
                     "decoration_df": cpk_decoration_result.decoration_df,
-                    "detail_path": str(cpk_decoration_result.detail_path),
                     "decoration_path": str(cpk_decoration_result.decoration_path),
                 },
             }
@@ -313,14 +298,14 @@ class SpcReportService:
 
     @staticmethod
     def get_spc_report_data(
-        _db_manager: "DatabaseManager",
+        _data_port: "SpcDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
     ) -> SpcReportViewModel:
         """Load cached CPM data and construct project ViewModels outside the pickle boundary."""
         payload = SpcReportService.fetch_spc_report_payload(
-            _db_manager=_db_manager,
+            _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
             period_sigma_source=period_sigma_source,

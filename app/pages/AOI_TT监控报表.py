@@ -31,8 +31,9 @@ from app.sections.aoi_tt.aoi_tt_dashboard import (
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
+from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
+from src.inline_domain.composition import build_aoi_tt_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.aoi_tt.data_loader import AoiTtQueryConfig
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v1"
@@ -57,17 +58,21 @@ query_config = AoiTtQueryConfig(
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
 )
+aoi_tt_data_port = build_aoi_tt_repository(db_manager, current_product)
 
 render_page_header(
     title="AOI_TT监控报表",
     config=active_config,
     cached_funcs=extract_cached_funcs(AoiTtReportService),
     product_cache_scope=current_product,
+    refresh_handlers=[
+        lambda: refresh_raw_measurements(db_manager, current_product, query_config.end_date)
+    ],
 )
 
 with st.spinner("正在加载 AOI TT 数据..."):
     view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _db_manager=db_manager,
+        _data_port=aoi_tt_data_port,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=product_cache_signature,
     )

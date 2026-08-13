@@ -9,27 +9,25 @@ from streamlit_echarts import st_echarts
 trace_logger = logging.getLogger("trace")
 from pydantic import BaseModel, Field
 from app.charts.spc_chart import get_spc_summary_echarts_option
+from app.manager.compliance_manager import get_compliance_file_signature
 from app.manager.render_gate import RenderGate
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
-from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.inline_domain.composition import build_monitor_repository
 from src.inline_domain.core.monitor.monitor_calculator import sanitize_to_compliant
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 ALARM_DETAIL_MONITOR_TYPES = ["SPC", "CTQ", "AOI", "报废"]
 ALARM_DETAIL_STATUS_OPTIONS = ["OOC", "OOS"]
 
 
 def _get_compliance_file_signature() -> str:
-    """Return a small cache-busting signature for compliance config changes."""
-    try:
-        from app.manager.compliance_manager import CONFIG_PATH
+    """Return the active compliance workbook cache signature."""
+    return get_compliance_file_signature()
 
-        stat = CONFIG_PATH.stat()
-        return f"{stat.st_mtime_ns}:{stat.st_size}"
-    except Exception:
-        return "missing"
+
 # --------------------------------------------------------------------------
 # 状态模型定义 (Type-Safe Session State)
 # --------------------------------------------------------------------------
@@ -333,7 +331,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     with header_col1:
         st.markdown(f"### {data_type_filter}报警明细 - {defect_type}")
     with header_col2:
-        if st.button("✖", key=f"close_btn_{prod}_{factory}_{defect_type}", use_container_width=True, help="关闭并释放图表状态"):
+        if st.button("✖", key=f"close_btn_{prod}_{factory}_{defect_type}", width="stretch", help="关闭并释放图表状态"):
             # 根据调用方来源，精确释放对应的锁和重置对应的 Key
             if source == "summary":
                 st.session_state.spc_summary_lock = None
@@ -346,10 +344,6 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
     st.divider()
     
     # 3. 业务数据调取与渲染逻辑
-    # [新增] 从配置文件获取当前组合的修饰配置
-    from app.manager.compliance_manager import get_compliance_config
-    force_compliant = get_compliance_config(data_type_filter, prod, factory)
-
     selected_time = "ALL"
 
     if selected_time:
@@ -366,12 +360,12 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                 db_manager = DatabaseManager()
 
                 real_df = MonitorAnalysisService.get_monitor_defect_details(
-                    _db_manager=db_manager,
+                    _repository_factory=partial(build_monitor_repository, db_manager),
                     query_config_json=query_config.model_dump_json(),
                     time_group=selected_time,
                     defect_type=core_defect_type,
                     time_type='MIXED',
-                    force_compliant=force_compliant,  # [核心修复] 传递当前组合修饰配置
+                    force_compliant=True,
                     data_type_filter=data_type_filter  # ✅ 传入监控类型
                 )
 
@@ -386,7 +380,7 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
                     else:
                         st.success(f"✅ 钻取成功！共捕获 **{len(real_df)}** 片真实的底层追溯数据。")
                         # 现在的 st.dataframe 自带极强的列过滤和排序功能，几百上千行数据一眼看穿！
-                        st.dataframe(real_df, use_container_width=True, hide_index=True, height=400)
+                        st.dataframe(real_df, width="stretch", hide_index=True, height=400)
                         
             except Exception as e:
                 import traceback
@@ -440,7 +434,7 @@ def get_cached_alarm_detail_tables(
         for alarm_type in ALARM_DETAIL_STATUS_OPTIONS:
             try:
                 real_df = MonitorAnalysisService.get_monitor_defect_details(
-                    _db_manager=_db_manager,
+                    _repository_factory=partial(build_monitor_repository, _db_manager),
                     query_config_json=query_config_json,
                     time_group="ALL",
                     defect_type=alarm_type,
@@ -563,7 +557,7 @@ def render_alarm_detail_tables(
 
             st.dataframe(
                 view_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 height=520,
             )

@@ -12,7 +12,6 @@ from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
 
 logger = logging.getLogger(__name__)
 
-OOS_DETAIL_FILE_NAME = "spc_sheet_oos_detail.xlsx"
 OOS_DECORATION_FILE_NAME = "spc_sheet_oos_decoration.xlsx"
 OOS_KEY_COLUMNS = ["prod_code", "step_id", "param_name", "sheet_id"]
 OOS_DETAIL_COLUMNS = [
@@ -40,14 +39,8 @@ class SheetOosDecorationReadError(RuntimeError):
 @dataclass(frozen=True)
 class SheetOosDecorationResult:
     raw_measurements_df: pd.DataFrame
-    detail_df: pd.DataFrame
     decoration_df: pd.DataFrame
-    detail_path: Path
     decoration_path: Path
-
-
-def get_sheet_oos_detail_path(product_dir: Path) -> Path:
-    return product_dir / OOS_DETAIL_FILE_NAME
 
 
 def get_sheet_oos_decoration_path(product_dir: Path) -> Path:
@@ -261,20 +254,14 @@ def _exclude_delete_flagged_measurements(
     )
 
 
-def persist_sheet_oos_files(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
-    """Write current OOS details and a flag table under resources/<prod_code>."""
+def persist_sheet_oos_decoration(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
+    """Refresh the user-maintained Sheet OOS decoration workbook."""
     product_dir.mkdir(parents=True, exist_ok=True)
-    detail_path = get_sheet_oos_detail_path(product_dir)
     decoration_path = get_sheet_oos_decoration_path(product_dir)
 
-    detail_to_write = _ordered_existing_columns(detail_df, OOS_DETAIL_COLUMNS)
     existing_decoration = load_sheet_oos_decoration(product_dir)
-    decoration_to_write = merge_detail_with_decoration_flags(detail_to_write, existing_decoration)
+    decoration_to_write = merge_detail_with_decoration_flags(detail_df, existing_decoration)
 
-    try:
-        detail_to_write.to_excel(detail_path, index=False)
-    except PermissionError as exc:
-        logger.warning("[CPM] Sheet OOS detail file is locked, skipped writing %s: %s", detail_path, exc)
     try:
         decoration_to_write.to_excel(decoration_path, index=False)
     except PermissionError as exc:
@@ -337,10 +324,10 @@ def prepare_sheet_oos_decoration(
     persist_files: bool = True,
     clip_rules: Iterable[dict[str, object]] | None = None,
 ) -> SheetOosDecorationResult:
-    """Build files and return chart-ready measurements after tri-state Sheet actions."""
+    """Return chart-ready measurements after applying tri-state Sheet actions."""
     detail_df = build_sheet_oos_detail(sheet_features_df)
     if persist_files:
-        decoration_df = persist_sheet_oos_files(product_dir, detail_df)
+        decoration_df = persist_sheet_oos_decoration(product_dir, detail_df)
     else:
         decoration_df = merge_detail_with_decoration_flags(detail_df, load_sheet_oos_decoration(product_dir))
 
@@ -352,8 +339,6 @@ def prepare_sheet_oos_decoration(
     )
     return SheetOosDecorationResult(
         raw_measurements_df=decorated_df,
-        detail_df=detail_df,
         decoration_df=decoration_df,
-        detail_path=get_sheet_oos_detail_path(product_dir),
         decoration_path=get_sheet_oos_decoration_path(product_dir),
     )

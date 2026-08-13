@@ -3,8 +3,9 @@ import pandas as pd
 from src.inline_domain.infrastructure.spc.main_process_trace import (
     apply_main_process_history,
     attach_main_process_spec,
-    enrich_measurements_with_main_process_trace,
-    load_main_process_history,
+)
+from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
+    InlineMainProcessHistoryRepository,
 )
 
 
@@ -196,8 +197,7 @@ def test_load_main_process_history_routes_array_eqp_to_sheet_out_history(monkeyp
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = load_main_process_history(
-        DummyDbManager(),
+    result = InlineMainProcessHistoryRepository(DummyDbManager()).get_main_process_history(
         routed_measurements,
         history_start="2026-07-01",
         history_end="2026-08-10",
@@ -257,8 +257,8 @@ def test_load_main_process_history_routes_array_chamber_with_sub_unit_priority(m
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = load_main_process_history(
-        DummyDbManager(), routed_measurements, "2026-07-01", "2026-08-10"
+    result = InlineMainProcessHistoryRepository(DummyDbManager()).get_main_process_history(
+        routed_measurements, "2026-07-01", "2026-08-10"
     )
 
     assert len(captured_sql) == 1
@@ -313,8 +313,8 @@ def test_load_main_process_history_routes_oled_and_tp_eqp_to_glass_history(monke
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = load_main_process_history(
-        DummyDbManager(), routed_measurements, "2026-07-01", "2026-08-10"
+    result = InlineMainProcessHistoryRepository(DummyDbManager()).get_main_process_history(
+        routed_measurements, "2026-07-01", "2026-08-10"
     )
 
     assert len(captured_sql) == 2
@@ -357,8 +357,8 @@ def test_load_main_process_history_routes_tp_chamber_to_glass_sub_unit(monkeypat
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = load_main_process_history(
-        DummyDbManager(), routed_measurements, "2026-07-01", "2026-08-10"
+    result = InlineMainProcessHistoryRepository(DummyDbManager()).get_main_process_history(
+        routed_measurements, "2026-07-01", "2026-08-10"
     )
 
     assert len(captured_sql) == 1
@@ -400,8 +400,8 @@ def test_load_main_process_history_normalizes_oled_cvd_chamber_route(monkeypatch
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = load_main_process_history(
-        DummyDbManager(), routed_measurements, "2026-07-01", "2026-08-10"
+    result = InlineMainProcessHistoryRepository(DummyDbManager()).get_main_process_history(
+        routed_measurements, "2026-07-01", "2026-08-10"
     )
 
     assert len(captured_sql) == 1
@@ -458,13 +458,15 @@ def test_enrich_measurements_with_main_process_trace_returns_routed_point_payloa
 
     monkeypatch.setattr(pd, "read_sql", fake_read_sql)
 
-    result = enrich_measurements_with_main_process_trace(
-        DummyDbManager(),
-        measurements,
-        specifications,
+    routed = attach_main_process_spec(measurements, specifications)
+    history = InlineMainProcessHistoryRepository(
+        DummyDbManager()
+    ).get_main_process_history(
+        routed,
         history_start="2026-07-01",
         history_end="2026-08-10",
     )
+    result = apply_main_process_history(routed, history)
 
     assert len(result) == 1
     assert result.loc[0, "main_step_id"] == "15100"

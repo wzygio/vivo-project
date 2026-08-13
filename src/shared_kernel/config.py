@@ -131,20 +131,23 @@ class ConfigLoader:
             raise ValueError(f"配置不符合 Schema 定义: {e}") from e
 
     @classmethod
+    def get_compliance_config_path(cls) -> Path:
+        """Return the single workbook used by the manager and runtime engine."""
+        return cls.get_project_root() / "resources" / "compliance_config.xlsx"
+
+    @classmethod
     def get_compliance_config(cls) -> dict:
         """
-        获取完整的合规配置（xlsx 优先，YAML 仅作兼容兜底）
+        获取厂别-产品型号-监控类型-月份四维修饰配置。
         """
-        root_dir = cls.get_project_root()
-        xlsx_path = root_dir / "resources" / "compliance_config.xlsx"
+        xlsx_path = cls.get_compliance_config_path()
         try:
             if xlsx_path.exists():
                 return load_compliance_config_from_xlsx(xlsx_path)
         except Exception as e:
-            import logging
             logging.error(f"❌ 读取 compliance 配置失败: {e}")
-            
-        return {"default": False, "rules": {}}
+
+        return {"rules": []}
 
     @classmethod
     def get_spc_period_sigma_source(cls) -> str:

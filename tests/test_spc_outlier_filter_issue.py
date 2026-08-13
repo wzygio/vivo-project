@@ -319,7 +319,7 @@ class TestOriginalCodeGracefulDegradation:
         直接调用原始 SpcRepository._apply_outlier_filters，
         验证它在加密文件场景下不会崩溃，而是返回原始 df。
         """
-        repo = SpcRepository(snapshot_dir=resource_dir)
+        repo = object.__new__(SpcRepository)
         df = pd.DataFrame({
             "step_id": ["1L650"],
             "param_name": ["CD1"],
@@ -373,7 +373,7 @@ class TestOutlierFilterBusinessLogic:
             "param_value": [5.0, 15.0, 3.0, 8.0, 12.0],
         })
 
-        repo = SpcRepository(snapshot_dir=tmp_path)
+        repo = object.__new__(SpcRepository)
         result = repo._apply_outlier_filters(df, "M626")
 
         # 注意：原始 _apply_outlier_filters 会读取 hardcode 路径

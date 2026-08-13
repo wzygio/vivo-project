@@ -32,8 +32,9 @@ from app.sections.ctq.ctq_dashboard import (
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.composition import build_ctq_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -53,12 +54,14 @@ db_manager = DatabaseManager()
 
 _, default_end_dt = MonitorAnalysisService.get_time_window()
 default_start_dt = get_default_ctq_start_date(default_end_dt.date())
+
 query_config = SpcQueryConfig(
     prod_code=current_product,
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
     data_type_filter="CTQ",
 )
+ctq_data_port = build_ctq_repository(db_manager, current_product)
 
 render_page_header(
     title="CTQ监控报表",
@@ -66,16 +69,17 @@ render_page_header(
     cached_funcs=extract_cached_funcs(CtqReportService),
     product_cache_scope=current_product,
     refresh_handlers=[
-        lambda: MonitorAnalysisService.safe_refresh_snapshots(
+        lambda: refresh_raw_measurements(
             db_manager,
-            query_config.model_dump_json(),
+            current_product,
+            query_config.end_date,
         )
     ],
 )
 
 with st.spinner("正在加载 CTQ 分布数据..."):
     view_model = CtqReportService.get_ctq_report_data(
-        _db_manager=db_manager,
+        _data_port=ctq_data_port,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=product_cache_signature,
     )

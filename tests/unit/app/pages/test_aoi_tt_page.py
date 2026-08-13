@@ -13,7 +13,7 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.aoi_tt.data_loader import AoiTtQueryConfig
+from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.shared_kernel.infrastructure import db_handler
 
 

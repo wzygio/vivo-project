@@ -9,16 +9,15 @@ import pandas as pd
 trace_logger = logging.getLogger("trace")
 import numpy as np
 import streamlit as st
-from typing import TYPE_CHECKING, Tuple, Optional, List
+from typing import Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
 from dateutil.relativedelta import relativedelta
 from dataclasses import dataclass
 
 # 引入底层配置与仓储层
-from src.shared_kernel.config_model import AppConfig
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
 from src.inline_domain.application.spc.spc_data_decoration import prepare_decorated_spc_data
 
 # 引入核心计算引擎
@@ -27,9 +26,6 @@ from src.inline_domain.core.monitor.monitor_calculator import (
     aggregate_spc_metrics,
     sanitize_to_compliant
 )
-
-if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # =========================================================================
 # [核心修复] 将 Pydantic 的 BaseModel 替换为标准库的 @dataclass
@@ -231,7 +227,7 @@ class MonitorAnalysisService:
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=1)
     def fetch_dashboard_data_dict(
-        _db_manager: 'DatabaseManager', 
+        _repository_factory: MonitorSpcRepositoryFactory,
         query_config_json: str, 
         time_type: str = 'MIXED',
         force_compliant: bool = False,
@@ -262,10 +258,7 @@ class MonitorAnalysisService:
         all_status_dfs = []
 
         for prod in search_prods:
-            prod_snapshot_dir = data_root / prod 
-            prod_snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-            repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+            repo = _repository_factory(prod)
             
             data_type_upper = data_type_filter.upper() if data_type_filter else 'ALL'
 
@@ -288,10 +281,6 @@ class MonitorAnalysisService:
                     
                     scrap_df = scrap_df[mask].copy()
                     trace_logger.info(f"🚧 [ScrapTrace][L3-TimeFilter] 过滤后: {len(scrap_df)} 条")
-                    
-                    if force_compliant:
-                        scrap_df = sanitize_to_compliant(scrap_df, add_tag=True)
-                        trace_logger.info(f"🚧 [ScrapTrace][L4-Compliant] 洗白后 is_ooc=1 数: {(scrap_df['is_ooc'] == 1).sum() if 'is_ooc' in scrap_df.columns else 0}")
                     
                     if not scrap_df.empty:
                         all_status_dfs.append(scrap_df)
@@ -333,8 +322,6 @@ class MonitorAnalysisService:
                     enable_soos = current_type_upper != 'AOI'
                     status = apply_spc_rules(sheet_features=features, enable_soos=enable_soos)
                     
-                    if force_compliant:
-                        status = sanitize_to_compliant(status)
                     all_status_dfs.append(status)
 
         if not all_status_dfs:
@@ -345,16 +332,14 @@ class MonitorAnalysisService:
         raw_status_df = pd.concat(all_status_dfs, ignore_index=True)
         trace_logger.info(f"🚧 [ScrapTrace][L6-Concat] pd.concat 后 raw_status_df: {len(raw_status_df)} 条, 列: {raw_status_df.columns.tolist()}")
         
-        # =========================================================================
-        # 🛑 [核心修复 B] 在合并完成、聚合发生之前，对全维度物理表执行【唯一一次】洗白！
-        # 此时数据含有厂别、型号等所有字段，修饰规则 100% 精准命中！
-        # =========================================================================
-        raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
-        trace_logger.info(f"🚧 [ScrapTrace][L7-Sanitize] 洗白后: {len(raw_status_df)} 条, is_ooc=1 数: {(raw_status_df['is_ooc'] == 1).sum() if 'is_ooc' in raw_status_df.columns else 0}")
+        # 在全维度物理事实表上只执行一次修饰，确保厂别、产品、类型和月份均可匹配。
+        if force_compliant:
+            raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
+            trace_logger.info(f"🚧 [ScrapTrace][L7-Sanitize] 洗白后: {len(raw_status_df)} 条, is_ooc=1 数: {(raw_status_df['is_ooc'] == 1).sum() if 'is_ooc' in raw_status_df.columns else 0}")
 
-        # 🚨 [关键探针 A] 记录原始物理报警数
+        # 记录进入聚合阶段的有效报警数（启用修饰时为修饰后口径）。
         ooc_count_raw = raw_status_df[raw_status_df['is_ooc'] == 1].shape[0] if 'is_ooc' in raw_status_df.columns else 0
-        logging.info(f"📊 [Service] 原始物理 OOC 总数: {ooc_count_raw}")
+        logging.info(f"📊 [Service] 聚合前有效 OOC 总数: {ooc_count_raw}")
 
         # =========================================================================
         # 🛡️ [核心修复] 对齐站点维度数据边界到近 3 个自然月，与趋势图保持一致
@@ -442,7 +427,7 @@ class MonitorAnalysisService:
     # =========================================================================
     @staticmethod
     def get_monitor_dashboard_data(
-        _db_manager: 'DatabaseManager', 
+        _repository_factory: MonitorSpcRepositoryFactory,
         query_config_json: str, 
         time_type: str = 'MIXED',
         force_compliant: bool = False,
@@ -454,7 +439,7 @@ class MonitorAnalysisService:
         """
         # 1. 穿透调用内部缓存引擎，获取字典
         raw_data = MonitorAnalysisService.fetch_dashboard_data_dict(
-            _db_manager, 
+            _repository_factory,
             query_config_json, 
             time_type, 
             force_compliant, 
@@ -471,7 +456,7 @@ class MonitorAnalysisService:
 
     @staticmethod
     def get_monitor_defect_details(
-        _db_manager: 'DatabaseManager', 
+        _repository_factory: MonitorSpcRepositoryFactory,
         query_config_json: str, 
         time_group: str, 
         defect_type: str,
@@ -512,10 +497,7 @@ class MonitorAnalysisService:
 
         # 2. 从本地缓存极速加载数据并还原状态
         for prod in search_prods:
-            prod_snapshot_dir = data_root / prod 
-            
-            # 使用 use_snapshot=True 强制走缓存，保护数据库
-            repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+            repo = _repository_factory(prod)
             data_type_upper = data_type_filter.upper() if data_type_filter else 'ALL'
 
             if data_type_upper in ('报废', 'ALL'):
@@ -608,7 +590,10 @@ class MonitorAnalysisService:
     
 
     @staticmethod
-    def safe_refresh_snapshots(_db_manager: 'DatabaseManager', query_config_json: str) -> bool:
+    def safe_refresh_snapshots(
+        _repository_factory: MonitorSpcRepositoryFactory,
+        query_config_json: str,
+    ) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
         返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
@@ -629,9 +614,7 @@ class MonitorAnalysisService:
             success_flag = True
 
             for prod in search_prods:
-                prod_snapshot_dir = data_root / prod
-                # 实例化仓储
-                repo = SpcRepository(snapshot_dir=prod_snapshot_dir, use_snapshot=True, db_manager=_db_manager)
+                repo = _repository_factory(prod)
 
                 current_fetch_config = config_instance.model_copy()
                 current_fetch_config.prod_code = prod

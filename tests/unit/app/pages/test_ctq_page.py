@@ -11,7 +11,7 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.spc.data_loader import SpcQueryConfig
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
 

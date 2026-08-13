@@ -1,83 +1,100 @@
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-import app.manager.compliance_manager as compliance_manager
-from src.shared_kernel.utils import excel_tools
-from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
+from src.shared_kernel.compliance_config_excel import (
+    COMPLIANCE_EXCEL_COLUMNS,
+    compliance_config_to_xlsx_bytes,
+    load_compliance_config_from_xlsx,
+)
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.utils import excel_tools
 
 
 def _write_compliance_config(path: Path) -> None:
     rules_df = pd.DataFrame(
         [
             {
-                "规则键": "ALL-Z571-ALL-M04",
-                "启用": True,
+                "厂别": "ALL",
+                "产品型号": "Z571",
+                "监控类型": "ALL",
+                "月份": "M04",
+                "周别": "W15",
             },
             {
-                "监控类型": "SPC",
-                "产品型号": "Z571",
                 "厂别": "ARRAY",
-                "月份": "M04",
-                "启用": False,
+                "产品型号": "M673",
+                "监控类型": "SPC",
+                "月份": 7,
+                "备注": "obsolete",
             },
         ]
     )
-    default_df = pd.DataFrame([{"默认启用": False}])
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         rules_df.to_excel(writer, index=False, sheet_name="规则配置")
-        default_df.to_excel(writer, index=False, sheet_name="默认配置")
 
 
-def test_load_compliance_config_from_xlsx_builds_rules_dict(tmp_path: Path) -> None:
+def test_load_compliance_config_uses_only_four_dimensions(tmp_path: Path) -> None:
     config_path = tmp_path / "compliance_config.xlsx"
     _write_compliance_config(config_path)
 
     config = load_compliance_config_from_xlsx(config_path)
 
     assert config == {
-        "default": False,
-        "rules": {
-            "ALL-Z571-ALL-M04": True,
-            "SPC-Z571-ARRAY-M04": False,
-        },
+        "rules": [
+            {
+                "factory": "ALL",
+                "prod_code": "Z571",
+                "data_type": "ALL",
+                "month": "M04",
+            },
+            {
+                "factory": "ARRAY",
+                "prod_code": "M673",
+                "data_type": "SPC",
+                "month": "M07",
+            },
+        ]
     }
 
 
-def test_get_compliance_config_uses_xlsx_rules(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
+def test_exported_workbook_contains_only_the_four_rule_columns(tmp_path: Path) -> None:
     config_path = tmp_path / "compliance_config.xlsx"
     _write_compliance_config(config_path)
-    monkeypatch.setattr(compliance_manager, "CONFIG_PATH", config_path)
+    config = load_compliance_config_from_xlsx(config_path)
 
-    assert compliance_manager.get_compliance_config("SPC", "Z571", "ARRAY", month=4) is False
-    assert compliance_manager.get_compliance_config("CTQ", "Z571", "OLED", month=4) is True
-    assert compliance_manager.get_compliance_config("SPC", "Z571", "ARRAY", month=5) is False
+    xls = pd.read_excel(
+        BytesIO(compliance_config_to_xlsx_bytes(config)),
+        sheet_name=None,
+        engine="openpyxl",
+    )
+
+    assert list(xls) == ["规则配置"]
+    assert xls["规则配置"].columns.tolist() == list(COMPLIANCE_EXCEL_COLUMNS)
 
 
-def test_config_loader_reads_xlsx_before_legacy_yaml(
+def test_config_loader_reads_the_shared_resources_workbook(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    _write_compliance_config(config_dir / "compliance_config.xlsx")
-    (config_dir / "compliance_config.yaml").write_text(
-        "default: true\nrules:\n  SPC-Z571-ARRAY-M04: true\n",
-        encoding="utf-8",
-    )
+    resources_dir = tmp_path / "resources"
+    resources_dir.mkdir()
+    _write_compliance_config(resources_dir / "compliance_config.xlsx")
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 
     config = ConfigLoader.get_compliance_config()
 
-    assert config["default"] is False
-    assert config["rules"]["SPC-Z571-ARRAY-M04"] is False
+    assert config["rules"][1] == {
+        "factory": "ARRAY",
+        "prod_code": "M673",
+        "data_type": "SPC",
+        "month": "M07",
+    }
 
 
-def test_load_compliance_config_from_encrypted_xlsx_uses_com_fallback(
+def test_load_encrypted_workbook_uses_com_fallback(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -88,25 +105,18 @@ def test_load_compliance_config_from_encrypted_xlsx_uses_com_fallback(
         raise ValueError("File is not a zip file")
 
     def fake_read_via_com(excel_path: Path, sheet_name: str | None = None) -> pd.DataFrame:
-        if sheet_name == "规则配置":
-            return pd.DataFrame(
-                [
-                    {
-                        "规则键": "ALL-Z571-ALL-M04",
-                        "启用": True,
-                    }
-                ]
-            )
-        if sheet_name == "默认配置":
-            return pd.DataFrame(
-                [
-                    {
-                        "规则键": "SPC-M678-ARRAY-M07",
-                        "启用": True,
-                    }
-                ]
-            )
-        return pd.DataFrame()
+        assert sheet_name in {"规则配置", None}
+        return pd.DataFrame(
+            [
+                {
+                    "厂别": "OLED",
+                    "产品型号": "Z571",
+                    "监控类型": "CTQ",
+                    "月份": "M04",
+                    "周别": "W15",
+                }
+            ]
+        )
 
     monkeypatch.setattr(pd, "read_excel", fail_read_excel)
     monkeypatch.setattr(excel_tools, "_read_encrypted_xlsx_via_com", fake_read_via_com)
@@ -114,9 +124,22 @@ def test_load_compliance_config_from_encrypted_xlsx_uses_com_fallback(
     config = load_compliance_config_from_xlsx(config_path)
 
     assert config == {
-        "default": False,
-        "rules": {
-            "ALL-Z571-ALL-M04": True,
-            "SPC-M678-ARRAY-M07": True,
-        },
+        "rules": [
+            {
+                "factory": "OLED",
+                "prod_code": "Z571",
+                "data_type": "CTQ",
+                "month": "M04",
+            }
+        ]
     }
+
+
+def test_unreadable_uploaded_workbook_does_not_silently_clear_rules(monkeypatch) -> None:
+    def fail_read_excel(*args, **kwargs):
+        raise ValueError("invalid workbook")
+
+    monkeypatch.setattr(pd, "read_excel", fail_read_excel)
+
+    with pytest.raises(ValueError, match="无法读取修饰配置工作簿"):
+        load_compliance_config_from_xlsx(BytesIO(b"invalid"))

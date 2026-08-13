@@ -6,11 +6,10 @@ import pytest
 from src.inline_domain.core.spc import spc_sheet_oos_decoration
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
-    OOS_DETAIL_FILE_NAME,
     apply_sheet_oos_decoration,
     build_sheet_oos_detail,
     load_sheet_oos_decoration,
-    persist_sheet_oos_files,
+    persist_sheet_oos_decoration,
 )
 
 
@@ -235,7 +234,7 @@ def test_load_sheet_oos_decoration_falls_back_to_excel_com_for_encrypted_file(
     assert loaded["flag"].tolist() == ["Delete", False]
 
 
-def test_persist_sheet_oos_files_does_not_overwrite_unreadable_existing_file(
+def test_persist_sheet_oos_decoration_does_not_overwrite_unreadable_existing_file(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -257,24 +256,24 @@ def test_persist_sheet_oos_files_does_not_overwrite_unreadable_existing_file(
     )
 
     with pytest.raises(spc_sheet_oos_decoration.SheetOosDecorationReadError):
-        persist_sheet_oos_files(product_dir, build_sheet_oos_detail(_sheet_features()))
+        persist_sheet_oos_decoration(product_dir, build_sheet_oos_detail(_sheet_features()))
 
     assert decoration_path.read_bytes() == original_bytes
 
 
-def test_persist_sheet_oos_files_writes_product_scoped_detail_and_preserves_flags(tmp_path: Path) -> None:
+def test_persist_sheet_oos_decoration_writes_only_decoration_and_preserves_flags(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources" / "Z571"
     detail = build_sheet_oos_detail(_sheet_features())
 
-    decoration = persist_sheet_oos_files(product_dir, detail)
-    assert (product_dir / OOS_DETAIL_FILE_NAME).exists()
+    decoration = persist_sheet_oos_decoration(product_dir, detail)
+    assert not (product_dir / "spc_sheet_oos_detail.xlsx").exists()
     assert (product_dir / OOS_DECORATION_FILE_NAME).exists()
     assert decoration["flag"].tolist() == [True, True]
 
     decoration.loc[decoration["sheet_id"] == "S1", "flag"] = False
     decoration.to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False)
 
-    updated = persist_sheet_oos_files(product_dir, detail)
+    updated = persist_sheet_oos_decoration(product_dir, detail)
     loaded = load_sheet_oos_decoration(product_dir)
 
     assert bool(updated.loc[updated["sheet_id"] == "S1", "flag"].iloc[0]) is False

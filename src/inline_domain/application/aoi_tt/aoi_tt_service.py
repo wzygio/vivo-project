@@ -9,14 +9,10 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
-from src.inline_domain.infrastructure.aoi_tt.data_loader import (
-    AoiTtQueryConfig,
-    load_tt_details,
-    load_tt_spec_limits,
-)
+from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 
 if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +66,7 @@ class AoiTtReportService:
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=3)
     def fetch_aoi_tt_report_payload(
-        _db_manager: "DatabaseManager",
+        _data_port: "AoiTtDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> dict[str, object]:
@@ -82,10 +78,10 @@ class AoiTtReportService:
             return AoiTtReportService._empty_payload()
 
         try:
-            tt_details_df = load_tt_details(_db_manager, query_config)
+            tt_details_df = _data_port.get_tt_details(query_config)
             if tt_details_df.empty:
                 return AoiTtReportService._empty_payload()
-            spec_df = load_tt_spec_limits(_db_manager, query_config.prod_code)
+            spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
             indicators_df = _build_indicators(tt_details_df)
             return {
                 "tt_details_df": tt_details_df,
@@ -98,13 +94,13 @@ class AoiTtReportService:
 
     @staticmethod
     def get_aoi_tt_report_data(
-        _db_manager: "DatabaseManager",
+        _data_port: "AoiTtDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> AoiTtReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         payload = AoiTtReportService.fetch_aoi_tt_report_payload(
-            _db_manager=_db_manager,
+            _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
         )

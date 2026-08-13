@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+import importlib
 from pathlib import Path
 import runpy
 from types import SimpleNamespace
@@ -11,13 +12,16 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
-from src.inline_domain.application.spc import spc_service
-from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
 
 def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch) -> None:
-    monkeypatch.delattr(spc_service, "SpcDecorationFileError")
+    current_spc_service = importlib.import_module(
+        "src.inline_domain.application.spc.spc_service"
+    )
+    current_spc_package = importlib.import_module("src.inline_domain.application.spc")
+    monkeypatch.setattr(current_spc_package, "spc_service", current_spc_service)
+    monkeypatch.delattr(current_spc_service, "SpcDecorationFileError")
     events: list[str] = []
     load_count = 0
     loaded_signatures: list[str] = []
@@ -95,7 +99,11 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         loaded_signatures.append(kwargs["snapshot_signature"])
         return report
 
-    monkeypatch.setattr(SpcReportService, "get_spc_report_data", staticmethod(fake_load_report))
+    monkeypatch.setattr(
+        current_spc_service.SpcReportService,
+        "get_spc_report_data",
+        staticmethod(fake_load_report),
+    )
     monkeypatch.setattr(
         spc_dashboard,
         "render_cpk_alert_center",

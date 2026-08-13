@@ -17,7 +17,7 @@ async page => {
   }
 
   const filterHeading = page.getByRole("heading", { name: "筛选", exact: true });
-  await filterHeading.waitFor({ timeout: 120_000 });
+await filterHeading.waitFor({ timeout: 120_000 });
 
   // 厂别固定选 ARRAY（TT 参数 TDSUM 数据量最大）
   const factorySelector = page.getByRole("combobox", { name: "厂别" });
