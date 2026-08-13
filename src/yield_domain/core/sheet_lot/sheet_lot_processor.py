@@ -133,7 +133,7 @@ def calculate_sheet_defect_rates(
         override_sheet_name = ""
         
         if override_res:
-             override_file_path = product_dir / override_res.file_name
+             override_file_path = product_dir.parent / override_res.file_name
              override_sheet_name = override_res.sheet_name or ""
         
         override_df, _ = _load_override_excel(
@@ -243,7 +243,7 @@ def calculate_lot_defect_rates(
         override_sheet_name = ""
         
         if override_res:
-                override_file_path = product_dir / override_res.file_name
+                override_file_path = product_dir.parent / override_res.file_name
                 override_sheet_name = override_res.sheet_name or ""
 
         override_sheet_df, _= _load_override_excel(

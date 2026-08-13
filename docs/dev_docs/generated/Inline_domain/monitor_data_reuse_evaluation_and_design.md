@@ -22,7 +22,7 @@ application/
   monitor/ports.py                  # MonitorSpcDataPort(SpcDataPort + get_scrap_data) + 工厂类型
 infrastructure/
   measurement/                      # 共享 DAO + 产品级原始 Parquet 快照（一次提取，三报表复用）
-  spc/repositories/spc_repository.py  # SPC 派生制备（见 1.2）
+  spc/spc_repository.py             # SPC 派生制备（见 1.2）
   ctq/ctq_repository.py             # 固定 data_type_filter="CTQ" 的投影门面
   monitor/monitor_repository.py     # 自动预警用例仓储门面
 composition.py                      # 组合根：页面边界装配端口实现

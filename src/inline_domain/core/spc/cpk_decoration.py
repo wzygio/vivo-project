@@ -7,7 +7,10 @@ from typing import Iterable
 
 import pandas as pd
 
-from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+from src.shared_kernel.utils.excel_tools import (
+    _read_encrypted_xlsx_via_com,
+    replace_workbook_sheet,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ class CpkDecorationResult:
     period_capability_df: pd.DataFrame
     decoration_df: pd.DataFrame
     decoration_path: Path
+    decoration_sheet: str
 
 
 def get_cpk_decoration_path(product_dir: Path) -> Path:
@@ -114,15 +118,22 @@ def build_cpk_detail(
     ).reset_index(drop=True)
 
 
-def load_cpk_decoration(product_dir: Path) -> pd.DataFrame:
+def load_cpk_decoration(product_dir: Path, sheet_name: str | None = None) -> pd.DataFrame:
     path = get_cpk_decoration_path(product_dir)
     if not path.exists():
         return _empty_decoration_frame()
     try:
-        loaded_df = pd.read_excel(path, engine="openpyxl")
+        if sheet_name is None:
+            loaded_df = pd.read_excel(path, engine="openpyxl")
+        else:
+            try:
+                loaded_df = pd.read_excel(path, sheet_name=sheet_name)
+            except ValueError:
+                # 指定 sheet 缺失 —— 与文件缺失语义一致
+                return _empty_decoration_frame()
     except Exception as excel_exc:
         try:
-            loaded_df = _read_encrypted_xlsx_via_com(path)
+            loaded_df = _read_encrypted_xlsx_via_com(path, sheet_name)
             logger.info("[SPC] loaded enterprise-encrypted CPK decoration file via Excel COM: %s", path)
         except Exception as com_exc:
             logger.warning(
@@ -165,20 +176,41 @@ def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decorat
     return result.drop(columns=["_user_cpk_corrected"])[CPK_DECORATION_COLUMNS]
 
 
-def persist_cpk_decoration(product_dir: Path, detail_df: pd.DataFrame) -> pd.DataFrame:
-    """Create the user-maintained decoration workbook when it does not exist."""
+def _decoration_sheet_exists(decoration_path: Path, sheet_name: str | None) -> bool:
+    """Return True when the target decoration sheet already exists or cannot be inspected safely."""
+    if not decoration_path.exists():
+        return False
+    if sheet_name is None:
+        return True
+    try:
+        import openpyxl
+
+        return sheet_name in openpyxl.load_workbook(decoration_path, read_only=True).sheetnames
+    except Exception:
+        # 企业加密等 openpyxl 无法打开的工作簿按“已存在”处理，避免破坏用户文件
+        logger.warning(
+            "[SPC] unable to inspect CPK decoration workbook sheets, treating %s as existing",
+            decoration_path,
+        )
+        return True
+
+
+def persist_cpk_decoration(
+    product_dir: Path,
+    detail_df: pd.DataFrame,
+    sheet_name: str | None = None,
+) -> pd.DataFrame:
+    """Create the user-maintained decoration sheet when it does not exist yet."""
     product_dir.mkdir(parents=True, exist_ok=True)
     decoration_path = get_cpk_decoration_path(product_dir)
-    decoration_file_exists = decoration_path.exists()
+    target_sheet = sheet_name or "Sheet1"
     decoration_to_write = merge_detail_with_decoration_flags(
         detail_df,
-        load_cpk_decoration(product_dir),
+        load_cpk_decoration(product_dir, sheet_name),
     )
-    if not decoration_file_exists:
-        try:
-            decoration_to_write.to_excel(decoration_path, index=False)
-        except PermissionError as exc:
-            logger.warning("[SPC] CPK decoration file is locked, skipped writing %s: %s", decoration_path, exc)
+    if not _decoration_sheet_exists(decoration_path, sheet_name):
+        # replace_workbook_sheet 内部已处理 PermissionError（仅告警跳过）
+        replace_workbook_sheet(decoration_path, target_sheet, decoration_to_write)
     return decoration_to_write
 
 
@@ -218,13 +250,14 @@ def prepare_cpk_decoration(
     corrected_period_capability_df: pd.DataFrame,
     product_dir: Path,
     persist_files: bool = True,
+    sheet_name: str | None = None,
 ) -> CpkDecorationResult:
-    """Build chart-ready values selected by the user-maintained decoration file."""
+    """Build chart-ready values selected by the user-maintained decoration sheet."""
     detail_df = build_cpk_detail(real_period_capability_df, corrected_period_capability_df)
     decoration_df = (
-        persist_cpk_decoration(product_dir, detail_df)
+        persist_cpk_decoration(product_dir, detail_df, sheet_name)
         if persist_files
-        else merge_detail_with_decoration_flags(detail_df, load_cpk_decoration(product_dir))
+        else merge_detail_with_decoration_flags(detail_df, load_cpk_decoration(product_dir, sheet_name))
     )
     period_capability_df = apply_cpk_decoration(
         real_period_capability_df,
@@ -235,4 +268,5 @@ def prepare_cpk_decoration(
         period_capability_df=period_capability_df,
         decoration_df=decoration_df,
         decoration_path=get_cpk_decoration_path(product_dir),
+        decoration_sheet=sheet_name or "Sheet1",
     )

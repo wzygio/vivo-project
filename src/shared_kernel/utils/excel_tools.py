@@ -9,6 +9,139 @@ import streamlit as st  # [新增] 引入 streamlit
 from src.shared_kernel.config import ConfigLoader
 
 
+def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
+    """读取共享工作簿中的指定 sheet。
+
+    文件不存在或 sheet 不存在时返回空 DataFrame（与“文件缺失”语义一致）；
+    企业加密等 openpyxl 无法读取的工作簿自动回退到 Excel COM 透明解密读取，
+    COM 也失败时抛出异常交由调用方决定（告警或包装为业务异常）。
+
+    Args:
+        xlsx_path: 共享工作簿路径
+        sheet_name: 目标 sheet 名（通常为产品号或 <产品号>_<原sheet名>）
+
+    Returns:
+        该 sheet 的数据；文件/sheet 缺失时为空 DataFrame
+    """
+    if not xlsx_path.exists():
+        return pd.DataFrame()
+    try:
+        return pd.read_excel(xlsx_path, sheet_name=sheet_name)
+    except ValueError:
+        # Worksheet named 'X' not found —— sheet 缺失视为无数据
+        return pd.DataFrame()
+    except Exception as openpyxl_error:
+        logging.warning(
+            "[excel_tools] 标准读取 %s [%s] 失败，尝试 Excel COM: %s",
+            xlsx_path.name, sheet_name, openpyxl_error,
+        )
+        return _read_encrypted_xlsx_via_com(xlsx_path, sheet_name)
+
+
+def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
+    """通过 Excel COM 读出工作簿的全部 sheets（用于加密工作簿的整体重写回退）。"""
+    try:
+        import win32com.client
+        import pythoncom
+    except ImportError:
+        raise ImportError("win32com 未安装，无法读取加密工作簿。")
+
+    com_initialized = False
+    try:
+        pythoncom.CoInitialize()
+        com_initialized = True
+    except Exception:
+        pass
+
+    excel = None
+    wb = None
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
+        sheets: dict[str, pd.DataFrame] = {}
+        for ws in wb.Worksheets:
+            data = ws.UsedRange.Value
+            if data is None or len(data) < 1:
+                sheets[ws.Name] = pd.DataFrame()
+                continue
+            headers = list(data[0])
+            rows = [list(row) for row in data[1:]]
+            sheets[ws.Name] = pd.DataFrame(rows, columns=headers)
+        return sheets
+    finally:
+        if wb is not None:
+            try:
+                wb.Close(SaveChanges=False)
+            except Exception:
+                pass
+        wb = None
+        try:
+            if excel is not None:
+                excel.Quit()
+        except Exception:
+            pass
+        excel = None
+        if com_initialized:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+
+def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -> None:
+    """在共享工作簿中替换（或新建）指定 sheet，保留其他 sheet 的内容与格式。
+
+    - 优先 openpyxl 原地替换：仅删除并重建目标 sheet，其他 sheet 原样保留；
+    - 企业加密等 openpyxl 无法打开的文件回退为：COM 读出全部 sheets，
+      替换目标 sheet 后整体重写为明文工作簿（与既有 to_excel 覆盖行为等价）；
+    - 文件被占用（PermissionError，如 Excel 打开中）时仅记录告警，不抛错。
+
+    Args:
+        xlsx_path: 共享工作簿路径（不存在则新建单 sheet 工作簿）
+        sheet_name: 目标 sheet 名
+        df: 写入的数据
+    """
+    from openpyxl.utils.dataframe import dataframe_to_rows
+
+    xlsx_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if not xlsx_path.exists():
+            df.to_excel(xlsx_path, index=False, sheet_name=sheet_name)
+            return
+
+        try:
+            import openpyxl
+
+            wb = openpyxl.load_workbook(xlsx_path)
+        except Exception:
+            wb = None
+
+        if wb is not None:
+            if sheet_name in wb.sheetnames:
+                del wb[sheet_name]
+            ws = wb.create_sheet(sheet_name)
+            for row in dataframe_to_rows(df, index=False, header=True):
+                ws.append(row)
+            wb.save(xlsx_path)
+            return
+
+        # openpyxl 无法打开（企业加密等）：读出全部 sheets 后整体重写
+        logging.warning("[excel_tools] openpyxl 无法打开 %s，回退为整体重写。", xlsx_path.name)
+        sheets = _read_all_sheets_via_com(xlsx_path)
+        sheets[sheet_name] = df
+        xlsx_path.unlink()
+        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+            for name, sheet_df in sheets.items():
+                sheet_df.to_excel(writer, index=False, sheet_name=name)
+    except PermissionError as exc:
+        logging.warning(
+            "[excel_tools] 工作簿被占用，跳过写入 %s [%s]: %s",
+            xlsx_path, sheet_name, exc,
+        )
+
+
 def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = None) -> pd.DataFrame:
     """
     [COM fallback] 通过 Windows Excel.Application COM 接口读取加密/受保护 xlsx 文件。

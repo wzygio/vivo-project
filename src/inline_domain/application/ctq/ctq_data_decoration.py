@@ -28,10 +28,14 @@ class DecoratedCtqData:
 
 
 def resolve_ctq_product_resource_dir(prod_code: str, product_dir: Path | None = None) -> Path:
-    """Resolve the product resource directory shared by CTQ decoration files."""
+    """Resolve the shared resources directory used by the CTQ decoration workbook.
+
+    The decoration workbook lives at ``resources/`` root with one sheet per product;
+    ``product_dir`` stays an explicit override for tests.
+    """
     if product_dir is not None:
         return product_dir
-    return ConfigLoader.get_project_root() / "resources" / str(prod_code)
+    return ConfigLoader.get_project_root() / "resources"
 
 
 def _preprocess_sheet_features_by_type(
@@ -71,6 +75,7 @@ def prepare_decorated_ctq_data(
         persist_files=persist_decoration,
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
         decoration_file_name=CTQ_OOS_DECORATION_FILE_NAME,
+        decoration_sheet_name=prod_code,
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
         decoration_result.raw_measurements_df,

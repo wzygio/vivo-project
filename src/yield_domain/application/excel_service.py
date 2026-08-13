@@ -152,17 +152,23 @@ class ExcelService:
     #                      Excel 覆盖适配器 (Adapter)
     # ==============================================================================
     @staticmethod
-    def _read_override_excel_via_com(excel_path: Path) -> Dict[str, pd.DataFrame]:
+    def _read_override_excel_via_com(
+        excel_path: Path,
+        sheet_names: tuple[str, str] = ("Group级", "Code级"),
+    ) -> Dict[str, pd.DataFrame]:
         """Read the known trend-override sheets through Excel COM."""
         from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
 
         return {
             sheet_name: _read_encrypted_xlsx_via_com(excel_path, sheet_name=sheet_name)
-            for sheet_name in ("Group级", "Code级")
+            for sheet_name in sheet_names
         }
 
     @staticmethod
-    def _parse_override_excel(excel_path: Path) -> Dict[str, Dict[str, Dict[str, float]]]:
+    def _parse_override_excel(
+        excel_path: Path,
+        sheet_names: tuple[str, str] = ("Group级", "Code级"),
+    ) -> Dict[str, Dict[str, Dict[str, float]]]:
         """解析双Sheet页的覆盖配置Excel为嵌套字典格式"""
         overrides = {
             'group_monthly_values': {}, 'group_weekly_values': {}, 'group_daily_values': {},
@@ -179,7 +185,7 @@ class ExcelService:
                     "读取趋势覆盖 Excel 失败，尝试 Excel COM 解密读取: %s",
                     openpyxl_error,
                 )
-                xls = ExcelService._read_override_excel_via_com(excel_path)
+                xls = ExcelService._read_override_excel_via_com(excel_path, sheet_names)
             
             def _parse_sheet(df, level_prefix):
                 if df.empty: return
@@ -210,10 +216,10 @@ class ExcelService:
                         overrides[dict_key][target] = {}
                     overrides[dict_key][target][time_key] = rate_val
 
-            if 'Group级' in xls:
-                _parse_sheet(xls['Group级'], 'group')
-            if 'Code级' in xls:
-                _parse_sheet(xls['Code级'], 'code')
+            if sheet_names[0] in xls:
+                _parse_sheet(xls[sheet_names[0]], 'group')
+            if sheet_names[1] in xls:
+                _parse_sheet(xls[sheet_names[1]], 'code')
                 
         except Exception as e:
             logging.error(f"解析覆盖Excel失败: {e}", exc_info=True)
@@ -232,8 +238,13 @@ class ExcelService:
         if not override_res: 
             return
         
-        excel_path = product_dir / override_res.file_name
-        excel_overrides = ExcelService._parse_override_excel(excel_path)
+        # 汇总工作簿位于 resources 根目录，按 <产品号>_Group级 / <产品号>_Code级 sheet 区分
+        excel_path = product_dir.parent / override_res.file_name
+        prod_code = config.data_source.product_code
+        excel_overrides = ExcelService._parse_override_excel(
+            excel_path,
+            sheet_names=(f"{prod_code}_Group级", f"{prod_code}_Code级"),
+        )
         
         # 将解析出的字典注入到 config.processing 中，完美替换原有的 YAML 节点
         for key, value_dict in excel_overrides.items():

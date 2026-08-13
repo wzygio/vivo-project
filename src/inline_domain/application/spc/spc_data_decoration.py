@@ -27,10 +27,14 @@ class DecoratedSpcData:
 
 
 def resolve_product_resource_dir(prod_code: str, product_dir: Path | None = None) -> Path:
-    """Resolve the product-scoped resources directory used by decoration files."""
+    """Resolve the shared resources directory used by the per-sheet decoration workbooks.
+
+    Decoration workbooks live at ``resources/`` root with one sheet per product;
+    ``product_dir`` stays an explicit override for tests.
+    """
     if product_dir is not None:
         return product_dir
-    return ConfigLoader.get_project_root() / "resources" / str(prod_code)
+    return ConfigLoader.get_project_root() / "resources"
 
 
 def _preprocess_sheet_features_by_type(measure_df: pd.DataFrame, spec_df: pd.DataFrame) -> pd.DataFrame:
@@ -60,9 +64,9 @@ def prepare_decorated_spc_data(
     persist_files: bool = True,
 ) -> DecoratedSpcData:
     """
-    Apply product-scoped tri-state Sheet actions and recompute Sheet features.
+    Apply tri-state Sheet actions stored in the shared decoration workbook and recompute Sheet features.
 
-    The user-maintained decoration file is matched against the original out-of-spec Sheets.
+    The user-maintained decoration sheet (named after the product) is matched against the original out-of-spec Sheets.
     Downstream reports receive recomputed features from the
     decorated point data, making CPM/CPK and auto-warning views share the same backend contract.
     ``flag=Delete`` removes the matching product/station/parameter/Sheet points from charts;
@@ -77,6 +81,7 @@ def prepare_decorated_spc_data(
         product_dir=resolved_product_dir,
         persist_files=persist_files,
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
+        decoration_sheet_name=prod_code,
     )
 
     decorated_features_df = _preprocess_sheet_features_by_type(

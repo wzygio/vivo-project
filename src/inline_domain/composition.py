@@ -15,7 +15,7 @@ from src.inline_domain.infrastructure.measurement.measurement_metadata_loader im
 from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
     InlineMainProcessHistoryRepository,
 )
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 

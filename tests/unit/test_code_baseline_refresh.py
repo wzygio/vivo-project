@@ -6,6 +6,7 @@ import pandas as pd
 from src.yield_domain.application.yield_service import YieldAnalysisService
 from src.yield_domain.core.mwd_trend.code_baseline import (
     ensure_code_baseline_current,
+    generate_code_baseline,
     load_code_baseline_frame,
     read_code_baseline_metadata,
 )
@@ -13,13 +14,14 @@ from src.shared_kernel.utils import excel_tools
 from yield_domain.core.mwd_trend.mwd_trend_processor import _calc_code_ema_noise
 
 
-def _write_baseline(path: Path, rows: list[dict]) -> None:
+def _write_baseline(path: Path, rows: list[dict], prod_code: str = "PTEST") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        pd.DataFrame(rows).to_excel(writer, index=False, sheet_name="Sheet1")
-        pd.DataFrame(
-            [{"key": "generated_at", "value": "2026-07-01T00:00:00"}]
-        ).to_excel(writer, index=False, sheet_name="_metadata")
+    excel_tools.replace_workbook_sheet(path, prod_code, pd.DataFrame(rows))
+    excel_tools.replace_workbook_sheet(
+        path,
+        f"{prod_code}_metadata",
+        pd.DataFrame([{"key": "generated_at", "value": "2026-07-01T00:00:00"}]),
+    )
 
 
 def _row_count(result: pd.DataFrame, day: str, code: str = "CodeA") -> int:
@@ -87,7 +89,7 @@ def test_code_ema_starts_each_month_at_first_stable_nonzero_day_rate(
     assert _row_count(result, "2026-05-03") == 20
     assert _row_count(result, "2026-06-01") == 20
     assert _row_count(result, "2026-06-02") == 30
-    assert not (tmp_path / "resources" / "PTEST" / "PTEST_codebaseline.xlsx").exists()
+    assert not (tmp_path / "resources" / "codebaseline.xlsx").exists()
 
 
 def test_zero_code_baseline_uses_first_stable_nonzero_day_rate(
@@ -95,7 +97,7 @@ def test_zero_code_baseline_uses_first_stable_nonzero_day_rate(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     _write_baseline(
-        tmp_path / "resources" / "PTEST" / "PTEST_codebaseline.xlsx",
+        tmp_path / "resources" / "codebaseline.xlsx",
         [
             {
                 "baseline_month": "2026-07",
@@ -176,16 +178,18 @@ def test_code_ema_keeps_zero_month_zero(tmp_path: Path, monkeypatch) -> None:
 
     assert _row_count(result, "2026-05-01") == 0
     assert _row_count(result, "2026-05-02") == 0
-    assert not (tmp_path / "resources" / "PTEST" / "PTEST_codebaseline.xlsx").exists()
+    assert not (tmp_path / "resources" / "codebaseline.xlsx").exists()
 
 
 def test_multiplier_change_rebuilds_only_affected_code_baselines(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    baseline_path = tmp_path / "resources" / "PTEST" / "PTEST_codebaseline.xlsx"
+    baseline_path = tmp_path / "resources" / "codebaseline.xlsx"
     baseline_path.parent.mkdir(parents=True, exist_ok=True)
-    with pd.ExcelWriter(baseline_path, engine="openpyxl") as writer:
+    excel_tools.replace_workbook_sheet(
+        baseline_path,
+        "PTEST",
         pd.DataFrame(
             [
                 {
@@ -203,13 +207,18 @@ def test_multiplier_change_rebuilds_only_affected_code_baselines(
                     "source_total_panels": 100,
                 },
             ]
-        ).to_excel(writer, index=False, sheet_name="Sheet1")
+        ),
+    )
+    excel_tools.replace_workbook_sheet(
+        baseline_path,
+        "PTEST_metadata",
         pd.DataFrame(
             [
                 {"key": "generated_at", "value": "2026-06-01T00:00:00"},
                 {"key": "defect_multipliers_signature", "value": "CodeA=1;CodeB=1"},
             ]
-        ).to_excel(writer, index=False, sheet_name="_metadata")
+        ),
+    )
 
     current_data = pd.DataFrame(
         [
@@ -237,7 +246,41 @@ def test_multiplier_change_rebuilds_only_affected_code_baselines(
 
     rates = baseline.set_index("defect_desc")["baseline_rate"].to_dict()
     assert rates == {"CodeA": 0.2, "CodeB": 0.77777}
-    assert read_code_baseline_metadata(baseline_path)["refresh_reason"] == "multiplier_changed_codes"
+    assert (
+        read_code_baseline_metadata(baseline_path, "PTEST_metadata")["refresh_reason"]
+        == "multiplier_changed_codes"
+    )
+
+
+def test_shared_workbook_keeps_other_product_sheets(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    source = pd.DataFrame(
+        [
+            {
+                "warehousing_time": "2026-05-01",
+                "defect_desc": "CodeA",
+                "defect_panel_count": 10,
+                "total_panels": 100,
+            }
+        ]
+    )
+
+    generate_code_baseline(source, "PTEST", generated_at=pd.Timestamp("2026-06-15"))
+    generate_code_baseline(source, "POTH", generated_at=pd.Timestamp("2026-06-15"))
+
+    workbook_path = tmp_path / "resources" / "codebaseline.xlsx"
+    ptest = load_code_baseline_frame(workbook_path, "PTEST")
+    poth = load_code_baseline_frame(workbook_path, "POTH")
+    assert ptest["baseline_rate"].tolist() == [0.1]
+    assert poth["baseline_rate"].tolist() == [0.1]
+    assert (
+        read_code_baseline_metadata(workbook_path, "PTEST_metadata")["product_code"]
+        == "PTEST"
+    )
+    assert (
+        read_code_baseline_metadata(workbook_path, "POTH_metadata")["product_code"]
+        == "POTH"
+    )
 
 
 def test_code_baseline_reads_encrypted_workbook_via_com(tmp_path: Path, monkeypatch) -> None:
@@ -249,7 +292,7 @@ def test_code_baseline_reads_encrypted_workbook_via_com(tmp_path: Path, monkeypa
 
     def read_via_com(path: Path, sheet_name: str | None = None) -> pd.DataFrame:
         assert path == baseline_path
-        if sheet_name == "_metadata":
+        if sheet_name == "PTEST_metadata":
             return pd.DataFrame(
                 [{"key": "defect_multipliers_signature", "value": "CodeA=1"}]
             )
@@ -268,10 +311,12 @@ def test_code_baseline_reads_encrypted_workbook_via_com(tmp_path: Path, monkeypa
     monkeypatch.setattr(pd, "read_excel", fail_openpyxl)
     monkeypatch.setattr(excel_tools, "_read_encrypted_xlsx_via_com", read_via_com)
 
-    baseline = load_code_baseline_frame(baseline_path)
+    baseline = load_code_baseline_frame(baseline_path, "PTEST")
 
     assert baseline["baseline_rate"].tolist() == [0.2]
-    assert read_code_baseline_metadata(baseline_path) == {"defect_multipliers_signature": "CodeA=1"}
+    assert read_code_baseline_metadata(baseline_path, "PTEST_metadata") == {
+        "defect_multipliers_signature": "CodeA=1"
+    }
 
 
 def test_yield_time_window_starts_at_first_day_three_months_before_end() -> None:

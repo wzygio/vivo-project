@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # 被测对象
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.config import ConfigLoader
 
 

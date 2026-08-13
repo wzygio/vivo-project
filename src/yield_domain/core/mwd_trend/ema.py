@@ -12,6 +12,7 @@ from .code_baseline import (
     CODE_BASELINE_COLUMNS,
     build_code_baseline_lookup,
     code_baseline_path,
+    code_baseline_sheet_name,
     defect_multipliers_signature,
     ensure_code_baseline_current,
     load_code_baseline_frame,
@@ -158,7 +159,10 @@ def calculate_code_ema_noise(
             defect_multipliers_signature=defect_multipliers_signature(config),
         )
         if baseline_df.empty:
-            baseline_df = load_baseline_frame(code_baseline_path(prod_code))
+            baseline_df = load_baseline_frame(
+                code_baseline_path(prod_code),
+                code_baseline_sheet_name(prod_code),
+            )
     else:
         baseline_df = pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
 

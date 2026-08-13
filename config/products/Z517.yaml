@@ -7,15 +7,15 @@ data_source:
 # 本地文件读取
 paths:
   static_warning_lines: 
-    file_name: 'Z517_入库不良率规格.xlsx'
-    sheet_name: 'Sheet1'
+    file_name: '入库不良率规格.xlsx'
+    sheet_name: 'Z517'
 
   rate_override_config:
-    file_name: "Z517_override_rates.xlsx"
-    sheet_name: "Sheet1"
+    file_name: "override_rates.xlsx"
+    sheet_name: "Z517"
 
   mwd_override_config:
-    file_name: "Z517_趋势图人工修正.xlsx"
+    file_name: "趋势图人工修正.xlsx"
 
 # 数据处理相关的参数
 processing:

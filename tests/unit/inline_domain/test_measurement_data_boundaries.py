@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 
 
 PROJECT_ROOT = Path(__file__).parents[3]

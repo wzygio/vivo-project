@@ -8,7 +8,10 @@ from typing import Iterable
 
 import pandas as pd
 
-from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+from src.shared_kernel.utils.excel_tools import (
+    _read_encrypted_xlsx_via_com,
+    replace_workbook_sheet,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,7 @@ class SheetOosDecorationResult:
     raw_measurements_df: pd.DataFrame
     decoration_df: pd.DataFrame
     decoration_path: Path
+    decoration_sheet: str
 
 
 def get_sheet_oos_decoration_path(product_dir: Path, file_name: str = OOS_DECORATION_FILE_NAME) -> Path:
@@ -178,16 +182,27 @@ def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def load_sheet_oos_decoration(product_dir: Path, file_name: str = OOS_DECORATION_FILE_NAME) -> pd.DataFrame:
-    """Load the user-editable decoration flag file for one product."""
+def load_sheet_oos_decoration(
+    product_dir: Path,
+    file_name: str = OOS_DECORATION_FILE_NAME,
+    sheet_name: str | None = None,
+) -> pd.DataFrame:
+    """Load the user-editable decoration flags from the shared workbook sheet."""
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
     if not decoration_path.exists():
         return _empty_decoration_frame()
     try:
-        df = pd.read_excel(decoration_path, engine="openpyxl")
+        if sheet_name is None:
+            df = pd.read_excel(decoration_path, engine="openpyxl")
+        else:
+            try:
+                df = pd.read_excel(decoration_path, sheet_name=sheet_name)
+            except ValueError:
+                # 指定 sheet 缺失 —— 与文件缺失语义一致
+                return _empty_decoration_frame()
     except Exception as excel_exc:
         try:
-            df = _read_encrypted_xlsx_via_com(decoration_path)
+            df = _read_encrypted_xlsx_via_com(decoration_path, sheet_name)
             logger.info(
                 "[SPC] loaded enterprise-encrypted Sheet OOS decoration file via Excel COM: %s",
                 decoration_path,
@@ -258,18 +273,17 @@ def persist_sheet_oos_decoration(
     product_dir: Path,
     detail_df: pd.DataFrame,
     file_name: str = OOS_DECORATION_FILE_NAME,
+    sheet_name: str | None = None,
 ) -> pd.DataFrame:
-    """Refresh the user-maintained Sheet OOS decoration workbook."""
+    """Refresh the user-maintained Sheet OOS decoration sheet in the shared workbook."""
     product_dir.mkdir(parents=True, exist_ok=True)
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
 
-    existing_decoration = load_sheet_oos_decoration(product_dir, file_name)
+    existing_decoration = load_sheet_oos_decoration(product_dir, file_name, sheet_name)
     decoration_to_write = merge_detail_with_decoration_flags(detail_df, existing_decoration)
 
-    try:
-        decoration_to_write.to_excel(decoration_path, index=False)
-    except PermissionError as exc:
-        logger.warning("[CPM] Sheet OOS decoration file is locked, skipped writing %s: %s", decoration_path, exc)
+    # replace_workbook_sheet 内部已处理 PermissionError（仅告警跳过）
+    replace_workbook_sheet(decoration_path, sheet_name or "Sheet1", decoration_to_write)
     return decoration_to_write
 
 
@@ -328,15 +342,18 @@ def prepare_sheet_oos_decoration(
     persist_files: bool = True,
     clip_rules: Iterable[dict[str, object]] | None = None,
     decoration_file_name: str = OOS_DECORATION_FILE_NAME,
+    decoration_sheet_name: str | None = None,
 ) -> SheetOosDecorationResult:
     """Return chart-ready measurements after applying tri-state Sheet actions."""
     detail_df = build_sheet_oos_detail(sheet_features_df)
     if persist_files:
-        decoration_df = persist_sheet_oos_decoration(product_dir, detail_df, decoration_file_name)
+        decoration_df = persist_sheet_oos_decoration(
+            product_dir, detail_df, decoration_file_name, decoration_sheet_name
+        )
     else:
         decoration_df = merge_detail_with_decoration_flags(
             detail_df,
-            load_sheet_oos_decoration(product_dir, decoration_file_name),
+            load_sheet_oos_decoration(product_dir, decoration_file_name, decoration_sheet_name),
         )
 
     decorated_df = apply_sheet_oos_decoration(
@@ -349,4 +366,5 @@ def prepare_sheet_oos_decoration(
         raw_measurements_df=decorated_df,
         decoration_df=decoration_df,
         decoration_path=get_sheet_oos_decoration_path(product_dir, decoration_file_name),
+        decoration_sheet=decoration_sheet_name or "Sheet1",
     )

@@ -11,6 +11,8 @@ from src.shared_kernel.config_model import AppConfig
 
 CODE_BASELINE_MAX_AGE_DAYS = 30
 CODE_BASELINE_FALLBACK_MIN_TOTAL_PANELS = 1000
+# Legacy sheet-name aliases kept for external compatibility; new code should
+# derive per-product sheet names via the functions below.
 CODE_BASELINE_SHEET = "Sheet1"
 CODE_BASELINE_METADATA_SHEET = "_metadata"
 CODE_BASELINE_COLUMNS = [
@@ -23,7 +25,20 @@ CODE_BASELINE_COLUMNS = [
 
 
 def code_baseline_path(prod_code: str) -> Path:
-    return Path(f"resources/{prod_code}/{prod_code}_codebaseline.xlsx")
+    """Shared multi-product baseline workbook path.
+
+    prod_code is retained for signature compatibility; all products share the
+    single workbook and are separated by sheet name instead.
+    """
+    return Path("resources/codebaseline.xlsx")
+
+
+def code_baseline_sheet_name(prod_code: str) -> str:
+    return prod_code
+
+
+def code_baseline_metadata_sheet_name(prod_code: str) -> str:
+    return f"{prod_code}_metadata"
 
 
 def defect_multipliers_signature(config: AppConfig | None) -> str:
@@ -139,14 +154,22 @@ def _read_code_baseline_sheet(path: Path, sheet_name: str) -> pd.DataFrame:
     """Read a baseline sheet, including enterprise-encrypted workbooks."""
     try:
         return pd.read_excel(path, sheet_name=sheet_name)
+    except ValueError as sheet_error:
+        if "Worksheet" in str(sheet_error):
+            # Sheet missing in the shared workbook: treat as no data.
+            return pd.DataFrame()
+        logging.warning(
+            "[Baseline Loader] Standard Excel read failed; trying Excel COM: %s",
+            sheet_error,
+        )
     except Exception as openpyxl_error:
         logging.warning(
             "[Baseline Loader] Standard Excel read failed; trying Excel COM: %s",
             openpyxl_error,
         )
-        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
+    from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
 
-        return _read_encrypted_xlsx_via_com(path, sheet_name=sheet_name)
+    return _read_encrypted_xlsx_via_com(path, sheet_name=sheet_name)
 
 
 def write_code_baseline_file(
@@ -172,16 +195,25 @@ def write_code_baseline_file(
         ]
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with pd.ExcelWriter(out_path, engine='openpyxl') as writer:
-        baseline.to_excel(writer, index=False, sheet_name=CODE_BASELINE_SHEET)
-        metadata.to_excel(writer, index=False, sheet_name=CODE_BASELINE_METADATA_SHEET)
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
+
+    # Replace only this product's sheets so other products' sheets survive.
+    replace_workbook_sheet(out_path, code_baseline_sheet_name(prod_code), baseline)
+    replace_workbook_sheet(
+        out_path,
+        code_baseline_metadata_sheet_name(prod_code),
+        metadata,
+    )
 
 
-def read_code_baseline_metadata(path: Path) -> Dict[str, str]:
+def read_code_baseline_metadata(
+    path: Path,
+    sheet_name: str = CODE_BASELINE_METADATA_SHEET,
+) -> Dict[str, str]:
     if not path.exists():
         return {}
     try:
-        metadata_df = _read_code_baseline_sheet(path, CODE_BASELINE_METADATA_SHEET)
+        metadata_df = _read_code_baseline_sheet(path, sheet_name)
         if not {'key', 'value'}.issubset(metadata_df.columns):
             return {}
         return {
@@ -196,11 +228,12 @@ def is_code_baseline_expired(
     path: Path,
     now: dt | pd.Timestamp | None = None,
     max_age_days: int = CODE_BASELINE_MAX_AGE_DAYS,
+    metadata_sheet: str = CODE_BASELINE_METADATA_SHEET,
 ) -> bool:
     if not path.exists():
         return True
 
-    metadata = read_code_baseline_metadata(path)
+    metadata = read_code_baseline_metadata(path, metadata_sheet)
     generated_at_raw = metadata.get('generated_at')
     if not generated_at_raw:
         return True
@@ -218,11 +251,14 @@ def is_code_baseline_expired(
     return (now_ts - generated_at).days >= max_age_days
 
 
-def load_code_baseline_frame(path: Path) -> pd.DataFrame:
+def load_code_baseline_frame(
+    path: Path,
+    sheet_name: str = CODE_BASELINE_SHEET,
+) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
     try:
-        df = _read_code_baseline_sheet(path, CODE_BASELINE_SHEET)
+        df = _read_code_baseline_sheet(path, sheet_name)
         if 'defect_desc' not in df.columns or 'baseline_rate' not in df.columns:
             return pd.DataFrame(columns=CODE_BASELINE_COLUMNS)
         df = df.copy()
@@ -317,12 +353,14 @@ def ensure_code_baseline_current(
     intentionally disabled because it makes historical months drift without user action.
     """
     path = code_baseline_path(prod_code)
+    data_sheet = code_baseline_sheet_name(prod_code)
+    metadata_sheet = code_baseline_metadata_sheet_name(prod_code)
     current_baseline = build_code_baseline(df, as_of=now)
     if current_baseline.empty:
-        return load_code_baseline_frame(path)
+        return load_code_baseline_frame(path, data_sheet)
 
-    existing = load_code_baseline_frame(path)
-    metadata = read_code_baseline_metadata(path)
+    existing = load_code_baseline_frame(path, data_sheet)
+    metadata = read_code_baseline_metadata(path, metadata_sheet)
     existing_scoped = existing[existing['baseline_month'].astype(str).str.strip() != ""].copy()
     existing_keys = code_baseline_keys(existing_scoped)
     current_keys = code_baseline_keys(current_baseline)
@@ -413,11 +451,11 @@ def ensure_code_baseline_current(
 
 def load_code_baseline(prod_code: str) -> dict:
     """
-    Read Code baseline mapping from resources/<prod_code>/<prod_code>_codebaseline.xlsx.
+    Read Code baseline mapping from the shared resources/codebaseline.xlsx workbook.
     Returns the latest-month {defect_desc: baseline_rate} mapping.
     """
     path = code_baseline_path(prod_code)
-    df = load_code_baseline_frame(path)
+    df = load_code_baseline_frame(path, code_baseline_sheet_name(prod_code))
     if df.empty:
         return {}
     df = df.sort_values(['baseline_month', 'defect_desc'])

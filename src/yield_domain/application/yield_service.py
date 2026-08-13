@@ -382,7 +382,7 @@ class YieldAnalysisService:
                 return {}
 
             # 构建完整路径
-            file_path = product_dir / warning_res.file_name
+            file_path = product_dir.parent / warning_res.file_name
             sheet_name = warning_res.sheet_name or "Sheet1"
 
             if not file_path.exists():

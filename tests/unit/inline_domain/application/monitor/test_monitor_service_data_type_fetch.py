@@ -7,7 +7,7 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
-from src.inline_domain.infrastructure.spc.repositories.spc_repository import SpcRepository
+from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 
 
 class _FakeRepository:

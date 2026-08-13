@@ -65,6 +65,7 @@ class CtqReportService:
                     decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame()
                 ),
                 decoration_path=Path(str(decoration_payload.get("decoration_path", ""))),
+                decoration_sheet=str(decoration_payload.get("decoration_sheet", "Sheet1")),
             )
 
         return CtqReportViewModel(
@@ -137,6 +138,7 @@ class CtqReportService:
                 "sheet_oos_decoration": {
                     "decoration_df": decoration_result.decoration_df,
                     "decoration_path": str(decoration_result.decoration_path),
+                    "decoration_sheet": decoration_result.decoration_sheet,
                 },
             }
         except Exception as exc:
