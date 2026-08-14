@@ -1,226 +1,161 @@
-# Monitor 数据链优化：复用评估与六边形架构设计（V2）
+# Inline Pipeline 复用：最终设计方案（V3 定稿）
 
-- 日期：2026-08-13（V2 修订，对齐 ADR-0012 落地后的代码现状）
-- 范围：`src/inline_domain/{application,infrastructure}`、`src/inline_domain/composition.py`
-- 关联：`docs/ADR/0012-shared-inline-measurement-snapshot.md`
-- 触发需求：监控报表的数据来自 SPC/CTQ 模块，monitor 不应重复提取数据；并评估
-  "取数 + 白名单过滤 + data_type 注入 + Sheet OOS 修饰 + Sheet 特征计算"
-  这条公共管路的归属层级（monitor 模块？repository 层？）
+- 日期：2026-08-13（V3 定稿，吸收用户修正点 1/2 与决策 D2/D3）
+- 关联 Issue：`.scratch/inline-pipeline-reuse/issues/01-shared-pipeline-to-measurement-and-monitor-reuse.md`
+- 关联 ADR：`docs/ADR/0012-shared-inline-measurement-snapshot.md`
+- 关联计划：`.planning/2026-08-13-inline-pipeline-reuse/`
+
+## 用户决策与修正点（已确认）
+
+- **D2（CTQ 修饰口径）**：切换。monitor 的 CTQ 数据改用 ctq 修饰口径。事实核查：ctq 修饰已汇总为
+  `resources/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet，
+  `ctq_data_decoration.py:18,30-38`），与 SPC 共用同一引擎，仅文件名不同。
+- **D3（AOI 归属）**：monitor 的 AOI 对应 aoi_tt；aoi_tt 在本次范围内，aoi_rs 不在。
+- **修正点 1（段 1 归属）**：spc_repository 中的可复用逻辑**必须全部**入
+  `infrastructure/measurement/`；spc 是与 ctq/aoi_tt/monitor 平行的业务模块。
+- **修正点 2（段 2 结构）**：用户质疑"repository 汇总进共享 SheetFeaturesService 再供给各模块"
+  的 DDD 合理性 —— 本版采纳并修正（见 §3）。
 
 ---
 
-## 1. 现状（infrastructure 重构落地后）
+## 1. 段 1 设计：共享制备管线归属 measurement
 
-### 1.1 已完成的分层（ADR-0012）
+### 1.1 迁移清单（spc_repository → measurement）
+
+| 逻辑 | 现状位置 | 目标位置 | 备注 |
+|---|---|---|---|
+| 清洗/类型 coercion/去重 | `spc_repository.py:171-183` | `measurement/measurement_preparation.py` | 原样平移 |
+| LOSS 排除参数过滤 | `:179` + `spc/measurement_preprocessor.py` | 同上（函数随迁移改名去 SPC 化） | **顺序：在 data_type 过滤之前** |
+| 白名单 merge + data_type 注入 | `:184-201` | 同上 | 经 metadata port，逻辑不变 |
+| 异常点过滤 `_apply_outlier_filters` | `:225-397` | 同上（独立函数） | **顺序：在 data_type 过滤之后**；COM 解密写 CSV 副作用原样保留（后续单列优化） |
+| 维度/时间过滤 | `:203-213` | 同上 | 原样平移 |
+| 主制程追溯纯函数 | `spc/main_process_trace.py` | `measurement/main_process_trace.py` | 纯 DataFrame 函数，直接平移 |
+| 规格线 + YAML 覆盖 | `:46-152` | `measurement/`（制备仓储的方法） | 机制被 spc/ctq/monitor 共用；键名 `spc_spec_override` 保留兼容 |
+| `get_scrap_data` + `_infer_factory_from_step` | `:402-524` | **`infrastructure/monitor/scrap_repository.py`** | 仅 monitor 消费，与 measurement 零耦合，不入 measurement |
+
+### 1.2 目标结构
 
 ```text
-application/
-  ports/measurement_snapshot.py     # MeasurementSnapshotPort / MetadataPort / MainProcessHistoryPort
-  spc/ports.py                      # SpcDataPort（消费方拥有的 Protocol）
-  spc/dtos.py                       # SpcQueryConfig
-  ctq/ports.py                      # CtqDataPort(SpcDataPort)
-  monitor/ports.py                  # MonitorSpcDataPort(SpcDataPort + get_scrap_data) + 工厂类型
 infrastructure/
-  measurement/                      # 共享 DAO + 产品级原始 Parquet 快照（一次提取，三报表复用）
-  spc/spc_repository.py             # SPC 派生制备（见 1.2）
-  ctq/ctq_repository.py             # 固定 data_type_filter="CTQ" 的投影门面
-  monitor/monitor_repository.py     # 自动预警用例仓储门面
-composition.py                      # 组合根：页面边界装配端口实现
+  measurement/                       # 共享测量能力（DAO + 快照 + 制备）
+    measurement_data_loader.py       # 三厂 DAO（不动）
+    measurement_metadata_loader.py   # 参数目录/规格 DAO（不动）
+    measurement_snapshot_repository.py  # 原始快照（不动）
+    main_process_history_repository.py  # 履历 DAO（不动）
+    main_process_trace.py            # 【迁入】追溯纯函数
+    measurement_preparation.py       # 【新增】共享制备管线 + 规格覆盖
+  spc/spc_repository.py              # 薄投影：data_type_filter="SPC"，委托制备管线
+  ctq/ctq_repository.py              # 薄投影：data_type_filter="CTQ"（现状已是薄投影）
+  aoi_tt/aoi_tt_repository.py        # 不动（直接用快照+规格 DAO，D3 纳入结构核查）
+  monitor/
+    monitor_repository.py            # 门面（不动）
+    scrap_repository.py              # 【新增】报废适配器
 ```
 
-### 1.2 公共管路各阶段的当前位置
-
-| 管路阶段 | 当前位置 | 状态 |
-|---|---|---|
-| 取数（三厂 UNION + 产品/时间下推） | `infrastructure/measurement/measurement_data_loader.py` + 快照仓储 | ✅ 已共享，只提取一次 |
-| 白名单过滤 + data_type 注入 | `SpcRepository._prepare_shared_measurements`（`spc_repository.py:166-201`） | ✅ 已沉入 repository |
-| 异常点过滤 + 主制程追溯 | 同上（`:202-223`） | ✅ 已沉入 repository |
-| Sheet OOS 修饰 | `application/spc/spc_data_decoration.py`、`application/ctq/ctq_data_decoration.py` | ⚠️ 三处各自执行 |
-| Sheet 特征计算 | `core/monitor/monitor_calculator.preprocess_sheet_features`（被修饰模块调用） | ⚠️ 随修饰重复执行 |
-| 规则判定/洗白/时间桶/聚合 | `application/monitor/monitor_service.py` | monitor 专属，正确归属 |
-
-### 1.3 仍存在的重复
-
-1. **修饰 + 特征计算重复 3 次**：spc、ctq、monitor 各自调用 `prepare_decorated_*` +
-   `preprocess_sheet_features`（修饰还伴随 `resources/` 下审计文件的读写）。
-2. **口径不一致**：monitor 对 CTQ 数据仍走 SPC 口径修饰（`monitor_service.py:21` 引入的是
-   `prepare_decorated_spc_data`），ctq 模块用 `resources/<prod>/ctq/` 口径——两者产出不同。
-3. **monitor 缓存粒度过粗**：`fetch_dashboard_data_dict` 的 `st.cache_data` 把
-   "修饰→判定→聚合"整条链包在一个缓存里，无法与 spc/ctq 共享中间产物。
+- 各模块 repository 直接面向本模块 application service，**1:1 对应关系保留**。
+- `application/ports/measurement_snapshot.py` 增加 `MeasurementPreparationPort`
+  （`get_prepared_measurements(config)` / `get_spec_limits(prod_code)`），
+  spc/ctq/monitor 的 repository 组合该 port 产出各自投影。
+- 顺带修正 `composition.py:18` 缺失的 `src.` 前缀。
+- **保序约束**（行为不变的关键）：LOSS 过滤 → 白名单/data_type 注入与过滤 →
+  异常点过滤 → 时间/维度过滤 → 主制程追溯。
 
 ---
 
-## 2. 归属评估：公共管路应该放哪？
+## 2. 段 1 论证：为什么这是正确归属
 
-### 2.1 结论先行
-
-把管路拆成**两段**，归属不同：
-
-| 管路段 | 归属 | 结论 |
-|---|---|---|
-| 段 1：取数 + 白名单 + data_type 注入（+ 异常点/追溯） | **repository 层（infrastructure）** | ✅ 正确，且已落地 |
-| 段 2：Sheet OOS 修饰 + Sheet 特征计算 | **application 层共享服务**（不是 monitor 模块，也不是 repository 层） | 见 2.3 论证 |
-
-monitor 模块两段都不放——monitor 只是三个消费方之一，公共管路放进 monitor 会让
-spc/ctq 反向依赖 monitor，依赖方向错乱。
-
-### 2.2 段 1 放 repository 层 —— 正确
-
-段 1 的职责是"**从持久化装配领域就绪的事实集**"：SQL、Parquet 快照、TTL、失败降级、
-白名单表 merge。这些全是出站适配器职责，与存储技术紧耦合，且所有消费方口径完全一致。
-ADR-0012 的 Alternatives 已正确否决了"放入 application service"（会造成依赖方向反转）。
-你的重构方向是对的。
-
-### 2.3 段 2 不应放 repository 层
-
-1. **修饰是业务规则，不是取数**。三态 flag（Delete/裁剪/保留）、合规裁剪策略来自
-   可配置工作簿，是 domain policy；repository 的契约应是"提供事实"，不该承载
-   "按某报表口径加工事实"的语义。
-2. **消费方口径天然分叉**：spc 同时需要修饰前特征（真实能力值）与修饰后特征（展示）；
-   ctq 用独立修饰目录；monitor 需要全类型。把分叉塞进 repository 会让
-   `get_spc_measurements` 的契约不断膨胀，repository 变成上帝对象。
-3. **特征计算是纯领域函数**：`preprocess_sheet_features` 在 `core/` 层、零 I/O。
-   让 repository 输出派生分析结果，会把 core 的演进拖进 infrastructure 的修改半径。
-4. **共享缓存是 delivery 关注点**：`st.cache_data` 属于 Streamlit 交付框架，
-   放进 infrastructure 会让出站适配器依赖 Web 框架，破坏可测试性
-   （当前 application 服务已能用 fake ports 单测，正是 ADR-0012 的收益）。
-
-### 2.4 段 2 的正确位置：application 层共享服务
-
-段 2 是"编排 domain 规则"的用例逻辑，典型 application 层职责。三模块共享它，
-通过一个**应用层共享服务**承载（即本文 V1 方案的 `SheetFeaturesProvider`，保留），
-它**向下只依赖 `SpcDataPort`**（application → port ← infrastructure adapter），
-依赖方向始终向内，与 ADR-0012 完全兼容。
+制备管线的职责是"把持久化事实装配为领域就绪的测量集"——SQL/Parquet/白名单表/规则文件/
+YAML，全部是出站适配器关注点，且所有消费方口径完全一致。把它留在 spc 会让 ctq/monitor
+反向依赖一个兄弟业务模块；放入 measurement 后，spc 退化为与 ctq 对称的薄投影，
+符合 ADR-0012 确立的"共享适配器 + 各报表派生"方向。
 
 ---
 
-## 3. 目标设计（在 ADR-0012 基础上的增量）
+## 3. 段 2 终审：对用户修正点 2 的回答与修正后方案
 
-### 3.1 架构图
+### 3.1 用户的质疑成立（V2 方案的修正）
 
-```mermaid
-flowchart LR
-  subgraph Pages["Inbound: Streamlit Pages"]
-    P1["SPC监控报表"]
-    P2["CTQ监控报表"]
-    P3["自动预警看板"]
-  end
+V2 的 `SheetFeaturesService` 把各模块 repository 汇总进一个共享服务、再回供各模块
+service —— 这在 DDD 下确实不成立：它把"repository → 本模块 application service"的
+1:1 编排关系改成了漏斗，模块 service 不再拥有自己的数据管线。
 
-  subgraph App["Application Layer"]
-    UC1["SpcReportService"]
-    UC2["CtqReportService"]
-    UC3["MonitorAnalysisService<br/>(判定/洗白/时间桶/聚合)"]
-    SFS["SheetFeaturesService<br/>修饰 + 特征计算 + st.cache_data<br/>【新增，共享】"]
-    PORT["&lt;&lt;port&gt;&gt; SpcDataPort"]
-    MPORT["&lt;&lt;port&gt;&gt; MonitorSpcDataPort"]
-  end
+### 3.2 终审结论：共享的是"无状态计算函数"，不是"服务"
 
-  subgraph Infra["Infrastructure (出站适配器)"]
-    REPO["SpcRepository<br/>段1 制备"]
-    SNAP["measurement 快照/DAO"]
-  end
+重新审视事实后，段 2 的真实结构是：
 
-  P1 --> UC1
-  P2 --> UC2
-  P3 --> UC3
-  UC1 --> SFS
-  UC2 --> SFS
-  UC3 --> SFS
-  UC3 --> MPORT
-  SFS --> PORT
-  REPO -.implements.-> PORT
-  REPO --> SNAP
-```
+1. **修饰是同一个领域引擎**（`core/spc/spc_sheet_oos_decoration.py`），SPC/CTQ 的唯一差异是
+   工作簿文件名参数；特征计算是 `core/` 纯函数。**领域层已经共享**，无需新建服务。
+2. 各模块的差异化只在"用哪个口径（scope）调用引擎"：
+   - spc 模块 → scope=`spc`；ctq 模块 → scope=`ctq`；
+   - monitor → 按 data_type 路由：SPC 行→`spc`，CTQ 行→`ctq`（D2），AOI 行→**不修饰**（D3）。
+3. 唯一真正缺失的共享点是**计算结果缓存**（消除重复执行）。
 
-### 3.2 新增模块（唯一新增）
-
-```text
-src/inline_domain/application/shared/
-  __init__.py
-  sheet_features_service.py   # SheetFeaturesService
-```
+因此最终方案：**保留各模块 repository↔service 的 1:1 结构**，新增一个
+**无状态、带 `st.cache_data` 的共享计算函数**（application 层的缓存边界工具），
+各模块 service 用自己的 repository 数据 + 自己的 scope 调用它：
 
 ```python
-@dataclass(frozen=True)
-class SheetFeaturesQuery:
-    prod_code: str
-    data_type_filter: str        # 'SPC' | 'CTQ' | 'ALL'（AOI 随 ALL 覆盖）
-    decoration_scope: str        # 'spc' | 'ctq' → 修饰目录口径（决策点 D2）
-    snapshot_signature: str = "" # 参与缓存 key，支撑强刷失效
-
-class SheetFeaturesService:
-    """段 2 的唯一执行点：经 SpcDataPort 取制备后测量 → 修饰 → 特征计算。"""
-
-    def __init__(self, data_port_factory: Callable[[str], SpcDataPort]): ...
-
-    @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=8, ttl=4 * 60 * 60)
-    def fetch_features(_data_port_factory, query_json: str) -> dict:
-        """缓存 key = (prod, data_type, decoration_scope, signature)；
-        时间窗口不进 key（repository 已输出 3 个月滚动窗口），消费方自行切片。"""
+# application/shared/decorated_features.py（新增，唯一新增的应用层共享点）
+@st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
+def fetch_decorated_features(
+    _measurements_and_specs,   # 下划线前缀：不参与 hash（沿用 _db_manager 既有模式）
+    prod_code: str,
+    scope: str,                # 'spc' | 'ctq' | 'none'
+    snapshot_signature: str = "",
+) -> dict:                     # 只含原生 DataFrame/dict（ADR-0001）
+    """按口径执行 Sheet OOS 修饰 + 特征计算；缓存 key=(prod, scope, signature)。"""
 ```
 
-要点：
+- spc service → `fetch_decorated_features(..., scope="spc")`
+- ctq service → `fetch_decorated_features(..., scope="ctq")`
+- monitor → 按 data_type 分组分别调用 `spc`/`ctq`/`none`，再合并进入判定管线
+- **一致性由此达成**：SPC 页与 monitor 的 SPC 部分命中同一缓存条目（同 prod、同 scope、
+  同签名），产出必然相同；CTQ 同理。这正是需求的一致性目标，且不引入服务漏斗。
+- 缓存函数**只做内存计算**；spc/ctq 的审计文件落盘保留在各自模块的薄包装中
+  （缓存外执行，行为不变）。
 
-- 方法名**不带下划线前缀**，保持 `extract_cached_funcs` 强刷联动可抓取；
-  三个页面的 `funcs_to_clear` 需登记它（见 4.3）。
-- 只返回原生 dict/DataFrame，ViewModel 在缓存边界外组装（延续现有约定）。
-- 内部按 `decoration_scope` 分派到现有 `prepare_decorated_spc_data` /
-  `prepare_decorated_ctq_data`——**段 2 逻辑不平移、不改行为，只收敛调用点**。
-
-### 3.3 monitor 重构后的形态
+### 3.3 monitor 的最终形态
 
 `fetch_dashboard_data_dict` 变为薄判定层：
 
-1. 经 `SheetFeaturesService` 取 `ALL` 特征（命中时零计算）；
-2. 经 `MonitorSpcDataPort.get_scrap_data` 取报废数据（monitor 专属分支，不变）；
-3. `apply_spc_rules → sanitize_to_compliant → 站点聚合 → 时间桶 → 全局/明细聚合`（不变）。
+1. 经本模块 repository（MonitorSpcDataPort）取 ALL 制备测量；
+2. 按 data_type 分组，经共享缓存函数取各口径特征（CTQ 组走 ctq 口径 = D2；AOI 组 `none` = D3）；
+3. 报废分支经 monitor 自己的 scrap_repository；
+4. `apply_spc_rules → sanitize_to_compliant → 站点聚合 → 时间桶 → 全局/明细聚合`（不变）。
+   `get_monitor_defect_details` 走同一路径，删除内联取数/修饰副本。
 
-`get_monitor_defect_details` 同样改走共享服务，删除其内联的取数/修饰副本
-（当前它与主流程各抄一遍，顺带收敛）。
+### 3.4 D3 的对齐边界（基于事实核查）
+
+monitor-AOI 与 aoi_tt **不是同一份数据**：参数识别（白名单 NULL→AOI vs 规格表
+param_type NULL）、粒度（sheet 特征 vs 保留 lot）、语义（报警判定 vs TT 均值）均不同。
+本次对齐到：**同源快照（已成立）+ AOI 行免于 SPC 修饰文件处理（与 aoi_tt 无修饰一致）
++ aoi_tt 模块结构核查**。"参数识别集统一"属行为变更，列入 Out of scope 单独立项。
+注意：AOI 行免修饰后 monitor 的 AOI 报警数可能变化（预期内的对齐结果）。
 
 ---
 
-## 4. 迁移计划（更新）
+## 4. 迁移步骤与验证
 
-已完成（ADR-0012）：段 1 沉入 repository、ports/composition 落地、页面注入工厂。
+1. **特征化测试先行**：固定 prod + 结束日期，对 SPC/CTQ/monitor 输出做快照断言（安全网）。
+2. 段 1：迁 `main_process_trace.py`、`measurement_preprocessor.py`、制备管线、规格覆盖、
+   异常点过滤 → `measurement/measurement_preparation.py`；spc_repository 改薄投影；
+   scrap 迁 monitor；composition 重接线 + 修 import；保序。
+3. 段 2：新增 `application/shared/decorated_features.py`；spc/ctq service 改走共享缓存函数；
+   monitor 按类型路由修饰（D2/D3）；下钻收敛。
+4. 页面登记清缓存：`自动预警看板.py:72` 等 `funcs_to_clear` 增加共享缓存函数。
+5. 验证：定向单测/集成 → SPC/CTQ/AOI_TT/自动预警 E2E → 全量 pytest（基线 7 个既有失败除外）。
+6. 文档：`references/domain/Inline_domain/` infrastructure 架构规范 + 本设计文档（已更新）。
 
-待办：
-
-1. **特征化测试**：固定 prod + 结束日期，对 monitor 三输出 DF 与 spc/ctq payload 做快照断言。
-2. **建 `application/shared/sheet_features_service.py`**：收敛段 2，挂缓存。
-3. **切 spc / ctq**：两个 Service 改经共享服务取特征，验证页面输出不变。
-4. **切 monitor**：替换 `fetch_dashboard_data_dict` 与 `get_monitor_defect_details` 的
-   修饰段；monitor 自身薄缓存保留。
-5. **页面登记清缓存**：`app/pages/自动预警看板.py:72` 及 SPC/CTQ 页面的
-   `funcs_to_clear` 增加 `SheetFeaturesService.fetch_features`。
-6. 保留 `INLINE_USE_SHARED_FEATURES` 开关，单步可回滚。
-
-### 4.1 风险与对策
+### 风险与对策
 
 | 风险 | 对策 |
 |---|---|
-| 强刷链路断裂 | 页面登记共享服务缓存函数 + `snapshot_signature` 参与缓存 key，双保险 |
-| 内存膨胀 | `max_entries=8`（产品数 × 口径数估算）+ TTL 兜底 |
-| CTQ 口径切换改变 monitor 数字 | 决策点 D2 确认后切换，特征化测试出 diff 报告 |
+| 制备管线迁移后顺序变化导致口径漂移 | 特征化测试逐断点比对；保序约束写入架构文档 |
+| 强刷链路断裂 | 页面登记共享缓存函数 + snapshot_signature 入 key |
+| 审计文件落盘语义变化 | 落盘保留在模块薄包装（缓存外），行为不变 |
+| AOI 免修饰改变 monitor 报警数 | D3 预期内对齐结果，计划批准时显式确认 |
 
-### 4.2 待确认决策点
+### 不做的事（YAGNI / Out of scope）
 
-- **D2（CTQ 修饰口径，关键）**：monitor 的 CTQ 数据是否切换到 `resources/<prod>/ctq/`
-  口径？切换 = 与 ctq 模块严格一致（推荐，正是一致性目标）；不切换 = 维持现状，
-  一致性仅部分达成。
-- **D3（AOI 归属）**：monitor 的 AOI 数据随 `ALL` 经共享服务同源（当前架构下自然成立），
-  无需独立处理；aoi_tt/aoi_rs 报表不在本次范围。
-- ~~D1（窗口归属）~~：已被 ADR-0012 消解——repository 固定输出 3 个月滚动窗口，
-  共享服务缓存不含时间维度，消费方自行切片。
-
----
-
-## 5. 总结
-
-- **段 1（取数+白名单+data_type 注入）放 repository 层：正确**，你的重构已落地，
-  "数据只提取一次"在快照 + 制备层已达成。
-- **段 2（修饰+特征计算）不放 repository，也不放 monitor**：它是应用层用例逻辑，
-  正确位置是 `application/shared` 的共享服务，向下只依赖 `SpcDataPort`。
-- 完成 4.1-4.6 后，三模块实现**同源（段 1，repository）+ 同源（段 2，共享服务）**，
-  重复计算仅剩 monitor 专属的判定/聚合薄层——这是它不可共享的领域职责。
+- 不统一 monitor-AOI 与 aoi_tt 的参数识别集；不迁移历史 CTQ flag 数据；
+- 不重构 outlier COM 写副作用；不动 aoi_rs；不改 monitor 判定/聚合口径与 aoi_tt 公式。

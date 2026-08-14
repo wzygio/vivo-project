@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.inline_domain.infrastructure.spc.measurement_preprocessor import (
-    filter_excluded_spc_param_names,
+from src.inline_domain.infrastructure.measurement.measurement_preprocessor import (
+    filter_excluded_param_names,
 )
 
 
-def test_spc_preprocessor_excludes_loss_but_keeps_mt_ch_parameters() -> None:
+def test_preprocessor_excludes_loss_but_keeps_mt_ch_parameters() -> None:
     measurements = pd.DataFrame(
         {
             "param_name": ["PPA_B_X", "TOTAL_LOSS_RATE", "MT_CH_PRESS_A"],
@@ -15,6 +15,6 @@ def test_spc_preprocessor_excludes_loss_but_keeps_mt_ch_parameters() -> None:
         }
     )
 
-    result = filter_excluded_spc_param_names(measurements)
+    result = filter_excluded_param_names(measurements)
 
     assert result["param_name"].tolist() == ["PPA_B_X", "MT_CH_PRESS_A"]

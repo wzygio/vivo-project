@@ -7,6 +7,9 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+    InlineMeasurementPreparationRepository,
+)
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 
 
@@ -123,10 +126,12 @@ def test_repository_filters_by_whitelist_parameter_data_type() -> None:
             return pd.DataFrame()
 
     with patch.object(
-        SpcRepository,
+        InlineMeasurementPreparationRepository,
         "_apply_outlier_filters",
         lambda self, df, prod_code: df,
     ):
-        result = SpcRepository(Raw(), Metadata(), History()).get_spc_measurements(query)
+        result = SpcRepository(
+            InlineMeasurementPreparationRepository(Raw(), Metadata(), History())
+        ).get_spc_measurements(query)
 
     assert result["param_name"].tolist() == ["SPC_PARAM"]

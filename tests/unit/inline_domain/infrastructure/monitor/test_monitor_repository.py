@@ -23,13 +23,15 @@ class FakeSpcSource:
     def get_spc_spec_limits(self, prod_code: str) -> pd.DataFrame:
         return pd.DataFrame({"prod_code": [prod_code]})
 
+
+class FakeScrapSource:
     def get_scrap_data(self, prod_code: str) -> pd.DataFrame:
         return pd.DataFrame({"prod_code": [prod_code], "data_type": ["报废"]})
 
 
 def test_monitor_repository_exposes_monitor_data_capabilities() -> None:
     source = FakeSpcSource()
-    repository = InlineMonitorRepository(source)
+    repository = InlineMonitorRepository(source, FakeScrapSource())
     config = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-08-01",

@@ -1,0 +1,153 @@
+- generic:
+  - generic [ref=f5e259]:
+    - log [ref=f5e260]:
+      - generic [ref=f5e261]: 5 options available.
+    - log
+  - generic [ref=f5e2]:
+    - generic [ref=f5e6]:
+      - generic:
+        - list:
+          - listitem:
+            - link "Home" [ref=f5e7] [cursor=pointer]:
+              - /url: http://localhost:8503/
+              - generic:
+                - generic:
+                  - paragraph: Home
+          - listitem:
+            - link "AOI RS监控报表" [ref=f5e8] [cursor=pointer]:
+              - /url: http://localhost:8503/AOI_RS监控报表
+              - generic:
+                - generic:
+                  - paragraph: AOI RS监控报表
+          - listitem:
+            - link "AOI TT监控报表" [ref=f5e9] [cursor=pointer]:
+              - /url: http://localhost:8503/AOI_TT监控报表
+              - generic:
+                - generic:
+                  - paragraph: AOI TT监控报表
+          - listitem:
+            - link "CTQ监控报表" [ref=f5e10] [cursor=pointer]:
+              - /url: http://localhost:8503/CTQ监控报表
+              - generic:
+                - generic:
+                  - paragraph: CTQ监控报表
+          - listitem:
+            - link "SPC监控报表" [ref=f5e11] [cursor=pointer]:
+              - /url: http://localhost:8503/SPC监控报表
+              - generic:
+                - generic:
+                  - paragraph: SPC监控报表
+          - listitem:
+            - link "专项资料-台账周报" [ref=f5e12] [cursor=pointer]:
+              - /url: http://localhost:8503/专项资料-台账周报
+              - generic:
+                - generic:
+                  - paragraph: 专项资料-台账周报
+          - listitem:
+            - link "专项资料-解析报告" [ref=f5e13] [cursor=pointer]:
+              - /url: http://localhost:8503/专项资料-解析报告
+              - generic:
+                - generic:
+                  - paragraph: 专项资料-解析报告
+          - listitem:
+            - link "入库不良率ByLot明细表" [ref=f5e14] [cursor=pointer]:
+              - /url: http://localhost:8503/入库不良率ByLot明细表
+              - generic:
+                - generic:
+                  - paragraph: 入库不良率ByLot明细表
+          - listitem:
+            - link "入库不良率BySheet明细表" [ref=f5e15] [cursor=pointer]:
+              - /url: http://localhost:8503/入库不良率BySheet明细表
+              - generic:
+                - generic:
+                  - paragraph: 入库不良率BySheet明细表
+          - listitem:
+            - link "入库不良率分析看板" [ref=f5e16] [cursor=pointer]:
+              - /url: http://localhost:8503/入库不良率分析看板
+              - generic:
+                - generic:
+                  - paragraph: 入库不良率分析看板
+          - listitem:
+            - link "关键备件报表" [ref=f5e17] [cursor=pointer]:
+              - /url: http://localhost:8503/关键备件报表
+              - generic:
+                - generic:
+                  - paragraph: 关键备件报表
+          - listitem:
+            - link "自动预警看板" [ref=f5e18] [cursor=pointer]:
+              - /url: http://localhost:8503/自动预警看板
+              - generic:
+                - generic:
+                  - paragraph: 自动预警看板
+    - generic [ref=f5e3]:
+      - banner [ref=f5e21]:
+        - generic [ref=f5e23]:
+          - button "keyboard_double_arrow_right" [ref=f5e26] [cursor=pointer]
+          - generic [ref=f5e29]:
+            - button "Deploy" [ref=f5e40] [cursor=pointer]
+            - button "Main menu" [ref=f5e44] [cursor=pointer]
+      - generic [ref=f5e48]:
+        - heading "自动预警看板" [level=1] [ref=f5e53]:
+          - text: 自动预警看板
+          - generic [ref=f5e54]:
+            - link "Link to heading":
+              - /url: "#26d191b9"
+        - generic [ref=f5e58]:
+          - group [ref=f5e64]:
+            - combobox "📦 当前产品型号" [ref=f5e65]: M626
+            - button "Open" [ref=f5e66] [cursor=pointer]
+          - button [ref=f5e79] [cursor=pointer]:
+            - paragraph [ref=f5e83]: 🔄 刷新数据
+          - button [ref=f5e91] [cursor=pointer]:
+            - paragraph [ref=f5e95]: 🔄 刷新缓存
+        - generic [ref=f5e97]:
+          - generic [ref=f5e101]:
+            - generic [ref=f5e102]:
+              - paragraph [ref=f5e105]: 监控类型
+              - button "Help for 监控类型" [ref=f5e109] [cursor=pointer]
+            - group [ref=f5e114]:
+              - combobox "监控类型" [active] [ref=f5e115]: ALL
+              - button "Open" [ref=f5e116] [cursor=pointer]
+          - generic [ref=f5e123]:
+            - paragraph [ref=f5e127]: 产品型号
+            - generic [ref=f5e130]:
+              - generic [ref=f5e131]:
+                - button "M626, close by backspace":
+                  - generic "M626" [ref=f5e132]
+                - button "M678, close by backspace":
+                  - generic "M678" [ref=f5e136]
+                - button "Z571, close by backspace":
+                  - generic "Z571" [ref=f5e140]
+                - button "M673, close by backspace":
+                  - generic "M673" [ref=f5e144]
+                - button "Z517, close by backspace":
+                  - generic "Z517" [ref=f5e148]
+                - combobox "Selected M626, M678, Z571, M673, Z517. 产品型号" [ref=f5e153]
+              - generic [ref=f5e154]:
+                - button "Clear all" [ref=f5e155] [cursor=pointer]
+                - img "open" [ref=f5e157] [cursor=pointer]
+          - generic [ref=f5e162]:
+            - paragraph [ref=f5e166]: 厂别
+            - generic [ref=f5e169]:
+              - generic [ref=f5e170]:
+                - button "ARRAY, close by backspace":
+                  - generic "ARRAY" [ref=f5e171]
+                - button "OLED, close by backspace":
+                  - generic "OLED" [ref=f5e175]
+                - button "TP, close by backspace":
+                  - generic "TP" [ref=f5e179]
+                - combobox "Selected ARRAY, OLED, TP. 厂别" [ref=f5e184]
+              - generic [ref=f5e185]:
+                - button "Clear all" [ref=f5e186] [cursor=pointer]
+                - img "open" [ref=f5e188] [cursor=pointer]
+        - heading "📊 ALL报警率汇总图" [level=4] [ref=f5e227]:
+          - text: 📊 ALL报警率汇总图
+          - generic [ref=f5e228]:
+            - link "Link to heading":
+              - /url: "#all"
+        - separator [ref=f5e242]
+        - heading "🏆 Top 10 异常站点分布图" [level=4] [ref=f5e248]:
+          - text: 🏆 Top 10 异常站点分布图
+          - generic [ref=f5e249]:
+            - link "Link to heading":
+              - /url: "#top-10"

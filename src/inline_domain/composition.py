@@ -15,8 +15,12 @@ from src.inline_domain.infrastructure.measurement.measurement_metadata_loader im
 from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
     InlineMainProcessHistoryRepository,
 )
-from inline_domain.infrastructure.spc.spc_repository import SpcRepository
+from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+    InlineMeasurementPreparationRepository,
+)
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository
+from src.inline_domain.infrastructure.monitor.scrap_repository import InlineScrapRepository
+from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -30,20 +34,29 @@ def build_raw_measurement_repository(
     )
 
 
-def build_spc_repository(db_manager: DatabaseManager, prod_code: str) -> SpcRepository:
-    raw = build_raw_measurement_repository(db_manager, prod_code)
-    return SpcRepository(
-        raw_measurements=raw,
+def build_measurement_preparation_repository(
+    db_manager: DatabaseManager,
+    prod_code: str,
+) -> InlineMeasurementPreparationRepository:
+    return InlineMeasurementPreparationRepository(
+        raw_measurements=build_raw_measurement_repository(db_manager, prod_code),
         metadata=InlineMeasurementMetadataRepository(db_manager),
         main_process_history=InlineMainProcessHistoryRepository(db_manager),
     )
+
+
+def build_spc_repository(db_manager: DatabaseManager, prod_code: str) -> SpcRepository:
+    return SpcRepository(build_measurement_preparation_repository(db_manager, prod_code))
 
 
 def build_monitor_repository(
     db_manager: DatabaseManager,
     prod_code: str,
 ) -> InlineMonitorRepository:
-    return InlineMonitorRepository(build_spc_repository(db_manager, prod_code))
+    return InlineMonitorRepository(
+        build_spc_repository(db_manager, prod_code),
+        InlineScrapRepository(),
+    )
 
 
 def build_ctq_repository(db_manager: DatabaseManager, prod_code: str) -> CtqRepository:

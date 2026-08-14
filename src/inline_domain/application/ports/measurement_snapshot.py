@@ -6,6 +6,8 @@ from typing import Protocol
 
 import pandas as pd
 
+from src.inline_domain.application.spc.dtos import SpcQueryConfig
+
 
 class MeasurementSnapshotPort(Protocol):
     """Provide one product's normalized raw measurement fact set."""
@@ -35,3 +37,15 @@ class MainProcessHistoryPort(Protocol):
         history_start: object,
         history_end: object,
     ) -> pd.DataFrame: ...
+
+
+class MeasurementPreparationPort(Protocol):
+    """Provide the fully prepared shared measurement projection and spec limits."""
+
+    def get_prepared_measurements(
+        self,
+        config: SpcQueryConfig,
+        force_refresh: bool = False,
+    ) -> pd.DataFrame: ...
+
+    def get_spec_limits(self, prod_code: str) -> pd.DataFrame: ...

@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
+from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+    InlineMeasurementPreparationRepository,
+)
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -35,9 +38,14 @@ def test_spc_and_aoi_tt_adapters_do_not_own_database_queries() -> None:
     assert violations == []
 
 
-def test_spc_repository_rejects_missing_monitor_ports() -> None:
+def test_preparation_repository_rejects_missing_monitor_ports() -> None:
     with pytest.raises(ValueError, match="requires raw measurement"):
-        SpcRepository(None, None, None)
+        InlineMeasurementPreparationRepository(None, None, None)
+
+
+def test_spc_repository_rejects_missing_preparation_port() -> None:
+    with pytest.raises(ValueError, match="requires a measurement preparation port"):
+        SpcRepository(None)
 
 
 def test_monitor_application_service_does_not_import_infrastructure() -> None:

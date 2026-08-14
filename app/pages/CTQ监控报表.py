@@ -33,6 +33,7 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.composition import build_ctq_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.shared_kernel.config import ConfigLoader
@@ -66,7 +67,7 @@ ctq_data_port = build_ctq_repository(db_manager, current_product)
 render_page_header(
     title="CTQ监控报表",
     config=active_config,
-    cached_funcs=extract_cached_funcs(CtqReportService),
+    cached_funcs=extract_cached_funcs(CtqReportService) + [fetch_decorated_features],
     product_cache_scope=current_product,
     refresh_handlers=[
         lambda: refresh_raw_measurements(

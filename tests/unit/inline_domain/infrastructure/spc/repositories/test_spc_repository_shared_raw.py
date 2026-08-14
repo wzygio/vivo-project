@@ -3,6 +3,9 @@ from __future__ import annotations
 import pandas as pd
 
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+    InlineMeasurementPreparationRepository,
+)
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
 
 
@@ -65,14 +68,16 @@ class FakeMainProcessHistory:
 def test_spc_repository_derives_spc_view_from_shared_raw_port(monkeypatch) -> None:
     raw = FakeRawMeasurements()
     monkeypatch.setattr(
-        SpcRepository,
+        InlineMeasurementPreparationRepository,
         "_apply_outlier_filters",
         lambda _self, measurements, _prod: measurements,
     )
     repository = SpcRepository(
-        raw_measurements=raw,
-        metadata=FakeMetadata(),
-        main_process_history=FakeMainProcessHistory(),
+        InlineMeasurementPreparationRepository(
+            raw_measurements=raw,
+            metadata=FakeMetadata(),
+            main_process_history=FakeMainProcessHistory(),
+        )
     )
 
     result = repository.get_spc_measurements(

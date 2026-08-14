@@ -1,4 +1,4 @@
-"""Pure SPC preprocessing for main-process routing and history matching."""
+"""Pure preprocessing for main-process routing and history matching."""
 
 from __future__ import annotations
 

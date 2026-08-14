@@ -27,6 +27,7 @@ from app.manager.compliance_manager import (
 
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.composition import build_monitor_repository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -72,6 +73,7 @@ except Exception as e:
     st.stop()
 
 funcs_to_clear = extract_cached_funcs(MonitorAnalysisService) + [
+    fetch_decorated_features,
     get_cached_query_window,
     get_cached_alarm_detail_tables,
 ]

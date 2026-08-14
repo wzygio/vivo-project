@@ -2,13 +2,13 @@
 
 > **领域代码**: `inline_domain`  
 > **对应目录**: [`src/inline_domain/`](../../src/inline_domain/)  
-> **最后更新**: 2026-07-21
+> **最后更新**: 2026-08-13
 
 ---
 
 ## 1. 概述
 
-Inline 数据域负责面板制造过程中的在线量测监控。目前包含三条独立应用路径：`monitor` 提供自动预警聚合，`spc` 提供 SPC 分布和 CPM/CPK 能力指数，`ctq` 提供不含能力指数的 CTQ 分布报表。三者复用同一物理量测仓储，但在应用服务边界固定各自的数据类型和返回契约。
+Inline 数据域负责面板制造过程中的在线量测监控。应用路径：`monitor` 提供自动预警聚合，`spc` 提供 SPC 分布和 CPM/CPK 能力指数，`ctq` 提供不含能力指数的 CTQ 分布报表，`aoi_tt` 提供 TT 趋势报表。四者共享 `infrastructure/measurement/` 的同一测量快照与制备管线，在各自应用服务边界固定数据类型和返回契约。
 
 ---
 
@@ -20,6 +20,8 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 │  monitor/monitor_service.py (自动预警)             │
 │  spc/spc_service.py         (SPC + CPM/CPK)       │
 │  ctq/ctq_service.py         (CTQ 分布，无能力指数)   │
+│  aoi_tt/aoi_tt_service.py   (TT 趋势)              │
+│  shared/decorated_features.py (共享修饰+特征缓存)    │
 ├─────────────────────────────────────────────────┤
 │               Core Domain Layer                   │
 │  monitor/monitor_calculator.py (预警规则与特征降维)   │
@@ -27,10 +29,12 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 │  ctq/indicator_chart.py        (UNI 图表类型规则)     │
 ├─────────────────────────────────────────────────┤
 │            Infrastructure Layer                   │
-│  data_loader.py  (DAO: 多厂 UNION 查询 + 白名单裸查)  │
-│  spc_repository.py (SpcRepository: 快照缓存 + 白名单过滤) │
+│  measurement/ (共享 DAO + 原始快照 + 制备管线)        │
+│  spc/ ctq/ aoi_tt/ monitor/ (平行薄投影/门面)       │
 └─────────────────────────────────────────────────┘
 ```
+
+> Infrastructure 详细规范见 [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。
 
 ---
 
@@ -44,6 +48,7 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 - 接收前端查询参数（产品代码、厂别、时间范围等）
 - 协调多厂别数据源（通过多态分表 UNION）
 - 构建重叠时间桶（Overlapping Time Buckets）
+- 按 data_type 路由修饰口径：SPC→spc、CTQ→ctq、AOI→免修饰（D2/D3）
 - 调度 SPC 规则引擎
 - 应用合规修饰（`compliance_config.yaml`）
 
@@ -60,12 +65,12 @@ Inline 数据域负责面板制造过程中的在线量测监控。目前包含�
 - 在服务边界强制 `data_type_filter = "CTQ"`，前端不参与数据类型判断。
 - 返回 Sheet 特征、原始点位、指标元数据和 OOS 修饰结果；契约中不包含 CPM/CPK、CPK 预警或 CPK 修饰。
 - 参数名称包含 `UNI` 时由 Core 标记 `chart_type = "line"`，其他参数标记为 `box`。
-- OOS 修饰文件位于 `resources/<product>/ctq/`，与 SPC 产品根目录资源隔离。
+- OOS 修饰文件为 `resources/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet），与 SPC 修饰文件隔离、共用同一引擎。
 - 页面缓存遵守 ADR-0001：只缓存 DataFrame/原生容器/标量，并在缓存外构造 `CtqReportViewModel`。
 
-### 3.4 `infrastructure/spc/data_loader.py` 中的 `SpcQueryConfig`
+### 3.4 `application/spc/dtos.py` 中的 `SpcQueryConfig`
 
-`SpcQueryConfig` DTO — 封装 SPC 查询参数。
+`SpcQueryConfig` DTO — 封装 SPC 查询参数（应用层契约，各模块共用）。
 
 ---
 
@@ -113,9 +118,16 @@ def classify_param_type(raw_data_type: Optional[str]) -> str:
 
 ## 5. 基础设施层 (Infrastructure)
 
-### 5.1 [`data_loader.py`](../../src/inline_domain/infrastructure/spc/data_loader.py)
+完整规范（模块矩阵、制备管线顺序、快照契约、装配）见
+[`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。要点：
 
-DAO 层职责（纯数据访问，无业务逻辑）：
+- `measurement/` 拥有三厂测量 DAO、参数元数据 DAO、产品级原始 Parquet 快照
+  （3 个月滚动窗口、8h TTL、策略版本、原子写、失败降级）与共享制备管线
+  （`measurement_preparation.py`）。
+- spc / ctq / aoi_tt / monitor 为平行薄投影模块；报废适配器归 monitor
+  （`monitor/scrap_repository.py`）；aoi_rs 独立。
+- 制备管线顺序为行为契约：清洗 → 排除参数（LOSS）→ 去重 → 白名单 merge +
+  data_type 注入/过滤 → 异常点过滤 → 时间/维度过滤 → 主制程追溯。
 
 **涉及数据库表：**
 
@@ -128,38 +140,7 @@ DAO 层职责（纯数据访问，无业务逻辑）：
 | `dwd_imp_dv_param_spec` | - | 配置 | 管控规格基准表（USL/LSL/UCL/LCL） |
 | `DWR_MES_PRODUCTSPEC` | - | 字典 | MES 产品字典表（productspecname → productcode 翻译） |
 
-**公开函数：**
-
-| 函数 | 职责 | 返回 |
-|------|------|------|
-| `load_spc_measurements(db, start, end, prod)` | UNION ALL 三厂时序表 + JOIN 字典表去重 | 全量测量数据 |
-| `load_spc_spec_limits(db, prod)` | 查询管控规格基准 | USL/LSL/UCL/LCL |
-| `load_param_whitelist(db, prod)` | **裸查询** IMP_SPC_TZBJX，不做分类、不做筛选 | (param_name, raw_data_type) |
-
-> 注意：`load_param_whitelist` 返回的是 DB 原始 `data_type` 值，分类映射由 Core 层 `spc_param_classifier` 完成。
-
-### 5.2 [`spc_repository.py`](../../src/inline_domain/infrastructure/spc/repositories/spc_repository.py)
-
-`SpcRepository` 职责：
-- Parquet 格式快照缓存（L1 缓存，TTL 8h）
-- 参数筛选策略版本校验；版本变化时全量刷新，数据库不可用时仍降级到旧快照
-- **参数白名单过滤**（三步：DAO 裸查 → Core 分类 → Repo 筛选 + merge）
-- 异常值过滤（Outlier Filter）
-- 规格覆盖（Override from YAML）
-- 报废数据加载与伪装
-
-**白名单过滤流程（详见第 8 节）：**
-
-```
-raw_whitelist = load_param_whitelist(db, prod_code)     # ① DAO: 裸查询
-raw_whitelist["data_type"] = raw_whitelist["data_type"]
-    .apply(classify_param_type)                          # ② Core: 分类映射
-if filter != "ALL":
-    raw_whitelist = raw_whitelist[raw_whitelist["data_type"] == filter]  # ③ Repo: 前端筛选
-df_filtered = df_filtered.merge(raw_whitelist, ...)      # ④ 注入 data_type 标签
-```
-
-参数名包含 `LOSS` 的记录仍在 SQL 与历史快照兜底层统一排除。`MT_CH_*`
+参数名包含 `LOSS` 的记录在制备层统一排除。`MT_CH_*`
 不属于全局排除项，其是否进入 SPC 报表完全由白名单中的标准化 `data_type`
 决定。
 
@@ -187,19 +168,26 @@ df_filtered = df_filtered.merge(raw_whitelist, ...)      # ④ 注入 data_type 
 PostgreSQL (多厂别分表)
     │
     ▼
-data_loader.py (UNION 查询)
+measurement/measurement_data_loader.py (UNION 查询)
     │
     ▼
-SpcRepository (共享快照 + 白名单 data_type 过滤)
+measurement/measurement_snapshot_repository.py (产品级原始快照)
+    │
+    ▼
+measurement/measurement_preparation.py (共享制备管线)
+    │
+    ▼
+各模块薄投影 Repository（spc / ctq / aoi_tt / monitor）
     │
     ▼
 Application boundary
-    ├── monitor: 自动预警
-    ├── spc: 强制 SPC → 分布 + CPM/CPK
-    └── ctq: 强制 CTQ → 分布 + OOS 修饰（无 CPM/CPK）
+    ├── monitor: ALL → 按 data_type 路由修饰（SPC/CTQ/AOI）→ 自动预警
+    ├── spc:   强制 SPC → 分布 + CPM/CPK
+    ├── ctq:   强制 CTQ → 分布 + OOS 修饰（无 CPM/CPK）
+    └── aoi_tt: 规格表识别 TT → 趋势
          │
          ▼
-Streamlit 独立 Monitor / SPC / CTQ 页面
+Streamlit 各独立页面
 ```
 
 ---
@@ -215,18 +203,18 @@ Streamlit 独立 Monitor / SPC / CTQ 页面
 Application Service
   config.data_type_filter = "SPC" / "CTQ"      ← 后端固定业务类型
        │
-Repository spc_repository.py                   ← 筛选在此层消费
+measurement/measurement_preparation.py          ← 筛选在此层消费
   │
-  ├─ ① raw_whitelist = load_param_whitelist(db, prod_code)
+  ├─ ① catalog = metadata.get_parameter_catalog(prod_code)
   │     └→ DAO: SELECT parmtername, data_type FROM IMP_SPC_TZBJX（裸查询）
   │
-  ├─ ② raw_whitelist["data_type"] = raw_whitelist["data_type"].apply(classify_param_type)
+  ├─ ② catalog["data_type"] = catalog["data_type"].apply(classify_param_type)
   │     └→ Core: NULL/空 → "AOI", else → UPPER（纯函数，无 I/O）
   │
-  ├─ ③ if filter != "ALL": raw_whitelist = raw_whitelist[... == filter]
-  │     └→ Repo: 按前端 data_type_filter 内存筛选（不下沉到 DAO）
+  ├─ ③ if filter != "ALL": catalog = catalog[... == filter]
+  │     └→ 制备层: 按 data_type_filter 内存筛选（不下沉到 DAO）
   │
-  └─ ④ df_filtered.merge(raw_whitelist, on="param_name", how="inner")
+  └─ ④ prepared.merge(catalog, on="param_name", how="inner")
         └→ 白名单过滤 + data_type 标签注入到测量数据
 ```
 
@@ -234,13 +222,13 @@ Repository spc_repository.py                   ← 筛选在此层消费
 
 | 层级 | 文件 | 职责 | 边界 |
 |------|------|------|------|
-| **DAO** | `data_loader.py` → `load_param_whitelist` | 裸 SQL 查询，返回原始列 | 不做分类映射、不做前端筛选 |
-| **Core** | `spc_param_classifier.py` → `classify_param_type` | 纯函数映射 raw → 标准标签 | 不访问 DB、不感知前端 |
-| **Repository** | `spc_repository.py` | 消费 DAO + Core，按 filter 筛选 + merge | 不写 SQL、不嵌入分类规则 |
+| **DAO** | `measurement/measurement_metadata_loader.py` | 裸 SQL 查询，返回原始列 | 不做分类映射、不做前端筛选 |
+| **Core** | `core/monitor/monitor_param_classifier.py` → `classify_param_type` | 纯函数映射 raw → 标准标签 | 不访问 DB、不感知前端 |
+| **制备层** | `measurement/measurement_preparation.py` | 消费 DAO + Core，按 filter 筛选 + merge | 不写 SQL、不嵌入分类规则 |
 
-**设计决策：DAO 不做快照。** `IMP_SPC_TZBJX` 查询成本极低（单表 DISTINCT，百级数据），且变更频率极低（新产品上线才变），快照收益 < 一致性风险。测量数据（三厂时序表）仍走 L1 Parquet 快照。
+**设计决策：DAO 不做快照。** `IMP_SPC_TZBJX` 查询成本极低（单表 DISTINCT，百级数据），且变更频率极低（新产品上线才变），快照收益 < 一致性风险。测量数据（三厂时序表）仍走 Parquet 快照。
 
 ---
 
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)

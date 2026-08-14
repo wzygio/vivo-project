@@ -9,6 +9,7 @@ import pytest
 
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc import spc_data_decoration
+from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
 from src.inline_domain.application.spc.spc_service import assign_indicator_chart_type
 from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
@@ -104,6 +105,7 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
     monkeypatch,
 ) -> None:
     SpcReportService.fetch_spc_report_payload.clear()
+    fetch_decorated_features.clear()
     calls = 0
 
     def fail_decoration(**_kwargs):
@@ -111,7 +113,8 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
         calls += 1
         raise SheetOosDecorationReadError("unreadable decoration file")
 
-    monkeypatch.setattr(spc_service, "prepare_decorated_spc_data", fail_decoration)
+    # 段2 改造后服务走共享缓存管线；在共享函数注入点模拟修饰工作簿读取失败。
+    monkeypatch.setattr(spc_service, "fetch_decorated_features", fail_decoration)
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",

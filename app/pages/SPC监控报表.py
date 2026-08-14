@@ -38,6 +38,7 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
@@ -77,7 +78,7 @@ spc_data_port = build_spc_repository(db_manager, current_product)
 render_page_header(
     title="SPC监控报表",
     config=active_config,
-    cached_funcs=extract_cached_funcs(SpcReportService),
+    cached_funcs=extract_cached_funcs(SpcReportService) + [fetch_decorated_features],
     product_cache_scope=current_product,
     refresh_handlers=[
         lambda: refresh_raw_measurements(

@@ -72,12 +72,19 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
   组合根。SPC、CTQ、AOI_TT 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
-- `infrastructure/spc/`、`infrastructure/ctq/` 和 `infrastructure/aoi_tt/`
-  分别从共享测量事实派生各自的数据契约。SPC 负责参数分类、异常值过滤、查询
-  维度过滤和主制程追溯；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
+- `infrastructure/measurement/measurement_preparation.py` 拥有共享制备管线：
+  清洗去重、LOSS 排除、白名单参数分类、异常值过滤、查询维度过滤、规格
+  YAML 覆盖和主制程追溯。`infrastructure/spc/`、`infrastructure/ctq/` 和
+  `infrastructure/aoi_tt/` 分别是共享测量事实的薄业务投影。SPC 透传制备
+  投影；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
   `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
+- `application/shared/decorated_features.py` 是 SPC/CTQ/monitor 共享的无状态
+  修饰+特征计算缓存函数 `fetch_decorated_features`（缓存 key 含产品、scope、
+  起止日期与快照签名）：scope='spc'/'ctq' 分别使用对应 OOS 修饰工作簿，
+  scope='none' 跳过修饰；monitor 按 data_type 分组路由 scope（SPC→spc、
+  CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，命中不重写。
 - 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
-  所有；`infrastructure/spc/main_process_trace.py` 仅执行规格路由和 DataFrame
+  所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
   图表类型；CPK 人工修饰文件
@@ -88,7 +95,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
   和规格口径仍遵循 ADR-0008。
 - `MonitorAnalysisService` 基于同一 SPC 数据源完成时间桶映射、规则判定和
-  汇总，自动预警页面再叠加合规配置的可见性规则。该服务只依赖
+  汇总，自动预警页面再叠加合规配置的可见性规则；报废数据由
+  `infrastructure/monitor/scrap_repository.py` 适配。该服务只依赖
   `MonitorSpcRepositoryFactory`；页面通过 `composition.py` 注入
   `infrastructure/monitor/monitor_repository.py` 中的 monitor 专属仓储门面，
   application 层不得直接导入 infrastructure。

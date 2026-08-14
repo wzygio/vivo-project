@@ -23,7 +23,9 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # 被测对象
-from inline_domain.infrastructure.spc.spc_repository import SpcRepository
+from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+    InlineMeasurementPreparationRepository,
+)
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -316,10 +318,10 @@ class TestOriginalCodeGracefulDegradation:
 
     def test_original_method_returns_df_on_encrypted_file(self, resource_dir):
         """
-        直接调用原始 SpcRepository._apply_outlier_filters，
+        直接调用原始 InlineMeasurementPreparationRepository._apply_outlier_filters，
         验证它在加密文件场景下不会崩溃，而是返回原始 df。
         """
-        repo = object.__new__(SpcRepository)
+        repo = object.__new__(InlineMeasurementPreparationRepository)
         df = pd.DataFrame({
             "step_id": ["1L650"],
             "param_name": ["CD1"],
@@ -373,7 +375,7 @@ class TestOutlierFilterBusinessLogic:
             "param_value": [5.0, 15.0, 3.0, 8.0, 12.0],
         })
 
-        repo = object.__new__(SpcRepository)
+        repo = object.__new__(InlineMeasurementPreparationRepository)
         result = repo._apply_outlier_filters(df, "M626")
 
         # 注意：原始 _apply_outlier_filters 会读取 hardcode 路径

@@ -18,7 +18,10 @@ from dataclasses import dataclass
 # 引入底层配置与仓储层
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
-from src.inline_domain.application.spc.spc_data_decoration import prepare_decorated_spc_data
+from src.inline_domain.application.shared.decorated_features import (
+    InMemoryFeaturesSource,
+    fetch_decorated_features,
+)
 
 # 引入核心计算引擎
 from src.inline_domain.core.monitor.monitor_calculator import (
@@ -47,6 +50,63 @@ class MonitorAnalysisService:
         'spc_cache',
         'yield_cache',
     }
+
+    # [D2/D3] monitor 按 data_type 路由修饰口径：
+    # SPC 组 -> spc_sheet_oos_decoration.xlsx；CTQ 组 -> ctq_sheet_oos_decoration.xlsx；
+    # AOI 组 -> 免修饰（与 aoi_tt 一致，AOI 报警数可能变化，属预期）。
+    # 其余类型（UNKNOWN/NaN 等）保持既有 spc 修饰口径。
+    _DECORATION_SCOPE_BY_DATA_TYPE: dict[str, str] = {
+        'SPC': 'spc',
+        'CTQ': 'ctq',
+        'AOI': 'none',
+    }
+
+    @staticmethod
+    def _decoration_scope_for_data_type(data_type: object) -> str:
+        return MonitorAnalysisService._DECORATION_SCOPE_BY_DATA_TYPE.get(
+            str(data_type).upper(), 'spc'
+        )
+
+    @staticmethod
+    def _fetch_grouped_features(
+        prod: str,
+        measurements_df: pd.DataFrame,
+        spec_df: pd.DataFrame,
+        start_dt: datetime,
+        end_dt: datetime,
+        snapshot_signature: str = "",
+    ) -> pd.DataFrame:
+        """
+        [D2/D3] 按 data_type 分组路由到共享修饰+特征管线，各组特征 concat 后返回。
+        每行组以 InMemoryFeaturesSource 喂给共享缓存函数，避免重复取数；
+        缓存 key 含 (prod, scope, start, end, snapshot_signature)，
+        与 SPC/CTQ 报表 service 在窗口一致时命中同一条目。
+        注意：共享函数内部 persist_files=True —— 缓存 miss 时修饰工作簿落盘一次，
+        命中时不重写（含下钻路径，替代原 persist_files=False 的内联副本）。
+        """
+        if 'data_type' in measurements_df.columns:
+            grouped_measurements = measurements_df.groupby('data_type', dropna=False)
+        else:
+            grouped_measurements = [(None, measurements_df)]
+
+        frames = []
+        for data_type, group_df in grouped_measurements:
+            scope = MonitorAnalysisService._decoration_scope_for_data_type(data_type)
+            features_payload = fetch_decorated_features(
+                _features_source=InMemoryFeaturesSource(group_df, spec_df),
+                prod_code=prod,
+                scope=scope,
+                start_date=start_dt.strftime("%Y-%m-%d"),
+                end_date=end_dt.strftime("%Y-%m-%d"),
+                snapshot_signature=snapshot_signature,
+            )
+            features = features_payload["sheet_features_df"]
+            if not features.empty:
+                frames.append(features)
+
+        if not frames:
+            return pd.DataFrame()
+        return pd.concat(frames, ignore_index=True)
 
     @classmethod
     def set_analysis_end_date(cls, end_date: Optional[datetime] = None):
@@ -303,12 +363,10 @@ class MonitorAnalysisService:
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                decorated_spc_data = prepare_decorated_spc_data(
-                    raw_measurements_df=m_df,
-                    spec_df=s_df,
-                    prod_code=prod,
+                # [D2/D3] 按 data_type 分组路由修饰口径（SPC/CTQ/AOI），特征 concat
+                features_df = MonitorAnalysisService._fetch_grouped_features(
+                    prod, m_df, s_df, start_dt, end_dt, snapshot_signature
                 )
-                features_df = decorated_spc_data.sheet_features_df
                 if features_df.empty:
                     continue
 
@@ -524,13 +582,10 @@ class MonitorAnalysisService:
             s_df = repo.get_spc_spec_limits(prod)
             
             if not m_df.empty:
-                decorated_spc_data = prepare_decorated_spc_data(
-                    raw_measurements_df=m_df,
-                    spec_df=s_df,
-                    prod_code=prod,
-                    persist_files=False,
+                # [D2/D3] 与大盘同一路由：共享缓存管线替代原内联取数/修饰副本
+                features_df = MonitorAnalysisService._fetch_grouped_features(
+                    prod, m_df, s_df, start_dt, end_dt
                 )
-                features_df = decorated_spc_data.sheet_features_df
                 if features_df.empty:
                     continue
 

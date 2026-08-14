@@ -17,8 +17,10 @@ from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
     SheetOosDecorationResult,
 )
 from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult, prepare_cpk_decoration
+from src.inline_domain.application.shared.decorated_features import (
+    fetch_decorated_features,
+)
 from src.inline_domain.application.spc.spc_data_decoration import (
-    prepare_decorated_spc_data,
     resolve_product_resource_dir,
 )
 from src.shared_kernel.config import ConfigLoader
@@ -190,34 +192,23 @@ class SpcReportService:
             return SpcReportService._empty_payload()
 
         try:
-            measurements_df = _data_port.get_spc_measurements(query_config)
-            spec_df = _data_port.get_spc_spec_limits(query_config.prod_code)
-            if measurements_df.empty or spec_df.empty:
+            # 共享修饰+特征管线（scope='spc'）：缓存 key 含产品/窗口/签名，
+            # 与 monitor 的 SPC 分组在窗口一致时命中同一条目。
+            features_payload = fetch_decorated_features(
+                _features_source=_data_port,
+                prod_code=query_config.prod_code,
+                scope="spc",
+                start_date=query_config.start_date,
+                end_date=query_config.end_date,
+                snapshot_signature=snapshot_signature,
+            )
+            if features_payload["original_raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
 
-            if "sheet_start_time" in measurements_df.columns:
-                measurements_df = measurements_df.copy()
-                measurements_df["sheet_start_time"] = pd.to_datetime(
-                    measurements_df["sheet_start_time"], errors="coerce"
-                )
-                start_dt = pd.to_datetime(query_config.start_date, errors="coerce")
-                end_dt = pd.to_datetime(query_config.end_date, errors="coerce") + pd.Timedelta(days=1)
-                measurements_df = measurements_df[
-                    (measurements_df["sheet_start_time"] >= start_dt)
-                    & (measurements_df["sheet_start_time"] < end_dt)
-                ].copy()
-                if measurements_df.empty:
-                    return SpcReportService._empty_payload()
-
-            decorated_spc_data = prepare_decorated_spc_data(
-                raw_measurements_df=measurements_df,
-                spec_df=spec_df,
-                prod_code=query_config.prod_code,
-            )
-            original_measurements_df = measurements_df.copy()
-            measurements_df = assign_indicator_chart_type(decorated_spc_data.raw_measurements_df)
-            sheet_features_df = assign_indicator_chart_type(decorated_spc_data.sheet_features_df)
-            original_sheet_features_df = decorated_spc_data.original_sheet_features_df
+            original_measurements_df = features_payload["original_raw_measurements_df"]
+            measurements_df = assign_indicator_chart_type(features_payload["raw_measurements_df"])
+            sheet_features_df = assign_indicator_chart_type(features_payload["sheet_features_df"])
+            original_sheet_features_df = features_payload["original_sheet_features_df"]
             if sheet_features_df.empty:
                 return SpcReportService._empty_payload()
 
@@ -271,17 +262,12 @@ class SpcReportService:
             )
             indicators_df = assign_indicator_chart_type(indicators_df)
 
-            decoration_result = decorated_spc_data.sheet_oos_decoration_result
             return {
                 "period_capability_df": period_capability_df,
                 "sheet_features_df": sheet_features_df,
                 "raw_measurements_df": measurements_df,
                 "indicators_df": indicators_df,
-                "sheet_oos_decoration": {
-                    "decoration_df": decoration_result.decoration_df,
-                    "decoration_path": str(decoration_result.decoration_path),
-                    "decoration_sheet": decoration_result.decoration_sheet,
-                },
+                "sheet_oos_decoration": features_payload["sheet_oos_decoration"],
                 "cpk_decoration": {
                     "decoration_df": cpk_decoration_result.decoration_df,
                     "decoration_path": str(cpk_decoration_result.decoration_path),

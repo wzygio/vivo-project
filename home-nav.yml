@@ -1,0 +1,27 @@
+- iframe [ref=e8]:
+  - generic [ref=f1e1]:
+    - generic:
+      - generic:
+        - generic [ref=f1e3] [cursor=pointer]: 入库不良率
+        - generic [ref=f1e10] [cursor=pointer]: SPC监控
+        - generic [ref=f1e15] [cursor=pointer]: Q-time监控
+        - generic [ref=f1e20] [cursor=pointer]: 解析资料
+        - generic [ref=f1e25] [cursor=pointer]: 专项资料
+        - generic [ref=f1e30] [cursor=pointer]: IQC
+        - generic [ref=f1e35] [cursor=pointer]: 关键备件
+        - generic [ref=f1e40] [cursor=pointer]: 自动预警
+      - generic: V3北极星专项报表
+    - generic: VISIONOX V3
+    - button [ref=f1e47] [cursor=pointer]
+    - complementary [ref=f1e50]:
+      - generic [ref=f1e51]:
+        - generic [ref=f1e52]: 北极星报表
+        - button [ref=f1e53] [cursor=pointer]
+      - generic [ref=f1e56]:
+        - generic [ref=f1e57]: 入库不良率
+        - generic [ref=f1e62]: Q-time
+        - generic [ref=f1e67]: SPC监控
+        - generic [ref=f1e72]: 解析资料
+        - generic [ref=f1e77]: 专项资料
+        - generic [ref=f1e82]: IQC监控
+        - generic [ref=f1e87]: 关键备件
