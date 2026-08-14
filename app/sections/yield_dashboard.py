@@ -2,7 +2,8 @@
 import streamlit as st
 import pandas as pd
 from functools import partial
-from typing import Dict, List, Optional
+from inspect import signature
+from typing import Any, Dict, List, Optional, Sequence
 import plotly.graph_objects as go
 
 from app.manager.render_gate import RenderGate
@@ -585,6 +586,16 @@ def _prepare_compact_mapping_payload(
     return payload
 
 
+def _tabs_with_optional_default(
+    tab_labels: list[str],
+    default_tab: str,
+) -> Sequence[Any]:
+    """Create tabs across Streamlit versions that may not support ``default``."""
+    if "default" not in signature(st.tabs).parameters:
+        return st.tabs(tab_labels)
+    return st.tabs(tab_labels, default=default_tab)
+
+
 def _render_compact_mapping_payload(payload: dict) -> None:
     """[RenderGate 阶段2] 纯渲染：仅执行 st.* 调用，不做任何重计算。"""
     st.markdown("**B. Mapping集中性**")
@@ -596,7 +607,10 @@ def _render_compact_mapping_payload(payload: dict) -> None:
         st.warning("该 Code 在 Mapping 数据源中无记录。")
         return
 
-    tabs = st.tabs(payload["tab_labels"], default=payload["default_tab"])
+    tabs = _tabs_with_optional_default(
+        payload["tab_labels"],
+        payload["default_tab"],
+    )
     key_fragment = _state_key_fragment(payload["curr_group"], payload["curr_code"])
     for i, batch_no in enumerate(payload["batches"]):
         with tabs[i]:

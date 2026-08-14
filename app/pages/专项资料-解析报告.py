@@ -6,6 +6,7 @@ from pathlib import Path
 
 # --- 1. 初始化与配置 ---
 from app.manager.session_manager import SessionManager
+from app.components.page_header import render_page_header
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.ppt_service import PPTService
 from yield_domain.application.pdf_service import PDFService
@@ -14,8 +15,11 @@ from yield_domain.application.pdf_service import PDFService
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 # --- 2. 获取动态上下文与路径 ---
+active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 resource_dir = SessionManager.get_resource_dir()
+
+render_page_header("📋 解析资料", active_config)
 
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = resource_dir / "analysis_files"

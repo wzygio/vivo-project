@@ -1,5 +1,5 @@
 async page => {
-  await page.goto("http://localhost:8503/SPC监控报表");
+  await page.goto("http://localhost:8503/SPC监控报表?admin=true");
   await page
     .getByText("正在加载 SPC 分布数据...")
     .waitFor({ state: "hidden", timeout: 120_000 });

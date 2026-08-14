@@ -84,39 +84,40 @@ def invalidate_page_cache(
         st.cache_resource.clear()
     return "global"
 
+
 def render_page_header(
-    title: Optional[str] = None, 
-    config: AppConfig = None, 
+    title: Optional[str] = None,
+    config: AppConfig = None,
     cached_funcs: list = None,
     refresh_handlers: list = None,
     product_cache_scope: str | None = None,
-):
+) -> None:
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
     # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
     detect_project_changes()
 
-    # =========================================================================
-    # [新增] Admin 隐身模式 (Stealth Mode)
-    # =========================================================================
+    is_admin = st.query_params.get("admin") == "true"
+
+    # Admin 隐身模式 (Stealth Mode)
     # 只要 URL 中没有 ?admin=true，就利用 CSS 抹除侧边栏中的特定页面
-    if st.query_params.get("admin") != "true":
+    if not is_admin:
         st.markdown(
             """
             <style>
             /* 使用属性选择器精准狙击 href 包含特定名称的 <a> 标签 */
             /* 兼容明文中文和 URL Encode 编码格式 */
-            [data-testid="stSidebarNav"] a[href*=""],
+            [data-testid="stSidebarNav"] a[href*="自动预警看板"],
             [data-testid="stSidebarNav"] a[href*="%E8%87%AA%E5%8A%A8%E9%A2%84%E8%AD%A6%E7%9C%8B%E6%9D%BF"] {
                 display: none !important;
             }
             </style>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
     if title:
         st.title(title)
-    
+
     # [L1] 仅刷新底层数据快照，不清除 st.cache_data。
     def _refresh_data_callback():
         if not refresh_handlers:
@@ -187,50 +188,53 @@ def render_page_header(
         else:
             st.toast("🔄 缓存已刷新 · 代码与配置已重载", icon="✅")
 
-    # --- 渲染控制栏 ---
-    with st.container(border=True):
-        c_prod, c_space, c_refresh, c_clear = st.columns([2, 4, 1.2, 1.2])
-
-        with c_prod:
+    # 产品筛选与管理员操作使用独立边框分组，避免把常规筛选误认为维护操作。
+    product_column, admin_column = st.columns(
+        [2, 4],
+        vertical_alignment="bottom",
+    )
+    with product_column:
+        with st.container(border=True):
+            st.caption("产品筛选")
             current_prod = config.data_source.product_code
             available_prods = SessionManager.AVAILABLE_PRODUCTS
             selected_prod = st.selectbox(
                 "📦 当前产品型号",
                 options=available_prods,
                 index=available_prods.index(current_prod) if current_prod in available_prods else 0,
-                key=f"header_prod_sel_{title}", 
-                label_visibility="collapsed" 
+                key=f"header_prod_sel_{title}",
+                label_visibility="collapsed",
             )
             if selected_prod != current_prod:
                 SessionManager.load_and_set_config(selected_prod)
                 st.rerun()
 
-        with c_space:
-             st.write("") 
+    if is_admin:
+        with admin_column:
+            with st.container(border=True):
+                st.caption("管理员操作")
+                with st.container(horizontal=True):
+                    st.button(
+                        "🔄 刷新数据",
+                        key=f"btn_refresh_{title}",
+                        on_click=_refresh_data_callback,
+                        width="stretch",
+                        help="刷新底层 L1 数据快照；不会清除 Streamlit 页面缓存。",
+                    )
+                    st.button(
+                        "🔄 刷新缓存",
+                        key=f"btn_clear_{title}",
+                        on_click=_hard_reset_callback,
+                        width="stretch",
+                        help=(
+                            f"仅刷新产品 {product_cache_scope} 的当前报表缓存，并重载代码与配置。"
+                            if product_cache_scope
+                            else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
+                        ),
+                    )
+                if st.session_state.get("code_update_pending"):
+                    st.caption("⚠️ 检测到项目文件变更，点击「刷新缓存」应用")
 
-        with c_refresh:
-            st.button(
-                "🔄 刷新数据",
-                key=f"btn_refresh_{title}",
-                on_click=_refresh_data_callback,
-                use_container_width=True,
-                help="刷新底层 L1 数据快照；不会清除 Streamlit 页面缓存。"
-            )
-
-        with c_clear:
-            st.button(
-                "🔄 刷新缓存",
-                key=f"btn_clear_{title}",
-                on_click=_hard_reset_callback,
-                use_container_width=True,
-                help=(
-                    f"仅刷新产品 {product_cache_scope} 的当前报表缓存，并重载代码与配置。"
-                    if product_cache_scope
-                    else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
-                )
-            )
-            if st.session_state.get("code_update_pending"):
-                st.caption("⚠️ 检测到项目文件变更，点击「刷新缓存」应用")
 
 def extract_cached_funcs(*services) -> list:
     """

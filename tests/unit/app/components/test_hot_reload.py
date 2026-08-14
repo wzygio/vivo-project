@@ -108,7 +108,7 @@ def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypa
     button_callbacks = {}
 
     class FakeSt:
-        query_params = {}
+        query_params = {"admin": "true"}
 
         def markdown(self, *_args, **_kwargs):
             return None
@@ -173,3 +173,85 @@ def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypa
     assert ("load_config", "M626") in events
     assert "code_update_pending" not in session_state
     assert "view_model_cache" not in session_state
+
+
+@pytest.mark.parametrize(
+    ("query_params", "expected_buttons", "expected_groups"),
+    [
+        ({}, [], ["产品筛选"]),
+        (
+            {"admin": "true"},
+            ["🔄 刷新数据", "🔄 刷新缓存"],
+            ["产品筛选", "管理员操作"],
+        ),
+        ({"admin": "True"}, [], ["产品筛选"]),
+    ],
+)
+def test_page_header_separates_product_filter_and_gates_admin_actions(
+    monkeypatch,
+    query_params,
+    expected_buttons,
+    expected_groups,
+):
+    """产品筛选始终可见，刷新操作仅在严格的 admin=true 下单独显示。"""
+    button_calls = []
+    captions = []
+    bordered_containers = []
+
+    class FakeSt:
+        session_state = {}
+
+        def __init__(self):
+            self.query_params = query_params
+
+        def markdown(self, *_args, **_kwargs):
+            return None
+
+        def title(self, *_args, **_kwargs):
+            return None
+
+        def container(self, **kwargs):
+            if kwargs.get("border"):
+                bordered_containers.append(kwargs)
+            return nullcontext()
+
+        def columns(self, spec, **_kwargs):
+            count = spec if isinstance(spec, int) else len(spec)
+            return [nullcontext() for _ in range(count)]
+
+        def selectbox(self, *_args, **kwargs):
+            return kwargs["options"][0]
+
+        def button(self, label, **kwargs):
+            button_calls.append((label, kwargs))
+            return False
+
+        def caption(self, text, **_kwargs):
+            captions.append(text)
+
+    monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
+    monkeypatch.setattr(page_header, "st", FakeSt())
+
+    page_header.render_page_header(
+        title="测试页面",
+        config=SimpleNamespace(data_source=SimpleNamespace(product_code="M626")),
+    )
+
+    assert [label for label, _kwargs in button_calls] == expected_buttons
+    assert captions == expected_groups
+    assert len(bordered_containers) == len(expected_groups)
+    assert all(kwargs.get("width") == "stretch" for _label, kwargs in button_calls)
+
+
+def test_every_streamlit_page_uses_the_shared_page_header():
+    """所有业务页面都必须通过共享页头获得一致的产品与管理员控件。"""
+    pages_dir = PROJECT_ROOT / "app" / "pages"
+    page_files = sorted(pages_dir.glob("*.py"))
+    pages_without_header = [
+        page_file.name
+        for page_file in page_files
+        if "render_page_header(" not in page_file.read_text(encoding="utf-8")
+    ]
+
+    assert len(page_files) == 11
+    assert pages_without_header == []

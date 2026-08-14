@@ -8,6 +8,7 @@ import time
 
 # --- 1. 基础配置与导入 ---
 from app.manager.session_manager import SessionManager
+from app.components.page_header import render_page_header
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.file_manager_service import FileManagerService
 from yield_domain.application.excel_service import ExcelService
@@ -17,8 +18,11 @@ from yield_domain.application.pdf_service import PDFService
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
 # --- 2. 获取动态上下文与路径 ---
+active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 resource_dir = SessionManager.get_resource_dir()
+
+render_page_header("📋 专项资料", active_config)
 
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = resource_dir / "project_files"

@@ -39,8 +39,8 @@ class _FakeStreamlit:
         count = spec if isinstance(spec, int) else len(spec)
         return [_Context() for _ in range(count)]
 
-    def tabs(self, labels, **kwargs):
-        self.tab_defaults.append(kwargs.get("default"))
+    def tabs(self, labels, *, default=None, **kwargs):
+        self.tab_defaults.append(default)
         return [_Context() for _ in labels]
 
     def expander(self, *args, **kwargs):
@@ -59,6 +59,18 @@ class _SelectionStreamlit(_FakeStreamlit):
     def plotly_chart(self, *args, **kwargs):
         self.plotly_keys.append(kwargs.get("key"))
         return SimpleNamespace(selection={"points": self.points})
+
+
+class _LegacyTabsStreamlit(_FakeStreamlit):
+    """模拟 Streamlit 1.49：st.tabs 不接受 default 参数。"""
+
+    def __init__(self):
+        super().__init__()
+        self.tab_labels = []
+
+    def tabs(self, labels):
+        self.tab_labels = list(labels)
+        return [_Context() for _ in labels]
 
 
 def _trend_frame(code: str) -> pd.DataFrame:
@@ -171,6 +183,33 @@ def test_compact_mapping_defaults_to_penultimate_batch(monkeypatch):
     )
 
     assert fake_st.tab_defaults == ["BATCH-2 (100)"]
+
+
+def test_compact_mapping_supports_legacy_streamlit_tabs(monkeypatch):
+    fake_st = _LegacyTabsStreamlit()
+    monkeypatch.setattr(yield_dashboard, "st", fake_st)
+    monkeypatch.setattr(yield_dashboard, "create_mapping_heatmap", lambda *args, **kwargs: go.Figure())
+
+    mapping_data = pd.DataFrame(
+        {
+            "defect_group": ["GROUP-A"] * 2,
+            "defect_desc": ["CODE-A"] * 2,
+            "batch_no": ["BATCH-1", "BATCH-2"],
+            "batch_total_input": [100, 100],
+            "panel_id": ["1-1", "1-1"],
+        }
+    )
+
+    yield_dashboard._render_compact_mapping_section(
+        mapping_data=mapping_data,
+        curr_group="GROUP-A",
+        curr_code="CODE-A",
+        hotspot_scripts=[],
+        product_code="TEST",
+    )
+
+    assert fake_st.tab_labels == ["BATCH-1 (100)", "BATCH-2 (100)"]
+    assert len(fake_st.plotly_keys) == 2
 
 
 def test_compact_lot_blank_click_clears_sheet_selection(monkeypatch):
