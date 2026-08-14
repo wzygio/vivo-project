@@ -19,8 +19,6 @@ active_config = SessionManager.get_active_config()
 project_root = ConfigLoader.get_project_root()
 resource_dir = SessionManager.get_resource_dir()
 
-render_page_header("📋 解析资料", active_config)
-
 # 动态构建绝对路径 (取代全局变量)
 doc_source_dir = resource_dir / "analysis_files"
 doc_source_dir.mkdir(parents=True, exist_ok=True)
