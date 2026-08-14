@@ -43,3 +43,15 @@
 - 特征化测试无变红（monitor fixture 仅 SPC 行）
 - 新增测试 9 例（scope 路由 7 + monitor 分组路由 2）
 - 证据：tests/unit/inline_domain 140 passed；全量 7 failed/414 passed（=基线，无新增）
+
+## 2026-08-14 — Phase 4/5 收尾
+
+- Phase 4 完成：新增 references/domain/Inline_domain/spec-infrastructure-architecture.md；
+  inline_domain.md 全面同步（分层图、CTQ 修饰路径、SpcQueryConfig 位置、第 5/7/8 节）
+- Phase 5 E2E（用户裁定"直接收尾"）：
+  - 四页 signoff 截图产出：SPC 11:12 / CTQ 11:23 / AOI_TT 11:26 / 自动预警 11:35
+  - 自动预警看板完成 CTQ 模式切换与 top10/bottom 明细截图；服务端日志 0 Traceback；
+    console 仅有公司网络固有噪音（healthz/host-config/metrics）
+  - 单页耗时 3-11 分钟，主要为查询+plotly 渲染
+  - 【有意排除】「刷新缓存」按钮点击验证未执行——用户评估现有证据后决定跳过
+- 全量 pytest 最终态：7 failed / 414 passed（7 个失败均为既有基线，与本任务无关）

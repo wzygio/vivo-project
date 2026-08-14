@@ -117,6 +117,11 @@ def fetch_decorated_features(_features_source, prod_code, scope,
 - monitor 按 data_type 分组路由：SPC→spc、CTQ→ctq（D2）、AOI→none（D3）。
 - 强刷链路：三个页面的 `funcs_to_clear` 均登记该函数。
 
+无工作簿的最简自动修饰由 `core/shared/auto_decoration.py::auto_clip_over_spec`
+提供（超规值截断为线内 5%~15% span 的确定性伪随机值，单边规格以 0 为下界），
+当前消费方：aoi_tt（tt_qty vs usl）与 aoi_rs（code_qty vs spec，规格按 sheet 级
+type_flag 优先去重）。
+
 ---
 
 ## 6. 装配（composition.py）

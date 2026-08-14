@@ -133,3 +133,34 @@ def test_service_reads_through_application_data_port() -> None:
 
     assert len(view_model.tt_details_df) == 2
     assert len(view_model.spec_df) == 1
+
+
+def test_service_auto_clips_over_spec_tt_qty() -> None:
+    """超规 tt_qty 被截断到 USL 以下（确定性伪随机），规格内行不变。"""
+
+    class OverSpecPort:
+        def get_tt_details(self, _query) -> pd.DataFrame:
+            return pd.DataFrame(
+                [
+                    {
+                        "factory": "ARRAY", "prod_code": "M678",
+                        "start_time": pd.Timestamp("2026-07-15 08:00:00"),
+                        "sheet_id": "SHT-A01", "lot_id": "LOT-A1",
+                        "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 99.0,
+                    }
+                ]
+            )
+
+        def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
+            return _spec_df()  # TDSUM usl=5.0
+
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=OverSpecPort(),
+        query_config_json=_config_json(),
+        snapshot_signature="clip-test",
+    )
+
+    clipped = view_model.tt_details_df["tt_qty"].iloc[0]
+    assert 5.0 * 0.85 <= clipped < 5.0

@@ -129,3 +129,22 @@ def test_service_tolerates_loader_exception(monkeypatch) -> None:
 
     assert view_model.rs_details_df.empty
     assert view_model.indicators_df.empty
+
+
+def test_service_auto_clips_over_spec_code_qty(monkeypatch) -> None:
+    """超规 code_qty 被截断到 spec 以下；无规格的 Code 保持原值。"""
+    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _spec_df())
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    view_model = AoiRsReportService.get_aoi_rs_report_data(
+        _db_manager=SimpleNamespace(engine=None),
+        query_config_json=_config_json(),
+        snapshot_signature="clip-test",
+    )
+
+    details = view_model.rs_details_df
+    clipped = details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0]
+    assert 0.5 * 0.85 <= clipped < 0.5
+    # T3DMR 无规格，保持原值
+    untouched = details[details["rs_code"] == "T3DMR"]["code_qty"].iloc[0]
+    assert untouched == 5

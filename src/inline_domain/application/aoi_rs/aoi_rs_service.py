@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
+from src.inline_domain.core.shared.auto_decoration import auto_clip_over_spec
 from src.inline_domain.infrastructure.aoi_rs.data_loader import (
     AoiRsQueryConfig,
     load_pass_through,
@@ -58,6 +59,23 @@ def _build_indicators(
     return indicators
 
 
+# 明细为 Sheet 级数据，规格去重时优先 sheet 级 type_flag，缺失时回退任意规格
+_SHEET_LEVEL_TYPE_FLAGS = {"SHEET_ID", "GLASS_ID"}
+
+
+def _detail_level_specs(spec_df: pd.DataFrame) -> pd.DataFrame:
+    """规格表按 (factory, step_id, rs_code) 去重：优先 sheet 级 type_flag。"""
+    if spec_df.empty or "type_flag" not in spec_df.columns:
+        return spec_df
+    priority = (~spec_df["type_flag"].isin(_SHEET_LEVEL_TYPE_FLAGS)).astype(int)
+    return (
+        spec_df.assign(_priority=priority)
+        .sort_values("_priority", kind="stable")
+        .drop_duplicates(subset=["factory", "step_id", "rs_code"], keep="first")
+        .drop(columns="_priority")
+    )
+
+
 class AoiRsReportService:
     """AOI_RS 报表应用服务。"""
 
@@ -103,6 +121,14 @@ class AoiRsReportService:
                 return AoiRsReportService._empty_payload()
             pass_through_df = load_pass_through(_db_manager, query_config)
             spec_df = load_rs_spec_limits(_db_manager, query_config.prod_code)
+            # 超规项自动修饰：单边上限（spec），截断为线内确定性伪随机值
+            rs_details_df = auto_clip_over_spec(
+                rs_details_df,
+                _detail_level_specs(spec_df),
+                value_col="code_qty",
+                join_keys=["factory", "step_id", "rs_code"],
+                upper_col="spec",
+            )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {
                 "rs_details_df": rs_details_df,
