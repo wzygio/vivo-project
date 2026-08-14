@@ -181,7 +181,7 @@ def test_ctq_report_remains_available_when_service_module_reloads_during_cache_f
 
 
 def test_ctq_service_returns_an_empty_view_model_when_physical_data_is_unavailable(
-    monkeypatch,
+    tmp_path: Path,
 ) -> None:
     class EmptyCtqRepository(FakeCtqRepository):
         def get_spc_measurements(
@@ -198,9 +198,10 @@ def test_ctq_service_returns_an_empty_view_model_when_physical_data_is_unavailab
         end_date="2026-07-07",
         data_type_filter="SPC",
     )
+    snapshot_dir = tmp_path / "data" / query.prod_code
 
     report = CtqReportService.get_ctq_report_data(
-        _data_port=EmptyCtqRepository(Path("data"), True, object()),
+        _data_port=EmptyCtqRepository(snapshot_dir, True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="ctq-empty-data",
     )

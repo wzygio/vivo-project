@@ -131,8 +131,8 @@ def test_service_tolerates_loader_exception(monkeypatch) -> None:
     assert view_model.indicators_df.empty
 
 
-def test_service_auto_clips_over_spec_code_qty(monkeypatch) -> None:
-    """超规 code_qty 被截断到 spec 以下；无规格的 Code 保持原值。"""
+def test_service_keeps_raw_values_decoration_is_chart_level(monkeypatch) -> None:
+    """service 层不做截断：lot/sheet 图使用不同 type_flag 规格，截断在图表组装层。"""
     _patch_loaders(monkeypatch, _details_df(), _pass_df(), _spec_df())
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
@@ -143,8 +143,6 @@ def test_service_auto_clips_over_spec_code_qty(monkeypatch) -> None:
     )
 
     details = view_model.rs_details_df
-    clipped = details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0]
-    assert 0.5 * 0.85 <= clipped < 0.5
-    # T3DMR 无规格，保持原值
-    untouched = details[details["rs_code"] == "T3DMR"]["code_qty"].iloc[0]
-    assert untouched == 5
+    # A1PPS code_qty=3 超过 spec=0.5，但 service 层保持原值
+    raw_value = details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0]
+    assert raw_value == 3

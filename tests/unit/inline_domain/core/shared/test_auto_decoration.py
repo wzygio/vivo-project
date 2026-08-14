@@ -68,3 +68,21 @@ def test_empty_inputs_are_safe() -> None:
     assert auto_clip_over_spec(pd.DataFrame(), _specs(), **kwargs).empty
     result = auto_clip_over_spec(_details(), pd.DataFrame(), **kwargs)
     assert len(result) == 3
+
+
+def test_clip_over_spec_column_uses_same_frame_spec() -> None:
+    from src.inline_domain.core.shared.auto_decoration import clip_over_spec_column
+
+    df = pd.DataFrame(
+        [
+            {"step_id": "S1", "value": 10.0, "spec": 5.0},
+            {"step_id": "S2", "value": 2.0, "spec": 5.0},
+            {"step_id": "S3", "value": 99.0, "spec": None},
+        ]
+    )
+    result = clip_over_spec_column(df, value_col="value", spec_col="spec")
+    clipped = result[result["step_id"] == "S1"]["value"].iloc[0]
+    assert 5.0 * 0.85 <= clipped < 5.0
+    # 规格内与无规格行不变
+    assert result[result["step_id"] == "S2"]["value"].iloc[0] == 2.0
+    assert result[result["step_id"] == "S3"]["value"].iloc[0] == 99.0

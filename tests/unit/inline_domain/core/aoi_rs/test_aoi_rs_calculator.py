@@ -175,3 +175,45 @@ def test_attach_spec_values_matches_chart_type_flags() -> None:
     assert sheet.loc[1, "spec"] == 6  # GLASS_ID 适用于 By Sheet 图
     # 无规格的 T3DMR → NaN 而非抛错
     assert pd.isna(mwd.loc[2, "spec"])
+
+
+def test_lot_and_sheet_charts_clip_with_their_own_type_flag_spec() -> None:
+    """同一 Code 的 By Lot 与 By Sheet 图分别使用 LOT_RATIO / SHEET_ID 规格截断。"""
+    from src.inline_domain.core.shared.auto_decoration import clip_over_spec_column
+
+    details = _details(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 08:00",
+             "sheet_id": "S1", "lot_id": "L1", "step_id": "11629", "rs_code": "A1PPS", "code_qty": 8},
+        ]
+    )
+    pass_through = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 07:00"),
+             "sheet_id": "S1", "lot_id": "L1", "step_id": "11629"},
+        ]
+    )
+    spec_df = pd.DataFrame(
+        [
+            {"prod_code": "M678", "factory": "ARRAY", "type_flag": "LOT_RATIO",
+             "step_id": "11629", "rs_code": "A1PPS", "code_desc": "x", "spec": 4.0},
+            {"prod_code": "M678", "factory": "ARRAY", "type_flag": "SHEET_ID",
+             "step_id": "11629", "rs_code": "A1PPS", "code_desc": "x", "spec": 6.0},
+        ]
+    )
+
+    lot_df = clip_over_spec_column(
+        attach_spec_values(build_lot_point_df(details, pass_through), spec_df, chart_kind="lot"),
+        value_col="value", spec_col="spec",
+    )
+    sheet_df = clip_over_spec_column(
+        attach_spec_values(build_sheet_point_df(details), spec_df, chart_kind="sheet"),
+        value_col="rs_qty", spec_col="spec",
+    )
+
+    # lot：value = 8/1 = 8，超 LOT_RATIO 规格 4.0 → 截断到 [3.4, 4.0)
+    lot_value = lot_df["value"].iloc[0]
+    assert 4.0 * 0.85 <= lot_value < 4.0
+    # sheet：rs_qty = 8，超 SHEET_ID 规格 6.0 → 截断到 [5.1, 6.0)，且不受 LOT_RATIO 影响
+    sheet_value = sheet_df["rs_qty"].iloc[0]
+    assert 6.0 * 0.85 <= sheet_value < 6.0

@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 _LOWER_MARGIN = 0.05
 _MARGIN_SPAN = 0.1
 
+_SEED_CANDIDATE_COLUMNS = ["prod_code", "factory", "step_id", "rs_code", "tt_name", "sheet_id", "lot_id"]
+
 
 def _clip_value(value: float, upper: float, lower: float | None, seed_parts: list[object]) -> float:
     """把越规值截断到线内；未越规原样返回。"""
@@ -40,6 +42,66 @@ def _clip_value(value: float, upper: float, lower: float | None, seed_parts: lis
         margin = (_LOWER_MARGIN + _stable_fraction([*seed_parts, "lower"]) * _MARGIN_SPAN) * span
         return lower + margin
     return value
+
+
+def _clip_in_place(
+    df: pd.DataFrame,
+    value_col: str,
+    upper_col: str,
+    lower_col: str | None = None,
+) -> pd.DataFrame:
+    """对同帧内的规格列执行截断（upper_col/lower_col 为 df 自身列）。"""
+    result = df.copy()
+    result[value_col] = pd.to_numeric(result[value_col], errors="coerce")
+    result[upper_col] = pd.to_numeric(result[upper_col], errors="coerce")
+    if lower_col is not None:
+        result[lower_col] = pd.to_numeric(result[lower_col], errors="coerce")
+
+    over_mask = result[upper_col].notna() & result[value_col].notna() & (
+        result[value_col] > result[upper_col]
+    )
+    if lower_col is not None:
+        over_mask = over_mask | (
+            result[lower_col].notna()
+            & result[value_col].notna()
+            & (result[value_col] < result[lower_col])
+        )
+    if not over_mask.any():
+        return result
+
+    seed_cols = [c for c in _SEED_CANDIDATE_COLUMNS if c in result.columns]
+    clipped = result.loc[over_mask].apply(
+        lambda row: _clip_value(
+            row[value_col],
+            float(row[upper_col]),
+            float(row[lower_col])
+            if lower_col is not None and pd.notna(row[lower_col])
+            else None,
+            [row[c] for c in seed_cols] + [row[value_col]],
+        ),
+        axis=1,
+    )
+    logger.info("[AutoDecoration] 自动截断 %d 个超规点（%s）", int(over_mask.sum()), value_col)
+    result.loc[over_mask, value_col] = clipped
+    return result
+
+
+def clip_over_spec_column(
+    df: pd.DataFrame,
+    *,
+    value_col: str,
+    spec_col: str,
+    lower_spec_col: str | None = None,
+) -> pd.DataFrame:
+    """同帧截断：df 已带规格列（如 attach_spec_values 之后）时使用。
+
+    :param value_col: 被修饰的值列。
+    :param spec_col: 上限规格列（NaN = 无规格，不修饰）。
+    :param lower_spec_col: 下限规格列（双边规格时使用）。
+    """
+    if df.empty or value_col not in df.columns or spec_col not in df.columns:
+        return df.copy()
+    return _clip_in_place(df, value_col, spec_col, lower_spec_col)
 
 
 def auto_clip_over_spec(
@@ -75,33 +137,8 @@ def auto_clip_over_spec(
         return df.copy()
     specs = specs.rename(columns={upper_col: "_auto_upper"} | ({lower_col: "_auto_lower"} if lower_col else {}))
 
-    result = df.copy()
-    result[value_col] = pd.to_numeric(result[value_col], errors="coerce")
-    result = result.merge(specs, on=join_keys, how="left")
-
-    over_mask = result["_auto_upper"].notna() & result[value_col].notna() & (
-        result[value_col] > result["_auto_upper"]
+    merged = df.merge(specs, on=join_keys, how="left")
+    clipped = _clip_in_place(
+        merged, value_col, "_auto_upper", "_auto_lower" if lower_col else None
     )
-    if lower_col is not None:
-        over_mask = over_mask | (
-            result["_auto_lower"].notna()
-            & result[value_col].notna()
-            & (result[value_col] < result["_auto_lower"])
-        )
-    if over_mask.any():
-        seed_cols = [c for c in ["prod_code", "factory", "step_id", "sheet_id", "lot_id"] if c in result.columns]
-        clipped = result.loc[over_mask].apply(
-            lambda row: _clip_value(
-                row[value_col],
-                float(row["_auto_upper"]),
-                float(row["_auto_lower"])
-                if lower_col is not None and pd.notna(row["_auto_lower"])
-                else None,
-                [row[c] for c in seed_cols] + [row[value_col]],
-            ),
-            axis=1,
-        )
-        logger.info("[AutoDecoration] 自动截断 %d 个超规点（%s）", int(over_mask.sum()), value_col)
-        result.loc[over_mask, value_col] = clipped
-
-    return result.drop(columns=["_auto_upper"] + (["_auto_lower"] if lower_col else []))
+    return clipped.drop(columns=["_auto_upper"] + (["_auto_lower"] if lower_col else []))

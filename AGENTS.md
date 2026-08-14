@@ -33,6 +33,9 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 - Do not print, copy, commit, or persist secrets.
 - Do not delete user data unless the user explicitly asks.
 - Preserve unrelated user changes.
+- E2E/browser automation artifacts (playwright-cli page snapshots, DOM dumps,
+  console logs, screenshots) must be written to `output/test-results/` or
+  `output/tmp/`, never to the repository root or `src/`.
 
 ## Agent skills
 
