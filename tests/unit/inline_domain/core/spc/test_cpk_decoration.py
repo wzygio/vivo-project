@@ -30,13 +30,11 @@ def _capability_frame(cpk: float) -> pd.DataFrame:
     )
 
 
-def test_cpk_decoration_defaults_to_real_cpk_until_an_admin_enables_a_row(tmp_path: Path) -> None:
-    real_df = _capability_frame(0.82)
-    corrected_df = _capability_frame(1.46)
+def test_cpk_decoration_defaults_to_computed_cpk_until_an_admin_enables_a_row(tmp_path: Path) -> None:
+    computed_df = _capability_frame(1.46)
 
     result = prepare_cpk_decoration(
-        real_period_capability_df=real_df,
-        corrected_period_capability_df=corrected_df,
+        period_capability_df=computed_df,
         product_dir=tmp_path,
         persist_files=False,
         sheet_name="M678",
@@ -44,27 +42,26 @@ def test_cpk_decoration_defaults_to_real_cpk_until_an_admin_enables_a_row(tmp_pa
 
     assert result.decoration_sheet == "M678"
     assert result.decoration_df["flag"].tolist() == [False]
-    assert result.period_capability_df["cpk"].tolist() == [0.82]
+    assert result.decoration_df["cpk_corrected"].tolist() == [1.46]
+    assert result.period_capability_df["cpk"].tolist() == [1.46]
     assert result.period_capability_df["cpk_decorated"].tolist() == [False]
 
-    enabled_df = result.decoration_df.assign(flag=True)
-    decorated_df = apply_cpk_decoration(real_df, corrected_df, enabled_df)
+    enabled_df = result.decoration_df.assign(cpk_corrected=1.72, flag=True)
+    decorated_df = apply_cpk_decoration(computed_df, enabled_df)
 
-    assert decorated_df["cpk"].tolist() == [1.46]
+    assert decorated_df["cpk"].tolist() == [1.72]
     assert decorated_df["cpk_decorated"].tolist() == [True]
 
 
 def test_cpk_decoration_accepts_existing_ture_flag_typo() -> None:
-    real_df = _capability_frame(0.82)
-    corrected_df = _capability_frame(1.46)
+    computed_df = _capability_frame(1.46)
     decoration_df = prepare_cpk_decoration(
-        real_period_capability_df=real_df,
-        corrected_period_capability_df=corrected_df,
+        period_capability_df=computed_df,
         product_dir=Path("."),
         persist_files=False,
     ).decoration_df.assign(cpk_corrected=1.72, flag="TURE")
 
-    decorated_df = apply_cpk_decoration(real_df, corrected_df, decoration_df)
+    decorated_df = apply_cpk_decoration(computed_df, decoration_df)
 
     assert decorated_df["cpk"].tolist() == [1.72]
     assert decorated_df["cpk_decorated"].tolist() == [True]
@@ -78,8 +75,7 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     decoration_path = product_dir / cpk_decoration.CPK_DECORATION_FILE_NAME
     decoration_path.write_bytes(b"\x00\x00\x00\x00enterprise-encrypted")
     expected_df = prepare_cpk_decoration(
-        real_period_capability_df=_capability_frame(0.82),
-        corrected_period_capability_df=_capability_frame(1.46),
+        period_capability_df=_capability_frame(0.82),
         product_dir=tmp_path,
         persist_files=False,
     ).decoration_df.assign(flag="TURE")
@@ -101,12 +97,10 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
 
 
 def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: Path) -> None:
-    real_df = _capability_frame(0.82)
-    corrected_df = _capability_frame(1.46)
+    computed_df = _capability_frame(1.46)
     decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
     existing_df = prepare_cpk_decoration(
-        real_period_capability_df=real_df,
-        corrected_period_capability_df=corrected_df,
+        period_capability_df=computed_df,
         product_dir=tmp_path,
         persist_files=False,
     ).decoration_df.assign(cpk_corrected=1.72, flag="TURE")
@@ -117,8 +111,7 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: 
     original_bytes = decoration_path.read_bytes()
 
     result = prepare_cpk_decoration(
-        real_period_capability_df=real_df,
-        corrected_period_capability_df=corrected_df,
+        period_capability_df=computed_df,
         product_dir=tmp_path,
         sheet_name="M678",
     )
@@ -152,8 +145,7 @@ def test_prepare_cpk_decoration_preserves_an_unreadable_existing_user_file(
     )
 
     result = prepare_cpk_decoration(
-        real_period_capability_df=_capability_frame(0.82),
-        corrected_period_capability_df=_capability_frame(1.46),
+        period_capability_df=_capability_frame(0.82),
         product_dir=tmp_path,
         sheet_name="M678",
     )

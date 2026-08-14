@@ -28,7 +28,6 @@ CPK_DETAIL_COLUMNS = [
     "period_sort",
     "period_start",
     "period_end",
-    "cpk_actual",
     "cpk_corrected",
 ]
 CPK_DECORATION_COLUMNS = [*CPK_DETAIL_COLUMNS, "flag"]
@@ -36,7 +35,7 @@ CPK_DECORATION_COLUMNS = [*CPK_DETAIL_COLUMNS, "flag"]
 
 @dataclass(frozen=True)
 class CpkDecorationResult:
-    """CPK values selected from real calculations or user-maintained corrections."""
+    """CPK values computed from decorated points, optionally overridden by user-maintained corrections."""
 
     period_capability_df: pd.DataFrame
     decoration_df: pd.DataFrame
@@ -89,30 +88,18 @@ def _parse_flag(value: object) -> bool:
     }
 
 
-def build_cpk_detail(
-    real_period_capability_df: pd.DataFrame,
-    corrected_period_capability_df: pd.DataFrame,
-) -> pd.DataFrame:
-    """Pair real CPK values with the OOS-corrected alternative for each period."""
+def build_cpk_detail(period_capability_df: pd.DataFrame) -> pd.DataFrame:
+    """List each period's CPK computed from decorated points as the user-editable value."""
     required_columns = {*CPK_KEY_COLUMNS, "cpk"}
-    if real_period_capability_df.empty or not required_columns.issubset(real_period_capability_df.columns):
+    if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
         return _empty_detail_frame()
 
-    real_df = _normalize_key_columns(real_period_capability_df)
-    real_detail = _ordered_existing_columns(
-        real_df,
+    capability_df = _normalize_key_columns(period_capability_df)
+    detail = _ordered_existing_columns(
+        capability_df,
         [*CPK_KEY_COLUMNS, "period_sort", "period_start", "period_end", "cpk"],
-    ).rename(columns={"cpk": "cpk_actual"})
-
-    if corrected_period_capability_df.empty or not required_columns.issubset(corrected_period_capability_df.columns):
-        real_detail["cpk_corrected"] = pd.NA
-        return _ordered_existing_columns(real_detail, CPK_DETAIL_COLUMNS)
-
-    corrected_df = _normalize_key_columns(corrected_period_capability_df)
-    corrected_detail = corrected_df[[*CPK_KEY_COLUMNS, "cpk"]].rename(columns={"cpk": "cpk_corrected"})
-    corrected_detail = corrected_detail.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
-    result = real_detail.merge(corrected_detail, on=CPK_KEY_COLUMNS, how="left")
-    return _ordered_existing_columns(result, CPK_DETAIL_COLUMNS).sort_values(
+    ).rename(columns={"cpk": "cpk_corrected"})
+    return _ordered_existing_columns(detail, CPK_DETAIL_COLUMNS).sort_values(
         ["factory", "step_id", "param_name", "period_sort"],
         kind="stable",
     ).reset_index(drop=True)
@@ -215,17 +202,16 @@ def persist_cpk_decoration(
 
 
 def apply_cpk_decoration(
-    real_period_capability_df: pd.DataFrame,
-    corrected_period_capability_df: pd.DataFrame,
+    period_capability_df: pd.DataFrame,
     decoration_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Use real CPK by default and apply only admin-enabled user corrections."""
-    result = real_period_capability_df.copy()
+    """Keep the computed CPK by default and apply only admin-enabled user corrections."""
+    result = period_capability_df.copy()
     if result.empty:
         result["cpk_decorated"] = pd.Series(dtype="bool")
         return result
 
-    detail_df = build_cpk_detail(real_period_capability_df, corrected_period_capability_df)
+    detail_df = build_cpk_detail(period_capability_df)
     flags_df = merge_detail_with_decoration_flags(
         detail_df,
         decoration_df if decoration_df is not None else _empty_decoration_frame(),
@@ -246,22 +232,20 @@ def apply_cpk_decoration(
 
 
 def prepare_cpk_decoration(
-    real_period_capability_df: pd.DataFrame,
-    corrected_period_capability_df: pd.DataFrame,
+    period_capability_df: pd.DataFrame,
     product_dir: Path,
     persist_files: bool = True,
     sheet_name: str | None = None,
 ) -> CpkDecorationResult:
     """Build chart-ready values selected by the user-maintained decoration sheet."""
-    detail_df = build_cpk_detail(real_period_capability_df, corrected_period_capability_df)
+    detail_df = build_cpk_detail(period_capability_df)
     decoration_df = (
         persist_cpk_decoration(product_dir, detail_df, sheet_name)
         if persist_files
         else merge_detail_with_decoration_flags(detail_df, load_cpk_decoration(product_dir, sheet_name))
     )
     period_capability_df = apply_cpk_decoration(
-        real_period_capability_df,
-        corrected_period_capability_df,
+        period_capability_df,
         decoration_df,
     )
     return CpkDecorationResult(

@@ -22,7 +22,7 @@ from src.inline_domain.core.spc.spc_calculator import (
     build_period_axis,
     get_period_window_start,
 )
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+from src.inline_domain.core.shared.sheet_oos_decoration import (
     DELETE_ACTION,
     OOS_DECORATION_COLUMNS,
     OOS_KEY_COLUMNS,
@@ -387,7 +387,7 @@ def render_cpk_decoration_admin(
     )
     container = st.expander("开发者后台：SPC CPK 修饰", expanded=False) if show_expander else nullcontext()
     with container:
-        st.caption("默认 flag=False，CPK 显示真实计算值；启用后显示修饰表中的 cpk_corrected。")
+        st.caption("默认 flag=False，CPK 显示基于修饰后点位的计算值；启用后显示修饰表中的 cpk_corrected。")
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_decoration, c_upload = st.columns([1, 1.2])
 

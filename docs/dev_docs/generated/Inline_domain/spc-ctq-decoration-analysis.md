@@ -4,6 +4,11 @@
 >
 > 本文基于当前代码实现，说明 SPC 与 CTQ 两个子模块的数据修饰逻辑，分析二者设计是否一致、能否统一。
 
+> **状态更新（2026-08-14）**：本文第 5 节的统一结论已实施——两个应用层 wrapper 已合并为
+> `application/shared/decorated_data.py::prepare_decorated_data(scope=...)` 并删除原文件，
+> 引擎已迁入 `core/shared/sheet_oos_decoration.py`。第 2~4 节保留统一前的事实记录，
+> 其中 `core/spc/spc_sheet_oos_decoration.py` 与两个 wrapper 的路径描述已成为历史。
+
 ## 1. 总体结论
 
 **SPC 与 CTQ 的 Sheet OOS 修饰在设计上是完全一致的**：两者调用同一个核心引擎
@@ -13,7 +18,8 @@
 
 1. **修饰工作簿文件名不同**（`spc_sheet_oos_decoration.xlsx` vs `ctq_sheet_oos_decoration.xlsx`），
    这只是引擎的一个参数；
-2. **SPC 多出两层独有逻辑**：保留修饰前特征（用于真实值 vs 修正值对比）和第二层 CPK 修饰，
+2. **SPC 多出独有逻辑**：返回值中保留修饰前特征（历史用途是真实/修正 CPK 对比，
+   该双轨逻辑已移除，修饰前特征目前仅随管线透传）和第二层 CPK 修饰，
    这是 SPC 有 CPM/CPK 周期能力报表而 CTQ 没有的业务差异，不属于修饰算法本身的分歧。
 
 因此：**二者可以统一**，详见本文第 5 节与《修饰逻辑统一方案分析》（`decoration-unify-proposal.md`）。
@@ -88,15 +94,17 @@ SPC 与 CTQ 都通过 `ConfigLoader.get_spc_sheet_oos_clip_rules()` 读取同一
    分组分别调用 `preprocess_sheet_features()` 再 concat，保持自动预警服务既有的类型隔离契约；
 2. 调用 `prepare_sheet_oos_decoration()`，使用默认文件名 `spc_sheet_oos_decoration.xlsx`；
 3. 用修饰后的点位**重新计算 Sheet 特征**，并同时返回修饰前特征
-   （`DecoratedSpcData.original_sheet_features_df`，:25），
-   供 SPC 报表做"真实 CPK vs 修正 CPK"对比（见 `spc_service.py:231-246`）。
+   （`DecoratedSpcData.original_sheet_features_df`，:25）。
+   注意：自本次需求修正后，**CPK 仅基于修饰后的点位/特征计算**，
+   修饰前特征不再参与 CPK 真实/修正对比（该双轨逻辑已移除）。
 
 此外 SPC 还有**第二层修饰 —— CPK 修饰**（`src/inline_domain/core/spc/cpk_decoration.py`）：
 
-- 作用于周期能力值（M/W/D 的 cpk_actual / cpk_corrected），而非原始点位；
-- 工作簿为 `spc_cpk_decoration.xlsx`，键含 `period_type/period_label`；
-- flag 语义与 Sheet OOS **相反**：opt-in，空值默认 `False`（不替换），
-  用户显式置 True 才用修正值覆盖（`cpk_decoration.py:75-80` 注释）。
+- 作用于周期能力值（M/W/D 的 cpk），而非原始点位；CPK 由修饰后的点位数据计算；
+- 工作簿为 `spc_cpk_decoration.xlsx`，键含 `period_type/period_label`，
+  `cpk_corrected` 列默认填计算值，用户可手工改写；
+- flag 语义为 opt-in：空值默认 `False`（显示计算值），
+  用户显式置 True 才用修饰表中的 `cpk_corrected` 覆盖（`cpk_decoration.py:75-80` 注释）。
 
 ## 4. CTQ 侧的包装：ctq_data_decoration.py
 
@@ -133,13 +141,13 @@ SPC 与 CTQ 都通过 `ConfigLoader.get_spc_sheet_oos_clip_rules()` 读取同一
 - 文件名差异 → 一个 `scope`/`file_name` 参数（引擎本身已支持 `decoration_file_name` 参数，
   `spc_sheet_oos_decoration.py:344`）；
 - `persist_files`/`persist_decoration` 参数名差异 → 统一命名即可；
-- "是否保留修饰前特征" → 统一保留（成本是一次特征重算，SPC 本就需要；CTQ 忽略该字段即可），
-  或作为返回 dataclass 的可选字段；
-- CPK 修饰是 SPC 在 Sheet OOS 修饰**之后**的独立第二层，不影响 Sheet OOS 修饰的统一，
-  继续留在 `core/spc/` 即可。
+- "是否保留修饰前特征" → 自 CPK 双轨逻辑移除后，修饰前特征已无消费方，
+  统一时可选择直接下线（少一次特征重算），或暂时保留为返回 dataclass 的可选字段；
+- CPK 修饰是 SPC 在 Sheet OOS 修饰**之后**的独立第二层（单轨：仅基于修饰后数据计算，
+  用户可按周期覆盖），不影响 Sheet OOS 修饰的统一，继续留在 `core/spc/` 即可。
 
-唯一**不应统一**的是业务语义差异：SPC 需要修饰前特征做 CPK 真实/修正对比，CTQ 不需要；
-这通过返回值保留原特征、由调用方自行决定是否使用来兼容，不需要两套实现。
+SPC 额外保留修饰前特征曾是"真实 CPK vs 修正 CPK"对比的需要；该对比逻辑移除后
+这一差异已消失，不再构成统一的障碍。
 
 ### 5.3 佐证
 

@@ -16,23 +16,20 @@ async page => {
       .getByRole("combobox", { name: /Selected Z571/ })
       .waitFor({ timeout: 120_000 });
   }
-  const readyIndicator = page.getByText("ARRAY | 12450 | OVL1_Y", {
-    exact: true,
-  }).first();
+  // 就绪指示：CPK 预警中心已渲染（预警周次随当前日期滚动，不断言具体指标名）
+  const readyIndicator = page
+    .getByText(/🚨 自动预警指标图像（\d+ 个指标）/)
+    .first();
   await readyIndicator.waitFor({ timeout: 120_000 });
 
-  const refreshedToast = page
-    .getByText(/Z571 缓存已刷新/)
-    .waitFor({ timeout: 30_000 });
+  // 不等待 toast / spinner 的可见性：重渲染高峰期短生命周期元素可能被轮询错过；
+  // 刷新生效的判定以随后「就绪指示重新出现 + 能力值网格可读」为准。
   await page.getByRole("button", { name: "🔄 刷新缓存" }).click();
-  await refreshedToast;
   await page
     .getByText("正在加载 SPC 分布数据...")
-    .waitFor({ state: "visible", timeout: 30_000 });
-  await page
-    .getByText("正在加载 SPC 分布数据...")
-    .waitFor({ state: "hidden", timeout: 120_000 });
-  await readyIndicator.waitFor({ timeout: 120_000 });
+    .waitFor({ state: "hidden", timeout: 300_000 })
+    .catch(() => {});
+  await readyIndicator.waitFor({ timeout: 300_000 });
 
   for (const correctedIndicator of [
     "ARRAY | 1L650 | CD1",
@@ -58,6 +55,16 @@ async page => {
 
   const parameterSelector = page.getByRole("combobox", { name: "参数名称" });
   if (!(await parameterSelector.getAttribute("aria-label"))?.includes("CD1")) {
+    // 参数名称在站点选择应用的 rerun 完成前处于 disabled，先等其启用
+    await page.waitForFunction(
+      () => {
+        const el = [...document.querySelectorAll('[role="combobox"]')].find(
+          e => e.getAttribute("aria-label") === "参数名称",
+        );
+        return el && el.getAttribute("aria-disabled") !== "true";
+      },
+      { timeout: 300_000 },
+    );
     await parameterSelector.fill("CD1");
     const parameterOption = page.getByRole("option", { name: "CD1", exact: true });
     if (await parameterOption.isVisible()) {

@@ -140,9 +140,6 @@ def test_ctq_scope_uses_ctq_decoration_workbook(decoration_root: Path) -> None:
     # The Delete flag from the CTQ workbook removed the only sheet's points.
     assert payload["raw_measurements_df"].empty
     assert payload["sheet_features_df"].empty
-    # Original (pre-decoration) data stays available.
-    assert len(payload["original_raw_measurements_df"]) == 2
-    assert not payload["original_sheet_features_df"].empty
     decoration = payload["sheet_oos_decoration"]
     assert decoration["decoration_path"].endswith("ctq_sheet_oos_decoration.xlsx")
     assert decoration["decoration_sheet"] == PROD
@@ -210,7 +207,7 @@ def test_empty_measurements_return_empty_payload(decoration_root: Path) -> None:
     )
 
     assert payload["sheet_features_df"].empty
-    assert payload["original_raw_measurements_df"].empty
+    assert payload["raw_measurements_df"].empty
     assert payload["sheet_oos_decoration"] is None
     assert payload["spec_empty"] is False
 

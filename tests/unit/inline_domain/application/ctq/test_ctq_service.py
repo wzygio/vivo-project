@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.application.ctq import ctq_service
-from src.inline_domain.application.ctq import ctq_data_decoration
+from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
@@ -80,7 +80,7 @@ def test_ctq_service_loads_ctq_distributions_without_capability_fields(
     CtqReportService.fetch_ctq_report_payload.clear()
     FakeCtqRepository.seen_data_type_filters = []
     monkeypatch.setattr(
-        ctq_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )
@@ -137,7 +137,7 @@ def test_ctq_report_remains_available_when_service_module_reloads_during_cache_f
     original_service = original_module.CtqReportService
     original_service.fetch_ctq_report_payload.clear()
     monkeypatch.setattr(
-        ctq_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )

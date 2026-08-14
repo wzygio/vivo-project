@@ -16,7 +16,7 @@ from app.sections.spc.spc_dashboard import (
     render_sheet_oos_decoration_admin,
 )
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
 
 CTQ_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 

@@ -66,9 +66,16 @@ def _ordered_existing_columns(df: pd.DataFrame, ordered_columns: Iterable[str]) 
     return df[list(ordered_columns)].copy()
 
 
-def _normalize_key_columns(df: pd.DataFrame) -> pd.DataFrame:
+def _resolve_key_columns(key_columns: Iterable[str] | None) -> list[str]:
+    """Custom key columns let non-SPC modules (e.g. aoi) reuse this machinery."""
+    return list(key_columns) if key_columns else OOS_KEY_COLUMNS
+
+
+def _normalize_key_columns(
+    df: pd.DataFrame, key_columns: Iterable[str] | None = None
+) -> pd.DataFrame:
     result = df.copy()
-    for column in OOS_KEY_COLUMNS:
+    for column in _resolve_key_columns(key_columns):
         if column in result.columns:
             result[column] = result[column].fillna("").astype(str)
     return result
@@ -186,11 +193,12 @@ def load_sheet_oos_decoration(
     product_dir: Path,
     file_name: str = OOS_DECORATION_FILE_NAME,
     sheet_name: str | None = None,
+    key_columns: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Load the user-editable decoration flags from the shared workbook sheet."""
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
     if not decoration_path.exists():
-        return _empty_decoration_frame()
+        return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
     try:
         if sheet_name is None:
             df = pd.read_excel(decoration_path, engine="openpyxl")
@@ -199,7 +207,7 @@ def load_sheet_oos_decoration(
                 df = pd.read_excel(decoration_path, sheet_name=sheet_name)
             except ValueError:
                 # 指定 sheet 缺失 —— 与文件缺失语义一致
-                return _empty_decoration_frame()
+                return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
     except Exception as excel_exc:
         try:
             df = _read_encrypted_xlsx_via_com(decoration_path, sheet_name)
@@ -218,49 +226,66 @@ def load_sheet_oos_decoration(
                 f"Unable to read existing Sheet OOS decoration file: {decoration_path}"
             ) from com_exc
     if df.empty:
-        return _empty_decoration_frame()
-    df = _normalize_key_columns(df)
-    return _ordered_existing_columns(df, OOS_DECORATION_COLUMNS)
+        return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
+    df = _normalize_key_columns(df, key_columns)
+    if key_columns is None:
+        return _ordered_existing_columns(df, OOS_DECORATION_COLUMNS)
+    return df
 
 
-def merge_detail_with_decoration_flags(detail_df: pd.DataFrame, existing_decoration_df: pd.DataFrame) -> pd.DataFrame:
+def merge_detail_with_decoration_flags(
+    detail_df: pd.DataFrame,
+    existing_decoration_df: pd.DataFrame,
+    key_columns: Iterable[str] | None = None,
+) -> pd.DataFrame:
     """Attach existing user flags to current OOS details, defaulting to True."""
+    if key_columns is None:
+        detail_columns: list[str] = OOS_DETAIL_COLUMNS
+        decoration_columns: list[str] = OOS_DECORATION_COLUMNS
+    else:
+        detail_columns = list(detail_df.columns)
+        decoration_columns = [*detail_columns, "flag"]
     if detail_df.empty:
-        return _empty_decoration_frame()
+        return pd.DataFrame(columns=decoration_columns)
 
-    detail_df = _normalize_key_columns(_ordered_existing_columns(detail_df, OOS_DETAIL_COLUMNS))
+    keys = _resolve_key_columns(key_columns)
+    detail_df = _normalize_key_columns(
+        _ordered_existing_columns(detail_df, detail_columns), keys
+    )
     if existing_decoration_df.empty or "flag" not in existing_decoration_df.columns:
         result = detail_df.copy()
         result["flag"] = True
-        return result[OOS_DECORATION_COLUMNS]
+        return result[decoration_columns]
 
-    flags_df = _normalize_key_columns(existing_decoration_df).copy()
+    flags_df = _normalize_key_columns(existing_decoration_df, keys).copy()
     flags_df["flag"] = flags_df["flag"].apply(_normalize_flag_action)
-    flags_df = flags_df[OOS_KEY_COLUMNS + ["flag"]].drop_duplicates(OOS_KEY_COLUMNS, keep="last")
-    result = detail_df.merge(flags_df, on=OOS_KEY_COLUMNS, how="left")
+    flags_df = flags_df[keys + ["flag"]].drop_duplicates(keys, keep="last")
+    result = detail_df.merge(flags_df, on=keys, how="left")
     result["flag"] = result["flag"].apply(_normalize_flag_action)
-    return result[OOS_DECORATION_COLUMNS]
+    return result[decoration_columns]
 
 
 def _exclude_delete_flagged_measurements(
     raw_measurements_df: pd.DataFrame,
     decoration_df: pd.DataFrame,
+    key_columns: Iterable[str] | None = None,
 ) -> pd.DataFrame:
-    required_columns = set(OOS_KEY_COLUMNS)
+    keys = _resolve_key_columns(key_columns)
+    required_columns = set(keys)
     if not required_columns.issubset(raw_measurements_df.columns):
         return raw_measurements_df.copy()
 
     delete_keys = decoration_df.loc[
         decoration_df["flag"].apply(_is_delete_action),
-        OOS_KEY_COLUMNS,
-    ].drop_duplicates(OOS_KEY_COLUMNS)
+        keys,
+    ].drop_duplicates(keys)
     if delete_keys.empty:
         return raw_measurements_df.copy()
 
-    delete_keys = _normalize_key_columns(delete_keys).assign(_delete_action=True)
-    result = _normalize_key_columns(raw_measurements_df).merge(
+    delete_keys = _normalize_key_columns(delete_keys, keys).assign(_delete_action=True)
+    result = _normalize_key_columns(raw_measurements_df, keys).merge(
         delete_keys,
-        on=OOS_KEY_COLUMNS,
+        on=keys,
         how="left",
         validate="many_to_one",
     )
@@ -274,13 +299,14 @@ def persist_sheet_oos_decoration(
     detail_df: pd.DataFrame,
     file_name: str = OOS_DECORATION_FILE_NAME,
     sheet_name: str | None = None,
+    key_columns: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Refresh the user-maintained Sheet OOS decoration sheet in the shared workbook."""
     product_dir.mkdir(parents=True, exist_ok=True)
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
 
-    existing_decoration = load_sheet_oos_decoration(product_dir, file_name, sheet_name)
-    decoration_to_write = merge_detail_with_decoration_flags(detail_df, existing_decoration)
+    existing_decoration = load_sheet_oos_decoration(product_dir, file_name, sheet_name, key_columns)
+    decoration_to_write = merge_detail_with_decoration_flags(detail_df, existing_decoration, key_columns)
 
     # replace_workbook_sheet 内部已处理 PermissionError（仅告警跳过）
     replace_workbook_sheet(decoration_path, sheet_name or "Sheet1", decoration_to_write)

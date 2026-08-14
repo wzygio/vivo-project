@@ -9,6 +9,12 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
+    build_lot_point_df,
+    build_sheet_point_df,
+)
+from src.inline_domain.core.aoi_rs.aoi_rs_decoration import prepare_aoi_rs_decoration
 from src.inline_domain.infrastructure.aoi_rs.data_loader import (
     AoiRsQueryConfig,
     load_pass_through,
@@ -24,12 +30,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AoiRsReportViewModel:
-    """AOI_RS 报表视图模型：明细、分母、规格与指标元数据。"""
+    """AOI_RS 报表视图模型：明细、分母、规格、图表就绪点帧与指标元数据。"""
 
     rs_details_df: pd.DataFrame
     pass_through_df: pd.DataFrame
     spec_df: pd.DataFrame
     indicators_df: pd.DataFrame
+    lot_points_df: pd.DataFrame
+    sheet_points_df: pd.DataFrame
 
 
 def _build_indicators(
@@ -58,6 +66,28 @@ def _build_indicators(
     return indicators
 
 
+def _build_chart_points(
+    rs_details_df: pd.DataFrame,
+    pass_through_df: pd.DataFrame,
+    spec_df: pd.DataFrame,
+    prod_code: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
+
+    修饰统一位于 service 层（D4：是否修饰由 application 层决定，前端只渲染）。
+    By Lot 用 LOT_RATIO 规格、By Sheet 用 SHEET_ID/GLASS_ID 规格，两图分别修饰；
+    工作簿 flag=Delete 删除图点、False 释放真实值、True（默认）截断。
+    """
+    result = prepare_aoi_rs_decoration(
+        build_lot_point_df(rs_details_df, pass_through_df),
+        build_sheet_point_df(rs_details_df),
+        spec_df,
+        product_dir=resolve_product_resource_dir(prod_code),
+        prod_code=prod_code,
+    )
+    return result.lot_points_df, result.sheet_points_df
+
+
 class AoiRsReportService:
     """AOI_RS 报表应用服务。"""
 
@@ -68,6 +98,8 @@ class AoiRsReportService:
             "pass_through_df": pd.DataFrame(),
             "spec_df": pd.DataFrame(),
             "indicators_df": pd.DataFrame(),
+            "lot_points_df": pd.DataFrame(),
+            "sheet_points_df": pd.DataFrame(),
         }
 
     @staticmethod
@@ -81,6 +113,8 @@ class AoiRsReportService:
             pass_through_df=_df("pass_through_df"),
             spec_df=_df("spec_df"),
             indicators_df=_df("indicators_df"),
+            lot_points_df=_df("lot_points_df"),
+            sheet_points_df=_df("sheet_points_df"),
         )
 
     @staticmethod
@@ -103,14 +137,19 @@ class AoiRsReportService:
                 return AoiRsReportService._empty_payload()
             pass_through_df = load_pass_through(_db_manager, query_config)
             spec_df = load_rs_spec_limits(_db_manager, query_config.prod_code)
-            # 修饰不在 service 层做：lot/sheet 图各自使用不同 type_flag 的规格线，
-            # 截断发生在图表组装层（见 sections/aoi_rs/aoi_rs_dashboard.py）
+            # 超规修饰在 service 层完成：By Lot 用 LOT_RATIO 规格、By Sheet 用
+            # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）
+            lot_points_df, sheet_points_df = _build_chart_points(
+                rs_details_df, pass_through_df, spec_df, query_config.prod_code
+            )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {
                 "rs_details_df": rs_details_df,
                 "pass_through_df": pass_through_df,
                 "spec_df": spec_df,
                 "indicators_df": indicators_df,
+                "lot_points_df": lot_points_df,
+                "sheet_points_df": sheet_points_df,
             }
         except Exception as exc:
             logger.error("[AOI_RS] report generation failed: %s", exc, exc_info=True)

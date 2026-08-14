@@ -12,7 +12,7 @@ from src.inline_domain.core.spc.spc_calculator import (
     build_period_capability_report,
     normalize_period_sigma_source,
 )
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationReadError,
     SheetOosDecorationResult,
 )
@@ -20,7 +20,7 @@ from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult, prepa
 from src.inline_domain.application.shared.decorated_features import (
     fetch_decorated_features,
 )
-from src.inline_domain.application.spc.spc_data_decoration import (
+from src.inline_domain.application.shared.decorated_data import (
     resolve_product_resource_dir,
 )
 from src.shared_kernel.config import ConfigLoader
@@ -202,33 +202,29 @@ class SpcReportService:
                 end_date=query_config.end_date,
                 snapshot_signature=snapshot_signature,
             )
-            if features_payload["original_raw_measurements_df"].empty or features_payload["spec_empty"]:
+            if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
 
-            original_measurements_df = features_payload["original_raw_measurements_df"]
             measurements_df = assign_indicator_chart_type(features_payload["raw_measurements_df"])
             sheet_features_df = assign_indicator_chart_type(features_payload["sheet_features_df"])
-            original_sheet_features_df = features_payload["original_sheet_features_df"]
             if sheet_features_df.empty:
                 return SpcReportService._empty_payload()
 
             capability_sheet_features_df = exclude_cpm_cpk_parameters(sheet_features_df)
-            capability_original_sheet_features_df = exclude_cpm_cpk_parameters(original_sheet_features_df)
             capability_measurements_df = exclude_cpm_cpk_parameters(measurements_df)
-            capability_original_measurements_df = exclude_cpm_cpk_parameters(original_measurements_df)
             capability_end_date = resolve_period_capability_end_date(
                 capability_sheet_features_df,
                 query_config.end_date,
             )
 
             if capability_sheet_features_df.empty or capability_end_date is None:
-                corrected_period_capability_df = pd.DataFrame()
-                real_period_capability_df = pd.DataFrame()
+                period_capability_df = pd.DataFrame()
             else:
                 resolved_period_sigma_source = normalize_period_sigma_source(
                     period_sigma_source or ConfigLoader.get_spc_period_sigma_source()
                 )
-                corrected_period_capability_df = build_period_capability_report(
+                # CPK 仅基于修饰后的点位/特征计算，不再保留真实值口径
+                period_capability_df = build_period_capability_report(
                     sheet_features=capability_sheet_features_df,
                     end_date=capability_end_date,
                     raw_measurements=capability_measurements_df
@@ -236,17 +232,8 @@ class SpcReportService:
                     else None,
                     sigma_source=resolved_period_sigma_source,
                 )
-                real_period_capability_df = build_period_capability_report(
-                    sheet_features=capability_original_sheet_features_df,
-                    end_date=capability_end_date,
-                    raw_measurements=capability_original_measurements_df
-                    if resolved_period_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
-                    else None,
-                    sigma_source=resolved_period_sigma_source,
-                )
             cpk_decoration_result = prepare_cpk_decoration(
-                real_period_capability_df=real_period_capability_df,
-                corrected_period_capability_df=corrected_period_capability_df,
+                period_capability_df=period_capability_df,
                 product_dir=resolve_product_resource_dir(query_config.prod_code),
                 sheet_name=query_config.prod_code,
             )

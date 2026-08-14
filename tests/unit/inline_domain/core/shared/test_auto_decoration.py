@@ -86,3 +86,44 @@ def test_clip_over_spec_column_uses_same_frame_spec() -> None:
     # 规格内与无规格行不变
     assert result[result["step_id"] == "S2"]["value"].iloc[0] == 2.0
     assert result[result["step_id"] == "S3"]["value"].iloc[0] == 99.0
+
+
+def _tri_state_frame() -> pd.DataFrame:
+    # df 已带规格列（attach 之后），3 行均超规（qty > spec）
+    return pd.DataFrame(
+        [
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S1", "qty": 10.0, "spec": 5.0},
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S2", "qty": 10.0, "spec": 5.0},
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S3", "qty": 10.0, "spec": 5.0},
+        ]
+    )
+
+
+def _tri_state_decoration() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S1", "flag": True},
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S2", "flag": False},
+            {"prod_code": "M678", "step_id": "11620", "sheet_id": "S3", "flag": "Delete"},
+        ]
+    )
+
+
+def test_tri_state_decoration_clips_releases_and_deletes_by_flag() -> None:
+    from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
+
+    result = apply_tri_state_decoration(
+        _tri_state_frame(),
+        _tri_state_decoration(),
+        key_columns=["prod_code", "step_id", "sheet_id"],
+        value_col="qty",
+        spec_col="spec",
+    )
+
+    # Delete 行被剔除
+    assert set(result["sheet_id"]) == {"S1", "S2"}
+    # flag=True：截断到线内
+    clipped = result[result["sheet_id"] == "S1"]["qty"].iloc[0]
+    assert 5.0 * 0.85 <= clipped < 5.0
+    # flag=False：释放真实值
+    assert result[result["sheet_id"] == "S2"]["qty"].iloc[0] == 10.0

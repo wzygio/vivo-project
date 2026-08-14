@@ -93,5 +93,7 @@ render_aoi_rs_indicator_sections(
     pass_through_df=filter_aoi_rs_report(pass_through_df, selected_factory, [], selected_steps),
     spec_df=spec_df,
     indicators_df=filter_aoi_rs_report(indicator_df, selected_factory, selected_codes, selected_steps),
+    lot_points_df=filter_aoi_rs_report(view_model.lot_points_df, selected_factory, selected_codes, selected_steps),
+    sheet_points_df=filter_aoi_rs_report(view_model.sheet_points_df, selected_factory, selected_codes, selected_steps),
     end_date=default_end_dt.date(),
 )

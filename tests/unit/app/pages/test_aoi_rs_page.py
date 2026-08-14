@@ -50,6 +50,32 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         ),
         pass_through_df=pd.DataFrame(),
         spec_df=pd.DataFrame(),
+        lot_points_df=pd.DataFrame(
+            [
+                {
+                    "factory": "ARRAY",
+                    "step_id": "11629",
+                    "rs_code": "A1PPS",
+                    "lot_id": "L1",
+                    "rs_qty": 3,
+                    "sheet_qty": 1,
+                    "value": 3.0,
+                    "first_start_time": pd.Timestamp("2026-08-09 08:00"),
+                }
+            ]
+        ),
+        sheet_points_df=pd.DataFrame(
+            [
+                {
+                    "factory": "ARRAY",
+                    "step_id": "11629",
+                    "rs_code": "A1PPS",
+                    "sheet_id": "S1",
+                    "rs_qty": 3,
+                    "first_start_time": pd.Timestamp("2026-08-09 08:00"),
+                }
+            ]
+        ),
     )
 
     monkeypatch.setattr(aoi_rs_dashboard.st, "set_page_config", lambda **_kwargs: None)

@@ -98,9 +98,7 @@ def _spy_fetch(recorded: list[tuple[str, str]]):
         )
         return {
             "sheet_features_df": features_df,
-            "original_sheet_features_df": features_df,
             "raw_measurements_df": measurements_df,
-            "original_raw_measurements_df": measurements_df,
             "spec_empty": spec_df.empty,
             "sheet_oos_decoration": None,
         }

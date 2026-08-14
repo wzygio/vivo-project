@@ -1,12 +1,23 @@
 """AOI_RS 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from src.inline_domain.application.aoi_rs import aoi_rs_service
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
 from src.inline_domain.infrastructure.aoi_rs.data_loader import AoiRsQueryConfig
+from src.shared_kernel.config import ConfigLoader
+
+
+@pytest.fixture(autouse=True)
+def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
+    """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
+    monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+    (tmp_path / "resources").mkdir(parents=True, exist_ok=True)
+    return tmp_path
 
 
 def _details_df() -> pd.DataFrame:
@@ -44,6 +55,7 @@ def _pass_df() -> pd.DataFrame:
                 "prod_code": "M678",
                 "start_time": pd.Timestamp("2026-07-15 07:00:00"),
                 "sheet_id": "SHT-A01",
+                "lot_id": "LOT-A1",
                 "step_id": "11629",
             }
         ]
@@ -131,9 +143,31 @@ def test_service_tolerates_loader_exception(monkeypatch) -> None:
     assert view_model.indicators_df.empty
 
 
-def test_service_keeps_raw_values_decoration_is_chart_level(monkeypatch) -> None:
-    """service 层不做截断：lot/sheet 图使用不同 type_flag 规格，截断在图表组装层。"""
-    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _spec_df())
+def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
+    """修饰在 service 层完成（D4）：payload 直接给出图表就绪的修饰后点帧。"""
+    spec_df = pd.DataFrame(
+        [
+            {
+                "prod_code": "M678",
+                "factory": "ARRAY",
+                "type_flag": "LOT_RATIO",
+                "step_id": "11629",
+                "rs_code": "A1PPS",
+                "code_desc": "PHT责M1残留",
+                "spec": 2.0,
+            },
+            {
+                "prod_code": "M678",
+                "factory": "ARRAY",
+                "type_flag": "SHEET_ID",
+                "step_id": "11629",
+                "rs_code": "A1PPS",
+                "code_desc": "PHT责M1残留",
+                "spec": 2.0,
+            },
+        ]
+    )
+    _patch_loaders(monkeypatch, _details_df(), _pass_df(), spec_df)
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
@@ -142,7 +176,109 @@ def test_service_keeps_raw_values_decoration_is_chart_level(monkeypatch) -> None
         snapshot_signature="clip-test",
     )
 
+    # 原始明细保持原值（源数据不修饰）
     details = view_model.rs_details_df
-    # A1PPS code_qty=3 超过 spec=0.5，但 service 层保持原值
-    raw_value = details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0]
-    assert raw_value == 3
+    assert details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0] == 3
+
+    # By Sheet：rs_qty=3 超过 spec=2，被截断到线内；spec 列不外泄
+    sheet_points = view_model.sheet_points_df
+    a1_sheet = sheet_points[sheet_points["rs_code"] == "A1PPS"]
+    assert not a1_sheet.empty
+    assert a1_sheet["rs_qty"].iloc[0] < 2.0
+    assert "spec" not in sheet_points.columns
+
+    # By Lot：value = 3/1 = 3 超过 spec=2，被截断到线内
+    lot_points = view_model.lot_points_df
+    a1_lot = lot_points[lot_points["rs_code"] == "A1PPS"]
+    assert not a1_lot.empty
+    assert a1_lot["value"].iloc[0] < 2.0
+    assert "spec" not in lot_points.columns
+
+    # 无规格的 Code 保持真实值
+    t3_sheet = sheet_points[sheet_points["rs_code"] == "T3DMR"]
+    assert t3_sheet["rs_qty"].iloc[0] == 5
+
+
+def _chart_spec_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "prod_code": "M678",
+                "factory": "ARRAY",
+                "type_flag": "LOT_RATIO",
+                "step_id": "11629",
+                "rs_code": "A1PPS",
+                "code_desc": "PHT责M1残留",
+                "spec": 2.0,
+            },
+            {
+                "prod_code": "M678",
+                "factory": "ARRAY",
+                "type_flag": "SHEET_ID",
+                "step_id": "11629",
+                "rs_code": "A1PPS",
+                "code_desc": "PHT责M1残留",
+                "spec": 2.0,
+            },
+        ]
+    )
+
+
+def test_service_persists_aoi_rs_decoration_workbook(
+    monkeypatch, _tmp_project_root: Path
+) -> None:
+    """默认全部截断，并生成带 chart_kind 维度的用户修饰工作簿。"""
+    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _chart_spec_df())
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    view_model = AoiRsReportService.get_aoi_rs_report_data(
+        _db_manager=SimpleNamespace(engine=None),
+        query_config_json=_config_json(),
+        snapshot_signature="wb-default",
+    )
+
+    a1_sheet = view_model.sheet_points_df[view_model.sheet_points_df["rs_code"] == "A1PPS"]
+    assert a1_sheet["rs_qty"].iloc[0] < 2.0
+    a1_lot = view_model.lot_points_df[view_model.lot_points_df["rs_code"] == "A1PPS"]
+    assert a1_lot["value"].iloc[0] < 2.0
+
+    workbook = _tmp_project_root / "resources" / "aoi_rs_sheet_oos_decoration.xlsx"
+    assert workbook.exists()
+    persisted = pd.read_excel(workbook, sheet_name="M678")
+    assert set(persisted["chart_kind"]) == {"lot", "sheet"}
+    assert persisted["flag"].tolist() == [True, True]
+
+
+def test_service_respects_aoi_rs_flag_false_and_delete(
+    monkeypatch, _tmp_project_root: Path
+) -> None:
+    # sheet 图 SHT-A01 释放真实值；lot 图 LOT-A1 整行删除
+    pd.DataFrame(
+        [
+            {"prod_code": "M678", "factory": "ARRAY", "step_id": "11629",
+             "rs_code": "A1PPS", "chart_kind": "sheet", "point_id": "SHT-A01", "flag": False},
+            {"prod_code": "M678", "factory": "ARRAY", "step_id": "11629",
+             "rs_code": "A1PPS", "chart_kind": "lot", "point_id": "LOT-A1", "flag": "Delete"},
+        ]
+    ).to_excel(
+        _tmp_project_root / "resources" / "aoi_rs_sheet_oos_decoration.xlsx",
+        sheet_name="M678",
+        index=False,
+        engine="openpyxl",
+    )
+    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _chart_spec_df())
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    view_model = AoiRsReportService.get_aoi_rs_report_data(
+        _db_manager=SimpleNamespace(engine=None),
+        query_config_json=_config_json(),
+        snapshot_signature="wb-flags",
+    )
+
+    a1_sheet = view_model.sheet_points_df[view_model.sheet_points_df["rs_code"] == "A1PPS"]
+    assert a1_sheet["rs_qty"].iloc[0] == 3  # 释放真实值
+    a1_lot = view_model.lot_points_df[view_model.lot_points_df["rs_code"] == "A1PPS"]
+    assert a1_lot.empty  # Delete 行被剔除
+    # 无规格的 T3DMR 不受影响
+    t3_sheet = view_model.sheet_points_df[view_model.sheet_points_df["rs_code"] == "T3DMR"]
+    assert t3_sheet["rs_qty"].iloc[0] == 5

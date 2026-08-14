@@ -1,3 +1,11 @@
+"""Unified scope-driven Sheet OOS decoration entry for the inline domain.
+
+Replaces the former per-module wrappers (``spc_data_decoration.py`` /
+``ctq_data_decoration.py``): the only difference between the SPC and CTQ
+decoration calibres was the workbook file name, so a single scope-parameterized
+entry now serves both (see ``docs/dev_docs/generated/Inline_domain/``).
+"""
+
 from __future__ import annotations
 
 import logging
@@ -6,23 +14,31 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
+from src.inline_domain.core.shared.sheet_oos_decoration import (
+    OOS_DECORATION_FILE_NAME,
     SheetOosDecorationResult,
     prepare_sheet_oos_decoration,
 )
-from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
+from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
+CTQ_OOS_DECORATION_FILE_NAME = "ctq_sheet_oos_decoration.xlsx"
+
+# scope -> 用户维护的修饰工作簿文件名（resources/ 根目录，每产品一个 sheet）
+SCOPE_DECORATION_FILE_NAME = {
+    "spc": OOS_DECORATION_FILE_NAME,
+    "ctq": CTQ_OOS_DECORATION_FILE_NAME,
+}
+
 
 @dataclass(frozen=True)
-class DecoratedSpcData:
-    """SPC measurement data after product-scoped Sheet OOS decoration."""
+class DecoratedData:
+    """Measurement data after scope-scoped Sheet OOS decoration."""
 
     raw_measurements_df: pd.DataFrame
     sheet_features_df: pd.DataFrame
-    original_sheet_features_df: pd.DataFrame
     sheet_oos_decoration_result: SheetOosDecorationResult
 
 
@@ -56,48 +72,48 @@ def _preprocess_sheet_features_by_type(measure_df: pd.DataFrame, spec_df: pd.Dat
     return pd.concat(frames, ignore_index=True)
 
 
-def prepare_decorated_spc_data(
+def prepare_decorated_data(
     raw_measurements_df: pd.DataFrame,
     spec_df: pd.DataFrame,
     prod_code: str,
+    scope: str,
     product_dir: Path | None = None,
-    persist_files: bool = True,
-) -> DecoratedSpcData:
-    """
-    Apply tri-state Sheet actions stored in the shared decoration workbook and recompute Sheet features.
+    persist: bool = True,
+) -> DecoratedData:
+    """Apply the scope's tri-state Sheet actions and recompute Sheet features.
 
-    The user-maintained decoration sheet (named after the product) is matched against the original out-of-spec Sheets.
-    Downstream reports receive recomputed features from the
-    decorated point data, making CPM/CPK and auto-warning views share the same backend contract.
-    ``flag=Delete`` removes the matching product/station/parameter/Sheet points from charts;
-    ``True`` clips OOS points and ``False`` preserves their real values.
+    The user-maintained decoration sheet (named after the product) is matched
+    against the original out-of-spec Sheets: ``flag=Delete`` removes the matching
+    product/station/parameter/Sheet points, ``True`` clips OOS points and
+    ``False`` preserves their real values. ``scope`` only selects the workbook
+    (``SCOPE_DECORATION_FILE_NAME``); the engine and flag semantics are shared.
     """
-    resolved_product_dir = resolve_product_resource_dir(prod_code, product_dir)
+    normalized_scope = (scope or "").strip().lower()
+    if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
+        raise ValueError(f"unknown decoration scope: {scope!r}")
+
     original_features_df = _preprocess_sheet_features_by_type(raw_measurements_df, spec_df)
-
     decoration_result = prepare_sheet_oos_decoration(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
-        product_dir=resolved_product_dir,
-        persist_files=persist_files,
+        product_dir=resolve_product_resource_dir(prod_code, product_dir),
+        persist_files=persist,
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
+        decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
         decoration_sheet_name=prod_code,
     )
-
     decorated_features_df = _preprocess_sheet_features_by_type(
         decoration_result.raw_measurements_df,
         spec_df,
     )
-
     logger.info(
-        "[SPC] Sheet OOS decoration prepared for %s: raw_features=%s, decorated_features=%s",
+        "[shared] Sheet OOS decoration prepared for %s (scope=%s): decorated_features=%s",
         prod_code,
-        len(original_features_df),
+        normalized_scope,
         len(decorated_features_df),
     )
-    return DecoratedSpcData(
+    return DecoratedData(
         raw_measurements_df=decoration_result.raw_measurements_df,
         sheet_features_df=decorated_features_df,
-        original_sheet_features_df=original_features_df,
         sheet_oos_decoration_result=decoration_result,
     )

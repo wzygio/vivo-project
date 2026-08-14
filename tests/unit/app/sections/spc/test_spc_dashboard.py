@@ -23,7 +23,7 @@ from app.sections.spc.spc_dashboard import (
     render_spc_indicator_sections,
 )
 from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
 
 
 def _sample_report_df() -> pd.DataFrame:

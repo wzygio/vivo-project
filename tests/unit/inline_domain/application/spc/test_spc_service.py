@@ -8,11 +8,11 @@ import pandas as pd
 import pytest
 
 from src.inline_domain.application.spc import spc_service
-from src.inline_domain.application.spc import spc_data_decoration
+from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
 from src.inline_domain.application.spc.spc_service import assign_indicator_chart_type
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationReadError,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
@@ -157,7 +157,7 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
         staticmethod(lambda: "sheet_mean"),
     )
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )
@@ -202,7 +202,7 @@ def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypat
         staticmethod(lambda: "point_value"),
     )
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )
@@ -249,7 +249,7 @@ def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
         staticmethod(lambda: "sheet_mean"),
     )
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )
@@ -310,7 +310,7 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
         staticmethod(lambda: "sheet_mean"),
     )
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )

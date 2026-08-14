@@ -25,7 +25,7 @@ import pandas as pd
 import pytest
 
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.application.spc import spc_data_decoration
+from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.infrastructure.measurement.measurement_preparation import (
     InlineMeasurementPreparationRepository,
@@ -566,7 +566,7 @@ def test_monitor_dashboard_aggregation_contract(monkeypatch, tmp_path: Path) -> 
     MonitorAnalysisService.set_analysis_end_date(datetime(2026, 8, 10))
     # Keep the sheet-OOS decoration workbook inside tmp_path.
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )

@@ -10,7 +10,8 @@ import pandas as pd
 import streamlit as st
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
-from src.inline_domain.core.shared.auto_decoration import auto_clip_over_spec
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.core.aoi_tt.aoi_tt_decoration import prepare_aoi_tt_decoration
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
@@ -83,14 +84,14 @@ class AoiTtReportService:
             if tt_details_df.empty:
                 return AoiTtReportService._empty_payload()
             spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
-            # 超规项自动修饰：单边上限（USL），截断为线内确定性伪随机值
-            tt_details_df = auto_clip_over_spec(
+            # 超规片修饰：工作簿三态 flag（Delete 删除 / False 释放 / True 默认截断），
+            # 无工作簿时与引入前的自动截断行为一致
+            tt_details_df = prepare_aoi_tt_decoration(
                 tt_details_df,
                 spec_df,
-                value_col="tt_qty",
-                join_keys=["step_id", "tt_name"],
-                upper_col="usl",
-            )
+                product_dir=resolve_product_resource_dir(query_config.prod_code),
+                prod_code=query_config.prod_code,
+            ).tt_details_df
             indicators_df = _build_indicators(tt_details_df)
             return {
                 "tt_details_df": tt_details_df,

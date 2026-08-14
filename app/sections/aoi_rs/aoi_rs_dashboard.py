@@ -21,12 +21,9 @@ from plotly.subplots import make_subplots
 from app.components.distribution_charts import create_point_line_trace
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
-    build_lot_point_df,
     build_period_throughput_df,
     build_period_trend_df,
-    build_sheet_point_df,
 )
-from src.inline_domain.core.shared.auto_decoration import clip_over_spec_column
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 
 AOI_RS_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
@@ -400,29 +397,22 @@ def render_aoi_rs_indicator_sections(
     pass_through_df: pd.DataFrame,
     spec_df: pd.DataFrame,
     indicators_df: pd.DataFrame,
+    lot_points_df: pd.DataFrame,
+    sheet_points_df: pd.DataFrame,
     end_date: date,
 ) -> None:
-    """按（厂别+站点）分组，组内每个 Code 一个默认展开的 Expander，并列渲染三张图。"""
+    """按（厂别+站点）分组，组内每个 Code 一个默认展开的 Expander，并列渲染三张图。
+
+    lot/sheet 点帧由 service 层完成超规修饰后传入，本层仅做筛选与渲染（D4）。
+    """
     if rs_details_df.empty or indicators_df.empty:
         st.info("当前筛选条件下暂无 AOI RS 数据。")
         return
 
     trend_df = build_period_trend_df(rs_details_df, pass_through_df, end_date)
     throughput_df = build_period_throughput_df(rs_details_df, pass_through_df, end_date)
-    lot_df = build_lot_point_df(rs_details_df, pass_through_df)
-    sheet_df = build_sheet_point_df(rs_details_df)
-    # 超规项自动修饰：By Lot 用 LOT_RATIO 规格、By Sheet 用 SHEET_ID/GLASS_ID 规格，
-    # 分别截断各自图的值列（两图规格不同，不能共用一次截断）
-    lot_df = clip_over_spec_column(
-        attach_spec_values(lot_df, spec_df, chart_kind="lot"),
-        value_col="value",
-        spec_col="spec",
-    ).drop(columns=["spec"])
-    sheet_df = clip_over_spec_column(
-        attach_spec_values(sheet_df, spec_df, chart_kind="sheet"),
-        value_col="rs_qty",
-        spec_col="spec",
-    ).drop(columns=["spec"])
+    lot_df = lot_points_df
+    sheet_df = sheet_points_df
     code_names = _code_display_names(indicators_df)
 
     groups = (

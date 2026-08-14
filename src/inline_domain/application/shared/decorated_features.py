@@ -17,12 +17,12 @@ import logging
 import pandas as pd
 import streamlit as st
 
+from src.inline_domain.application.shared.decorated_data import (
+    _preprocess_sheet_features_by_type,
+    prepare_decorated_data,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
-from src.inline_domain.application.spc.spc_data_decoration import (
-    _preprocess_sheet_features_by_type,
-    prepare_decorated_spc_data,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +67,7 @@ class InMemoryFeaturesSource:
 def _empty_features_payload(spec_empty: bool = True) -> dict[str, object]:
     return {
         "sheet_features_df": pd.DataFrame(),
-        "original_sheet_features_df": pd.DataFrame(),
         "raw_measurements_df": pd.DataFrame(),
-        "original_raw_measurements_df": pd.DataFrame(),
         "spec_empty": spec_empty,
         "sheet_oos_decoration": None,
     }
@@ -99,15 +97,14 @@ def fetch_decorated_features(
     - ``"none"``: decoration skipped entirely, only preprocess feature
       computation (same exemption as aoi_tt).
 
-    Audit-file persistence: the underlying ``prepare_decorated_*`` wrappers
-    run with ``persist_files=True`` so the user-maintained decoration
-    workbook is (re)written once per cache miss; cache hits return the
-    computed payload without rewriting the workbook.
+    Audit-file persistence: ``prepare_decorated_data`` runs with
+    ``persist=True`` so the user-maintained decoration workbook is (re)written
+    once per cache miss; cache hits return the computed payload without
+    rewriting the workbook.
 
-    Returns a native-payload dict (ADR-0001): decorated/original
-    sheet_features_df, decorated/original raw_measurements_df, ``spec_empty``
-    flag, and the decoration payload (decoration_df / decoration_path /
-    decoration_sheet) or None.
+    Returns a native-payload dict (ADR-0001): decorated sheet_features_df,
+    decorated raw_measurements_df, ``spec_empty`` flag, and the decoration
+    payload (decoration_df / decoration_path / decoration_sheet) or None.
     """
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in _DATA_TYPE_FILTER_BY_SCOPE:
@@ -143,39 +140,18 @@ def fetch_decorated_features(
         features_df = _preprocess_sheet_features_by_type(measurements_df, spec_df)
         return {
             "sheet_features_df": features_df,
-            "original_sheet_features_df": features_df,
             "raw_measurements_df": measurements_df,
-            "original_raw_measurements_df": measurements_df.copy(),
             "spec_empty": spec_df.empty,
             "sheet_oos_decoration": None,
         }
 
-    original_raw_measurements_df = measurements_df.copy()
-    if normalized_scope == SCOPE_SPC:
-        decorated_data = prepare_decorated_spc_data(
-            raw_measurements_df=measurements_df,
-            spec_df=spec_df,
-            prod_code=prod_code,
-            persist_files=True,
-        )
-        original_features_df = decorated_data.original_sheet_features_df
-    else:
-        # 延迟导入：ctq 包 __init__ 依赖 ctq_service，而 ctq_service 依赖本模块，
-        # 顶层导入会形成循环。
-        from src.inline_domain.application.ctq.ctq_data_decoration import (
-            prepare_decorated_ctq_data,
-        )
-
-        decorated_data = prepare_decorated_ctq_data(
-            raw_measurements_df=measurements_df,
-            spec_df=spec_df,
-            prod_code=prod_code,
-            persist_decoration=True,
-        )
-        original_features_df = _preprocess_sheet_features_by_type(
-            original_raw_measurements_df, spec_df
-        )
-
+    decorated_data = prepare_decorated_data(
+        raw_measurements_df=measurements_df,
+        spec_df=spec_df,
+        prod_code=prod_code,
+        scope=normalized_scope,
+        persist=True,
+    )
     decoration_result = decorated_data.sheet_oos_decoration_result
     logger.info(
         "[shared] decorated features prepared: prod=%s scope=%s features=%s",
@@ -185,9 +161,7 @@ def fetch_decorated_features(
     )
     return {
         "sheet_features_df": decorated_data.sheet_features_df,
-        "original_sheet_features_df": original_features_df,
         "raw_measurements_df": decorated_data.raw_measurements_df,
-        "original_raw_measurements_df": original_raw_measurements_df,
         "spec_empty": spec_df.empty,
         "sheet_oos_decoration": {
             "decoration_df": decoration_result.decoration_df,

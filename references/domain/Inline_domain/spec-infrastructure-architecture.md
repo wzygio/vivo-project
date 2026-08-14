@@ -100,8 +100,10 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 
 ## 5. 应用层共享缓存（application/shared/decorated_features.py）
 
-修饰引擎（`core/spc/spc_sheet_oos_decoration.py`）与特征计算本是共享领域逻辑；
-模块间唯一差异是**修饰口径（scope）**：
+修饰引擎（`core/shared/sheet_oos_decoration.py`）与特征计算本是共享领域逻辑；
+模块间唯一差异是**修饰口径（scope）**。应用层统一入口为
+`application/shared/decorated_data.py::prepare_decorated_data(scope=...)`
+（scope → 工作簿文件名映射；spc/ctq 的独立 wrapper 已删除）：
 
 ```python
 @st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
@@ -112,15 +114,28 @@ def fetch_decorated_features(_features_source, prod_code, scope,
 - scope：`spc` → `resources/spc_sheet_oos_decoration.xlsx`；`ctq` →
   `resources/ctq_sheet_oos_decoration.xlsx`；`none` → 免修饰（monitor 的 AOI 行）。
 - 缓存 key 含时间窗口：窗口一致时跨模块命中同一条目（一致性由此保证）。
-- 审计文件落盘语义：缓存 miss 时写一次，命中不重写。
-- 返回值只含原生结构（ADR-0001）；ViewModel 在缓存外组装。
+- 审计文件落盘语义：缓存 miss 时写一次，命中不重写；
+  **操作契约：手工编辑修饰工作簿后须在页面点「刷新缓存」生效**。
+- 返回值只含原生结构（ADR-0001）；ViewModel 在缓存外组装；
+  payload 不再透传修饰前数据（original_* 已随 CPK 单轨移除）。
 - monitor 按 data_type 分组路由：SPC→spc、CTQ→ctq（D2）、AOI→none（D3）。
 - 强刷链路：三个页面的 `funcs_to_clear` 均登记该函数。
 
-无工作簿的最简自动修饰由 `core/shared/auto_decoration.py::auto_clip_over_spec`
-提供（超规值截断为线内 5%~15% span 的确定性伪随机值，单边规格以 0 为下界），
-当前消费方：aoi_tt（tt_qty vs usl）与 aoi_rs（code_qty vs spec，规格按 sheet 级
-type_flag 优先去重）。
+修饰算法在 `core/shared/` 单一来源：
+
+- `sheet_oos_decoration.py`：工作簿三态引擎（Delete 删除 / True 截断 / False 释放），
+  键列可参数化（`key_columns`，默认为 SPC/CTQ 的
+  `[prod_code, step_id, param_name, sheet_id]`）；
+- `auto_decoration.py`：无工作簿截断（`auto_clip_over_spec` /
+  `clip_over_spec_column`）与三态应用（`apply_tri_state_decoration`），
+  margin 与稳定哈希复用引擎常量。
+
+aoi 模块的对齐（2026-08-14 起）：aoi_tt / aoi_rs 各有修饰工作簿
+（`resources/aoi_tt_sheet_oos_decoration.xlsx` /
+`aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet），默认行为 = 自动截断
+（向后兼容），用户可置 flag=False 释放真实值或 Delete 删除；
+aoi_rs 工作簿以 `chart_kind`（lot/sheet）+ `point_id` 区分两张图的图点。
+修饰均在 service 层完成，section 层只消费修饰后数据渲染。
 
 ---
 

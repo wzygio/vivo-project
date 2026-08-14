@@ -4,6 +4,11 @@
 >
 > 分析对象：`src/inline_domain/application/shared/decorated_features.py`
 
+> **状态更新（2026-08-14）**：修饰统一已实施——spc/ctq 双分支已合并为对
+> `application/shared/decorated_data.py::prepare_decorated_data(scope=...)` 的单一调用，
+> ctq 延迟导入已消除；payload 不再包含 `original_*` 键（CPK 单轨后无消费方）。
+> 下文第 3/6 节已按最终态修订。
+
 ## 1. 定位
 
 `decorated_features.py` 是 inline_domain **应用层唯一的共享"修饰 + 特征"计算入口**。
@@ -48,37 +53,31 @@ flowchart TD
     E -->|是| F[_empty_features_payload]
     E -->|否| G[sheet_start_time 窗口过滤<br/>对已窗口化数据幂等]
     G --> H{scope}
-    H -->|none| I[仅 _preprocess_sheet_features_by_type<br/>decorated == original]
-    H -->|spc| J[prepare_decorated_spc_data<br/>persist_files=True]
-    H -->|ctq| K[prepare_decorated_ctq_data<br/>persist_decoration=True，延迟导入]
+    H -->|none| I[仅 _preprocess_sheet_features_by_type]
+    H -->|spc / ctq| J[prepare_decorated_data<br/>scope→工作簿文件名，persist=True]
     I --> L[统一原生 dict payload]
     J --> L
-    K --> L
 ```
 
 关键点：
 
-- **缓存**：`@st.cache_data(show_spinner=False, max_entries=12, ttl=4h)`（:78）。
+- **缓存**：`@st.cache_data(show_spinner=False, max_entries=12, ttl=4h)`。
   缓存 key = (prod_code, scope, start_date, end_date, snapshot_signature)；
   `_features_source` 以下划线开头被排除在哈希之外（与既有 `_db_manager`/`_data_port`
   参数同一模式）。相同窗口跨模块共享一条缓存；不同窗口分开缓存（正确性优先）。
-- **工作簿落盘时机**：spc/ctq 分支都以 `persist=True` 运行——**缓存 miss 时**修饰工作簿
-  重写一次；缓存命中直接返回 payload，不重写工作簿（:102-105 注释）。
-- **ctq 分支延迟导入**（:163-167）：`ctq` 包 `__init__` 依赖 `ctq_service`，
-  而 `ctq_service` 依赖本模块，顶层导入会成环，因此在函数体内导入。
-- **original 特征的来源不对称**（:161, :175-177）：spc 分支直接取
-  `DecoratedSpcData.original_sheet_features_df`；ctq 分支因为包装函数不保留修饰前特征，
-  在 shared 层用 `original_raw_measurements_df` 补算一次。这正好印证了文档
-  《SPC 与 CTQ 数据修饰逻辑分析》第 5 节的结论——两个包装函数冗余，差异被 shared 层吸收。
+- **工作簿落盘时机**：spc/ctq 统一走 `prepare_decorated_data(scope=..., persist=True)`
+  ——**缓存 miss 时**修饰工作簿重写一次；缓存命中直接返回 payload，不重写工作簿。
+  操作契约：手工编辑工作簿后须在页面点「刷新缓存」生效。
+- **单分支路由**（2026-08-14 起）：spc/ctq 的唯一差异是工作簿文件名，
+  由 `SCOPE_DECORATION_FILE_NAME` 映射吸收；统一前的 ctq 延迟导入循环依赖
+  与 original 特征不对称补算均已消除。
 
-返回 payload（:186-196）：
+返回 payload：
 
 | 键 | 含义 |
 |---|---|
 | `sheet_features_df` | 修饰后 Sheet 特征（图表用） |
-| `original_sheet_features_df` | 修饰前 Sheet 特征（真实/修正对比用） |
 | `raw_measurements_df` | 修饰后点位 |
-| `original_raw_measurements_df` | 修饰前点位 |
 | `spec_empty` | 规格表是否为空（调用方据此降级空报表） |
 | `sheet_oos_decoration` | `decoration_df / decoration_path / decoration_sheet` 或 None |
 
@@ -103,12 +102,13 @@ flowchart TD
 由此形成的契约：**SPC 报表、CTQ 报表、自动预警看板在窗口一致时读的是同一份修饰结果**，
 三者看到的数据必然一致；修饰工作簿每个缓存 miss 只落盘一次。
 
-## 6. 现状评价
+## 6. 现状评价（2026-08-14 最终态）
 
-- 该模块已经完成了"管线级"复用（取数/窗口/修饰路由/缓存），是本次统一需求里
-  **做对的部分**，应作为 aoi 对齐的参照系；
-- 但它路由的下层仍是 spc/ctq 两个近似复制的包装函数，且 `none` 口径是"完全免修饰"——
-  aoi_tt/aoi_rs 的自动截断并未纳入此管线（aoi 数据不经过 Sheet 特征管线，见
-  《修饰逻辑统一方案分析》第 3 节）；
-- 统一两个包装函数后，本模块的 spc/ctq 双分支可简化为"按 scope 解析工作簿文件名的
-  单分支"，ctq 延迟导入的循环依赖问题也随之消失。
+- 该模块是管线级复用的正确范式：取数/窗口/修饰路由/缓存单点共享，
+  SPC/CTQ/monitor 同源同结果；
+- 下层包装已统一为 `decorated_data.py` 单入口（scope→文件名映射），
+  spc/ctq 双分支、ctq 延迟导入、original_* 透传均已消除；
+- `none` 口径仍是"完全免修饰"——aoi_tt/aoi_rs 的修饰不经过本管线
+  （aoi 数据不做 Sheet 特征），其工作簿三态能力由各自 service 直接调用
+  `core/aoi_tt/aoi_tt_decoration.py` / `core/aoi_rs/aoi_rs_decoration.py` 获得，
+  截断与 flag 语义与本管线同源（core/shared）。

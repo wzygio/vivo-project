@@ -244,11 +244,28 @@ def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkey
         ]
     )
 
+    lot_points = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A1PPS", "lot_id": "L1", "rs_qty": 3, "sheet_qty": 1, "value": 3.0, "first_start_time": pd.Timestamp("2026-08-09 08:00")},
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A2CIP", "lot_id": "L2", "rs_qty": 1, "sheet_qty": 1, "value": 1.0, "first_start_time": pd.Timestamp("2026-08-09 09:00")},
+            {"factory": "TP", "step_id": "43629", "rs_code": "T3DMR", "lot_id": "L9", "rs_qty": 2, "sheet_qty": 1, "value": 2.0, "first_start_time": pd.Timestamp("2026-08-09 10:00")},
+        ]
+    )
+    sheet_points = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A1PPS", "sheet_id": "S1", "rs_qty": 3, "first_start_time": pd.Timestamp("2026-08-09 08:00")},
+            {"factory": "ARRAY", "step_id": "11629", "rs_code": "A2CIP", "sheet_id": "S2", "rs_qty": 1, "first_start_time": pd.Timestamp("2026-08-09 09:00")},
+            {"factory": "TP", "step_id": "43629", "rs_code": "T3DMR", "sheet_id": "G1", "rs_qty": 2, "first_start_time": pd.Timestamp("2026-08-09 10:00")},
+        ]
+    )
+
     render_aoi_rs_indicator_sections(
         rs_details_df=details,
         pass_through_df=pass_through,
         spec_df=pd.DataFrame(),
         indicators_df=indicators,
+        lot_points_df=lot_points,
+        sheet_points_df=sheet_points,
         end_date=date(2026, 8, 10),
     )
 

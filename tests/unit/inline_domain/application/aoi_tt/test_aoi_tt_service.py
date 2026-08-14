@@ -1,9 +1,21 @@
 """AOI_TT 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
+from pathlib import Path
+
 import pandas as pd
+import pytest
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
+from src.shared_kernel.config import ConfigLoader
+
+
+@pytest.fixture(autouse=True)
+def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
+    """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
+    monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+    (tmp_path / "resources").mkdir(parents=True, exist_ok=True)
+    return tmp_path
 
 
 def _details_df() -> pd.DataFrame:
@@ -164,3 +176,77 @@ def test_service_auto_clips_over_spec_tt_qty() -> None:
 
     clipped = view_model.tt_details_df["tt_qty"].iloc[0]
     assert 5.0 * 0.85 <= clipped < 5.0
+
+
+def _over_spec_port() -> type:
+    class OverSpecPort:
+        def get_tt_details(self, _query) -> pd.DataFrame:
+            return pd.DataFrame(
+                [
+                    {
+                        "factory": "ARRAY", "prod_code": "M678",
+                        "start_time": pd.Timestamp("2026-07-15 08:00:00"),
+                        "sheet_id": "SHT-A01", "lot_id": "LOT-A1",
+                        "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 99.0,
+                    },
+                    {
+                        "factory": "ARRAY", "prod_code": "M678",
+                        "start_time": pd.Timestamp("2026-07-16 08:00:00"),
+                        "sheet_id": "SHT-A02", "lot_id": "LOT-A2",
+                        "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 88.0,
+                    },
+                ]
+            )
+
+        def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
+            return _spec_df()  # TDSUM usl=5.0
+
+    return OverSpecPort
+
+
+def _write_aoi_tt_workbook(resources: Path, rows: list[dict]) -> Path:
+    path = resources / "aoi_tt_sheet_oos_decoration.xlsx"
+    pd.DataFrame(rows).to_excel(path, sheet_name="M678", index=False, engine="openpyxl")
+    return path
+
+
+def test_service_persists_aoi_tt_decoration_workbook(_tmp_project_root: Path) -> None:
+    """无工作簿时按默认自动截断，并生成用户可编辑的修饰工作簿。"""
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=_over_spec_port()(),
+        query_config_json=_config_json(),
+        snapshot_signature="wb-default",
+    )
+
+    assert (view_model.tt_details_df["tt_qty"] < 5.0).all()
+    workbook = _tmp_project_root / "resources" / "aoi_tt_sheet_oos_decoration.xlsx"
+    assert workbook.exists()
+    persisted = pd.read_excel(workbook, sheet_name="M678")
+    assert set(persisted["sheet_id"]) == {"SHT-A01", "SHT-A02"}
+    assert persisted["flag"].tolist() == [True, True]
+
+
+def test_service_respects_flag_false_and_delete(_tmp_project_root: Path) -> None:
+    resources = _tmp_project_root / "resources"
+    _write_aoi_tt_workbook(
+        resources,
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "step_id": "11620",
+             "tt_name": "TDSUM", "sheet_id": "SHT-A01", "flag": False},
+            {"factory": "ARRAY", "prod_code": "M678", "step_id": "11620",
+             "tt_name": "TDSUM", "sheet_id": "SHT-A02", "flag": "Delete"},
+        ],
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=_over_spec_port()(),
+        query_config_json=_config_json(),
+        snapshot_signature="wb-flags",
+    )
+
+    # Delete 行被剔除；flag=False 行释放真实值 99.0
+    assert view_model.tt_details_df["sheet_id"].tolist() == ["SHT-A01"]
+    assert view_model.tt_details_df["tt_qty"].iloc[0] == 99.0

@@ -1,7 +1,7 @@
 """超规项自动修饰：把越出规格线的值截断为线内的确定性伪随机值。
 
 仿照 SPC Sheet OOS 修饰的截断语义
-（`core/spc/spc_sheet_oos_decoration.py::_clip_inside_spec`）：
+（`core/shared/sheet_oos_decoration.py::_clip_inside_spec`）：
 
 - 上限越规 → 截断到上限以下 5%~15% span 处；下限越规对称处理；
 - 单边规格（无下限）时 span 以 0 为下界（即截断到上限的 85%~95%）；
@@ -16,7 +16,13 @@ import logging
 
 import pandas as pd
 
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import _stable_fraction
+from src.inline_domain.core.shared.sheet_oos_decoration import (
+    _exclude_delete_flagged_measurements,
+    _is_delete_action,
+    _normalize_key_columns,
+    _parse_flag,
+    _stable_fraction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,3 +148,46 @@ def auto_clip_over_spec(
         merged, value_col, "_auto_upper", "_auto_lower" if lower_col else None
     )
     return clipped.drop(columns=["_auto_upper"] + (["_auto_lower"] if lower_col else []))
+
+
+def apply_tri_state_decoration(
+    df: pd.DataFrame,
+    decoration_df: pd.DataFrame,
+    *,
+    key_columns: list[str],
+    value_col: str,
+    spec_col: str,
+) -> pd.DataFrame:
+    """按工作簿三态 flag 修饰 df（df 须已带 spec_col 规格列）。
+
+    - flag=Delete：剔除匹配 key_columns 的行；
+    - flag=False：释放真实值（不截断）；
+    - flag=True（默认）：按 spec_col 截断（与 auto_clip_over_spec 同语义）。
+
+    不在 decoration_df 中的行按规格正常截断（与默认 flag=True 一致）。
+    """
+    if df.empty or value_col not in df.columns or spec_col not in df.columns:
+        return df.copy()
+    if decoration_df is None or decoration_df.empty or "flag" not in decoration_df.columns:
+        return _clip_in_place(df, value_col, spec_col)
+
+    result = _exclude_delete_flagged_measurements(df, decoration_df, key_columns)
+    if result.empty:
+        return result
+
+    released = decoration_df[
+        ~decoration_df["flag"].apply(_is_delete_action)
+        & ~decoration_df["flag"].apply(_parse_flag)
+    ]
+    if released.empty:
+        return _clip_in_place(result, value_col, spec_col)
+
+    release_keys = _normalize_key_columns(
+        released[key_columns].drop_duplicates(), key_columns
+    ).assign(_released=True)
+    merged = _normalize_key_columns(result, key_columns).merge(
+        release_keys, on=key_columns, how="left", validate="many_to_one"
+    )
+    merged.loc[merged["_released"].eq(True), spec_col] = pd.NA
+    clipped = _clip_in_place(merged, value_col, spec_col)
+    return clipped.drop(columns=["_released"])

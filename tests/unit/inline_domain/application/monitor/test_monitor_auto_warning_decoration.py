@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.application.monitor import monitor_service
-from src.inline_domain.application.spc import spc_data_decoration
+from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
@@ -65,7 +65,7 @@ class FakeAutoWarningRepository:
 
 def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )

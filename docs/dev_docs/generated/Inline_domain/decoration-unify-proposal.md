@@ -5,6 +5,12 @@
 > 议题：Inline_domain 各子模块的数据修饰逻辑极其相似却各自重复编写，应作为通用算法
 > 纳入 `shared`，保证算法统一性、降低后续优化与排障成本。本文分析该想法并给出目标设计。
 
+> **状态更新（2026-08-14）**：本方案已由 `.scratch/decoration-unify/` 立项并实施完成
+> （实施顺序按第 4 节，第 5 步 monitor AOI 口径切换按约定未做，留作后续单独立项）。
+> 落地形态与第 3 节一致，补充两点实现定案：aoi_rs 工作簿采用
+> `chart_kind`（lot/sheet）+ `point_id`（lot_id/sheet_id）键维度；
+> 三态应用算法落地为 `core/shared/auto_decoration.py::apply_tri_state_decoration`。
+
 ## 1. 结论先行
 
 **想法成立，且方向正确。** 事实上代码库已经部分走在这条路上：

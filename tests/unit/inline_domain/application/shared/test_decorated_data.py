@@ -1,10 +1,17 @@
+"""Characterization tests for the unified scope-driven decoration entry.
+
+Replaces the per-module wrapper tests (former test_spc_data_decoration.py):
+the same behaviours must hold through ``prepare_decorated_data(scope=...)``.
+"""
+
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from src.inline_domain.application.spc import spc_data_decoration
-from src.inline_domain.application.spc.spc_data_decoration import prepare_decorated_spc_data
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import OOS_DECORATION_FILE_NAME
+from src.inline_domain.application.shared import decorated_data
+from src.inline_domain.application.shared.decorated_data import prepare_decorated_data
+from src.inline_domain.core.shared.sheet_oos_decoration import OOS_DECORATION_FILE_NAME
 
 
 def _raw_measurements() -> pd.DataFrame:
@@ -55,17 +62,40 @@ def _spec_limits() -> pd.DataFrame:
     )
 
 
-def test_prepare_decorated_spc_data_clips_points_and_recomputes_sheet_features(tmp_path: Path) -> None:
+def _write_flag_workbook(product_dir: Path, file_name: str, flag: object) -> None:
+    product_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "factory": "OLED",
+                "prod_code": "Z571",
+                "step_id": "21200",
+                "param_name": "PPA_B_X",
+                "sheet_id": "S1",
+                "sheet_start_time": "2026-07-01 08:00:00",
+                "sheet_max": 8.0,
+                "sheet_min": 0.0,
+                "sheet_mean": 4.0,
+                "usl": 6.0,
+                "lsl": -6.0,
+                "oos_type": "USL",
+                "flag": flag,
+            }
+        ]
+    ).to_excel(product_dir / file_name, index=False, sheet_name="Z571")
+
+
+def test_prepare_decorated_data_clips_points_and_recomputes_sheet_features(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
 
-    result = prepare_decorated_spc_data(
+    result = prepare_decorated_data(
         raw_measurements_df=_raw_measurements(),
         spec_df=_spec_limits(),
         prod_code="Z571",
+        scope="spc",
         product_dir=product_dir,
     )
 
-    assert result.original_sheet_features_df["sheet_max"].iloc[0] == 8.0
     assert not (product_dir / "spc_sheet_oos_detail.xlsx").exists()
     assert result.sheet_oos_decoration_result.decoration_path.exists()
     assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
@@ -73,11 +103,11 @@ def test_prepare_decorated_spc_data_clips_points_and_recomputes_sheet_features(t
     assert result.sheet_features_df["sheet_max"].iloc[0] < 6.0
 
 
-def test_prepare_decorated_spc_data_applies_configured_clip_rules(monkeypatch, tmp_path: Path) -> None:
+def test_prepare_decorated_data_applies_configured_clip_rules(monkeypatch, tmp_path: Path) -> None:
     raw_measurements = _raw_measurements()
     raw_measurements.loc[raw_measurements["param_value"] == 8.0, "param_value"] = 6.2
     monkeypatch.setattr(
-        spc_data_decoration.ConfigLoader,
+        decorated_data.ConfigLoader,
         "get_spc_sheet_oos_clip_rules",
         staticmethod(
             lambda: [
@@ -90,45 +120,28 @@ def test_prepare_decorated_spc_data_applies_configured_clip_rules(monkeypatch, t
         ),
     )
 
-    result = prepare_decorated_spc_data(
+    result = prepare_decorated_data(
         raw_measurements_df=raw_measurements,
         spec_df=_spec_limits(),
         prod_code="Z571",
+        scope="spc",
         product_dir=tmp_path / "resources",
-        persist_files=False,
+        persist=False,
     )
 
     assert result.raw_measurements_df["param_value"].max() == 6.2
     assert result.sheet_features_df["sheet_max"].iloc[0] == 6.2
 
 
-def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path: Path) -> None:
+def test_prepare_decorated_data_respects_flag_false_for_real_values(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
-    product_dir.mkdir(parents=True)
-    pd.DataFrame(
-        [
-            {
-                "factory": "OLED",
-                "prod_code": "Z571",
-                "step_id": "21200",
-                "param_name": "PPA_B_X",
-                "sheet_id": "S1",
-                "sheet_start_time": "2026-07-01 08:00:00",
-                "sheet_max": 8.0,
-                "sheet_min": 0.0,
-                "sheet_mean": 4.0,
-                "usl": 6.0,
-                "lsl": -6.0,
-                "oos_type": "USL",
-                "flag": False,
-            }
-        ]
-    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False, sheet_name="Z571")
+    _write_flag_workbook(product_dir, OOS_DECORATION_FILE_NAME, False)
 
-    result = prepare_decorated_spc_data(
+    result = prepare_decorated_data(
         raw_measurements_df=_raw_measurements(),
         spec_df=_spec_limits(),
         prod_code="Z571",
+        scope="spc",
         product_dir=product_dir,
     )
 
@@ -136,46 +149,52 @@ def test_prepare_decorated_spc_data_respects_flag_false_for_real_values(tmp_path
     assert result.sheet_features_df["sheet_max"].iloc[0] == 8.0
 
 
-def test_prepare_decorated_spc_data_removes_delete_flagged_sheet_from_report(
-    tmp_path: Path,
-) -> None:
+def test_prepare_decorated_data_removes_delete_flagged_sheet_from_report(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
-    product_dir.mkdir(parents=True)
-    pd.DataFrame(
-        [
-            {
-                "factory": "OLED",
-                "prod_code": "Z571",
-                "step_id": "21200",
-                "param_name": "PPA_B_X",
-                "sheet_id": "S1",
-                "sheet_start_time": "2026-07-01 08:00:00",
-                "sheet_max": 8.0,
-                "sheet_min": 0.0,
-                "sheet_mean": 4.0,
-                "usl": 6.0,
-                "lsl": -6.0,
-                "oos_type": "USL",
-                "flag": "Delete",
-            }
-        ]
-    ).to_excel(product_dir / OOS_DECORATION_FILE_NAME, index=False, sheet_name="Z571")
+    _write_flag_workbook(product_dir, OOS_DECORATION_FILE_NAME, "Delete")
 
-    result = prepare_decorated_spc_data(
+    result = prepare_decorated_data(
         raw_measurements_df=_raw_measurements(),
         spec_df=_spec_limits(),
         prod_code="Z571",
+        scope="spc",
         product_dir=product_dir,
     )
 
     assert result.raw_measurements_df.empty
     assert result.sheet_features_df.empty
-    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == [
-        "Delete"
-    ]
+    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == ["Delete"]
     assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
-    persisted = pd.read_excel(
-        product_dir / OOS_DECORATION_FILE_NAME,
-        sheet_name="Z571",
-    )
+    persisted = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="Z571")
     assert persisted["flag"].tolist() == ["Delete"]
+
+
+def test_ctq_scope_uses_ctq_workbook(tmp_path: Path) -> None:
+    product_dir = tmp_path / "resources"
+    # CTQ 工作簿释放真实值；同名 SPC 工作簿若被误用会删除该片
+    _write_flag_workbook(product_dir, "ctq_sheet_oos_decoration.xlsx", False)
+    _write_flag_workbook(product_dir, OOS_DECORATION_FILE_NAME, "Delete")
+
+    result = prepare_decorated_data(
+        raw_measurements_df=_raw_measurements(),
+        spec_df=_spec_limits(),
+        prod_code="Z571",
+        scope="ctq",
+        product_dir=product_dir,
+    )
+
+    assert result.raw_measurements_df["param_value"].max() == 8.0
+    assert result.sheet_oos_decoration_result.decoration_path.name == (
+        "ctq_sheet_oos_decoration.xlsx"
+    )
+
+
+def test_unknown_scope_raises(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown decoration scope"):
+        prepare_decorated_data(
+            raw_measurements_df=_raw_measurements(),
+            spec_df=_spec_limits(),
+            prod_code="Z571",
+            scope="banana",
+            product_dir=tmp_path / "resources",
+        )

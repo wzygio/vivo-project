@@ -4,8 +4,8 @@ from zipfile import BadZipFile
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.spc import spc_sheet_oos_decoration
-from src.inline_domain.core.spc.spc_sheet_oos_decoration import (
+from src.inline_domain.core.shared import sheet_oos_decoration
+from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
     apply_sheet_oos_decoration,
     build_sheet_oos_detail,
@@ -195,7 +195,7 @@ def test_merge_detail_preserves_delete_action_but_ignores_edited_statistics() ->
         123.0,
     ]
 
-    merged = spc_sheet_oos_decoration.merge_detail_with_decoration_flags(
+    merged = sheet_oos_decoration.merge_detail_with_decoration_flags(
         detail,
         existing,
     )
@@ -219,12 +219,12 @@ def test_load_sheet_oos_decoration_falls_back_to_excel_com_for_encrypted_file(
     expected = build_sheet_oos_detail(_sheet_features()).assign(flag=["Delete", False])
 
     monkeypatch.setattr(
-        spc_sheet_oos_decoration.pd,
+        sheet_oos_decoration.pd,
         "read_excel",
         lambda *args, **kwargs: (_ for _ in ()).throw(BadZipFile("not a zip file")),
     )
     monkeypatch.setattr(
-        spc_sheet_oos_decoration,
+        sheet_oos_decoration,
         "_read_encrypted_xlsx_via_com",
         lambda path, sheet_name=None: expected if path == decoration_path else pd.DataFrame(),
         raising=False,
@@ -246,17 +246,17 @@ def test_persist_sheet_oos_decoration_does_not_overwrite_unreadable_existing_fil
     decoration_path.write_bytes(original_bytes)
 
     monkeypatch.setattr(
-        spc_sheet_oos_decoration.pd,
+        sheet_oos_decoration.pd,
         "read_excel",
         lambda *args, **kwargs: (_ for _ in ()).throw(BadZipFile("not a zip file")),
     )
     monkeypatch.setattr(
-        spc_sheet_oos_decoration,
+        sheet_oos_decoration,
         "_read_encrypted_xlsx_via_com",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("Excel unavailable")),
     )
 
-    with pytest.raises(spc_sheet_oos_decoration.SheetOosDecorationReadError):
+    with pytest.raises(sheet_oos_decoration.SheetOosDecorationReadError):
         persist_sheet_oos_decoration(
             product_dir,
             build_sheet_oos_detail(_sheet_features()),
@@ -289,3 +289,43 @@ def test_persist_sheet_oos_decoration_writes_only_decoration_and_preserves_flags
     # 共享工作簿中的其他 sheet 不受影响
     other_loaded = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="OTHER")
     assert other_loaded["note"].tolist() == ["keep-me"]
+
+
+def test_generic_key_columns_round_trip_for_non_spc_modules(tmp_path: Path) -> None:
+    """Non-SPC modules (e.g. aoi) reuse the same workbook machinery with their own key columns."""
+    key_columns = ["prod_code", "step_id", "tt_name", "sheet_id"]
+    detail_df = pd.DataFrame(
+        [
+            {"prod_code": "Z571", "step_id": "1A250", "tt_name": "TT1", "sheet_id": "S1",
+             "start_time": "2026-07-01", "tt_qty": 12.0, "usl": 10.0},
+            {"prod_code": "Z571", "step_id": "1A250", "tt_name": "TT1", "sheet_id": "S2",
+             "start_time": "2026-07-02", "tt_qty": 15.0, "usl": 10.0},
+        ]
+    )
+
+    decoration_df = sheet_oos_decoration.persist_sheet_oos_decoration(
+        tmp_path, detail_df, "aoi_tt_sheet_oos_decoration.xlsx", "Z571",
+        key_columns=key_columns,
+    )
+
+    assert decoration_df["flag"].tolist() == [True, True]
+    assert list(decoration_df.columns) == [*detail_df.columns, "flag"]
+
+    # 用户把 S2 行改成 Delete、S1 行改成 False 后重新 merge，flag 被保留
+    user_df = decoration_df.assign(flag=["False", "Delete"])
+    merged = sheet_oos_decoration.merge_detail_with_decoration_flags(
+        detail_df, user_df, key_columns=key_columns
+    )
+    assert merged["flag"].tolist() == [False, "Delete"]
+
+    # 自定义键列的 Delete 行能从明细中剔除
+    excluded = sheet_oos_decoration._exclude_delete_flagged_measurements(
+        detail_df, merged, key_columns=key_columns
+    )
+    assert excluded["sheet_id"].tolist() == ["S1"]
+
+    # 读回工作簿与写入一致
+    loaded = sheet_oos_decoration.load_sheet_oos_decoration(
+        tmp_path, "aoi_tt_sheet_oos_decoration.xlsx", "Z571", key_columns=key_columns
+    )
+    assert loaded["flag"].tolist() == [True, True]

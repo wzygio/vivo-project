@@ -21,9 +21,15 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 │  spc/spc_service.py         (SPC + CPM/CPK)       │
 │  ctq/ctq_service.py         (CTQ 分布，无能力指数)   │
 │  aoi_tt/aoi_tt_service.py   (TT 趋势)              │
+│  aoi_rs/aoi_rs_service.py   (RS 趋势，service 层修饰) │
 │  shared/decorated_features.py (共享修饰+特征缓存)    │
+│  shared/decorated_data.py    (统一修饰入口，scope 路由)│
 ├─────────────────────────────────────────────────┤
 │               Core Domain Layer                   │
+│  shared/sheet_oos_decoration.py (工作簿三态修饰引擎)  │
+│  shared/auto_decoration.py     (自动截断+三态应用)    │
+│  aoi_tt/aoi_tt_decoration.py   (TT 修饰工作簿)       │
+│  aoi_rs/aoi_rs_decoration.py   (RS 修饰工作簿)       │
 │  monitor/monitor_calculator.py (预警规则与特征降维)   │
 │  spc/spc_calculator.py         (周期 CPM/CPK)       │
 │  ctq/indicator_chart.py        (UNI 图表类型规则)     │
