@@ -1,7 +1,7 @@
 # 修饰逻辑统一：修饰算法收敛 shared + aoi 对齐 spc/ctq（自动修饰 + 工作簿释放/删除）
 
 Category: `enhancement`  
-Status: `ready-for-agent`  
+Status: `complete`  
 Created: `2026-08-14`  
 Source: `docs/dev_docs/dev_spec/Inline_domain/feat-decoration_unify.md`  
 Related: `.scratch/decoration-unify/PRD.md`、`docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md`、`docs/dev_docs/generated/Inline_domain/spc-ctq-decoration-analysis.md`、`docs/dev_docs/generated/Inline_domain/decorated-features-pipeline.md`
@@ -120,3 +120,15 @@ Related: `.scratch/decoration-unify/PRD.md`、`docs/dev_docs/generated/Inline_do
 的强约束 D4），并授权跳过计划评审、按默认 plan 开发至 E2E 通过；代码事实经三份
 generated 分析文档核实，无阻塞问题。D6（aoi 工作簿键列）为计划阶段的实证核对项，
 已在 Agent Brief 的 Edge cases 中给出降级预案。仓库无 `.out-of-scope/` 历史拒绝记录。
+
+### 2026-08-14 — Completed
+
+全部 5 个实施段交付：引擎归位 `core/shared/sheet_oos_decoration.py`（+key_columns 泛化）、
+应用层合并为 `application/shared/decorated_data.py`（original_* 清理）、aoi_rs 截断下移
+service（D4）、aoi_tt/aoi_rs 工作簿三态（新能力，默认行为兼容）。
+验证：tests/unit 417 passed / 5 failed（=既有基线）；E2E 九脚本在锁定环境
+（.venv / streamlit 1.60）全部通过，含 aoi_rs flag=Delete 端到端轨迹断言与
+spc_cpk_decoration 8 行修饰值全匹配；截图/产物见 output/test-results、output/screenshots。
+过程修正：E2E 运行环境从系统 Python（1.49，缺 streamlit_echarts）改为 .venv；
+全部 e2e 脚本适配 1.60 aria-label 行为。架构决策见 ADR-0014。
+有意排除：monitor AOI 组 scope 切换（按 PRD 约定单独立项）。

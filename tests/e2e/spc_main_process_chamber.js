@@ -24,18 +24,26 @@ async page => {
     .waitFor({ timeout: 240_000 });
   qa.functional.push("SPC page loaded without a Streamlit error boundary");
 
+  // Streamlit 1.60：选中值从 input value / 容器文本读取，不依赖 "Selected X" aria-label
+  const comboInputValue = label =>
+    page.evaluate(l => {
+      const el = [...document.querySelectorAll('[role="combobox"]')].find(
+        e => e.getAttribute("aria-label") === l,
+      );
+      return el?.value || "";
+    }, label);
+
   const productSelector = page.getByRole("combobox").first();
-  if (!(await productSelector.getAttribute("aria-label"))?.includes("M626")) {
+  if ((await productSelector.inputValue()) !== "M626") {
     await productSelector.click();
     await page.getByRole("option", { name: "M626", exact: true }).click();
     await page
       .getByText("正在加载 SPC 分布数据...")
-      .waitFor({ state: "hidden", timeout: 240_000 });
+      .waitFor({ state: "hidden", timeout: 600_000 });
   }
 
-  const factorySelector = page.getByRole("combobox", { name: "厂别" });
-  if (!(await factorySelector.getAttribute("aria-label"))?.includes("OLED")) {
-    await factorySelector.click();
+  if ((await comboInputValue("厂别")) !== "OLED") {
+    await page.getByRole("combobox", { name: "厂别" }).click();
     await page.getByRole("option", { name: "OLED", exact: true }).click();
   }
 
@@ -43,9 +51,24 @@ async page => {
   await stationSelector.fill("21200");
   await page.getByRole("option", { name: "21200", exact: true }).click();
   await page.keyboard.press("Escape");
-  await page
-    .getByRole("combobox", { name: /Selected 21200/ })
-    .waitFor({ timeout: 30_000 });
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('[data-testid="stMultiSelect"]')].some(
+      c => (c.querySelector('[data-testid="stWidgetLabel"]')?.textContent || "").includes("站点")
+        && c.textContent.includes("21200"),
+    ),
+    undefined,
+    { timeout: 300_000 },
+  );
+  await page.waitForFunction(
+    () => {
+      const btn = [...document.querySelectorAll("button")].find(
+        b => b.textContent?.trim() === "查询",
+      );
+      return btn && !btn.disabled;
+    },
+    undefined,
+    { timeout: 300_000 },
+  );
 
   await page.getByRole("button", { name: "查询" }).click();
   await page

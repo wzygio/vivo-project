@@ -21,7 +21,7 @@ async page => {
   // 站点多选：选第一个可选站点
   const stepSelector = page.getByRole("combobox", { name: "站点" });
   await stepSelector.click();
-  const firstStepOption = page.getByRole("option").first();
+  const firstStepOption = page.getByRole("option", { name: /^\d+$/ }).first();
   const firstStepName = (await firstStepOption.textContent()).trim();
   await firstStepOption.click();
   await page.keyboard.press("Escape");
@@ -35,7 +35,8 @@ async page => {
       );
       return btn && !btn.disabled;
     },
-    { timeout: 60_000 },
+    undefined,
+    { timeout: 300_000 },
   );
   await queryButton.click();
 

@@ -94,3 +94,33 @@
   CD1/1L650 期望值 1.663/1.554/1.385/1.365/1.441/1.381/1.389/1.396 与新单轨计算
   逐位吻合（CPK 单轨改动未破坏既有修饰数据语义）；仅将就绪指示改为
   「🚨 自动预警指标图像（N 个指标）」正则，不断言具体指标名。
+- **E2E 运行环境修正**：发现 8503 原进程（含我首次重启）实际跑在系统 Python
+  （streamlit 1.49，无 streamlit_echarts → monitor 页 ModuleNotFoundError）；
+  改用 `.venv/Scripts/python.exe -m streamlit`（锁定 streamlit 1.60）重启。
+  1.60 的 combobox aria-label 不再含 "Selected X" 前缀，单选取 input.value、
+  多选取 stMultiSelect 容器文本；全部 8 个 e2e 脚本已改写为 1.60 兼容
+  （另修正 waitForFunction 的 arg/options 形参错位），并在 .venv 环境下全量重跑。
+
+## 2026-08-14 — 模块 3 · Phase 7 E2E 全部通过（锁定环境 .venv / streamlit 1.60）
+
+| 脚本 | 结果 | 证据 |
+|---|---|---|
+| aoi_tt_report.js | 通过 | output/screenshots/aoi_tt_e2e.png (20:59) |
+| aoi_rs_report.js | 通过 | output/test-results/aoi_rs_e2e.png (21:06) |
+| aoi_rs_decoration_delete.js | 通过 | output/test-results/aoi_rs_delete_e2e.png (21:12)，轨迹数据断言 hits=[] |
+| ctq_report.js | 通过 | output/test-results/ctq_e2e.png (21:17) |
+| spc_cpk_decoration.js | 通过 | output/test-results/spc-cpk-decoration/e2e-pass.png (21:23)，8 行修饰值全匹配 |
+| spc_cpk_alert.js | 通过 | 返回 result 无异常 (~21:28) |
+| spc_filter_layout_mt_ch.js | 通过 | 返回 result 无异常 (~21:33) |
+| spc_main_process_chamber.js | 通过 | output/screenshots/spc_main_process_chamber_e2e.png (21:39) |
+| monitor_compliance_config.js | 通过 | output/test-results/monitor-compliance-e2e/downloaded-compliance-config.xlsx (20:14) |
+
+- 服务端日志：仅公司网络固有噪音（healthz/host-config/metrics + websocket ConnectionReset），
+  无应用 Traceback。
+- aoi_rs Delete 验证后 flag 已恢复 True。
+- 有意排除：无（首轮 1.49 环境下的通过记录被 1.60 全量重跑取代）。
+
+## 2026-08-14 — 模块 4 项目沉淀（完成）
+
+- [x] 8.1 ADR-0014 `docs/ADR/0014-inline-decoration-unify-shared-single-source.md` 建立；
+  issue 状态 → complete（含完成记录）；checklist 全部以证据勾选。

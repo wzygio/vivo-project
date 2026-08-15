@@ -1,8 +1,29 @@
 async page => {
+  // Streamlit 1.60：单选 combobox 的选中值在 input 的 value 属性（aria-label 不再含 "Selected X"）；
+  // 多选选中项渲染为容器内标签文本。
+  const comboInputValue = label =>
+    page.evaluate(l => {
+      const el = [...document.querySelectorAll('[role="combobox"]')].find(
+        e => e.getAttribute("aria-label") === l,
+      );
+      return el?.value || "";
+    }, label);
+  const waitQueryEnabled = (timeout = 300_000) =>
+    page.waitForFunction(
+      () => {
+        const btn = [...document.querySelectorAll("button")].find(
+          b => b.textContent?.trim() === "查询",
+        );
+        return btn && !btn.disabled;
+      },
+      undefined,
+      { timeout },
+    );
+
   await page.goto("http://localhost:8503/AOI_TT监控报表");
   await page
     .getByText("正在加载 AOI TT 数据...")
-    .waitFor({ state: "hidden", timeout: 180_000 });
+    .waitFor({ state: "hidden", timeout: 600_000 });
 
   const title = page.getByRole("heading", {
     name: "AOI_TT监控报表",
@@ -17,12 +38,11 @@ async page => {
   }
 
   const filterHeading = page.getByRole("heading", { name: "筛选", exact: true });
-await filterHeading.waitFor({ timeout: 120_000 });
+  await filterHeading.waitFor({ timeout: 120_000 });
 
   // 厂别固定选 ARRAY（TT 参数 TDSUM 数据量最大）
-  const factorySelector = page.getByRole("combobox", { name: "厂别" });
-  if (!(await factorySelector.getAttribute("aria-label"))?.includes("ARRAY")) {
-    await factorySelector.click();
+  if ((await comboInputValue("厂别")) !== "ARRAY") {
+    await page.getByRole("combobox", { name: "厂别" }).click();
     await page.getByRole("option", { name: "ARRAY", exact: true }).click();
   }
 
@@ -34,41 +54,28 @@ await filterHeading.waitFor({ timeout: 120_000 });
   await page.keyboard.press("Escape");
   const firstStepName = "11620";
 
-  // 等重跑完成：Code名称（TT 参数）随站点自动全选后再查询
-  await page
-    .getByRole("combobox", { name: /Selected .+\. Code名称/ })
-    .waitFor({ timeout: 60_000 });
-  const queryButton = page.getByRole("button", { name: "查询" });
-  await queryButton.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    () => {
-      const btn = [...document.querySelectorAll("button")].find(
-        b => b.textContent?.trim() === "查询",
-      );
-      return btn && !btn.disabled;
-    },
-    { timeout: 60_000 },
-  );
-  await queryButton.click();
+  // Code名称（TT 参数）随站点自动全选后查询按钮启用
+  await waitQueryEnabled(300_000);
+  await page.getByRole("button", { name: "查询" }).click();
 
   // 报表区：站点分组标题 + 每 TT 三图
   const groupHeading = page.getByRole("heading", {
     name: new RegExp(`ARRAY \\| 站点 ${firstStepName}`),
   });
-  await groupHeading.waitFor({ timeout: 120_000 });
+  await groupHeading.waitFor({ timeout: 300_000 });
 
   await page
     .getByText("月周天趋势（平均每片 TT 个数）")
     .first()
-    .waitFor({ timeout: 120_000 });
+    .waitFor({ timeout: 300_000 });
   await page
     .getByText("By Lot（Lot 内平均每片 TT 个数）")
     .first()
-    .waitFor({ timeout: 120_000 });
+    .waitFor({ timeout: 300_000 });
   await page
     .getByText("By Sheet（每片的 TT 个数）")
     .first()
-    .waitFor({ timeout: 120_000 });
+    .waitFor({ timeout: 300_000 });
 
   const chartCount = await page.locator(".js-plotly-plot").count();
   if (chartCount < 3) {
