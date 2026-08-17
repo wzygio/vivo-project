@@ -62,6 +62,26 @@ def test_monitor_application_service_does_not_import_infrastructure() -> None:
     assert infrastructure_imports == []
 
 
+def test_aoi_rs_application_service_does_not_import_infrastructure() -> None:
+    path = INLINE_ROOT / "application" / "aoi_rs" / "aoi_rs_service.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    infrastructure_imports = [
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        and node.module.startswith("src.inline_domain.infrastructure")
+    ]
+
+    assert infrastructure_imports == []
+
+
+def test_aoi_rs_snapshot_does_not_expand_shared_measurement_modules() -> None:
+    measurement_root = INLINE_ROOT / "infrastructure" / "measurement"
+
+    assert not any("aoi_rs" in path.name for path in measurement_root.glob("*.py"))
+
+
 def test_monitor_infrastructure_contains_no_reusable_measurement_dao() -> None:
     monitor_root = INLINE_ROOT / "infrastructure" / "monitor"
     forbidden_modules = {

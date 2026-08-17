@@ -30,9 +30,10 @@ from app.sections.aoi_rs.aoi_rs_dashboard import (
 )
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.aoi_rs.data_loader import AoiRsQueryConfig
+from src.inline_domain.composition import build_aoi_rs_repository, refresh_aoi_rs_snapshots
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_RS_PAGE_CACHE_SIGNATURE = "aoi_rs_report_v1"
@@ -57,17 +58,21 @@ query_config = AoiRsQueryConfig(
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
 )
+aoi_rs_data_port = build_aoi_rs_repository(db_manager, current_product)
 
 render_page_header(
     title="AOI_RS监控报表",
     config=active_config,
     cached_funcs=extract_cached_funcs(AoiRsReportService),
     product_cache_scope=current_product,
+    refresh_handlers=[
+        lambda: refresh_aoi_rs_snapshots(db_manager, current_product, query_config.end_date)
+    ],
 )
 
 with st.spinner("正在加载 AOI RS 数据..."):
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=db_manager,
+        _data_port=aoi_rs_data_port,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=product_cache_signature,
     )

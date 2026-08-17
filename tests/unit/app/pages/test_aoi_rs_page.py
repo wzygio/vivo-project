@@ -11,9 +11,10 @@ from app.components import page_header
 from app.sections.aoi_rs import aoi_rs_dashboard
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
+from src.inline_domain import composition as inline_composition
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.infrastructure.aoi_rs.data_loader import AoiRsQueryConfig
 from src.shared_kernel.infrastructure import db_handler
 
 
@@ -22,6 +23,8 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     loaded_queries: list[AoiRsQueryConfig] = []
     loaded_signatures: list[str] = []
     header_kwargs: dict[str, object] = {}
+    refresh_calls: list[tuple[object, str, str]] = []
+    data_port = object()
     report = SimpleNamespace(
         indicators_df=pd.DataFrame(
             [
@@ -94,6 +97,21 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(
+        inline_composition,
+        "build_aoi_rs_repository",
+        lambda _db_manager, _prod_code: data_port,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        inline_composition,
+        "refresh_aoi_rs_snapshots",
+        lambda db_manager, prod_code, end_date: refresh_calls.append(
+            (db_manager, prod_code, end_date)
+        )
+        or True,
+        raising=False,
+    )
+    monkeypatch.setattr(
         MonitorAnalysisService,
         "get_time_window",
         staticmethod(lambda: (pd.Timestamp("2026-07-01"), pd.Timestamp("2026-08-10"))),
@@ -111,6 +129,7 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     )
 
     def fake_load_report(**kwargs):
+        assert kwargs["_data_port"] is data_port
         loaded_queries.append(AoiRsQueryConfig.model_validate_json(kwargs["query_config_json"]))
         loaded_signatures.append(kwargs["snapshot_signature"])
         return report
@@ -136,6 +155,11 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     assert loaded_queries[0].end_date == "2026-08-10"
     assert loaded_signatures == ["aoi_rs_report_v1|scoped=M678"]
     assert header_kwargs["product_cache_scope"] == "M678"
+    assert len(header_kwargs["refresh_handlers"]) == 1
+    assert header_kwargs["refresh_handlers"][0]() is True
+    assert [(prod_code, end_date) for _, prod_code, end_date in refresh_calls] == [
+        ("M678", "2026-08-10")
+    ]
     assert events == ["filters", "charts"]
 
 

@@ -10,20 +10,15 @@ import pandas as pd
 import streamlit as st
 
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_lot_point_df,
     build_sheet_point_df,
 )
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import prepare_aoi_rs_decoration
-from src.inline_domain.infrastructure.aoi_rs.data_loader import (
-    AoiRsQueryConfig,
-    load_pass_through,
-    load_rs_details,
-    load_rs_spec_limits,
-)
 
 if TYPE_CHECKING:
-    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.inline_domain.application.aoi_rs.ports import AoiRsDataPort
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +115,7 @@ class AoiRsReportService:
     @staticmethod
     @st.cache_data(show_spinner=False, max_entries=3)
     def fetch_aoi_rs_report_payload(
-        _db_manager: "DatabaseManager",
+        _data_port: "AoiRsDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> dict[str, object]:
@@ -132,11 +127,11 @@ class AoiRsReportService:
             return AoiRsReportService._empty_payload()
 
         try:
-            rs_details_df = load_rs_details(_db_manager, query_config)
+            rs_details_df = _data_port.get_rs_details(query_config)
             if rs_details_df.empty:
                 return AoiRsReportService._empty_payload()
-            pass_through_df = load_pass_through(_db_manager, query_config)
-            spec_df = load_rs_spec_limits(_db_manager, query_config.prod_code)
+            pass_through_df = _data_port.get_pass_through(query_config)
+            spec_df = _data_port.get_rs_spec_limits(query_config.prod_code)
             # 超规修饰在 service 层完成：By Lot 用 LOT_RATIO 规格、By Sheet 用
             # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）
             lot_points_df, sheet_points_df = _build_chart_points(
@@ -157,13 +152,13 @@ class AoiRsReportService:
 
     @staticmethod
     def get_aoi_rs_report_data(
-        _db_manager: "DatabaseManager",
+        _data_port: "AoiRsDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
     ) -> AoiRsReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         payload = AoiRsReportService.fetch_aoi_rs_report_payload(
-            _db_manager=_db_manager,
+            _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
         )

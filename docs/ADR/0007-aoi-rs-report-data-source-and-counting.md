@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-08-10
 - Scope: `src/inline_domain/{infrastructure,application,core}/aoi_rs/`、`app/sections/aoi_rs/`、`app/pages/AOI_RS监控报表.py`
+- Superseded in part: Decision 8（不引入 Parquet）由
+  `0015-aoi-rs-product-local-snapshot.md` 取代；数据源与计数口径继续有效。
 
 ## Context
 

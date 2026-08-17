@@ -6,9 +6,8 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from src.inline_domain.application.aoi_rs import aoi_rs_service
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
-from src.inline_domain.infrastructure.aoi_rs.data_loader import AoiRsQueryConfig
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -78,10 +77,12 @@ def _spec_df() -> pd.DataFrame:
     )
 
 
-def _patch_loaders(monkeypatch, details, pass_through, spec) -> None:
-    monkeypatch.setattr(aoi_rs_service, "load_rs_details", lambda *_args, **_kw: details)
-    monkeypatch.setattr(aoi_rs_service, "load_pass_through", lambda *_args, **_kw: pass_through)
-    monkeypatch.setattr(aoi_rs_service, "load_rs_spec_limits", lambda *_args, **_kw: spec)
+def _data_port(details, pass_through, spec) -> SimpleNamespace:
+    return SimpleNamespace(
+        get_rs_details=lambda _query: details,
+        get_pass_through=lambda _query: pass_through,
+        get_rs_spec_limits=lambda _prod_code: spec,
+    )
 
 
 def _config_json() -> str:
@@ -90,12 +91,30 @@ def _config_json() -> str:
     ).model_dump_json()
 
 
-def test_service_builds_view_model_with_indicators_and_code_desc(monkeypatch) -> None:
-    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _spec_df())
+def test_service_reads_report_inputs_through_aoi_rs_data_port() -> None:
+    data_port = SimpleNamespace(
+        get_rs_details=lambda _query: _details_df(),
+        get_pass_through=lambda _query: _pass_df(),
+        get_rs_spec_limits=lambda _prod_code: _spec_df(),
+    )
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=data_port,
+        query_config_json=_config_json(),
+        snapshot_signature="port-tracer",
+    )
+
+    assert len(view_model.rs_details_df) == 2
+    assert len(view_model.pass_through_df) == 1
+    assert view_model.indicators_df.loc[0, "code_desc"] == "PHT责M1残留"
+
+
+def test_service_builds_view_model_with_indicators_and_code_desc(monkeypatch) -> None:
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    view_model = AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=_data_port(_details_df(), _pass_df(), _spec_df()),
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
@@ -113,11 +132,10 @@ def test_service_builds_view_model_with_indicators_and_code_desc(monkeypatch) ->
 
 
 def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:
-    _patch_loaders(monkeypatch, pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=_data_port(pd.DataFrame(), pd.DataFrame(), pd.DataFrame()),
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
@@ -130,11 +148,12 @@ def test_service_tolerates_loader_exception(monkeypatch) -> None:
     def _boom(*_args, **_kw):
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(aoi_rs_service, "load_rs_details", _boom)
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    data_port = _data_port(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+    data_port.get_rs_details = _boom
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=data_port,
         query_config_json=_config_json(),
         snapshot_signature="test",
     )
@@ -167,11 +186,10 @@ def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
             },
         ]
     )
-    _patch_loaders(monkeypatch, _details_df(), _pass_df(), spec_df)
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=_data_port(_details_df(), _pass_df(), spec_df),
         query_config_json=_config_json(),
         snapshot_signature="clip-test",
     )
@@ -228,11 +246,10 @@ def test_service_persists_aoi_rs_decoration_workbook(
     monkeypatch, _tmp_project_root: Path
 ) -> None:
     """默认全部截断，并生成带 chart_kind 维度的用户修饰工作簿。"""
-    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _chart_spec_df())
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=_data_port(_details_df(), _pass_df(), _chart_spec_df()),
         query_config_json=_config_json(),
         snapshot_signature="wb-default",
     )
@@ -266,11 +283,10 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
         index=False,
         engine="openpyxl",
     )
-    _patch_loaders(monkeypatch, _details_df(), _pass_df(), _chart_spec_df())
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _db_manager=SimpleNamespace(engine=None),
+        _data_port=_data_port(_details_df(), _pass_df(), _chart_spec_df()),
         query_config_json=_config_json(),
         snapshot_signature="wb-flags",
     )

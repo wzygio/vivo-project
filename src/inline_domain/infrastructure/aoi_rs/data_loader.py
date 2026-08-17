@@ -24,11 +24,12 @@ RS Code 明细表（分子 / By Lot / By Sheet）：
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import pandas as pd
-from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -62,26 +63,20 @@ RS_DETAIL_COLUMNS = [
 PASS_THROUGH_COLUMNS = ["factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id"]
 
 
-class AoiRsQueryConfig(BaseModel):
-    """AOI_RS 报表查询的强类型配置（固定窗口：上一自然月 1 日 ~ 当前日期）。"""
-
-    start_date: str = Field(..., description="开始日期, 格式 YYYY-MM-DD")
-    end_date: str = Field(..., description="结束日期, 格式 YYYY-MM-DD")
-    prod_code: str = Field(..., description="产品代码 (必须精确指定以避免全表扫)")
-    factory: Optional[str] = Field(None, description="厂别 (ARRAY/OLED/TP)")
-    step_id: Optional[str] = Field(None, description="站点ID")
-    rs_code: Optional[str] = Field(None, description="RS Code")
-
-
-def _read_sql(db_manager: "DatabaseManager", sql: str, errMsg: str) -> pd.DataFrame:
+def _read_sql(
+    db_manager: "DatabaseManager",
+    sql: str,
+    error_message: str,
+    params: dict[str, object] | None = None,
+) -> pd.DataFrame:
     try:
         if db_manager.engine is None:
             raise ValueError("数据库引擎未初始化。")
-        df = pd.read_sql(text(sql), db_manager.engine)
+        df = pd.read_sql(text(sql), db_manager.engine, params=params)
         df.columns = df.columns.str.lower()
         return df
     except Exception as exc:  # noqa: BLE001 - DAO 层容错，返回空表由上层降级
-        logger.error("%s: %s", errMsg, exc, exc_info=True)
+        logger.error("%s: %s", error_message, exc, exc_info=True)
         return pd.DataFrame()
 
 
@@ -109,14 +104,23 @@ def load_rs_details(
             T.code_qty
         FROM eda.{table_name} T
         JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
-        WHERE T.{time_col} >= '{start_time_fmt}'
-          AND T.{time_col} <= '{end_time_fmt}'
-          AND P.productcode = '{query_config.prod_code}'
+        WHERE T.{time_col} >= :start_time
+          AND T.{time_col} <= :end_time
+          AND P.productcode = :prod_code
         """
         sql_queries.append(q)
 
     final_sql = " UNION ALL ".join(sql_queries)
-    df = _read_sql(db_manager, final_sql, "[DAO] 提取 AOI RS 明细失败")
+    df = _read_sql(
+        db_manager,
+        final_sql,
+        "[DAO] 提取 AOI RS 明细失败",
+        params={
+            "start_time": start_time_fmt,
+            "end_time": end_time_fmt,
+            "prod_code": query_config.prod_code,
+        },
+    )
     if df.empty:
         return pd.DataFrame(columns=RS_DETAIL_COLUMNS)
 
@@ -149,14 +153,23 @@ def load_pass_through(
             T.step_id
         FROM eda.{view_name} T
         JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
-        WHERE T.{time_col} >= '{start_time_fmt}'
-          AND T.{time_col} <= '{end_time_fmt}'
-          AND P.productcode = '{query_config.prod_code}'
+        WHERE T.{time_col} >= :start_time
+          AND T.{time_col} <= :end_time
+          AND P.productcode = :prod_code
         """
         sql_queries.append(q)
 
     final_sql = " UNION ALL ".join(sql_queries)
-    df = _read_sql(db_manager, final_sql, "[DAO] 提取过货明细失败")
+    df = _read_sql(
+        db_manager,
+        final_sql,
+        "[DAO] 提取过货明细失败",
+        params={
+            "start_time": start_time_fmt,
+            "end_time": end_time_fmt,
+            "prod_code": query_config.prod_code,
+        },
+    )
     if df.empty:
         return pd.DataFrame(columns=PASS_THROUGH_COLUMNS)
 
@@ -181,9 +194,14 @@ def load_rs_spec_limits(
         code_desc,
         spec
     FROM mdw.dwd_imp_rs_code_xishu_fo_tzsbjx
-    WHERE prod_code = '{prod_code}'
+    WHERE prod_code = :prod_code
     """
-    df = _read_sql(db_manager, sql_query, "[DAO] 提取 RS 规格基准失败")
+    df = _read_sql(
+        db_manager,
+        sql_query,
+        "[DAO] 提取 RS 规格基准失败",
+        params={"prod_code": prod_code},
+    )
     if df.empty:
         return pd.DataFrame(
             columns=["prod_code", "factory", "type_flag", "step_id", "rs_code", "code_desc", "spec"]

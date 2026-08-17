@@ -70,7 +70,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   Parquet 快照。共享快照只保存预处理前的稳定字段超集；TTL、策略版本、强制
   刷新、原子写入和数据库失败降级均在这一适配器内完成。
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
-  组合根。SPC、CTQ、AOI_TT 应用服务只依赖端口，不读取 Parquet，也不构造
+  组合根。SPC、CTQ、AOI_TT、AOI_RS 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
 - `infrastructure/measurement/measurement_preparation.py` 拥有共享制备管线：
   清洗去重、LOSS 排除、白名单参数分类、异常值过滤、查询维度过滤、规格
@@ -94,6 +94,11 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   选定的图表类型；CTQ OOS 修饰保存在共享工作簿 `resources/ctq_sheet_oos_decoration.xlsx` 的产品 sheet 中。
 - `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
   和规格口径仍遵循 ADR-0008。
+- `AoiRsReportService` 不复用共享 measurement：RS Code 明细和过货分母来自独立
+  表/视图与事实契约，由 `infrastructure/aoi_rs/` 的产品级双 Parquet 仓储负责
+  三个月滚动提取、8 小时 TTL、覆盖版本、原子写入和数据库失败降级；规格保持
+  独立元数据查询。页面通过 `composition.py` 注入端口，并分别提供底层快照刷新
+  与产品级 Streamlit 缓存失效。边界见 ADR-0015。
 - `MonitorAnalysisService` 基于同一 SPC 数据源完成时间桶映射、规则判定和
   汇总，自动预警页面再叠加合规配置的可见性规则；报废数据由
   `infrastructure/monitor/scrap_repository.py` 适配。该服务只依赖
@@ -132,6 +137,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`。
 共享 Inline 原始快照和派生适配器边界见
 `docs/ADR/0012-shared-inline-measurement-snapshot.md`。
+AOI_RS 专属产品级快照边界见
+`docs/ADR/0015-aoi-rs-product-local-snapshot.md`。
 
 ## 目录地图
 

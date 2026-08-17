@@ -110,3 +110,16 @@ def test_load_rs_details_applies_time_window() -> None:
     df = load_rs_details(db_manager, config)
 
     assert set(df["factory"]) == {"OLED", "TP"}
+
+
+def test_load_rs_details_binds_product_code_instead_of_interpolating_sql() -> None:
+    db_manager = _fake_db_manager()
+    config = AoiRsQueryConfig(
+        prod_code="M678' OR '1'='1",
+        start_date="2026-07-01",
+        end_date="2026-08-10",
+    )
+
+    df = load_rs_details(db_manager, config)
+
+    assert df.empty

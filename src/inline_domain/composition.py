@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepository
+from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
+from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
 from src.inline_domain.infrastructure.ctq.ctq_repository import CtqRepository
 from src.inline_domain.infrastructure.measurement.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
@@ -68,6 +70,30 @@ def build_aoi_tt_repository(db_manager: DatabaseManager, prod_code: str) -> AoiT
         raw_measurements=build_raw_measurement_repository(db_manager, prod_code),
         metadata=InlineMeasurementMetadataRepository(db_manager),
     )
+
+
+def build_aoi_rs_repository(
+    db_manager: DatabaseManager,
+    prod_code: str,
+) -> AoiRsSnapshotRepository:
+    return AoiRsSnapshotRepository(
+        snapshot_dir=Path("data") / prod_code,
+        db_manager=db_manager,
+    )
+
+
+def refresh_aoi_rs_snapshots(
+    db_manager: DatabaseManager,
+    prod_code: str,
+    end_date: str,
+) -> bool:
+    repository = build_aoi_rs_repository(db_manager, prod_code)
+    query = AoiRsQueryConfig(
+        prod_code=prod_code,
+        start_date=end_date,
+        end_date=end_date,
+    )
+    return repository.refresh(query)
 
 
 def refresh_raw_measurements(
