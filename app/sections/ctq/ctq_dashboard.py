@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from app.manager.render_gate import RenderGate
+from app.utils.step_labels import format_step_label
 from app.sections.spc.spc_dashboard import (
     _create_period_overview_chart,
     _create_sheet_points_box_charts,
@@ -75,7 +76,11 @@ def _filter_signature(
     return selected_factory, tuple(selected_steps), tuple(selected_params)
 
 
-def render_ctq_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], list[str], bool]:
+def render_ctq_filters(
+    indicator_df: pd.DataFrame,
+    *,
+    step_desc_map: dict[str, str] | None = None,
+) -> tuple[str, list[str], list[str], bool]:
     """Render CTQ-owned cascade filters and return the applied query state."""
     with st.container(border=True):
         st.markdown("#### 筛选")
@@ -105,7 +110,12 @@ def render_ctq_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], list
                 st.session_state.get(step_key, []),
                 available_steps,
             )
-            selected_steps = st.multiselect("站点", options=available_steps, key=step_key)
+            selected_steps = st.multiselect(
+                "站点",
+                options=available_steps,
+                key=step_key,
+                format_func=lambda step: format_step_label(step, step_desc_map),
+            )
 
         available_params = get_params_for_factory_steps(
             indicator_df,
@@ -234,6 +244,7 @@ def render_ctq_indicator_sections(
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
+    step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render capability-free CTQ distribution figures by indicator.
 
@@ -247,7 +258,7 @@ def render_ctq_indicator_sections(
     gate = RenderGate()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
-        label = f"{factory} | {step_id} | {param_name}"
+        label = f"{factory} | {format_step_label(step_id, step_desc_map)} | {param_name}"
         if {"factory", "step_id", "param_name"}.issubset(raw_measurements_df.columns):
             indicator_raw_df = raw_measurements_df[
                 (raw_measurements_df["factory"].astype(str) == str(factory))

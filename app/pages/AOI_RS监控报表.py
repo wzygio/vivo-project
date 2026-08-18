@@ -29,6 +29,7 @@ from app.sections.aoi_rs.aoi_rs_dashboard import (
     render_aoi_rs_indicator_sections,
 )
 from app.utils.app_setup import AppSetup
+from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
@@ -49,6 +50,7 @@ product_cache_signature = build_product_cache_signature(
     current_product,
 )
 db_manager = DatabaseManager()
+step_desc_map = get_cached_step_description_map(db_manager)
 
 # 固定时间窗：上一自然月 1 日 ~ 当前日期（含当天），不提供时间筛选框
 _, default_end_dt = MonitorAnalysisService.get_time_window()
@@ -63,7 +65,7 @@ aoi_rs_data_port = build_aoi_rs_repository(db_manager, current_product)
 render_page_header(
     title="AOI_RS监控报表",
     config=active_config,
-    cached_funcs=extract_cached_funcs(AoiRsReportService),
+    cached_funcs=extract_cached_funcs(AoiRsReportService) + [get_cached_step_description_map],
     product_cache_scope=current_product,
     refresh_handlers=[
         lambda: refresh_aoi_rs_snapshots(db_manager, current_product, query_config.end_date)
@@ -87,7 +89,8 @@ if rs_details_df.empty or indicator_df.empty:
     st.stop()
 
 selected_factory, selected_codes, selected_steps, should_render_report = render_aoi_rs_filters(
-    indicator_df=indicator_df
+    indicator_df=indicator_df,
+    step_desc_map=step_desc_map,
 )
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
@@ -101,4 +104,5 @@ render_aoi_rs_indicator_sections(
     lot_points_df=filter_aoi_rs_report(view_model.lot_points_df, selected_factory, selected_codes, selected_steps),
     sheet_points_df=filter_aoi_rs_report(view_model.sheet_points_df, selected_factory, selected_codes, selected_steps),
     end_date=default_end_dt.date(),
+    step_desc_map=step_desc_map,
 )

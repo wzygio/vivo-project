@@ -30,6 +30,7 @@ from app.sections.ctq.ctq_dashboard import (
     render_ctq_indicator_sections,
 )
 from app.utils.app_setup import AppSetup
+from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
@@ -52,6 +53,7 @@ product_cache_signature = build_product_cache_signature(
     current_product,
 )
 db_manager = DatabaseManager()
+step_desc_map = get_cached_step_description_map(db_manager)
 
 _, default_end_dt = MonitorAnalysisService.get_time_window()
 default_start_dt = get_default_ctq_start_date(default_end_dt.date())
@@ -67,7 +69,7 @@ ctq_data_port = build_ctq_repository(db_manager, current_product)
 render_page_header(
     title="CTQ监控报表",
     config=active_config,
-    cached_funcs=extract_cached_funcs(CtqReportService) + [fetch_decorated_features],
+    cached_funcs=extract_cached_funcs(CtqReportService) + [fetch_decorated_features, get_cached_step_description_map],
     product_cache_scope=current_product,
     refresh_handlers=[
         lambda: refresh_raw_measurements(
@@ -101,7 +103,8 @@ if is_admin:
     )
 
 selected_factory, selected_params, selected_steps, should_render_report = render_ctq_filters(
-    indicator_df=indicator_df
+    indicator_df=indicator_df,
+    step_desc_map=step_desc_map,
 )
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
@@ -124,4 +127,5 @@ render_ctq_indicator_sections(
     sheet_features_df=filtered_sheet_features_df,
     raw_measurements_df=filtered_raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
+    step_desc_map=step_desc_map,
 )

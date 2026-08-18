@@ -7,6 +7,7 @@ from functools import partial
 # ==============================================================================
 from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
+from app.utils.step_labels import get_cached_step_description_map
 from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
@@ -55,6 +56,7 @@ is_admin = query_params.get("admin") == "true"
 # ==============================================================================
 try:
     db_manager = DatabaseManager()
+    step_desc_map = get_cached_step_description_map(db_manager)
     start_date_str, end_date_str = get_cached_query_window()
     active_config = SessionManager.get_active_config()
     header_data_type_filter = st.session_state.get("spc_data_type_filter", "ALL")
@@ -76,6 +78,7 @@ funcs_to_clear = extract_cached_funcs(MonitorAnalysisService) + [
     fetch_decorated_features,
     get_cached_query_window,
     get_cached_alarm_detail_tables,
+    get_cached_step_description_map,
 ]
 render_page_header(
     title="自动预警看板",
@@ -143,6 +146,7 @@ render_station_top10_section(
     filter_state.data_type_filter,
     is_admin,
     show_tables=False,
+    step_desc_map=step_desc_map,
 )
 
 if is_admin:

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.charts.spc_chart import get_spc_summary_echarts_option
 from app.manager.compliance_manager import get_compliance_file_signature
 from app.manager.render_gate import RenderGate
+from app.utils.step_labels import format_step_label
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
@@ -711,6 +712,7 @@ def _build_station_top10_payload(
     filtered_station_df: pd.DataFrame,
     data_type_filter: str,
     show_tables: bool,
+    step_desc_map: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """[RenderGate 阶段1] 纯计算：聚合 Top 10 站点并组装图表与表格材料，禁止触碰 st.*。"""
     is_scrap = data_type_filter == '报废'
@@ -742,7 +744,7 @@ def _build_station_top10_payload(
     # 0. Echarts 垂直堆叠柱状图
     # ==========================================
     chart_df = top_station_df.copy()
-    x_data = chart_df['step_id'].tolist()
+    x_data = [format_step_label(step, step_desc_map) for step in chart_df['step_id'].tolist()]
 
     option = {
         "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
@@ -809,6 +811,7 @@ def _build_station_top10_payload(
         sum_view['报警总数'] = sum_view['Total'].astype(str)
 
     sum_view = sum_view.set_index('step_id')[ordered_metrics]
+    sum_view.index = [format_step_label(step, step_desc_map) for step in sum_view.index]
     view_df = sum_view.T.reset_index().rename(columns={'index': '统计维度'})
 
     # [报废类型] 前端文案替换
@@ -822,7 +825,7 @@ def _build_station_top10_payload(
     gb_sum.configure_selection(selection_mode="single", use_checkbox=False)
     gb_sum.configure_column("统计维度", pinned="left", width=95, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
 
-    for col in top10_stations_list:
+    for col in [format_step_label(step, step_desc_map) for step in top10_stations_list]:
         gb_sum.configure_column(col, cellStyle={'backgroundColor': 'transparent'})
 
     grid_options_sum = gb_sum.build()
@@ -885,6 +888,8 @@ def _build_station_top10_payload(
         )
 
     flat_df = flat_df[['品名', '报警类型'] + available_stations]
+    station_labels = {step: format_step_label(step, step_desc_map) for step in available_stations}
+    flat_df = flat_df.rename(columns=station_labels)
 
     gb_det = GridOptionsBuilder.from_dataframe(flat_df)
     gb_det.configure_selection(selection_mode="single", use_checkbox=False)
@@ -892,7 +897,7 @@ def _build_station_top10_payload(
     gb_det.configure_column("报警类型", pinned="left", width=95, cellStyle={'fontWeight': 'bold', 'backgroundColor': '#f8f9fa'})
 
     # [核心修改] 为站点列添加下钻样式（蓝色下划线 + 手型光标）
-    for col in available_stations:
+    for col in station_labels.values():
         gb_det.configure_column(col, cellStyle={
             'color': '#1e88e5', 'cursor': 'pointer', 'textDecoration': 'underline'
         })
@@ -1011,6 +1016,7 @@ def render_station_top10_section(
     data_type_filter: str = 'SPC',
     is_admin: bool = False,
     show_tables: bool = True,
+    step_desc_map: dict[str, str] | None = None,
 ):
     """渲染 Top 10 异常站点图表、汇总(转置)与明细表(产品折叠)
 
@@ -1046,6 +1052,7 @@ def render_station_top10_section(
         filtered_station_df,
         data_type_filter,
         show_tables,
+        step_desc_map,
     ))
     for payload in gate.collect():
         _render_station_top10_payload(payload, data_type_filter, is_admin, show_tables)

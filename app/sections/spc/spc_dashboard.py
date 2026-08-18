@@ -17,6 +17,7 @@ from app.components.distribution_charts import (
 )
 from app.components.page_header import build_product_cache_signature
 from app.manager.render_gate import RenderGate
+from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import (
     build_available_period_axis,
     build_period_axis,
@@ -119,6 +120,7 @@ def render_cpk_alert_center(
     *,
     has_capability_data: bool,
     threshold: float = CPK_ALERT_THRESHOLD,
+    step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render the product-level CPK alert summary and details."""
     has_alerts = not alerts_df.empty
@@ -128,8 +130,14 @@ def render_cpk_alert_center(
     ):
         if has_alerts:
             st.error(f"检测到 {len(alerts_df)} 条 CPK 预警，请关注。")
+            display_alerts_df = alerts_df
+            if step_desc_map:
+                display_alerts_df = alerts_df.copy()
+                display_alerts_df["站点"] = display_alerts_df["站点"].map(
+                    lambda step: format_step_label(step, step_desc_map)
+                )
             st.dataframe(
-                alerts_df,
+                display_alerts_df,
                 column_config={"CPK值": st.column_config.NumberColumn("CPK值", format="%.3f")},
                 hide_index=True,
                 use_container_width=True,
@@ -214,7 +222,11 @@ def _filter_signature(
     return selected_factory, tuple(selected_steps), tuple(selected_params)
 
 
-def render_spc_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], list[str], bool]:
+def render_spc_filters(
+    indicator_df: pd.DataFrame,
+    *,
+    step_desc_map: dict[str, str] | None = None,
+) -> tuple[str, list[str], list[str], bool]:
     """Render CPM/CPK filters and return selected factory, params, steps, and query state."""
     with st.container(border=True):
         st.markdown("#### 筛选")
@@ -246,7 +258,12 @@ def render_spc_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], list
 
         with c_step:
             st.session_state[step_key] = _normalise_selection(st.session_state.get(step_key, []), available_steps)
-            selected_steps = st.multiselect("站点", options=available_steps, key=step_key)
+            selected_steps = st.multiselect(
+                "站点",
+                options=available_steps,
+                key=step_key,
+                format_func=lambda step: format_step_label(step, step_desc_map),
+            )
 
         available_params = get_params_for_factory_steps(indicator_df, selected_factory, selected_steps)
         steps_signature_key = "spc_steps_for_param_autoselect"
@@ -1047,6 +1064,7 @@ def render_spc_indicator_sections(
     memo_signature: str | None = None,
     memo_state_key: str = "spc_alert_charts_memo",
     chart_key_prefix: str = "spc_report",
+    step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render one expander per monitoring indicator with Task2 distribution figures.
 
@@ -1064,7 +1082,7 @@ def render_spc_indicator_sections(
     gate = RenderGate()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
-        label = f"{factory} | {step_id} | {param_name}"
+        label = f"{factory} | {format_step_label(step_id, step_desc_map)} | {param_name}"
         if {"factory", "step_id", "param_name"}.issubset(period_capability_df.columns):
             indicator_capability_df = period_capability_df[
                 (period_capability_df["factory"].astype(str) == str(factory))
@@ -1132,6 +1150,7 @@ def render_cpk_alert_indicator_sections(
     sheet_features_df: pd.DataFrame,
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
+    step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render every alerted indicator directly, without requiring filter interaction."""
     if alerts_df.empty:
@@ -1158,4 +1177,5 @@ def render_cpk_alert_indicator_sections(
             period_box_source=period_box_source,
             memo_signature=_alert_charts_signature(alerts_df, alert_sheet_features_df),
             chart_key_prefix="spc_alert",
+            step_desc_map=step_desc_map,
         )

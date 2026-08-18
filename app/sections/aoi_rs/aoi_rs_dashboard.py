@@ -19,6 +19,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from app.components.distribution_charts import create_point_line_trace
+from app.utils.step_labels import format_step_label
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
     build_period_throughput_df,
@@ -95,7 +96,11 @@ def _filter_signature(
     return selected_factory, tuple(selected_steps), tuple(selected_codes)
 
 
-def render_aoi_rs_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], list[str], bool]:
+def render_aoi_rs_filters(
+    indicator_df: pd.DataFrame,
+    *,
+    step_desc_map: dict[str, str] | None = None,
+) -> tuple[str, list[str], list[str], bool]:
     """渲染厂别/站点/Code名称筛选与查询门控，返回 (factory, codes, steps, should_render)。"""
     with st.container(border=True):
         st.markdown("#### 筛选")
@@ -125,7 +130,12 @@ def render_aoi_rs_filters(indicator_df: pd.DataFrame) -> tuple[str, list[str], l
             st.session_state[step_key] = _normalise_selection(
                 st.session_state.get(step_key, []), available_steps
             )
-            selected_steps = st.multiselect("站点", options=available_steps, key=step_key)
+            selected_steps = st.multiselect(
+                "站点",
+                options=available_steps,
+                key=step_key,
+                format_func=lambda step: format_step_label(step, step_desc_map),
+            )
 
         available_codes = get_codes_for_factory_steps(indicator_df, selected_factory, selected_steps)
         steps_signature_key = "aoi_rs_steps_for_code_autoselect"
@@ -400,6 +410,7 @@ def render_aoi_rs_indicator_sections(
     lot_points_df: pd.DataFrame,
     sheet_points_df: pd.DataFrame,
     end_date: date,
+    step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """按（厂别+站点）分组，组内每个 Code 一个默认展开的 Expander，并列渲染三张图。
 
@@ -426,7 +437,7 @@ def render_aoi_rs_indicator_sections(
             (indicators_df["factory"].astype(str) == factory)
             & (indicators_df["step_id"].astype(str) == step_id)
         ]
-        st.subheader(f"{factory} | 站点 {step_id}")
+        st.subheader(f"{factory} | 站点 {format_step_label(step_id, step_desc_map)}")
 
         step_trend = trend_df[
             (trend_df["factory"].astype(str) == factory)
@@ -451,7 +462,7 @@ def render_aoi_rs_indicator_sections(
         for indicator in group_indicators.itertuples(index=False):
             code = str(indicator.rs_code)
             code_name = code_names.get(code, code)
-            with st.expander(f"{code_name} | 站点 {step_id}", expanded=True):
+            with st.expander(f"{code_name} | 站点 {format_step_label(step_id, step_desc_map)}", expanded=True):
                 c_trend, c_lot, c_sheet = st.columns(3)
                 with c_trend:
                     st.plotly_chart(
