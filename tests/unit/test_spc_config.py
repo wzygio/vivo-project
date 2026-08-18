@@ -31,6 +31,29 @@ spc:
     ]
 
 
+def test_get_auto_decoration_param_exemptions_normalizes_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "spc_config.yaml").write_text(
+        """
+spc:
+  auto_decoration:
+    exempt_param_name_contains:
+      - PPA
+      - "  THK  "
+      - ""
+      - null
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+
+    assert ConfigLoader.get_auto_decoration_param_exemptions() == ["PPA", "THK"]
+
+
 def test_get_spc_period_box_source_reads_supported_value(
     tmp_path: Path,
     monkeypatch,

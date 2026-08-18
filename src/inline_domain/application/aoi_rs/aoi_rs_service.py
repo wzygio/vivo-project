@@ -16,6 +16,7 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_sheet_point_df,
 )
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import prepare_aoi_rs_decoration
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_rs.ports import AoiRsDataPort
@@ -79,6 +80,7 @@ def _build_chart_points(
         spec_df,
         product_dir=resolve_product_resource_dir(prod_code),
         prod_code=prod_code,
+        exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
     )
     return result.lot_points_df, result.sheet_points_df
 

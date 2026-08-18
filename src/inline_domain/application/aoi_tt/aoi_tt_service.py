@@ -12,6 +12,7 @@ import streamlit as st
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.core.aoi_tt.aoi_tt_decoration import prepare_aoi_tt_decoration
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
@@ -91,6 +92,9 @@ class AoiTtReportService:
                 spec_df,
                 product_dir=resolve_product_resource_dir(query_config.prod_code),
                 prod_code=query_config.prod_code,
+                exempt_param_name_contains=(
+                    ConfigLoader.get_auto_decoration_param_exemptions()
+                ),
             ).tt_details_df
             indicators_df = _build_indicators(tt_details_df)
             return {

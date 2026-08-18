@@ -213,6 +213,28 @@ class ConfigLoader:
             return []
 
     @classmethod
+    def get_auto_decoration_param_exemptions(cls) -> list[str]:
+        """Read parameter-name tokens that bypass automatic value clipping."""
+        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        try:
+            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
+            decoration_conf = spc_conf.get("auto_decoration", {})
+            configured_values = decoration_conf.get(
+                "exempt_param_name_contains",
+                [],
+            )
+            if not isinstance(configured_values, list):
+                return []
+            return [
+                str(value).strip()
+                for value in configured_values
+                if value is not None and str(value).strip()
+            ]
+        except Exception as exc:
+            logging.error("❌ 读取自动修饰参数豁免配置失败: %s", exc)
+            return []
+
+    @classmethod
     def get_scrap_factory_mapping(cls) -> dict:
         """
         [新增] 获取报废站点 → 厂别映射配置

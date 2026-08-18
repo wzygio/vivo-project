@@ -5,7 +5,8 @@
 
 - 上限越规 → 截断到上限以下 5%~15% span 处；下限越规对称处理；
 - 单边规格（无下限）时 span 以 0 为下界（即截断到上限的 85%~95%）；
-- 伪随机由稳定哈希驱动，同一数据行重跑结果一致（报表可复现）。
+- 伪随机由稳定哈希驱动，同一数据行重跑结果一致（报表可复现）；
+- 配置命中的豁免参数保留真实值，Delete 动作仍优先删除对应明细。
 
 供无工作簿机制的业务模块（如 aoi_tt / aoi_rs）复用的最简自动修饰。
 """
@@ -13,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 
 import pandas as pd
 
@@ -30,6 +32,30 @@ _LOWER_MARGIN = 0.05
 _MARGIN_SPAN = 0.1
 
 _SEED_CANDIDATE_COLUMNS = ["prod_code", "factory", "step_id", "rs_code", "tt_name", "sheet_id", "lot_id"]
+
+
+def _parameter_exemption_mask(
+    df: pd.DataFrame,
+    parameter_col: str | None,
+    exempt_param_name_contains: Iterable[str] | None,
+) -> pd.Series:
+    """Return rows whose parameter name matches a configured literal token."""
+    mask = pd.Series(False, index=df.index)
+    if not parameter_col or parameter_col not in df.columns:
+        return mask
+
+    needles = [
+        str(value).strip()
+        for value in exempt_param_name_contains or []
+        if value is not None and str(value).strip()
+    ]
+    if not needles:
+        return mask
+
+    parameter_names = df[parameter_col].fillna("").astype(str)
+    for needle in needles:
+        mask |= parameter_names.str.contains(needle, case=False, regex=False)
+    return mask
 
 
 def _clip_value(value: float, upper: float, lower: float | None, seed_parts: list[object]) -> float:
@@ -55,6 +81,8 @@ def _clip_in_place(
     value_col: str,
     upper_col: str,
     lower_col: str | None = None,
+    parameter_col: str | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """对同帧内的规格列执行截断（upper_col/lower_col 为 df 自身列）。"""
     result = df.copy()
@@ -72,6 +100,12 @@ def _clip_in_place(
             & result[value_col].notna()
             & (result[value_col] < result[lower_col])
         )
+    exemption_mask = _parameter_exemption_mask(
+        result,
+        parameter_col,
+        exempt_param_name_contains,
+    )
+    over_mask &= ~exemption_mask
     if not over_mask.any():
         return result
 
@@ -98,16 +132,27 @@ def clip_over_spec_column(
     value_col: str,
     spec_col: str,
     lower_spec_col: str | None = None,
+    parameter_col: str | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """同帧截断：df 已带规格列（如 attach_spec_values 之后）时使用。
 
     :param value_col: 被修饰的值列。
     :param spec_col: 上限规格列（NaN = 无规格，不修饰）。
     :param lower_spec_col: 下限规格列（双边规格时使用）。
+    :param parameter_col: 参数名称列；提供后可按名称应用豁免。
+    :param exempt_param_name_contains: 大小写不敏感的参数名包含规则。
     """
     if df.empty or value_col not in df.columns or spec_col not in df.columns:
         return df.copy()
-    return _clip_in_place(df, value_col, spec_col, lower_spec_col)
+    return _clip_in_place(
+        df,
+        value_col,
+        spec_col,
+        lower_spec_col,
+        parameter_col,
+        exempt_param_name_contains,
+    )
 
 
 def auto_clip_over_spec(
@@ -118,6 +163,8 @@ def auto_clip_over_spec(
     join_keys: list[str],
     upper_col: str,
     lower_col: str | None = None,
+    parameter_col: str | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """按规格线自动截断 df 中越规的 value_col 值（无工作簿的最简修饰）。
 
@@ -126,6 +173,8 @@ def auto_clip_over_spec(
     :param join_keys: 明细与规格的匹配键（须同名）；同一键组合取第一条规格。
     :param upper_col: 规格上限列名；单边规格时 lower_col 传 None。
     :param lower_col: 规格下限列名（双边规格时使用）。
+    :param parameter_col: 参数名称列；提供后可按名称应用豁免。
+    :param exempt_param_name_contains: 大小写不敏感的参数名包含规则。
     :return: 截断后的新 DataFrame；无匹配规格的行保持原值。
     """
     if df.empty or spec_df.empty or value_col not in df.columns:
@@ -145,7 +194,12 @@ def auto_clip_over_spec(
 
     merged = df.merge(specs, on=join_keys, how="left")
     clipped = _clip_in_place(
-        merged, value_col, "_auto_upper", "_auto_lower" if lower_col else None
+        merged,
+        value_col,
+        "_auto_upper",
+        "_auto_lower" if lower_col else None,
+        parameter_col,
+        exempt_param_name_contains,
     )
     return clipped.drop(columns=["_auto_upper"] + (["_auto_lower"] if lower_col else []))
 
@@ -157,19 +211,28 @@ def apply_tri_state_decoration(
     key_columns: list[str],
     value_col: str,
     spec_col: str,
+    parameter_col: str | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """按工作簿三态 flag 修饰 df（df 须已带 spec_col 规格列）。
 
     - flag=Delete：剔除匹配 key_columns 的行；
     - flag=False：释放真实值（不截断）；
-    - flag=True（默认）：按 spec_col 截断（与 auto_clip_over_spec 同语义）。
+    - 参数豁免：保留真实值，优先级低于 Delete、高于 True；
+    - flag=True（默认）：非豁免参数按 spec_col 截断。
 
     不在 decoration_df 中的行按规格正常截断（与默认 flag=True 一致）。
     """
     if df.empty or value_col not in df.columns or spec_col not in df.columns:
         return df.copy()
     if decoration_df is None or decoration_df.empty or "flag" not in decoration_df.columns:
-        return _clip_in_place(df, value_col, spec_col)
+        return _clip_in_place(
+            df,
+            value_col,
+            spec_col,
+            parameter_col=parameter_col,
+            exempt_param_name_contains=exempt_param_name_contains,
+        )
 
     result = _exclude_delete_flagged_measurements(df, decoration_df, key_columns)
     if result.empty:
@@ -180,7 +243,13 @@ def apply_tri_state_decoration(
         & ~decoration_df["flag"].apply(_parse_flag)
     ]
     if released.empty:
-        return _clip_in_place(result, value_col, spec_col)
+        return _clip_in_place(
+            result,
+            value_col,
+            spec_col,
+            parameter_col=parameter_col,
+            exempt_param_name_contains=exempt_param_name_contains,
+        )
 
     release_keys = _normalize_key_columns(
         released[key_columns].drop_duplicates(), key_columns
@@ -189,5 +258,11 @@ def apply_tri_state_decoration(
         release_keys, on=key_columns, how="left", validate="many_to_one"
     )
     merged.loc[merged["_released"].eq(True), spec_col] = pd.NA
-    clipped = _clip_in_place(merged, value_col, spec_col)
+    clipped = _clip_in_place(
+        merged,
+        value_col,
+        spec_col,
+        parameter_col=parameter_col,
+        exempt_param_name_contains=exempt_param_name_contains,
+    )
     return clipped.drop(columns=["_released"])

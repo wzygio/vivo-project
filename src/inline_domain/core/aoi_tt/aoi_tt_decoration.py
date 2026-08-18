@@ -6,12 +6,14 @@
   复用共享引擎的三态语义：flag=Delete 删除该行、False 释放真实值、True（默认）自动截断；
 - 无工作簿 / 缺产品 sheet 时按空修饰语义处理 —— 全部超规行默认截断，
   与引入工作簿前的 auto_clip_over_spec 行为完全一致（向后兼容）；
+- 配置命中的参数豁免自动截断并保留真实值，Delete 仍优先；
 - 截断算法与 flag 机制均来自 core/shared（单一算法来源）。
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,8 +86,9 @@ def prepare_aoi_tt_decoration(
     product_dir: Path,
     prod_code: str,
     persist: bool = True,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> AoiTtDecorationResult:
-    """应用工作簿三态 flag：Delete 删除、False 释放、True（默认）截断。"""
+    """应用三态 flag 与参数豁免；Delete 的优先级最高。"""
     detail_df = build_aoi_tt_oos_detail(tt_details_df, spec_df)
     if persist:
         decoration_df = persist_sheet_oos_decoration(
@@ -122,6 +125,8 @@ def prepare_aoi_tt_decoration(
                 key_columns=AOI_TT_OOS_KEY_COLUMNS,
                 value_col="tt_qty",
                 spec_col="_oos_usl",
+                parameter_col="tt_name",
+                exempt_param_name_contains=exempt_param_name_contains,
             ).drop(columns=["_oos_usl"])
 
     logger.info(

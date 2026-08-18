@@ -178,6 +178,47 @@ def test_service_auto_clips_over_spec_tt_qty() -> None:
     assert 5.0 * 0.85 <= clipped < 5.0
 
 
+def test_service_releases_configured_exempt_parameter(monkeypatch) -> None:
+    details = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": pd.Timestamp("2026-07-15 08:00:00"),
+                "sheet_id": "SHT-PPA",
+                "lot_id": "LOT-PPA",
+                "step_id": "11620",
+                "tt_name": "PPA_B_X",
+                "tt_qty": 99.0,
+            }
+        ]
+    )
+    specs = pd.DataFrame(
+        [
+            {
+                "prod_code": "M678",
+                "step_id": "11620",
+                "tt_name": "PPA_B_X",
+                "usl": 5.0,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_auto_decoration_param_exemptions",
+        staticmethod(lambda: ["PPA"]),
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(details, specs),
+        query_config_json=_config_json(),
+        snapshot_signature="exempt-ppa",
+    )
+
+    assert view_model.tt_details_df["tt_qty"].tolist() == [99.0]
+
+
 def _over_spec_port() -> type:
     class OverSpecPort:
         def get_tt_details(self, _query) -> pd.DataFrame:

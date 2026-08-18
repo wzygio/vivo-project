@@ -9,11 +9,13 @@
   sheet 图取 sheet_id；
 - 无工作簿 / 缺产品 sheet 时按空修饰语义处理 —— 全部超规点默认截断，
   与引入工作簿前的 clip_over_spec_column 行为一致（向后兼容）。
+- 配置命中的参数豁免自动截断并保留真实值，Delete 仍优先。
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -111,6 +113,7 @@ def _apply_chart_decoration(
     decoration_df: pd.DataFrame,
     chart_kind: str,
     prod_code: str,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """对单张图的点帧应用三态 flag（Delete 剔除 / False 释放 / True 截断）。"""
     id_col, value_col = _CHART_POINT_META[chart_kind]
@@ -130,6 +133,8 @@ def _apply_chart_decoration(
         key_columns=AOI_RS_OOS_KEY_COLUMNS,
         value_col="value",
         spec_col="spec",
+        parameter_col="rs_code",
+        exempt_param_name_contains=exempt_param_name_contains,
     )
     if value_col != "value":
         decorated[value_col] = decorated["value"]
@@ -144,8 +149,9 @@ def prepare_aoi_rs_decoration(
     product_dir: Path,
     prod_code: str,
     persist: bool = True,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> AoiRsDecorationResult:
-    """对 By Lot / By Sheet 点帧应用工作簿三态修饰（默认自动截断）。"""
+    """对 By Lot / By Sheet 点帧应用三态修饰与参数豁免。"""
     detail_df = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
     if persist:
         decoration_df = persist_sheet_oos_decoration(
@@ -168,10 +174,20 @@ def prepare_aoi_rs_decoration(
         )
 
     lot_decorated = _apply_chart_decoration(
-        lot_points_df, spec_df, decoration_df, "lot", prod_code
+        lot_points_df,
+        spec_df,
+        decoration_df,
+        "lot",
+        prod_code,
+        exempt_param_name_contains,
     )
     sheet_decorated = _apply_chart_decoration(
-        sheet_points_df, spec_df, decoration_df, "sheet", prod_code
+        sheet_points_df,
+        spec_df,
+        decoration_df,
+        "sheet",
+        prod_code,
+        exempt_param_name_contains,
     )
     logger.info(
         "[AOI_RS] Sheet OOS decoration prepared for %s: oos=%s, lot=%s, sheet=%s",

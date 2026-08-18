@@ -127,3 +127,75 @@ def test_tri_state_decoration_clips_releases_and_deletes_by_flag() -> None:
     assert 5.0 * 0.85 <= clipped < 5.0
     # flag=False：释放真实值
     assert result[result["sheet_id"] == "S2"]["qty"].iloc[0] == 10.0
+
+
+def test_auto_clip_releases_parameters_matching_configured_exemption() -> None:
+    details = pd.DataFrame(
+        [
+            {"step_id": "S", "param_name": "PPA_B_X", "qty": 10.0},
+            {"step_id": "S", "param_name": "THK", "qty": 10.0},
+        ]
+    )
+    specs = pd.DataFrame([{"step_id": "S", "upper": 5.0}])
+
+    result = auto_clip_over_spec(
+        details,
+        specs,
+        value_col="qty",
+        join_keys=["step_id"],
+        upper_col="upper",
+        parameter_col="param_name",
+        exempt_param_name_contains=["ppa"],
+    )
+
+    assert result.loc[result["param_name"] == "PPA_B_X", "qty"].iloc[0] == 10.0
+    assert result.loc[result["param_name"] == "THK", "qty"].iloc[0] < 5.0
+
+
+def test_tri_state_parameter_exemption_overrides_true_but_not_delete() -> None:
+    from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
+
+    details = pd.DataFrame(
+        [
+            {
+                "prod_code": "M678",
+                "step_id": "S",
+                "sheet_id": "S1",
+                "param_name": "PPA_B_X",
+                "qty": 10.0,
+                "spec": 5.0,
+            },
+            {
+                "prod_code": "M678",
+                "step_id": "S",
+                "sheet_id": "S2",
+                "param_name": "PPA_B_Y",
+                "qty": 10.0,
+                "spec": 5.0,
+            },
+        ]
+    )
+    decoration = pd.DataFrame(
+        [
+            {"prod_code": "M678", "step_id": "S", "sheet_id": "S1", "flag": True},
+            {
+                "prod_code": "M678",
+                "step_id": "S",
+                "sheet_id": "S2",
+                "flag": "Delete",
+            },
+        ]
+    )
+
+    result = apply_tri_state_decoration(
+        details,
+        decoration,
+        key_columns=["prod_code", "step_id", "sheet_id"],
+        value_col="qty",
+        spec_col="spec",
+        parameter_col="param_name",
+        exempt_param_name_contains=["PPA"],
+    )
+
+    assert result["sheet_id"].tolist() == ["S1"]
+    assert result["qty"].tolist() == [10.0]
