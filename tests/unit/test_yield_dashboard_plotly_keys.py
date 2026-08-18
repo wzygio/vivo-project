@@ -212,6 +212,54 @@ def test_compact_mapping_supports_legacy_streamlit_tabs(monkeypatch):
     assert len(fake_st.plotly_keys) == 2
 
 
+def test_batch_render_collects_every_payload_before_rendering(monkeypatch):
+    events = []
+
+    class _Gate:
+        def __init__(self):
+            self.jobs = []
+
+        def stage(self, job):
+            self.jobs.append(job)
+
+        def collect(self):
+            payloads = [job() for job in self.jobs]
+            events.append(("collected", len(payloads)))
+            return payloads
+
+    monkeypatch.setattr(yield_dashboard, "RenderGate", _Gate)
+    monkeypatch.setattr(
+        yield_dashboard,
+        "_build_compact_render_payload",
+        lambda **kwargs: {"curr_code": kwargs["curr_code"]},
+    )
+    monkeypatch.setattr(
+        yield_dashboard,
+        "_render_compact_payload",
+        lambda payload: events.append(("rendered", payload["curr_code"])),
+    )
+    monkeypatch.setattr(yield_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(yield_dashboard.st, "divider", lambda *_args, **_kwargs: None)
+
+    yield_dashboard.render_code_compact_expanders(
+        selected_groups=["G1", "G2"],
+        codes_by_group={"G1": ["A", "B"], "G2": ["C"]},
+        warning_lines=None,
+        mwd_code_data={},
+        lot_data={},
+        sheet_data={},
+        mapping_data=None,
+        hotspot_scripts=[],
+    )
+
+    assert events == [
+        ("collected", 3),
+        ("rendered", "A"),
+        ("rendered", "B"),
+        ("rendered", "C"),
+    ]
+
+
 def test_compact_lot_blank_click_clears_sheet_selection(monkeypatch):
     fake_st = _SelectionStreamlit(points=[])
     selection_key = "compact_sheet_lot_" + yield_dashboard._state_key_fragment(

@@ -165,7 +165,7 @@ def create_group_batch_selection_ui(
     rate_threshold: float = 0.0001,
     count_threshold: int = 10,
 ) -> Dict[str, object]:
-    """Render Group multiselect and return eligible Codes grouped by selected Group."""
+    """Render Group filters and gate batch Code rendering behind an explicit query."""
     code_options_by_group = build_batch_code_options_by_group(
         source_data=source_data,
         filter_by=filter_by,
@@ -176,7 +176,12 @@ def create_group_batch_selection_ui(
 
     if not active_groups:
         st.info("当前无可展示的 Group。")
-        return {"groups": [], "codes_by_group": {}, "total_codes": 0}
+        return {
+            "groups": [],
+            "codes_by_group": {},
+            "total_codes": 0,
+            "should_render": False,
+        }
 
     group_key = f"{key_prefix}_groups"
     current_groups = st.session_state.get(group_key)
@@ -187,7 +192,10 @@ def create_group_batch_selection_ui(
         st.session_state[group_key] = normalized_groups if normalized_groups else active_groups
 
     with st.container():
-        group_col, metric_col, _ = st.columns([2.2, 0.8, 4.0])
+        group_col, metric_col, query_col, _ = st.columns(
+            [2.2, 0.8, 0.9, 3.1],
+            vertical_alignment="bottom",
+        )
         with group_col:
             selected_groups = st.multiselect(
                 "不良 Group",
@@ -205,10 +213,31 @@ def create_group_batch_selection_ui(
         with metric_col:
             st.metric("Code 数", total_codes)
 
+        current_signature = tuple(
+            (group_name, tuple(codes_by_group.get(group_name, [])))
+            for group_name in selected_groups
+        )
+        applied_signature_key = f"{key_prefix}_applied_signature"
+        can_query = bool(selected_groups and codes_by_group)
+        with query_col:
+            if st.button(
+                "查询",
+                type="primary",
+                width="stretch",
+                disabled=not can_query,
+            ):
+                st.session_state[applied_signature_key] = current_signature
+
+    should_render = bool(
+        can_query
+        and st.session_state.get(applied_signature_key) == current_signature
+    )
+
     return {
         "groups": selected_groups,
         "codes_by_group": codes_by_group,
         "total_codes": total_codes,
+        "should_render": should_render,
     }
 
 

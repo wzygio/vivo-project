@@ -181,14 +181,18 @@ if not selected_groups or not codes_by_group:
     st.info("请选择至少一个包含有效 Code 的 Defect Group。")
     st.stop()
 
+if not selection.get("should_render", False):
+    st.info("当前筛选条件尚未查询。")
+    st.stop()
+
 # ==============================================================================
 #  第三部分: 微观分析 (Group 下所有 Code 批量展示)
 # ==============================================================================
 hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
 st.markdown(f"### 🎯 当前分析: **{selection.get('total_codes', 0)} 个 Code**")
 
-# 两阶段渲染：RenderGate 先在统一 spinner 下构建全部 Code 的图表，
-# 再按原顺序集中渲染（分组标题、分隔线、expander 次序与交互保持不变）。
+# 查询门控通过后才进入两阶段渲染：RenderGate 先在统一 spinner 下构建
+# 全部 Code payload，再按原顺序集中渲染，避免图表逐张出现。
 render_code_compact_expanders(
     selected_groups=selected_groups,
     codes_by_group=codes_by_group,
