@@ -179,7 +179,8 @@ def resolve_monthly_targets(
     """解析每个不良类型在目标月份的目标良损。
 
     回退链：当月 `指定良损` → 最近一个有 `指定良损` 的上个月 → 当月 `当月良损`
-    → 0（表中无该月行且从未指定，视为当月无此不良）。
+    → 不给目标（表中无该月行且从未指定时，日度生成器保持原始日度不良数；
+    原始数据即 `当月良损` 水准，与 Mapping 侧倍数 1.0 保持一致）。
     """
     months = sorted(str(m) for m in months)
     targets: dict[str, dict[str, float]] = {}
@@ -208,7 +209,9 @@ def resolve_monthly_targets(
             if earlier:
                 defect_targets[month] = specified_by_month[max(earlier)]
                 continue
-            defect_targets[month] = raw_by_month.get(month, 0.0)
+            if month in raw_by_month:
+                defect_targets[month] = raw_by_month[month]
+            # 从未指定且表中无该月行：不给目标，日度生成器保持原始（= 当月良损水准）
         targets[defect] = defect_targets
     return targets
 
