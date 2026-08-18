@@ -47,4 +47,4 @@
 ## Workflow
 1. 请分析我的需求，并评估解决方案（“## Solution”）是否可行
 2. 如果可行，请根据我的要求（“## Requirements”）设计详细的解决方案，并输出一份PRD至如下路径：`docs\PRD`
-3. 后续按照`developement-flow`这一skill完成开发，直至E2E测试通过
+3. 后续按照`developement-flow`这一skill完成开发，直至E2E测试通过（请新建一个branch或worktree来完成开发，不要影响原始代码）

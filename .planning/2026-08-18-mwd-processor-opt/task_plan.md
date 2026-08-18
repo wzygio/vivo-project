@@ -1,0 +1,76 @@
+# Task Plan: 入库良率修饰逻辑简化（指定良损驱动）
+
+**Plan ID:** 2026-08-18-mwd-processor-opt
+**Issue:** `.scratch/mwd-processor-opt/issues/01-simplify-yield-modifier-pipeline.md`（ready-for-agent）
+**PRD:** `docs/PRD/PRD-2026-08-18-入库良率修饰逻辑简化.md`
+**Created:** 2026-08-18
+**Status:** approved
+
+## Goal
+
+删除入库良率 "Codebaseline→EMA→趋势调节→月度校准→人工覆盖" 修饰链路，改为
+`resources/入库良率修饰表.xlsx` 的"指定良损"驱动：确定性日度生成 + 周/月聚合，
+并把月度缩放倍数接入 Mapping 不良数（级联衰减红线不动），直至 E2E 通过。
+
+## Confirmed Decisions
+
+- D1（2026-08-18 评审调整）：Group 趋势继续由 Code 日度按 Group 汇总；
+  Group 级 Sheet 照常回写当月良损/缩放倍数，仅作展示，不驱动生成。
+- D2：写回双通道（页面 cache miss 顺带写回 + CLI）；写回失败仅记日志。
+- D3：`趋势图人工修正.xlsx` 停止消费、文件保留。
+- D4（计划阶段已核实）：`load_static_warning_lines`（入库不良率规格.xlsx）消费方包括
+  sheet_lot/capping、页面警戒线展示、alert_center —— **保留**；仅删除趋势侧
+  `warning_lines` 入参（随 TrendRegulator 删除）。
+
+## Phases & Checklist
+
+### Phase 1 — 测试基线与 TDD 锚点
+- [ ] 1.1 记录全量 pytest 基线（既有失败清单写入 findings.md）【验证：`pytest tests/unit -x -q` 输出】
+- [ ] 1.2 新测试骨架先行（红）：`test_modifier_table.py`、`test_daily_generator.py`、`test_mapping_monthly_factor.py`【验证：新增测试全部 FAIL】
+
+### Phase 2 — 修饰表管理器 `core/mwd_trend/modifier_table.py`（对应 AC-1/AC-2）
+- [x] 2.1 `read_modifier_table`：读 `<prod>_Group级`/`<prod>_Code级`，COM 回退，缺文件/缺 Sheet/缺列 → 空表语义【验证：单测 10 项通过】
+- [x] 2.2 `compute_current_month_loss`：按 level（group/code）算当月原始良损【验证：单测 3 项通过】
+- [x] 2.3 `resolve_monthly_targets`：当月指定 → 最近上月指定 → 当月原始 的回退链【验证：单测 5 项通过】
+- [x] 2.4 `compute_scale_factors`：两位小数、除零/缺失 1.0、百分比字符串与 >1 防呆解析、上月回退口径【验证：单测 4 项通过】
+- [x] 2.5 `signature` + `sync_modifier_table`：仅更新当月行（缺失则追加）、签名变化才回写缩放倍数、写回异常仅记日志【验证：单测 5 项通过（mock replace_workbook_sheet）】
+
+### Phase 3 — 日度生成器 `core/mwd_trend/daily_generator.py`（对应 AC-3）
+- [ ] 3.1 确定性：同输入两次输出逐行一致（blake2b 哈希，非内置 hash）【验证：单测】
+- [ ] 3.2 月度合计 == `round(rate × 当月投入)`，单日 ≤ 当日投入（月内最大余数分配，复用/泛化 `allocation.allocate_integer_counts`）【验证：单测】
+- [ ] 3.3 跨月平滑：月中锚点线性插值基线，月末日→次月首日基线率连续无阶梯【验证：单测断言基线差有界】
+- [ ] 3.4 无周期震荡：日度噪声为哈希白噪声，无固定周期自相关峰；`指定良损` 全空 → 回落原始日度【验证：单测】
+
+### Phase 4 — facade 重写与旧链路删除（对应 AC-4/AC-8）
+- [ ] 4.1 `create_code_level_mwd_trend_data` 改为 指定良损→日度生成→聚合→format；`create_mwd_trend_data` 保留 `mwd_code_data` 入参（Group = Code 日度汇总，D1 调整）；输出契约（`monthly/weekly/weekly_full/daily_full`）不变【验证：重写后的 `test_defect_panel_count_alignment.py` 通过】
+- [ ] 4.2 删除 `code_baseline.py`、`ema.py`、`trend_regulator.py`、`manual_overrides.py`、`pipeline.py`、模块级兼容入口；删除 `inject_excel_overrides_to_config` 趋势覆盖部分（保留 mapping 注入）；删除 `defect_modifier` 死代码与 service 的 ema/scale 类属性【验证：全仓 grep 无残留引用；pytest】
+- [ ] 4.3 删除旧测试 `test_code_baseline_refresh.py`、`test_mwd_trend_manual_rebuild.py`、`test_override_logic.py`、`test_excel_override_decryption.py`【验证：pytest 收集无 error】
+
+### Phase 5 — Service / 配置 / CLI 接线（对应 AC-9/AC-10）
+- [ ] 5.1 `config/products/*.yaml`（5 个产品）`paths` 增加 `yield_modifier_config: 入库良率修饰表.xlsx`【验证：配置加载单测/手动】
+- [ ] 5.2 `YieldAnalysisService` 趋势方法接 modifier_targets，缓存 key 含修饰表签名；`get_mapping_data` 传 Code 级 `monthly_factors`【验证：`test_yield_service_modifier_wiring.py`】
+- [ ] 5.3 CLI `tools/update_yield_modifier_table.py --product <code>`【验证：对 M678 干跑，写回内容正确】
+
+### Phase 6 — Mapping 月度缩放（对应 AC-5/AC-6）
+- [ ] 6.1 `prepare_mapping_data` 新增 `monthly_factors`，级联衰减之前按 `(defect_desc, 批次月份)` 缩放；缺省 1.0 结果与现状一致；级联代码零改动【验证：`test_mapping_monthly_factor.py` + `git diff` 核对级联段】
+- [ ] 6.2 同 Code 月趋势不良数 ≈ Mapping 同月不良数（指定良损口径）【验证：集成断言】
+
+### Phase 7 — 回归、E2E 与文档沉淀
+- [ ] 7.1 全量 pytest 不引入新失败（对照 1.1 基线）【验证：pytest 输出】
+- [ ] 7.2 E2E（playwright-cli，产物落 `output/test-results/`）：M678 看板指定良损 → Code 月趋势 == 指定水准且 Mapping 一致；清空 → 回落原始【验证：E2E 脚本通过 + 截图】
+- [ ] 7.3 文档：更新 `references/domain/yield_domian/mwd_trend_processor_algorithm.md`、`ARCHITECTURE.md`（如涉及）、`AGENTS.md`（如涉及）【验证：diff 评审】
+- [ ] 7.4 ADR（development-flow 模块 4）【验证：`docs/ADR/` 新文件】
+
+## Out of Scope（与 issue 一致）
+
+级联衰减算法、defect_multipliers 语义、mapping 热点脚本、趋势图人工修正.xlsx 迁移、
+codebaseline.xlsx 文件清理、周/日粒度指定、其他域修饰逻辑。
+
+## Errors Encountered
+
+（暂无）
+
+## Approval
+
+- 2026-08-18 用户批准计划，并调整 D1：Group 趋势继续由 Code 日度汇总
+  （放弃两级独立生成；Group 级 Sheet 仅作展示）。PRD / issue / 计划已同步。
