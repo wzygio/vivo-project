@@ -288,7 +288,7 @@ class TestSyncModifierTable:
             read_modifier_table(path, "M999")["code"]
         )
         (tmp_path / "sig.json").write_text(
-            __import__("json").dumps({"code": sig, "group": ""}), encoding="utf-8"
+            __import__("json").dumps({"M999:code": sig, "M999:group": ""}), encoding="utf-8"
         )
 
         sync_modifier_table(
@@ -303,7 +303,7 @@ class TestSyncModifierTable:
         _write_table(path, "M999_Code级", rows)
         # 预置"旧"签名（与当前指定不符）
         (tmp_path / "sig.json").write_text(
-            __import__("json").dumps({"code": "stale", "group": ""}), encoding="utf-8"
+            __import__("json").dumps({"M999:code": "stale", "M999:group": ""}), encoding="utf-8"
         )
 
         sync_modifier_table(

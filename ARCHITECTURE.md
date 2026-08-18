@@ -54,10 +54,10 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
    执行。快照保留原始 Defect Group，避免重复或不可逆过滤。
 3. `YieldAnalysisService` 调用核心算法生成 MWD、Code 趋势、Lot/Sheet
    缺陷率与 Mapping 数据；`AlertService` 和展示层消费这些结果。
-4. Code 级 MWD 以 `defect_multipliers` 后的 Panel 明细作为月度整数计数
-   权威。EMA 决定日度形状，之后按月回补、再执行月/周/日人工覆盖，最终从
-   日度数据重建周/月输出。`weekly_full` 保留完整三自然月窗口，`weekly`
-   仅供近期展示。
+4. Code 级 MWD 由"入库良率修饰表"的指定良损驱动：`daily_generator` 按月中
+   锚点插值基线 + blake2b 确定性噪声生成日度整数不良数（未指定的缺陷保持
+   原始数据），月/周由最终日度直接聚合，无任何人工覆盖。`weekly_full` 保留
+   完整三自然月窗口，`weekly` 仅供近期展示。
 5. Lot 模拟按 Code-week 的 `weekly_full` 速率分配整数缺陷 token；聚合后
    才取整，再按稳定加权噪声分配到 Lot，最后执行封顶与显式覆盖。
 6. Mapping 与 MWD 独立。它先解析单一有效的产品/Code/batch 修改计划，再
@@ -181,7 +181,11 @@ AOI_RS 专属产品级快照边界见
 ### MWD 趋势模块职责
 
 `src/yield_domain/core/mwd_trend/mwd_trend_processor.py` 仅作为 MWD 趋势
-门面，负责调用顺序和对外兼容入口。数据准备、聚合与整数分配、EMA、人工
-覆盖与日度重建、结果格式化分别由同目录下的专用模块承担。人工覆盖的顺序
-固定为：周度覆盖先重建日度再聚合月度；月度覆盖只修改最终月度结果，不回写
-日度；日度覆盖完成后重新聚合周度和月度。
+门面，负责调用顺序。数据修饰由"入库良率修饰表"（`resources/入库良率修饰表.xlsx`）
+的人工指定良损驱动：`modifier_table.py` 负责读写修饰表、当月原始良损回写、
+上月回退解析与缩放倍数计算；`daily_generator.py` 按指定月度良损确定性地生成
+日度不良数（月中锚点插值保证跨月平滑、blake2b 哈希噪声无周期）；Group 趋势由
+Code 日度汇总；周/月由日度直接聚合。数据准备、聚合与整数分配、结果格式化分别
+由 `data_preparation.py`、`aggregation.py`/`allocation.py`、`formatting.py` 承担。
+Mapping 不良数在级联衰减之前乘以"批次所属月份的缩放倍数"（`mapping_processor.py`
+步骤 2.5），使月周日趋势与 Mapping 水准一致。

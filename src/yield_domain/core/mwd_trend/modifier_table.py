@@ -333,7 +333,7 @@ def sync_modifier_table(
     xlsx_path = Path(xlsx_path)
     signature_path = Path(
         signature_path
-        or Path("data") / product_code / "yield_modifier_signature.json"
+        or xlsx_path.with_suffix(".sig.json")
     )
     stored = _load_stored_signatures(signature_path)
     table = read_modifier_table(xlsx_path, product_code)
@@ -348,7 +348,7 @@ def sync_modifier_table(
             table[level], loss, current_month
         )
         signature = specified_signature(updated)
-        new_signatures[level] = signature
+        new_signatures[f"{product_code}:{level}"] = signature
 
         # 缩放倍数整列重算（口径含上月回退），保证与趋势生成一致
         factors = compute_scale_factors(updated)
@@ -360,7 +360,10 @@ def sync_modifier_table(
                 for d, m in zip(updated[COL_DEFECT], updated[COL_MONTH])
             ]
 
-        need_write = loss_changed or stored.get(level) != signature
+        need_write = (
+            not updated.empty
+            and (loss_changed or stored.get(f"{product_code}:{level}") != signature)
+        )
         if need_write:
             try:
                 replace_workbook_sheet(xlsx_path, sheet_name, updated)
@@ -369,7 +372,7 @@ def sync_modifier_table(
                     xlsx_path.name,
                     sheet_name,
                     "有" if loss_changed else "无",
-                    "有" if stored.get(level) != signature else "无",
+                    "有" if stored.get(f"{product_code}:{level}") != signature else "无",
                 )
             except Exception as error:
                 logging.warning(

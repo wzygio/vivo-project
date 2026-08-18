@@ -22,6 +22,12 @@ if TYPE_CHECKING:
 
 # --- Core (Processors) ---
 from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
+from yield_domain.core.mwd_trend.modifier_table import (
+    compute_scale_factors,
+    resolve_monthly_targets,
+    specified_signature,
+    sync_modifier_table,
+)
 from yield_domain.core.sheet_lot.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
@@ -45,10 +51,6 @@ class YieldAnalysisService:
 
     # 更新时间需使用 datetime(2026, 3, 31)
     _custom_end_date: Optional[datetime] = None
-    group_scale: float = 1.0
-    code_scale: float = 1.0
-    group_ema_span: int = 120
-    code_ema_span: int = 120
 
     @classmethod
     def set_analysis_end_date(cls, end_date: datetime):
@@ -166,6 +168,53 @@ class YieldAnalysisService:
     #  2. 趋势图业务 (Trend Analysis)
     # ==========================================================================
 
+    DEFAULT_MODIFIER_TABLE_NAME = "入库良率修饰表.xlsx"
+
+    @staticmethod
+    def resolve_modifier_table_path(config: AppConfig, product_dir: Path) -> Path:
+        """解析入库良率修饰表路径（config.paths['yield_modifier_config'] 可覆盖文件名）。"""
+        modifier_res = config.paths.get('yield_modifier_config')
+        file_name = (
+            modifier_res.file_name
+            if modifier_res
+            else YieldAnalysisService.DEFAULT_MODIFIER_TABLE_NAME
+        )
+        return Path(product_dir).parent / file_name
+
+    @staticmethod
+    def _build_modifier_context(
+        config: AppConfig,
+        product_dir: Path,
+        panel_df: pd.DataFrame,
+    ) -> Dict[str, Any]:
+        """同步入库良率修饰表并产出趋势/Mapping 所需上下文。
+
+        在 cached 方法内部（cache miss 时）调用：
+        - 回写当月良损（仅当月行）与缩放倍数（指定签名变化时）；
+        - 返回 targets（Code 级月目标良损，含上月回退）、factors（Code 级缩放倍数）、
+          signature（两级指定签名，供缓存 key 使用）。
+        当月良损与趋势图使用同一份 panel 明细计算，保证 Mapping 口径：
+        展示不良数 = 展示原始数 × (指定 / 展示原始) = 指定水准。
+        """
+        start_dt, end_dt = YieldAnalysisService.get_time_window()
+        months = pd.period_range(start_dt, end_dt, freq="M").strftime("%Y-%m").tolist()
+        current_month = end_dt.strftime("%Y-%m")
+        table_path = YieldAnalysisService.resolve_modifier_table_path(config, product_dir)
+        table = sync_modifier_table(
+            table_path,
+            config.data_source.product_code,
+            panel_df,
+            current_month,
+        )
+        return {
+            "targets": resolve_monthly_targets(table["code"], months),
+            "factors": compute_scale_factors(table["code"]),
+            "signature": (
+                f"{specified_signature(table['code'])}"
+                f"-{specified_signature(table['group'])}"
+            ),
+        }
+
     @staticmethod
     @st.cache_data(show_spinner=False)
     def get_mwd_trend_data(
@@ -173,8 +222,7 @@ class YieldAnalysisService:
         product_dir: Path, 
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
-        ema_span: int = group_ema_span, 
-        scaling_factor: float = group_scale,
+        modifier_signature: str = "",
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
@@ -185,15 +233,13 @@ class YieldAnalysisService:
         
         # 1. 强制依赖 Code 级结果作为数据源头
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _db_manager, snapshot_signature, ema_span, scaling_factor
+            config, product_dir, _db_manager, snapshot_signature, modifier_signature
         )
 
-        # [Refactor] 传入 config 和 resource_dir 给 Core 层，同时传入目标截止日期
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             mwd_code_data=mwd_code_data,  # 传入 Code 数据
             config=config,
-            scaling_factor=scaling_factor,
             target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )
 
@@ -204,8 +250,7 @@ class YieldAnalysisService:
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
-        ema_span: int = code_ema_span, 
-        scaling_factor: float = code_scale,
+        modifier_signature: str = "",
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
@@ -216,19 +261,15 @@ class YieldAnalysisService:
         # [核心修复] 获取目标截止日期，用于数据补齐
         _, target_end_dt = YieldAnalysisService.get_time_window()
         
-        # [新增] 提前加载警戒线配置，准备下发给底层调节器
-        warning_lines = YieldAnalysisService.load_static_warning_lines(
-            config,
-            product_dir,
-            snapshot_signature,
+        # 同步入库良率修饰表（cache miss 时顺带写回）并取目标良损
+        modifier_context = YieldAnalysisService._build_modifier_context(
+            config, product_dir, panel_df
         )
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
             panel_details_df=panel_df, 
             config=config,
-            ema_span=ema_span,
-            scaling_factor=scaling_factor,
-            warning_lines=warning_lines,
+            modifier_targets=modifier_context["targets"],
             target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )
 
@@ -241,9 +282,7 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
-        snapshot_signature: str = "",
-        ema_span: int = code_ema_span,
-        scaling_factor: float = code_scale) -> Dict[str, Any] | None:
+        snapshot_signature: str = "") -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -261,7 +300,7 @@ class YieldAnalysisService:
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _db_manager, snapshot_signature, ema_span, scaling_factor
+            config, product_dir, _db_manager, snapshot_signature
         )
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             config,
@@ -319,16 +358,23 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor: float = group_scale, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
-        """准备 Mapping 数据"""
+    def get_mapping_data(config: AppConfig, scaling_factor: float = 1.0, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "", product_dir: Path | None = None, modifier_signature: str = "") -> pd.DataFrame:
+        """准备 Mapping 数据（不良数 = 全局倍率 × 月度缩放倍数 × 级联衰减）"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return pd.DataFrame()
+        monthly_factors = None
+        if product_dir is not None:
+            modifier_context = YieldAnalysisService._build_modifier_context(
+                config, product_dir, panel_df
+            )
+            monthly_factors = modifier_context["factors"]
         return prepare_mapping_data(
             panel_details_df=panel_df,
             scaling_factor=scaling_factor,
             hotspot_scripts=config.processing.get('mapping_hotspot_script', []),
             product_code=config.data_source.product_code,
             mapping_layout=config.processing.get('mapping_layout'),
+            monthly_factors=monthly_factors,
         )
 
     # ==========================================================================

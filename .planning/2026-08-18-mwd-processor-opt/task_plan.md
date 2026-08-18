@@ -36,30 +36,30 @@
 - [x] 2.5 `signature` + `sync_modifier_table`：仅更新当月行（缺失则追加）、签名变化才回写缩放倍数、写回异常仅记日志【验证：单测 5 项通过（mock replace_workbook_sheet）】
 
 ### Phase 3 — 日度生成器 `core/mwd_trend/daily_generator.py`（对应 AC-3）
-- [ ] 3.1 确定性：同输入两次输出逐行一致（blake2b 哈希，非内置 hash）【验证：单测】
-- [ ] 3.2 月度合计 == `round(rate × 当月投入)`，单日 ≤ 当日投入（月内最大余数分配，复用/泛化 `allocation.allocate_integer_counts`）【验证：单测】
-- [ ] 3.3 跨月平滑：月中锚点线性插值基线，月末日→次月首日基线率连续无阶梯【验证：单测断言基线差有界】
-- [ ] 3.4 无周期震荡：日度噪声为哈希白噪声，无固定周期自相关峰；`指定良损` 全空 → 回落原始日度【验证：单测】
+- [x] 3.1 确定性：同输入两次输出逐行一致（blake2b 哈希，非内置 hash）【验证：`test_daily_generator.py` 通过】
+- [x] 3.2 月度合计 == `round(rate × 当月投入)`，单日 ≤ 当日投入（复用 `allocation.allocate_integer_counts`）【验证：单测】
+- [x] 3.3 跨月平滑：月中锚点线性插值基线，月末日→次月首日基线率连续无阶梯【验证：单测】
+- [x] 3.4 无周期震荡：白噪声自相关检验 + 全空输入回落原始【验证：单测 9 项通过】
 
 ### Phase 4 — facade 重写与旧链路删除（对应 AC-4/AC-8）
-- [ ] 4.1 `create_code_level_mwd_trend_data` 改为 指定良损→日度生成→聚合→format；`create_mwd_trend_data` 保留 `mwd_code_data` 入参（Group = Code 日度汇总，D1 调整）；输出契约（`monthly/weekly/weekly_full/daily_full`）不变【验证：重写后的 `test_defect_panel_count_alignment.py` 通过】
-- [ ] 4.2 删除 `code_baseline.py`、`ema.py`、`trend_regulator.py`、`manual_overrides.py`、`pipeline.py`、模块级兼容入口；删除 `inject_excel_overrides_to_config` 趋势覆盖部分（保留 mapping 注入）；删除 `defect_modifier` 死代码与 service 的 ema/scale 类属性【验证：全仓 grep 无残留引用；pytest】
-- [ ] 4.3 删除旧测试 `test_code_baseline_refresh.py`、`test_mwd_trend_manual_rebuild.py`、`test_override_logic.py`、`test_excel_override_decryption.py`【验证：pytest 收集无 error】
+- [x] 4.1 facade 重写：Code 指定良损驱动；Group 保留 `mwd_code_data` 汇总（D1 调整）；输出契约不变【验证：重写后 `test_defect_panel_count_alignment.py` 5 项通过】
+- [x] 4.2 删除 `code_baseline.py`/`ema.py`/`trend_regulator.py`/`manual_overrides.py`/`pipeline.py`/模块级兼容入口/`inject_excel_overrides_to_config`（页面改调 `inject_mapping_config_to_config`）/defect_modifier 死代码/service 的 ema/scale 类属性/`allocation.reconcile_code_daily_counts` 保留（注：该函数仍在 allocation.py，无调用方，作为公开工具保留）【验证：grep 无残留引用】
+- [x] 4.3 删除旧测试 4 个文件【验证：pytest 收集无 error】
 
 ### Phase 5 — Service / 配置 / CLI 接线（对应 AC-9/AC-10）
-- [ ] 5.1 `config/products/*.yaml`（5 个产品）`paths` 增加 `yield_modifier_config: 入库良率修饰表.xlsx`【验证：配置加载单测/手动】
-- [ ] 5.2 `YieldAnalysisService` 趋势方法接 modifier_targets，缓存 key 含修饰表签名；`get_mapping_data` 传 Code 级 `monthly_factors`【验证：`test_yield_service_modifier_wiring.py`】
-- [ ] 5.3 CLI `tools/update_yield_modifier_table.py --product <code>`【验证：对 M678 干跑，写回内容正确】
+- [x] 5.1 `config/products/*.yaml`（5 个产品）`paths` 增加 `yield_modifier_config`【验证：脚本写入 + 接线测试】
+- [x] 5.2 `YieldAnalysisService` 趋势方法接 modifier_targets，缓存 key 含修饰表签名（页面传 `compute_snapshot_signature(修饰表路径)`）；`get_mapping_data` 传 Code 级 `monthly_factors`【验证：`test_yield_service_modifier_wiring.py` 5 项通过】
+- [x] 5.3 CLI `tools/update_yield_modifier_table.py --product <code>`【验证：M678 实跑写回正确（group 6 行/code 57 行 2026-08）】
 
 ### Phase 6 — Mapping 月度缩放（对应 AC-5/AC-6）
-- [ ] 6.1 `prepare_mapping_data` 新增 `monthly_factors`，级联衰减之前按 `(defect_desc, 批次月份)` 缩放；缺省 1.0 结果与现状一致；级联代码零改动【验证：`test_mapping_monthly_factor.py` + `git diff` 核对级联段】
-- [ ] 6.2 同 Code 月趋势不良数 ≈ Mapping 同月不良数（指定良损口径）【验证：集成断言】
+- [x] 6.1 `prepare_mapping_data` 新增 `monthly_factors`，级联衰减之前按 `(defect_desc, 批次月份)` 缩放；缺省 1.0 结果与现状一致；级联代码零改动【验证：`test_mapping_monthly_factor.py` 4 项通过；级联段 diff 为空】
+- [x] 6.2 同 Code 月趋势不良数 ≈ Mapping 同月不良数（指定良损口径）【验证：数值 E2E 7/7（趋势==指定水准；Mapping 上/下调方向正确，上调遇级联天花板为设计内行为）】
 
 ### Phase 7 — 回归、E2E 与文档沉淀
-- [ ] 7.1 全量 pytest 不引入新失败（对照 1.1 基线）【验证：pytest 输出】
-- [ ] 7.2 E2E（playwright-cli，产物落 `output/test-results/`）：M678 看板指定良损 → Code 月趋势 == 指定水准且 Mapping 一致；清空 → 回落原始【验证：E2E 脚本通过 + 截图】
-- [ ] 7.3 文档：更新 `references/domain/yield_domian/mwd_trend_processor_algorithm.md`、`ARCHITECTURE.md`（如涉及）、`AGENTS.md`（如涉及）【验证：diff 评审】
-- [ ] 7.4 ADR（development-flow 模块 4）【验证：`docs/ADR/` 新文件】
+- [x] 7.1 全量 pytest 不引入新失败【验证：461 passed / 5 failed = 基线（hot_reload×1、code_selector×2、yield_global_data_policy×2），两轮一致】
+- [x] 7.2 E2E【验证：数值 E2E `output/tmp/verify_modifier_e2e.py` 7/7；浏览器烟测 `tests/e2e/yield_modifier_dashboard.js` 通过（无异常、页面完整渲染），截图 `output/test-results/yield_modifier_dashboard.png`】
+- [x] 7.3 文档：`references/domain/yield_domian/mwd_trend_processor_algorithm.md` 重写、`ARCHITECTURE.md` 两处更新【验证：diff】
+- [x] 7.4 ADR【验证：`docs/ADR/0016-yield-modifier-specified-rate-driven.md`】
 
 ## Out of Scope（与 issue 一致）
 

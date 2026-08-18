@@ -1,7 +1,7 @@
 # 入库良率修饰逻辑简化：删除 Codebaseline/EMA/截断/人工覆盖链路，改为"入库良率修饰表"指定良损驱动
 
 Category: `enhancement`  
-Status: `ready-for-agent`  
+Status: `complete`  
 Created: `2026-08-18`  
 Source: `docs/dev_docs/dev_spec/yield_domain/feat-mwd_processor-opt.md`  
 Related: `docs/PRD/PRD-2026-08-18-入库良率修饰逻辑简化.md`
@@ -128,3 +128,21 @@ Related: `docs/PRD/PRD-2026-08-18-入库良率修饰逻辑简化.md`
 （D1 两级独立生成 / D2 双通道写回 / D3 旧修正表停用）成文，代码事实经直接调研
 核实，无阻塞问题。D4（静态警戒线消费方核实）为计划阶段实证核对项，已在
 Agent Brief 的 Edge cases 中给出处理预案。仓库无 `.out-of-scope/` 相关拒绝记录。
+
+### 2026-08-18 — Completed
+
+全部 7 个 Phase 交付：修饰表管理器（`modifier_table.py`）、日度生成器
+（`daily_generator.py`）、facade 重写与旧链路删除（5 模块 + 4 旧测试）、
+service/配置/CLI 接线、Mapping 月度缩放（级联红线零改动）、回归与 E2E、
+文档与 ADR-0016。
+验证：tests/unit 461 passed / 5 failed（= 既有基线，两轮一致）；
+数值 E2E（真实 M678 快照）7/7——Code 月趋势 == 指定水准、Mapping 上/下调
+方向正确、清空指定回落原始；浏览器 E2E（worktree :8510）页面无异常渲染完成，
+截图 output/test-results/yield_modifier_dashboard.png；CLI M678 实跑写回正确。
+过程修正：D1 经评审调整为 Group 由 Code 汇总；缩放倍数口径与目标回退链对齐；
+当月良损采用与趋势一致的修饰后口径（D5）；签名存储改为修饰表旁
+`<表名>.sig.json`（按 `<产品>:<级别>` 分键）。开发在 worktree
+`D:/wzy/Python/vivo-project-mwd`（分支 feat/mwd-processor-opt）进行，
+主目录保持 master 不受影响。
+有意排除：级联衰减、defect_multipliers 语义、趋势图人工修正.xlsx 迁移、
+codebaseline.xlsx 文件清理、周/日粒度指定。
