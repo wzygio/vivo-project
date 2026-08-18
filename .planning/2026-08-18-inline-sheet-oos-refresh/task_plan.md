@@ -3,7 +3,9 @@
 - Issue：`.scratch/inline-sheet-oos-refresh/issues/01-sheet-oos-decoration-refresh-decision-persistence.md`（ready-for-agent）
 - PRD：`docs/PRD/PRD-2026-08-18-Inline-Sheet-OOS修饰刷新与决策持久化.md`
 - 开发分支/worktree：新建 worktree + 分支 `feat/inline-sheet-oos-refresh`（见 Phase 0）
-- 批准记录：（待用户批准）
+- 批准记录：用户 2026-08-18 在计划呈现后指示“请继续完成任务”，按推荐默认批准：
+  worktree 于主仓同级目录 `../vivo-project-inline-sheet-oos-refresh`，
+  分支 `feat/inline-sheet-oos-refresh`，含 UI 验收全量执行。
 
 ## Goal
 
@@ -38,24 +40,24 @@
 ## Checklist（TDD：每切片先写/改测试）
 
 ### Phase 0 — 基线与 worktree
-- [ ] 0.1 创建 worktree + 分支 `feat/inline-sheet-oos-refresh`；确认测试运行方式
+- [x] 0.1 创建 worktree + 分支 `feat/inline-sheet-oos-refresh`；确认测试运行方式
   （worktree cwd + 主仓 `.venv` python，必要时 PYTHONPATH 指 worktree `src`）；
   验证：`git worktree list` + 一条收集命令成功。
-- [ ] 0.2 记录基线：`pytest tests/unit -q`（对照既有失败基线）；
+- [x] 0.2 记录基线：`pytest tests/unit -q`（对照既有失败基线）；
   验证：输出存档于 progress.md。
 
 ### Phase 1 — 页头“刷新数据”L1+L2 契约（tracer bullet）
-- [ ] 1.1 测试先行：全成功 → 调用产品级 invalidation 且提示含“L1 快照与 L2 缓存已刷新”；
+- [x] 1.1 测试先行：全成功 → 调用产品级 invalidation 且提示含“L1 快照与 L2 缓存已刷新”；
   任一失败 → 不 invalidation、提示失败；无产品作用域 → 保持函数清理路径；
   不触发模块卸载/配置重读。验证：`tests/unit` 页头测试先红。
-- [ ] 1.2 实现 `_refresh_data_callback` 改造；验证：转绿。
+- [x] 1.2 实现 `_refresh_data_callback` 改造；验证：转绿。
   对应 AC：11.1 全部。
 
 ### Phase 2 — Excel 写入契约（WorkbookWriteResult + 原子写 + 锁）
-- [ ] 2.1 测试先行：成功写、PermissionError、COM 失败、临时保存失败、替换失败、
+- [x] 2.1 测试先行：成功写、PermissionError、COM 失败、临时保存失败、替换失败、
   多 sheet 单事务（任一失败无“部分新明细+新 meta”）、其他 sheet 保留；
   验证：先红。
-- [ ] 2.2 实现多 sheet 原子写（同目录临时文件 + openpyxl 可读性验证 + 原子替换 +
+- [x] 2.2 实现多 sheet 原子写（同目录临时文件 + openpyxl 可读性验证 + 原子替换 +
   进程内锁；加密回退 COM 读全表后临时文件整体重写并日志记录）；
   `replace_workbook_sheet` 委托保持兼容；验证：转绿。
   对应 AC：11.4 全部。
