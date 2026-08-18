@@ -1067,6 +1067,38 @@ def test_sheet_points_box_chart_draws_only_upper_lines_when_lsl_is_zero() -> Non
     assert annotation_texts == {"USL: 8", "UCL: 6"}
 
 
+def test_sheet_points_box_chart_draws_upper_lines_when_lower_specs_are_null() -> None:
+    raw_measurements_df = pd.DataFrame(
+        [
+            {"sheet_id": "S1", "sheet_start_time": "2026-06-01", "param_value": 3.0},
+            {"sheet_id": "S2", "sheet_start_time": "2026-06-02", "param_value": 6.0},
+        ]
+    )
+    spec_df = pd.DataFrame(
+        [
+            {
+                "usl": 9.9,
+                "lsl": None,
+                "ucl": 7.5,
+                "lcl": None,
+                "target": None,
+            }
+        ]
+    )
+
+    figure = _create_sheet_points_box_chart(
+        raw_measurements_df,
+        sort_mode="按过货时间排序",
+        title="Sheet点位分布",
+        spec_df=spec_df,
+    )
+
+    annotation_texts = {annotation.text for annotation in figure.layout.annotations}
+
+    assert annotation_texts == {"USL: 9.9", "UCL: 7.5"}
+    assert figure.layout.yaxis.range[1] > 9.9
+
+
 def test_sheet_points_box_chart_preserves_tiny_upper_spec_values_in_labels() -> None:
     raw_measurements_df = pd.DataFrame(
         [

@@ -9,6 +9,7 @@ product_registry:
     - "Z571"
     - "M673"
     - "Z517"
+    - "Z576"
 
 # Yield 域通用数据策略。产品配置只声明产品差异。
 data_source:

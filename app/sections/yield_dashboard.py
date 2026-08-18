@@ -581,7 +581,7 @@ def _prepare_compact_mapping_payload(
     ]
     payload["batches"] = batches
     payload["tab_labels"] = tab_labels
-    payload["default_tab"] = tab_labels[-2] if len(tab_labels) >= 2 else tab_labels[-1]
+    payload["default_tab"] = tab_labels[-1] if len(tab_labels) >= 2 else tab_labels[-1]
     payload["figures"] = figures
     return payload
 

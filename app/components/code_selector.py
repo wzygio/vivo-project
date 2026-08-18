@@ -210,8 +210,6 @@ def create_group_batch_selection_ui(
             if code_options_by_group.get(group_name, [])
         }
         total_codes = sum(len(codes) for codes in codes_by_group.values())
-        with metric_col:
-            st.metric("Code 数", total_codes)
 
         current_signature = tuple(
             (group_name, tuple(codes_by_group.get(group_name, [])))

@@ -67,7 +67,7 @@ const APP_CONFIG = {
         {
             name: "SPC监控",
             children: [
-                { name: "AOI_RS", url: LINKS.AOI_RS_REPORT },
+                { name: "AOI_RS", url: LINKS.AOI_RS },
                 { name: "AOI_TT", url: LINKS.AOI_TT_REPORT },
                 { name: "CTQ", url: LINKS.CTQ_REPORT },
                 { name: "SPC", url: LINKS.SPC_REPORT },
@@ -118,7 +118,7 @@ const APP_CONFIG = {
             label: 'SPC监控', 
             icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>', 
             subs: [ 
-                {l:'', v:'AOI_RS', url: LINKS.AOI_RS_REPORT },
+                {l:'', v:'AOI_RS', url: LINKS.AOI_RS },
                 {l:'', v:'AOI_TT', url: LINKS.AOI_TT_REPORT },
                 {l:'', v:'CTQ', url: LINKS.CTQ_REPORT },
                 {l:'', v:'SPC', url: LINKS.SPC_REPORT },

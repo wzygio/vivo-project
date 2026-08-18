@@ -189,7 +189,6 @@ if not selection.get("should_render", False):
 #  第三部分: 微观分析 (Group 下所有 Code 批量展示)
 # ==============================================================================
 hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
-st.markdown(f"### 🎯 当前分析: **{selection.get('total_codes', 0)} 个 Code**")
 
 # 查询门控通过后才进入两阶段渲染：RenderGate 先在统一 spinner 下构建
 # 全部 Code payload，再按原顺序集中渲染，避免图表逐张出现。

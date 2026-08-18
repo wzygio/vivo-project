@@ -175,6 +175,14 @@ def create_code_trend_chart(
     df = df.copy()
     # [核心修复 2] 同步移除 Code 级的 sorted() 越权排序
     df['time_period'] = pd.Categorical(df['time_period'], categories=df['time_period'].unique(), ordered=True)
+    has_panel_count = 'total_panels' in df.columns
+    df_panels = (
+        df[['time_period', 'total_panels']]
+        .drop_duplicates()
+        .sort_values('time_period')
+        if has_panel_count
+        else None
+    )
 
     # 1. 基础柱状图
     fig = px.bar(
@@ -207,6 +215,22 @@ def create_code_trend_chart(
 
     # 4. 布局调整
     fig.update_traces(hovertemplate='<b>%{x}</b><br>不良率: %{y:.2%}', marker_color='#54a24b')
+    if df_panels is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=df_panels['time_period'],
+                y=df_panels['total_panels'],
+                name='过货数',
+                mode='lines+markers+text',
+                text=df_panels['total_panels'],
+                textposition='top center',
+                yaxis='y2',
+                line=dict(color='#7f7f7f', width=1.5, dash='dot'),
+                marker=dict(symbol='circle', size=5, color='#7f7f7f'),
+                hovertemplate='过货数: %{y}<extra></extra>',
+                showlegend=False,
+            )
+        )
     fig.update_layout(
         yaxis_range=[0, final_y_max],  # 使用计算后的范围
         yaxis_tickformat='.2%', 
@@ -215,6 +239,17 @@ def create_code_trend_chart(
         yaxis_title=None, 
         title_font_size=16
     )
+    if has_panel_count:
+        fig.update_layout(
+            yaxis2=dict(
+                title=None,
+                overlaying='y',
+                side='right',
+                showgrid=False,
+                showticklabels=False,
+                rangemode='tozero',
+            )
+        )
     fig.update_xaxes(type='category', tickangle=-45 if "日度" in title else 0)
     
     return fig
