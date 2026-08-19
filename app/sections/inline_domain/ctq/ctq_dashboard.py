@@ -2,24 +2,35 @@ from __future__ import annotations
 
 from datetime import date
 from functools import partial
-from typing import Iterable
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from app.manager.render_gate import RenderGate
-from app.utils.step_labels import format_step_label
-from app.sections.inline_domain.spc.spc_dashboard import (
-    _create_period_overview_chart,
-    _create_sheet_points_box_charts,
-    _resolve_chart_type,
+from app.sections.inline_domain.shared import (
+    INLINE_FACTORY_OPTIONS,
+    apply_report_filter,
+    get_available_factories as _shared_available_factories,
+    get_options_for_factory_steps,
+    get_steps_for_factory as _shared_steps_for_factory,
+    render_cascade_filters,
     render_sheet_oos_decoration_admin,
+    resolve_chart_type,
 )
+from app.sections.inline_domain.shared.sheet_charts import (
+    create_period_overview_chart,
+    create_sheet_points_box_charts,
+)
+from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.shared_kernel.config import ConfigLoader
 
-CTQ_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
+CTQ_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
+
+# 公共管线别名：供本模块组合层引用，并保持既有测试的 monkeypatch 锚点。
+_create_sheet_points_box_charts = create_sheet_points_box_charts
 
 
 def get_default_ctq_start_date(end_date: date) -> date:
@@ -27,28 +38,13 @@ def get_default_ctq_start_date(end_date: date) -> date:
     return get_period_window_start(end_date)
 
 
-def _normalise_selection(selection: Iterable[str], available: list[str]) -> list[str]:
-    return [item for item in selection if item in available]
-
-
-def _unique_sorted(dataframe: pd.DataFrame, column: str) -> list[str]:
-    if dataframe.empty or column not in dataframe.columns:
-        return []
-    return sorted(dataframe[column].dropna().astype(str).unique().tolist())
-
-
 def get_available_factories(report_df: pd.DataFrame) -> list[str]:
     """Return available CTQ factories with the standard order preserved."""
-    factories = set(_unique_sorted(report_df, "factory"))
-    ordered = [factory for factory in CTQ_FACTORY_OPTIONS if factory in factories]
-    return ordered + sorted(factories.difference(CTQ_FACTORY_OPTIONS))
+    return _shared_available_factories(report_df, CTQ_FACTORY_OPTIONS)
 
 
 def get_steps_for_factory(report_df: pd.DataFrame, selected_factory: str) -> list[str]:
-    if report_df.empty or not selected_factory or "factory" not in report_df.columns:
-        return []
-    factory_df = report_df[report_df["factory"].astype(str) == str(selected_factory)]
-    return _unique_sorted(factory_df, "step_id")
+    return _shared_steps_for_factory(report_df, selected_factory)
 
 
 def get_params_for_factory_steps(
@@ -56,24 +52,7 @@ def get_params_for_factory_steps(
     selected_factory: str,
     selected_steps: list[str],
 ) -> list[str]:
-    if report_df.empty or not selected_factory or not selected_steps:
-        return []
-    required_columns = {"factory", "step_id", "param_name"}
-    if not required_columns.issubset(report_df.columns):
-        return []
-    filtered_df = report_df[
-        (report_df["factory"].astype(str) == str(selected_factory))
-        & (report_df["step_id"].astype(str).isin(selected_steps))
-    ]
-    return _unique_sorted(filtered_df, "param_name")
-
-
-def _filter_signature(
-    selected_factory: str,
-    selected_steps: list[str],
-    selected_params: list[str],
-) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    return selected_factory, tuple(selected_steps), tuple(selected_params)
+    return get_options_for_factory_steps(report_df, selected_factory, selected_steps, "param_name")
 
 
 def render_ctq_filters(
@@ -82,75 +61,15 @@ def render_ctq_filters(
     step_desc_map: dict[str, str] | None = None,
 ) -> tuple[str, list[str], list[str], bool]:
     """Render CTQ-owned cascade filters and return the applied query state."""
-    with st.container(border=True):
-        st.markdown("#### 筛选")
-        factory_col, step_col, param_col, query_col = st.columns(
-            [1.1, 2.5, 3.4, 0.9],
-            vertical_alignment="bottom",
-        )
-        available_factories = get_available_factories(indicator_df) or CTQ_FACTORY_OPTIONS
-        factory_key = "ctq_factory_filter"
-        if st.session_state.get(factory_key) not in available_factories:
-            st.session_state[factory_key] = available_factories[0]
-
-        with factory_col:
-            selected_factory = st.selectbox("厂别", options=available_factories, key=factory_key)
-
-        available_steps = get_steps_for_factory(indicator_df, selected_factory)
-        step_key = "ctq_step_filter"
-        param_key = "ctq_param_filter"
-        previous_factory_key = "ctq_previous_factory_filter"
-        if st.session_state.get(previous_factory_key) != selected_factory:
-            st.session_state[step_key] = []
-            st.session_state[param_key] = []
-            st.session_state[previous_factory_key] = selected_factory
-
-        with step_col:
-            st.session_state[step_key] = _normalise_selection(
-                st.session_state.get(step_key, []),
-                available_steps,
-            )
-            selected_steps = st.multiselect(
-                "站点",
-                options=available_steps,
-                key=step_key,
-                format_func=lambda step: format_step_label(step, step_desc_map),
-            )
-
-        available_params = get_params_for_factory_steps(
-            indicator_df,
-            selected_factory,
-            selected_steps,
-        )
-        steps_signature_key = "ctq_steps_for_param_autoselect"
-        steps_signature = _filter_signature(selected_factory, selected_steps, [])
-        if st.session_state.get(steps_signature_key) != steps_signature:
-            st.session_state[param_key] = available_params
-            st.session_state[steps_signature_key] = steps_signature
-        st.session_state[param_key] = _normalise_selection(
-            st.session_state.get(param_key, []),
-            available_params,
-        )
-
-        with param_col:
-            selected_params = st.multiselect(
-                "参数名称",
-                options=available_params,
-                key=param_key,
-                disabled=not selected_steps,
-            )
-
-        current_signature = _filter_signature(selected_factory, selected_steps, selected_params)
-        applied_signature_key = "ctq_applied_filter_signature"
-        can_query = bool(selected_factory and selected_steps and selected_params)
-        with query_col:
-            if st.button("查询", type="primary", width="stretch", disabled=not can_query):
-                st.session_state[applied_signature_key] = current_signature
-
-    should_render = bool(
-        can_query and st.session_state.get(applied_signature_key) == current_signature
+    return render_cascade_filters(
+        indicator_df,
+        key_prefix="ctq",
+        third_label="参数名称",
+        third_column="param_name",
+        third_kind="param",
+        factory_options=CTQ_FACTORY_OPTIONS,
+        step_desc_map=step_desc_map,
     )
-    return selected_factory, selected_params, selected_steps, should_render
 
 
 def filter_ctq_report(
@@ -160,16 +79,13 @@ def filter_ctq_report(
     selected_steps: list[str],
 ) -> pd.DataFrame:
     """Apply CTQ filters to a report frame."""
-    if report_df.empty:
-        return report_df
-    filtered_df = report_df.copy()
-    if selected_factory and "factory" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["factory"].astype(str) == str(selected_factory)]
-    if selected_params and "param_name" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["param_name"].astype(str).isin(selected_params)]
-    if selected_steps and "step_id" in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df["step_id"].astype(str).isin(selected_steps)]
-    return filtered_df.reset_index(drop=True)
+    return apply_report_filter(
+        report_df,
+        selected_factory,
+        selected_params,
+        selected_steps,
+        third_column="param_name",
+    )
 
 
 def render_ctq_decoration_admin(
@@ -195,7 +111,7 @@ def create_ctq_period_overview_chart(
     period_box_source: str = "point_value",
 ) -> go.Figure:
     """Create a capability-free CTQ month/week/day distribution figure."""
-    return _create_period_overview_chart(
+    return create_period_overview_chart(
         sheet_features_df=sheet_features_df,
         period_capability_df=pd.DataFrame(),
         raw_measurements_df=raw_measurements_df,
@@ -256,6 +172,7 @@ def render_ctq_indicator_sections(
         return
 
     gate = RenderGate()
+    line_param_name_contains = ConfigLoader.get_spc_line_chart_param_name_contains()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
         label = f"{factory} | {format_step_label(step_id, step_desc_map)} | {param_name}"
@@ -267,7 +184,7 @@ def render_ctq_indicator_sections(
             ].copy()
         else:
             indicator_raw_df = pd.DataFrame()
-        chart_type = _resolve_chart_type(indicator_features_df, indicator_raw_df)
+        chart_type = resolve_chart_type(param_name, line_param_name_contains)
         gate.stage(
             partial(
                 _build_ctq_indicator_render_payload,

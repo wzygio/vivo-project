@@ -22,7 +22,7 @@ from app.components.page_header import (
 from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
 from app.components.file_uploader import render_trend_override_uploader
-from app.charts.mwd_chart import (
+from app.charts.yield_domain.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]

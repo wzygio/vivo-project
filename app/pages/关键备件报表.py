@@ -161,7 +161,7 @@ if selected_row_data is not None:
         f"📈 备件寿命趋势分析 — {trend_factory} | {trend_layer} | {trend_part_type}",
         expanded=True,
     ):
-        from app.charts.parts_chart import generate_trend_data, create_parts_trend_chart
+        from app.charts.equipment_domain.parts_chart import generate_trend_data, create_parts_trend_chart
 
         df_selected_trend = generate_trend_data(
             factory=trend_factory,

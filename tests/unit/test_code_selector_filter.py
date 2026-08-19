@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.charts.mwd_chart import prepare_union_data_for_filter
+from app.charts.yield_domain.mwd_chart import prepare_union_data_for_filter
 from app.components.code_selector import (
     build_batch_code_options_by_group,
     create_group_batch_selection_ui,

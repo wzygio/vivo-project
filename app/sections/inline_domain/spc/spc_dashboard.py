@@ -4,29 +4,34 @@ from contextlib import nullcontext
 from datetime import date
 from functools import partial
 from io import BytesIO
-from typing import Iterable
 import hashlib
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
-from app.components.distribution_charts import (
-    create_box_distribution_trace,
-    create_point_line_trace,
-)
 from app.components.page_header import build_product_cache_signature
 from app.manager.render_gate import RenderGate
-from app.utils.step_labels import format_step_label
-from src.inline_domain.core.spc.spc_calculator import (
-    build_available_period_axis,
-    build_period_axis,
-    get_period_window_start,
+from app.sections.inline_domain.shared import (
+    INLINE_FACTORY_OPTIONS,
+    PERIOD_LABELS,
+    PERIOD_WINDOW_LIMITS,
+    apply_report_filter,
+    excel_bytes,
+    get_available_factories as _shared_available_factories,
+    get_options_for_factory_steps,
+    get_steps_for_factory as _shared_steps_for_factory,
+    render_cascade_filters,
+    render_sheet_oos_decoration_admin,
+    resolve_chart_type,
 )
+from app.sections.inline_domain.shared.sheet_charts import (
+    create_period_overview_chart,
+    create_sheet_points_box_chart,
+    create_sheet_points_box_charts,
+)
+from app.utils.step_labels import format_step_label
+from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.inline_domain.core.shared.sheet_oos_decoration import (
-    DELETE_ACTION,
-    OOS_DECORATION_COLUMNS,
-    OOS_KEY_COLUMNS,
     SheetOosDecorationResult,
 )
 from src.inline_domain.core.spc.cpk_decoration import (
@@ -37,16 +42,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
 
-SPC_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
-PERIOD_LABELS = {"month": "月", "week": "周", "day": "日"}
-PERIOD_WINDOW_LIMITS = {"month": 2, "week": 3, "day": 7}
-PERIOD_COLORS = {"month": "#2563eb", "week": "#16a34a", "day": "#f59e0b"}
-PERIOD_FILL_COLORS = {
-    "month": "rgba(37, 99, 235, 0.18)",
-    "week": "rgba(22, 163, 74, 0.18)",
-    "day": "rgba(245, 158, 11, 0.18)",
-}
-SHEET_BOX_PALETTE = ["#2563eb", "#16a34a", "#f59e0b", "#8b5cf6", "#0f766e", "#dc2626", "#64748b"]
+SPC_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
 CPK_ALERT_THRESHOLD = 1.33
 CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规周次", "CPK值"]
 CPK_ALERT_KEY_COLUMN_MAP = {
@@ -54,8 +50,13 @@ CPK_ALERT_KEY_COLUMN_MAP = {
     "站点": "step_id",
     "参数名称": "param_name",
 }
-CHART_TYPE_BOX = "box"
-CHART_TYPE_LINE = "line"
+
+# 公共管线已下沉至 app.sections.inline_domain.shared；以下别名为兼容既有调用/测试保留。
+_excel_bytes = excel_bytes
+_resolve_chart_type = resolve_chart_type
+_create_period_overview_chart = create_period_overview_chart
+_create_sheet_points_box_chart = create_sheet_points_box_chart
+_create_sheet_points_box_charts = create_sheet_points_box_charts
 
 
 def get_default_spc_start_date(end_date: date) -> date:
@@ -174,30 +175,14 @@ def filter_spc_report_by_alerts(
     return report_df.loc[report_key_index.isin(alert_key_index)].copy().reset_index(drop=True)
 
 
-def _normalise_selection(selection: Iterable[str], available: list[str]) -> list[str]:
-    return [item for item in selection if item in available]
-
-
-def _unique_sorted(df: pd.DataFrame, column: str) -> list[str]:
-    if df.empty or column not in df.columns:
-        return []
-    return sorted(df[column].dropna().astype(str).unique().tolist())
-
-
 def get_available_factories(report_df: pd.DataFrame) -> list[str]:
     """Return available factories with known factory order preserved."""
-    factories = set(_unique_sorted(report_df, "factory"))
-    ordered = [factory for factory in SPC_FACTORY_OPTIONS if factory in factories]
-    extras = sorted(factories.difference(SPC_FACTORY_OPTIONS))
-    return ordered + extras
+    return _shared_available_factories(report_df, SPC_FACTORY_OPTIONS)
 
 
 def get_steps_for_factory(report_df: pd.DataFrame, selected_factory: str) -> list[str]:
     """Return stations available under the selected factory."""
-    if report_df.empty or not selected_factory:
-        return []
-    factory_df = report_df[report_df["factory"].astype(str) == str(selected_factory)]
-    return _unique_sorted(factory_df, "step_id")
+    return _shared_steps_for_factory(report_df, selected_factory)
 
 
 def get_params_for_factory_steps(
@@ -206,21 +191,7 @@ def get_params_for_factory_steps(
     selected_steps: list[str],
 ) -> list[str]:
     """Return parameters available under the selected factory and stations."""
-    if report_df.empty or not selected_factory or not selected_steps:
-        return []
-    df = report_df[
-        (report_df["factory"].astype(str) == str(selected_factory))
-        & (report_df["step_id"].astype(str).isin(selected_steps))
-    ]
-    return _unique_sorted(df, "param_name")
-
-
-def _filter_signature(
-    selected_factory: str,
-    selected_steps: list[str],
-    selected_params: list[str],
-) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    return selected_factory, tuple(selected_steps), tuple(selected_params)
+    return get_options_for_factory_steps(report_df, selected_factory, selected_steps, "param_name")
 
 
 def render_spc_filters(
@@ -229,68 +200,15 @@ def render_spc_filters(
     step_desc_map: dict[str, str] | None = None,
 ) -> tuple[str, list[str], list[str], bool]:
     """Render CPM/CPK filters and return selected factory, params, steps, and query state."""
-    with st.container(border=True):
-        st.markdown("#### 筛选")
-        c_factory, c_step, c_param, c_query = st.columns(
-            [1.1, 2.5, 3.4, 0.9],
-            vertical_alignment="bottom",
-        )
-
-        available_factories = get_available_factories(indicator_df) or SPC_FACTORY_OPTIONS
-        factory_key = "spc_factory_filter"
-        if st.session_state.get(factory_key) not in available_factories:
-            st.session_state[factory_key] = available_factories[0]
-
-        with c_factory:
-            selected_factory = st.selectbox(
-                "厂别",
-                options=available_factories,
-                key=factory_key,
-            )
-
-        available_steps = get_steps_for_factory(indicator_df, selected_factory)
-        step_key = "spc_step_filter"
-        param_key = "spc_param_filter"
-        previous_factory_key = "spc_previous_factory_filter"
-        if st.session_state.get(previous_factory_key) != selected_factory:
-            st.session_state[step_key] = []
-            st.session_state[param_key] = []
-            st.session_state[previous_factory_key] = selected_factory
-
-        with c_step:
-            st.session_state[step_key] = _normalise_selection(st.session_state.get(step_key, []), available_steps)
-            selected_steps = st.multiselect(
-                "站点",
-                options=available_steps,
-                key=step_key,
-                format_func=lambda step: format_step_label(step, step_desc_map),
-            )
-
-        available_params = get_params_for_factory_steps(indicator_df, selected_factory, selected_steps)
-        steps_signature_key = "spc_steps_for_param_autoselect"
-        steps_signature = _filter_signature(selected_factory, selected_steps, [])
-        if st.session_state.get(steps_signature_key) != steps_signature:
-            st.session_state[param_key] = available_params
-            st.session_state[steps_signature_key] = steps_signature
-        st.session_state[param_key] = _normalise_selection(st.session_state.get(param_key, []), available_params)
-
-        with c_param:
-            selected_params = st.multiselect(
-                "参数名称",
-                options=available_params,
-                key=param_key,
-                disabled=not selected_steps,
-            )
-
-        current_signature = _filter_signature(selected_factory, selected_steps, selected_params)
-        applied_signature_key = "spc_applied_filter_signature"
-        can_query = bool(selected_factory and selected_steps and selected_params)
-        with c_query:
-            if st.button("查询", type="primary", width="stretch", disabled=not can_query):
-                st.session_state[applied_signature_key] = current_signature
-
-    should_render = bool(can_query and st.session_state.get(applied_signature_key) == current_signature)
-    return selected_factory, selected_params, selected_steps, should_render
+    return render_cascade_filters(
+        indicator_df,
+        key_prefix="spc",
+        third_label="参数名称",
+        third_column="param_name",
+        third_kind="param",
+        factory_options=SPC_FACTORY_OPTIONS,
+        step_desc_map=step_desc_map,
+    )
 
 
 def filter_spc_report(
@@ -300,96 +218,13 @@ def filter_spc_report(
     selected_steps: list[str],
 ) -> pd.DataFrame:
     """Apply frontend CPM/CPK filters to any report frame with factory/step/param columns."""
-    if report_df.empty:
-        return report_df
-
-    df = report_df.copy()
-    if selected_factory and "factory" in df.columns:
-        df = df[df["factory"].astype(str) == str(selected_factory)]
-    if selected_params and "param_name" in df.columns:
-        df = df[df["param_name"].astype(str).isin(selected_params)]
-    if selected_steps and "step_id" in df.columns:
-        df = df[df["step_id"].astype(str).isin(selected_steps)]
-    return df.reset_index(drop=True)
-
-
-def _excel_bytes(sheet_map: dict[str, pd.DataFrame]) -> bytes:
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        for sheet_name, df in sheet_map.items():
-            df.to_excel(writer, index=False, sheet_name=sheet_name)
-    return output.getvalue()
-
-
-def render_sheet_oos_decoration_admin(
-    decoration_result: SheetOosDecorationResult,
-    *,
-    show_expander: bool = True,
-    report_name: str = "SPC",
-    key_prefix: str = "spc",
-) -> None:
-    """Render the Sheet OOS decorator, optionally inside a parent admin panel."""
-    decoration_df = decoration_result.decoration_df
-    decoration_download_df = decoration_df if not decoration_df.empty else pd.DataFrame(columns=OOS_DECORATION_COLUMNS)
-
-    container = (
-        st.expander(f"开发者后台：{report_name} 超规片数据修饰", expanded=False)
-        if show_expander
-        else nullcontext()
+    return apply_report_filter(
+        report_df,
+        selected_factory,
+        selected_params,
+        selected_steps,
+        third_column="param_name",
     )
-    with container:
-        st.caption(
-            f"flag 支持 True（修饰）、False（保留原值）、{DELETE_ACTION}"
-            "（不显示该 Sheet 的当前参数记录）；修改后请上传并确认刷新，"
-            "或点击页头“刷新缓存”。"
-        )
-        st.caption(f"修饰文件：{decoration_result.decoration_path}")
-        c_decoration, c_upload = st.columns([1, 1.2])
-
-        with c_decoration:
-            st.markdown("#### 下载修饰表")
-            st.download_button(
-                label="下载修饰表",
-                data=_excel_bytes({"修饰表": decoration_download_df}),
-                file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"{key_prefix}_oos_decoration_download",
-                use_container_width=True,
-            )
-
-        with c_upload:
-            st.markdown("#### 上传修饰表")
-            uploaded_file = st.file_uploader(
-                "上传包含 flag 字段的 Excel",
-                type=["xlsx"],
-                key=f"{key_prefix}_oos_decoration_upload",
-                label_visibility="collapsed",
-            )
-            if uploaded_file is not None:
-                if st.button(
-                    "确认覆盖并刷新",
-                    type="primary",
-                    key=f"{key_prefix}_oos_decoration_upload_btn",
-                    use_container_width=True,
-                ):
-                    try:
-                        uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
-                        required_columns = {*OOS_KEY_COLUMNS, "flag"}
-                        missing_columns = required_columns - set(uploaded_df.columns)
-                        if missing_columns:
-                            st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
-                            return
-
-                        replace_workbook_sheet(
-                            decoration_result.decoration_path,
-                            decoration_result.decoration_sheet,
-                            uploaded_df,
-                        )
-                        st.success("修饰表已覆盖，正在刷新缓存。")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"保存修饰表失败：{exc}")
 
 
 def render_cpk_decoration_admin(
@@ -474,242 +309,6 @@ def render_spc_decoration_admin(
                 render_cpk_decoration_admin(cpk_decoration_result, show_expander=False)
 
 
-def _display_period_label(period_type: str, period_label: str) -> str:
-    return f"{PERIOD_LABELS.get(period_type, period_type)} | {period_label}"
-
-
-def _empty_period_points_frame(value_column: str = "sheet_mean") -> pd.DataFrame:
-    return pd.DataFrame(columns=["period_type", "period_label", "display_label", "period_sort", value_column])
-
-
-def _add_display_labels(axis_df: pd.DataFrame) -> pd.DataFrame:
-    axis_df = axis_df.copy()
-    axis_df["display_label"] = [
-        _display_period_label(period_type, period_label)
-        for period_type, period_label in zip(axis_df["period_type"], axis_df["period_label"])
-    ]
-    return axis_df
-
-
-def _period_axis_with_display(end_date: date, sheet_features_df: pd.DataFrame | None = None) -> pd.DataFrame:
-    if sheet_features_df is not None and not sheet_features_df.empty:
-        axis_df = build_available_period_axis(sheet_features_df, end_date).copy()
-    else:
-        axis_df = build_period_axis(end_date).copy()
-    return _add_display_labels(axis_df)
-
-
-def _infer_period_axis_end_date(sheet_features_df: pd.DataFrame, period_capability_df: pd.DataFrame) -> date:
-    for source_df, column in [
-        (period_capability_df, "period_end"),
-        (sheet_features_df, "sheet_start_time"),
-    ]:
-        if source_df.empty or column not in source_df.columns:
-            continue
-        max_value = pd.to_datetime(source_df[column], errors="coerce").max()
-        if pd.notna(max_value):
-            return max_value.date()
-    return date.today()
-
-
-def _period_points(
-    source_df: pd.DataFrame,
-    period_axis_df: pd.DataFrame,
-    value_column: str,
-) -> pd.DataFrame:
-    if source_df.empty or "sheet_start_time" not in source_df.columns or value_column not in source_df.columns:
-        return _empty_period_points_frame(value_column)
-
-    df = source_df.copy()
-    df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
-    df[value_column] = pd.to_numeric(df[value_column], errors="coerce")
-    df = df.dropna(subset=["sheet_start_time", value_column]).copy()
-    if df.empty:
-        return _empty_period_points_frame(value_column)
-
-    frames: list[pd.DataFrame] = []
-    month_df = df.copy()
-    month_df["period_type"] = "month"
-    month_df["period_label"] = month_df["sheet_start_time"].dt.strftime("%Y-%m")
-    frames.append(month_df)
-
-    week_df = df.copy()
-    iso_week = week_df["sheet_start_time"].dt.isocalendar()
-    week_df["period_type"] = "week"
-    week_df["period_label"] = iso_week.year.astype(str) + "-W" + iso_week.week.astype(str).str.zfill(2)
-    frames.append(week_df)
-
-    day_df = df.copy()
-    day_df["period_type"] = "day"
-    day_df["period_label"] = day_df["sheet_start_time"].dt.strftime("%Y-%m-%d")
-    frames.append(day_df)
-
-    points_df = pd.concat(frames, ignore_index=True)
-    return points_df.merge(
-        period_axis_df[["period_type", "period_label", "period_sort", "display_label"]],
-        on=["period_type", "period_label"],
-        how="inner",
-    )
-
-
-def _sheet_period_points(sheet_features_df: pd.DataFrame, period_axis_df: pd.DataFrame) -> pd.DataFrame:
-    return _period_points(sheet_features_df, period_axis_df, "sheet_mean")
-
-
-def _measurement_period_points(raw_measurements_df: pd.DataFrame, period_axis_df: pd.DataFrame) -> pd.DataFrame:
-    return _period_points(raw_measurements_df, period_axis_df, "param_value")
-
-
-def _resolve_chart_type(
-    param_name: object,
-    line_param_name_contains: Iterable[str],
-) -> str:
-    """Resolve the Sheet point chart style from frontend-owned configuration."""
-    parameter_name = "" if param_name is None else str(param_name)
-    for configured_value in line_param_name_contains:
-        token = str(configured_value).strip()
-        if token and token.casefold() in parameter_name.casefold():
-            return CHART_TYPE_LINE
-    return CHART_TYPE_BOX
-
-
-def _add_spec_line(fig: go.Figure, y_value: object, label: str, color: str, row: int) -> None:
-    if pd.isna(y_value):
-        return
-    fig.add_hline(
-        y=float(y_value),
-        line_dash="dash",
-        line_color=color,
-        line_width=1.4,
-        annotation_text=_format_spec_line_label(label, y_value),
-        annotation_position="top right",
-        row=row,
-        col=1,
-    )
-
-
-def _format_spec_value(value: object) -> str:
-    numeric_value = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
-    if pd.isna(numeric_value):
-        return "-"
-    float_value = float(numeric_value)
-    absolute_value = abs(float_value)
-    if float_value != 0.0 and (absolute_value < 0.001 or absolute_value >= 1_000_000):
-        return f"{float_value:.4g}"
-    value_text = f"{float_value:.3f}".rstrip("0").rstrip(".")
-    return value_text if value_text else "0"
-
-
-def _format_spec_line_label(label: str, value: object) -> str:
-    return f"{label}: {_format_spec_value(value)}"
-
-
-def _resolve_target_value(spec_row: pd.Series) -> float | None:
-    target = spec_row.get("target")
-    if pd.notna(target):
-        return float(target)
-    usl = spec_row.get("usl")
-    lsl = spec_row.get("lsl")
-    if pd.notna(usl) and pd.notna(lsl):
-        return float((float(usl) + float(lsl)) / 2.0)
-    return None
-
-
-def _resolve_cl_value(spec_row: pd.Series) -> float | None:
-    ucl = spec_row.get("ucl")
-    lcl = spec_row.get("lcl")
-    if pd.notna(ucl) and pd.notna(lcl):
-        return float((float(ucl) + float(lcl)) / 2.0)
-    return _resolve_target_value(spec_row)
-
-
-def _add_plain_spec_line(fig: go.Figure, y_value: object, label: str, color: str) -> None:
-    if pd.isna(y_value):
-        return
-    fig.add_hline(
-        y=float(y_value),
-        line_dash="dash",
-        line_color=color,
-        line_width=1.4,
-        annotation_text=_format_spec_line_label(label, y_value),
-        annotation_position="top right",
-    )
-
-
-def _first_measurement_spec_row(spec_df: pd.DataFrame) -> pd.Series | None:
-    """Return the first row carrying at least one numeric specification limit."""
-    if spec_df.empty:
-        return None
-
-    limit_columns = ["usl", "lsl", "ucl", "lcl"]
-    numeric_limits = spec_df.reindex(columns=limit_columns).apply(
-        pd.to_numeric,
-        errors="coerce",
-    )
-    valid_rows = numeric_limits.notna().any(axis=1)
-    if not valid_rows.any():
-        return None
-    return spec_df.loc[valid_rows].iloc[0]
-
-
-def _apply_measurement_spec_lines(fig: go.Figure, spec_df: pd.DataFrame, row: int | None = None) -> None:
-    spec_row = _first_measurement_spec_row(spec_df)
-    if spec_row is None:
-        return
-    line_func = (
-        (lambda value, label, color: _add_spec_line(fig, value, label, color, row=row))
-        if row is not None
-        else (lambda value, label, color: _add_plain_spec_line(fig, value, label, color))
-    )
-    line_func(spec_row.get("usl"), "USL", "#dc2626")
-    lsl = pd.to_numeric(pd.Series([spec_row.get("lsl")]), errors="coerce").iloc[0]
-    if pd.isna(lsl) or float(lsl) == 0.0:
-        line_func(spec_row.get("ucl"), "UCL", "#16a34a")
-        return
-
-    line_func(spec_row.get("lsl"), "LSL", "#dc2626")
-    line_func(spec_row.get("ucl"), "UCL", "#16a34a")
-    line_func(spec_row.get("lcl"), "LCL", "#16a34a")
-    target_value = _resolve_target_value(spec_row)
-    if target_value is not None:
-        line_func(target_value, "Target", "#f97316")
-    cl_value = _resolve_cl_value(spec_row)
-    if cl_value is not None:
-        line_func(cl_value, "CL", "#16a34a")
-
-
-def _resolve_measurement_y_range(data_values: object, spec_df: pd.DataFrame) -> list[float] | None:
-    spec_row = _first_measurement_spec_row(spec_df)
-    if spec_row is None:
-        return None
-
-    usl = pd.to_numeric(pd.Series([spec_row.get("usl")]), errors="coerce").iloc[0]
-    lsl = pd.to_numeric(pd.Series([spec_row.get("lsl")]), errors="coerce").iloc[0]
-    values = pd.to_numeric(pd.Series(data_values), errors="coerce").dropna()
-
-    if pd.notna(usl) and pd.notna(lsl) and usl > lsl:
-        if values.empty:
-            return [float(lsl), float(usl)]
-        lower = min(float(lsl), float(values.min()))
-        upper = max(float(usl), float(values.max()))
-        if lower == float(lsl) and upper == float(usl):
-            return [float(lsl), float(usl)]
-    else:
-        limit_values = pd.to_numeric(
-            pd.Series([spec_row.get(column) for column in ["usl", "lsl", "ucl", "lcl"]]),
-            errors="coerce",
-        ).dropna()
-        bounds = pd.concat([values.reset_index(drop=True), limit_values.reset_index(drop=True)])
-        if bounds.empty:
-            return None
-        lower = float(bounds.min())
-        upper = float(bounds.max())
-
-    span = upper - lower
-    padding = span * 0.06 if span > 0 else max(abs(upper), 1.0) * 0.06
-    return [float(lower - padding), float(upper + padding)]
-
-
 def _format_metric_value(value: object) -> str:
     numeric_value = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
     if pd.isna(numeric_value):
@@ -767,230 +366,6 @@ def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.Da
         )
 
     return pd.DataFrame(records, columns=[period_column, *metric_columns])
-
-
-def _create_period_overview_chart(
-    sheet_features_df: pd.DataFrame,
-    period_capability_df: pd.DataFrame,
-    title: str,
-    raw_measurements_df: pd.DataFrame | None = None,
-    period_box_source: str = "sheet_mean",
-) -> go.Figure:
-    """Create Figure1: month/week/day box distributions."""
-    fig = go.Figure()
-
-    axis_end_date = _infer_period_axis_end_date(sheet_features_df, period_capability_df)
-    period_axis_df = _period_axis_with_display(axis_end_date, sheet_features_df)
-    use_point_values = period_box_source == "point_value" and raw_measurements_df is not None
-    if use_point_values:
-        points_df = _measurement_period_points(raw_measurements_df, period_axis_df)
-        value_column = "param_value"
-        value_label = "Point Value"
-    else:
-        points_df = _sheet_period_points(sheet_features_df, period_axis_df)
-        value_column = "sheet_mean"
-        value_label = "Sheet Mean"
-    ordered_labels = period_axis_df["display_label"].tolist()
-    for period_type in ["month", "week", "day"]:
-        type_points = points_df[points_df["period_type"] == period_type]
-        labels = period_axis_df[period_axis_df["period_type"] == period_type]["display_label"].tolist()
-        for label in labels:
-            y_values = type_points[type_points["display_label"] == label][value_column]
-            if y_values.empty:
-                continue
-            fig.add_trace(
-                create_box_distribution_trace(
-                    x_values=[label] * len(y_values),
-                    y_values=y_values,
-                    name=label,
-                    color=PERIOD_COLORS.get(period_type, "#2563eb"),
-                    fillcolor=PERIOD_FILL_COLORS.get(period_type, "rgba(37, 99, 235, 0.18)"),
-                    showlegend=False,
-                    width=0.42,
-                    hovertemplate=f"{label}<br>{value_label}=%{{y:.4f}}<extra></extra>",
-                ),
-            )
-
-    spec_source = sheet_features_df
-    _apply_measurement_spec_lines(fig, spec_source)
-    y_range = _resolve_measurement_y_range(points_df[value_column], spec_source)
-    if y_range is not None:
-        fig.update_yaxes(range=y_range)
-
-    fig.update_layout(
-        title=title,
-        height=450,
-        margin={"l": 32, "r": 24, "t": 58, "b": 82},
-        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
-        boxmode="group",
-        plot_bgcolor="#ffffff",
-        paper_bgcolor="#ffffff",
-        yaxis={"title": value_label},
-    )
-    fig.update_xaxes(categoryorder="array", categoryarray=ordered_labels, tickangle=-35)
-    return fig
-
-
-def _resolve_chamber_column(df: pd.DataFrame) -> str:
-    return "main_process_unit_id" if "main_process_unit_id" in df.columns else ""
-
-
-def _sheet_id_order(df: pd.DataFrame) -> list[str]:
-    if "sheet_id" not in df.columns:
-        return []
-    return df["sheet_id"].dropna().astype(str).drop_duplicates().tolist()
-
-
-def _create_sheet_points_box_chart(
-    raw_measurements_df: pd.DataFrame,
-    sort_mode: str,
-    title: str,
-    spec_df: pd.DataFrame | None = None,
-    chart_type: str = CHART_TYPE_BOX,
-) -> go.Figure:
-    """Create Figure2: point-level boxes or point-line trends by chamber/site or pass time."""
-    fig = go.Figure()
-    if raw_measurements_df.empty or "param_value" not in raw_measurements_df.columns:
-        fig.update_layout(title=title, height=420)
-        return fig
-
-    df = raw_measurements_df.copy()
-    df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
-    df["sheet_start_time"] = pd.to_datetime(df.get("sheet_start_time"), errors="coerce")
-    df = df.dropna(subset=["param_value"]).copy()
-    if df.empty:
-        fig.update_layout(title=title, height=420)
-        return fig
-
-    uses_time_axis = sort_mode == "按过货时间排序" and chart_type == CHART_TYPE_LINE
-    if sort_mode == "按过货时间排序":
-        sorted_df = df.sort_values(["sheet_start_time", "sheet_id"], na_position="last")
-        group_labels = _sheet_id_order(sorted_df)
-        if chart_type == CHART_TYPE_LINE:
-            trend_points = sorted_df.dropna(subset=["sheet_start_time"]).assign(
-                sheet_id=lambda frame: frame["sheet_id"].astype(str)
-            )
-            if not trend_points.empty:
-                fig.add_trace(
-                    create_point_line_trace(
-                        x_values=trend_points["sheet_start_time"],
-                        y_values=trend_points["param_value"],
-                        customdata=trend_points["sheet_id"],
-                        name="Point Value",
-                        color="#1d4ed8",
-                        hovertemplate=(
-                            "Time=%{x|%Y-%m-%d %H:%M:%S}<br>"
-                            "Sheet=%{customdata}<br>"
-                            "Param Value=%{y:.4f}<extra></extra>"
-                        ),
-                    )
-                )
-        else:
-            for sheet_id in group_labels:
-                y_values = sorted_df[sorted_df["sheet_id"].astype(str) == sheet_id]["param_value"]
-                fig.add_trace(
-                    create_box_distribution_trace(
-                        y_values=y_values,
-                        name=sheet_id,
-                        color="#1d4ed8",
-                        showlegend=False,
-                    )
-                )
-    else:
-        chamber_col = _resolve_chamber_column(df)
-        df["chamber_label"] = (
-            df[chamber_col].fillna("UNKNOWN").astype(str)
-            if chamber_col
-            else "UNKNOWN"
-        )
-        df["chamber_label"] = df["chamber_label"].fillna("UNKNOWN").astype(str)
-        sorted_df = df.sort_values(["chamber_label", "sheet_start_time", "sheet_id"], na_position="last")
-        sheet_order = _sheet_id_order(sorted_df)
-        chamber_order = sorted(sorted_df["chamber_label"].dropna().astype(str).unique().tolist())
-        chamber_colors = {
-            chamber: SHEET_BOX_PALETTE[index % len(SHEET_BOX_PALETTE)]
-            for index, chamber in enumerate(chamber_order)
-        }
-        if chart_type == CHART_TYPE_LINE:
-            for chamber in chamber_order:
-                trend_points = sorted_df[
-                    sorted_df["chamber_label"] == chamber
-                ].assign(
-                    sheet_id=lambda frame: frame["sheet_id"].astype(str)
-                )
-                fig.add_trace(
-                    create_point_line_trace(
-                        x_values=trend_points["sheet_id"],
-                        y_values=trend_points["param_value"],
-                        name=chamber,
-                        color=chamber_colors.get(chamber, SHEET_BOX_PALETTE[0]),
-                        hovertemplate=f"Chamber={chamber}<br>Sheet=%{{x}}<br>Param Value=%{{y:.4f}}<extra></extra>",
-                    )
-                )
-        else:
-            shown_chambers: set[str] = set()
-            for sheet_id in sheet_order:
-                sheet_rows = sorted_df[sorted_df["sheet_id"].astype(str) == sheet_id]
-                if sheet_rows.empty:
-                    continue
-                chamber = str(sheet_rows["chamber_label"].iloc[0])
-                y_values = sheet_rows["param_value"]
-                color = chamber_colors.get(chamber, SHEET_BOX_PALETTE[0])
-                fig.add_trace(
-                    create_box_distribution_trace(
-                        x_values=[sheet_id] * len(y_values),
-                        y_values=y_values,
-                        name=chamber,
-                        color=color,
-                        legendgroup=chamber,
-                        showlegend=chamber not in shown_chambers,
-                    )
-                )
-                shown_chambers.add(chamber)
-
-    if spec_df is not None:
-        _apply_measurement_spec_lines(fig, spec_df)
-        y_range = _resolve_measurement_y_range(df["param_value"], spec_df)
-        if y_range is not None:
-            fig.update_yaxes(range=y_range)
-
-    fig.update_layout(
-        title=title,
-        height=430,
-        margin={"l": 32, "r": 24, "t": 56, "b": 80},
-        xaxis_title="过货时间" if uses_time_axis else None,
-        yaxis_title="Param Value",
-        plot_bgcolor="#ffffff",
-        paper_bgcolor="#ffffff",
-    )
-    if uses_time_axis:
-        fig.update_xaxes(type="date", tickformat="%m-%d\n%H:%M", tickangle=0)
-    else:
-        fig.update_xaxes(tickangle=-45)
-    return fig
-
-
-def _create_sheet_points_box_charts(
-    raw_measurements_df: pd.DataFrame,
-    title_prefix: str,
-    spec_df: pd.DataFrame | None = None,
-    chart_type: str = CHART_TYPE_BOX,
-) -> tuple[go.Figure, go.Figure]:
-    chamber_fig = _create_sheet_points_box_chart(
-        raw_measurements_df=raw_measurements_df,
-        sort_mode="按腔室排序",
-        title=f"{title_prefix} | Sheet点位分布 By主站点设备/腔室",
-        spec_df=spec_df,
-        chart_type=chart_type,
-    )
-    time_fig = _create_sheet_points_box_chart(
-        raw_measurements_df=raw_measurements_df,
-        sort_mode="按过货时间排序",
-        title=f"{title_prefix} | Sheet点位分布 By过货时间",
-        spec_df=spec_df,
-        chart_type=chart_type,
-    )
-    return chamber_fig, time_fig
 
 
 def _build_indicator_render_payload(

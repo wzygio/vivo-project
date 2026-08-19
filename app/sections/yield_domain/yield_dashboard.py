@@ -9,12 +9,12 @@ import plotly.graph_objects as go
 from app.manager.render_gate import RenderGate
 
 # 引入现有的绘图函数
-from app.charts.mwd_chart import (
+from app.charts.yield_domain.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
     slice_recent_data
 )
-from app.charts.sheet_lot_chart import (
+from app.charts.yield_domain.sheet_lot_chart import (
     create_lot_defect_chart, 
     create_sheet_defect_chart,
     create_mapping_heatmap,

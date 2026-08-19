@@ -1,7 +1,7 @@
 import pandas as pd
 
 import app.sections.yield_domain.yield_dashboard as yield_dashboard
-from app.charts.sheet_lot_chart import create_mapping_heatmap
+from app.charts.yield_domain.sheet_lot_chart import create_mapping_heatmap
 from app.sections.yield_domain.yield_dashboard import _prepare_mapping_matrices
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.core.mapping.layout import (

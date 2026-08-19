@@ -8,7 +8,7 @@ from streamlit_echarts import st_echarts
 # [Phase 1] 调试追踪专用 Logger
 trace_logger = logging.getLogger("trace")
 from pydantic import BaseModel, Field
-from app.charts.spc_chart import get_spc_summary_echarts_option
+from app.charts.inline_domain.monitor.monitor_chart import get_spc_summary_echarts_option
 from app.manager.compliance_manager import get_compliance_file_signature
 from app.manager.render_gate import RenderGate
 from app.utils.step_labels import format_step_label
