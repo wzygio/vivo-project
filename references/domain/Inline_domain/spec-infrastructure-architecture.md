@@ -10,11 +10,11 @@
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Application（spc / ctq / monitor / aoi_tt service）          │
+│ Application（spc / ctq / monitor / aoi_tt / aoi_rs service）          │
 │   各自持有本模块 port，repository↔service 1:1                 │
 ├────────────────────────────────────────────────────────────┤
 │ Infrastructure                                              │
-│  measurement/        共享测量能力（唯一数据源入口）            │
+│  shared/             共享测量能力（唯一数据源入口，原 measurement/）            │
 │  spc/                SPC 薄投影（data_type_filter="SPC"）     │
 │  ctq/                CTQ 薄投影（data_type_filter="CTQ"）     │
 │  aoi_tt/             AOI_TT 投影（规格表 param_type 识别）    │
@@ -26,12 +26,12 @@
 ```
 
 **核心原则**：spc / ctq / aoi_tt / monitor 是**平行业务模块**。任何可复用的取数与
-制备逻辑只允许归属 `measurement/`；业务模块的 repository 只做投影与门面，不承载
+制备逻辑只允许归属 `shared/`；业务模块的 repository 只做投影与门面，不承载
 跨模块共享逻辑。
 
 ---
 
-## 2. measurement/ —— 共享测量能力
+## 2. shared/ —— 共享测量能力（原 `measurement/`）
 
 | 文件 | 职责 | 对外接口 |
 |---|---|---|

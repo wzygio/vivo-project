@@ -87,8 +87,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   起止日期与快照签名）：scope='spc'/'ctq' 分别使用对应 OOS 修饰工作簿，
   scope='none' 跳过修饰；monitor 按 data_type 分组路由 scope（SPC→spc、
   CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，命中不重写。
-- 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
-  所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
+- 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
+  所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
   点位图类型统一由 `app/charts/inline/chart_type.py` 根据
@@ -166,6 +166,11 @@ AOI_RS 专属产品级快照边界见
 
 ## 约束与验证
 
+- **shared 提取约束**：对于各模块可复用的逻辑，应当提取出来并写入对应层的
+  `shared/` 子模块下（`application/shared/`、`core/shared/`、
+  `infrastructure/shared/`；前端对应 `app/charts/inline/` 与
+  `app/sections/inline_domain/shared/`）。业务模块只保留业务差异，禁止跨
+  业务模块导入私有函数；复用必须经由 shared 公共 API（ADR-0014、ADR-0016）。
 - `app/` 负责交互、筛选、调用应用服务和渲染；新的业务规则应落在领域
   `core/` 或 `application/`，数据访问和快照语义应落在 `infrastructure/`。
 - 不要在没有专门任务和回归证明的情况下重构 Yield 的浓度/Mapping 算法、
