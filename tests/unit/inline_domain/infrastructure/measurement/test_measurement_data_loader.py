@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
-from src.inline_domain.infrastructure.measurement.measurement_data_loader import (
+from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     RAW_MEASUREMENT_COLUMNS,
     load_raw_measurements,
 )

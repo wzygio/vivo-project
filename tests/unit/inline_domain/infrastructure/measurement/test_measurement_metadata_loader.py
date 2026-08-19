@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from sqlalchemy import create_engine, text
 
-from src.inline_domain.infrastructure.measurement.measurement_metadata_loader import (
+from src.inline_domain.infrastructure.shared.measurement_metadata_loader import (
     load_parameter_catalog,
     load_parameter_specs,
 )

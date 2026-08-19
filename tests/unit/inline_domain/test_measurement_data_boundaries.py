@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 

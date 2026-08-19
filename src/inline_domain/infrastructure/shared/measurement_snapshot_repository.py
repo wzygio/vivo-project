@@ -14,7 +14,7 @@ from uuid import uuid4
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from src.inline_domain.infrastructure.measurement.measurement_data_loader import (
+from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     RAW_MEASUREMENT_COLUMNS,
     load_raw_measurements,
 )

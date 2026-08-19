@@ -20,11 +20,11 @@ from src.inline_domain.application.ports.measurement_snapshot import (
     MeasurementMetadataPort,
     MeasurementSnapshotPort,
 )
-from src.inline_domain.infrastructure.measurement.main_process_trace import (
+from src.inline_domain.infrastructure.shared.main_process_trace import (
     apply_main_process_history,
     attach_main_process_spec,
 )
-from src.inline_domain.infrastructure.measurement.measurement_preprocessor import (
+from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_param_names,
 )
 from src.shared_kernel.config import ConfigLoader

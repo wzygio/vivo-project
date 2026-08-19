@@ -8,16 +8,16 @@ from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepos
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
 from src.inline_domain.infrastructure.ctq.ctq_repository import CtqRepository
-from src.inline_domain.infrastructure.measurement.measurement_snapshot_repository import (
+from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
 )
-from src.inline_domain.infrastructure.measurement.measurement_metadata_loader import (
+from src.inline_domain.infrastructure.shared.measurement_metadata_loader import (
     InlineMeasurementMetadataRepository,
 )
-from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
+from src.inline_domain.infrastructure.shared.main_process_history_repository import (
     InlineMainProcessHistoryRepository,
 )
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository

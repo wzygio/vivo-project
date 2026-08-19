@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from src.inline_domain.infrastructure.measurement.measurement_preprocessor import (
+from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_param_names,
 )
 
