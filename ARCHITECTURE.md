@@ -86,8 +86,9 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
   所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
-- `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
-  图表类型；CPK 人工修饰文件
+- `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC Sheet
+  点位图类型由 `app/sections/inline_domain/spc/spc_dashboard.py` 根据
+  `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
   `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
   合并到新结果，刷新时不会重建既有 sheet。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端

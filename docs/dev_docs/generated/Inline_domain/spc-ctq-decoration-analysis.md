@@ -13,7 +13,7 @@
 
 **SPC 与 CTQ 的 Sheet OOS 修饰在设计上是完全一致的**：两者调用同一个核心引擎
 `prepare_sheet_oos_decoration()`（`src/inline_domain/core/spc/spc_sheet_oos_decoration.py:338`），
-共享同一套三态 flag 语义、同一套截断算法、同一个资源配置目录和同一个 clip_rules 配置。
+共享同一套三态 flag 语义、同一套截断算法和同一个资源配置目录。
 二者的差异只有两类：
 
 1. **修饰工作簿文件名不同**（`spc_sheet_oos_decoration.xlsx` vs `ctq_sheet_oos_decoration.xlsx`），
@@ -66,14 +66,7 @@ flag 归一化入口是 `_normalize_flag_action()`（:92）：先判 Delete，�
   `prod_code|step_id|param_name|sheet_id|site_name|unit_id|value|side` 做 SHA-256 得到，
   同一数据行重跑结果一致（报表可复现）。
 
-### 2.4 参数级规格偏移（clip_rules）
-
-`_apply_clip_rules()`（:128）按 `config/inline_config.yaml` 的
-`spc.sheet_oos_decoration.param_clip_rules` 对匹配参数（`param_name_contains`）的
-usl/lsl 施加偏移，用于修饰口径而不改动上游官方规格列。
-SPC 与 CTQ 都通过 `ConfigLoader.get_spc_sheet_oos_clip_rules()` 读取同一份规则。
-
-### 2.5 工作簿机制
+### 2.4 工作簿机制
 
 - 工作簿位于 `resources/` 根目录，**每个产品一个 sheet**（sheet 名 = `prod_code`）；
 - 读取兼容企业加密文件：openpyxl 失败时回退 Excel COM（`_read_encrypted_xlsx_via_com`，:205）；
@@ -130,7 +123,7 @@ SPC 与 CTQ 都通过 `ConfigLoader.get_spc_sheet_oos_clip_rules()` 读取同一
 
 判定依据：
 
-- 同一个核心引擎、同一个三态 flag 契约、同一个截断算法、同一个 clip_rules 配置来源；
+- 同一个核心引擎、同一个三态 flag 契约和同一个截断算法来源；
 - 同样的"先算特征定位超规 Sheet → 用户工作簿决策 → 修饰点位 → 重算特征"管线形状；
 - 同样的资源布局（`resources/` 根目录、每产品一个 sheet、企业加密回退）。
 

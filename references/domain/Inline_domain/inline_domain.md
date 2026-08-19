@@ -62,6 +62,8 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 
 - 在服务边界强制 `data_type_filter = "SPC"`。
 - 生成 Sheet/点位分布、月/周/日 CPM/CPK、CPK 预警及 OOS/CPK 修饰结果。
+- 应用服务不返回图表样式；SPC Sheet 点位图由前端 dashboard 按
+  `inline_config.yaml` 的 `spc.chart.line_param_name_contains` 选择折线或箱线。
 - Sheet OOS 修饰表的 `flag` 为三态：`True` 修饰超规点、`False` 保留真实值、`Delete` 按产品/站点/参数/Sheet 四键从图表点位中排除；修改表内 `sheet_min/max/mean` 不改变计算结果。
 - 修饰表支持标准或企业加密 XLSX；已有文件双重读取失败时必须中止本次报表重建并保留原文件。直接编辑文件后按 ADR-0005 通过页头“刷新缓存”手动生效。
 - 缓存函数只返回原生 payload，ViewModel 在缓存外构造。

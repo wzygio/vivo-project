@@ -8,15 +8,14 @@ spc:
     period_box_source: "point_value"
 
 
-  sheet_oos_decoration:
-    # 调整usl和lsl
-    param_clip_rules:
-      # - param_name_contains: "PPA"
-      #   lower_offset: -0.5
-      #   upper_offset: 0.5
+  # Sheet 点位图样式由前端按参数名决定；匹配不区分大小写，按普通文本处理。
+  chart:
+    line_param_name_contains:
+      - "UNI"
 
-  # 自动修饰参数豁免：参数名包含任一配置值时，保留真实明细值。
-  # Delete 仍优先删除；匹配不区分大小写，按普通文本而非正则表达式处理。
-  auto_decoration:
-    exempt_param_name_contains:
-      - "PPA"
+# Inline 共享自动修饰参数豁免：AOI_TT 与 AOI_RS 均消费该规则。
+# 参数名包含任一配置值时保留真实值；Delete 仍优先。
+# 匹配不区分大小写，按普通文本而非正则表达式处理。
+auto_decoration:
+  exempt_param_name_contains:
+    - "PPA"

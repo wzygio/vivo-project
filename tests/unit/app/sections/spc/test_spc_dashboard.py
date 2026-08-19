@@ -1153,7 +1153,7 @@ def test_sheet_points_box_chart_preserves_tiny_upper_spec_values_in_labels() -> 
     assert annotation_texts == {"USL: 1.6e-11", "UCL: 9.7e-12"}
 
 
-def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line() -> None:
+def test_sheet_points_box_chart_uses_point_lines_when_frontend_style_is_line() -> None:
     raw_measurements_df = pd.DataFrame(
         [
             {
@@ -1193,8 +1193,17 @@ def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line
     assert not [trace for trace in fig.data if trace.type == "box"]
     line_trace = next(trace for trace in fig.data if trace.type == "scatter")
     assert line_trace.mode == "lines+markers"
+    assert list(pd.to_datetime(line_trace.x)) == [
+        pd.Timestamp("2026-06-01 08:00:00"),
+        pd.Timestamp("2026-06-01 08:00:00"),
+        pd.Timestamp("2026-06-02 09:00:00"),
+        pd.Timestamp("2026-06-02 09:00:00"),
+    ]
     assert list(line_trace.y) == [3.0, 5.0, 4.0, 6.0]
+    assert list(line_trace.customdata) == ["S1", "S1", "S2", "S2"]
     assert line_trace.name == "Point Value"
+    assert fig.layout.xaxis.type == "date"
+    assert fig.layout.xaxis.title.text == "过货时间"
 
 
 def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:

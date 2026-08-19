@@ -34,6 +34,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     CPK_KEY_COLUMNS,
     CpkDecorationResult,
 )
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
 
 SPC_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
@@ -559,13 +560,15 @@ def _measurement_period_points(raw_measurements_df: pd.DataFrame, period_axis_df
     return _period_points(raw_measurements_df, period_axis_df, "param_value")
 
 
-def _resolve_chart_type(*dataframes: pd.DataFrame) -> str:
-    """Read the backend-provided chart type, defaulting safely to a box chart."""
-    for dataframe in dataframes:
-        if dataframe.empty or "chart_type" not in dataframe.columns:
-            continue
-        chart_types = dataframe["chart_type"].dropna().astype(str).str.lower()
-        if not chart_types.empty and chart_types.iloc[0] == CHART_TYPE_LINE:
+def _resolve_chart_type(
+    param_name: object,
+    line_param_name_contains: Iterable[str],
+) -> str:
+    """Resolve the Sheet point chart style from frontend-owned configuration."""
+    parameter_name = "" if param_name is None else str(param_name)
+    for configured_value in line_param_name_contains:
+        token = str(configured_value).strip()
+        if token and token.casefold() in parameter_name.casefold():
             return CHART_TYPE_LINE
     return CHART_TYPE_BOX
 
@@ -859,20 +862,29 @@ def _create_sheet_points_box_chart(
         fig.update_layout(title=title, height=420)
         return fig
 
+    uses_time_axis = sort_mode == "按过货时间排序" and chart_type == CHART_TYPE_LINE
     if sort_mode == "按过货时间排序":
         sorted_df = df.sort_values(["sheet_start_time", "sheet_id"], na_position="last")
         group_labels = _sheet_id_order(sorted_df)
         if chart_type == CHART_TYPE_LINE:
-            trend_points = sorted_df.assign(sheet_id=lambda frame: frame["sheet_id"].astype(str))
-            fig.add_trace(
-                create_point_line_trace(
-                    x_values=trend_points["sheet_id"],
-                    y_values=trend_points["param_value"],
-                    name="Point Value",
-                    color="#1d4ed8",
-                    hovertemplate="Sheet=%{x}<br>Param Value=%{y:.4f}<extra></extra>",
-                )
+            trend_points = sorted_df.dropna(subset=["sheet_start_time"]).assign(
+                sheet_id=lambda frame: frame["sheet_id"].astype(str)
             )
+            if not trend_points.empty:
+                fig.add_trace(
+                    create_point_line_trace(
+                        x_values=trend_points["sheet_start_time"],
+                        y_values=trend_points["param_value"],
+                        customdata=trend_points["sheet_id"],
+                        name="Point Value",
+                        color="#1d4ed8",
+                        hovertemplate=(
+                            "Time=%{x|%Y-%m-%d %H:%M:%S}<br>"
+                            "Sheet=%{customdata}<br>"
+                            "Param Value=%{y:.4f}<extra></extra>"
+                        ),
+                    )
+                )
         else:
             for sheet_id in group_labels:
                 y_values = sorted_df[sorted_df["sheet_id"].astype(str) == sheet_id]["param_value"]
@@ -946,12 +958,15 @@ def _create_sheet_points_box_chart(
         title=title,
         height=430,
         margin={"l": 32, "r": 24, "t": 56, "b": 80},
-        xaxis_title=None,
+        xaxis_title="过货时间" if uses_time_axis else None,
         yaxis_title="Param Value",
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
     )
-    fig.update_xaxes(tickangle=-45)
+    if uses_time_axis:
+        fig.update_xaxes(type="date", tickformat="%m-%d\n%H:%M", tickangle=0)
+    else:
+        fig.update_xaxes(tickangle=-45)
     return fig
 
 
@@ -1094,6 +1109,7 @@ def render_spc_indicator_sections(
         return
 
     gate = RenderGate()
+    line_param_name_contains = ConfigLoader.get_spc_line_chart_param_name_contains()
     grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
     for (factory, step_id, param_name), indicator_features_df in grouped:
         label = f"{factory} | {format_step_label(step_id, step_desc_map)} | {param_name}"
@@ -1113,11 +1129,7 @@ def render_spc_indicator_sections(
             ].copy()
         else:
             indicator_raw_df = pd.DataFrame()
-        chart_type = _resolve_chart_type(
-            indicator_capability_df,
-            indicator_features_df,
-            indicator_raw_df,
-        )
+        chart_type = _resolve_chart_type(param_name, line_param_name_contains)
         gate.stage(
             partial(
                 _build_indicator_render_payload,
@@ -1130,10 +1142,18 @@ def render_spc_indicator_sections(
             )
         )
 
+    memo_signature_with_chart_config = (
+        None
+        if memo_signature is None
+        else (
+            f"{memo_signature}|chart-config="
+            f"{hashlib.sha256('|'.join(line_param_name_contains).encode('utf-8')).hexdigest()[:16]}"
+        )
+    )
     payloads = (
         gate.collect()
-        if memo_signature is None
-        else gate.collect_memoized(memo_state_key, memo_signature)
+        if memo_signature_with_chart_config is None
+        else gate.collect_memoized(memo_state_key, memo_signature_with_chart_config)
     )
     for payload in payloads:
         _render_indicator_payload(payload, chart_key_prefix=chart_key_prefix)

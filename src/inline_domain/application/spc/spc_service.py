@@ -31,33 +31,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-INDICATOR_CHART_TYPE_COLUMN = "chart_type"
-INDICATOR_CHART_TYPE_BOX = "box"
-INDICATOR_CHART_TYPE_LINE = "line"
 CPM_CPK_EXCLUDED_PARAMETER_TOKEN = "PPA"
 
 
 class SpcDecorationFileError(RuntimeError):
     """Raised when the SPC decoration workbook cannot be read safely."""
-
-
-def assign_indicator_chart_type(indicator_df: pd.DataFrame) -> pd.DataFrame:
-    """Attach the backend-owned chart type for each monitoring parameter."""
-    result = indicator_df.copy()
-    if "param_name" not in result.columns:
-        result[INDICATOR_CHART_TYPE_COLUMN] = INDICATOR_CHART_TYPE_BOX
-        return result
-
-    is_uniformity_parameter = result["param_name"].astype(str).str.contains(
-        "UNI", case=False, regex=False
-    )
-    result[INDICATOR_CHART_TYPE_COLUMN] = is_uniformity_parameter.map(
-        {
-            True: INDICATOR_CHART_TYPE_LINE,
-            False: INDICATOR_CHART_TYPE_BOX,
-        }
-    )
-    return result
 
 
 def exclude_cpm_cpk_parameters(dataframe: pd.DataFrame) -> pd.DataFrame:
@@ -205,8 +183,8 @@ class SpcReportService:
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
 
-            measurements_df = assign_indicator_chart_type(features_payload["raw_measurements_df"])
-            sheet_features_df = assign_indicator_chart_type(features_payload["sheet_features_df"])
+            measurements_df = features_payload["raw_measurements_df"]
+            sheet_features_df = features_payload["sheet_features_df"]
             if sheet_features_df.empty:
                 return SpcReportService._empty_payload()
 
@@ -238,7 +216,6 @@ class SpcReportService:
                 sheet_name=query_config.prod_code,
             )
             period_capability_df = cpk_decoration_result.period_capability_df
-            period_capability_df = assign_indicator_chart_type(period_capability_df)
             indicators_df = (
                 sheet_features_df[["prod_code", "factory", "step_id", "param_name"]]
                 .drop_duplicates()
@@ -247,8 +224,6 @@ class SpcReportService:
                 if not sheet_features_df.empty
                 else pd.DataFrame(columns=["prod_code", "factory", "step_id", "param_name"])
             )
-            indicators_df = assign_indicator_chart_type(indicators_df)
-
             return {
                 "period_capability_df": period_capability_df,
                 "sheet_features_df": sheet_features_df,

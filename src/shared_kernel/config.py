@@ -178,38 +178,22 @@ class ConfigLoader:
             return "point_value"
 
     @classmethod
-    def get_spc_sheet_oos_clip_rules(cls) -> list[dict[str, object]]:
-        """Read normalized parameter-specific Sheet OOS clipping rules."""
+    def get_spc_line_chart_param_name_contains(cls) -> list[str]:
+        """Read parameter-name tokens rendered as SPC Sheet point line charts."""
         yaml_path = cls.get_project_root() / "config" / "inline_config.yaml"
         try:
             spc_conf = cls._load_yaml(yaml_path).get("spc", {})
-            decoration_conf = spc_conf.get("sheet_oos_decoration", {})
-            configured_rules = decoration_conf.get("param_clip_rules", [])
-            if not isinstance(configured_rules, list):
+            chart_conf = spc_conf.get("chart", {})
+            configured_values = chart_conf.get("line_param_name_contains", [])
+            if not isinstance(configured_values, list):
                 return []
-
-            normalized_rules: list[dict[str, object]] = []
-            for rule in configured_rules:
-                if not isinstance(rule, dict):
-                    continue
-                needle = str(rule.get("param_name_contains", "")).strip()
-                if not needle:
-                    continue
-                try:
-                    lower_offset = float(rule.get("lower_offset", 0.0))
-                    upper_offset = float(rule.get("upper_offset", 0.0))
-                except (TypeError, ValueError):
-                    continue
-                normalized_rules.append(
-                    {
-                        "param_name_contains": needle,
-                        "lower_offset": lower_offset,
-                        "upper_offset": upper_offset,
-                    }
-                )
-            return normalized_rules
-        except Exception as e:
-            logging.error(f"❌ 读取 SPC Sheet OOS 截断规则失败: {e}")
+            return [
+                str(value).strip()
+                for value in configured_values
+                if value is not None and str(value).strip()
+            ]
+        except Exception as exc:
+            logging.error("❌ 读取 SPC 前端折线图参数配置失败: %s", exc)
             return []
 
     @classmethod
@@ -217,8 +201,7 @@ class ConfigLoader:
         """Read parameter-name tokens that bypass automatic value clipping."""
         yaml_path = cls.get_project_root() / "config" / "inline_config.yaml"
         try:
-            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
-            decoration_conf = spc_conf.get("auto_decoration", {})
+            decoration_conf = cls._load_yaml(yaml_path).get("auto_decoration", {})
             configured_values = decoration_conf.get(
                 "exempt_param_name_contains",
                 [],

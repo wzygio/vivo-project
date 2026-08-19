@@ -39,6 +39,7 @@ def create_point_line_trace(
     y_values: Iterable[object],
     name: str,
     color: str,
+    customdata: Iterable[object] | None = None,
     hovertemplate: str | None = None,
 ) -> go.Scatter:
     """Create a point-line trace that preserves every supplied measurement."""
@@ -49,5 +50,6 @@ def create_point_line_trace(
         name=name,
         line={"color": color, "width": 2},
         marker={"size": 7},
+        customdata=customdata,
         hovertemplate=hovertemplate,
     )

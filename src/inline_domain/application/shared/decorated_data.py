@@ -98,7 +98,6 @@ def prepare_decorated_data(
         sheet_features_df=original_features_df,
         product_dir=resolve_product_resource_dir(prod_code, product_dir),
         persist_files=persist,
-        clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
         decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
         decoration_sheet_name=prod_code,
     )
