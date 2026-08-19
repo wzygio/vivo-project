@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from app.components import page_header
-from app.sections.ctq import ctq_dashboard
+from app.sections.inline_domain.ctq import ctq_dashboard
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService

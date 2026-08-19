@@ -38,12 +38,12 @@ from src.equipment_domain.application.parts_service import PartsReportService
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
 from app.components.page_header import extract_cached_funcs, render_page_header
 from app.manager.session_manager import SessionManager
-from app.sections.parts_filters import (
+from app.sections.equipment_domain.parts_filters import (
     apply_parts_filters,
     get_selected_parts_row,
     render_parts_filters,
 )
-from app.sections.parts_dashboard import (
+from app.sections.equipment_domain.parts_dashboard import (
     render_parts_metrics,
     render_parts_table_selectable,
 )

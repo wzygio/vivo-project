@@ -68,7 +68,7 @@ flag 归一化入口是 `_normalize_flag_action()`（:92）：先判 Delete，�
 
 ### 2.4 参数级规格偏移（clip_rules）
 
-`_apply_clip_rules()`（:128）按 `config/spc_config.yaml` 的
+`_apply_clip_rules()`（:128）按 `config/inline_config.yaml` 的
 `spc.sheet_oos_decoration.param_clip_rules` 对匹配参数（`param_name_contains`）的
 usl/lsl 施加偏移，用于修饰口径而不改动上游官方规格列。
 SPC 与 CTQ 都通过 `ConfigLoader.get_spc_sheet_oos_clip_rules()` 读取同一份规则。

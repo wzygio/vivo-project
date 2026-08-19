@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from app.components import page_header
-from app.sections.aoi_tt import aoi_tt_dashboard
+from app.sections.inline_domain.aoi_tt import aoi_tt_dashboard
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService

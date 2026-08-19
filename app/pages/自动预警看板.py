@@ -12,7 +12,7 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.monitor.monitor_dashboard import (
+from app.sections.inline_domain.monitor.monitor_dashboard import (
     get_cached_alarm_detail_tables,
     render_alarm_detail_tables,
     render_monitor_control_panel,

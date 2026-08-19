@@ -3,32 +3,27 @@ from pathlib import Path
 from src.shared_kernel.config import ConfigLoader
 
 
-def test_get_spc_sheet_oos_clip_rules_reads_configured_rules(
+def test_get_spc_line_chart_param_name_contains_normalizes_config(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "spc_config.yaml").write_text(
+    (config_dir / "inline_config.yaml").write_text(
         """
 spc:
-  sheet_oos_decoration:
-    param_clip_rules:
-      - param_name_contains: ppa
-        lower_offset: -0.5
-        upper_offset: 0.5
+  chart:
+    line_param_name_contains:
+      - UNI
+      - "  PROFILE  "
+      - ""
+      - null
 """.strip(),
         encoding="utf-8",
     )
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 
-    assert ConfigLoader.get_spc_sheet_oos_clip_rules() == [
-        {
-            "param_name_contains": "ppa",
-            "lower_offset": -0.5,
-            "upper_offset": 0.5,
-        }
-    ]
+    assert ConfigLoader.get_spc_line_chart_param_name_contains() == ["UNI", "PROFILE"]
 
 
 def test_get_auto_decoration_param_exemptions_normalizes_config(
@@ -37,15 +32,14 @@ def test_get_auto_decoration_param_exemptions_normalizes_config(
 ) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "spc_config.yaml").write_text(
+    (config_dir / "inline_config.yaml").write_text(
         """
-spc:
-  auto_decoration:
-    exempt_param_name_contains:
-      - PPA
-      - "  THK  "
-      - ""
-      - null
+auto_decoration:
+  exempt_param_name_contains:
+    - PPA
+    - "  THK  "
+    - ""
+    - null
 """.strip(),
         encoding="utf-8",
     )
@@ -60,7 +54,7 @@ def test_get_spc_period_box_source_reads_supported_value(
 ) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "spc_config.yaml").write_text(
+    (config_dir / "inline_config.yaml").write_text(
         """
 spc:
   spc_cpk:
@@ -79,7 +73,7 @@ def test_get_spc_period_box_source_defaults_to_point_values_for_unknown_value(
 ) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
-    (config_dir / "spc_config.yaml").write_text(
+    (config_dir / "inline_config.yaml").write_text(
         """
 spc:
   spc_cpk:

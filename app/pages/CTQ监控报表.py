@@ -22,7 +22,7 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.ctq.ctq_dashboard import (
+from app.sections.inline_domain.ctq.ctq_dashboard import (
     filter_ctq_report,
     get_default_ctq_start_date,
     render_ctq_decoration_admin,

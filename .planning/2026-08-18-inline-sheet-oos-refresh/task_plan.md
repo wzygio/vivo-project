@@ -63,32 +63,32 @@
   对应 AC：11.4 全部。
 
 ### Phase 3 — 决策 sheet / meta / 迁移 / 生成判定（core）
-- [ ] 3.1 测试先行：`should_regenerate_detail` 全分支（missing / ttl 边界 / revision 变化 /
+- [x] 3.1 测试先行：`should_regenerate_detail` 全分支（missing / ttl 边界 / revision 变化 /
   决策变化 / unchanged）；验证：先红。
-- [ ] 3.2 测试先行：旧表迁移（全部 flag 保留、重复键取最后、空表、幂等、失败保留原文件）、
+- [x] 3.2 测试先行：旧表迁移（全部 flag 保留、重复键取最后、空表、幂等、失败保留原文件）、
   当前明细 LEFT JOIN 决策（消失/重现恢复 flag、历史键不进当前明细）；
   验证：先红。
-- [ ] 3.3 实现 core 层；验证：转绿。
+- [x] 3.3 实现 core 层；验证：转绿。
   对应 AC：11.2 全部、11.3 之 revision/决策分支。
 
 ### Phase 4 — 决策签名与共享缓存接线
-- [ ] 4.1 测试先行：行序变化不改 hash；flag 变化改 hash；产品明细 sheet 变化不改决策 hash；
+- [x] 4.1 测试先行：行序变化不改 hash；flag 变化改 hash；产品明细 sheet 变化不改决策 hash；
   file_stat 未变不重读（COM 不被反复调用）；`__flags` 不可读显式失败。验证：先红。
-- [ ] 4.2 `fetch_decorated_features`/`prepare_decorated_data` 改造：persist 由门控决定，
+- [x] 4.2 `fetch_decorated_features`/`prepare_decorated_data` 改造：persist 由门控决定，
   决策签名入缓存键；SPC/CTQ 页面传入共享 revision + 决策签名；验证：转绿。
   对应 AC：11.3 之 rerun/重启/淘汰/自写 mtime/其他产品 sheet 分支。
 
 ### Phase 5 — 管理员下载/上传
-- [ ] 5.1 测试先行（service 层可测部分）：下载含“当前明细+决策台账”两 sheet；
+- [x] 5.1 测试先行（service 层可测部分）：下载含“当前明细+决策台账”两 sheet；
   上传完整集覆盖 `__flags`、兼容旧单 sheet、键列/flag 枚举/重复键校验、
   内容一致不重写、失败不显成功不更新 meta；验证：先红。
-- [ ] 5.2 `spc_dashboard.py` 管理区改造（CTQ 页面如有同等区块一并处理）；验证：转绿。
+- [x] 5.2 `spc_dashboard.py` 管理区改造（CTQ 页面如有同等区块一并处理）；验证：转绿。
   对应 AC：11.2 兼容项与 11.4 上传项。
 
 ### Phase 6 — CTQ/SPC/Monitor 4h 可达性
-- [ ] 6.1 测试先行：CTQ 外层缓存带 4h TTL（时钟测试：4h 后再次进入共享判定）；
+- [x] 6.1 测试先行：CTQ 外层缓存带 4h TTL（时钟测试：4h 后再次进入共享判定）；
   验证：先红。
-- [ ] 6.2 `ctq_service.py` 补 TTL；核查 SPC/Monitor 外层 TTL ≤ 4h；验证：转绿。
+- [x] 6.2 `ctq_service.py` 补 TTL；核查 SPC/Monitor 外层 TTL ≤ 4h；验证：转绿。
 
 ### Phase 7 — 回归与验收
 - [ ] 7.1 集成测试：临时多 sheet 工作簿迁移；改 `__flags` 后 payload 同步；系统写明细

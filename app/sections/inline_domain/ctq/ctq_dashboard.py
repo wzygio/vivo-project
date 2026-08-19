@@ -10,7 +10,7 @@ import streamlit as st
 
 from app.manager.render_gate import RenderGate
 from app.utils.step_labels import format_step_label
-from app.sections.spc.spc_dashboard import (
+from app.sections.inline_domain.spc.spc_dashboard import (
     _create_period_overview_chart,
     _create_sheet_points_box_charts,
     _resolve_chart_type,

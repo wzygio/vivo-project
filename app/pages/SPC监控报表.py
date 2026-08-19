@@ -22,7 +22,7 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.spc.spc_dashboard import (
+from app.sections.inline_domain.spc.spc_dashboard import (
     build_weekly_cpk_alerts,
     filter_spc_report,
     get_default_spc_start_date,

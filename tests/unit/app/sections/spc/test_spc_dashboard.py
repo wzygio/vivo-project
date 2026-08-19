@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.sections.spc import spc_dashboard
-from app.sections.spc.spc_dashboard import (
+from app.sections.inline_domain.spc import spc_dashboard
+from app.sections.inline_domain.spc.spc_dashboard import (
     _create_period_capability_table,
     _create_period_overview_chart,
     _create_sheet_points_box_chart,
@@ -600,7 +600,7 @@ def test_render_indicator_sections_forwards_point_box_source_and_measurements(mo
     assert captured["raw_measurements_df"].equals(raw_measurements)
 
 
-def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters(monkeypatch) -> None:
+def test_render_indicator_sections_uses_frontend_config_for_line_parameters(monkeypatch) -> None:
     captured: dict[str, dict[str, object]] = {}
 
     class FakeColumn:
@@ -639,7 +639,12 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
         capture_sheet,
     )
 
-    sheet_features = _sample_sheet_features().assign(param_name="SE_L1T_UNI", chart_type="line")
+    monkeypatch.setattr(
+        spc_dashboard.ConfigLoader,
+        "get_spc_line_chart_param_name_contains",
+        staticmethod(lambda: ["UNI"]),
+    )
+    sheet_features = _sample_sheet_features().assign(param_name="SE_L1T_UNI")
     raw_measurements = pd.DataFrame(
         [
             {
@@ -648,7 +653,6 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
                 "param_name": "SE_L1T_UNI",
                 "sheet_start_time": "2026-06-24",
                 "param_value": 8.5,
-                "chart_type": "line",
             }
         ]
     )
@@ -656,7 +660,6 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
         factory="ARRAY",
         step_id="15260",
         param_name="SE_L1T_UNI",
-        chart_type="line",
     )
 
     render_spc_indicator_sections(
@@ -893,6 +896,27 @@ def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_
 
     assert fig.layout.yaxis.range[0] < 8.0
     assert fig.layout.yaxis.range[1] > 15.0
+
+
+def test_period_overview_chart_draws_upper_lines_when_lower_specs_are_null() -> None:
+    sheet_features_df = _sample_sheet_features().assign(
+        usl=9.9,
+        lsl=None,
+        ucl=7.5,
+        lcl=None,
+        target=None,
+    )
+
+    figure = _create_period_overview_chart(
+        sheet_features_df=sheet_features_df,
+        period_capability_df=pd.DataFrame(),
+        title="OLED | 21200 | MT_CH_PRESS_MANTISSA",
+    )
+
+    annotation_texts = {annotation.text for annotation in figure.layout.annotations}
+
+    assert annotation_texts == {"USL: 9.9", "UCL: 7.5"}
+    assert figure.layout.yaxis.range[1] > 9.9
 
 
 def test_sheet_points_box_chart_marks_unknown_when_main_process_trace_is_missing() -> None:

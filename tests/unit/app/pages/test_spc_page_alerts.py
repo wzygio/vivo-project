@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from app.components import page_header
-from app.sections.spc import spc_dashboard
+from app.sections.inline_domain.spc import spc_dashboard
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader

@@ -151,9 +151,9 @@ class ConfigLoader:
 
     @classmethod
     def get_spc_period_sigma_source(cls) -> str:
-        """Read the SPC capability period sigma source from spc_config.yaml."""
+        """Read the SPC capability period sigma source from inline_config.yaml."""
         root_dir = cls.get_project_root()
-        global_yaml_path = root_dir / "config" / "spc_config.yaml"
+        global_yaml_path = root_dir / "config" / "inline_config.yaml"
 
         try:
             global_conf = cls._load_yaml(global_yaml_path)
@@ -166,8 +166,8 @@ class ConfigLoader:
 
     @classmethod
     def get_spc_period_box_source(cls) -> str:
-        """Read the SPC capability period boxplot sample source from spc_config.yaml."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        """Read the SPC capability period boxplot sample source from inline_config.yaml."""
+        yaml_path = cls.get_project_root() / "config" / "inline_config.yaml"
         try:
             spc_conf = cls._load_yaml(yaml_path).get("spc", {})
             report_conf = spc_conf.get("spc_cpk", {})
@@ -180,7 +180,7 @@ class ConfigLoader:
     @classmethod
     def get_spc_sheet_oos_clip_rules(cls) -> list[dict[str, object]]:
         """Read normalized parameter-specific Sheet OOS clipping rules."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        yaml_path = cls.get_project_root() / "config" / "inline_config.yaml"
         try:
             spc_conf = cls._load_yaml(yaml_path).get("spc", {})
             decoration_conf = spc_conf.get("sheet_oos_decoration", {})
@@ -215,7 +215,7 @@ class ConfigLoader:
     @classmethod
     def get_auto_decoration_param_exemptions(cls) -> list[str]:
         """Read parameter-name tokens that bypass automatic value clipping."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        yaml_path = cls.get_project_root() / "config" / "inline_config.yaml"
         try:
             spc_conf = cls._load_yaml(yaml_path).get("spc", {})
             decoration_conf = spc_conf.get("auto_decoration", {})

@@ -26,7 +26,7 @@ from app.charts.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]
-from app.sections.yield_dashboard import (
+from app.sections.yield_domain.yield_dashboard import (
     render_macro_trend_section,
     render_code_compact_expanders,
 )
@@ -150,8 +150,6 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         total_recent_lots=total_recent_lots,
         time_period=30
     )
-
-
 
 # ==============================================================================
 #  第一部分: 宏观监控 (Group级趋势)

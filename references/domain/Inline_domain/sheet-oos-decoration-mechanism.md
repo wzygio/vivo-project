@@ -231,7 +231,7 @@ False, 0, no, n, 否, 不修饰, 不截断
 
 ## 9. 参数专用截断边界
 
-`config/spc_config.yaml` 可配置 `param_clip_rules`：
+`config/inline_config.yaml` 可配置 `param_clip_rules`：
 
 ```yaml
 spc:

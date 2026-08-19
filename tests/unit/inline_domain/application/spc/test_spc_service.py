@@ -11,7 +11,6 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
-from src.inline_domain.application.spc.spc_service import assign_indicator_chart_type
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationReadError,
 )
@@ -133,21 +132,6 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
     assert calls == 2
 
 
-def test_assign_indicator_chart_type_marks_uni_parameters_for_line_charts() -> None:
-    source_df = pd.DataFrame(
-        [
-            {"param_name": "SE_L1T_UNI"},
-            {"param_name": "cd_uni"},
-            {"param_name": "THK"},
-            {"param_name": None},
-        ]
-    )
-
-    result = assign_indicator_chart_type(source_df)
-
-    assert result["chart_type"].tolist() == ["line", "line", "box", "box"]
-
-
 def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypatch, tmp_path: Path) -> None:
     SpcReportService.fetch_spc_report_payload.clear()
     FakeSpcRepository.seen_data_type_filters = []
@@ -180,10 +164,10 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
     assert not report.period_capability_df.empty
     assert len(report.raw_measurements_df) == 4
     assert {"cpm", "cpk"}.issubset(report.period_capability_df.columns)
-    assert set(report.period_capability_df["chart_type"]) == {"box"}
-    assert set(report.sheet_features_df["chart_type"]) == {"box"}
-    assert set(report.raw_measurements_df["chart_type"]) == {"box"}
-    assert set(report.indicators_df["chart_type"]) == {"box"}
+    assert "chart_type" not in report.period_capability_df.columns
+    assert "chart_type" not in report.sheet_features_df.columns
+    assert "chart_type" not in report.raw_measurements_df.columns
+    assert "chart_type" not in report.indicators_df.columns
     assert set(report.period_capability_df["sigma_source"]) == {"sheet_mean"}
     assert set(report.period_capability_df["cpk_decorated"]) == {False}
     assert set(report.raw_measurements_df["data_type"]) == {"SPC"}

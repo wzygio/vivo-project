@@ -633,20 +633,34 @@ def _add_plain_spec_line(fig: go.Figure, y_value: object, label: str, color: str
     )
 
 
-def _apply_measurement_spec_lines(fig: go.Figure, spec_df: pd.DataFrame, row: int | None = None) -> None:
+def _first_measurement_spec_row(spec_df: pd.DataFrame) -> pd.Series | None:
+    """Return the first row carrying at least one numeric specification limit."""
     if spec_df.empty:
+        return None
+
+    limit_columns = ["usl", "lsl", "ucl", "lcl"]
+    numeric_limits = spec_df.reindex(columns=limit_columns).apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
+    valid_rows = numeric_limits.notna().any(axis=1)
+    if not valid_rows.any():
+        return None
+    return spec_df.loc[valid_rows].iloc[0]
+
+
+def _apply_measurement_spec_lines(fig: go.Figure, spec_df: pd.DataFrame, row: int | None = None) -> None:
+    spec_row = _first_measurement_spec_row(spec_df)
+    if spec_row is None:
         return
-    spec_source = spec_df.dropna(subset=["usl", "lsl"]).head(1)
-    if spec_source.empty:
-        return
-    spec_row = spec_source.iloc[0]
     line_func = (
         (lambda value, label, color: _add_spec_line(fig, value, label, color, row=row))
         if row is not None
         else (lambda value, label, color: _add_plain_spec_line(fig, value, label, color))
     )
     line_func(spec_row.get("usl"), "USL", "#dc2626")
-    if float(spec_row.get("lsl")) == 0.0:
+    lsl = pd.to_numeric(pd.Series([spec_row.get("lsl")]), errors="coerce").iloc[0]
+    if pd.isna(lsl) or float(lsl) == 0.0:
         line_func(spec_row.get("ucl"), "UCL", "#16a34a")
         return
 
@@ -662,26 +676,31 @@ def _apply_measurement_spec_lines(fig: go.Figure, spec_df: pd.DataFrame, row: in
 
 
 def _resolve_measurement_y_range(data_values: object, spec_df: pd.DataFrame) -> list[float] | None:
-    if spec_df.empty:
-        return None
-    spec_source = spec_df.dropna(subset=["usl", "lsl"]).head(1)
-    if spec_source.empty:
+    spec_row = _first_measurement_spec_row(spec_df)
+    if spec_row is None:
         return None
 
-    spec_row = spec_source.iloc[0]
     usl = pd.to_numeric(pd.Series([spec_row.get("usl")]), errors="coerce").iloc[0]
     lsl = pd.to_numeric(pd.Series([spec_row.get("lsl")]), errors="coerce").iloc[0]
-    if pd.isna(usl) or pd.isna(lsl) or usl <= lsl:
-        return None
-
     values = pd.to_numeric(pd.Series(data_values), errors="coerce").dropna()
-    if values.empty:
-        return [float(lsl), float(usl)]
 
-    lower = min(float(lsl), float(values.min()))
-    upper = max(float(usl), float(values.max()))
-    if lower == float(lsl) and upper == float(usl):
-        return [float(lsl), float(usl)]
+    if pd.notna(usl) and pd.notna(lsl) and usl > lsl:
+        if values.empty:
+            return [float(lsl), float(usl)]
+        lower = min(float(lsl), float(values.min()))
+        upper = max(float(usl), float(values.max()))
+        if lower == float(lsl) and upper == float(usl):
+            return [float(lsl), float(usl)]
+    else:
+        limit_values = pd.to_numeric(
+            pd.Series([spec_row.get(column) for column in ["usl", "lsl", "ucl", "lcl"]]),
+            errors="coerce",
+        ).dropna()
+        bounds = pd.concat([values.reset_index(drop=True), limit_values.reset_index(drop=True)])
+        if bounds.empty:
+            return None
+        lower = float(bounds.min())
+        upper = float(bounds.max())
 
     span = upper - lower
     padding = span * 0.06 if span > 0 else max(abs(upper), 1.0) * 0.06
@@ -789,16 +808,11 @@ def _create_period_overview_chart(
                 ),
             )
 
-    spec_source = (
-        sheet_features_df.dropna(subset=["usl", "lsl"]).head(1)
-        if {"usl", "lsl"}.issubset(sheet_features_df.columns)
-        else pd.DataFrame()
-    )
+    spec_source = sheet_features_df
     _apply_measurement_spec_lines(fig, spec_source)
-    if not spec_source.empty:
-        y_range = _resolve_measurement_y_range(points_df[value_column], spec_source)
-        if y_range is not None:
-            fig.update_yaxes(range=y_range)
+    y_range = _resolve_measurement_y_range(points_df[value_column], spec_source)
+    if y_range is not None:
+        fig.update_yaxes(range=y_range)
 
     fig.update_layout(
         title=title,

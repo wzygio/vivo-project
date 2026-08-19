@@ -22,7 +22,7 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.aoi_rs.aoi_rs_dashboard import (
+from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
     filter_aoi_rs_report,
     get_default_aoi_rs_start_date,
     render_aoi_rs_filters,
