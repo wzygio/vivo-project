@@ -22,20 +22,28 @@
 
 ## Decision
 
-1. **新建 `app/sections/inline_domain/shared/` 包**，按职责拆分并经包级
-   `__init__.py` 显式 re-export：
-   - `constants`：厂别顺序、调色板、月周天周期标签/配色/分隔符；
-   - `filters`：级联选项推导、签名门控、`render_cascade_filters`
+> **2026-08-19 结构调整（维护者指示）**：section 定位为组装层（对齐后端
+> application 层），绘图相关模块最终落在 `app/charts/inline/`；
+> `app/sections/inline_domain/shared/` 只保留筛选级联（`filters`）、修饰后台
+> （`decoration_admin`）与厂别常量（`constants`）。下文 Decision 1 中的
+> `chart_type` / `spec_lines` / `sheet_charts` / `aoi_charts` 与图表常量
+> 均归属 `app/charts/inline/`，职责划分不变。
+
+1. **新建共享层**（`app/charts/inline/` + 精简后的 `sections/inline_domain/shared/`），
+   按职责拆分并分别经包级 `__init__.py` 显式 re-export：
+   - `shared/constants`：厂别顺序（筛选级联使用）；
+   - `shared/filters`：级联选项推导、签名门控、`render_cascade_filters`
      （`key_prefix`/`third_kind` 参数化，session key 与历史逐字一致）、
      `apply_report_filter`；
-   - `chart_type`：`resolve_chart_type(param_name, tokens)` 折线/箱线决策；
-   - `spec_lines`：规格线绘制（LSL 为空或 0 → 仅 USL/UCL 上限）与 y 轴范围；
-   - `sheet_charts`：月周天分布图、Sheet 点位图（By 腔室 / By 过货时间，
+   - `shared/decoration_admin`：Sheet OOS 修饰后台 UI（`key_prefix`/`report_name` 参数化）；
+   - `charts/inline/constants`：调色板、月周天周期标签/配色/分隔符；
+   - `charts/inline/chart_type`：`resolve_chart_type(param_name, tokens)` 折线/箱线决策；
+   - `charts/inline/spec_lines`：规格线绘制（LSL 为空或 0 → 仅 USL/UCL 上限）与 y 轴范围；
+   - `charts/inline/sheet_charts`：月周天分布图、Sheet 点位图（By 腔室 / By 过货时间，
      line 时横轴为 `type="date"` 真实时间轴）；
-   - `aoi_charts`：月周天趋势图与 By Lot/By Sheet 点线图，规格线经
+   - `charts/inline/aoi_charts`：月周天趋势图与 By Lot/By Sheet 点线图，规格线经
      `AoiSpecLine` 列表注入（RS 单值「规格」；TT USL 虚线 + UCL 点线），
-     code 列名/显示名/文案参数化；
-   - `decoration_admin`：Sheet OOS 修饰后台 UI（`key_prefix`/`report_name` 参数化）。
+     code 列名/显示名/文案参数化。
 2. **四个 dashboard 变为委托层**：保留全部现有公开函数名与签名（页面与测试的
    导入面不变），内部委托 shared；`ctq` 不再导入 `spc_dashboard`。
 3. **修复 CTQ chart_type 缺陷**：与 SPC 同口径调用
@@ -59,7 +67,8 @@
 
 - 正面：公共绘图/筛选规则单一来源，修改一处四页面同时生效；CTQ 图表类型真正
   受配置控制（含 `UNI` token 的参数画折线，其余箱线）；ctq→spc 私有耦合消除；
-  新增 `tests/unit/app/sections/shared/` 32 条直接覆盖。
+  新增 32 条直接单测（`tests/unit/app/charts/inline/` 与
+  `tests/unit/app/sections/shared/`）。
 - 负面/约束：shared 与 section 之间以「模块属性别名」保留既有 monkeypatch 锚点
   （如 `spc_dashboard._create_period_overview_chart`），后续重命名需同步测试；
   session key 前缀是公开契约，shared 内禁止硬编码。

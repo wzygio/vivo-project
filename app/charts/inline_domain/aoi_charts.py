@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from app.components.distribution_charts import create_point_line_trace
-from app.sections.inline_domain.shared.constants import (
+from app.charts.inline_domain.constants import (
     CODE_PALETTE,
     PERIOD_BAR_COLORS,
     PERIOD_SEPARATORS,

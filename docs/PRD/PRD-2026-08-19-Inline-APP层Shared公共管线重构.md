@@ -77,29 +77,36 @@ src/inline_domain/ 后端先例：
 ### 4.1 目标结构
 
 ```text
-app/sections/inline_domain/shared/
-├── __init__.py        # 公共 API 出口（显式 re-export）
-├── constants.py       # INLINE_FACTORY_OPTIONS、SHEET_BOX_PALETTE、CODE_PALETTE、
-│                      # PERIOD_LABELS、PERIOD_COLORS、PERIOD_FILL_COLORS、
-│                      # PERIOD_BAR_COLORS、PERIOD_TYPE_NAMES、PERIOD_SEPARATORS
-├── filters.py         # unique_sorted、normalise_selection、filter_signature、
-│                      # get_available_factories / get_steps_for_factory /
-│                      # get_third_options_for_factory_steps（第三级列名参数化：
-│                      #   param_name / rs_code / tt_name）、
-│                      # render_cascade_filters（key_prefix、第三级标签参数化）、
-│                      # apply_report_filter（列名参数化）
-├── chart_type.py      # CHART_TYPE_BOX / CHART_TYPE_LINE、
-│                      # resolve_chart_type(param_name, line_param_name_contains)
-├── spec_lines.py      # 规格值格式化、首行规格提取、规格线绘制
-│                      # （LSL 为空或 0 → 仅 USL/UCL 上限）、y 轴范围推导
-├── sheet_charts.py    # 月周天分布图（period 轴 + display label + 箱线）、
-│                      # Sheet 点位图（By 腔室 / By 过货时间；过货时间 chart_type=line
-│                      # 时横轴为真实时间轴 type="date"）
-└── aoi_charts.py      # spec trace 工具、月周天趋势图（分组 x 轴 + 零宽分隔 +
-                       # 次 Y 轴柱 + 比值线）、By Lot/By Sheet 点线图；
-                       # 规格线通过 spec_provider 回调注入：
-                       #   RS → 单值规格线；TT → USL/UCL 双上限
+app/charts/inline/           # 绘图层（section 不直接绘制）
+├── __init__.py              # 公共 API 出口（显式 re-export）
+├── constants.py             # 调色板、月周天周期标签/配色/分隔符
+├── chart_type.py            # CHART_TYPE_BOX / CHART_TYPE_LINE、
+│                            # resolve_chart_type(param_name, line_param_name_contains)
+├── spec_lines.py            # 规格值格式化、首行规格提取、规格线绘制
+│                            # （LSL 为空或 0 → 仅 USL/UCL 上限）、y 轴范围推导
+├── sheet_charts.py          # 月周天分布图（period 轴 + display label + 箱线）、
+│                            # Sheet 点位图（By 腔室 / By 过货时间；过货时间 chart_type=line
+│                            # 时横轴为真实时间轴 type="date"）
+└── aoi_charts.py            # spec trace 工具、月周天趋势图（分组 x 轴 + 零宽分隔 +
+                             # 次 Y 轴柱 + 比值线）、By Lot/By Sheet 点线图；
+                             # 规格线经 AoiSpecLine 列表注入：
+                             #   RS → 单值规格线；TT → USL/UCL 双上限
+
+app/sections/inline_domain/shared/    # 组装层共享（对齐后端 application 层）
+├── __init__.py              # 公共 API 出口
+├── constants.py             # INLINE_FACTORY_OPTIONS（筛选级联使用）
+├── filters.py               # unique_sorted、normalise_selection、filter_signature、
+│                            # get_available_factories / get_steps_for_factory /
+│                            # get_options_for_factory_steps（第三级列名参数化：
+│                            #   param_name / rs_code / tt_name）、
+│                            # render_cascade_filters（key_prefix、第三级标签参数化）、
+│                            # apply_report_filter（列名参数化）
+└── decoration_admin.py      # Sheet OOS 修饰后台 UI（key_prefix/report_name 参数化）
 ```
+
+> 2026-08-19 结构补充：按维护者指示，section 定位为组装层（对齐后端
+> application 层），图表绘制从 `sections/inline_domain/shared/` 迁至
+> `app/charts/inline/`；上方结构为最终落地形态。
 
 ### 4.2 各 section 改造方式
 

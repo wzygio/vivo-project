@@ -15,10 +15,12 @@ Streamlit
   ├─ app/Home.py                 门户、应用初始化、热重载
   └─ app/pages/*.py              各业务页面
        ├─ app/components/        页头、筛选、上传、告警与缓存失效
-       ├─ app/sections/          页面区块组装（inline 各报表共享
-       │                         app/sections/inline_domain/shared/ 公共管线：
-       │                         级联筛选、图表类型决策、规格线、月周天与点位图表）
+       ├─ app/sections/          页面区块组装层（对齐后端 application 层；
+       │                         inline 各报表共享 inline_domain/shared/
+       │                         级联筛选与修饰后台组装）
        └─ app/charts/            Plotly / ECharts 图表适配
+            └─ app/charts/inline/   inline 四报表共享绘图：图表类型决策、
+                                   规格线、月周天分布、Sheet 点位图、AOI 趋势/点线图
             ↓
 src/<domain>/application/        用例编排、缓存 payload、ViewModel
             ↓
@@ -89,7 +91,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
-  点位图类型统一由 `app/sections/inline_domain/shared/chart_type.py` 根据
+  点位图类型统一由 `app/charts/inline/chart_type.py` 根据
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
   `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
   合并到新结果，刷新时不会重建既有 sheet。

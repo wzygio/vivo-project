@@ -121,3 +121,10 @@ session key 不变；ctq→spc 私有导入消除；CTQ chart_type 修复为配�
 验证：`pytest tests/unit -q` = 7 failed（=既有基线）/ 482 passed（+32 条 shared 新测）；
 grep 验收（四 dashboard 无重复私有函数/常量）与四页面 import smoke 通过。
 架构决策见 ADR-0016。有意排除：E2E（用户自行验收）、git 分支/提交（留待用户确认）。
+
+### 2026-08-19 — Structure follow-up
+
+维护者指示 section 作为组装层（对齐后端 application 层）：绘图模块迁入
+`app/charts/inline/`（constants / chart_type / spec_lines / sheet_charts / aoi_charts），
+`sections/inline_domain/shared/` 仅保留 filters / decoration_admin / 厂别常量。
+全量回归与基线一致（7 failed / 482 passed）。ADR-0016 已同步。

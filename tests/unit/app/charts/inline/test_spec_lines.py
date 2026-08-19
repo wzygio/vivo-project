@@ -1,7 +1,7 @@
 import pandas as pd
 import plotly.graph_objects as go
 
-from app.sections.inline_domain.shared.spec_lines import (
+from app.charts.inline_domain.spec_lines import (
     apply_measurement_spec_lines,
     format_spec_value,
     resolve_measurement_y_range,

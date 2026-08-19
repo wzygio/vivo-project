@@ -1,4 +1,4 @@
-from app.sections.inline_domain.shared.chart_type import (
+from app.charts.inline_domain.chart_type import (
     CHART_TYPE_BOX,
     CHART_TYPE_LINE,
     resolve_chart_type,

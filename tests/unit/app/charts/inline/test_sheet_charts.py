@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from app.sections.inline_domain.shared.chart_type import CHART_TYPE_BOX, CHART_TYPE_LINE
-from app.sections.inline_domain.shared.sheet_charts import (
+from app.charts.inline_domain.chart_type import CHART_TYPE_BOX, CHART_TYPE_LINE
+from app.charts.inline_domain.sheet_charts import (
     create_period_overview_chart,
     create_sheet_points_box_chart,
     create_sheet_points_box_charts,

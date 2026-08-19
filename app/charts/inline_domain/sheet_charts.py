@@ -3,7 +3,7 @@
 业务规则：
 - 月周天分布图：横轴为「月/周/日 | 周期标签」的类别轴，按周期类型着色箱线；
 - Sheet 点位图 By 过货时间：chart_type=line 时横轴替换为真实过货时间（date 轴）；
-- 规格线与纵轴范围规则见 ``shared.spec_lines``（LSL 为空或 0 仅绘上限）。
+- 规格线与纵轴范围规则见 ``app.charts.inline.spec_lines``（LSL 为空或 0 仅绘上限）。
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ from app.components.distribution_charts import (
     create_box_distribution_trace,
     create_point_line_trace,
 )
-from app.sections.inline_domain.shared.chart_type import CHART_TYPE_BOX, CHART_TYPE_LINE
-from app.sections.inline_domain.shared.constants import (
+from app.charts.inline_domain.chart_type import CHART_TYPE_BOX, CHART_TYPE_LINE
+from app.charts.inline_domain.constants import (
     PERIOD_COLORS,
     PERIOD_FILL_COLORS,
     PERIOD_LABELS,
     SHEET_BOX_PALETTE,
 )
-from app.sections.inline_domain.shared.spec_lines import (
+from app.charts.inline_domain.spec_lines import (
     apply_measurement_spec_lines,
     resolve_measurement_y_range,
 )

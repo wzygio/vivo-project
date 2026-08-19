@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.sections.inline_domain.shared.aoi_charts import (
+from app.charts.inline_domain.aoi_charts import (
     AoiSpecLine,
     add_spec_trace,
     code_color_map,

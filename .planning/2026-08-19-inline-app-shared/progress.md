@@ -33,3 +33,16 @@
 - UI smoke: not applicable —— 用户明确"无需 E2E 测试，自行完成"；本次为纯重构 + 单测覆盖。
 - 分支策略偏差：系统约束禁止未经确认的 git 变更，未建开发分支，改动保留在工作区待用户审查/提交。
 - 过程修正：spc 重写时一度把 `render_cpk_decoration_admin` 的 `nullcontext()` 误写为 `st.container()` 并漏导 `BytesIO`，当场修复后测试通过。
+
+## 2026-08-19 — Session 2（结构调整：section = 组装层）
+
+- 维护者指示：图表绘制下沉 `app/charts/`，section 作为组装层（对齐后端 application 层）。
+- 执行：`chart_type` / `spec_lines` / `sheet_charts` / `aoi_charts` + 图表常量迁入
+  `app/charts/inline/`；`sections/inline_domain/shared/` 精简为 constants（厂别）/
+  filters / decoration_admin；四个 dashboard 与测试导入同步更新；
+  图表测试迁至 `tests/unit/app/charts/inline/`。
+- 可复用 UI 组件评估：无新组件需进 `app/components/`（trace 工厂
+  `create_box_distribution_trace` / `create_point_line_trace` 本就在其中）。
+- 验证：`pytest tests/unit -q` = 7 failed（=既有基线）/ 482 passed；无旧路径残留引用；
+  import smoke 通过（charts/inline 导出 26，sections/shared 导出 11）。
+- 文档同步：ARCHITECTURE.md、ADR-0016（结构调整注记）、PRD 4.1 目标结构。
