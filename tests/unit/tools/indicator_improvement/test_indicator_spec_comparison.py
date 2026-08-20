@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from src.inline_domain.core.spc.indicator_spec_comparison import (
+from tools.indicator_improvement.indicator_spec_comparison import (
     compare_specs,
     make_display_name,
     make_spec_identity,

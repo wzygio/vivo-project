@@ -72,7 +72,10 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 
 - `infrastructure/measurement/` 拥有三厂 Inline 测量事实的数据库读取和产品级
   Parquet 快照。共享快照只保存预处理前的稳定字段超集；TTL、策略版本、强制
-  刷新、原子写入和数据库失败降级均在这一适配器内完成。
+  刷新、原子写入和数据库失败降级均在这一适配器内完成。快照写入前可通过
+  `measurement_corrector` 钩子应用数值修正（当前规则见
+  `infrastructure/spc/spc_data_correction.py`：M673 且 param_name 含 PPA 且
+  site_name∈[99,114] 的记录 param_value 减 5），由 `composition.py` 注入。
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
   组合根。SPC、CTQ、AOI_TT、AOI_RS 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
@@ -95,6 +98,9 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
   `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
   合并到新结果，刷新时不会重建既有 sheet。
+- PNL 指标规格的版本/产品收严分析是独立离线工具，归
+  `tools/indicator_improvement/` 所有，不进入 `src/inline_domain` 的应用服务、
+  Core 或组合根；其输入为离线 Excel，输出为 `output/` 下的可重建报告。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端
   选定的图表类型；CTQ OOS 修饰保存在共享工作簿 `resources/ctq_sheet_oos_decoration.xlsx` 的产品 sheet 中。
 - `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
@@ -157,7 +163,7 @@ AOI_RS 专属产品级快照边界见
 | `config/` | 全局、产品、SPC、设备和合规配置。 |
 | `resources/` | 受版本控制的产品资源、基线、人工修饰与前端静态文件。 |
 | `data/` | 本地运行时数据与领域 Parquet 快照。 |
-| `tools/` | 分域 smoke 测试和设备仿造数据运维命令。 |
+| `tools/` | 分域 smoke、离线分析和设备仿造数据运维命令。 |
 | `tests/` | 单元、集成和浏览器端到端测试。 |
 | `docs/ADR/` | 已接受的架构决策记录。 |
 | `references/` | 项目自有领域知识与 Harness 演进记录。 |

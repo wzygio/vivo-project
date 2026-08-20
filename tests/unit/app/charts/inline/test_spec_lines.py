@@ -33,7 +33,8 @@ def test_lsl_missing_draws_only_upper_spec_lines() -> None:
     assert _annotation_texts(fig) == {"USL: 12", "UCL: 10"}
 
 
-def test_full_spec_draws_all_lines() -> None:
+def test_full_spec_draws_all_lines_except_cl() -> None:
+    # CL 线已在前端注释停用（后续可能重新启用），仅断言 Target Line
     fig = go.Figure()
     apply_measurement_spec_lines(
         fig,
@@ -45,7 +46,6 @@ def test_full_spec_draws_all_lines() -> None:
         "UCL: 1.15",
         "LCL: 0.85",
         "Target: 1",
-        "CL: 1",
     }
 
 

@@ -5,8 +5,8 @@ import argparse
 import json
 from pathlib import Path
 
-from src.inline_domain.application.spc.indicator_improvement_service import IndicatorImprovementService
 from src.shared_kernel.output_paths import OutputLayout
+from tools.indicator_improvement.indicator_improvement_service import IndicatorImprovementService
 
 
 def build_parser() -> argparse.ArgumentParser:

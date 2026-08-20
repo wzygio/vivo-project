@@ -116,9 +116,10 @@ def apply_measurement_spec_lines(
     target_value = resolve_target_value(spec_row)
     if target_value is not None:
         line_func(target_value, "Target", "#f97316")
-    cl_value = resolve_cl_value(spec_row)
-    if cl_value is not None:
-        line_func(cl_value, "CL", "#16a34a")
+    # 暂不展示 CL 线，仅保留 Target Line（后续可能重新启用，勿删）：
+    # cl_value = resolve_cl_value(spec_row)
+    # if cl_value is not None:
+    #     line_func(cl_value, "CL", "#16a34a")
 
 
 def resolve_measurement_y_range(data_values: object, spec_df: pd.DataFrame) -> list[float] | None:

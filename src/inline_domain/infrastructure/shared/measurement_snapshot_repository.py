@@ -23,14 +23,15 @@ if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 MeasurementLoader = Callable[["DatabaseManager", str, str, str], pd.DataFrame]
+MeasurementCorrector = Callable[[pd.DataFrame], pd.DataFrame]
 logger = logging.getLogger(__name__)
-
 
 class InlineMeasurementSnapshotRepository:
     """Load a product's raw measurements once and reuse its fresh snapshot."""
 
     SNAPSHOT_TTL_HOURS = 8
-    SNAPSHOT_POLICY_VERSION = "inline-measurement-raw-v1"
+    # v2: 快照生成前接入 SPC 数值修正（M673 PPA site[99,114] param_value-5）
+    SNAPSHOT_POLICY_VERSION = "inline-measurement-raw-v2"
     _locks_guard = threading.Lock()
     _snapshot_locks: dict[str, threading.Lock] = {}
 
@@ -39,10 +40,12 @@ class InlineMeasurementSnapshotRepository:
         snapshot_dir: Path,
         db_manager: "DatabaseManager",
         measurement_loader: MeasurementLoader = load_raw_measurements,
+        measurement_corrector: MeasurementCorrector | None = None,
     ) -> None:
         self.snapshot_dir = snapshot_dir
         self.db_manager = db_manager
         self.measurement_loader = measurement_loader
+        self.measurement_corrector = measurement_corrector
 
     def get_measurements(
         self,
@@ -72,6 +75,9 @@ class InlineMeasurementSnapshotRepository:
                 return self._fallback(snapshot_path)
             if measurements.empty:
                 return self._fallback(snapshot_path)
+
+            if self.measurement_corrector is not None:
+                measurements = self.measurement_corrector(measurements)
 
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
             self._write_snapshot(snapshot_path, measurements)

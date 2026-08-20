@@ -2,7 +2,7 @@
 
 > **领域代码**: `inline_domain`  
 > **对应目录**: [`src/inline_domain/`](../../src/inline_domain/)  
-> **最后更新**: 2026-08-19
+> **最后更新**: 2026-08-20
 
 ---
 
@@ -19,7 +19,6 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 │              Application Layer                   │
 │  monitor/monitor_service.py (自动预警)             │
 │  spc/spc_service.py         (SPC + CPM/CPK)       │
-│  spc/indicator_improvement_service.py (指标改善离线工具)│
 │  ctq/ctq_service.py         (CTQ 分布，无能力指数)   │
 │  aoi_tt/aoi_tt_service.py   (TT 趋势)              │
 │  aoi_rs/aoi_rs_service.py   (RS 趋势，service 层修饰) │
@@ -32,7 +31,6 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 │  shared/auto_decoration.py     (自动截断+三态应用)    │
 │  spc/spc_calculator.py         (周期 CPM/CPK)       │
 │  spc/cpk_decoration.py         (CPK 人工修饰单轨)     │
-│  spc/indicator_spec_comparison.py (指标规格比对)     │
 │  ctq/indicator_chart.py        (UNI 图表类型标记)     │
 │  monitor/monitor_calculator.py (预警规则与特征降维)   │
 │  monitor/monitor_param_classifier.py (参数类型分类)   │
@@ -49,6 +47,10 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 ```
 
 > Infrastructure 详细规范见 [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。
+
+PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路。其 CLI、用例编排和
+专用规格比较规则统一位于 `tools/indicator_improvement/`，只读取离线 Excel 并向
+`output/` 生成可重建报告，不由 `src/inline_domain/composition.py` 装配。
 
 ---
 
@@ -100,8 +102,7 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 - Sheet OOS 修饰表的 `flag` 为三态：`True` 修饰超规点、`False` 保留真实值、`Delete` 按产品/站点/参数/Sheet 四键从图表点位中排除；修改表内 `sheet_min/max/mean` 不改变计算结果。
 - 修饰表支持标准或企业加密 XLSX；已有文件双重读取失败时必须中止本次报表重建并保留原文件。直接编辑文件后按 ADR-0005 通过页头“刷新缓存”手动生效。
 - 缓存函数只返回原生 payload，ViewModel 在缓存外构造。
-- 同目录 `indicator_improvement_service.py`（+ CLI）为指标改善离线工具：比对指标规格
-  （`core/spc/indicator_spec_comparison.py`），产出改善建议报告，不参与在线报表链路。
+- 指标改善离线工具位于 `tools/indicator_improvement/`；SPC 应用服务不导入或调用它。
 
 ### 4.3 `ctq/ctq_service.py` — CTQ 分布报表
 

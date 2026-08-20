@@ -1193,16 +1193,22 @@ def test_sheet_points_box_chart_uses_point_lines_when_frontend_style_is_line() -
     assert not [trace for trace in fig.data if trace.type == "box"]
     line_trace = next(trace for trace in fig.data if trace.type == "scatter")
     assert line_trace.mode == "lines+markers"
-    assert list(pd.to_datetime(line_trace.x)) == [
-        pd.Timestamp("2026-06-01 08:00:00"),
-        pd.Timestamp("2026-06-01 08:00:00"),
-        pd.Timestamp("2026-06-02 09:00:00"),
-        pd.Timestamp("2026-06-02 09:00:00"),
+    assert list(line_trace.x) == [
+        "S1<br>06-01 08:00",
+        "S1<br>06-01 08:00",
+        "S2<br>06-02 09:00",
+        "S2<br>06-02 09:00",
     ]
     assert list(line_trace.y) == [3.0, 5.0, 4.0, 6.0]
-    assert list(line_trace.customdata) == ["S1", "S1", "S2", "S2"]
+    assert [tuple(row) for row in line_trace.customdata] == [
+        ("S1", "2026-06-01 08:00:00"),
+        ("S1", "2026-06-01 08:00:00"),
+        ("S2", "2026-06-02 09:00:00"),
+        ("S2", "2026-06-02 09:00:00"),
+    ]
     assert line_trace.name == "Point Value"
-    assert fig.layout.xaxis.type == "date"
+    assert fig.layout.xaxis.type != "date"
+    assert list(fig.layout.xaxis.categoryarray) == ["S1<br>06-01 08:00", "S2<br>06-02 09:00"]
     assert fig.layout.xaxis.title.text == "过货时间"
 
 

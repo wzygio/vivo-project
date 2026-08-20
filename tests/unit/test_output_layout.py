@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from src.inline_domain.application.spc.indicator_improvement_cli import build_parser
 from src.shared_kernel.output_paths import OutputLayout
+from tools.indicator_improvement.indicator_improvement_cli import build_parser
 
 
 def test_output_layout_exposes_canonical_artifact_directories(tmp_path: Path) -> None:

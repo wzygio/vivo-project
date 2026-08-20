@@ -12,7 +12,7 @@ from zipfile import BadZipFile
 
 import pandas as pd
 
-from src.inline_domain.core.spc.indicator_spec_comparison import (
+from tools.indicator_improvement.indicator_spec_comparison import (
     compare_specs,
     constraints_to_text,
     make_display_name,

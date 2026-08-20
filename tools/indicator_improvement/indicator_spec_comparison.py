@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+"""Specification comparison rules for the offline indicator-improvement tool."""
+
 from __future__ import annotations
 
 import math

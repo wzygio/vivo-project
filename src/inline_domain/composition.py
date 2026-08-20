@@ -22,6 +22,9 @@ from src.inline_domain.infrastructure.shared.measurement_preparation import (
 )
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository
 from src.inline_domain.infrastructure.monitor.scrap_repository import InlineScrapRepository
+from src.inline_domain.infrastructure.spc.spc_data_correction import (
+    apply_spc_value_corrections,
+)
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -33,6 +36,7 @@ def build_raw_measurement_repository(
     return InlineMeasurementSnapshotRepository(
         snapshot_dir=Path("data") / prod_code,
         db_manager=db_manager,
+        measurement_corrector=apply_spc_value_corrections,
     )
 
 
