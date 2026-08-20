@@ -2,7 +2,8 @@
 
 业务规则：
 - 月周天分布图：横轴为「月/周/日 | 周期标签」的类别轴，按周期类型着色箱线；
-- Sheet 点位图 By 过货时间：chart_type=line 时横轴替换为真实过货时间（date 轴）；
+- Sheet 点位图 By 过货时间：chart_type=line 时横轴按过货时间排序的 sheet_id 类别轴，
+  刻度标签附带各 sheet 的过货时间（非连续 date 轴，无货日期不占位）；
 - 规格线与纵轴范围规则见 ``app.charts.inline.spec_lines``（LSL 为空或 0 仅绘上限）。
 """
 
@@ -214,6 +215,7 @@ def create_sheet_points_box_chart(
         return fig
 
     uses_time_axis = sort_mode == "按过货时间排序" and chart_type == CHART_TYPE_LINE
+    time_axis_labels: list[str] = []
     if sort_mode == "按过货时间排序":
         sorted_df = df.sort_values(["sheet_start_time", "sheet_id"], na_position="last")
         group_labels = _sheet_id_order(sorted_df)
@@ -222,16 +224,26 @@ def create_sheet_points_box_chart(
                 sheet_id=lambda frame: frame["sheet_id"].astype(str)
             )
             if not trend_points.empty:
+                time_by_sheet = trend_points.groupby("sheet_id", sort=False)["sheet_start_time"].min()
+                label_by_sheet = {
+                    sheet_id: f"{sheet_id}<br>{pass_time:%m-%d %H:%M}"
+                    for sheet_id, pass_time in time_by_sheet.items()
+                }
+                time_axis_labels = [label_by_sheet[sheet_id] for sheet_id in time_by_sheet.index]
+                trend_points = trend_points.assign(
+                    x_label=trend_points["sheet_id"].map(label_by_sheet),
+                    time_label=trend_points["sheet_start_time"].dt.strftime("%Y-%m-%d %H:%M:%S"),
+                )
                 fig.add_trace(
                     create_point_line_trace(
-                        x_values=trend_points["sheet_start_time"],
+                        x_values=trend_points["x_label"],
                         y_values=trend_points["param_value"],
-                        customdata=trend_points["sheet_id"],
+                        customdata=trend_points[["sheet_id", "time_label"]],
                         name="Point Value",
                         color="#1d4ed8",
                         hovertemplate=(
-                            "Time=%{x|%Y-%m-%d %H:%M:%S}<br>"
-                            "Sheet=%{customdata}<br>"
+                            "Sheet=%{customdata[0]}<br>"
+                            "Time=%{customdata[1]}<br>"
                             "Param Value=%{y:.4f}<extra></extra>"
                         ),
                     )
@@ -315,7 +327,11 @@ def create_sheet_points_box_chart(
         paper_bgcolor="#ffffff",
     )
     if uses_time_axis:
-        fig.update_xaxes(type="date", tickformat="%m-%d\n%H:%M", tickangle=0)
+        fig.update_xaxes(
+            categoryorder="array",
+            categoryarray=time_axis_labels,
+            tickangle=-45,
+        )
     else:
         fig.update_xaxes(tickangle=-45)
     return fig

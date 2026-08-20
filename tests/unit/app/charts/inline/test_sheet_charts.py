@@ -57,7 +57,7 @@ def test_period_overview_draws_box_traces_with_upper_only_spec() -> None:
     assert annotation_texts == {"USL: 12", "UCL: 10"}
 
 
-def test_pass_time_line_chart_uses_date_axis() -> None:
+def test_pass_time_line_chart_uses_time_ordered_category_axis() -> None:
     figure = create_sheet_points_box_chart(
         raw_measurements_df=_raw_df(),
         sort_mode="按过货时间排序",
@@ -65,10 +65,13 @@ def test_pass_time_line_chart_uses_date_axis() -> None:
         spec_df=_sheet_features_df(),
         chart_type=CHART_TYPE_LINE,
     )
-    assert figure.layout.xaxis.type == "date"
+    assert figure.layout.xaxis.type != "date"
     assert figure.layout.xaxis.title.text == "过货时间"
+    expected_labels = ["S1<br>07-01 08:00", "S2<br>07-02 09:00"]
+    assert list(figure.layout.xaxis.categoryarray) == expected_labels
     scatter_traces = [trace for trace in figure.data if trace.type == "scatter"]
     assert scatter_traces
+    assert list(scatter_traces[0].x) == expected_labels
 
 
 def test_pass_time_box_chart_keeps_category_axis() -> None:
