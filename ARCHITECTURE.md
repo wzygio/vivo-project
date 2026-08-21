@@ -75,7 +75,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   刷新、原子写入和数据库失败降级均在这一适配器内完成。快照写入前可通过
   `measurement_corrector` 钩子应用数值修正（当前规则见
   `infrastructure/spc/spc_data_correction.py`：M673 且 param_name 含 PPA 且
-  site_name∈[99,114] 的记录 param_value 减 5），由 `composition.py` 注入。
+  site_name∈[96,114] 的记录 param_value 减 5，属真实量测偏差修正；其余
+  所有 PPA 记录统一减 0.5），由 `composition.py` 注入。
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
   组合根。SPC、CTQ、AOI_TT、AOI_RS 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
