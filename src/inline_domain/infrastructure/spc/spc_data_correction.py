@@ -32,8 +32,7 @@ M673_PPA_KEYWORD = "PPA"
 M673_PPA_SITE_MIN = 96
 M673_PPA_SITE_MAX = 114
 M673_PPA_VALUE_OFFSET = -5.0
-PPA_FALLBACK_VALUE_OFFSET = -0.5
-
+PPA_FALLBACK_VALUE_OFFSET = -1
 
 def apply_spc_value_corrections(measurements: pd.DataFrame) -> pd.DataFrame:
     """返回应用 SPC 数值修正后的量测副本；空表或无命中时原样返回。"""
