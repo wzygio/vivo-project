@@ -16,7 +16,7 @@ equipment:
     decoration_growth_ratio: 1.01
     decoration_min_ratio: 0.90
     decoration_max_ratio: 0.95
-    display_progress_max_ratio: 0.96
+    display_progress_max_ratio: 0.98
   fabrication:
     random_seed: 20260715
     initial_value_ratio_range: [0.0, 1.0]

@@ -524,29 +524,54 @@ class TestPartsCalculator:
         assert calculated.loc[1, "使用进度"] == pytest.approx(95.95)
         assert calculated.loc[1, "预警状态"] == STATUS_WARNING
 
-    def test_frontend_progress_never_exceeds_96_percent(self) -> None:
-        """接近规格线或超规修饰后的进度不能超过 96%。"""
+    def test_frontend_high_progress_uses_stable_low_biased_caps(self) -> None:
+        """超过展示上限的进度应稳定分散，且高截断值少于低截断值。"""
+        row_count = 400
         df = pd.DataFrame({
-            "厂别": ["Array", "Array"],
-            "备件类型": ["Mask", "Mask"],
-            "设备类型": ["PVD", "PVD"],
-            "膜层": ["TI", "TI"],
-            "制程": ["M3 DEPO", "M3 DEPO"],
-            "寿命规格": [100.0, 100.0],
-            "测量值": [99.8, 150.0],
+            "厂别": ["Array"] * row_count,
+            "备件类型": ["Mask"] * row_count,
+            "设备类型": ["PVD"] * row_count,
+            "膜层": ["TI"] * row_count,
+            "制程": ["M3 DEPO"] * row_count,
+            "站点": ["18200"] * row_count,
+            "机台号-腔室": [f"3AFS{i:03d}-SPU-PM3" for i in range(row_count)],
+            "寿命规格": [100.0] * row_count,
+            "测量值": [99.8] * row_count,
         })
+        group_cols = ["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"]
 
-        decorated = apply_over_spec_alert_and_decoration(
+        first = apply_over_spec_alert_and_decoration(
             df,
-            group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
+            group_cols=group_cols,
             policy=_alert_policy(),
         )
-        calculated = batch_calculate_progress_and_status(decorated, policy=_alert_policy())
-
-        assert calculated["使用进度"].max() == pytest.approx(
-            _alert_policy().display_progress_max_ratio * 100.0
+        second = apply_over_spec_alert_and_decoration(
+            df,
+            group_cols=group_cols,
+            policy=_alert_policy(),
         )
-        assert calculated["使用进度"].max() <= 96.0
-        rendered_progress = [round(progress) for progress in calculated["使用进度"]]
-        assert max(rendered_progress) <= 96
-        assert calculated["预警状态"].tolist() == [STATUS_WARNING, STATUS_WARNING]
+        progress = batch_calculate_progress_and_status(
+            first,
+            policy=_alert_policy(),
+        )["使用进度"]
+
+        assert _alert_policy().display_progress_max_ratio == 0.98
+        pd.testing.assert_series_equal(first["测量值"], second["测量值"])
+        assert progress.min() >= _alert_policy().decoration_min_ratio * 100.0
+        assert progress.max() < _alert_policy().display_progress_max_ratio * 100.0
+        assert progress.nunique() > row_count * 0.9
+        assert progress.lt(92.0).sum() > progress.ge(96.0).sum()
+        assert set(first["数据修饰"]) == {"进度上限修饰"}
+
+    def test_frontend_progress_at_or_below_cap_is_not_modified(self) -> None:
+        """未超过 98% 展示上限的测量值必须保留原值。"""
+        policy = _alert_policy()
+        upper_progress = policy.display_progress_max_ratio * 100.0
+        df = pd.DataFrame({
+            "寿命规格": [100.0, 100.0],
+            "测量值": [95.0, upper_progress],
+        })
+
+        decorated = apply_over_spec_alert_and_decoration(df, policy=policy)
+
+        assert decorated["测量值"].tolist() == [95.0, upper_progress]

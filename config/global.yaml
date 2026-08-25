@@ -9,9 +9,9 @@ data_snapshot:
 # Service 层 L2 缓存（@st.cache_data）TTL 统一配置，单位：小时
 service_cache:
   ttl_hours:
-    equipment_parts_report_payload: 1 # 关键备件报表 payload
-    inline_spc_report_payload: 4 # SPC 报表 payload
-    inline_decorated_features: 4 # Sheet OOS 修饰共享特征
+    equipment_parts_report_payload: 12 # 关键备件报表 payload
+    inline_spc_report_payload: 12 # SPC 报表 payload
+    inline_decorated_features: 12 # Sheet OOS 修饰共享特征
 
 product_registry:
   enabled_products:

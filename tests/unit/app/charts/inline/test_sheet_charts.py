@@ -66,8 +66,8 @@ def test_pass_time_line_chart_uses_time_ordered_category_axis() -> None:
         chart_type=CHART_TYPE_LINE,
     )
     assert figure.layout.xaxis.type != "date"
-    assert figure.layout.xaxis.title.text == "过货时间"
-    expected_labels = ["S1<br>07-01 08:00", "S2<br>07-02 09:00"]
+    assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
+    expected_labels = ["S1<br>07-01 08时", "S2<br>07-02 09时"]
     assert list(figure.layout.xaxis.categoryarray) == expected_labels
     scatter_traces = [trace for trace in figure.data if trace.type == "scatter"]
     assert scatter_traces
@@ -83,7 +83,11 @@ def test_pass_time_box_chart_keeps_category_axis() -> None:
         chart_type=CHART_TYPE_BOX,
     )
     assert figure.layout.xaxis.type != "date"
-    assert [trace for trace in figure.data if trace.type == "box"]
+    assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
+    expected_labels = ["S1<br>07-01 08时", "S2<br>07-02 09时"]
+    assert list(figure.layout.xaxis.categoryarray) == expected_labels
+    box_traces = [trace for trace in figure.data if trace.type == "box"]
+    assert [trace.x[0] for trace in box_traces] == expected_labels
 
 
 def test_chamber_box_chart_colors_traces_by_chamber() -> None:

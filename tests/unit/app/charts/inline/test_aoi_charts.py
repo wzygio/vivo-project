@@ -119,6 +119,41 @@ def test_point_chart_uses_code_display_names() -> None:
     assert "A（描述） 规格" in names
 
 
+def test_sheet_point_chart_keeps_sheet_axis_and_adds_hour_pass_time() -> None:
+    point_df = pd.DataFrame(
+        [
+            {
+                "sheet_id": "S2",
+                "first_start_time": "2026-08-02 09:45:00",
+                "code": "A",
+                "value": 0.2,
+            },
+            {
+                "sheet_id": "S1",
+                "first_start_time": "2026-08-01 08:30:00",
+                "code": "A",
+                "value": 0.1,
+            },
+        ]
+    )
+
+    figure = create_aoi_point_chart(
+        point_df=point_df,
+        id_col="sheet_id",
+        code_column="code",
+        code_specs={"A": []},
+        title="t",
+        y_title="每片个数",
+        y_col="value",
+    )
+
+    expected_labels = ["S1<br>08-01 08时", "S2<br>08-02 09时"]
+    assert figure.layout.xaxis.type == "category"
+    assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
+    assert list(figure.layout.xaxis.categoryarray) == expected_labels
+    assert list(figure.data[0].x) == expected_labels
+
+
 def test_add_spec_trace_spans_first_to_last_x() -> None:
     fig = go.Figure()
     add_spec_trace(fig, ["a", "b", "c"], 1.5, "s", "#000000")
