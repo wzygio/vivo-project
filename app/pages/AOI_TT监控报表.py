@@ -23,11 +23,15 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
+    build_aoi_tt_sheet_oos_alerts,
     filter_aoi_tt_report,
     get_default_aoi_tt_start_date,
+    load_aoi_tt_oos_decoration,
     render_aoi_tt_filters,
     render_aoi_tt_indicator_sections,
+    render_aoi_tt_sheet_oos_alert_indicator_sections,
 )
+from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -35,6 +39,7 @@ from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportServi
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.composition import build_aoi_tt_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v1"
@@ -91,6 +96,26 @@ selected_factory, selected_codes, selected_steps, should_render_report = render_
     indicator_df=indicator_df,
     step_desc_map=step_desc_map,
 )
+
+# 单片异常预警：只读加载修饰工作簿，失败降级为提示、不阻断报表主体
+oos_decoration_df = load_aoi_tt_oos_decoration(current_product)
+alerts_df = build_aoi_tt_sheet_oos_alerts(oos_decoration_df, reference_date=default_end_dt.date())
+_iso_week = previous_iso_week_range(default_end_dt.date())[0].isocalendar()
+render_sheet_oos_alert_center(
+    alerts_df,
+    title=f"单片异常预警中心（上一周 {_iso_week.year}-W{_iso_week.week:02d}）",
+    has_source_data=oos_decoration_df is not None,
+    step_desc_map=step_desc_map,
+)
+render_aoi_tt_sheet_oos_alert_indicator_sections(
+    alerts_df,
+    tt_details_df=tt_details_df,
+    spec_df=spec_df,
+    indicators_df=indicator_df,
+    end_date=default_end_dt.date(),
+    step_desc_map=step_desc_map,
+)
+
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
     st.stop()

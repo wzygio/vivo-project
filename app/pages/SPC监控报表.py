@@ -23,15 +23,18 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.inline_domain.spc.spc_dashboard import (
+    build_spc_sheet_oos_alerts,
     build_weekly_cpk_alerts,
     filter_spc_report,
     get_default_spc_start_date,
     render_cpk_alert_center,
     render_cpk_alert_indicator_sections,
+    render_sheet_oos_alert_indicator_sections,
     render_spc_filters,
     render_spc_indicator_sections,
     render_spc_decoration_admin,
 )
+from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -42,6 +45,7 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
 SpcReportService = spc_service.SpcReportService
@@ -144,6 +148,31 @@ render_cpk_alert_center(
 
 render_cpk_alert_indicator_sections(
     alerts_df=cpk_alerts_df,
+    period_capability_df=period_capability_df,
+    sheet_features_df=sheet_features_df,
+    raw_measurements_df=raw_measurements_df,
+    period_box_source=ConfigLoader.get_spc_period_box_source(),
+    step_desc_map=step_desc_map,
+)
+
+sheet_oos_decoration_result = getattr(view_model, "sheet_oos_decoration_result", None)
+spc_oos_alerts_df = build_spc_sheet_oos_alerts(
+    sheet_oos_decoration_result,
+    reference_date=default_end_dt.date(),
+)
+previous_week_start, _ = previous_iso_week_range(default_end_dt.date())
+previous_week_iso = previous_week_start.isocalendar()
+previous_week_label = f"{previous_week_iso.year}-W{previous_week_iso.week:02d}"
+
+render_sheet_oos_alert_center(
+    spc_oos_alerts_df,
+    title=f"单片异常预警中心（上一周 {previous_week_label}）",
+    has_source_data=sheet_oos_decoration_result is not None,
+    step_desc_map=step_desc_map,
+)
+
+render_sheet_oos_alert_indicator_sections(
+    alerts_df=spc_oos_alerts_df,
     period_capability_df=period_capability_df,
     sheet_features_df=sheet_features_df,
     raw_measurements_df=raw_measurements_df,

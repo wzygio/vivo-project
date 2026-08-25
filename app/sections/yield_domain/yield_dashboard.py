@@ -1,4 +1,5 @@
 # src/vivo_project/app/components/view_sections.py
+import hashlib
 import streamlit as st
 import pandas as pd
 from functools import partial
@@ -6,6 +7,7 @@ from inspect import signature
 from typing import Any, Dict, List, Optional, Sequence
 import plotly.graph_objects as go
 
+from app.components.page_header import build_product_cache_signature
 from app.manager.render_gate import RenderGate
 
 # 引入现有的绘图函数
@@ -539,11 +541,16 @@ def _prepare_compact_mapping_payload(
     hotspot_scripts: list,
     product_code: Optional[str],
     mapping_layout: Optional[dict] = None,
+    key_prefix: Optional[str] = None,
 ) -> dict:
     """[RenderGate 阶段1] 纯计算：构建 Mapping 各批次热力图，禁止触碰 st.*。"""
+    key_fragment = _state_key_fragment(curr_group, curr_code)
+    if key_prefix:
+        key_fragment = _state_key_fragment(key_prefix, curr_group, curr_code)
     payload = {
         "curr_group": curr_group,
         "curr_code": curr_code,
+        "key_fragment": key_fragment,
         "status": "ok",
         "batches": [],
         "tab_labels": [],
@@ -611,7 +618,9 @@ def _render_compact_mapping_payload(payload: dict) -> None:
         payload["tab_labels"],
         payload["default_tab"],
     )
-    key_fragment = _state_key_fragment(payload["curr_group"], payload["curr_code"])
+    key_fragment = payload.get("key_fragment") or _state_key_fragment(
+        payload["curr_group"], payload["curr_code"]
+    )
     for i, batch_no in enumerate(payload["batches"]):
         with tabs[i]:
             st.plotly_chart(
@@ -823,6 +832,7 @@ def _render_compact_sheet_chart(
     target_lot: str,
     curr_group: str,
     curr_code: str,
+    key_fragment: Optional[str] = None,
 ) -> None:
     if not target_lot:
         st.caption("点击上方 Lot 柱体后显示 Sheet 分布。")
@@ -839,10 +849,11 @@ def _render_compact_sheet_chart(
         xaxis_label="Sheet ID",
         sorted_sheet_ids=df_sheet['sheet_id'].astype(str).tolist(),
     )
+    fragment = key_fragment or _state_key_fragment(curr_group, curr_code)
     st.plotly_chart(
         _apply_compact_chart_layout(fig_sheet, 300),
         use_container_width=True,
-        key=f"compact_sheet_chart_{_state_key_fragment(curr_group, curr_code, target_lot)}",
+        key=f"compact_sheet_chart_{_state_key_fragment(fragment, target_lot)}",
     )
 
 
@@ -944,13 +955,19 @@ def _build_compact_render_payload(
     product_code: Optional[str] = None,
     mapping_layout: Optional[dict] = None,
     expanded: bool = False,
+    key_prefix: Optional[str] = None,
 ) -> dict:
     """[RenderGate 阶段1] 纯计算：构建单个 Code expander 的全部图表与表格材料。
 
     禁止任何 st.* 渲染调用；仅读取 st.session_state 中上一次 rerun 已固化的
     Lot 选择（非渲染调用），用于预建 Sheet 分布图。
+
+    key_prefix 用于自动预警等需要与手动筛选区隔离 chart key 的场景；
+    不传时保持手动筛选区原有 key 不变。
     """
     key_fragment = _state_key_fragment(curr_group, curr_code)
+    if key_prefix:
+        key_fragment = _state_key_fragment(key_prefix, curr_group, curr_code)
     target_lot = str(st.session_state.get(f"compact_sheet_lot_{key_fragment}", ""))
     return {
         "label": _build_code_expander_label(mwd_code_data, curr_code, curr_warning),
@@ -966,6 +983,7 @@ def _build_compact_render_payload(
             hotspot_scripts=hotspot_scripts,
             product_code=product_code,
             mapping_layout=mapping_layout,
+            key_prefix=key_prefix,
         ),
         "lot": {
             "curr_code": curr_code,
@@ -989,7 +1007,13 @@ def _render_compact_sheet_from_payload(payload: dict, target_lot: str) -> None:
     if target_lot != sheet_info["target_lot"]:
         # 本次 rerun 的 Lot 点击刚改写 session_state，预建图对应旧 Lot，
         # 按改造前路径即时重建（仅发生在点击/清除选择的那一次 rerun）。
-        _render_compact_sheet_chart(payload["sheet_data"], target_lot, curr_group, curr_code)
+        _render_compact_sheet_chart(
+            payload["sheet_data"],
+            target_lot,
+            curr_group,
+            curr_code,
+            key_fragment=payload["key_fragment"],
+        )
         return
 
     if not target_lot:
@@ -1004,7 +1028,7 @@ def _render_compact_sheet_from_payload(payload: dict, target_lot: str) -> None:
     st.plotly_chart(
         sheet_info["fig"],
         use_container_width=True,
-        key=f"compact_sheet_chart_{_state_key_fragment(curr_group, curr_code, target_lot)}",
+        key=f"compact_sheet_chart_{_state_key_fragment(payload['key_fragment'], target_lot)}",
     )
 
 
@@ -1106,3 +1130,145 @@ def render_code_compact_expanders(
         for payload in payloads[offset:offset + code_count]:
             _render_compact_payload(payload)
         offset += code_count
+
+
+# ==============================================================================
+#  7. 自动预警缺陷图像 (Alert-driven Code Charts)
+# ==============================================================================
+def collect_alert_hit_codes(
+    trend_records: Optional[List[dict]],
+    lot_oos_records: Optional[List[dict]],
+    mwd_code_data: dict,
+) -> List[tuple]:
+    """汇总趋势波动与 Lot 超规预警命中的 (defect_group, defect_desc) 集合。
+
+    - code 级趋势记录：直接取 (defect_group, defect_desc)；记录缺 group 时
+      按 mwd_code_data 的 group↔code 映射补齐；
+    - group 级趋势记录：展开为该 defect_group 下的全部 defect_desc；
+    - Lot 超规记录：取 "异常 Code" 字段并按同一映射补齐 group。
+
+    group↔code 映射取自 mwd_code_data['monthly']，monthly 缺失时回退 weekly。
+    无法映射到 group 的 code 直接跳过；结果去重并按 (group, code) 稳定排序。
+    """
+    pair_df = None
+    for scope in ("monthly", "weekly"):
+        candidate = mwd_code_data.get(scope) if mwd_code_data else None
+        if (
+            candidate is not None
+            and not candidate.empty
+            and {"defect_group", "defect_desc"}.issubset(candidate.columns)
+        ):
+            pair_df = candidate
+            break
+
+    code_to_group: Dict[str, str] = {}
+    if pair_df is not None:
+        pairs = pair_df[["defect_group", "defect_desc"]].dropna().drop_duplicates()
+        for group, code in pairs.itertuples(index=False):
+            code_to_group.setdefault(str(code), str(group))
+
+    hits = set()
+    for record in trend_records or []:
+        level = record.get("level")
+        desc = record.get("defect_desc")
+        group = record.get("defect_group")
+        if level == "code" and desc:
+            resolved_group = str(group) if group else code_to_group.get(str(desc))
+            if resolved_group:
+                hits.add((resolved_group, str(desc)))
+        elif level == "group" and group:
+            hits.update(
+                (str(group), code)
+                for code, mapped_group in code_to_group.items()
+                if mapped_group == str(group)
+            )
+
+    for record in lot_oos_records or []:
+        code = str(record.get("异常 Code", "") or "").strip()
+        if not code:
+            continue
+        group = code_to_group.get(code)
+        if group:
+            hits.add((group, code))
+
+    return sorted(hits)
+
+
+def _alert_charts_signature(
+    hit_codes: List[tuple],
+    warning_lines: Optional[dict],
+    product_code: Optional[str],
+) -> str:
+    """自动预警缺陷图像的构建签名：产品缓存 revision + 命中 Code 集合指纹。
+
+    点"刷新缓存"会 bump 产品 revision，签名必变、图表必重建；
+    同一版数据重复 rerun 时签名稳定，命中 memo 直接复用构建结果。
+    """
+    if product_code:
+        base = build_product_cache_signature("yield_alert_charts", product_code)
+    else:
+        base = "yield_alert_charts|product=unknown"
+    warning_lines = warning_lines or {}
+    parts = []
+    for group, code in hit_codes:
+        warning = warning_lines.get(code) or {}
+        parts.append(f"{group}::{code}::{warning.get('upper', '')}")
+    fingerprint = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
+    return f"{base}|codes={fingerprint}"
+
+
+def render_alert_code_expanders(
+    trend_records: Optional[List[dict]],
+    lot_oos_records: Optional[List[dict]],
+    warning_lines: Optional[dict],
+    mwd_code_data: dict,
+    lot_data: dict,
+    sheet_data: dict,
+    mapping_data: Optional[pd.DataFrame],
+    hotspot_scripts: list,
+    product_code: Optional[str] = None,
+    mapping_layout: Optional[dict] = None,
+    memo_state_key: str = "yield_alert_charts_memo",
+    chart_key_prefix: str = "yield_alert",
+) -> None:
+    """渲染预警命中 Defect Code 的图像（趋势 + Mapping + Lot + Sheet），无需手动筛选。
+
+    命中集合由 collect_alert_hit_codes 汇总（趋势波动 + Lot 超规）；
+    无命中时不渲染任何内容。所有图表 key 统一带 chart_key_prefix 前缀，
+    与下方手动筛选区的 plotly key 完全隔离。
+    """
+    hit_codes = collect_alert_hit_codes(trend_records, lot_oos_records, mwd_code_data)
+    if not hit_codes:
+        return
+
+    gate = RenderGate()
+    for curr_group, curr_code in hit_codes:
+        curr_warning = warning_lines.get(curr_code) if warning_lines else None
+        if curr_warning is None:
+            curr_warning = {'upper': 0.002, 'lower': 0.0}
+        gate.stage(
+            partial(
+                _build_compact_render_payload,
+                mwd_code_data=mwd_code_data,
+                lot_data=lot_data,
+                sheet_data=sheet_data,
+                mapping_data=mapping_data,
+                curr_group=curr_group,
+                curr_code=curr_code,
+                curr_warning=float(curr_warning.get('upper', 0.002)),
+                hotspot_scripts=hotspot_scripts,
+                product_code=product_code,
+                mapping_layout=mapping_layout,
+                expanded=False,
+                key_prefix=chart_key_prefix,
+            )
+        )
+
+    payloads = gate.collect_memoized(
+        memo_state_key,
+        _alert_charts_signature(hit_codes, warning_lines, product_code),
+    )
+    with st.expander(f"🚨 自动预警缺陷图像（{len(hit_codes)} 个 Code）", expanded=False):
+        st.caption("以下图像由预警自动匹配（趋势波动 + Lot 超规），无需通过筛选器查询。")
+        for payload in payloads:
+            _render_compact_payload(payload)

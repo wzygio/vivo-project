@@ -7,12 +7,16 @@
 2. By Lot 别点线图：每 lot 的 Lot 内平均每片 TT 个数（Σtt_qty ÷ Lot 内检测片数），叠加 USL/UCL。
 3. By Sheet 别点线图：每 sheet/glass 的 TT 个数，叠加 USL/UCL。
 
+另含单片异常（Sheet OOS）预警：只读加载修饰工作簿中上一 ISO 周 flag=FALSE 明细，
+并按预警键自动过滤出图（见 docs/PRD/PRD-2026-08-25-Inline自动预警中心.md）。
+
 公共筛选与绘图管线位于 ``app.sections.inline_domain.shared``，本模块只保留
 TT 业务差异：USL/UCL 双上限规格线（虚线/点线）与检测片数文案。
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 import pandas as pd
@@ -32,7 +36,12 @@ from app.sections.inline_domain.shared import (
     get_steps_for_factory as _shared_steps_for_factory,
     render_cascade_filters,
 )
+from app.sections.inline_domain.shared.alert_center import (
+    build_sheet_oos_alert_display,
+    filter_report_by_alert_keys,
+)
 from app.utils.step_labels import format_step_label
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     attach_spec_values,
     build_lot_point_df,
@@ -40,11 +49,35 @@ from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     build_period_trend_df,
     build_sheet_point_df,
 )
+from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
+    AOI_TT_OOS_DECORATION_FILE_NAME,
+    AOI_TT_OOS_KEY_COLUMNS,
+)
+from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
+from src.inline_domain.core.shared.sheet_oos_decoration import (
+    SheetOosDecorationReadError,
+    load_sheet_oos_decoration,
+)
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
+
+logger = logging.getLogger(__name__)
 
 AOI_TT_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
 USL_COLOR = "#dc2626"
 UCL_COLOR = "#f59e0b"
+
+# 单片异常预警展示列（中文）与过滤键映射（中文列 → 报表英文列）
+AOI_TT_ALERT_COLUMN_MAP = {
+    "factory": "厂别",
+    "step_id": "站点",
+    "tt_name": "TT名称",
+    "sheet_id": "Sheet ID",
+    "start_time": "超规时间",
+    "tt_qty": "TT数量",
+    "usl": "规格上限",
+}
+AOI_TT_ALERT_OUTPUT_COLUMNS = ["厂别", "站点", "TT名称", "Sheet ID", "超规时间", "TT数量", "规格上限"]
+AOI_TT_ALERT_KEY_MAP = {"厂别": "factory", "站点": "step_id", "TT名称": "tt_name"}
 
 
 def get_default_aoi_tt_start_date(end_date: date) -> date:
@@ -285,3 +318,112 @@ def render_aoi_tt_indicator_sections(
                         ),
                         width="stretch",
                     )
+
+
+# ---------------------------------------------------------------------------
+# 单片异常（Sheet OOS）预警：上一 ISO 周 flag=FALSE 明细 + 命中指标自动出图
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(show_spinner=False, max_entries=3)
+def _load_aoi_tt_oos_decoration_cached(
+    prod_code: str,
+    file_mtime_ns: int,
+    file_size: int,
+) -> pd.DataFrame | None:
+    """只读加载当前产品的 Sheet OOS 修饰明细；缓存键含文件 (mtime_ns, size)。
+
+    读取失败（含企业加密文件 COM 回退失败）降级返回 None，绝不阻断页面、
+    也绝不触发工作簿写入。
+    """
+    product_dir = resolve_product_resource_dir(prod_code)
+    try:
+        return load_sheet_oos_decoration(
+            product_dir,
+            AOI_TT_OOS_DECORATION_FILE_NAME,
+            prod_code,
+            key_columns=AOI_TT_OOS_KEY_COLUMNS,
+        )
+    except SheetOosDecorationReadError:
+        logger.warning("[AOI_TT] Sheet OOS decoration unreadable for %s, alerts degraded", prod_code)
+        return None
+    except Exception:  # noqa: BLE001 - 预警只读消费，任何异常都降级
+        logger.exception("[AOI_TT] failed to load Sheet OOS decoration for %s", prod_code)
+        return None
+
+
+def load_aoi_tt_oos_decoration(prod_code: str) -> pd.DataFrame | None:
+    """加载当前产品的 Sheet OOS 修饰明细（用于单片异常预警）。
+
+    文件不存在时直接返回 None；存在时按 (mtime_ns, size) 命中 st.cache_data，
+    普通 rerun 不会重复读取工作簿。
+    """
+    decoration_path = (
+        resolve_product_resource_dir(prod_code) / AOI_TT_OOS_DECORATION_FILE_NAME
+    )
+    try:
+        stat = decoration_path.stat()
+    except OSError:
+        return None
+    return _load_aoi_tt_oos_decoration_cached(prod_code, stat.st_mtime_ns, stat.st_size)
+
+
+def build_aoi_tt_sheet_oos_alerts(
+    decoration_df: pd.DataFrame | None,
+    reference_date: date | pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """构建单片异常预警展示表：上一 ISO 周内 flag=FALSE 的明细，中文列、按时间倒序。"""
+    if decoration_df is None or decoration_df.empty:
+        return pd.DataFrame(columns=AOI_TT_ALERT_OUTPUT_COLUMNS)
+    alerts = build_sheet_oos_alerts(
+        decoration_df,
+        time_column="start_time",
+        reference_date=reference_date,
+    )
+    display = build_sheet_oos_alert_display(
+        alerts,
+        column_map=AOI_TT_ALERT_COLUMN_MAP,
+        output_columns=AOI_TT_ALERT_OUTPUT_COLUMNS,
+    )
+    if "超规时间" in display.columns:
+        display["超规时间"] = display["超规时间"].astype(str)
+    return display
+
+
+def render_aoi_tt_sheet_oos_alert_indicator_sections(
+    alerts_df: pd.DataFrame,
+    *,
+    tt_details_df: pd.DataFrame,
+    spec_df: pd.DataFrame,
+    indicators_df: pd.DataFrame,
+    end_date: date,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """按预警键自动过滤并渲染命中指标的图像（无需手动筛选）。
+
+    ``render_aoi_tt_indicator_sections`` 的 st.plotly_chart 未显式传 key，预警区与
+    手动筛选区即使渲染同一指标，Streamlit 也会按调用位置生成不同内部 key，无冲突风险。
+    """
+    if alerts_df.empty:
+        return
+
+    alert_tt_details_df = filter_report_by_alert_keys(tt_details_df, alerts_df, AOI_TT_ALERT_KEY_MAP)
+    alert_indicators_df = filter_report_by_alert_keys(indicators_df, alerts_df, AOI_TT_ALERT_KEY_MAP)
+    if alert_indicators_df.empty or alert_tt_details_df.empty:
+        st.warning("预警指标暂无可绘制的 AOI TT 数据。")
+        return
+
+    indicator_count = (
+        alert_indicators_df.groupby(["factory", "step_id", "tt_name"]).ngroups
+        if {"factory", "step_id", "tt_name"}.issubset(alert_indicators_df.columns)
+        else 0
+    )
+    with st.expander(f"🚨 单片异常预警指标图像（{indicator_count} 个指标）", expanded=False):
+        st.caption("以下图像由单片异常预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
+        render_aoi_tt_indicator_sections(
+            tt_details_df=alert_tt_details_df,
+            spec_df=spec_df,
+            indicators_df=alert_indicators_df,
+            end_date=end_date,
+            step_desc_map=step_desc_map,
+        )

@@ -29,8 +29,13 @@ from app.sections.inline_domain.shared import (
     render_cascade_filters,
     render_sheet_oos_decoration_admin,
 )
+from app.sections.inline_domain.shared.alert_center import (
+    build_sheet_oos_alert_display,
+    filter_report_by_alert_keys,
+)
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
+from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationResult,
 )
@@ -50,6 +55,15 @@ CPK_ALERT_KEY_COLUMN_MAP = {
     "站点": "step_id",
     "参数名称": "param_name",
 }
+SPC_OOS_ALERT_COLUMN_MAP = {
+    "factory": "厂别",
+    "step_id": "站点",
+    "param_name": "参数名称",
+    "sheet_id": "Sheet ID",
+    "sheet_start_time": "超规时间",
+    "oos_type": "超规类型",
+}
+SPC_OOS_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]
 
 # 公共管线已下沉至 app.sections.inline_domain.shared；以下别名为兼容既有调用/测试保留。
 _excel_bytes = excel_bytes
@@ -173,6 +187,29 @@ def filter_spc_report_by_alerts(
     alert_key_index = pd.MultiIndex.from_frame(alert_keys_df)
     report_key_index = pd.MultiIndex.from_frame(report_keys_df)
     return report_df.loc[report_key_index.isin(alert_key_index)].copy().reset_index(drop=True)
+
+
+def build_spc_sheet_oos_alerts(
+    sheet_oos_decoration_result: SheetOosDecorationResult | None,
+    reference_date: date | pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Return last-ISO-week Sheet OOS alerts (flag=FALSE) as a Chinese display table."""
+    if sheet_oos_decoration_result is None:
+        return pd.DataFrame(columns=SPC_OOS_ALERT_COLUMNS)
+
+    alerts_df = build_sheet_oos_alerts(
+        sheet_oos_decoration_result.decoration_df,
+        time_column="sheet_start_time",
+        reference_date=reference_date,
+    )
+    display_df = build_sheet_oos_alert_display(
+        alerts_df,
+        column_map=SPC_OOS_ALERT_COLUMN_MAP,
+        output_columns=SPC_OOS_ALERT_COLUMNS,
+    )
+    if not display_df.empty and "超规时间" in display_df.columns:
+        display_df["超规时间"] = display_df["超规时间"].astype(str)
+    return display_df
 
 
 def get_available_factories(report_df: pd.DataFrame) -> list[str]:
@@ -534,7 +571,11 @@ def render_spc_indicator_sections(
         _render_indicator_payload(payload, chart_key_prefix=chart_key_prefix)
 
 
-def _alert_charts_signature(alerts_df: pd.DataFrame, alert_sheet_features_df: pd.DataFrame) -> str:
+def _alert_charts_signature(
+    alerts_df: pd.DataFrame,
+    alert_sheet_features_df: pd.DataFrame,
+    base: str = "spc_alert_charts",
+) -> str:
     """自动预警图表的构建签名：产品缓存 revision + 预警内容指纹。
 
     点"刷新缓存"会 bump 产品 revision，签名必变、图表必重建；
@@ -544,9 +585,9 @@ def _alert_charts_signature(alerts_df: pd.DataFrame, alert_sheet_features_df: pd
     if "prod_code" in alert_sheet_features_df.columns and not alert_sheet_features_df.empty:
         product_code = str(alert_sheet_features_df["prod_code"].iloc[0])
     if product_code:
-        base = build_product_cache_signature("spc_alert_charts", product_code)
+        base = build_product_cache_signature(base, product_code)
     else:
-        base = "spc_alert_charts|product=unknown"
+        base = f"{base}|product=unknown"
     fingerprint = hashlib.sha256(
         f"{len(alerts_df)}|{alerts_df.astype(str).to_csv(index=False)}".encode("utf-8")
     ).hexdigest()[:16]
@@ -586,5 +627,51 @@ def render_cpk_alert_indicator_sections(
             period_box_source=period_box_source,
             memo_signature=_alert_charts_signature(alerts_df, alert_sheet_features_df),
             chart_key_prefix="spc_alert",
+            step_desc_map=step_desc_map,
+        )
+
+
+def render_sheet_oos_alert_indicator_sections(
+    alerts_df: pd.DataFrame,
+    period_capability_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Render every Sheet-OOS-alerted indicator directly, without requiring filter interaction."""
+    if alerts_df.empty:
+        return
+
+    alert_capability_df = filter_report_by_alert_keys(
+        period_capability_df, alerts_df, CPK_ALERT_KEY_COLUMN_MAP
+    )
+    alert_sheet_features_df = filter_report_by_alert_keys(
+        sheet_features_df, alerts_df, CPK_ALERT_KEY_COLUMN_MAP
+    )
+    alert_raw_measurements_df = filter_report_by_alert_keys(
+        raw_measurements_df, alerts_df, CPK_ALERT_KEY_COLUMN_MAP
+    )
+    if alert_sheet_features_df.empty:
+        st.warning("预警指标暂无可绘制的 Sheet 数据。")
+        return
+
+    indicator_count = (
+        alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
+        if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
+        else 0
+    )
+    with st.expander(f"🚨 单片异常预警指标图像（{indicator_count} 个指标）", expanded=False):
+        st.caption("以下图像由单片异常预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
+        render_spc_indicator_sections(
+            period_capability_df=alert_capability_df,
+            sheet_features_df=alert_sheet_features_df,
+            raw_measurements_df=alert_raw_measurements_df,
+            period_box_source=period_box_source,
+            memo_signature=_alert_charts_signature(
+                alerts_df, alert_sheet_features_df, base="spc_oos_alert_charts"
+            ),
+            memo_state_key="spc_oos_alert_charts_memo",
+            chart_key_prefix="spc_oos_alert",
             step_desc_map=step_desc_map,
         )

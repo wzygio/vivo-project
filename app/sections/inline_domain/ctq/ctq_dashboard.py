@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from functools import partial
+import hashlib
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -22,12 +23,31 @@ from app.sections.inline_domain.shared import (
     render_cascade_filters,
     render_sheet_oos_decoration_admin,
 )
+from app.sections.inline_domain.shared.alert_center import (
+    build_sheet_oos_alert_display,
+    filter_report_by_alert_keys,
+)
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
+from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
 from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
 from src.shared_kernel.config import ConfigLoader
 
 CTQ_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
+CTQ_OOS_ALERT_KEY_COLUMN_MAP = {
+    "厂别": "factory",
+    "站点": "step_id",
+    "参数名称": "param_name",
+}
+CTQ_OOS_ALERT_COLUMN_MAP = {
+    "factory": "厂别",
+    "step_id": "站点",
+    "param_name": "参数名称",
+    "sheet_id": "Sheet ID",
+    "sheet_start_time": "超规时间",
+    "oos_type": "超规类型",
+}
+CTQ_OOS_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]
 
 # 公共管线别名：供本模块组合层引用，并保持既有测试的 monkeypatch 锚点。
 _create_sheet_points_box_charts = create_sheet_points_box_charts
@@ -148,12 +168,33 @@ def _build_ctq_indicator_render_payload(
     }
 
 
-def _render_ctq_indicator_payload(payload: dict[str, object]) -> None:
+def _build_ctq_chart_key(chart_key_prefix: str, label: object, chart_slot: str) -> str:
+    """Return a stable key that is unique to a page section, indicator, and chart."""
+    indicator_digest = hashlib.sha256(str(label).encode("utf-8")).hexdigest()[:16]
+    return f"{chart_key_prefix}_{indicator_digest}_{chart_slot}"
+
+
+def _render_ctq_indicator_payload(
+    payload: dict[str, object],
+    chart_key_prefix: str = "ctq_report",
+) -> None:
     """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
     with st.expander(payload["label"], expanded=True):
-        st.plotly_chart(payload["period_figure"], width="stretch")
-        st.plotly_chart(payload["chamber_figure"], width="stretch")
-        st.plotly_chart(payload["time_figure"], width="stretch")
+        st.plotly_chart(
+            payload["period_figure"],
+            width="stretch",
+            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "period"),
+        )
+        st.plotly_chart(
+            payload["chamber_figure"],
+            width="stretch",
+            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "chamber"),
+        )
+        st.plotly_chart(
+            payload["time_figure"],
+            width="stretch",
+            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "time"),
+        )
 
 
 def render_ctq_indicator_sections(
@@ -161,6 +202,7 @@ def render_ctq_indicator_sections(
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
     step_desc_map: dict[str, str] | None = None,
+    chart_key_prefix: str = "ctq_report",
 ) -> None:
     """Render capability-free CTQ distribution figures by indicator.
 
@@ -197,4 +239,64 @@ def render_ctq_indicator_sections(
         )
 
     for payload in gate.collect():
-        _render_ctq_indicator_payload(payload)
+        _render_ctq_indicator_payload(payload, chart_key_prefix=chart_key_prefix)
+
+
+def build_ctq_sheet_oos_alerts(
+    sheet_oos_decoration_result: SheetOosDecorationResult | None,
+    reference_date: date | None = None,
+) -> pd.DataFrame:
+    """构建上一 ISO 周内 flag=FALSE 的 CTQ 单片异常预警展示表。
+
+    无数据源或窗口内无命中时返回带固定中文列的空表。
+    """
+    if sheet_oos_decoration_result is None:
+        return pd.DataFrame(columns=CTQ_OOS_ALERT_COLUMNS)
+    alerts_df = build_sheet_oos_alerts(
+        sheet_oos_decoration_result.decoration_df,
+        time_column="sheet_start_time",
+        reference_date=reference_date,
+    )
+    display_df = build_sheet_oos_alert_display(
+        alerts_df,
+        column_map=CTQ_OOS_ALERT_COLUMN_MAP,
+        output_columns=CTQ_OOS_ALERT_COLUMNS,
+    )
+    if "超规时间" in display_df.columns:
+        display_df["超规时间"] = display_df["超规时间"].astype(str)
+    return display_df
+
+
+def render_ctq_sheet_oos_alert_indicator_sections(
+    alerts_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """按单片异常预警键过滤并渲染命中指标的 CTQ 图像，无需筛选器交互。"""
+    if alerts_df.empty:
+        return
+
+    alert_sheet_features_df = filter_report_by_alert_keys(
+        sheet_features_df, alerts_df, CTQ_OOS_ALERT_KEY_COLUMN_MAP
+    )
+    alert_raw_measurements_df = filter_report_by_alert_keys(
+        raw_measurements_df, alerts_df, CTQ_OOS_ALERT_KEY_COLUMN_MAP
+    )
+    if alert_sheet_features_df.empty:
+        st.warning("预警指标暂无可绘制的 Sheet 数据。")
+        return
+
+    indicator_count = alert_sheet_features_df.groupby(
+        ["factory", "step_id", "param_name"]
+    ).ngroups
+    with st.expander(f"🚨 单片异常预警指标图像（{indicator_count} 个指标）", expanded=False):
+        st.caption("以下图像由单片异常预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
+        render_ctq_indicator_sections(
+            sheet_features_df=alert_sheet_features_df,
+            raw_measurements_df=alert_raw_measurements_df,
+            period_box_source=period_box_source,
+            step_desc_map=step_desc_map,
+            chart_key_prefix="ctq_oos_alert",
+        )

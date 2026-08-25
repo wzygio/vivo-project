@@ -97,3 +97,27 @@ class AlertService:
                 all_alerts.extend(benchmark_alerts)
         
         return all_alerts
+
+    @staticmethod
+    def get_dashboard_alert_records(
+        mwd_group_data: Dict[str, pd.DataFrame],
+        mwd_code_data: Dict[str, pd.DataFrame],
+    ) -> List[Dict[str, Any]]:
+        """
+        获取结构化趋势预警记录（系统计算，月度 + 周度），用于按 Defect Code 自动出图。
+
+        判定口径与 get_dashboard_alerts 完全一致；每条记录额外带 period_scope
+        （"monthly" / "weekly"）标识来源周期。基准报表比对的文本预警不在此返回。
+        """
+        records: List[Dict[str, Any]] = []
+        for scope in ("monthly", "weekly"):
+            group_df = mwd_group_data.get(scope)
+            code_df = mwd_code_data.get(scope)
+            scope_records = AbnormalDetector.detect_system_trend_records(
+                group_df if group_df is not None else pd.DataFrame(),
+                code_df if code_df is not None else pd.DataFrame(),
+            )
+            for record in scope_records:
+                record["period_scope"] = scope
+            records.extend(scope_records)
+        return records

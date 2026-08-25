@@ -29,6 +29,7 @@ from app.charts.yield_domain.mwd_chart import (
 from app.sections.yield_domain.yield_dashboard import (
     render_macro_trend_section,
     render_code_compact_expanders,
+    render_alert_code_expanders,
 )
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -149,6 +150,24 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         oos_records=oos_records,
         total_recent_lots=total_recent_lots,
         time_period=30
+    )
+
+    # 5. 自动预警缺陷图像：对趋势波动与 Lot 超规命中的 Defect Code 自动出图
+    alert_records = AlertService.get_dashboard_alert_records(
+        mwd_group_data=mwd_group_data,
+        mwd_code_data=mwd_code_data,
+    )
+    render_alert_code_expanders(
+        trend_records=alert_records,
+        lot_oos_records=oos_records,
+        warning_lines=warning_lines,
+        mwd_code_data=mwd_code_data,
+        lot_data=lot_data,
+        sheet_data=sheet_data,
+        mapping_data=mapping_data,
+        hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
+        product_code=active_config.data_source.product_code,
+        mapping_layout=active_config.processing.get('mapping_layout'),
     )
 
 # ==============================================================================
