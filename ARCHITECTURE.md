@@ -151,6 +151,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 `docs/ADR/0012-shared-inline-measurement-snapshot.md`。
 AOI_RS 专属产品级快照边界见
 `docs/ADR/0015-aoi-rs-product-local-snapshot.md`。
+Inline/Yield 页面级自动预警（单片异常 flag=FALSE 口径、上一 ISO 周、
+异常项自动出图）见 `docs/ADR/0017-inline-alert-center.md`。
 
 ## 目录地图
 
