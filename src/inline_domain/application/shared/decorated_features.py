@@ -23,6 +23,7 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
+from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,13 @@ def _empty_features_payload(spec_empty: bool = True) -> dict[str, object]:
     }
 
 
-@st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=12,
+    ttl=ConfigLoader.get_service_cache_ttl_seconds(
+        "inline_decorated_features", default_hours=4
+    ),
+)
 def fetch_decorated_features(
     _features_source: SpcDataPort,
     prod_code: str,

@@ -131,6 +131,47 @@ class ConfigLoader:
             raise ValueError(f"配置不符合 Schema 定义: {e}") from e
 
     @classmethod
+    def get_snapshot_ttl_hours(cls) -> int:
+        """
+        从 global.yaml 读取数据快照缓存 TTL（小时），各模块统一。
+        读取失败或配置非法时回退到默认 8 小时。
+        """
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        default_ttl = 8
+        try:
+            snapshot_conf = cls._load_yaml(yaml_path).get("data_snapshot", {})
+            ttl_hours = int(snapshot_conf.get("ttl_hours", default_ttl))
+            if ttl_hours <= 0:
+                raise ValueError(f"data_snapshot.ttl_hours 必须为正整数，当前值: {ttl_hours}")
+            return ttl_hours
+        except Exception as e:
+            logging.error(f"❌ 读取数据快照 TTL 配置失败: {e}，回退到默认 {default_ttl} 小时。")
+            return default_ttl
+
+    @classmethod
+    def get_service_cache_ttl_seconds(cls, cache_name: str, default_hours: int) -> int:
+        """
+        从 global.yaml 的 service_cache.ttl_hours 段读取指定 Service 缓存 TTL，返回秒。
+        读取失败或配置非法时回退到 default_hours。
+        """
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        try:
+            cache_conf = cls._load_yaml(yaml_path).get("service_cache", {})
+            ttl_map = cache_conf.get("ttl_hours", {})
+            ttl_hours = int(ttl_map.get(cache_name, default_hours))
+            if ttl_hours <= 0:
+                raise ValueError(
+                    f"service_cache.ttl_hours.{cache_name} 必须为正整数，当前值: {ttl_hours}"
+                )
+            return ttl_hours * 3600
+        except Exception as e:
+            logging.error(
+                f"❌ 读取 Service 缓存 TTL 配置失败 ({cache_name}): {e}，"
+                f"回退到默认 {default_hours} 小时。"
+            )
+            return default_hours * 3600
+
+    @classmethod
     def get_compliance_config_path(cls) -> Path:
         """Return the single workbook used by the manager and runtime engine."""
         return cls.get_project_root() / "resources" / "compliance_config.xlsx"

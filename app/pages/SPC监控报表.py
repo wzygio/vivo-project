@@ -124,11 +124,6 @@ cpk_alerts_df = build_weekly_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
 )
-render_cpk_alert_center(
-    cpk_alerts_df,
-    has_capability_data=not period_capability_df.empty,
-    step_desc_map=step_desc_map,
-)
 
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
@@ -137,6 +132,14 @@ if is_admin:
         getattr(view_model, "sheet_oos_decoration_result", None),
         getattr(view_model, "cpk_decoration_result", None),
     )
+    
+render_cpk_alert_center(
+    cpk_alerts_df,
+    has_capability_data=not period_capability_df.empty,
+    step_desc_map=step_desc_map,
+)
+
+
 
 
 render_cpk_alert_indicator_sections(

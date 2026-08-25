@@ -55,12 +55,12 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     root = ConfigLoader.get_project_root()
     source_excel_path = Path(str(baseline["source_excel_path"]))
     snapshot_dir = Path(str(snapshot["directory"]))
-    snapshot_ttl_hours = int(snapshot["ttl_hours"])
+    snapshot_ttl_hours = ConfigLoader.get_snapshot_ttl_hours()
     query_lookback_days = int(query["lookback_days"])
     measurement_max_age_days = int(query.get("measurement_max_age_days", 3))
     source_table = str(query["source_table"]).strip()
     if snapshot_ttl_hours <= 0:
-        raise ValueError("equipment_config.yaml: 'snapshot.ttl_hours' must be positive")
+        raise ValueError("global.yaml: 'data_snapshot.ttl_hours' must be positive")
     if query_lookback_days <= 0:
         raise ValueError("equipment_config.yaml: 'query.lookback_days' must be positive")
     if measurement_max_age_days <= 0:

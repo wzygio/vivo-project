@@ -102,7 +102,7 @@ config.processing['defect_capping']       # 处理参数
 ### 4.1 L1: Parquet 快照
 
 - 路径：`data/{product_code}/yield_snapshot_{product_code}.parquet`
-- TTL：8 小时
+- TTL：统一由 `config/global.yaml` 的 `data_snapshot.ttl_hours` 配置（当前 8 小时）
 - 增量更新：最近 2 天缓冲窗口
 - 降级策略：三防线容灾
 

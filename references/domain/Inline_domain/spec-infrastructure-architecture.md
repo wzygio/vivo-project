@@ -37,7 +37,7 @@
 |---|---|---|
 | `measurement_data_loader.py` | 三厂测量 DAO：一次参数化 UNION ALL（ARRAY/OLED/TP）+ 产品字典 join，产品/时间过滤下推 SQL | `load_raw_measurements(db, start, end, prod)` |
 | `measurement_metadata_loader.py` | 参数元数据 DAO：白名单目录 `eda.IMP_SPC_TZBJX`、规格表 `mdw.dwd_imp_dv_param_spec` | `InlineMeasurementMetadataRepository`（实现 `MeasurementMetadataPort`） |
-| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：3 个月滚动窗口、8h TTL、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
+| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：3 个月滚动窗口、TTL 统一配置于 `config/global.yaml` 的 `data_snapshot.ttl_hours`、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
 | `main_process_history_repository.py` | 主制程 OUT 履历 DAO（6 条 factory×route SQL） | `InlineMainProcessHistoryRepository`（实现 `MainProcessHistoryPort`） |
 | `main_process_trace.py` | 主制程追溯**纯函数**（路由 + 最近前序匹配，零 I/O） | `attach_main_process_spec` / `apply_main_process_history` |
 | `measurement_preprocessor.py` | 排除参数关键字过滤（`LOSS`），纯函数 | `filter_excluded_param_names` |
@@ -106,7 +106,9 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 （scope → 工作簿文件名映射；spc/ctq 的独立 wrapper 已删除）：
 
 ```python
-@st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
+# ttl 统一由 config/global.yaml 的 service_cache.ttl_hours.inline_decorated_features 配置
+@st.cache_data(show_spinner=False, max_entries=12,
+               ttl=ConfigLoader.get_service_cache_ttl_seconds("inline_decorated_features", default_hours=4))
 def fetch_decorated_features(_features_source, prod_code, scope,
                              start_date, end_date, snapshot_signature="") -> dict
 ```

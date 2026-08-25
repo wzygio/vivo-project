@@ -251,9 +251,16 @@ class TestLoadSpecBaseline:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """关键备件运行参数统一从 equipment_config.yaml 读取。"""
+        """关键备件运行参数统一从 equipment_config.yaml 读取，快照 TTL 来自 global.yaml。"""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
+        (config_dir / "global.yaml").write_text(
+            """
+data_snapshot:
+  ttl_hours: 12
+""".strip(),
+            encoding="utf-8",
+        )
         (config_dir / "equipment_config.yaml").write_text(
             """
 equipment:
@@ -262,7 +269,6 @@ equipment:
     source_sheet_names: [规格表A, 规格表B]
   snapshot:
     directory: data/custom-equipment
-    ttl_hours: 12
   query:
     lookback_days: 30
     source_table: eda.ARRAY_PDS_RESULT_T
@@ -288,11 +294,12 @@ equipment:
         config = ConfigLoader.get_equipment_config()
 
         assert config["baseline"]["source_sheet_names"] == ["规格表A", "规格表B"]
-        assert config["snapshot"]["ttl_hours"] == 12
+        assert config["snapshot"]["directory"] == "data/custom-equipment"
         assert config["alert"]["warning_threshold"] == 85.0
         from src.equipment_domain.config import get_equipment_runtime_config
 
         runtime = get_equipment_runtime_config()
+        assert runtime.snapshot_ttl_hours == 12
         assert runtime.fabrication_policy.snapshot_ttl_hours == 24
         assert runtime.fabrication_policy.update_increment_ratio == 0.3
 

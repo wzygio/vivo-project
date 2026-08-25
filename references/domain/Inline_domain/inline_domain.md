@@ -193,7 +193,8 @@ def classify_param_type(raw_data_type: Optional[str]) -> str:
 [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。要点：
 
 - `shared/`（原 `measurement/`，2026-08 按 shared 约束更名归位）拥有三厂测量 DAO、
-  参数元数据 DAO、产品级原始 Parquet 快照（3 个月滚动窗口、8h TTL、策略版本、原子写、
+  参数元数据 DAO、产品级原始 Parquet 快照（3 个月滚动窗口、TTL 统一配置于
+  `config/global.yaml` 的 `data_snapshot.ttl_hours`、策略版本、原子写、
   失败降级）、共享制备管线（`measurement_preparation.py` + `measurement_preprocessor.py`）、
   主制程追溯（`main_process_history_repository.py` + `main_process_trace.py`）与
   站点描述字典（`step_description_loader.py`，纯展示用途）。

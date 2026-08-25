@@ -6,7 +6,6 @@ equipment:
     csv_encoding: utf-8-sig
   snapshot:
     directory: data/equipment
-    ttl_hours: 8
   query:
     lookback_days: 90
     measurement_max_age_days: 3
