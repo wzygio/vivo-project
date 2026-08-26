@@ -2,7 +2,7 @@
 
 业务规则：
 - 月周天分布图：横轴为「月/周/日 | 周期标签」的类别轴，按周期类型着色箱线；
-- Sheet 点位图 By 过货时间：chart_type=line 时横轴按过货时间排序的 sheet_id 类别轴，
+- Sheet 点位图 By 过货时间：横轴为按过货时间排序的 sheet_id 类别轴，
   刻度标签附带各 sheet 的过货时间（非连续 date 轴，无货日期不占位）；
 - 规格线与纵轴范围规则见 ``app.charts.inline.spec_lines``（LSL 为空或 0 仅绘上限）。
 """
@@ -29,6 +29,7 @@ from app.charts.inline_domain.spec_lines import (
     apply_measurement_spec_lines,
     resolve_measurement_y_range,
 )
+from app.charts.inline_domain.sheet_axis import build_sheet_time_axis_labels
 from src.inline_domain.core.spc.spc_calculator import (
     build_available_period_axis,
     build_period_axis,
@@ -214,22 +215,20 @@ def create_sheet_points_box_chart(
         fig.update_layout(title=title, height=420)
         return fig
 
-    uses_time_axis = sort_mode == "按过货时间排序" and chart_type == CHART_TYPE_LINE
+    uses_sheet_time_axis = sort_mode == "按过货时间排序"
     time_axis_labels: list[str] = []
     if sort_mode == "按过货时间排序":
         sorted_df = df.sort_values(["sheet_start_time", "sheet_id"], na_position="last")
-        group_labels = _sheet_id_order(sorted_df)
+        group_labels, label_by_sheet = build_sheet_time_axis_labels(
+            sorted_df,
+            time_column="sheet_start_time",
+        )
+        time_axis_labels = [label_by_sheet[sheet_id] for sheet_id in group_labels]
         if chart_type == CHART_TYPE_LINE:
-            trend_points = sorted_df.dropna(subset=["sheet_start_time"]).assign(
+            trend_points = sorted_df.dropna(subset=["sheet_id"]).assign(
                 sheet_id=lambda frame: frame["sheet_id"].astype(str)
             )
             if not trend_points.empty:
-                time_by_sheet = trend_points.groupby("sheet_id", sort=False)["sheet_start_time"].min()
-                label_by_sheet = {
-                    sheet_id: f"{sheet_id}<br>{pass_time:%m-%d %H:%M}"
-                    for sheet_id, pass_time in time_by_sheet.items()
-                }
-                time_axis_labels = [label_by_sheet[sheet_id] for sheet_id in time_by_sheet.index]
                 trend_points = trend_points.assign(
                     x_label=trend_points["sheet_id"].map(label_by_sheet),
                     time_label=trend_points["sheet_start_time"].dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -251,8 +250,10 @@ def create_sheet_points_box_chart(
         else:
             for sheet_id in group_labels:
                 y_values = sorted_df[sorted_df["sheet_id"].astype(str) == sheet_id]["param_value"]
+                x_label = label_by_sheet[sheet_id]
                 fig.add_trace(
                     create_box_distribution_trace(
+                        x_values=[x_label] * len(y_values),
                         y_values=y_values,
                         name=sheet_id,
                         color="#1d4ed8",
@@ -320,17 +321,19 @@ def create_sheet_points_box_chart(
     fig.update_layout(
         title=title,
         height=430,
-        margin={"l": 32, "r": 24, "t": 56, "b": 80},
-        xaxis_title="过货时间" if uses_time_axis else None,
+        margin={"l": 32, "r": 24, "t": 56, "b": 108 if uses_sheet_time_axis else 80},
+        xaxis_title="Sheet ID / 过货时间（小时）" if uses_sheet_time_axis else None,
         yaxis_title="Param Value",
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
     )
-    if uses_time_axis:
+    if uses_sheet_time_axis:
         fig.update_xaxes(
             categoryorder="array",
             categoryarray=time_axis_labels,
-            tickangle=-45,
+            tickangle=-40,
+            tickfont={"size": 10},
+            automargin=True,
         )
     else:
         fig.update_xaxes(tickangle=-45)

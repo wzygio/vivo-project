@@ -22,6 +22,7 @@ from app.charts.inline_domain.constants import (
     PERIOD_SEPARATORS,
     PERIOD_TYPE_NAMES,
 )
+from app.charts.inline_domain.sheet_axis import build_sheet_time_axis_labels
 
 
 @dataclass(frozen=True)
@@ -197,13 +198,22 @@ def create_aoi_point_chart(
     if point_df.empty:
         return figure
 
-    x_order = (
-        point_df[[id_col, "first_start_time"]]
-        .drop_duplicates()
-        .sort_values("first_start_time", kind="stable")[id_col]
-        .astype(str)
-        .tolist()
-    )
+    is_sheet_axis = id_col == "sheet_id"
+    if is_sheet_axis:
+        x_order, label_by_id = build_sheet_time_axis_labels(
+            point_df,
+            time_column="first_start_time",
+        )
+    else:
+        x_order = (
+            point_df[[id_col, "first_start_time"]]
+            .drop_duplicates()
+            .sort_values("first_start_time", kind="stable")[id_col]
+            .astype(str)
+            .tolist()
+        )
+        label_by_id = {x_value: x_value for x_value in x_order}
+    display_x_order = [label_by_id[x_value] for x_value in x_order]
     codes = sorted(point_df[code_column].astype(str).unique().tolist())
     colors = code_color_map(codes)
     display_names = code_names or {}
@@ -216,18 +226,32 @@ def create_aoi_point_chart(
         display_name = display_names.get(code, code)
         figure.add_trace(
             create_point_line_trace(
-                x_values=x_order,
+                x_values=display_x_order,
                 y_values=y_values,
                 name=display_name,
                 color=colors[code],
                 hovertemplate=f"%{{x}}<br>{y_title}: %{{y}}<extra></extra>",
             )
         )
-        _add_spec_lines(figure, x_order, code_specs.get(code, []), display_name, showlegend=True)
+        _add_spec_lines(
+            figure,
+            display_x_order,
+            code_specs.get(code, []),
+            display_name,
+            showlegend=True,
+        )
 
     figure.update_layout(
         title=title,
-        xaxis={"type": "category", "title": id_col},
+        xaxis={
+            "type": "category",
+            "title": "Sheet ID / 过货时间（小时）" if is_sheet_axis else id_col,
+            "categoryorder": "array",
+            "categoryarray": display_x_order,
+            "tickangle": -50 if is_sheet_axis else 0,
+            "tickfont": {"size": 9} if is_sheet_axis else None,
+            "automargin": True,
+        },
         yaxis={"title": y_title},
         legend={"orientation": "h", "yanchor": "top", "y": -0.5},
         margin={"l": 40, "r": 20, "t": 60, "b": 200},

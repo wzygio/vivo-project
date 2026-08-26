@@ -1196,10 +1196,10 @@ def test_sheet_points_box_chart_uses_point_lines_when_frontend_style_is_line() -
     line_trace = next(trace for trace in fig.data if trace.type == "scatter")
     assert line_trace.mode == "lines+markers"
     assert list(line_trace.x) == [
-        "S1<br>06-01 08:00",
-        "S1<br>06-01 08:00",
-        "S2<br>06-02 09:00",
-        "S2<br>06-02 09:00",
+        "S1<br>06-01 08时",
+        "S1<br>06-01 08时",
+        "S2<br>06-02 09时",
+        "S2<br>06-02 09时",
     ]
     assert list(line_trace.y) == [3.0, 5.0, 4.0, 6.0]
     assert [tuple(row) for row in line_trace.customdata] == [
@@ -1210,8 +1210,8 @@ def test_sheet_points_box_chart_uses_point_lines_when_frontend_style_is_line() -
     ]
     assert line_trace.name == "Point Value"
     assert fig.layout.xaxis.type != "date"
-    assert list(fig.layout.xaxis.categoryarray) == ["S1<br>06-01 08:00", "S2<br>06-02 09:00"]
-    assert fig.layout.xaxis.title.text == "过货时间"
+    assert list(fig.layout.xaxis.categoryarray) == ["S1<br>06-01 08时", "S2<br>06-02 09时"]
+    assert fig.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
 
 
 def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:
