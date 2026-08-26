@@ -1,9 +1,13 @@
 # src/vivo_project/utils/utils.py
-import pandas as pd
 import logging
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
+
+import pandas as pd
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
@@ -90,56 +94,124 @@ def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
                 pass
 
 
-def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -> None:
+def _new_staging_path(xlsx_path: Path, purpose: str) -> Path:
+    """在目标同目录创建临时文件，保证最终替换可使用同卷原子操作。"""
+    handle = tempfile.NamedTemporaryFile(
+        dir=xlsx_path.parent,
+        prefix=f".{xlsx_path.name}.{purpose}.",
+        suffix=".xlsx",
+        delete=False,
+    )
+    handle.close()
+    return Path(handle.name)
+
+
+def _validate_staged_workbook(
+    staged_path: Path,
+    sheet_name: str,
+    df: pd.DataFrame,
+) -> None:
+    """确认临时工作簿可打开，且目标 Sheet 的表头和行列数完整。"""
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(staged_path, read_only=True, data_only=True)
+    try:
+        if sheet_name not in workbook.sheetnames:
+            raise ValueError(f"临时工作簿缺少目标 Sheet: {sheet_name}")
+        worksheet = workbook[sheet_name]
+        headers = [cell.value for cell in next(worksheet.iter_rows(max_row=1))]
+        if headers != list(df.columns):
+            raise ValueError(f"临时工作簿 {sheet_name} 表头校验失败")
+        if (
+            worksheet.max_row != len(df.index) + 1
+            or worksheet.max_column != len(df.columns)
+        ):
+            raise ValueError(f"临时工作簿 {sheet_name} 行列数校验失败")
+    finally:
+        workbook.close()
+
+
+def replace_workbook_sheet(
+    xlsx_path: Path,
+    sheet_name: str,
+    df: pd.DataFrame,
+) -> bool:
     """在共享工作簿中替换（或新建）指定 sheet，保留其他 sheet 的内容与格式。
 
-    - 优先 openpyxl 原地替换：仅删除并重建目标 sheet，其他 sheet 原样保留；
+    - 先在同目录临时文件中完成整本写入与校验，再原子替换源文件；
+    - 替换前将源文件保存为 `<文件名>.bak`，供失败恢复；
+    - 优先 openpyxl 替换目标 sheet，其他 sheet 原样保留；
     - 企业加密等 openpyxl 无法打开的文件回退为：COM 读出全部 sheets，
       替换目标 sheet 后整体重写为明文工作簿（与既有 to_excel 覆盖行为等价）；
-    - 文件被占用（PermissionError，如 Excel 打开中）时仅记录告警，不抛错。
+    - 返回明确成功状态；文件被占用时返回 False 并保留源文件与旧签名重试条件。
 
     Args:
         xlsx_path: 共享工作簿路径（不存在则新建单 sheet 工作簿）
         sheet_name: 目标 sheet 名
         df: 写入的数据
+
+    Returns:
+        目标 Sheet 已持久化时为 True；文件占用导致未写入时为 False。
     """
     from openpyxl.utils.dataframe import dataframe_to_rows
 
+    xlsx_path = Path(xlsx_path)
     xlsx_path.parent.mkdir(parents=True, exist_ok=True)
+    staged_path = _new_staging_path(xlsx_path, "write")
+    backup_staged_path: Path | None = None
     try:
         if not xlsx_path.exists():
-            df.to_excel(xlsx_path, index=False, sheet_name=sheet_name)
-            return
+            df.to_excel(staged_path, index=False, sheet_name=sheet_name)
+        else:
+            try:
+                import openpyxl
 
-        try:
-            import openpyxl
+                workbook = openpyxl.load_workbook(xlsx_path)
+            except Exception:
+                workbook = None
 
-            wb = openpyxl.load_workbook(xlsx_path)
-        except Exception:
-            wb = None
+            if workbook is not None:
+                try:
+                    if sheet_name in workbook.sheetnames:
+                        del workbook[sheet_name]
+                    worksheet = workbook.create_sheet(sheet_name)
+                    for row in dataframe_to_rows(df, index=False, header=True):
+                        worksheet.append(row)
+                    workbook.save(staged_path)
+                finally:
+                    workbook.close()
+            else:
+                logging.warning(
+                    "[excel_tools] openpyxl 无法打开 %s，回退为整体重写。",
+                    xlsx_path.name,
+                )
+                sheets = _read_all_sheets_via_com(xlsx_path)
+                sheets[sheet_name] = df
+                with pd.ExcelWriter(staged_path, engine="openpyxl") as writer:
+                    for name, sheet_df in sheets.items():
+                        sheet_df.to_excel(writer, index=False, sheet_name=name)
 
-        if wb is not None:
-            if sheet_name in wb.sheetnames:
-                del wb[sheet_name]
-            ws = wb.create_sheet(sheet_name)
-            for row in dataframe_to_rows(df, index=False, header=True):
-                ws.append(row)
-            wb.save(xlsx_path)
-            return
+        _validate_staged_workbook(staged_path, sheet_name, df)
 
-        # openpyxl 无法打开（企业加密等）：读出全部 sheets 后整体重写
-        logging.warning("[excel_tools] openpyxl 无法打开 %s，回退为整体重写。", xlsx_path.name)
-        sheets = _read_all_sheets_via_com(xlsx_path)
-        sheets[sheet_name] = df
-        xlsx_path.unlink()
-        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-            for name, sheet_df in sheets.items():
-                sheet_df.to_excel(writer, index=False, sheet_name=name)
+        if xlsx_path.exists():
+            backup_path = xlsx_path.with_suffix(f"{xlsx_path.suffix}.bak")
+            backup_staged_path = _new_staging_path(xlsx_path, "backup")
+            shutil.copy2(xlsx_path, backup_staged_path)
+            os.replace(backup_staged_path, backup_path)
+            backup_staged_path = None
+
+        os.replace(staged_path, xlsx_path)
+        return True
     except PermissionError as exc:
         logging.warning(
-            "[excel_tools] 工作簿被占用，跳过写入 %s [%s]: %s",
+            "[excel_tools] 工作簿被占用，未写入 %s [%s]；源文件保持不变: %s",
             xlsx_path, sheet_name, exc,
         )
+        return False
+    finally:
+        staged_path.unlink(missing_ok=True)
+        if backup_staged_path is not None:
+            backup_staged_path.unlink(missing_ok=True)
 
 
 def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = None) -> pd.DataFrame:

@@ -1,6 +1,7 @@
 # src/vivo_project/core/mapping_processor.py
 import pandas as pd
 import logging
+import math
 import re
 from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
@@ -16,6 +17,72 @@ from yield_domain.core.mapping.panel_position import (
 )
 
 # ==============================================================================
+#                      月度缩放倍数（批次所属月份 × Code）
+# ==============================================================================
+MAX_MONTHLY_SCALE_FACTOR = 10.0
+
+
+def _safe_monthly_factor(factor: object, code_desc: str, month: str) -> float:
+    """拒绝异常或过大的倍率，避免单个配置触发 Mapping 行爆炸。"""
+    try:
+        parsed = float(factor)
+    except (TypeError, ValueError):
+        parsed = math.nan
+    if not math.isfinite(parsed) or parsed < 0 or parsed > MAX_MONTHLY_SCALE_FACTOR:
+        logging.error(
+            "Mapping 月度倍率无效或超出防御上限 %.1f，按 1.0 处理: Code=%s, 月份=%s, 原值=%r",
+            MAX_MONTHLY_SCALE_FACTOR,
+            code_desc,
+            month,
+            factor,
+        )
+        return 1.0
+    return parsed
+
+
+def _apply_monthly_scale_factors(
+    df: pd.DataFrame,
+    batch_month_map: dict[str, str],
+    monthly_factors: dict[tuple[str, str], float],
+) -> pd.DataFrame:
+    """在级联衰减之前，按 (defect_desc, 批次所属月份) 缩放不良行数。
+
+    - f < 1：确定性抽样（random_state=42）；
+    - f > 1：整倍复制 + 余数抽样，复制行 panel_id 加 `_SIM_M{i}` 后缀防碰撞；
+    - 未命中因子（含批次日期无法解析）的行保持不变。
+    """
+    SEED = 42
+    processed = []
+    for (batch_no, code_desc), df_group in df.groupby(
+        ["batch_no", "defect_desc"], sort=False, dropna=False
+    ):
+        month = batch_month_map.get(batch_no)
+        raw_factor = monthly_factors.get((code_desc, month), 1.0) if month else 1.0
+        factor = _safe_monthly_factor(raw_factor, str(code_desc), month or "unknown")
+        current_count = len(df_group)
+        target_count = int(current_count * factor)
+
+        if target_count == current_count or factor == 1.0:
+            processed.append(df_group)
+        elif target_count < current_count:
+            processed.append(df_group.sample(n=target_count, random_state=SEED))
+        else:
+            repeat_times = target_count // current_count
+            remainder = target_count % current_count
+            copies = [df_group]
+            for i in range(1, repeat_times):
+                df_copy = df_group.copy()
+                df_copy["panel_id"] = df_copy["panel_id"].astype(str) + f"_SIM_M{i}"
+                copies.append(df_copy)
+            if remainder > 0:
+                df_rem = df_group.sample(n=remainder, random_state=SEED).copy()
+                df_rem["panel_id"] = df_rem["panel_id"].astype(str) + "_SIM_MREM"
+                copies.append(df_rem)
+            processed.append(pd.concat(copies, ignore_index=True))
+    return pd.concat(processed, ignore_index=True) if processed else df
+
+
+# ==============================================================================
 #                      ByCode计算Mapping集中性
 # ==============================================================================  
 @staticmethod
@@ -26,6 +93,7 @@ def prepare_mapping_data(
     hotspot_scripts: Optional[list[dict[str, Any]]] = None,
     product_code: Optional[str] = None,
     mapping_layout: Optional[dict[str, Any]] = None,
+    monthly_factors: Optional[dict[tuple[str, str], float]] = None,
 ) -> pd.DataFrame:
     """
     [V2.0 - Rate-Based Decay] 为Mapping图准备数据。
@@ -134,6 +202,22 @@ def prepare_mapping_data(
 
         df_defective_panels_modified = pd.concat(batches_after_pos_modification)
         
+        # --- 步骤2.5: 月度缩放倍数（批次所属月份 × Code，级联衰减之前） ---
+        if monthly_factors:
+            batch_month_map = {
+                row["original_batch"]: (
+                    row["batch_date"].strftime("%Y-%m")
+                    if pd.notna(row["batch_date"])
+                    else None
+                )
+                for _, row in batch_map.iterrows()
+            }
+            df_defective_panels_modified = _apply_monthly_scale_factors(
+                df_defective_panels_modified,
+                batch_month_map,
+                monthly_factors,
+            )
+
         # --- 步骤3: Rate-Based 级联衰减 (完美级联版) ---
         max_allowed_rates = {} # 存储每个 Code 的理论天花板
         processed_dfs = []

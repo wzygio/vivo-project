@@ -58,14 +58,16 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
    执行。快照保留原始 Defect Group，避免重复或不可逆过滤。
 3. `YieldAnalysisService` 调用核心算法生成 MWD、Code 趋势、Lot/Sheet
    缺陷率与 Mapping 数据；`AlertService` 和展示层消费这些结果。
-4. Code 级 MWD 以 `defect_multipliers` 后的 Panel 明细作为月度整数计数
-   权威。EMA 决定日度形状，之后按月回补、再执行月/周/日人工覆盖，最终从
-   日度数据重建周/月输出。`weekly_full` 保留完整三自然月窗口，`weekly`
-   仅供近期展示。
+4. Code 与 Group MWD 均以 `defect_multipliers` 后的 Panel 明细作为月度投入
+   权威，分别由“入库良率修饰表”的 Code Sheet 和 Group Sheet 人工指定良损驱动。
+   月中锚点插值与稳定哈希噪声决定日度形状，月内整数分配保证目标合计和单日容量；
+   周/月均从各自最终日度重建。`weekly_full` 保留完整三自然月窗口，`weekly`
+   仅供近期展示。Group 人工指定优先，不要求等于其下 Code 日度之和。
 5. Lot 模拟按 Code-week 的 `weekly_full` 速率分配整数缺陷 token；聚合后
    才取整，再按稳定加权噪声分配到 Lot，最后执行封顶与显式覆盖。
-6. Mapping 与 MWD 独立。它先解析单一有效的产品/Code/batch 修改计划，再
-   处理坐标；无匹配配置时采用确定性位置偏移。布局来自
+6. Mapping 与 Code MWD 共享 Code Sheet 的月度目标水准，但 Mapping 随后仍执行
+   批次级联衰减；非有限、负值或超过 10 倍的月度倍率按 1.0 防御性回退。它先
+   解析单一有效的产品/Code/batch 修改计划，再处理坐标；无匹配配置时采用确定性位置偏移。布局来自
    `processing.mapping_layout`，未配置产品使用默认 10 × 19 布局。
 
 ### SPC、CTQ 与自动预警
@@ -153,6 +155,8 @@ AOI_RS 专属产品级快照边界见
 `docs/ADR/0015-aoi-rs-product-local-snapshot.md`。
 Inline/Yield 页面级自动预警（单片异常 flag=FALSE 口径、上一 ISO 周、
 异常项自动出图）见 `docs/ADR/0017-inline-alert-center.md`。
+MWD 指定良损、Group/Code Sheet 优先级与 Mapping 边界见
+`docs/ADR/0018-yield-modifier-specified-rate-driven.md`。
 
 ## 目录地图
 
