@@ -5,7 +5,7 @@
 - Code 级日度由 `daily_generator.generate_daily_counts` 按"入库良率修饰表"
   解析出的 `modifier_targets`（{defect_desc: {月份: 目标良损}}）确定性生成；
   未指定的缺陷保持原始日度不良数。
-- Group 级不独立生成，由 Code 日度结果按 Group 汇总。
+- Group 级由 Group Sheet 的人工指定良损独立生成，人工指定优先。
 - 周度/月度不再有任何人工覆盖，由最终日度经 `aggregation.safe_trend_aggregator`
   直接聚合。
 """
@@ -22,7 +22,10 @@ from src.shared_kernel.config_model import AppConfig
 from yield_domain.core.mwd_trend.aggregation import (
     safe_trend_aggregator as _safe_trend_aggregator,
 )
-from yield_domain.core.mwd_trend.daily_generator import generate_daily_counts
+from yield_domain.core.mwd_trend.daily_generator import (
+    generate_daily_counts,
+    generate_group_daily_counts,
+)
 from yield_domain.core.mwd_trend.data_preparation import (
     pad_daily_data_to_end as _pad_daily_data_to_today,
     prepare_code_raw_data as _prepare_code_raw_data,
@@ -40,13 +43,14 @@ class MWDTrendProcessor:
     @staticmethod
     def create_mwd_trend_data(
         panel_details_df: pd.DataFrame,
-        mwd_code_data: Dict[str, pd.DataFrame] | None,
         config: AppConfig,
+        modifier_targets: Dict[str, Dict[str, float]] | None = None,
+        volatility: float = 0.3,
         target_end_date: dt | None = None,
     ) -> Dict[str, pd.DataFrame] | None:
-        """Create Group trends from the already calculated Code daily source."""
+        """Create Group trends driven by Group Sheet monthly loss rates."""
         logging.info("开始 Group 月/周/日趋势处理")
-        if panel_details_df.empty or not mwd_code_data:
+        if panel_details_df.empty:
             return None
 
         try:
@@ -59,10 +63,11 @@ class MWDTrendProcessor:
                 is_group_level=True,
                 end_date=last_day,
             )
-            group_daily = _build_group_daily_from_code_data(
+            group_daily = generate_group_daily_counts(
                 padded_daily,
-                mwd_code_data.get("daily_full"),
-                target_defects,
+                modifier_targets or {},
+                product_code=config.data_source.product_code,
+                volatility=volatility,
             )
             monthly = _safe_trend_aggregator(
                 group_daily, last_day, "M", is_group_level=True
@@ -114,30 +119,6 @@ class MWDTrendProcessor:
         except Exception as error:
             logging.error("Code 趋势分析出错: %s", error, exc_info=True)
             return None
-
-
-def _build_group_daily_from_code_data(
-    daily_skeleton: pd.DataFrame,
-    code_daily: pd.DataFrame | None,
-    target_defects: list[str],
-) -> pd.DataFrame:
-    """Convert formatted Code daily rows into a Group-wide daily table."""
-    result = daily_skeleton[["total_panels"]].copy()
-    for group in target_defects:
-        result[group] = 0
-    if code_daily is None or code_daily.empty:
-        return result
-
-    source = code_daily.copy()
-    source["warehousing_time"] = pd.to_datetime(source["time_period"], errors="coerce")
-    counts = source.groupby(["warehousing_time", "defect_group"])[
-        "defect_panel_count"
-    ].sum()
-    for group in target_defects:
-        group_counts = counts.xs(group, level="defect_group", drop_level=True) if group in counts.index.get_level_values("defect_group") else pd.Series(dtype=float)
-        result[group] = result.index.map(group_counts).fillna(0).astype(int)
-    return result
-
 
 __all__ = [
     "MWDTrendProcessor",

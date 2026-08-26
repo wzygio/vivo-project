@@ -72,7 +72,7 @@ class TestBuildModifierContext:
             config, tmp_path / "M999", _panel_details()
         )
 
-        assert set(context) >= {"targets", "factors", "signature"}
+        assert set(context) >= {"targets", "group_targets", "factors", "signature"}
         # 表文件被同步创建，CodeA 当月良损 = 1/20
         table_path = tmp_path / "入库良率修饰表.xlsx"
         assert table_path.exists()
@@ -82,6 +82,9 @@ class TestBuildModifierContext:
         assert row["当月良损"] == pytest.approx(1 / 20)
         # 未指定 → 目标回落原始良损，倍数 1.0
         assert context["targets"]["CodeA"]["2026-07"] == pytest.approx(1 / 20)
+        assert context["group_targets"]["Array_Pixel"]["2026-07"] == pytest.approx(
+            1 / 20
+        )
         assert context["factors"][("CodeA", "2026-07")] == 1.0
 
     def test_specified_rate_flows_into_targets_and_factors(
@@ -118,4 +121,5 @@ class TestBuildModifierContext:
             _config(), tmp_path / "M999", empty_panels
         )
         assert context["targets"] == {}
+        assert context["group_targets"] == {}
         assert context["factors"] == {}

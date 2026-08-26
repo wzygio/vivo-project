@@ -8,8 +8,8 @@
 3. 确定性扰动：``noise = 1 + volatility × (2u − 1)``，其中
    ``u = blake2b("{product}|{defect}|{date}") / 2^64`` —— 无周期性震荡，
    且同输入多次运行结果完全一致（不依赖内置 ``hash()``）；
-4. 日度权重 ``w = base × noise × total_panels``，月内按权重把目标量分配到日
-   （复用 `allocation.allocate_integer_counts`，单日上限 = 当日投入）。
+4. 日度权重 ``w = base × noise × total_panels``，月内按权重把目标量分配到日，
+   单日上限为当日投入。
 
 未出现在目标表中的缺陷保持原始日度不良数不变（回落原始数据语义）。
 """
@@ -21,9 +21,64 @@ import hashlib
 import numpy as np
 import pandas as pd
 
-from yield_domain.core.mwd_trend.allocation import allocate_integer_counts
-
 MID_MONTH_DAY = 15
+
+
+def allocate_integer_counts(
+    weights: np.ndarray,
+    capacities: np.ndarray,
+    target_total: int,
+) -> np.ndarray:
+    """按权重分配整数目标，且不超过各行容量。"""
+    safe_capacities = np.floor(
+        np.nan_to_num(capacities, nan=0.0, posinf=0.0, neginf=0.0)
+    ).astype(int)
+    safe_capacities = np.clip(safe_capacities, 0, None)
+    effective_target = min(max(0, int(target_total)), int(safe_capacities.sum()))
+    if effective_target == 0:
+        return np.zeros(len(safe_capacities), dtype=int)
+
+    safe_weights = np.nan_to_num(weights, nan=0.0, posinf=0.0, neginf=0.0)
+    safe_weights = np.clip(safe_weights.astype(float), 0.0, None)
+    exact_allocations = np.zeros(len(safe_capacities), dtype=float)
+    remaining_target = float(effective_target)
+    active = safe_capacities > 0
+
+    while remaining_target > 0 and active.any():
+        active_weights = np.where(active, safe_weights, 0.0)
+        if active_weights.sum() <= 0:
+            active_weights = np.where(
+                active,
+                safe_capacities - exact_allocations,
+                0.0,
+            )
+
+        shares = remaining_target * active_weights / active_weights.sum()
+        remaining_capacity = safe_capacities - exact_allocations
+        saturated = active & (shares >= remaining_capacity)
+        if saturated.any():
+            exact_allocations[saturated] += remaining_capacity[saturated]
+            remaining_target -= float(remaining_capacity[saturated].sum())
+            active[saturated] = False
+            continue
+
+        exact_allocations[active] += shares[active]
+        remaining_target = 0.0
+
+    allocated = np.floor(exact_allocations).astype(int)
+    remainder = effective_target - int(allocated.sum())
+    if remainder > 0:
+        fractional = exact_allocations - allocated
+        eligible = allocated < safe_capacities
+        order = np.argsort(-fractional, kind="stable")
+        for index in order:
+            if remainder == 0:
+                break
+            if eligible[index]:
+                allocated[index] += 1
+                remainder -= 1
+
+    return allocated
 
 
 def _hash_unit_interval(product_code: str, defect: str, date: pd.Timestamp) -> float:
@@ -129,3 +184,38 @@ def generate_daily_counts(
             )
         )
     return pd.concat(pieces).sort_index()
+
+
+def generate_group_daily_counts(
+    padded_daily: pd.DataFrame,
+    monthly_targets: dict[str, dict[str, float]],
+    product_code: str,
+    volatility: float = 0.3,
+) -> pd.DataFrame:
+    """按 Group Sheet 的月度指定良损生成 Group 级日度宽表。"""
+    if padded_daily.empty:
+        return padded_daily.copy()
+
+    result = padded_daily.copy()
+    group_columns = [column for column in result if column != "total_panels"]
+    for group in group_columns:
+        month_rates = (monthly_targets or {}).get(group)
+        if not month_rates:
+            continue
+        group_daily = pd.DataFrame(
+            {
+                "warehousing_time": result.index,
+                "total_panels": result["total_panels"].to_numpy(),
+                "defect_panel_count": result[group].to_numpy(),
+            },
+            index=result.index,
+        )
+        generated = _generate_defect_daily(
+            group_daily,
+            month_rates,
+            product_code,
+            group,
+            volatility,
+        )
+        result[group] = generated["defect_panel_count"].to_numpy()
+    return result

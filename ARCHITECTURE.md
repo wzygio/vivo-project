@@ -15,8 +15,12 @@ Streamlit
   ├─ app/Home.py                 门户、应用初始化、热重载
   └─ app/pages/*.py              各业务页面
        ├─ app/components/        页头、筛选、上传、告警与缓存失效
-       ├─ app/sections/          页面区块组装
+       ├─ app/sections/          页面区块组装层（对齐后端 application 层；
+       │                         inline 各报表共享 inline_domain/shared/
+       │                         级联筛选与修饰后台组装）
        └─ app/charts/            Plotly / ECharts 图表适配
+            └─ app/charts/inline/   inline 四报表共享绘图：图表类型决策、
+                                   规格线、月周天分布、Sheet 点位图、AOI 趋势/点线图
             ↓
 src/<domain>/application/        用例编排、缓存 payload、ViewModel
             ↓
@@ -54,21 +58,27 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
    执行。快照保留原始 Defect Group，避免重复或不可逆过滤。
 3. `YieldAnalysisService` 调用核心算法生成 MWD、Code 趋势、Lot/Sheet
    缺陷率与 Mapping 数据；`AlertService` 和展示层消费这些结果。
-4. Code 级 MWD 由"入库良率修饰表"的指定良损驱动：`daily_generator` 按月中
-   锚点插值基线 + blake2b 确定性噪声生成日度整数不良数（未指定的缺陷保持
-   原始数据），月/周由最终日度直接聚合，无任何人工覆盖。`weekly_full` 保留
-   完整三自然月窗口，`weekly` 仅供近期展示。
+4. Code 与 Group MWD 均以 `defect_multipliers` 后的 Panel 明细作为月度投入
+   权威，分别由“入库良率修饰表”的 Code Sheet 和 Group Sheet 人工指定良损驱动。
+   月中锚点插值与稳定哈希噪声决定日度形状，月内整数分配保证目标合计和单日容量；
+   周/月均从各自最终日度重建。`weekly_full` 保留完整三自然月窗口，`weekly`
+   仅供近期展示。Group 人工指定优先，不要求等于其下 Code 日度之和。
 5. Lot 模拟按 Code-week 的 `weekly_full` 速率分配整数缺陷 token；聚合后
    才取整，再按稳定加权噪声分配到 Lot，最后执行封顶与显式覆盖。
-6. Mapping 与 MWD 独立。它先解析单一有效的产品/Code/batch 修改计划，再
-   处理坐标；无匹配配置时采用确定性位置偏移。布局来自
+6. Mapping 与 Code MWD 共享 Code Sheet 的月度目标水准，但 Mapping 随后仍执行
+   批次级联衰减；异常或超过 10 倍的月度倍率按 1.0 防御性回退。它先解析单一
+   有效的产品/Code/batch 修改计划，再处理坐标；无匹配配置时采用确定性位置偏移。布局来自
    `processing.mapping_layout`，未配置产品使用默认 10 × 19 布局。
 
 ### SPC、CTQ 与自动预警
 
 - `infrastructure/measurement/` 拥有三厂 Inline 测量事实的数据库读取和产品级
   Parquet 快照。共享快照只保存预处理前的稳定字段超集；TTL、策略版本、强制
-  刷新、原子写入和数据库失败降级均在这一适配器内完成。
+  刷新、原子写入和数据库失败降级均在这一适配器内完成。快照写入前可通过
+  `measurement_corrector` 钩子应用数值修正（当前规则见
+  `infrastructure/spc/spc_data_correction.py`：M673 且 param_name 含 PPA 且
+  site_name∈[96,114] 的记录 param_value 减 5，属真实量测偏差修正；其余
+  所有 PPA 记录统一减 0.5），由 `composition.py` 注入。
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
   组合根。SPC、CTQ、AOI_TT、AOI_RS 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
@@ -83,13 +93,17 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   起止日期与快照签名）：scope='spc'/'ctq' 分别使用对应 OOS 修饰工作簿，
   scope='none' 跳过修饰；monitor 按 data_type 分组路由 scope（SPC→spc、
   CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，命中不重写。
-- 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
-  所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
+- 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
+  所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
-- `SpcReportService` 固定使用 `SPC` 数据类型，提供 CPM/CPK 能力结果和
-  图表类型；CPK 人工修饰文件
+- `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
+  点位图类型统一由 `app/charts/inline/chart_type.py` 根据
+  `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
   `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
   合并到新结果，刷新时不会重建既有 sheet。
+- PNL 指标规格的版本/产品收严分析是独立离线工具，归
+  `tools/indicator_improvement/` 所有，不进入 `src/inline_domain` 的应用服务、
+  Core 或组合根；其输入为离线 Excel，输出为 `output/` 下的可重建报告。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端
   选定的图表类型；CTQ OOS 修饰保存在共享工作簿 `resources/ctq_sheet_oos_decoration.xlsx` 的产品 sheet 中。
 - `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
@@ -139,6 +153,8 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 `docs/ADR/0012-shared-inline-measurement-snapshot.md`。
 AOI_RS 专属产品级快照边界见
 `docs/ADR/0015-aoi-rs-product-local-snapshot.md`。
+Inline/Yield 页面级自动预警（单片异常 flag=FALSE 口径、上一 ISO 周、
+异常项自动出图）见 `docs/ADR/0017-inline-alert-center.md`。
 
 ## 目录地图
 
@@ -152,7 +168,7 @@ AOI_RS 专属产品级快照边界见
 | `config/` | 全局、产品、SPC、设备和合规配置。 |
 | `resources/` | 受版本控制的产品资源、基线、人工修饰与前端静态文件。 |
 | `data/` | 本地运行时数据与领域 Parquet 快照。 |
-| `tools/` | 分域 smoke 测试和设备仿造数据运维命令。 |
+| `tools/` | 分域 smoke、离线分析和设备仿造数据运维命令。 |
 | `tests/` | 单元、集成和浏览器端到端测试。 |
 | `docs/ADR/` | 已接受的架构决策记录。 |
 | `references/` | 项目自有领域知识与 Harness 演进记录。 |
@@ -161,6 +177,11 @@ AOI_RS 专属产品级快照边界见
 
 ## 约束与验证
 
+- **shared 提取约束**：对于各模块可复用的逻辑，应当提取出来并写入对应层的
+  `shared/` 子模块下（`application/shared/`、`core/shared/`、
+  `infrastructure/shared/`；前端对应 `app/charts/inline/` 与
+  `app/sections/inline_domain/shared/`）。业务模块只保留业务差异，禁止跨
+  业务模块导入私有函数；复用必须经由 shared 公共 API（ADR-0014、ADR-0016）。
 - `app/` 负责交互、筛选、调用应用服务和渲染；新的业务规则应落在领域
   `core/` 或 `application/`，数据访问和快照语义应落在 `infrastructure/`。
 - 不要在没有专门任务和回归证明的情况下重构 Yield 的浓度/Mapping 算法、
@@ -181,11 +202,7 @@ AOI_RS 专属产品级快照边界见
 ### MWD 趋势模块职责
 
 `src/yield_domain/core/mwd_trend/mwd_trend_processor.py` 仅作为 MWD 趋势
-门面，负责调用顺序。数据修饰由"入库良率修饰表"（`resources/入库良率修饰表.xlsx`）
-的人工指定良损驱动：`modifier_table.py` 负责读写修饰表、当月原始良损回写、
-上月回退解析与缩放倍数计算；`daily_generator.py` 按指定月度良损确定性地生成
-日度不良数（月中锚点插值保证跨月平滑、blake2b 哈希噪声无周期）；Group 趋势由
-Code 日度汇总；周/月由日度直接聚合。数据准备、聚合与整数分配、结果格式化分别
-由 `data_preparation.py`、`aggregation.py`/`allocation.py`、`formatting.py` 承担。
-Mapping 不良数在级联衰减之前乘以"批次所属月份的缩放倍数"（`mapping_processor.py`
-步骤 2.5），使月周日趋势与 Mapping 水准一致。
+门面，负责调用顺序和对外兼容入口。数据准备、聚合与整数分配、EMA、人工
+覆盖与日度重建、结果格式化分别由同目录下的专用模块承担。人工覆盖的顺序
+固定为：周度覆盖先重建日度再聚合月度；月度覆盖只修改最终月度结果，不回写
+日度；日度覆盖完成后重新聚合周度和月度。

@@ -71,14 +71,30 @@ class TestReadModifierTable:
         assert table["group"].empty and table["code"].empty
         assert list(table["group"].columns) == MODIFIER_TABLE_COLUMNS
 
-    def test_missing_sheet_returns_empty_frame_for_that_level(self, tmp_path):
+    def test_missing_sheet_returns_empty_without_starting_com(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
         path = tmp_path / "modifier.xlsx"
         _write_table(path, "M999_Group级", [_row("Array_Line", "2026-07", 0.01)])
+        com_calls = 0
+
+        def fail_if_com_starts(*args, **kwargs):
+            nonlocal com_calls
+            com_calls += 1
+            raise AssertionError("标准工作簿缺 Sheet 不应启动 COM")
+
+        monkeypatch.setattr(
+            "src.shared_kernel.utils.excel_tools._read_encrypted_xlsx_via_com",
+            fail_if_com_starts,
+        )
 
         table = read_modifier_table(path, "M999")
 
         assert not table["group"].empty
         assert table["code"].empty
+        assert com_calls == 0
 
 
 from src.yield_domain.core.mwd_trend.modifier_table import compute_current_month_loss
@@ -119,6 +135,7 @@ class TestComputeCurrentMonthLoss:
 
 
 from src.yield_domain.core.mwd_trend.modifier_table import (
+    ModifierTableValidationError,
     compute_scale_factors,
     resolve_monthly_targets,
 )
@@ -175,16 +192,35 @@ class TestResolveMonthlyTargets:
         assert "2026-07" not in targets["B暗点"]
 
 
-class TestComputeScaleFactors:
-    """缩放倍数 = round(指定良损 / 当月良损, 2)；异常口径记 1.0。"""
+def test_read_modifier_table_rejects_negative_rate_with_row_context(tmp_path):
+    path = tmp_path / "modifier.xlsx"
+    _write_table(
+        path,
+        "M999_Code级",
+        [_row("B暗点", "2026-07", raw_loss=0.1, specified=-0.1)],
+    )
 
-    def test_factor_rounded_to_two_decimals(self):
+    with pytest.raises(ModifierTableValidationError) as exc_info:
+        read_modifier_table(path, "M999")
+
+    message = str(exc_info.value)
+    assert "M999" in message
+    assert "M999_Code级" in message
+    assert "B暗点" in message
+    assert "2026-07" in message
+    assert "-0.1" in message
+
+
+class TestComputeScaleFactors:
+    """缩放倍数 = round(指定良损 / 当月良损, 3)；异常口径记 1.0。"""
+
+    def test_factor_rounded_to_three_decimals(self):
         df = pd.DataFrame(
             [_row("B暗点", "2026-07", raw_loss=0.013, specified=0.02)],
             columns=MODIFIER_TABLE_COLUMNS,
         )
         factors = compute_scale_factors(df)
-        assert factors[("B暗点", "2026-07")] == pytest.approx(round(0.02 / 0.013, 2))
+        assert factors[("B暗点", "2026-07")] == pytest.approx(round(0.02 / 0.013, 3))
 
     def test_unspecified_rows_have_factor_one(self):
         df = pd.DataFrame(
@@ -212,7 +248,7 @@ class TestComputeScaleFactors:
             columns=MODIFIER_TABLE_COLUMNS,
         )
         factors = compute_scale_factors(df)
-        assert factors[("B暗点", "2026-07")] == pytest.approx(round(0.02 / 0.008, 2))
+        assert factors[("B暗点", "2026-07")] == pytest.approx(round(0.02 / 0.008, 3))
 
 
 from src.yield_domain.core.mwd_trend.modifier_table import (
@@ -222,7 +258,7 @@ from src.yield_domain.core.mwd_trend.modifier_table import (
 
 
 class TestSyncModifierTable:
-    """写回 orchestration：更新当月良损、按需重算缩放倍数、容忍写失败。"""
+    """写回 orchestration：更新当月良损，并仅在持久化成功后推进签名。"""
 
     @pytest.fixture
     def captured_writes(self, monkeypatch):
@@ -230,6 +266,7 @@ class TestSyncModifierTable:
 
         def fake_replace(path, sheet_name, df):
             writes[sheet_name] = df.copy()
+            return True
 
         monkeypatch.setattr(
             "src.yield_domain.core.mwd_trend.modifier_table.replace_workbook_sheet",
@@ -273,7 +310,7 @@ class TestSyncModifierTable:
         line = written[written["不良类型"] == "G向单亮线"].iloc[0]
         assert line["指定良损"] == 0.8  # 用户指定不被覆盖
         assert line["当月良损"] == pytest.approx(0.5)  # 当月良损被刷新
-        assert line["缩放倍数"] == pytest.approx(round(0.8 / 0.5, 2))
+        assert line["缩放倍数"] == pytest.approx(round(0.8 / 0.5, 3))
 
     def test_no_rewrite_when_nothing_changed(self, tmp_path, captured_writes):
         rows = [_row("G向单亮线", "2026-07", raw_loss=0.5, specified=0.8)]
@@ -315,12 +352,22 @@ class TestSyncModifierTable:
 
     def test_write_failure_is_tolerated(self, tmp_path, monkeypatch):
         def boom(path, sheet_name, df):
-            raise PermissionError("file locked")
+            return False
 
         monkeypatch.setattr(
             "src.yield_domain.core.mwd_trend.modifier_table.replace_workbook_sheet",
             boom,
         )
-        # 不抛异常，仍返回内存中的更新表
+        signature_path = tmp_path / "sig.json"
+        signature_path.write_text(
+            __import__("json").dumps(
+                {"M999:code": "stale-code", "M999:group": "stale-group"}
+            ),
+            encoding="utf-8",
+        )
+
+        # 不抛异常，仍返回内存中的更新表；失败 sheet 的签名保留旧值以便重试。
         table = self._run_sync(tmp_path, None)
         assert not table["code"].empty
+        stored = __import__("json").loads(signature_path.read_text(encoding="utf-8"))
+        assert stored == {"M999:code": "stale-code", "M999:group": "stale-group"}

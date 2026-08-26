@@ -121,7 +121,7 @@ def test_output_contract_keys_and_determinism() -> None:
     pd.testing.assert_frame_equal(first["daily_full"], second["daily_full"])
 
 
-def test_group_trend_is_aggregated_from_code_daily() -> None:
+def test_group_sheet_specified_rate_drives_group_trend() -> None:
     days = ["20260501", "20260502", "20260503"]
     panel_details = _panel_details(
         days,
@@ -131,22 +131,20 @@ def test_group_trend_is_aggregated_from_code_daily() -> None:
         },
     )
     config = _config()
-    targets = {"CodeA": {"2026-05": 0.1}, "CodeB": {"2026-05": 0.2}}
-
-    code_results = MWDTrendProcessor.create_code_level_mwd_trend_data(
-        panel_details, config, targets, target_end_date=pd.Timestamp("2026-05-03")
-    )
+    group_targets = {
+        "Array_Pixel": {"2026-05": 0.5},
+        "OLED_Mura": {"2026-05": 0.2},
+    }
     group_results = MWDTrendProcessor.create_mwd_trend_data(
         panel_details_df=panel_details,
-        mwd_code_data=code_results,
         config=config,
+        modifier_targets=group_targets,
         target_end_date=pd.Timestamp("2026-05-03"),
     )
 
     assert group_results is not None
-    # CodeA: 30×0.1=3，CodeB: 30×0.2=6 → Array_Pixel 组合计 9（Code 日度汇总）
     group_monthly = group_results["monthly"]
     pixel = group_monthly[group_monthly["defect_group"] == "Array_Pixel"]
-    assert pixel["defect_rate"].sum() == pytest.approx(9 / 30)
+    assert pixel["defect_rate"].sum() == pytest.approx(0.5)
     mura = group_monthly[group_monthly["defect_group"] == "OLED_Mura"]
-    assert mura["defect_rate"].sum() == pytest.approx(1 / 30)  # CodeC 未指定 → 原始 1 片
+    assert mura["defect_rate"].sum() == pytest.approx(0.2)

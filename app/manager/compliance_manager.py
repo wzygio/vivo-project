@@ -183,7 +183,7 @@ def render_scrap_sheet_uploader():
     """
     报废Sheet覆写面板
     
-    参考 render_trend_override_uploader 的交互样式：
+    参考 render_yield_config_uploader 的交互样式：
     - 左列：步骤1 下载标准模板（现有文件或空模板）
     - 右列：步骤2 上传覆盖文件
     """

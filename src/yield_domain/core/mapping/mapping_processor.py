@@ -1,6 +1,7 @@
 # src/vivo_project/core/mapping_processor.py
 import pandas as pd
 import logging
+import math
 import re
 from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
@@ -18,6 +19,27 @@ from yield_domain.core.mapping.panel_position import (
 # ==============================================================================
 #                      月度缩放倍数（批次所属月份 × Code）
 # ==============================================================================
+MAX_MONTHLY_SCALE_FACTOR = 10.0
+
+
+def _safe_monthly_factor(factor: object, code_desc: str, month: str) -> float:
+    """拒绝异常或过大的倍率，避免单个配置触发 Mapping 行爆炸。"""
+    try:
+        parsed = float(factor)
+    except (TypeError, ValueError):
+        parsed = math.nan
+    if not math.isfinite(parsed) or parsed < 0 or parsed > MAX_MONTHLY_SCALE_FACTOR:
+        logging.error(
+            "Mapping 月度倍率无效或超出防御上限 %.1f，按 1.0 处理: Code=%s, 月份=%s, 原值=%r",
+            MAX_MONTHLY_SCALE_FACTOR,
+            code_desc,
+            month,
+            factor,
+        )
+        return 1.0
+    return parsed
+
+
 def _apply_monthly_scale_factors(
     df: pd.DataFrame,
     batch_month_map: dict[str, str],
@@ -35,7 +57,8 @@ def _apply_monthly_scale_factors(
         ["batch_no", "defect_desc"], sort=False, dropna=False
     ):
         month = batch_month_map.get(batch_no)
-        factor = monthly_factors.get((code_desc, month), 1.0) if month else 1.0
+        raw_factor = monthly_factors.get((code_desc, month), 1.0) if month else 1.0
+        factor = _safe_monthly_factor(raw_factor, str(code_desc), month or "unknown")
         current_count = len(df_group)
         target_count = int(current_count * factor)
 

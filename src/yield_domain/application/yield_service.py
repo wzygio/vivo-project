@@ -191,8 +191,8 @@ class YieldAnalysisService:
 
         在 cached 方法内部（cache miss 时）调用：
         - 回写当月良损（仅当月行）与缩放倍数（指定签名变化时）；
-        - 返回 targets（Code 级月目标良损，含上月回退）、factors（Code 级缩放倍数）、
-          signature（两级指定签名，供缓存 key 使用）。
+        - 返回 targets（Code 级）、group_targets（Group 级）、factors（Code 级缩放
+          倍数）和 signature（两级指定签名，供缓存 key 使用）。
         当月良损与趋势图使用同一份 panel 明细计算，保证 Mapping 口径：
         展示不良数 = 展示原始数 × (指定 / 展示原始) = 指定水准。
         """
@@ -208,6 +208,7 @@ class YieldAnalysisService:
         )
         return {
             "targets": resolve_monthly_targets(table["code"], months),
+            "group_targets": resolve_monthly_targets(table["group"], months),
             "factors": compute_scale_factors(table["code"]),
             "signature": (
                 f"{specified_signature(table['code'])}"
@@ -231,15 +232,16 @@ class YieldAnalysisService:
         # [核心修复] 获取目标截止日期，用于数据补齐
         _, target_end_dt = YieldAnalysisService.get_time_window()
         
-        # 1. 强制依赖 Code 级结果作为数据源头
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _db_manager, snapshot_signature, modifier_signature
+        modifier_context = YieldAnalysisService._build_modifier_context(
+            config,
+            product_dir,
+            panel_df,
         )
 
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
-            mwd_code_data=mwd_code_data,  # 传入 Code 数据
             config=config,
+            modifier_targets=modifier_context["group_targets"],
             target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )
 

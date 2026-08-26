@@ -21,7 +21,7 @@ from app.components.page_header import (
 )
 from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
-from app.components.file_uploader import render_trend_override_uploader
+from app.components.file_uploader import render_yield_config_uploader
 from app.charts.mwd_chart import (
     prepare_union_data_for_filter
 )
@@ -64,10 +64,10 @@ render_page_header(
     product_cache_scope=active_config.data_source.product_code,
 )
 
-# [Refactor] 4. 渲染趋势图覆盖文件上传组件
+# [Refactor] 4. 渲染 Yield 配置文件上传组件
 query_params = st.query_params
 if query_params.get("admin") == "true":
-    render_trend_override_uploader(active_config, product_dir)
+    render_yield_config_uploader(active_config, product_dir)
 ExcelService.inject_mapping_config_to_config(active_config)
 
 # ==============================================================================

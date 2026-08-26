@@ -2,7 +2,7 @@
 
 与页面内逻辑共用同一入口（`modifier_table.sync_modifier_table`）：
 仅更新目标月份的"当月良损"（缺失行追加），并在"指定良损"签名变化时
-重算"缩放倍数"（两位小数，口径含上月回退）。
+重算"缩放倍数"（三位小数，口径含上月回退）。
 
 用法：
     python tools/update_yield_modifier_table.py --product M678

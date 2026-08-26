@@ -16,7 +16,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
+from src.shared_kernel.utils.excel_tools import (
+    read_workbook_sheet,
+    replace_workbook_sheet,
+)
 
 MODIFIER_TABLE_COLUMNS = [
     "不良类型",
@@ -33,6 +36,15 @@ COL_MONTH = "时间标签"
 COL_RAW_LOSS = "当月良损"
 COL_SPECIFIED_LOSS = "指定良损"
 COL_SCALE_FACTOR = "缩放倍数"
+
+# 小数位约定：良损按"百分数保留三位小数"存储（分数即 5 位小数，如 1.383% → 0.01383），
+# 与历史 codebaseline `np.round(rate, 5)` 约定一致；缩放倍数为比值，保留 3 位小数。
+RATE_DECIMALS = 5
+FACTOR_DECIMALS = 3
+
+
+class ModifierTableValidationError(ValueError):
+    """修饰表包含无法安全用于良损计算的数据。"""
 
 
 def parse_rate_value(value) -> float | None:
@@ -62,24 +74,38 @@ def parse_rate_value(value) -> float | None:
     return parsed
 
 
+def _validate_rate_values(
+    table_df: pd.DataFrame,
+    *,
+    product_code: str,
+    sheet_name: str,
+) -> None:
+    """校验良损字段，并在错误中保留可定位的业务上下文。"""
+    for _, row in table_df.iterrows():
+        defect = str(row[COL_DEFECT]).strip()
+        month = str(row[COL_MONTH]).strip()
+        for column in (COL_RAW_LOSS, COL_SPECIFIED_LOSS):
+            raw_value = row[column]
+            if pd.isna(raw_value) or (
+                isinstance(raw_value, str) and not raw_value.strip()
+            ):
+                continue
+            parsed = parse_rate_value(raw_value)
+            if parsed is None or not 0.0 <= parsed <= 1.0:
+                raise ModifierTableValidationError(
+                    "修饰表良损必须满足 0 <= 良损 <= 1："
+                    f"产品={product_code}, Sheet={sheet_name}, Code={defect}, "
+                    f"月份={month}, 字段={column}, 原值={raw_value!r}"
+                )
+
+
 def _empty_table() -> pd.DataFrame:
     return pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS)
 
 
 def _read_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
-    """读取单个 Sheet；openpyxl 失败时回退 Excel COM（企业加密文件）。"""
-    try:
-        return pd.read_excel(xlsx_path, sheet_name=sheet_name, engine="openpyxl")
-    except Exception as openpyxl_error:
-        logging.warning(
-            "[modifier_table] openpyxl 读取 %s[%s] 失败，尝试 COM: %s",
-            xlsx_path.name,
-            sheet_name,
-            openpyxl_error,
-        )
-        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
-
-        return _read_encrypted_xlsx_via_com(xlsx_path, sheet_name=sheet_name)
+    """复用共享读取边界；缺 Sheet 返回空表，加密文件才回退 COM。"""
+    return read_workbook_sheet(xlsx_path, sheet_name)
 
 
 def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.DataFrame]:
@@ -94,8 +120,11 @@ def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.Data
         if not xlsx_path.exists():
             table[level] = _empty_table()
             continue
+        sheet_name = f"{product_code}_{suffix}"
         try:
-            df = _read_sheet(xlsx_path, f"{product_code}_{suffix}")
+            df = _read_sheet(xlsx_path, sheet_name)
+        except ModifierTableValidationError:
+            raise
         except Exception as error:
             logging.warning(
                 "[modifier_table] 读取 %s 的 %s 失败，按空表处理: %s",
@@ -118,6 +147,11 @@ def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.Data
                 for column in missing:
                     df[column] = None
             df = df[MODIFIER_TABLE_COLUMNS]
+            _validate_rate_values(
+                df,
+                product_code=product_code,
+                sheet_name=sheet_name,
+            )
         table[level] = df
     return table
 
@@ -217,7 +251,7 @@ def resolve_monthly_targets(
 
 
 def compute_scale_factors(table_df: pd.DataFrame) -> dict[tuple[str, str], float]:
-    """缩放倍数 = round(回退后指定良损 / 当月良损, 2)。
+    """缩放倍数 = round(回退后指定良损 / 当月良损, 3)（保留三位小数）。
 
     回退口径与 `resolve_monthly_targets` 一致：当月未指定时用最近上月的指定良损，
     保证趋势日度与 Mapping 缩放使用同一水准。从未指定或当月良损为 0/缺失时记 1.0。
@@ -245,7 +279,7 @@ def compute_scale_factors(table_df: pd.DataFrame) -> dict[tuple[str, str], float
             if resolved is None or pd.isna(raw) or not raw:
                 factors[(defect, month)] = 1.0
             else:
-                factors[(defect, month)] = round(resolved / raw, 2)
+                factors[(defect, month)] = round(resolved / raw, FACTOR_DECIMALS)
     return factors
 
 
@@ -286,6 +320,7 @@ def _apply_current_month_loss(
 ) -> tuple[pd.DataFrame, bool]:
     """把当月原始良损合并进表：已有当月行更新，缺失行追加。
 
+    写入前按 `RATE_DECIMALS`（百分数三位小数）舍入。
     返回 (更新后的表, 当月良损内容是否发生变化)。
     """
     updated = table_df.copy()
@@ -296,6 +331,7 @@ def _apply_current_month_loss(
 
     month_mask = updated[COL_MONTH].astype(str).str.strip() == current_month
     for defect, rate in loss.items():
+        rate = round(float(rate), RATE_DECIMALS)
         row_mask = month_mask & (updated[COL_DEFECT].astype(str).str.strip() == defect)
         if row_mask.any():
             existing = parse_rate_value(updated.loc[row_mask, COL_RAW_LOSS].iloc[0])
@@ -330,7 +366,7 @@ def sync_modifier_table(
 
     - 每次调用只更新 `current_month` 的 `当月良损`（缺失行追加）；
     - `指定良损` 签名变化或当月良损内容变化时才写回工作簿；
-    - 写回（含缩放倍数整列重算）失败仅记日志，不影响内存中的返回表；
+    - 写回（含缩放倍数整列重算）失败不影响内存中的返回表，但保留旧签名以便重试；
     - 返回内存中的最新表（无论写回是否成功）。
     """
     xlsx_path = Path(xlsx_path)
@@ -340,7 +376,7 @@ def sync_modifier_table(
     )
     stored = _load_stored_signatures(signature_path)
     table = read_modifier_table(xlsx_path, product_code)
-    new_signatures: dict[str, str] = {}
+    committed_signatures = stored.copy()
 
     for level in ("group", "code"):
         sheet_name = f"{product_code}_{'Group级' if level == 'group' else 'Code级'}"
@@ -351,7 +387,7 @@ def sync_modifier_table(
             table[level], loss, current_month
         )
         signature = specified_signature(updated)
-        new_signatures[f"{product_code}:{level}"] = signature
+        signature_key = f"{product_code}:{level}"
 
         # 缩放倍数整列重算（口径含上月回退），保证与趋势生成一致
         factors = compute_scale_factors(updated)
@@ -365,26 +401,40 @@ def sync_modifier_table(
 
         need_write = (
             not updated.empty
-            and (loss_changed or stored.get(f"{product_code}:{level}") != signature)
+            and (loss_changed or stored.get(signature_key) != signature)
         )
         if need_write:
             try:
-                replace_workbook_sheet(xlsx_path, sheet_name, updated)
+                write_succeeded = replace_workbook_sheet(
+                    xlsx_path,
+                    sheet_name,
+                    updated,
+                )
+            except Exception as error:
+                write_succeeded = False
+                logging.error(
+                    "[modifier_table] 写回 %s[%s] 失败，保留旧签名以便重试: %s",
+                    xlsx_path.name,
+                    sheet_name,
+                    error,
+                    exc_info=True,
+                )
+            if write_succeeded:
+                committed_signatures[signature_key] = signature
                 logging.info(
                     "[modifier_table] 已写回 %s[%s]（当月良损%s更新，指定%s变化）。",
                     xlsx_path.name,
                     sheet_name,
                     "有" if loss_changed else "无",
-                    "有" if stored.get(f"{product_code}:{level}") != signature else "无",
+                    "有" if stored.get(signature_key) != signature else "无",
                 )
-            except Exception as error:
-                logging.warning(
-                    "[modifier_table] 写回 %s[%s] 失败（忽略，按内存数据继续）: %s",
+            else:
+                logging.error(
+                    "[modifier_table] 未写回 %s[%s]，签名未推进；下次同步将重试。",
                     xlsx_path.name,
                     sheet_name,
-                    error,
                 )
         table[level] = updated
 
-    _store_signatures(signature_path, new_signatures)
+    _store_signatures(signature_path, committed_signatures)
     return table

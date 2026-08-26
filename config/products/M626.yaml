@@ -12,9 +12,6 @@ paths:
     file_name: "override_rates.xlsx"
     sheet_name: "M626"
     
-  mwd_override_config:
-    file_name: "趋势图人工修正.xlsx"
-
   yield_modifier_config:
     file_name: "入库良率修饰表.xlsx"
 
