@@ -10,9 +10,10 @@
 
 - `resources/yield_domain/入库良率修饰表.xlsx` 是 MWD 月度目标的业务控制入口；
 - `<产品>_Code级` Sheet 驱动 Code 趋势，并提供 Mapping 月度倍率；
-- `<产品>_Group级` Sheet 独立驱动 Group 趋势，人工指定优先级最高；
-- Group 不再由其下 Code 日度汇总反推，不要求 `Group = ΣCode`；
-- Code 与 Group 各自的最终日度整数是本级周度、月度结果的唯一事实源。
+- Group 日度严格由其下 Code 最终日度汇总，满足 `Group = ΣCode`；
+- `<产品>_Group级` Sheet 只覆写 Group 月度结果，不反向生成 Group 日度；
+- Code 最终日度是 Code 周/月与 Group 日/周的事实源；已覆写的 Group 月度允许与
+  Group 日度月合计不同。
 
 旧的 Code baseline、EMA、TrendRegulator、月度对账和月/周/日人工覆盖链路已停止
 消费；`resources/yield_domain/趋势图人工修正.xlsx` 保留，但不再参与 MWD 计算。
@@ -38,10 +39,9 @@ round(回退后的目标良损 / 当月原始良损, 3)
 `read_workbook_sheet`；企业加密文件才回退 Excel COM。写回失败时不推进签名，
 后续同步会继续重试。
 
-## 三、Code 与 Group 日度生成
+## 三、Code 日度生成与 Group 汇总
 
-Code 使用 `daily_generator.generate_daily_counts`；Group 使用
-`daily_generator.generate_group_daily_counts`。两者采用相同算法：
+Code 使用 `daily_generator.generate_daily_counts`，执行以下算法：
 
 1. 把每个月目标良损锚定在当月 15 日；
 2. 相邻锚点间线性插值得到逐日基线 `b_d`；
@@ -49,7 +49,7 @@ Code 使用 `daily_generator.generate_daily_counts`；Group 使用
 4. 计算日度权重 `w_d = b_d × n_d × P_d`；
 5. 对每个自然月计算目标整数 `T_m = round(r_m × ΣP_d)`；
 6. 在单日投入容量内，按权重把 `T_m` 分配为日度整数；
-7. 从最终日度直接聚合周度和月度。
+7. 从 Code 最终日度聚合 Code 周度和月度。
 
 整数分配函数 `allocate_integer_counts` 位于 `daily_generator.py`。它保证：
 
@@ -57,6 +57,10 @@ Code 使用 `daily_generator.generate_daily_counts`；Group 使用
 0 <= 当日不良数 <= 当日投入数
 月内日度不良数合计 = 容量允许范围内的月度目标整数
 ```
+
+Group 不执行上述日度生成算法。`mwd_trend_processor.py` 将 Code 最终日度按
+`(日期, defect_group)` 求和得到 Group 日度，再聚合 Group 周度和月度基础值；
+Group Sheet 只覆写最终 Group 月度结果。
 
 ## 四、跨月平滑的准确边界
 
@@ -78,8 +82,8 @@ Mapping 月度倍率的轻量防御规则为：非有限值、负数或超过 10
 ## 六、代码路由
 
 - `modifier_table.py`：修饰表读取、校验、回写、回退目标和 Mapping 倍率；
-- `daily_generator.py`：插值、稳定扰动、逐月归一化和整数分配；
-- `mwd_trend_processor.py`：Code/Group 编排及周月聚合；
+- `daily_generator.py`：Code 插值、稳定扰动、逐月归一化和整数分配；
+- `mwd_trend_processor.py`：Code 编排、Code 到 Group 日度汇总及 Group 月度覆写；
 - `aggregation.py`：从最终日度聚合周度、月度；
 - `formatting.py`：生成前端使用的数据结构；
 - `mapping/mapping_processor.py`：应用 Code 月度倍率后继续既有级联逻辑；

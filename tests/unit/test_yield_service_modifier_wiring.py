@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from src.shared_kernel.config_model import AppConfig
+from src.yield_domain.application import yield_service as yield_service_module
 from src.yield_domain.application.yield_service import YieldAnalysisService
 
 
@@ -123,3 +124,62 @@ class TestBuildModifierContext:
         assert context["targets"] == {}
         assert context["group_targets"] == {}
         assert context["factors"] == {}
+
+
+def test_group_service_passes_code_daily_source_to_group_processor(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    panel_df = _panel_details()
+    code_results = {"daily_full": pd.DataFrame({"time_period": ["2026-07-01"]})}
+    group_targets = {"Array_Pixel": {"2026-07": 0.1}}
+    captured = {}
+
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "get_modified_panel_details",
+        staticmethod(lambda *args, **kwargs: panel_df),
+    )
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "get_code_level_trend_data",
+        staticmethod(lambda *args, **kwargs: code_results),
+    )
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "_build_modifier_context",
+        staticmethod(
+            lambda *args, **kwargs: {
+                "group_targets": group_targets,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "get_time_window",
+        classmethod(
+            lambda cls: (datetime(2026, 5, 1), datetime(2026, 7, 31))
+        ),
+    )
+
+    def fake_create_group(**kwargs):
+        captured.update(kwargs)
+        return {"daily_full": pd.DataFrame({"ok": [True]})}
+
+    monkeypatch.setattr(
+        yield_service_module.MWDTrendProcessor,
+        "create_mwd_trend_data",
+        staticmethod(fake_create_group),
+    )
+    YieldAnalysisService.get_mwd_trend_data.clear()
+
+    result = YieldAnalysisService.get_mwd_trend_data(
+        _config(),
+        tmp_path / "M999",
+        snapshot_signature="group-from-code-test",
+        modifier_signature="group-from-code-test",
+    )
+
+    assert result is not None
+    assert captured["mwd_code_data"] is code_results
+    assert captured["modifier_targets"] == group_targets

@@ -198,7 +198,7 @@ st.subheader("2️⃣ 入库不良率分析 (Code Level)")
 # 1. 准备“全能候选池”
 master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 
-# 2. 渲染 Group 批量筛选器
+# 2. 渲染 Group / Code 批量筛选器
 selection = create_group_batch_selection_ui(
     source_data=master_df,
     key_prefix="unified_focus"
@@ -207,7 +207,7 @@ selection = create_group_batch_selection_ui(
 selected_groups = selection.get("groups", [])
 codes_by_group = selection.get("codes_by_group", {})
 if not selected_groups or not codes_by_group:
-    st.info("请选择至少一个包含有效 Code 的 Defect Group。")
+    st.info("请至少选择一个 Defect Group 和 Defect Code。")
     st.stop()
 
 if not selection.get("should_render", False):

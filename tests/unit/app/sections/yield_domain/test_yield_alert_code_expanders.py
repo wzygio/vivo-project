@@ -27,11 +27,13 @@ class _FakeStreamlit:
     def __init__(self):
         self.session_state = {}
         self.expander_labels = []
+        self.expander_calls = []
         self.captions = []
         self.plotly_keys = []
 
     def expander(self, label, **kwargs):
         self.expander_labels.append(label)
+        self.expander_calls.append({"label": label, **kwargs})
         return _Context()
 
     def caption(self, *args, **kwargs):
@@ -231,9 +233,13 @@ class TestRenderAlertCodeExpanders:
         )
 
         assert fake_st.expander_labels == ["🚨 自动预警缺陷图像（2 个 Code）"]
+        assert fake_st.expander_calls == [
+            {"label": "🚨 自动预警缺陷图像（2 个 Code）", "expanded": False}
+        ]
         assert fake_st.captions
         assert [call["curr_code"] for call in build_calls] == ["CODE-A", "CODE-C"]
         assert all(call["key_prefix"] == "yield_alert" for call in build_calls)
+        assert all(call["expanded"] is True for call in build_calls)
         assert [(p["curr_group"], p["curr_code"]) for p in rendered] == [
             ("G1", "CODE-A"),
             ("G2", "CODE-C"),

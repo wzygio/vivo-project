@@ -5,9 +5,9 @@
 - Code 级日度由 `daily_generator.generate_daily_counts` 按"入库良率修饰表"
   解析出的 `modifier_targets`（{defect_desc: {月份: 目标良损}}）确定性生成；
   未指定的缺陷保持原始日度不良数。
-- Group 级由 Group Sheet 的人工指定良损独立生成，人工指定优先。
-- 周度/月度不再有任何人工覆盖，由最终日度经 `aggregation.safe_trend_aggregator`
-  直接聚合。
+- Group 级日度由 Code 最终日度按 Group 汇总；Group Sheet 的人工指定良损只覆写
+  最终月度结果，不反向生成日度数据。
+- 周度由最终日度直接聚合；月度先由日度聚合，再应用 Group Sheet 的月度覆写。
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from yield_domain.core.mwd_trend.aggregation import (
 )
 from yield_domain.core.mwd_trend.daily_generator import (
     generate_daily_counts,
-    generate_group_daily_counts,
 )
 from yield_domain.core.mwd_trend.data_preparation import (
     pad_daily_data_to_end as _pad_daily_data_to_today,
@@ -44,13 +43,13 @@ class MWDTrendProcessor:
     def create_mwd_trend_data(
         panel_details_df: pd.DataFrame,
         config: AppConfig,
+        mwd_code_data: Dict[str, pd.DataFrame] | None = None,
         modifier_targets: Dict[str, Dict[str, float]] | None = None,
-        volatility: float = 0.3,
         target_end_date: dt | None = None,
     ) -> Dict[str, pd.DataFrame] | None:
-        """Create Group trends driven by Group Sheet monthly loss rates."""
+        """Create Group daily/weekly from Code data, then override monthly."""
         logging.info("开始 Group 月/周/日趋势处理")
-        if panel_details_df.empty:
+        if panel_details_df.empty or not mwd_code_data:
             return None
 
         try:
@@ -63,14 +62,18 @@ class MWDTrendProcessor:
                 is_group_level=True,
                 end_date=last_day,
             )
-            group_daily = generate_group_daily_counts(
+            group_daily = _build_group_daily_from_code_data(
                 padded_daily,
-                modifier_targets or {},
-                product_code=config.data_source.product_code,
-                volatility=volatility,
+                mwd_code_data.get("daily_full"),
+                target_defects,
             )
             monthly = _safe_trend_aggregator(
                 group_daily, last_day, "M", is_group_level=True
+            )
+            monthly = _apply_group_monthly_overrides(
+                monthly,
+                modifier_targets or {},
+                target_defects,
             )
             weekly = _safe_trend_aggregator(
                 group_daily, last_day, "W", is_group_level=True
@@ -119,6 +122,66 @@ class MWDTrendProcessor:
         except Exception as error:
             logging.error("Code 趋势分析出错: %s", error, exc_info=True)
             return None
+
+
+def _build_group_daily_from_code_data(
+    daily_skeleton: pd.DataFrame,
+    code_daily: pd.DataFrame | None,
+    target_defects: list[str],
+) -> pd.DataFrame:
+    """Aggregate final Code daily counts into a Group-wide daily table."""
+    result = daily_skeleton[["total_panels"]].copy()
+    for group in target_defects:
+        result[group] = 0
+    if code_daily is None or code_daily.empty:
+        return result
+
+    source = code_daily.copy()
+    source["warehousing_time"] = pd.to_datetime(
+        source["time_period"],
+        errors="coerce",
+    )
+    counts = source.groupby(["warehousing_time", "defect_group"])[
+        "defect_panel_count"
+    ].sum()
+    available_groups = set(counts.index.get_level_values("defect_group"))
+    for group in target_defects:
+        if group not in available_groups:
+            continue
+        group_counts = counts.xs(group, level="defect_group", drop_level=True)
+        result[group] = result.index.map(group_counts).fillna(0).astype(int)
+    return result
+
+
+def _apply_group_monthly_overrides(
+    monthly: pd.DataFrame,
+    monthly_targets: Dict[str, Dict[str, float]],
+    target_defects: list[str],
+) -> pd.DataFrame:
+    """Override final Group monthly counts without changing daily/weekly data."""
+    if monthly.empty or not monthly_targets:
+        return monthly.copy()
+
+    result = monthly.copy()
+    month_keys = pd.to_datetime(result.index).to_period("M").astype(str)
+    for group in target_defects:
+        if group not in result or group not in monthly_targets:
+            continue
+        for month, rate in monthly_targets[group].items():
+            mask = month_keys == month
+            if not mask.any():
+                continue
+            capacities = pd.to_numeric(
+                result.loc[mask, "total_panels"],
+                errors="coerce",
+            ).fillna(0).clip(lower=0)
+            target_counts = (capacities * float(rate)).round().clip(
+                lower=0,
+                upper=capacities,
+            )
+            result.loc[mask, group] = target_counts.astype(int)
+    return result
+
 
 __all__ = [
     "MWDTrendProcessor",

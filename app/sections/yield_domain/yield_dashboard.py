@@ -1259,7 +1259,7 @@ def render_alert_code_expanders(
                 hotspot_scripts=hotspot_scripts,
                 product_code=product_code,
                 mapping_layout=mapping_layout,
-                expanded=False,
+                expanded=True,
                 key_prefix=chart_key_prefix,
             )
         )

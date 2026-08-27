@@ -231,6 +231,16 @@ class YieldAnalysisService:
         
         # [核心修复] 获取目标截止日期，用于数据补齐
         _, target_end_dt = YieldAnalysisService.get_time_window()
+
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+            config,
+            product_dir,
+            _db_manager,
+            snapshot_signature,
+            modifier_signature,
+        )
+        if not mwd_code_data:
+            return None
         
         modifier_context = YieldAnalysisService._build_modifier_context(
             config,
@@ -241,6 +251,7 @@ class YieldAnalysisService:
         return MWDTrendProcessor.create_mwd_trend_data(
             panel_details_df=panel_df,
             config=config,
+            mwd_code_data=mwd_code_data,
             modifier_targets=modifier_context["group_targets"],
             target_end_date=target_end_dt  # [核心修复] 传入目标截止日期
         )

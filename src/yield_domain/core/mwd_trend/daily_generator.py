@@ -184,38 +184,3 @@ def generate_daily_counts(
             )
         )
     return pd.concat(pieces).sort_index()
-
-
-def generate_group_daily_counts(
-    padded_daily: pd.DataFrame,
-    monthly_targets: dict[str, dict[str, float]],
-    product_code: str,
-    volatility: float = 0.3,
-) -> pd.DataFrame:
-    """按 Group Sheet 的月度指定良损生成 Group 级日度宽表。"""
-    if padded_daily.empty:
-        return padded_daily.copy()
-
-    result = padded_daily.copy()
-    group_columns = [column for column in result if column != "total_panels"]
-    for group in group_columns:
-        month_rates = (monthly_targets or {}).get(group)
-        if not month_rates:
-            continue
-        group_daily = pd.DataFrame(
-            {
-                "warehousing_time": result.index,
-                "total_panels": result["total_panels"].to_numpy(),
-                "defect_panel_count": result[group].to_numpy(),
-            },
-            index=result.index,
-        )
-        generated = _generate_defect_daily(
-            group_daily,
-            month_rates,
-            product_code,
-            group,
-            volatility,
-        )
-        result[group] = generated["defect_panel_count"].to_numpy()
-    return result

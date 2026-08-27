@@ -5,19 +5,24 @@
 
 ## 一、算法目标与事实源
 
-新流程用业务维护的月度“指定良损”分别控制 Code 与 Group 趋势：
+新流程用 Code Sheet 的月度“指定良损”生成 Code 日度趋势；Group 日度由 Code
+最终日度向上汇总，Group Sheet 的“指定良损”只覆写 Group 月度结果：
 
 ```text
 入库良率修饰表 Code Sheet → Code 月度目标整数 → Code 日度整数分配
-                                      → Code 周度、月度聚合
+                                      ├─→ Code 周度、月度聚合
+                                      └─→ 按 Group 汇总为 Group 日度
+                                                ├─→ Group 周度聚合
+                                                └─→ Group 月度聚合
+                                                      → Group Sheet 月度覆写
 
-入库良率修饰表 Group Sheet → Group 月度目标整数 → Group 日度整数分配
-                                       → Group 周度、月度聚合
+入库良率修饰表 Group Sheet ────────────────────────────────┘
 ```
 
-最终 Code 日度整数和 Group 日度整数分别是两级 MWD 的事实源。周度、月度不再
-独立执行趋势修饰或人工覆盖。Group Sheet 的人工指定值优先级最高，因此 Group
-趋势不再由 Code 汇总反推。
+最终 Code 日度整数是日度事实源。Group 日度不独立生成，而是严格等于同日
+`Σ Code 日度整数`；Group 周度也由该日度结果聚合。Group Sheet 只负责覆写最终
+Group 月度值，不允许把月度指定值反向分配到 Group 日度，因此 Group 月度可以与
+Group 日度合计不同。
 
 Mapping 使用同一修饰表计算月度倍率，但在倍率应用后仍执行既有批次级联衰减。
 
@@ -39,30 +44,33 @@ Mapping 使用同一修饰表计算月度倍率，但在倍率应用后仍执行
 2. 使用经过全局 `defect_multipliers` 修饰后的 Panel 明细计算当月原始良损；
 3. 更新当月原始良损和缩放倍数；
 4. 从 Code Sheet 生成 Code MWD 使用的 `targets`；
-5. 从 Group Sheet 生成 Group MWD 使用的 `group_targets`；
+5. 从 Group Sheet 生成只用于 Group 月度覆写的 `group_targets`；
 6. 从 Code Sheet 生成 Mapping 使用的 `factors`。
 
 ```text
 targets[Code][月份] = 该 Code 在该月最终采用的目标良损
+group_targets[Group][月份] = 该 Group 在该月最终采用的月度覆写良损
 factors[(Code, 月份)] = 目标良损 / 当月原始良损
 ```
 
-Code Sheet 生成 Code 月度目标和 Mapping 倍率；Group Sheet 生成 Group 月度目标。
-两级目标分别驱动各自日度趋势。
+Code Sheet 生成 Code 月度目标和 Mapping 倍率，并驱动 Code 日度趋势。Group Sheet
+生成 Group 月度覆写值，不参与 Group 日度生成。
 
 ### 2.2 月度目标回退
 
-`modifier_table.py::resolve_monthly_targets` 对每个 Code、每个月按以下顺序解析：
+`modifier_table.py::resolve_monthly_targets` 对每个不良项（Code 或 Group）、每个月按
+以下顺序解析：
 
 ```text
 当月指定良损
   → 最近一个更早月份的指定良损
   → 当月原始良损
-  → 不生成目标，保留原始日度不良数
+  → 不生成目标
 ```
 
 因此，业务人员可以只在需要改变水准的月份填写“指定良损”。未填写月份沿用最近一次
-指定；从未指定时使用原始月度水准，或在没有当月表行时保留原始日度数据。
+指定；从未指定时使用原始月度水准。表中没有可解析目标时：Code 保留原始日度数据，
+Group 则不覆写月度，保留 Code 日度汇总得到的月度基础值。
 
 ## 三、Code 日度生成
 
@@ -380,28 +388,43 @@ w_d = 插值基线 × 1000
 
 ## 五、Group、周度与月度生成
 
-Group 使用与 Code 相同的月中锚点、稳定哈希噪声和月内整数分配规则，但处理单位是
-Group Sheet 中的“不良类型”，输入是 Group 原始日度宽表：
+Group 不执行月中锚点、稳定哈希噪声或月内整数分配。它先把已经完成 Code Sheet
+修饰的 Code 最终日度结果按 `(日期, defect_group)` 求和：
 
 ```text
-Group Sheet 指定良损
-  → Group 月度目标整数
+Code 最终日度整数
+  → 按日期、Group 汇总
   → Group 日度整数
-  → Group 周度、月度
+  ├─→ Group 周度
+  └─→ Group 月度基础值
+          → 应用 Group Sheet 月度指定良损
+          → Group 最终月度
 ```
 
-Code 则独立执行：
+对应程序：
+
+- `mwd_trend_processor.py::_build_group_daily_from_code_data`：从 Code 日度汇总
+  Group 日度；
+- `aggregation.py::safe_trend_aggregator`：从 Group 日度生成周度和月度基础值；
+- `mwd_trend_processor.py::_apply_group_monthly_overrides`：只覆写最终月度值。
+
+Group Sheet 的指定良损转换为该月覆写整数：
 
 ```text
-Code Sheet 指定良损
-  → Code 月度目标整数
-  → Code 日度整数
-  → Code 周度、月度
+Group 月度覆写整数 = round(Group 指定良损 × 该月投入 Panel 数)
 ```
 
-当 Group Sheet 与 Code Sheet 的人工目标不一致时，以各 Sheet 的指定值分别生成，
-不强制 `Group = ΣCode`。这是人工 Group 指定优先的业务规则，不属于计算误差。
-两级周度和月度都从各自最终日度聚合，避免同一级内维护三套周期结果。
+该整数直接写入 Group 月度表。程序不会再把它重新分配到当月各日，也不会据此重建
+周度。因此三个周期的关系是：
+
+- `Group 日度 = Σ 同 Group 的 Code 日度`；
+- `Group 周度 = Σ 对应自然周的 Group 日度`；
+- 未指定月份：`Group 月度 = Σ 对应自然月的 Group 日度`；
+- 指定月份：`Group 月度 = Group Sheet 指定良损 × 月投入`（取整并受月投入约束）。
+
+当 Group Sheet 与 Code Sheet 的人工目标不一致时，日度和周度仍服从 Code 汇总；
+只有最终 Group 月度显示服从 Group Sheet。这里的“Group 覆写优先”只限月度结果，
+不表示 Group 可以反向生成或改写日度数据。
 
 ## 六、Mapping 月度倍率
 
@@ -462,15 +485,17 @@ Mapping 原始不良行
 当前算法保证：
 
 - 相同输入得到相同 Code 日度结果；
-- 在容量允许时，各指定月份的日度整数合计等于月度目标整数；
+- 在容量允许时，Code 各指定月份的日度整数合计等于 Code 月度目标整数；
 - 单日不良数不超过当日投入；
-- Group Sheet 和 Code Sheet 分别驱动各自日度结果；
-- 周度和月度均从最终日度聚合；
+- Code Sheet 驱动 Code 日度，Group 日度严格由 Code 日度按 Group 汇总；
+- Code 周/月和 Group 周度均从最终日度聚合；
+- Group Sheet 只覆写 Group 月度，不反向生成 Group 日度；
 - 跨月插值基线没有月初目标值阶梯。
 
 当前算法不保证：
 
 - 最终日度整数在月界连续；
+- Group Sheet 已覆写月份的 Group 月度等于 Group 日度合计；
 - Mapping 与 MWD 最终计数严格相等；
 - Mapping 上调在级联后仍然生效；
 - 大倍率 Mapping 的内存和响应时间有固定上限。

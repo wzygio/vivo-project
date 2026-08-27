@@ -17,6 +17,7 @@
 | `resources\inline_domain\spc_sheet_oos_decoration.xlsx` | spc_sheet | sheet明细修饰 |
 
 2. yield_domain - `resources\yield_domain`：
+
 | 文件路径 | 对应子模块 | 作用 |
 | --- | --- | --- |
 | `resources\yield_domain\mapping_config.xlsx` | mapping | mapping分布修饰 |
@@ -27,6 +28,7 @@
 | `resources\yield_domain\codebaseline.xlsx` | 原mwd | 现不再需要，但暂不删除 |
 
 3. equipment_domain - `resources\equipment_domain`：
+
 | 文件路径 | 对应子模块 | 作用 |
 | --- | --- | --- |
 | `resources\equipment_domain\critical_parts_baseline.csv` | 无 | 关键备件规格数据 |

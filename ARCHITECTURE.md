@@ -58,11 +58,11 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
    执行。快照保留原始 Defect Group，避免重复或不可逆过滤。
 3. `YieldAnalysisService` 调用核心算法生成 MWD、Code 趋势、Lot/Sheet
    缺陷率与 Mapping 数据；`AlertService` 和展示层消费这些结果。
-4. Code 与 Group MWD 均以 `defect_multipliers` 后的 Panel 明细作为月度投入
-   权威，分别由“入库良率修饰表”的 Code Sheet 和 Group Sheet 人工指定良损驱动。
-   月中锚点插值与稳定哈希噪声决定日度形状，月内整数分配保证目标合计和单日容量；
-   周/月均从各自最终日度重建。`weekly_full` 保留完整三自然月窗口，`weekly`
-   仅供近期展示。Group 人工指定优先，不要求等于其下 Code 日度之和。
+4. Code MWD 以 `defect_multipliers` 后的 Panel 明细作为月度投入权威，由“入库良率
+   修饰表”的 Code Sheet 指定良损驱动；月中锚点插值、稳定哈希噪声和月内整数分配
+   生成 Code 日度。Group 日度严格由 Code 最终日度按 Group 汇总，Group 周度再由
+   该日度聚合；Group Sheet 只覆写 Group 月度结果，不反向生成日度。
+   `weekly_full` 保留完整三自然月窗口，`weekly` 仅供近期展示。
 5. Lot 模拟按 Code-week 的 `weekly_full` 速率分配整数缺陷 token；聚合后
    才取整，再按稳定加权噪声分配到 Lot，最后执行封顶与显式覆盖。
 6. Mapping 与 Code MWD 共享 Code Sheet 的月度目标水准，但 Mapping 随后仍执行

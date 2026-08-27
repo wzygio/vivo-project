@@ -121,7 +121,7 @@ def test_output_contract_keys_and_determinism() -> None:
     pd.testing.assert_frame_equal(first["daily_full"], second["daily_full"])
 
 
-def test_group_sheet_specified_rate_drives_group_trend() -> None:
+def test_group_sheet_only_overrides_monthly_group_result() -> None:
     days = ["20260501", "20260502", "20260503"]
     panel_details = _panel_details(
         days,
@@ -135,8 +135,20 @@ def test_group_sheet_specified_rate_drives_group_trend() -> None:
         "Array_Pixel": {"2026-05": 0.5},
         "OLED_Mura": {"2026-05": 0.2},
     }
+    code_targets = {
+        "CodeA": {"2026-05": 0.2},
+        "CodeB": {"2026-05": 0.1},
+        "CodeC": {"2026-05": 0.1},
+    }
+    code_results = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details_df=panel_details,
+        config=config,
+        modifier_targets=code_targets,
+        target_end_date=pd.Timestamp("2026-05-03"),
+    )
     group_results = MWDTrendProcessor.create_mwd_trend_data(
         panel_details_df=panel_details,
+        mwd_code_data=code_results,
         config=config,
         modifier_targets=group_targets,
         target_end_date=pd.Timestamp("2026-05-03"),
@@ -148,3 +160,28 @@ def test_group_sheet_specified_rate_drives_group_trend() -> None:
     assert pixel["defect_rate"].sum() == pytest.approx(0.5)
     mura = group_monthly[group_monthly["defect_group"] == "OLED_Mura"]
     assert mura["defect_rate"].sum() == pytest.approx(0.2)
+
+    code_daily = code_results["daily_full"]
+    expected_daily = code_daily.groupby(["time_period", "defect_group"])[
+        "defect_panel_count"
+    ].sum()
+    group_daily_rows = group_results["daily_full"].copy()
+    group_daily_rows["defect_panel_count"] = (
+        group_daily_rows["defect_rate"] * group_daily_rows["total_panels"]
+    ).round().astype(int)
+    group_daily = group_daily_rows.set_index(
+        ["time_period", "defect_group"]
+    )["defect_panel_count"]
+    pd.testing.assert_series_equal(
+        group_daily.sort_index(),
+        expected_daily.sort_index(),
+        check_names=False,
+    )
+
+    # Group 月度指定只覆盖月度展示，不反向改写 Code 汇总得到的日度/周度事实。
+    assert group_daily_rows["defect_panel_count"].sum() == 12
+    weekly_counts = (
+        group_results["weekly"]["defect_rate"]
+        * group_results["weekly"]["total_panels"]
+    ).round().astype(int)
+    assert weekly_counts.sum() == 12

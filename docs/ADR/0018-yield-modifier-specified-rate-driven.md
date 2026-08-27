@@ -37,9 +37,9 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    基线（跨月平滑无阶梯）+ blake2b 哈希白噪声（无周期、跨进程确定）+ 月内
    权重整数分配（同模块 `allocate_integer_counts`，单日 ≤ 当日投入，月合计精确
    等于 `round(目标良损 × 当月投入)`）。未指定的缺陷保持原始日度不良数。
-4. **Group Sheet 人工指定优先**：Group 趋势按 Group Sheet 的月度指定良损独立
-   生成，Code 趋势按 Code Sheet 独立生成。两级均从各自最终日度聚合周/月，
-   不再要求 `Group = ΣCode`；人工维护的 Group 目标是 Group 趋势的权威来源。
+4. **Group Sheet 仅覆写月度**：Group 日度严格由 Code 最终日度按 Group 汇总，
+   Group 周度由该日度聚合；Group Sheet 的月度指定良损只覆写最终 Group 月度表，
+   不允许反向分配或重建 Group 日度。
 5. **Mapping 月度缩放为级联前的前置步骤**：`prepare_mapping_data` 新增可选参数
    `monthly_factors`，在位置修饰之后、级联衰减之前按 `(defect_desc, 批次月份)`
    确定性抽样/复制（`_SIM_M` 后缀）。级联代码零改动。Mapping 不良数 =
@@ -56,8 +56,8 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
 
 ## Alternatives considered
 
-- **Group 由 Code 汇总**：被否决——Group Sheet 保留业务人工指定值，人工指定
-  优先级最高；用 Code 汇总覆盖 Group 目标会使 Group Sheet 失去控制作用。
+- **Group Sheet 独立生成 Group 日度**：被否决——月度指定值反向分配会破坏
+  `Group 日度 = ΣCode 日度` 的事实关系；Group Sheet 的控制范围限定为月度覆写。
 - **缩放倍数沿用"仅当月指定/当月原始"口径**：被否决——当月未指定但上月指定
   时趋势按回退生成而 Mapping 倍数为 1.0，两者水准不一致；改为回退口径后一致。
 - **签名存 `data/<prod>/` sidecar**：改为修饰表旁 `<表名>.sig.json`——多产品
