@@ -8,14 +8,14 @@
 
 ## 一、事实源与业务优先级
 
-- `resources/入库良率修饰表.xlsx` 是 MWD 月度目标的业务控制入口；
+- `resources/yield_domain/入库良率修饰表.xlsx` 是 MWD 月度目标的业务控制入口；
 - `<产品>_Code级` Sheet 驱动 Code 趋势，并提供 Mapping 月度倍率；
 - `<产品>_Group级` Sheet 独立驱动 Group 趋势，人工指定优先级最高；
 - Group 不再由其下 Code 日度汇总反推，不要求 `Group = ΣCode`；
 - Code 与 Group 各自的最终日度整数是本级周度、月度结果的唯一事实源。
 
 旧的 Code baseline、EMA、TrendRegulator、月度对账和月/周/日人工覆盖链路已停止
-消费；`resources/趋势图人工修正.xlsx` 保留，但不再参与 MWD 计算。
+消费；`resources/yield_domain/趋势图人工修正.xlsx` 保留，但不再参与 MWD 计算。
 
 ## 二、修饰表解析
 

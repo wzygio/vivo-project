@@ -13,6 +13,12 @@ service_cache:
     inline_spc_report_payload: 12 # SPC 报表 payload
     inline_decorated_features: 12 # Sheet OOS 修饰共享特征
 
+# 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
+domain_config:
+  inline_domain: config/domain/inline_domain.yaml
+  yield_domain: config/domain/yield_domain.yaml
+  equipment_domain: config/domain/equipment_domain.yaml
+
 product_registry:
   enabled_products:
     - "M626"

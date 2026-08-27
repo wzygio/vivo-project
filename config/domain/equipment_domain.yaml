@@ -24,3 +24,9 @@ equipment:
     update_increment_ratio: 0.30
     reset_ratio_range: [0.0, 0.30]
     snapshot_ttl_hours: 24
+
+# 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）
+resources:
+  dir: resources/equipment_domain
+  files:
+    critical_parts_baseline: critical_parts_baseline.csv

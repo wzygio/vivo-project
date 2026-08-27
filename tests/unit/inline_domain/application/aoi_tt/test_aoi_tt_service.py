@@ -14,7 +14,7 @@ from src.shared_kernel.config import ConfigLoader
 def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
     """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
-    (tmp_path / "resources").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "resources" / "inline_domain").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
@@ -262,7 +262,7 @@ def test_service_persists_aoi_tt_decoration_workbook(_tmp_project_root: Path) ->
     )
 
     assert (view_model.tt_details_df["tt_qty"] < 5.0).all()
-    workbook = _tmp_project_root / "resources" / "aoi_tt_sheet_oos_decoration.xlsx"
+    workbook = _tmp_project_root / "resources" / "inline_domain" / "aoi_tt_sheet_oos_decoration.xlsx"
     assert workbook.exists()
     persisted = pd.read_excel(workbook, sheet_name="M678")
     assert set(persisted["sheet_id"]) == {"SHT-A01", "SHT-A02"}
@@ -270,7 +270,7 @@ def test_service_persists_aoi_tt_decoration_workbook(_tmp_project_root: Path) ->
 
 
 def test_service_respects_flag_false_and_delete(_tmp_project_root: Path) -> None:
-    resources = _tmp_project_root / "resources"
+    resources = _tmp_project_root / "resources" / "inline_domain"
     _write_aoi_tt_workbook(
         resources,
         [

@@ -61,15 +61,15 @@ MWD 与 Mapping 只需共享 Code Sheet 的指定来源和月度调节方向，�
 - Code Sheet 的 Mapping 月度倍率接线和轻量倍率防御；
 - Yield service、页面上传入口、产品路径配置；
 - 相关单元测试、E2E、smoke 路由、运维工具和领域文档；
-- `resources/入库良率修饰表.xlsx`。
+- `resources/yield_domain/入库良率修饰表.xlsx`。
 
 保留 master 版本的内容包括：
 
 - 所有 Inline、SPC、CTQ、Equipment、XMind 和 planning 变更；
 - 所有与本次 MWD 算法无关的源码、测试和文档；
-- `resources/趋势图人工修正.xlsx`；
-- `resources/mapping_config.xlsx`；
-- `resources/codebaseline.xlsx`；
+- `resources/yield_domain/趋势图人工修正.xlsx`；
+- `resources/yield_domain/mapping_config.xlsx`；
+- `resources/yield_domain/codebaseline.xlsx`；
 - 其他 SPC/CTQ/OOS/规格类业务工作簿。
 
 交叉文件处理：

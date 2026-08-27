@@ -272,7 +272,7 @@ class ExcelService:
     def get_mapping_config_path() -> Path:
         from src.shared_kernel.config import ConfigLoader
 
-        return ConfigLoader.get_project_root() / "resources" / ExcelService.MAPPING_CONFIG_FILE_NAME
+        return ConfigLoader.get_domain_resource_path("yield_domain", "mapping_config", ExcelService.MAPPING_CONFIG_FILE_NAME)
 
     @staticmethod
     def _read_mapping_config_via_com(excel_path: Path) -> pd.DataFrame:

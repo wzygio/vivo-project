@@ -22,7 +22,7 @@ flowchart TD
     A[自动预警看板固定请求 ALL 产品/ALL 类型] --> B[MonitorAnalysisService]
     B --> C{逐产品读取}
     C -->|SPC/CTQ/AOI| D[SpcRepository: 数据库或 Parquet 快照]
-    C -->|报废| E[resources/scrap_sheets.xlsx]
+    C -->|报废| E[resources/inline_domain/scrap_sheets.xlsx]
     D --> F[参数白名单注入 data_type]
     F --> G[规格线及产品规格覆盖]
     G --> H[Sheet OOS 修饰]
@@ -97,7 +97,7 @@ ALL 产品通过扫描 `data/` 下的产品目录得到，并排除 `doc_cache`�
 
 ### 3.5 报废适配
 
-报废数据来自 `resources/scrap_sheets.xlsx`，按产品过滤并标准化列名、日期和厂别。它不经过 SPC 特征计算，而是被适配为 monitor 可消费的兼容事实行：
+报废数据来自 `resources/inline_domain/scrap_sheets.xlsx`，按产品过滤并标准化列名、日期和厂别。它不经过 SPC 特征计算，而是被适配为 monitor 可消费的兼容事实行：
 
 - `data_type = "报废"`；
 - `spc_status = "OOC"`；
@@ -217,9 +217,9 @@ raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
 | 消费方 | 实际路径 |
 |---|---|
 | `app/manager/compliance_manager.py` | 相对当前工作目录的 `config/compliance_config.xlsx` |
-| `ConfigLoader.get_compliance_config()` / `sanitize_to_compliant()` | 项目根目录下的 `resources/compliance_config.xlsx` |
+| `ConfigLoader.get_compliance_config()` / `sanitize_to_compliant()` | 项目根目录下的 `resources/inline_domain/compliance_config.xlsx` |
 
-检查时仓库只有 `resources/compliance_config.xlsx`，没有 `config/compliance_config.xlsx` 或旧 YAML。运行管理员面板时，`_ensure_config_exists()` 会在 `config/` 新建一个默认禁用文件；管理员看到、下载和上传的是这个新文件，但主看板洗白仍读取 `resources/` 下的文件。
+检查时仓库只有 `resources/inline_domain/compliance_config.xlsx`，没有 `config/compliance_config.xlsx` 或旧 YAML。运行管理员面板时，`_ensure_config_exists()` 会在 `config/` 新建一个默认禁用文件；管理员看到、下载和上传的是这个新文件，但主看板洗白仍读取 `resources/` 下的文件。
 
 结果是：管理员面板显示的状态和上传的修改可能不影响看板；报警明细缓存签名也跟踪 `config/` 文件，而逐行可见性过滤实际读取 `resources/` 文件。
 
@@ -255,7 +255,7 @@ raw_status_df = sanitize_to_compliant(raw_status_df, add_tag=True)
 
 本次分析时：
 
-- `resources/compliance_config.xlsx` 存在，且需要 Excel COM 回退读取；
+- `resources/inline_domain/compliance_config.xlsx` 存在，且需要 Excel COM 回退读取；
 - 解析结果为 `default=False`、10 条规则；
 - 其中 9 条为 4 段规则、1 条为 5 段规则，且全部启用；
 - `config/compliance_config.xlsx` 与 `config/compliance_config.yaml` 均不存在。

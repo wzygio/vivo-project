@@ -251,7 +251,7 @@ class TestLoadSpecBaseline:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """关键备件运行参数统一从 equipment_config.yaml 读取，快照 TTL 来自 global.yaml。"""
+        """关键备件运行参数统一从 config/domain/equipment_domain.yaml 读取，快照 TTL 来自 global.yaml。"""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "global.yaml").write_text(
@@ -261,7 +261,9 @@ data_snapshot:
 """.strip(),
             encoding="utf-8",
         )
-        (config_dir / "equipment_config.yaml").write_text(
+        domain_dir = config_dir / "domain"
+        domain_dir.mkdir()
+        (domain_dir / "equipment_domain.yaml").write_text(
             """
 equipment:
   baseline:

@@ -41,7 +41,7 @@ flowchart TD
 
 | 对象 | 当前来源/位置 | 作用 |
 |---|---|---|
-| 规格基线 | `resources/critical_parts_baseline.csv` | 定义每条监控规格、站点、机台/腔室、参数模式和寿命规格 |
+| 规格基线 | `resources/equipment_domain/critical_parts_baseline.csv` | 定义每条监控规格、站点、机台/腔室、参数模式和寿命规格 |
 | 规格原始 Excel | 配置项 `baseline.source_excel_path` | CSV 缺失时的回退来源 |
 | 真实快照 | `data/equipment/part_life_snapshot_<signature>.parquet` | 保存数据库查询结果 |
 | 伪造快照 | `data/equipment/part_life_fabricated_<signature>.parquet` | 只为没有真实匹配的规格提供当前值 |
@@ -54,7 +54,7 @@ flowchart TD
 
 ### 4.1 常规路径
 
-1. 页面和应用服务传入 `resources/critical_parts_baseline.csv`。
+1. 页面和应用服务传入 `resources/equipment_domain/critical_parts_baseline.csv`。
 2. 加载器按配置编码读取 CSV，要求存在以下九列：厂别、备件类型、设备类型、膜层、制程、寿命规格、站点、机台号-腔室、参数名称。
 3. `寿命规格` 去掉非数字/小数字符后转为数值；无法转换的值保留为空。
 4. 删除整行均为空的记录并重建索引。

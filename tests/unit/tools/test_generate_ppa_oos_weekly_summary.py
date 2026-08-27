@@ -122,7 +122,7 @@ def test_write_summary_workbook_creates_styled_table_and_metadata(
         output_path,
         start=pd.Timestamp("2026-08-10"),
         end_exclusive=pd.Timestamp("2026-08-17"),
-        source_path=Path("resources/spc_sheet_oos_decoration.xlsx"),
+        source_path=Path("resources/inline_domain/spc_sheet_oos_decoration.xlsx"),
     )
 
     workbook = openpyxl.load_workbook(output_path, data_only=True)

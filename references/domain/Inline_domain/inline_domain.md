@@ -110,7 +110,7 @@ PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路�
 - 返回 Sheet 特征、原始点位、指标元数据和 OOS 修饰结果；契约中不包含 CPM/CPK、CPK 预警或 CPK 修饰。
 - Core 侧 `core/ctq/indicator_chart.py` 仍为 payload 标记 `chart_type` 列（参数名含 `UNI` → line）；
   前端实际渲染决策统一由 `app/charts/inline/chart_type.py` 按配置完成，与 SPC 同口径（ADR-0016）。
-- OOS 修饰文件为 `resources/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet），与 SPC 修饰文件隔离、共用同一引擎。
+- OOS 修饰文件为 `resources/inline_domain/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet），与 SPC 修饰文件隔离、共用同一引擎。
 - 页面缓存遵守 ADR-0001：只缓存 DataFrame/原生容器/标量，并在缓存外构造 `CtqReportViewModel`。
 
 ### 4.4 `aoi_tt/aoi_tt_service.py` — AOI TT 趋势报表

@@ -1,7 +1,7 @@
 # Inline Sheet OOS 数据修饰机制
 
 > 分析对象：`src/inline_domain/core/shared/sheet_oos_decoration.py` 及其 SPC/CTQ/Monitor 调用链  
-> 重点文件：`resources/spc_sheet_oos_decoration.xlsx`  
+> 重点文件：`resources/inline_domain/spc_sheet_oos_decoration.xlsx`  
 > 核验日期：2026-08-18
 
 ## 1. 结论
@@ -12,7 +12,7 @@ Sheet OOS 修饰不是对源数据库或 Inline Parquet 快照的回写，而是
 - `False`：保留真实越规值；
 - `Delete`：从当前报表数据集中删除对应产品、站点、参数、Sheet 的全部点位。
 
-`resources/spc_sheet_oos_decoration.xlsx` 同时承担两个职责：
+`resources/inline_domain/spc_sheet_oos_decoration.xlsx` 同时承担两个职责：
 
 1. 保存当前查询窗口内识别出的 Sheet 级 OOS 明细；
 2. 保存用户针对这些明细维护的 `flag` 决策。
@@ -60,8 +60,8 @@ SPC 与 CTQ 共用同一套引擎，但使用不同工作簿，避免两种口�
 
 | `scope` | 工作簿 | sheet 名 |
 |---|---|---|
-| `spc` | `resources/spc_sheet_oos_decoration.xlsx` | 产品号，如 `M678` |
-| `ctq` | `resources/ctq_sheet_oos_decoration.xlsx` | 产品号 |
+| `spc` | `resources/inline_domain/spc_sheet_oos_decoration.xlsx` | 产品号，如 `M678` |
+| `ctq` | `resources/inline_domain/ctq_sheet_oos_decoration.xlsx` | 产品号 |
 | `none` | 不读写工作簿 | 不适用 |
 
 默认运行路径固定到项目根目录的 `resources/`，不是 `resources/<product>/`。测试可以通过 `product_dir` 显式覆盖该位置。

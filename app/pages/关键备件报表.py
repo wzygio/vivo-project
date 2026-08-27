@@ -3,7 +3,7 @@
 📋 关键备件报表 — Streamlit 前端页面
 
 数据流:
-1. 加载 resources/critical_parts_baseline.csv（规格基线）
+1. 加载 resources/equipment_domain/critical_parts_baseline.csv（规格基线）
 2. 查询 PostgreSQL eda.ARRAY_PDS_RESULT_T（最新实测值）→ Parquet 快照
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
 4. 渲染卡片：总备件数、超规、预警、正常、最后更新
@@ -33,6 +33,7 @@ if project_root:
 
 import streamlit as st
 
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
@@ -52,7 +53,7 @@ from app.sections.equipment_domain.parts_dashboard import (
 #  配置常量
 # ==============================================================================
 
-BASELINE_PATH = Path("resources/critical_parts_baseline.csv")
+BASELINE_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline", "critical_parts_baseline.csv")
 PARTS_REPORT_CACHE_SIGNATURE = "parts_report_manual_refresh_v1"
 
 

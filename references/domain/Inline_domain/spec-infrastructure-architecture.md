@@ -64,7 +64,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
   → 排除参数过滤（LOSS 关键字）
   → 排序去重（prod/factory/sheet/step/param/site 六键 keep="last"）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤
-  → 异常点过滤（resources/spc_outlier_filters.xlsx，规则键 prod/step/param）
+  → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，规则键 prod/step/param）
   → 时间窗口 [start, end+1d) + factory/step_id/param_name 维度过滤
   → 主制程追溯（attach_main_process_spec → 履历查询 → apply_main_process_history）
 ```
@@ -89,7 +89,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 | spc | `spc/spc_repository.py`（约 30 行） | 委托制备 port，`data_type_filter="SPC"` 由应用层固定 |
 | ctq | `ctq/ctq_repository.py` | 委托制备 port，`data_type_filter="CTQ"` 在 repository 注入 |
 | aoi_tt | `aoi_tt/aoi_tt_repository.py` | 直接用快照 + 规格 DAO；规格表 `param_type IS NULL` 识别 TT；保留 lot；不走白名单/异常点/追溯/覆盖 |
-| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/scrap_sheets.xlsx`（全产品单文件）+ `config/scrap_factory_mapping.yaml` 厂别推断，伪装为 OOC 行 |
+| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/inline_domain/scrap_sheets.xlsx`（全产品单文件）+ `config/scrap_factory_mapping.yaml` 厂别推断，伪装为 OOC 行 |
 | aoi_rs | `aoi_rs/data_loader.py` | 独立 DAO，不在共享体系内 |
 
 **注意**：monitor 的 AOI 与 aoi_tt 不是同一份数据（参数识别、lot 粒度、语义均不同），
@@ -113,8 +113,8 @@ def fetch_decorated_features(_features_source, prod_code, scope,
                              start_date, end_date, snapshot_signature="") -> dict
 ```
 
-- scope：`spc` → `resources/spc_sheet_oos_decoration.xlsx`；`ctq` →
-  `resources/ctq_sheet_oos_decoration.xlsx`；`none` → 免修饰（monitor 的 AOI 行）。
+- scope：`spc` → `resources/inline_domain/spc_sheet_oos_decoration.xlsx`；`ctq` →
+  `resources/inline_domain/ctq_sheet_oos_decoration.xlsx`；`none` → 免修饰（monitor 的 AOI 行）。
 - 缓存 key 含时间窗口：窗口一致时跨模块命中同一条目（一致性由此保证）。
 - 审计文件落盘语义：缓存 miss 时写一次，命中不重写；
   **操作契约：手工编辑修饰工作簿后须在页面点「刷新缓存」生效**。
@@ -133,7 +133,7 @@ def fetch_decorated_features(_features_source, prod_code, scope,
   margin 与稳定哈希复用引擎常量。
 
 aoi 模块的对齐（2026-08-14 起）：aoi_tt / aoi_rs 各有修饰工作簿
-（`resources/aoi_tt_sheet_oos_decoration.xlsx` /
+（`resources/inline_domain/aoi_tt_sheet_oos_decoration.xlsx` /
 `aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet），默认行为 = 自动截断
 （向后兼容），用户可置 flag=False 释放真实值或 Delete 删除；
 aoi_rs 工作簿以 `chart_kind`（lot/sheet）+ `point_id` 区分两张图的图点。

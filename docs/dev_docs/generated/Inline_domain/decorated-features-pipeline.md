@@ -36,8 +36,8 @@ scope 同时决定两件事（:33-41, :95-101）：
 
 1. **取数过滤**：构造 `SpcQueryConfig` 时的 `data_type_filter`；
 2. **修饰口径**：
-   - `spc` → `resources/spc_sheet_oos_decoration.xlsx`（sheet = 产品名）；
-   - `ctq` → `resources/ctq_sheet_oos_decoration.xlsx`（sheet 缺失 = 空修饰语义，由引擎处理）；
+   - `spc` → `resources/inline_domain/spc_sheet_oos_decoration.xlsx`（sheet = 产品名）；
+   - `ctq` → `resources/inline_domain/ctq_sheet_oos_decoration.xlsx`（sheet 缺失 = 空修饰语义，由引擎处理）；
    - `none` → 完全跳过修饰，只做 preprocess 特征计算（与 aoi_tt 的免修饰口径一致）。
 
 非法 scope 直接 `ValueError`（:113-114），不做静默兜底。

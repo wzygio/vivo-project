@@ -28,7 +28,7 @@ class EquipmentRuntimeConfig:
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise ValueError(f"equipment_config.yaml: '{name}' must be a mapping")
+        raise ValueError(f"equipment_domain.yaml: '{name}' must be a mapping")
     return value
 
 
@@ -44,12 +44,12 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     sheet_names = baseline.get("source_sheet_names")
     if not isinstance(sheet_names, list) or not sheet_names:
         raise ValueError(
-            "equipment_config.yaml: 'baseline.source_sheet_names' must be a non-empty list"
+            "equipment_domain.yaml: 'baseline.source_sheet_names' must be a non-empty list"
         )
     normalized_sheet_names = tuple(str(name).strip() for name in sheet_names if str(name).strip())
     if not normalized_sheet_names:
         raise ValueError(
-            "equipment_config.yaml: 'baseline.source_sheet_names' must contain a sheet name"
+            "equipment_domain.yaml: 'baseline.source_sheet_names' must contain a sheet name"
         )
 
     root = ConfigLoader.get_project_root()
@@ -62,13 +62,13 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     if snapshot_ttl_hours <= 0:
         raise ValueError("global.yaml: 'data_snapshot.ttl_hours' must be positive")
     if query_lookback_days <= 0:
-        raise ValueError("equipment_config.yaml: 'query.lookback_days' must be positive")
+        raise ValueError("equipment_domain.yaml: 'query.lookback_days' must be positive")
     if measurement_max_age_days <= 0:
         raise ValueError(
-            "equipment_config.yaml: 'query.measurement_max_age_days' must be positive"
+            "equipment_domain.yaml: 'query.measurement_max_age_days' must be positive"
         )
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$#]*(?:\.[A-Za-z_][A-Za-z0-9_$#]*)?", source_table):
-        raise ValueError("equipment_config.yaml: 'query.source_table' is not a valid SQL identifier")
+        raise ValueError("equipment_domain.yaml: 'query.source_table' is not a valid SQL identifier")
 
     return EquipmentRuntimeConfig(
         source_excel_path=(root / source_excel_path if not source_excel_path.is_absolute() else source_excel_path),

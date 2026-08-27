@@ -40,7 +40,7 @@ def main() -> int:
     from yield_domain.core.mwd_trend.modifier_table import sync_modifier_table
 
     config = ConfigLoader.load_config(args.product)
-    product_dir = ConfigLoader.get_project_root() / "resources" / args.product
+    product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / args.product
     table_path = YieldAnalysisService.resolve_modifier_table_path(config, product_dir)
     current_month = args.month or datetime.now().strftime("%Y-%m")
 

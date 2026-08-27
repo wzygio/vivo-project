@@ -33,7 +33,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--baseline",
         type=Path,
-        default=Path("resources/critical_parts_baseline.csv"),
+        default=Path("resources/equipment_domain/critical_parts_baseline.csv"),
     )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--seed", type=int)

@@ -149,7 +149,7 @@ inline_config.yaml
 
 规则文件为：
 
-`resources/spc_outlier_filters.xlsx`
+`resources/inline_domain/spc_outlier_filters.xlsx`
 
 它位于共享 measurement preparation 中，在参数排除、去重和数据类型归类之后执行，在日期及页面查询维度过滤之前完成。
 

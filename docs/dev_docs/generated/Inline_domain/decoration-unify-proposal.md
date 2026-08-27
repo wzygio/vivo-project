@@ -94,7 +94,7 @@ flowchart TD
 需求目标是 aoi_tt/aoi_rs 与 spc/ctq 对齐：①超规片自动修饰（已有）②配置文件指定
 释放或删除（缺失）。第②点的设计**不需要发明新机制**——直接复用工作簿三态 flag 模式：
 
-- 新增 aoi 修饰工作簿（如 `resources/aoi_tt_sheet_oos_decoration.xlsx` /
+- 新增 aoi 修饰工作簿（如 `resources/inline_domain/aoi_tt_sheet_oos_decoration.xlsx` /
   `aoi_rs_sheet_oos_decoration.xlsx`，延续"resources 根目录 + 每产品一个 sheet"布局）；
 - 引擎按键匹配：aoi_tt 可用 `[prod_code, step_id, tt_name, sheet_id]`，
   aoi_rs 用 `[prod_code, step_id, rs_code, sheet_id/lot_id]`——

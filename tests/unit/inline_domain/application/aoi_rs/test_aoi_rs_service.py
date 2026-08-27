@@ -15,7 +15,7 @@ from src.shared_kernel.config import ConfigLoader
 def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
     """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
-    (tmp_path / "resources").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "resources" / "inline_domain").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
@@ -259,7 +259,7 @@ def test_service_persists_aoi_rs_decoration_workbook(
     a1_lot = view_model.lot_points_df[view_model.lot_points_df["rs_code"] == "A1PPS"]
     assert a1_lot["value"].iloc[0] < 2.0
 
-    workbook = _tmp_project_root / "resources" / "aoi_rs_sheet_oos_decoration.xlsx"
+    workbook = _tmp_project_root / "resources" / "inline_domain" / "aoi_rs_sheet_oos_decoration.xlsx"
     assert workbook.exists()
     persisted = pd.read_excel(workbook, sheet_name="M678")
     assert set(persisted["chart_kind"]) == {"lot", "sheet"}
@@ -278,7 +278,7 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
              "rs_code": "A1PPS", "chart_kind": "lot", "point_id": "LOT-A1", "flag": "Delete"},
         ]
     ).to_excel(
-        _tmp_project_root / "resources" / "aoi_rs_sheet_oos_decoration.xlsx",
+        _tmp_project_root / "resources" / "inline_domain" / "aoi_rs_sheet_oos_decoration.xlsx",
         sheet_name="M678",
         index=False,
         engine="openpyxl",

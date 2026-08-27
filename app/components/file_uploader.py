@@ -183,7 +183,7 @@ def _render_file_manager_tab(
         return
     
     if target_path is None:
-        # 按产品 sheet 汇总模式：共享工作簿位于 resources 根目录，本产品数据在各自的 sheet 中
+        # 按产品 sheet 汇总模式：共享工作簿位于 yield_domain 资源目录，本产品数据在各自的 sheet 中
         per_product_sheets = True
         file_name = override_res.file_name
         target_path = product_dir.parent / file_name

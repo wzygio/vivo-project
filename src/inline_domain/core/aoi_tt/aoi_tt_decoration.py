@@ -2,7 +2,7 @@
 
 与 SPC/CTQ 对齐（见 docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md）：
 
-- 工作簿 `resources/aoi_tt_sheet_oos_decoration.xlsx`，每产品一个 sheet，
+- 工作簿 `resources/inline_domain/aoi_tt_sheet_oos_decoration.xlsx`，每产品一个 sheet，
   复用共享引擎的三态语义：flag=Delete 删除该行、False 释放真实值、True（默认）自动截断；
 - 无工作簿 / 缺产品 sheet 时按空修饰语义处理 —— 全部超规行默认截断，
   与引入工作簿前的 auto_clip_over_spec 行为完全一致（向后兼容）；

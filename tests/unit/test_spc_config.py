@@ -7,9 +7,9 @@ def test_get_spc_line_chart_param_name_contains_normalizes_config(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "inline_config.yaml").write_text(
+    config_dir = tmp_path / "config" / "domain"
+    config_dir.mkdir(parents=True)
+    (config_dir / "inline_domain.yaml").write_text(
         """
 spc:
   chart:
@@ -30,9 +30,9 @@ def test_get_auto_decoration_param_exemptions_normalizes_config(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "inline_config.yaml").write_text(
+    config_dir = tmp_path / "config" / "domain"
+    config_dir.mkdir(parents=True)
+    (config_dir / "inline_domain.yaml").write_text(
         """
 auto_decoration:
   exempt_param_name_contains:
@@ -52,9 +52,9 @@ def test_get_spc_period_box_source_reads_supported_value(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "inline_config.yaml").write_text(
+    config_dir = tmp_path / "config" / "domain"
+    config_dir.mkdir(parents=True)
+    (config_dir / "inline_domain.yaml").write_text(
         """
 spc:
   spc_cpk:
@@ -71,9 +71,9 @@ def test_get_spc_period_box_source_defaults_to_point_values_for_unknown_value(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "inline_config.yaml").write_text(
+    config_dir = tmp_path / "config" / "domain"
+    config_dir.mkdir(parents=True)
+    (config_dir / "inline_domain.yaml").write_text(
         """
 spc:
   spc_cpk:

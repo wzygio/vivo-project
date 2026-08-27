@@ -98,8 +98,8 @@ def fetch_decorated_features(
     different windows cache separately (correctness first).
 
     ``scope`` selects the decoration calibre:
-    - ``"spc"``: ``resources/spc_sheet_oos_decoration.xlsx`` (sheet = product);
-    - ``"ctq"``: ``resources/ctq_sheet_oos_decoration.xlsx`` (sheet = product,
+    - ``"spc"``: ``resources/inline_domain/spc_sheet_oos_decoration.xlsx`` (sheet = product);
+    - ``"ctq"``: ``resources/inline_domain/ctq_sheet_oos_decoration.xlsx`` (sheet = product,
       missing sheet = empty decoration semantics, handled by the engine);
     - ``"none"``: decoration skipped entirely, only preprocess feature
       computation (same exemption as aoi_tt).

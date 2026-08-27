@@ -37,7 +37,7 @@ def db_manager() -> DatabaseManager:
 @pytest.fixture
 def baseline_path() -> Path:
     """指向项目实际的 CSV 基线文件。"""
-    return Path("resources/critical_parts_baseline.csv")
+    return Path("resources/equipment_domain/critical_parts_baseline.csv")
 
 
 @pytest.fixture

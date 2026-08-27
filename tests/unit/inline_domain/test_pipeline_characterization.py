@@ -449,7 +449,7 @@ def _write_scrap_excel(scrap_path: Path) -> None:
 def test_scrap_data_transforms_excel_into_ooc_contract(
     monkeypatch, tmp_path: Path
 ) -> None:
-    _write_scrap_excel(tmp_path / "resources" / "scrap_sheets.xlsx")
+    _write_scrap_excel(tmp_path / "resources" / "inline_domain" / "scrap_sheets.xlsx")
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "scrap_factory_mapping.yaml").write_text(

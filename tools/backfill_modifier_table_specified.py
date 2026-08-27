@@ -1,9 +1,9 @@
 """一次性补全"入库良率修饰表"的"指定良损"列（Task2）。
 
 填充优先级（left join，不新增修饰表中没有的记录、不覆盖已有指定值）：
-1. `resources/趋势图人工修正.xlsx` 同 Sheet（<产品>_Group级 / <产品>_Code级）的
+1. `resources/yield_domain/趋势图人工修正.xlsx` 同 Sheet（<产品>_Group级 / <产品>_Code级）的
    月度数据（周期类型 == "月度"），按 (不良类型, 时间标签) 匹配"期望不良率"；
-2. 仍缺失的 Code 级行，用 `resources/codebaseline.xlsx` 对应产品 Sheet，
+2. 仍缺失的 Code 级行，用 `resources/yield_domain/codebaseline.xlsx` 对应产品 Sheet，
    按 (defect_desc, baseline_month) 匹配"baseline_rate"（codebaseline 无 Group 级
    数据，Group 级仍缺失的行保持空缺，运行时按"当月良损"兜底）。
 
@@ -47,9 +47,9 @@ from yield_domain.core.mwd_trend.modifier_table import (
     parse_rate_value,
 )
 
-MODIFIER_TABLE_PATH = PROJECT_ROOT / "resources" / "入库良率修饰表.xlsx"
-OVERRIDE_PATH = PROJECT_ROOT / "resources" / "趋势图人工修正.xlsx"
-CODEBASELINE_PATH = PROJECT_ROOT / "resources" / "codebaseline.xlsx"
+MODIFIER_TABLE_PATH = PROJECT_ROOT / "resources" / "yield_domain" / "入库良率修饰表.xlsx"
+OVERRIDE_PATH = PROJECT_ROOT / "resources" / "yield_domain" / "趋势图人工修正.xlsx"
+CODEBASELINE_PATH = PROJECT_ROOT / "resources" / "yield_domain" / "codebaseline.xlsx"
 
 
 def _norm_month(value) -> str:

@@ -246,9 +246,9 @@ class InlineMeasurementPreparationRepository:
         import io
         from src.shared_kernel.config import ConfigLoader
 
-        # 1. 路径锁定
+        # 1. 路径锁定（路径由 inline_domain 配置的 resources.files.spc_outlier_filters 决定）
         project_root = ConfigLoader.get_project_root()
-        rule_file = project_root / "resources" / "spc_outlier_filters.xlsx"
+        rule_file = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters", "spc_outlier_filters.xlsx")
         csv_fallback = project_root / "output" / "decrypted_files" / "spc_outlier_filters.csv"
 
         if df.empty:

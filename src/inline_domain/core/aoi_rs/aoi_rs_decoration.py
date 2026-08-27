@@ -2,7 +2,7 @@
 
 与 SPC/CTQ/AOI_TT 对齐（见 docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md）：
 
-- 工作簿 `resources/aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet，
+- 工作簿 `resources/inline_domain/aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet，
   复用共享引擎三态语义：flag=Delete 删除图点、False 释放真实值、True（默认）截断；
 - By Lot 与 By Sheet 两张图规格来源不同（LOT_RATIO vs SHEET_ID/GLASS_ID），
   工作簿以 ``chart_kind`` 列区分图口径，``point_id`` 在 lot 图取 lot_id、
