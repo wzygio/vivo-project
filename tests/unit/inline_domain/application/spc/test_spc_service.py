@@ -351,3 +351,39 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     report = outcome["report"]
     assert isinstance(report, original_module.SpcReportViewModel)
     assert not report.raw_measurements_df.empty
+
+
+def test_spc_service_threads_gate_params_to_shared_pipeline(monkeypatch) -> None:
+    """get_spc_report_data 把 product_revision/decision_signature 穿到共享管线。"""
+    SpcReportService.fetch_spc_report_payload.clear()
+    recorded: dict[str, object] = {}
+
+    def spy_fetch(**kwargs):
+        recorded.update(kwargs)
+        return {
+            "sheet_features_df": pd.DataFrame(),
+            "raw_measurements_df": pd.DataFrame(),
+            "spec_empty": True,
+            "sheet_oos_decoration": None,
+        }
+
+    monkeypatch.setattr(spc_service, "fetch_decorated_features", spy_fetch)
+    query = SpcQueryConfig(
+        prod_code="M626",
+        start_date="2026-06-01",
+        end_date="2026-06-07",
+        data_type_filter="SPC",
+    )
+
+    SpcReportService.get_spc_report_data(
+        _data_port=FakeSpcRepository(Path("data"), True, object()),
+        query_config_json=query.model_dump_json(),
+        snapshot_signature="gate-thread-spc",
+        product_revision="rev-spc",
+        decision_signature="sig-spc",
+    )
+
+    assert recorded["scope"] == "spc"
+    assert recorded["prod_code"] == "M626"
+    assert recorded["product_revision"] == "rev-spc"
+    assert recorded["decision_signature"] == "sig-spc"

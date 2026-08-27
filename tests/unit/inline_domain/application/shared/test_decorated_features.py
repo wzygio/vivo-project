@@ -14,10 +14,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from src.inline_domain.application.shared import decorated_features as decorated_features_module
+from src.inline_domain.application.shared.decorated_data import DecoratedData
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
 )
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
 from src.shared_kernel.config import ConfigLoader
 
 PROD = "M678"
@@ -250,3 +253,87 @@ def test_cache_key_covers_window_scope_product_and_signature(
     # Different product -> separate entry.
     fetch_decorated_features(source, "M626", "none", START_DATE, END_DATE, "k1")
     assert source.measure_calls == 5
+
+
+# ---------------------------------------------------------------------------
+# 门控参数接线（Phase 4，PRD §5.4/§5.5）
+# ---------------------------------------------------------------------------
+def test_fetch_threads_gate_params_to_prepare_decorated_data(
+    monkeypatch, decoration_root: Path
+) -> None:
+    """spc/ctq scope 下 fetch 必须把 scope/prod_code/product_revision/decision_signature
+    传给 prepare_decorated_data，进而启用 core 刷新门控。"""
+    recorded: dict[str, object] = {}
+
+    def fake_prepare(**kwargs):
+        recorded.update(kwargs)
+        raw_df = kwargs["raw_measurements_df"]
+        return DecoratedData(
+            raw_measurements_df=raw_df,
+            sheet_features_df=pd.DataFrame(),
+            sheet_oos_decoration_result=SheetOosDecorationResult(
+                raw_measurements_df=raw_df,
+                decoration_df=pd.DataFrame(),
+                decoration_path=Path("spc_sheet_oos_decoration.xlsx"),
+                decoration_sheet=str(kwargs["prod_code"]),
+            ),
+        )
+
+    monkeypatch.setattr(decorated_features_module, "prepare_decorated_data", fake_prepare)
+
+    fetch_decorated_features(
+        _source(),
+        PROD,
+        "spc",
+        START_DATE,
+        END_DATE,
+        "gate-thread",
+        product_revision="rev-1",
+        decision_signature="sig-1",
+    )
+
+    assert recorded["scope"] == "spc"
+    assert recorded["prod_code"] == PROD
+    assert recorded["product_revision"] == "rev-1"
+    assert recorded["decision_signature"] == "sig-1"
+
+
+def test_decision_signature_and_product_revision_are_cache_key_parts(
+    decoration_root: Path,
+) -> None:
+    """决策签名/产品 revision 进入共享 L2 缓存键：变化即产生新缓存条目。"""
+    source = _CountingSource()
+
+    fetch_decorated_features(
+        source, PROD, "none", START_DATE, END_DATE, "k1",
+        product_revision="r1", decision_signature="s1",
+    )
+    fetch_decorated_features(
+        source, PROD, "none", START_DATE, END_DATE, "k1",
+        product_revision="r1", decision_signature="s1",
+    )
+    assert source.measure_calls == 1
+
+    # 决策签名变化 -> 新缓存条目（用户编辑 __flags 后触发 L2 miss）。
+    fetch_decorated_features(
+        source, PROD, "none", START_DATE, END_DATE, "k1",
+        product_revision="r1", decision_signature="s2",
+    )
+    assert source.measure_calls == 2
+
+    # 产品 revision 变化 -> 新缓存条目。
+    fetch_decorated_features(
+        source, PROD, "none", START_DATE, END_DATE, "k1",
+        product_revision="r2", decision_signature="s1",
+    )
+    assert source.measure_calls == 3
+
+
+def test_gate_params_default_to_legacy_behavior(decoration_root: Path) -> None:
+    """不传新参数时行为与旧契约一致（aoi/既有调用零改动）。"""
+    payload = fetch_decorated_features(
+        _source(), PROD, "none", START_DATE, END_DATE, "gate-default"
+    )
+
+    assert payload["sheet_features_df"]["sheet_max"].tolist() == [100.0]
+    assert payload["sheet_oos_decoration"] is None

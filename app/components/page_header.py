@@ -118,7 +118,8 @@ def render_page_header(
     if title:
         st.title(title)
 
-    # [L1] 仅刷新底层数据快照，不清除 st.cache_data。
+    # [L1+L2] 刷新底层数据快照，成功后同步失效当前页面的 L2 缓存。
+    # 模块卸载与配置重读仍只属于「刷新缓存」(_hard_reset_callback)。
     def _refresh_data_callback():
         if not refresh_handlers:
             st.toast("当前页面没有独立的数据快照刷新任务。", icon="ℹ️")
@@ -135,8 +136,20 @@ def render_page_header(
             st.toast("❌ 数据库连接或快照更新失败，已保留当前缓存视图。", icon="🚨")
             return
 
-        st.toast("✅ 数据快照刷新完成。需要重读页面缓存时，请点击“刷新缓存”。", icon="🎉")
-        logging.info("🔄 [UI] L1 数据快照刷新完毕，未清除 Streamlit L2 缓存。")
+        # 快照全部刷新成功后失效 L2：产品页面仅推进当前产品的共享 revision；
+        # 无产品作用域但有缓存函数时保留旧的全量 func.clear() 语义。
+        if product_cache_scope:
+            invalidate_page_cache(cached_funcs, product_code=product_cache_scope)
+        elif cached_funcs:
+            invalidate_page_cache(cached_funcs)
+
+        # 清理前端 memo 化的视图模型缓存（与 _hard_reset_callback 阶段 2 一致）。
+        for key in list(st.session_state.keys()):
+            if "view_model" in key: # type: ignore
+                del st.session_state[key]
+
+        st.toast("✅ L1 快照与 L2 缓存已刷新。", icon="🎉")
+        logging.info("🔄 [UI] L1 数据快照刷新完毕，已同步失效 L2 页面缓存。")
 
     # 产品页面通过共享版本键仅失效当前产品；聚合/无产品页面保留旧的
     # func.clear() + 模块重载行为。
@@ -219,7 +232,11 @@ def render_page_header(
                         key=f"btn_refresh_{title}",
                         on_click=_refresh_data_callback,
                         width="stretch",
-                        help="刷新底层 L1 数据快照；不会清除 Streamlit 页面缓存。",
+                        help=(
+                            f"刷新底层 L1 数据快照，并同步刷新产品 {product_cache_scope} 的 L2 页面缓存。"
+                            if product_cache_scope
+                            else "刷新底层 L1 数据快照，并同步刷新当前页面的 L2 缓存。"
+                        ),
                     )
                     st.button(
                         "🔄 刷新缓存",

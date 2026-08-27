@@ -75,14 +75,21 @@ class MonitorAnalysisService:
         start_dt: datetime,
         end_dt: datetime,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signatures: Optional[dict] = None,
     ) -> pd.DataFrame:
         """
         [D2/D3] 按 data_type 分组路由到共享修饰+特征管线，各组特征 concat 后返回。
         每行组以 InMemoryFeaturesSource 喂给共享缓存函数，避免重复取数；
-        缓存 key 含 (prod, scope, start, end, snapshot_signature)，
+        缓存 key 含 (prod, scope, start, end, snapshot_signature,
+        product_revision, decision_signature)，
         与 SPC/CTQ 报表 service 在窗口一致时命中同一条目。
         注意：共享函数内部 persist_files=True —— 缓存 miss 时修饰工作簿落盘一次，
         命中时不重写（含下钻路径，替代原 persist_files=False 的内联副本）。
+
+        ``decision_signatures`` 为 scope -> 决策签名映射（由页面逐产品逐 scope
+        预算后传入）；缺失的 scope 以空字符串进入缓存 key（core 门控会自行从
+        决策台账计算签名，判定仍然正确）。
         """
         if 'data_type' in measurements_df.columns:
             grouped_measurements = measurements_df.groupby('data_type', dropna=False)
@@ -99,6 +106,8 @@ class MonitorAnalysisService:
                 start_date=start_dt.strftime("%Y-%m-%d"),
                 end_date=end_dt.strftime("%Y-%m-%d"),
                 snapshot_signature=snapshot_signature,
+                product_revision=product_revision,
+                decision_signature=(decision_signatures or {}).get(scope, ""),
             )
             features = features_payload["sheet_features_df"]
             if not features.empty:
@@ -285,17 +294,23 @@ class MonitorAnalysisService:
         return hash_md5.hexdigest()[:8]
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=1)
+    @st.cache_data(show_spinner=False, max_entries=1, ttl=4 * 60 * 60)
     def fetch_dashboard_data_dict(
         _repository_factory: MonitorSpcRepositoryFactory,
         query_config_json: str, 
         time_type: str = 'MIXED',
         force_compliant: bool = False,
         data_type_filter: str = 'SPC',
-        snapshot_signature: str = ""
+        snapshot_signature: str = "",
+        product_revisions: Optional[dict] = None,
+        decision_signatures: Optional[dict] = None,
     ) -> dict:
         """
         [内部缓存层] 负责所有重负载的查询与计算，返回原生字典以完美规避 Pickle 序列化陷阱。
+
+        ``product_revisions``/``decision_signatures`` 由页面按产品（及 scope）预算后
+        传入：prod -> revision 字符串；prod -> {scope -> 决策签名}。二者进入缓存 key，
+        用户编辑 __flags 或刷新缓存换 revision 时触发 L2 miss 与明细重建。
         """
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
@@ -365,7 +380,9 @@ class MonitorAnalysisService:
             if not m_df.empty:
                 # [D2/D3] 按 data_type 分组路由修饰口径（SPC/CTQ/AOI），特征 concat
                 features_df = MonitorAnalysisService._fetch_grouped_features(
-                    prod, m_df, s_df, start_dt, end_dt, snapshot_signature
+                    prod, m_df, s_df, start_dt, end_dt, snapshot_signature,
+                    product_revision=(product_revisions or {}).get(prod, ""),
+                    decision_signatures=(decision_signatures or {}).get(prod),
                 )
                 if features_df.empty:
                     continue
@@ -486,11 +503,13 @@ class MonitorAnalysisService:
     @staticmethod
     def get_monitor_dashboard_data(
         _repository_factory: MonitorSpcRepositoryFactory,
-        query_config_json: str, 
+        query_config_json: str,
         time_type: str = 'MIXED',
         force_compliant: bool = False,
         data_type_filter: str = 'SPC',
-        snapshot_signature: str = ""
+        snapshot_signature: str = "",
+        product_revisions: Optional[dict] = None,
+        decision_signatures: Optional[dict] = None,
     ) -> MonitorDashboardViewModel:
         """
         [企业级标准接口] 实时从底层缓存引擎拉取字典，安全组装为 MonitorDashboardViewModel 对象。
@@ -498,11 +517,13 @@ class MonitorAnalysisService:
         # 1. 穿透调用内部缓存引擎，获取字典
         raw_data = MonitorAnalysisService.fetch_dashboard_data_dict(
             _repository_factory,
-            query_config_json, 
-            time_type, 
-            force_compliant, 
+            query_config_json,
+            time_type,
+            force_compliant,
             data_type_filter,
-            snapshot_signature
+            snapshot_signature,
+            product_revisions,
+            decision_signatures,
         )
         
         # 2. 实时实例化数据类，彻底消灭热重载时的序列化报错！
@@ -520,7 +541,9 @@ class MonitorAnalysisService:
         defect_type: str,
         time_type: str = 'MIXED',
         force_compliant: bool = False,
-        data_type_filter: str = 'SPC'
+        data_type_filter: str = 'SPC',
+        product_revisions: Optional[dict] = None,
+        decision_signatures: Optional[dict] = None,
     ) -> pd.DataFrame:
         """
         [企业级下钻 API] 针对前端大盘数字点击事件，提供精准的明细级数据下钻。
@@ -584,7 +607,9 @@ class MonitorAnalysisService:
             if not m_df.empty:
                 # [D2/D3] 与大盘同一路由：共享缓存管线替代原内联取数/修饰副本
                 features_df = MonitorAnalysisService._fetch_grouped_features(
-                    prod, m_df, s_df, start_dt, end_dt
+                    prod, m_df, s_df, start_dt, end_dt,
+                    product_revision=(product_revisions or {}).get(prod, ""),
+                    decision_signatures=(decision_signatures or {}).get(prod),
                 )
                 if features_df.empty:
                     continue

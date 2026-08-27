@@ -79,6 +79,9 @@ def prepare_decorated_data(
     scope: str,
     product_dir: Path | None = None,
     persist: bool = True,
+    *,
+    product_revision: str = "",
+    decision_signature: str = "",
 ) -> DecoratedData:
     """Apply the scope's tri-state Sheet actions and recompute Sheet features.
 
@@ -87,6 +90,10 @@ def prepare_decorated_data(
     product/station/parameter/Sheet points, ``True`` clips OOS points and
     ``False`` preserves their real values. ``scope`` only selects the workbook
     (``SCOPE_DECORATION_FILE_NAME``); the engine and flag semantics are shared.
+
+    ``product_revision``/``decision_signature`` 透传到 core 刷新门控：
+    相同 revision + 相同决策签名 + 距成功写入不足 4h 时不重写工作簿；
+    缺省为空字符串时 core 自行从决策台账计算签名，门控仍然生效。
     """
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
@@ -101,6 +108,10 @@ def prepare_decorated_data(
         clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
         decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
         decoration_sheet_name=prod_code,
+        scope=normalized_scope,
+        prod_code=prod_code,
+        product_revision=product_revision,
+        decision_signature=decision_signature,
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
         decoration_result.raw_measurements_df,

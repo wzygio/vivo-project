@@ -80,9 +80,15 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
 - `application/shared/decorated_features.py` 是 SPC/CTQ/monitor 共享的无状态
   修饰+特征计算缓存函数 `fetch_decorated_features`（缓存 key 含产品、scope、
-  起止日期与快照签名）：scope='spc'/'ctq' 分别使用对应 OOS 修饰工作簿，
-  scope='none' 跳过修饰；monitor 按 data_type 分组路由 scope（SPC→spc、
-  CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，命中不重写。
+  起止日期、快照签名、产品 revision 与决策签名）：scope='spc'/'ctq' 分别使用
+  对应 OOS 修饰工作簿，scope='none' 跳过修饰；monitor 按 data_type 分组路由
+  scope（SPC→spc、CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，
+  命中不重写；spc/ctq 下行到 core 的刷新门控（meta + 4h TTL + revision/决策
+  签名比对）判定是否真正重写明细。决策签名由
+  `application/shared/decision_signature.py` 两阶段生成：file_stat
+  (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
+  file_stat 不变不重读工作簿；`__flags` 读取失败上抛
+  `SheetOosDecorationReadError`，不降级为空签名。
 - 主制程 OUT 履历查询归 `infrastructure/measurement/main_process_history_repository.py`
   所有；`infrastructure/measurement/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。

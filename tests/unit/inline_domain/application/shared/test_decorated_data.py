@@ -198,3 +198,42 @@ def test_unknown_scope_raises(tmp_path: Path) -> None:
             scope="banana",
             product_dir=tmp_path / "resources",
         )
+
+
+def test_prepare_decorated_data_threads_gate_params_to_core(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """prepare_decorated_data 把 scope/prod_code/product_revision/decision_signature
+    透传到 core prepare_sheet_oos_decoration（启用刷新门控）。"""
+    from src.inline_domain.core.shared.sheet_oos_decoration import (
+        SheetOosDecorationResult,
+    )
+
+    recorded: dict[str, object] = {}
+
+    def fake_core(**kwargs):
+        recorded.update(kwargs)
+        raw_df = kwargs["raw_measurements_df"]
+        return SheetOosDecorationResult(
+            raw_measurements_df=raw_df,
+            decoration_df=pd.DataFrame(),
+            decoration_path=tmp_path / "spc_sheet_oos_decoration.xlsx",
+            decoration_sheet=str(kwargs.get("decoration_sheet_name") or "Sheet1"),
+        )
+
+    monkeypatch.setattr(decorated_data, "prepare_sheet_oos_decoration", fake_core)
+
+    prepare_decorated_data(
+        raw_measurements_df=_raw_measurements(),
+        spec_df=_spec_limits(),
+        prod_code="Z571",
+        scope="spc",
+        product_dir=tmp_path / "resources",
+        product_revision="rev-9",
+        decision_signature="sig-9",
+    )
+
+    assert recorded["scope"] == "spc"
+    assert recorded["prod_code"] == "Z571"
+    assert recorded["product_revision"] == "rev-9"
+    assert recorded["decision_signature"] == "sig-9"

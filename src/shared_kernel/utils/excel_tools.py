@@ -1,9 +1,13 @@
 # src/vivo_project/utils/utils.py
 import pandas as pd
 import logging
+import os
 import sys
+import tempfile
+import threading
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Mapping, Optional
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
@@ -90,55 +94,196 @@ def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
                 pass
 
 
+@dataclass(frozen=True)
+class WorkbookWriteResult:
+    """工作簿写入结果契约（PRD §5.10）。
+
+    - written: 是否真正完成了正式文件的原子替换；
+    - path: 目标工作簿路径；
+    - updated_sheets: 本次提交中更新（替换/新建）的 sheet 名，按传入顺序；
+    - error: 失败时的可操作错误信息，成功时为 None。
+    """
+
+    written: bool
+    path: Path
+    updated_sheets: tuple[str, ...]
+    error: str | None = None
+
+
+# 同一工作簿的写入在进程内互斥，避免并发写产生部分更新
+_workbook_write_lock = threading.Lock()
+
+
+def replace_workbook_sheets(
+    xlsx_path: Path,
+    sheets: Mapping[str, pd.DataFrame],
+) -> WorkbookWriteResult:
+    """在一次工作簿提交中原子替换（或新建）多个 sheet，保留其他 sheet。
+
+    事务语义：所有目标 sheet 要么全部生效，要么全部不生效——
+    先在同目录临时文件中完成保存并用 openpyxl 回读验证
+    （目标 sheet 存在且行数符合预期），再 os.replace 原子替换正式文件；
+    任一环节失败均返回 written=False，正式文件保持不变。
+
+    - 企业加密等 openpyxl 无法打开的文件回退为：COM 读出全部 sheets，
+      合并更新后整体重写为明文 xlsx（logger.warning 明确记录）；
+    - 文件被占用（PermissionError，如 Excel 打开中）返回 written=False，
+      error 含“请关闭 Excel 后重试”提示，不抛错；
+    - 正式文件不存在时按同样流程新建。
+
+    Args:
+        xlsx_path: 共享工作簿路径
+        sheets: {目标 sheet 名: 写入数据}，顺序即 updated_sheets 顺序
+
+    Returns:
+        WorkbookWriteResult，调用方必须显式检查 written
+    """
+    with _workbook_write_lock:
+        return _replace_workbook_sheets_locked(xlsx_path, sheets)
+
+
+def _replace_workbook_sheets_locked(
+    xlsx_path: Path,
+    sheets: Mapping[str, pd.DataFrame],
+) -> WorkbookWriteResult:
+    """replace_workbook_sheets 的实际实现（调用方需已持有 _workbook_write_lock）。"""
+    import openpyxl
+    from openpyxl.utils.dataframe import dataframe_to_rows
+
+    target_sheets = tuple(sheets.keys())
+    if not target_sheets:
+        return WorkbookWriteResult(
+            written=False, path=xlsx_path, updated_sheets=(), error="未提供需要写入的 sheet"
+        )
+
+    xlsx_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 同目录临时文件：保证 os.replace 为同卷原子替换
+    tmp_handle = tempfile.NamedTemporaryFile(
+        prefix=f".{xlsx_path.stem}-", suffix=".tmp.xlsx", dir=xlsx_path.parent, delete=False
+    )
+    tmp_path = Path(tmp_handle.name)
+    tmp_handle.close()
+
+    try:
+        wb = None
+        if xlsx_path.exists():
+            try:
+                wb = openpyxl.load_workbook(xlsx_path)
+            except Exception:
+                wb = None
+
+        if wb is None and xlsx_path.exists():
+            # openpyxl 无法打开（企业加密等）：COM 读出全部 sheets 后整体重写为明文
+            logging.warning(
+                "[excel_tools] openpyxl 无法打开 %s，企业加密工作簿整体重写为明文 xlsx。",
+                xlsx_path.name,
+            )
+            try:
+                all_sheets = _read_all_sheets_via_com(xlsx_path)
+            except Exception as exc:
+                return WorkbookWriteResult(
+                    written=False,
+                    path=xlsx_path,
+                    updated_sheets=(),
+                    error=f"COM 读取加密工作簿失败: {exc}",
+                )
+            for name, df in sheets.items():
+                all_sheets[name] = df
+            with pd.ExcelWriter(tmp_path, engine="openpyxl") as writer:
+                for name, sheet_df in all_sheets.items():
+                    sheet_df.to_excel(writer, index=False, sheet_name=name)
+        else:
+            if wb is None:
+                # 正式文件不存在：新建工作簿
+                wb = openpyxl.Workbook()
+                wb.remove(wb.active)
+            for name, df in sheets.items():
+                if name in wb.sheetnames:
+                    del wb[name]
+                ws = wb.create_sheet(name)
+                for row in dataframe_to_rows(df, index=False, header=True):
+                    ws.append(row)
+            wb.save(tmp_path)
+
+        # 回读临时文件验证：目标 sheet 存在且行数（含表头）符合预期
+        verify_error = _verify_temp_workbook(tmp_path, sheets)
+        if verify_error is not None:
+            return WorkbookWriteResult(
+                written=False, path=xlsx_path, updated_sheets=(), error=verify_error
+            )
+
+        os.replace(tmp_path, xlsx_path)
+        return WorkbookWriteResult(
+            written=True, path=xlsx_path, updated_sheets=target_sheets
+        )
+    except PermissionError as exc:
+        return WorkbookWriteResult(
+            written=False,
+            path=xlsx_path,
+            updated_sheets=(),
+            error=f"工作簿被占用（可能被 Excel 打开），请关闭 Excel 后重试: {exc}",
+        )
+    except Exception as exc:
+        return WorkbookWriteResult(
+            written=False,
+            path=xlsx_path,
+            updated_sheets=(),
+            error=f"写入工作簿失败: {exc}",
+        )
+    finally:
+        # 无论成败都清理临时文件；已原子替换成功时 tmp_path 已不存在
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
+
+
+def _verify_temp_workbook(
+    tmp_path: Path, sheets: Mapping[str, pd.DataFrame]
+) -> str | None:
+    """回读临时工作簿验证目标 sheet 存在且行数（含表头）符合预期；失败返回错误信息。"""
+    import openpyxl
+
+    try:
+        wb = openpyxl.load_workbook(tmp_path, read_only=True)
+    except Exception as exc:
+        return f"临时工作簿回读验证失败: {exc}"
+    try:
+        for name, df in sheets.items():
+            if name not in wb.sheetnames:
+                return f"临时工作簿验证失败: 目标 sheet [{name}] 缺失"
+            expected_rows = len(df) + 1  # 含表头行
+            actual_rows = wb[name].max_row or 0
+            if actual_rows != expected_rows:
+                return (
+                    f"临时工作簿验证失败: sheet [{name}] 行数 {actual_rows}，"
+                    f"预期 {expected_rows}"
+                )
+    finally:
+        wb.close()
+    return None
+
+
 def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -> None:
     """在共享工作簿中替换（或新建）指定 sheet，保留其他 sheet 的内容与格式。
 
-    - 优先 openpyxl 原地替换：仅删除并重建目标 sheet，其他 sheet 原样保留；
-    - 企业加密等 openpyxl 无法打开的文件回退为：COM 读出全部 sheets，
-      替换目标 sheet 后整体重写为明文工作簿（与既有 to_excel 覆盖行为等价）；
-    - 文件被占用（PermissionError，如 Excel 打开中）时仅记录告警，不抛错。
+    [兼容包装] 内部委托 replace_workbook_sheets；新代码请直接使用
+    replace_workbook_sheets 并显式检查 WorkbookWriteResult.written。
+
+    兼容语义：失败（如文件被 Excel 占用）时仅记录告警，不抛错。
 
     Args:
         xlsx_path: 共享工作簿路径（不存在则新建单 sheet 工作簿）
         sheet_name: 目标 sheet 名
         df: 写入的数据
     """
-    from openpyxl.utils.dataframe import dataframe_to_rows
-
-    xlsx_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        if not xlsx_path.exists():
-            df.to_excel(xlsx_path, index=False, sheet_name=sheet_name)
-            return
-
-        try:
-            import openpyxl
-
-            wb = openpyxl.load_workbook(xlsx_path)
-        except Exception:
-            wb = None
-
-        if wb is not None:
-            if sheet_name in wb.sheetnames:
-                del wb[sheet_name]
-            ws = wb.create_sheet(sheet_name)
-            for row in dataframe_to_rows(df, index=False, header=True):
-                ws.append(row)
-            wb.save(xlsx_path)
-            return
-
-        # openpyxl 无法打开（企业加密等）：读出全部 sheets 后整体重写
-        logging.warning("[excel_tools] openpyxl 无法打开 %s，回退为整体重写。", xlsx_path.name)
-        sheets = _read_all_sheets_via_com(xlsx_path)
-        sheets[sheet_name] = df
-        xlsx_path.unlink()
-        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-            for name, sheet_df in sheets.items():
-                sheet_df.to_excel(writer, index=False, sheet_name=name)
-    except PermissionError as exc:
+    result = replace_workbook_sheets(xlsx_path, {sheet_name: df})
+    if not result.written:
         logging.warning(
-            "[excel_tools] 工作簿被占用，跳过写入 %s [%s]: %s",
-            xlsx_path, sheet_name, exc,
+            "[excel_tools] 写入工作簿 %s [%s] 失败: %s",
+            xlsx_path, sheet_name, result.error,
         )
 
 

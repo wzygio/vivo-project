@@ -20,6 +20,7 @@ import streamlit as st
 from app.components.page_header import (
     build_product_cache_signature,
     extract_cached_funcs,
+    get_product_cache_revision,
     render_page_header,
 )
 from app.sections.spc.spc_dashboard import (
@@ -40,8 +41,10 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
+from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
 
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
 SpcReportService = spc_service.SpcReportService
@@ -92,14 +95,20 @@ render_page_header(
 )
 
 try:
+    # Phase 4 门控：共享产品 revision + 两阶段决策签名进入 L2 缓存键；
+    # 决策表读取失败时显式失败（不降级为空决策），由现有错误路径提示。
+    product_revision = get_product_cache_revision(current_product)
+    decision_signature = get_scope_decision_signature("spc", current_product)
     with st.spinner("正在加载 SPC 分布数据..."):
         view_model = SpcReportService.get_spc_report_data(
             _data_port=spc_data_port,
             query_config_json=query_config.model_dump_json(),
             snapshot_signature=product_cache_signature,
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
-except SPC_DECORATION_FILE_ERRORS:
+except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):
     st.error(
         "SPC 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
         "然后点击页头“刷新缓存”重试。"

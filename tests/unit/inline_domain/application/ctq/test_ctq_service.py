@@ -210,3 +210,39 @@ def test_ctq_service_returns_an_empty_view_model_when_physical_data_is_unavailab
     assert report.raw_measurements_df.empty
     assert report.indicators_df.empty
     assert report.sheet_oos_decoration_result is None
+
+
+def test_ctq_service_threads_gate_params_to_shared_pipeline(monkeypatch) -> None:
+    """get_ctq_report_data 把 product_revision/decision_signature 穿到共享管线。"""
+    CtqReportService.fetch_ctq_report_payload.clear()
+    recorded: dict[str, object] = {}
+
+    def spy_fetch(**kwargs):
+        recorded.update(kwargs)
+        return {
+            "sheet_features_df": pd.DataFrame(),
+            "raw_measurements_df": pd.DataFrame(),
+            "spec_empty": True,
+            "sheet_oos_decoration": None,
+        }
+
+    monkeypatch.setattr(ctq_service, "fetch_decorated_features", spy_fetch)
+    query = SpcQueryConfig(
+        prod_code="M626",
+        start_date="2026-06-01",
+        end_date="2026-06-07",
+        data_type_filter="CTQ",
+    )
+
+    CtqReportService.get_ctq_report_data(
+        _data_port=FakeCtqRepository(Path("data"), True, object()),
+        query_config_json=query.model_dump_json(),
+        snapshot_signature="gate-thread-ctq",
+        product_revision="rev-ctq",
+        decision_signature="sig-ctq",
+    )
+
+    assert recorded["scope"] == "ctq"
+    assert recorded["prod_code"] == "M626"
+    assert recorded["product_revision"] == "rev-ctq"
+    assert recorded["decision_signature"] == "sig-ctq"

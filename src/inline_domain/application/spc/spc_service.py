@@ -177,12 +177,15 @@ class SpcReportService:
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> dict[str, object]:
         """Cache only reload-stable CPM/CPK payload values.
 
         max_entries=3：缓存为进程级共享，多标签/多产品同时使用时避免互相驱逐
         导致每次 rerun 全量重建；ttl=4h：跨日日期窗口变化与"刷新缓存"换 key
         产生的孤儿条目由 TTL 兜底回收，内存有界。
+        product_revision/decision_signature 进入缓存 key 并透传到共享管线门控。
         """
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
@@ -201,6 +204,8 @@ class SpcReportService:
                 start_date=query_config.start_date,
                 end_date=query_config.end_date,
                 snapshot_signature=snapshot_signature,
+                product_revision=product_revision,
+                decision_signature=decision_signature,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
@@ -280,6 +285,8 @@ class SpcReportService:
         query_config_json: str,
         snapshot_signature: str = "",
         period_sigma_source: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> SpcReportViewModel:
         """Load cached CPM data and construct project ViewModels outside the pickle boundary."""
         payload = SpcReportService.fetch_spc_report_payload(
@@ -287,5 +294,7 @@ class SpcReportService:
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
             period_sigma_source=period_sigma_source,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
         return SpcReportService._view_model_from_payload(payload)

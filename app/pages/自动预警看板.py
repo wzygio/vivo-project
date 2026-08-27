@@ -10,6 +10,7 @@ from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.components.page_header import (
     extract_cached_funcs,
+    get_product_cache_revision,
     render_page_header,
 )
 from app.sections.monitor.monitor_dashboard import (
@@ -29,8 +30,10 @@ from app.manager.compliance_manager import (
 # --- 2. 引入真实的 SPC 后端 Service 与数据模型 ---
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
+from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.composition import build_monitor_repository
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 MONITOR_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
@@ -98,6 +101,27 @@ render_page_header(
 available_products = SessionManager.AVAILABLE_PRODUCTS
 available_factories = MONITOR_FACTORY_OPTIONS
 
+# Phase 4 门控：monitor 涉及多产品/多修饰口径（spc/ctq），按产品逐个预算
+# 共享 revision 与决策签名；服务内部按产品循环取用，进入 L2 缓存键与 core 门控。
+# 决策表读取失败时显式失败（不降级为空决策）。
+product_revisions = {
+    prod: get_product_cache_revision(prod) for prod in available_products
+}
+try:
+    decision_signatures = {
+        prod: {
+            scope: get_scope_decision_signature(scope, prod)
+            for scope in ("spc", "ctq")
+        }
+        for prod in available_products
+    }
+except SheetOosDecorationReadError as exc:
+    st.error(
+        f"超规片修饰决策表读取失败：{exc}。"
+        "请确认 Excel 文件可正常打开且未被锁定，然后点击页头“刷新缓存”重试。"
+    )
+    st.stop()
+
 # 4. 组装积木: 渲染控制台
 filter_state = render_monitor_control_panel(available_products, available_factories)
 
@@ -124,6 +148,8 @@ with st.spinner("正在加载 ALL 监控数据..."):
         force_compliant=True,
         data_type_filter="ALL",
         snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
+        product_revisions=product_revisions,
+        decision_signatures=decision_signatures,
     )
 
 # 更新数据引用

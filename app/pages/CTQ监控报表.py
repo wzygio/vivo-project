@@ -20,6 +20,7 @@ import streamlit as st
 from app.components.page_header import (
     build_product_cache_signature,
     extract_cached_funcs,
+    get_product_cache_revision,
     render_page_header,
 )
 from app.sections.ctq.ctq_dashboard import (
@@ -35,8 +36,10 @@ from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
+from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_ctq_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -80,11 +83,25 @@ render_page_header(
     ],
 )
 
+# Phase 4 门控：共享产品 revision + 两阶段决策签名进入 L2 缓存键；
+# 决策表读取失败时显式失败（不降级为空决策）。
+product_revision = get_product_cache_revision(current_product)
+try:
+    decision_signature = get_scope_decision_signature("ctq", current_product)
+except SheetOosDecorationReadError:
+    st.error(
+        "CTQ 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
+        "然后点击页头“刷新缓存”重试。"
+    )
+    st.stop()
+
 with st.spinner("正在加载 CTQ 分布数据..."):
     view_model = CtqReportService.get_ctq_report_data(
         _data_port=ctq_data_port,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=product_cache_signature,
+        product_revision=product_revision,
+        decision_signature=decision_signature,
     )
 
 sheet_features_df = view_model.sheet_features_df

@@ -12,6 +12,7 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     load_sheet_oos_decoration,
     persist_sheet_oos_decoration,
 )
+from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
 
 
 def _sheet_features() -> pd.DataFrame:
@@ -275,11 +276,15 @@ def test_persist_sheet_oos_decoration_writes_only_decoration_and_preserves_flags
     assert (product_dir / OOS_DECORATION_FILE_NAME).exists()
     assert decoration["flag"].tolist() == [True, True]
 
-    decoration.loc[decoration["sheet_id"] == "S1", "flag"] = False
+    # 用户在决策 sheet（Z571__flags）中把 S1 改为 False；同时验证其他 sheet 不受影响
+    decisions = decoration[[*sheet_oos_decoration.OOS_KEY_COLUMNS, "flag"]].copy()
+    decisions.loc[decisions["sheet_id"] == "S1", "flag"] = False
     other_sheet_df = pd.DataFrame([{"prod_code": "OTHER", "note": "keep-me"}])
-    with pd.ExcelWriter(product_dir / OOS_DECORATION_FILE_NAME, engine="openpyxl") as writer:
-        decoration.to_excel(writer, index=False, sheet_name="Z571")
-        other_sheet_df.to_excel(writer, index=False, sheet_name="OTHER")
+    write_result = replace_workbook_sheets(
+        product_dir / OOS_DECORATION_FILE_NAME,
+        {"Z571__flags": decisions, "OTHER": other_sheet_df},
+    )
+    assert write_result.written, write_result.error
 
     updated = persist_sheet_oos_decoration(product_dir, detail, sheet_name="Z571")
     loaded = load_sheet_oos_decoration(product_dir, sheet_name="Z571")

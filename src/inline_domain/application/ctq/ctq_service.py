@@ -78,13 +78,18 @@ class CtqReportService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=1)
+    @st.cache_data(show_spinner=False, max_entries=1, ttl=4 * 60 * 60)
     def fetch_ctq_report_payload(
         _data_port: "CtqDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> dict[str, object]:
-        """Cache only reload-stable CTQ payload values."""
+        """Cache only reload-stable CTQ payload values.
+
+        product_revision/decision_signature 进入缓存 key 并透传到共享管线门控。
+        """
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
             query_config.data_type_filter = "CTQ"
@@ -101,6 +106,8 @@ class CtqReportService:
                 start_date=query_config.start_date,
                 end_date=query_config.end_date,
                 snapshot_signature=snapshot_signature,
+                product_revision=product_revision,
+                decision_signature=decision_signature,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return CtqReportService._empty_payload()
@@ -134,11 +141,15 @@ class CtqReportService:
         _data_port: "CtqDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> CtqReportViewModel:
         """Build the CTQ ViewModel outside the Streamlit pickle boundary."""
         payload = CtqReportService.fetch_ctq_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
         return CtqReportService._view_model_from_payload(payload)

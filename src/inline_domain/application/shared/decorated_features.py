@@ -81,14 +81,18 @@ def fetch_decorated_features(
     start_date: str,
     end_date: str,
     snapshot_signature: str = "",
+    product_revision: str = "",
+    decision_signature: str = "",
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
-    Cache key = (prod_code, scope, start_date, end_date, snapshot_signature);
-    ``_features_source`` is underscore-prefixed and therefore excluded from
-    hashing (same pattern as the existing ``_db_manager``/``_data_port``
-    arguments). Identical windows share one cache entry across modules;
-    different windows cache separately (correctness first).
+    Cache key = (prod_code, scope, start_date, end_date, snapshot_signature,
+    product_revision, decision_signature); ``_features_source`` is
+    underscore-prefixed and therefore excluded from hashing (same pattern as
+    the existing ``_db_manager``/``_data_port`` arguments). Identical windows
+    share one cache entry across modules; different windows cache separately
+    (correctness first). 决策签名变化（用户编辑 ``__flags``）或产品 revision
+    变化（页头刷新缓存）都会产生新缓存条目，从而触发当前明细重建。
 
     ``scope`` selects the decoration calibre:
     - ``"spc"``: ``resources/spc_sheet_oos_decoration.xlsx`` (sheet = product);
@@ -100,7 +104,9 @@ def fetch_decorated_features(
     Audit-file persistence: ``prepare_decorated_data`` runs with
     ``persist=True`` so the user-maintained decoration workbook is (re)written
     once per cache miss; cache hits return the computed payload without
-    rewriting the workbook.
+    rewriting the workbook. spc/ctq scope 下还会把
+    ``product_revision``/``decision_signature`` 透传到 core 刷新门控，
+    由 meta + TTL 4h 判定是否真正落盘。
 
     Returns a native-payload dict (ADR-0001): decorated sheet_features_df,
     decorated raw_measurements_df, ``spec_empty`` flag, and the decoration
@@ -151,13 +157,16 @@ def fetch_decorated_features(
         prod_code=prod_code,
         scope=normalized_scope,
         persist=True,
+        product_revision=product_revision,
+        decision_signature=decision_signature,
     )
     decoration_result = decorated_data.sheet_oos_decoration_result
     logger.info(
-        "[shared] decorated features prepared: prod=%s scope=%s features=%s",
+        "[shared] decorated features prepared: prod=%s scope=%s features=%s refresh_reason=%s",
         prod_code,
         normalized_scope,
         len(decorated_data.sheet_features_df),
+        decoration_result.refresh_reason,
     )
     return {
         "sheet_features_df": decorated_data.sheet_features_df,

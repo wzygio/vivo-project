@@ -89,6 +89,8 @@ def _spy_fetch(recorded: list[tuple[str, str]]):
         start_date: str,
         end_date: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> dict:
         recorded.append((prod_code, scope))
         measurements_df = _features_source.get_spc_measurements(None)
@@ -156,3 +158,54 @@ def test_defect_details_uses_the_same_scope_routing(monkeypatch) -> None:
 
     # 下钻路径与大盘共享同一路由（原内联取数/修饰副本已删除）。
     assert sorted(recorded) == [(PROD, "ctq"), (PROD, "none"), (PROD, "spc")]
+
+
+def test_dashboard_threads_product_revision_and_per_scope_decision_signature(
+    monkeypatch,
+) -> None:
+    """monitor 大盘按产品循环逐个透传 revision，并按 scope 逐个透传决策签名。"""
+    recorded: list[tuple[str, str, str, str]] = []
+
+    def spy(
+        _features_source,
+        prod_code: str,
+        scope: str,
+        start_date: str,
+        end_date: str,
+        snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
+    ) -> dict:
+        recorded.append((prod_code, scope, product_revision, decision_signature))
+        measurements_df = _features_source.get_spc_measurements(None)
+        spec_df = _features_source.get_spc_spec_limits(prod_code)
+        features_df = preprocess_sheet_features(
+            measure_df=measurements_df, spec_df=spec_df
+        )
+        return {
+            "sheet_features_df": features_df,
+            "raw_measurements_df": measurements_df,
+            "spec_empty": spec_df.empty,
+            "sheet_oos_decoration": None,
+        }
+
+    monkeypatch.setattr(monitor_service, "fetch_decorated_features", spy)
+    MonitorAnalysisService.set_analysis_end_date(datetime(2026, 8, 10))
+    try:
+        MonitorAnalysisService.fetch_dashboard_data_dict(
+            _repository_factory=lambda _prod: _MixedTypeRepository(),
+            query_config_json=_query().model_dump_json(),
+            time_type="MIXED",
+            data_type_filter="SPC",
+            snapshot_signature="monitor-gate-thread",
+            product_revisions={PROD: "rev-monitor"},
+            decision_signatures={PROD: {"spc": "sig-spc", "ctq": "sig-ctq"}},
+        )
+    finally:
+        MonitorAnalysisService.set_analysis_end_date(None)
+
+    by_scope = {scope: (rev, sig) for _prod, scope, rev, sig in recorded}
+    assert by_scope["spc"] == ("rev-monitor", "sig-spc")
+    assert by_scope["ctq"] == ("rev-monitor", "sig-ctq")
+    # AOI 免修饰组无决策台账：签名为空，revision 仍透传。
+    assert by_scope["none"] == ("rev-monitor", "")
