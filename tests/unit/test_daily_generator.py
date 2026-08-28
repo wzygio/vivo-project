@@ -20,7 +20,7 @@ def _padded_daily(months_days: dict[str, int], total_panels: int = 10000) -> pd.
                 "total_panels": total_panels,
                 "defect_group": "Array_Line",
                 "defect_desc": "G向单亮线",
-                "defect_panel_count": 7,  # 原始日度不良数（待被生成值替换）
+                "defect_panel_count": 7,  # 生成器必须忽略该历史值
             }
         )
     return pd.DataFrame(rows)
@@ -52,13 +52,54 @@ class TestGenerateDailyCounts:
 
         assert (result["defect_panel_count"] <= result["total_panels"]).all()
 
-    def test_unspecified_defect_keeps_raw_counts(self):
+    def test_unspecified_defect_uses_raw_monthly_rate(self):
         df = _padded_daily({"2026-07": 31})
-        targets = {}  # 空目标 → 全部回落原始
+        targets = {}
+        raw_monthly_targets = {"G向单亮线": {"2026-07": 0.001}}
 
-        result = generate_daily_counts(df, targets, "M999")
+        result = generate_daily_counts(
+            df,
+            targets,
+            "M999",
+            raw_monthly_targets=raw_monthly_targets,
+        )
 
-        assert (result["defect_panel_count"] == 7).all()
+        assert result["defect_panel_count"].sum() == round(0.001 * 31 * 10000)
+
+    def test_uncovered_month_uses_raw_monthly_rate(self):
+        df = _padded_daily({"2026-06": 30, "2026-07": 31})
+        targets = {"G向单亮线": {"2026-07": 0.002}}
+        raw_monthly_targets = {
+            "G向单亮线": {"2026-06": 0.001, "2026-07": 0.009}
+        }
+
+        result = generate_daily_counts(
+            df,
+            targets,
+            "M999",
+            raw_monthly_targets=raw_monthly_targets,
+        )
+
+        result["month"] = result["warehousing_time"].dt.strftime("%Y-%m")
+        totals = result.groupby("month")["defect_panel_count"].sum().to_dict()
+        assert totals == {
+            "2026-06": round(0.001 * 30 * 10000),
+            "2026-07": round(0.002 * 31 * 10000),
+        }
+
+    def test_generated_counts_do_not_depend_on_input_defect_counts(self):
+        first_input = _padded_daily({"2026-07": 31})
+        second_input = first_input.copy()
+        second_input["defect_panel_count"] = 9999
+        targets = {"G向单亮线": {"2026-07": 0.002}}
+
+        first = generate_daily_counts(first_input, targets, "M999")
+        second = generate_daily_counts(second_input, targets, "M999")
+
+        pd.testing.assert_series_equal(
+            first["defect_panel_count"],
+            second["defect_panel_count"],
+        )
 
     def test_zero_input_days_get_zero_counts(self):
         df = _padded_daily({"2026-07": 31}, total_panels=10000)

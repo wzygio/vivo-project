@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-18
+- Last amended: 2026-08-27（Code 日度改为月度目标驱动，删除原始日度回退）
 - Scope: `src/yield_domain/core/mwd_trend/`、`src/yield_domain/core/mapping/mapping_processor.py`、`src/yield_domain/core/defect_modifier.py`、`src/yield_domain/application/{yield_service,excel_service}.py`、`app/pages/入库不良率分析看板.py`、`config/products/*.yaml`、`tools/update_yield_modifier_table.py`
 - Trace: Issue `.scratch/mwd-processor-opt/issues/01-simplify-yield-modifier-pipeline.md`、
   Plan `.planning/2026-08-18-mwd-processor-opt/`、
@@ -29,14 +30,17 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    月份和原值报错。写回先在同目录临时文件完整生成并校验，再备份源文件并原子
    替换；写接口返回明确成功状态，只有目标 Sheet 持久化成功后才推进对应签名。
    良损字段按百分数三位小数（分数 5 位）存储。目标良损
-   回退链：当月指定 → 最近上月指定 → 当月原始 → 无目标（保持原始日度不良数，
-   即当月良损水准，与 Mapping 倍数 1.0 一致）。
+   回退链：当月指定 → 最近上月指定 → 当月原始。若修饰表没有该月原始值，Code
+   使用本次 Panel 明细按月汇总得到的原始月度良损；不再回落原始日度不良数。
+   Group 无目标时不执行月度覆写。
    存量"指定良损"由 `tools/backfill_modifier_table_specified.py` 一次性补全：
    趋势图人工修正.xlsx（仅月度，left join）→ codebaseline.xlsx（baseline_month）。
 3. **日度生成器**（`mwd_trend/daily_generator.py`）：月中（15 日）锚点线性插值
    基线（跨月平滑无阶梯）+ blake2b 哈希白噪声（无周期、跨进程确定）+ 月内
    权重整数分配（同模块 `allocate_integer_counts`，单日 ≤ 当日投入，月合计精确
-   等于 `round(目标良损 × 当月投入)`）。未指定的缺陷保持原始日度不良数。
+   等于 `round(目标良损 × 当月投入)`）。Panel 明细只用于计算每日总投入容量并提取
+   `(Defect Group, Code)` 清单，同时按自然月、Code 汇总原始月度良损作为最后回退；
+   不再按日聚合 Code 原始不良数。
 4. **Group Sheet 仅覆写月度**：Group 日度严格由 Code 最终日度按 Group 汇总，
    Group 周度由该日度聚合；Group Sheet 的月度指定良损只覆写最终 Group 月度表，
    不允许反向分配或重建 Group 日度。
@@ -66,7 +70,8 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
 ## Consequences
 
 - 正面：修饰逻辑对业务可读（填"指定良损"即可）；日度生成确定性可复现；
-  趋势与 Mapping 共享同一水准；删除 5 个旧模块与 4 个旧测试文件。
+  趋势与 Mapping 共享同一水准；删除 5 个旧模块与 4 个旧测试文件；Code 日度不再
+  执行原始不良 Panel 的日级去重聚合。
 - 负面/约束：
   - `当月良损 = 0` 且指定 > 0 时倍数记 1.0（Mapping 无法从 0 放大），
     趋势与 Mapping 在该口径下存在已知差异；
@@ -84,7 +89,10 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
   重写 `test_defect_panel_count_alignment.py`（5）。
 - 数值 E2E（真实 M678 快照，`output/tmp/verify_modifier_e2e.py`）：7/7 通过——
   当月行写回、指定解析、倍数三位小数、Code 月趋势 == 指定水准、Mapping 上/下调
-  方向正确（上调遇级联天花板为设计内）、清空指定回落原始。
+  方向正确（上调遇级联天花板为设计内）、清空指定后使用当月月度原始良损水准。
+- 2026-08-27 定向回归：指定目标完整时月度合计与容量约束保持不变；指定目标缺失时
+  使用原始月度良损；不同输入原始 `defect_panel_count` 得到相同生成结果；Code 数据
+  准备不再计算原始日度不良数。
 - 浏览器 E2E（playwright-cli，`tests/e2e/yield_modifier_dashboard.js`，worktree
   :8510）：页面无异常渲染完成，截图 `output/test-results/yield_modifier_dashboard.png`。
 - 级联红线：`git diff` 核对 `mapping_processor.py` 级联段全部为新增行。

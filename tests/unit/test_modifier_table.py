@@ -142,7 +142,7 @@ from src.yield_domain.core.mwd_trend.modifier_table import (
 
 
 class TestResolveMonthlyTargets:
-    """目标良损回退链：当月指定 → 最近上月指定 → 当月原始 → 无目标（保持原始日度）。"""
+    """目标良损回退链：当月指定 → 最近上月指定 → 当月原始 → 无目标。"""
 
     def test_specified_current_month_wins(self):
         df = pd.DataFrame(
@@ -181,9 +181,8 @@ class TestResolveMonthlyTargets:
         targets = resolve_monthly_targets(df, ["2026-07"])
         assert "HBM亮点" not in targets
 
-    def test_month_without_row_and_no_specified_keeps_original(self):
-        # 表中无该月行且从未指定 → 不给目标，日度生成器保持原始日度不良数
-        # （原始数据即当月良损水准，与 Mapping 侧倍数 1.0 一致；不能清零）
+    def test_month_without_row_and_no_specified_yields_no_modifier_target(self):
+        # 表中无该月行且从未指定 → 不给修饰目标，由日度生成器使用原始月度良损。
         df = pd.DataFrame(
             [_row("B暗点", "2026-06", raw_loss=0.013)],
             columns=MODIFIER_TABLE_COLUMNS,

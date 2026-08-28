@@ -112,7 +112,7 @@ def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.Data
     """读取 `<产品>_Group级` / `<产品>_Code级` 两个 Sheet。
 
     文件不存在、Sheet 缺失或读取失败时，对应级别返回带标准列的空表（空表语义：
-    调用方按"无指定"处理，回落原始数据）。
+    调用方按"无指定"处理；Code 日度生成阶段会回退原始月度良损）。
     """
     xlsx_path = Path(xlsx_path)
     table: dict[str, pd.DataFrame] = {}
@@ -213,8 +213,8 @@ def resolve_monthly_targets(
     """解析每个不良类型在目标月份的目标良损。
 
     回退链：当月 `指定良损` → 最近一个有 `指定良损` 的上个月 → 当月 `当月良损`
-    → 不给目标（表中无该月行且从未指定时，日度生成器保持原始日度不良数；
-    原始数据即 `当月良损` 水准，与 Mapping 侧倍数 1.0 保持一致）。
+    → 不给修饰目标。表中无该月行且从未指定时，Code 日度生成阶段使用从 Panel 明细
+    按月汇总的原始月度良损，不回落原始日度不良数。
     """
     months = sorted(str(m) for m in months)
     targets: dict[str, dict[str, float]] = {}
@@ -245,7 +245,7 @@ def resolve_monthly_targets(
                 continue
             if month in raw_by_month:
                 defect_targets[month] = raw_by_month[month]
-            # 从未指定且表中无该月行：不给目标，日度生成器保持原始（= 当月良损水准）
+            # 从未指定且表中无该月行：不给修饰目标，日度生成器回退原始月度良损。
         targets[defect] = defect_targets
     return targets
 

@@ -90,7 +90,7 @@ def test_specified_rate_drives_code_monthly_total() -> None:
     assert weekly["defect_panel_count"].sum() == 6
 
 
-def test_unspecified_code_falls_back_to_raw_counts() -> None:
+def test_unspecified_code_uses_raw_monthly_rate() -> None:
     days = ["20260501", "20260502", "20260503"]
     panel_details = _panel_details(days, {"20260501": [("P00", "Array_Pixel", "CodeA")]})
 
@@ -101,8 +101,9 @@ def test_unspecified_code_falls_back_to_raw_counts() -> None:
         target_end_date=pd.Timestamp("2026-05-03"),
     )
 
+    assert result is not None
     code_daily = result["daily_full"][result["daily_full"]["defect_desc"] == "CodeA"]
-    assert code_daily["defect_panel_count"].sum() == 1  # 原始不良数
+    assert code_daily["defect_panel_count"].sum() == 1
 
 
 def test_output_contract_keys_and_determinism() -> None:

@@ -5,7 +5,8 @@
 > 及其直接调用链。算法语义参见
 > [`mwd-processor-opt-algorithm.md`](mwd-processor-opt-algorithm.md)。
 >
-> 本文只做性能诊断与方案评估，未修改算法代码。
+> 本文最初用于性能诊断；其中“删除 Code 原始日度不良数计算”已按新业务契约实施。
+> 原始基准数据继续保留，用于说明优化来源；实施后的生产耗时仍需重新测量。
 
 ## 一、结论
 
@@ -55,7 +56,7 @@ Group 核心趋势流水线阶段中位数合计约 **0.95 s**。所以第一优
 
 | 层级 | 阶段 | 中位耗时 | 同层级占比 |
 |---|---|---:|---:|
-| Code | 原始日度准备 | 210.19 ms | 31.0% |
+| Code | 原始日度准备（优化前基准） | 210.19 ms | 31.0% |
 | Code | 日期 × Code 补齐 | 8.37 ms | 1.2% |
 | Code | 指定良损日度生成 | 357.91 ms | 52.8% |
 | Code | 月聚合 | 15.14 ms | 2.2% |
@@ -71,7 +72,9 @@ Group 核心趋势流水线阶段中位数合计约 **0.95 s**。所以第一优
 | **Group** | **阶段合计** | **275.30 ms** | **100%** |
 
 这张表只覆盖 `MWDTrendProcessor` 内部。看板冷缓存路径中，修饰上下文的重复扫描
-比上述核心流水线更慢。
+比上述核心流水线更慢。表中 Code“原始日度准备”的 210.19 ms 是删除原始 Code
+日度不良聚合之前的结果，不代表当前实现；当前实现只计算每日总投入和 Group/Code
+唯一清单，需在同一生产快照上重新基准测试。
 
 ## 三、主要耗时与根因
 
@@ -86,8 +89,8 @@ Group 核心趋势流水线阶段中位数合计约 **0.95 s**。所以第一优
 | 2. 构建修饰上下文 | **3.1-A（P0）**：`get_mwd_trend_data`、`get_code_level_trend_data`、`get_mapping_data` 在各自 cache miss 时分别调用 `_build_modifier_context`，使同一上下文最多构建 3 次。 | `_build_modifier_context` 进入 `modifier_table.sync_modifier_table`，随后解析 `targets`、`group_targets`、`factors` 和 `signature`。 | 每次构建都可能重复读取 Group/Code Sheet；企业工作簿的 COM 路径会放大重复 I/O。 |
 | 3. 计算当前月原始良损并同步修饰表 | Application 只负责触发和传递 Panel、月份、文件路径，**并不在本层计算 Group/Code 良损**。 | **3.1-B（P0）**：`sync_modifier_table` 分别以 `level="group"`、`level="code"` 调用 `compute_current_month_loss`。两次都复制全表、解析日期、生成月份字符串、过滤当前月并计算总投入，只在最后的分组字段不同。输出是当前月每个 Group/Code 的汇总良损 `Series`。 | `read_workbook_sheet`/写回边界负责持久化；当前把部分文件格式 `ValueError` 误判为 Sheet 缺失，既有正确性风险，也使真实 COM 耗时未被本次基准覆盖。 |
 | 4. 解析 Code/Group 月度目标与 Mapping 倍率 | `_build_modifier_context` 将 Core 结果组装成三个入口使用的上下文。 | `resolve_monthly_targets` 产生 Code/Group 月度目标；`compute_scale_factors` 产生 Mapping 月度倍率。 | 修饰工作簿是人工指定值的存储边界，不负责趋势计算。 |
-| 5. 准备 Code 原始日度事实 | Application 将同一 Panel 明细、Code 月度目标和截止日期交给 `create_code_level_mwd_trend_data`。 | **3.3-Code（P1）**：`prepare_code_raw_data` 再次复制并扫描完整分析窗口的 Panel 明细，生成“日期 + Group + Code”的每日投入数和原始日度不良数；这与 3.1 的当前月汇总良损不是同一输出。 | 无新增外部 I/O；成本主要是 pandas 内存计算。 |
-| 6. 生成 Code 最终日度，再聚合周/月 | Application 接收并缓存 Code MWD 结果。 | **3.2（P1）**：补齐“日期 × Code”后，`generate_daily_counts` 按 Code、按月执行许多小 DataFrame 操作；有目标的 Code 生成最终日度整数，未指定 Code 回落原始日度不良数，随后聚合周/月。 | 无。 |
+| 5. 准备 Code 日度容量与原始月度良损 | Application 将同一 Panel 明细、Code 修饰目标和截止日期交给 `create_code_level_mwd_trend_data`。 | **已优化**：`prepare_code_raw_data` 计算每日总投入、提取 `(Group, Code)` 唯一清单，并按“自然月 + Code”计算原始月度良损；不再执行“日期 + Group + Code”的原始不良 Panel 去重。日度容量网格的 `defect_panel_count` 仅为 0 占位。 | 无新增外部 I/O；成本主要是 pandas 内存计算。 |
+| 6. 解析有效月度目标并生成 Code 最终日度，再聚合周/月 | Application 接收并缓存 Code MWD 结果。 | **新契约**：`generate_daily_counts` 按“当月指定 → 最近更早月份指定 → 原始月度良损”得到每个 Code/月的有效目标，再按月度基线、确定性扰动和每日总投入生成全部日度整数；不回落原始日度数。逐 Code 小 DataFrame 操作仍是 **3.2（P1）**。 | 无。 |
 | 7. 生成 Group 日/周/月 | `get_mwd_trend_data` 先取得已生成的 Code 结果，再调用 Group Core。 | **3.3-Group（P1）**：`prepare_group_raw_data` 仍从 Panel 重新计算每日总投入和原始 Group 日度不良宽表；但 `_build_group_daily_from_code_data` 只保留其中的 `total_panels` 骨架及 Group 名单，原始 Group 日度不良列随后被 Code 最终日度聚合结果替换。因此这部分 Group 不良计算是可删除的冗余。Group Sheet 只在 `_apply_group_monthly_overrides` 覆写最终月度，不反向生成日度。 | 无。 |
 | 8. 格式化月/周/日结果 | Application 将格式化结果提供给看板。 | **3.4（P2）**：完整表与近期窗口分别执行 copy、日期格式化、良损计算和排序，存在重复工作。 | 无。 |
 | 9. Mapping 消费月度倍率 | `get_mapping_data` 再次构建/消费修饰上下文并调用 Mapping 流水线。 | MWD Core 不参与 Mapping 后续抽样、复制、位置修饰和级联衰减；这里只共享 Code Sheet 推导出的月度倍率。 | Mapping 数据读取及结果输出属于其自身边界。 |
@@ -100,18 +103,18 @@ Application 的三个入口触发和放大，但 Group/Code 原始良损的实�
 
 两者的关系应拆成“相同事实基础”和“不同输出目的”来看：
 
-| 维度 | 3.1 当前月原始良损 | 3.3 Code 原始日度事实 |
+| 维度 | 3.1 当前月原始良损 | 当前 Code 日度容量准备 |
 |---|---|---|
-| 输入事实 | 同一份 Panel 明细、`panel_id`、日期、Group、Code | 同左 |
-| 可共享工作 | DataFrame 复制、日期标准化、时间过滤、总投入去重和公共分组准备 | 同左 |
+| 输入事实 | Panel 明细、`panel_id`、日期、Group、Code | 同左，但不再按日统计 Code 不良 Panel 数 |
+| 可共享工作 | DataFrame 复制、日期标准化、时间过滤、总投入去重 | 同左；Group/Code 唯一清单可从同一标准化事实派生 |
 | 时间粒度 | 只取当前月 | 完整 MWD 分析窗口，并保留每天 |
-| 输出粒度 | 每个 Group/Code 一个当前月汇总良损 Rate `Series` | 每个“日期 + Group + Code”的投入数/不良数 Count 表 |
-| 使用目的 | 回写修饰表、解析目标和 Mapping 倍率 | 生成 Code 最终日度，再聚合为周/月；未指定 Code 还会直接使用原始日度不良数 |
-| 能否互相替代 | 不能。月度 Rate 已丢失不良数在各日的分布 | 先按月汇总后可以派生 3.1 所需事实，但当前实现没有复用 |
+| 输出粒度 | 每个 Group/Code 一个当前月汇总良损 Rate `Series` | 每日总投入容量网格 + `(Group, Code)` 清单 + 每个 Code/月的原始月度良损；不包含原始日度不良事实 |
+| 使用目的 | 回写修饰表、解析指定值回退和 Mapping 倍率 | 补齐有效月度目标并生成全部 Code 日度整数，再聚合为周/月 |
+| 能否互相替代 | 不能。它提供月度目标来源，不提供日容量 | 不能。它提供日容量和 Code 清单，不提供目标良损 |
 
-所以，你认为它们都在重复处理同一批 Panel 事实是正确的；此前“3.3 不能像 3.1
-那样合并”的说法过于绝对。准确表述应是：**公共的标准化 Panel 事实和分组中间结果
-可以合并复用，但最终的月度 Rate 与日度 Count 不能直接互相替代。**
+所以，两者仍然重复处理同一批 Panel 事实中的日期和总投入，但不再重复计算 Code
+不良数：3.1 保留当前月 Group/Code 汇总原始良损，用于形成月度目标和 Mapping 倍率；
+日度准备只保留容量与 Code 清单。公共标准化 Panel 事实仍可进一步共享。
 
 另外，当前 Group 路径已经不同于 Code 路径：Group 日度来自 Code 最终日度聚合，
 因此 `prepare_group_raw_data` 中“按日期 + Group 计算原始不良数宽表”的部分并非必要；
@@ -225,11 +228,14 @@ Mapping cache miss     → 构建上下文 → Group 扫描 + Code 扫描
 
 扩展测试显示耗时近似随 Code 数线性增长：
 
-| Code 数 | 日度行数 | 全部有目标 | 全部无目标 |
+| Code 数 | 日度行数 | 全部有目标 | 全部无目标（旧回退路径） |
 |---:|---:|---:|---:|
 | 20 | 1,840 | 90.89 ms | 2.26 ms |
 | 80 | 7,360 | 360.66 ms | 9.56 ms |
 | 200 | 18,400 | 889.80 ms | 17.34 ms |
+
+“全部无目标”列是优化前诊断数据。新契约下该输入会在目标覆盖校验阶段失败，不再作为
+可运行的快速路径。
 
 80 个 Code 的 `cProfile` 结果中：
 
@@ -242,20 +248,24 @@ Mapping cache miss     → 构建上下文 → Group 扫描 + Code 扫描
 因此，“哈希太重”与“容量循环太重”都不是主结论，主要问题是大量小 DataFrame
 操作的固定开销。
 
-### 3.3 P1：Group 与 Code 分别从原始 Panel 明细重新准备
+### 3.3 P1：Code 原始日度不良已删除；Group 冗余准备仍待处理
 
 3.3 已经进入 `MWDTrendProcessor` 核心计算。此时 3.1 产生的 `targets` 和
 `group_targets` 已经准备好，程序现在要把 Panel 事实明细转换为月/周/天趋势真正使用
 的**日度基础数据**。
 
-`create_mwd_trend_data` 与 `create_code_level_mwd_trend_data` 接收同一份 Panel 明细，
-却分别进入 `prepare_group_raw_data` 和 `prepare_code_raw_data`：
+`create_mwd_trend_data` 与 `create_code_level_mwd_trend_data` 仍接收同一份 Panel 明细，
+但 Code 路径已不再聚合原始日度不良数：
 
 ```text
 Code MWD
   Panel 明细
     → prepare_code_raw_data
-    → 每日总投入 + 每个 Group/Code 的每日不良数（长表）
+    ├─ 按日计算 total_panels
+    ├─ 提取 Group + Code 唯一清单
+    └─ 按自然月 + Code 计算原始月度良损
+    → 日期 × Code 容量网格（defect_panel_count 初始为 0）
+    → 当月指定 / 最近指定 / 原始月度良损
     → Code 最终日度生成
     → 周/月聚合
 
@@ -270,18 +280,19 @@ Group MWD
     → Group Sheet 只覆写月度结果
 ```
 
-这里需要区分 Code 路径与 Group 路径：
+当前状态需要区分已完成与尚未完成的优化：
 
-- Code 的原始日度不良数仍有回退用途：没有人工目标的 Code，以及人工目标未覆盖的
-  月份，会保留这组原始日度数；已被月度目标覆盖的月份则会将其完全覆写。原始明细
-  还用于识别实际存在的 Group/Code 组合。
+- **Code 已完成**：删除了按“日期 + Group + Code”执行 `panel_id.nunique()` 的原始
+  日度不良聚合。Panel 明细提供每日总投入、实际 Group/Code 组合，以及按“自然月 +
+  Code”聚合的原始月度良损。修饰目标未覆盖时回退原始月度良损，因此不需要原始
+  日度数承担回退职责。
 - Group 的最终日度不再由原始 Group 日度不良数生成，而是由 Code `daily_full` 按
   Group 汇总。`_build_group_daily_from_code_data` 从 `padded_daily` 只复制
   `total_panels`，随后用 Code 汇总结果填充各 Group 列。
 - Group Sheet 的人工指定值只通过 `_apply_group_monthly_overrides` 覆写月度结果，不会
   反向改变 Group 日度或周度。
 
-因此，当前可消除的并不只是两条路径前面的公共日期准备，还包括
+因此，剩余可消除的不只是两条路径前面的公共日期准备，还包括
 `prepare_group_raw_data` 对“日期 + Group 原始不良数宽表”的计算：这些 Group 不良列
 随后被丢弃。Group 路径实际只需要：
 
@@ -289,9 +300,10 @@ Group MWD
 2. 用于补齐输出列的 Group 名单；
 3. 已经生成的 Code `daily_full`。
 
-当前这两条链路对同一份明细各执行一次，合计约 **407.57 ms**。可先共享“标准化日期
-+ 每日总投入”的基础结果，由 Code 路径生成唯一的原始/最终日度长表，再从最终 Code
-日度派生 Group 日度。
+优化前两条准备链合计约 **407.57 ms**。其中 Code 原始日度不良聚合已删除；当前
+Code 路径直接生成最终日度长表，再从最终 Code 日度派生 Group 日度。具体节省需用
+相同样本重新测量，不能直接把旧 Code 阶段的 210.19 ms 全部视为收益，因为日期解析、
+每日总投入和 Code 清单提取仍然保留。
 
 Group Sheet 仍然具有最高的月度覆写优先级，但“月度覆写”不等于“独立生成日度”。
 这正是原始 Group 日度不良数可以删除，而 Group 月度人工指定仍需保留的原因。
@@ -301,30 +313,29 @@ Group Sheet 仍然具有最高的月度覆写优先级，但“月度覆写”�
 两项都出现了“同一份 Panel 明细被重复复制、解析和聚合”，但它们处于不同层级，
 计算目的也不同：
 
-| 对比维度 | 3.1 修饰上下文重复构建 | 3.3 Code 原始日度准备 / Group 冗余准备 |
+| 对比维度 | 3.1 修饰上下文重复构建 | 3.3 Code 容量准备 / Group 冗余准备 |
 |---|---|---|
 | 所在层级 | Application 触发与放大；实际良损计算在 Core `modifier_table.py` | MWD Core 趋势计算 |
 | 发生时间 | 生成趋势之前 | 已拿到目标良损之后 |
-| 主要目的 | 计算当前月汇总原始良损，解析目标和 Mapping 倍率 | 构造完整窗口的 Code 日度投入/不良事实，再派生最终 Code、Group 趋势 |
+| 主要目的 | 计算当前月汇总原始良损，解析目标和 Mapping 倍率 | 构造完整窗口的每日容量与 Code 清单，再生成最终 Code、Group 趋势 |
 | 时间范围 | 只需要当前月 | MWD 完整分析窗口，通常约三个月 |
-| Group/Code 扫描原因 | 同一函数一次只算一个层级，公共当前月准备未复用 | Code 日度事实有用途；Group 原始日度不良已无用途，但实现仍在计算 |
+| Group/Code 扫描原因 | 同一函数一次只算一个层级，公共当前月准备未复用 | Code 仍需日容量、清单和月度原始良损；Group 原始日度不良已无用途，但实现仍在计算 |
 | 单轮重复数量 | 最多 `3 个使用方 × 2 个层级 = 6` 遍 | Group、Code 两条核心入口各 1 遍，共 2 遍 |
-| 直接输出 | 当前月每个 Group/Code 的汇总良损 Rate；随后形成 `targets`、`group_targets`、`factors`、`signature` | Code 日度 Count 长表；Group 准备函数还产出随后被替换的原始 Group 日度 Count 宽表 |
+| 直接输出 | 当前月每个 Group/Code 的汇总良损 Rate；随后形成 `targets`、`group_targets`、`factors`、`signature` | Code 日度容量网格和原始月度良损；Group 准备函数还产出随后被替换的原始 Group 日度 Count 宽表 |
 | 是否包含 Excel | 是，负责读取和按需同步修饰表 | 否，只做内存中的趋势数据准备 |
-| 本次样本耗时 | 六遍约 8.26 s | 两条准备链合计约 0.41 s |
-| 可合并程度 | 很高：当前月切片和两级汇总可一次计算，结果可供三个使用方共享 | 很高：公共日事实可共享；Group 原始日度不良聚合可直接删除，Group 最终日度由 Code 聚合 |
+| 本次样本耗时 | 六遍约 8.26 s | 优化前两条准备链合计约 0.41 s；Code 优化后待复测 |
+| 可合并程度 | 很高：当前月切片和两级汇总可一次计算，结果可供三个使用方共享 | Code 原始日度聚合已删除；公共日容量仍可共享，Group 原始日度聚合仍可删除 |
 
 可以把两者简化理解为：
 
 ```text
 3.1 回答“当前月各 Group/Code 的汇总原始良损是多少，修饰目标和倍率是什么？”
-3.3 回答“整个趋势窗口中，每天投入多少、各 Code 原始不良多少，并应生成多少最终不良？”
+3.3 回答“整个趋势窗口中，每天投入多少、有哪些 Group/Code，并应生成多少最终不良？”
 ```
 
-3.1 是**参数准备重复**，3.3 是**趋势事实准备重复和无效 Group 聚合**。它们确实
-消费相同的 Panel 事实、使用相同的投入/不良去重口径，因此标准化事实可以共享；但
-3.1 的月度 Rate 与 3.3 的日度 Count 是不同粒度的产物，不能直接互相替代。前者重复
-次数更多、字符串月份处理更重，因此定为 P0；后者定为 P1。
+3.1 是**参数准备重复**；3.3 当前剩余问题是**日容量重复准备和无效 Group 聚合**。
+Code 日度不再使用 Panel 原始不良 Count，因此它与 3.1 不再重复计算同一份 Code
+不良事实。两者仍共享日期标准化、总投入和 Code 清单等基础事实，可以继续复用。
 
 ### 3.4 P2：结果格式化重复处理同一张完整表
 
@@ -384,7 +395,7 @@ Panel 明细
   └─ Code 不良 Panel 去重
 ```
 
-这不改变目标良损、回退或 Mapping 倍率语义，是风险最低、收益最高的简化。按本次
+这不改变月度目标解析或 Mapping 倍率语义，是风险最低、收益最高的简化。按本次
 样本，当月良损计算有从约 8.26 s 降到百毫秒量级的空间；最终收益需在真实资源和
 完整页面上复测。
 
@@ -401,14 +412,16 @@ month_start <= warehousing_time < next_month_start
 
 ### 5.3 P1：共享 MWD 基础日汇总
 
-增加只负责标准化日期、日总投入和 Group 名单的内部准备结果。Code 路径在其上生成
-唯一的原始/最终日度长表；Group 路径直接从 Code 最终日度聚合，不再从 Panel 计算
-随后被丢弃的原始 Group 日度不良宽表。更彻底的入口可以一次返回两级结果：
+本项已完成第一部分：Code 路径现在只准备标准化日期、日总投入和 Group/Code 清单，
+直接生成最终日度长表；原始 Code 日度不良聚合和回退语义已经删除。
+
+尚未完成的部分是让 Group 路径复用同一份基础结果，并删除其随后被丢弃的原始 Group
+日度不良宽表。更彻底的入口可以一次返回两级结果：
 
 ```text
 create_all_mwd_trend_data(panel_df, modifier_context)
   ├─ shared daily base
-  ├─ Code raw/final daily → Code weekly/monthly
+  ├─ Code generated daily → Code weekly/monthly
   └─ Code final daily → Group daily/weekly → Group monthly override
 ```
 
@@ -450,7 +463,7 @@ weekly 和 daily 分别先生成完整结果，再截取 `weekly` 最近 3 周�
 | 1 | 修饰上下文共享；Group/Code 当月良损一次计算 | 极高 | 低 |
 | 2 | 月份范围过滤；复用已解析日期 | 极高 | 低 |
 | 3 | 修复 Excel ValueError 分类并复测真实 COM | 正确性优先 | 中 |
-| 4 | Group/Code 共享基础日汇总 | 中高 | 中 |
+| 4 | ~~删除 Code 原始日度不良聚合，改用原始月度良损回退~~（已完成）；继续共享 Group/Code 基础日汇总 | 中高 | 中 |
 | 5 | Code 日度数组化、一次写回 | 中 | 中 |
 | 6 | 完整结果格式化一次再切片 | 低到中 | 低 |
 | 7 | 分配器快速路径 | 低 | 中 |
@@ -463,18 +476,20 @@ weekly 和 daily 分别先生成完整结果，再截取 `weekly` 最近 3 周�
 - Code 数、补齐后日度行数和各阶段耗时；
 - 第二次加载的全缓存命中时间。
 
-功能回归至少验证：月目标合计、单日容量、未指定 Code 回落原始数据、Group Sheet
-优先、Mapping 月度倍率、跨进程确定性以及修饰表人工值不被错误覆盖。
+功能回归至少验证：月目标合计、单日容量、指定目标缺失时回退原始月度良损、输入原始
+日度数不影响生成结果、Group Sheet 月度优先、Mapping 月度倍率、跨进程确定性以及
+修饰表人工值不被错误覆盖。
 
 ## 七、最终判断
 
 当前算法**可以明显简化和加速**，但简化重点应放在数据流和 pandas 执行方式，而不是
 删除业务约束：
 
-- 主要性能问题：修饰上下文重复构建、月份字符串化、Group/Code 重复准备；
+- 主要性能问题：修饰上下文重复构建、月份字符串化、Group 路径重复准备；
 - 次要性能问题：逐 Code 小 DataFrame 操作和重复格式化；
 - 非主要问题：BLAKE2b 与 `allocate_integer_counts`；
 - 最高优先级正确性风险：企业加密工作簿的 `ValueError` 被误判为 Sheet 缺失。
 
-建议先完成 5.1～5.3 并在真实工作簿上复测。仅从当前证据看，不需要推翻“指定月度
-良损 → 日度整数 → 周/月聚合”的业务算法；需要重构的是其外围编排和内部批处理方式。
+Code 原始日度不良聚合已经删除，正式契约为“指定值回退 + 原始月度良损 → 完整月度
+目标 → 日度整数 → 周/月聚合”。建议继续完成 5.1～5.3 的剩余部分，并在真实工作簿
+上复测。

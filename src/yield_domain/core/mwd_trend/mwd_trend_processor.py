@@ -4,7 +4,7 @@
 
 - Code 级日度由 `daily_generator.generate_daily_counts` 按"入库良率修饰表"
   解析出的 `modifier_targets`（{defect_desc: {月份: 目标良损}}）确定性生成；
-  未指定的缺陷保持原始日度不良数。
+  修饰目标缺失时回退原始月度良损，不回落原始日度不良数。
 - Group 级日度由 Code 最终日度按 Group 汇总；Group Sheet 的人工指定良损只覆写
   最终月度结果，不反向生成日度数据。
 - 周度由最终日度直接聚合；月度先由日度聚合，再应用 Group Sheet 的月度覆写。
@@ -97,7 +97,7 @@ class MWDTrendProcessor:
             return None
 
         try:
-            raw_daily, last_day = _prepare_code_raw_data(
+            raw_daily, last_day, raw_monthly_targets = _prepare_code_raw_data(
                 panel_details_df,
                 target_end_date,
             )
@@ -111,6 +111,7 @@ class MWDTrendProcessor:
                 modifier_targets or {},
                 product_code=config.data_source.product_code,
                 volatility=volatility,
+                raw_monthly_targets=raw_monthly_targets,
             )
             monthly = _safe_trend_aggregator(
                 daily, last_day, "M", is_group_level=False

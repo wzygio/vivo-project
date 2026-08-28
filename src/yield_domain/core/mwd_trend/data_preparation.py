@@ -42,8 +42,8 @@ def prepare_group_raw_data(
 def prepare_code_raw_data(
     df: pd.DataFrame,
     target_end_date: dt | None = None,
-) -> tuple[pd.DataFrame, pd.Timestamp]:
-    """Convert panel details to a Code-level daily long table."""
+) -> tuple[pd.DataFrame, pd.Timestamp, dict[str, dict[str, float]]]:
+    """Build daily capacities and raw monthly Code loss rates."""
     working = df.copy()
     working["warehousing_time"] = pd.to_datetime(
         working["warehousing_time"], format="%Y%m%d"
@@ -60,21 +60,63 @@ def prepare_code_raw_data(
     daily_total = working.groupby(working["warehousing_time"].dt.date)[
         "panel_id"
     ].nunique().to_frame("total_panels")
-    daily_code = working.groupby(
-        [working["warehousing_time"].dt.date, "defect_group", "defect_desc"]
-    )["panel_id"].nunique().to_frame("defect_panel_count")
-
-    raw_daily = pd.merge(
-        daily_total.reset_index(),
-        daily_code.reset_index(),
-        on="warehousing_time",
-        how="left",
+    code_catalog = (
+        working[["defect_group", "defect_desc"]]
+        .dropna(subset=["defect_group", "defect_desc"])
+        .drop_duplicates()
     )
-    raw_daily["defect_panel_count"] = raw_daily["defect_panel_count"].fillna(0)
+    if code_catalog.empty:
+        empty = pd.DataFrame(
+            columns=[
+                "warehousing_time",
+                "total_panels",
+                "defect_group",
+                "defect_desc",
+                "defect_panel_count",
+            ]
+        )
+        return empty, last_day, {}
+
+    raw_monthly_targets = _compute_code_raw_monthly_targets(
+        working,
+        code_catalog,
+    )
+
+    raw_daily = (
+        daily_total.reset_index()
+        .assign(_key=1)
+        .merge(code_catalog.assign(_key=1), on="_key")
+        .drop(columns="_key")
+    )
+    # 新契约：该列仅作为最终生成结果的占位，不承载原始日度不良数。
+    raw_daily["defect_panel_count"] = 0
     raw_daily["warehousing_time"] = pd.to_datetime(raw_daily["warehousing_time"])
-    raw_daily["defect_group"] = raw_daily["defect_group"].fillna("NoDefect")
-    raw_daily["defect_desc"] = raw_daily["defect_desc"].fillna("NoDefect")
-    return raw_daily, last_day
+    return raw_daily, last_day, raw_monthly_targets
+
+
+def _compute_code_raw_monthly_targets(
+    working: pd.DataFrame,
+    code_catalog: pd.DataFrame,
+) -> dict[str, dict[str, float]]:
+    """Calculate monthly Code loss rates without retaining daily defect counts."""
+    month_keys = working["warehousing_time"].dt.strftime("%Y-%m")
+    months = sorted(month_keys.unique().tolist())
+    codes = sorted(code_catalog["defect_desc"].astype(str).unique().tolist())
+    targets = {code: {month: 0.0 for month in months} for code in codes}
+
+    monthly_totals = working.groupby(month_keys)["panel_id"].nunique()
+    defect_rows = working.dropna(subset=["defect_desc"]).copy()
+    defect_rows["_month"] = defect_rows["warehousing_time"].dt.strftime("%Y-%m")
+    monthly_defects = defect_rows.groupby(["_month", "defect_desc"])[
+        "panel_id"
+    ].nunique()
+
+    for (month, defect), defect_count in monthly_defects.items():
+        total_panels = int(monthly_totals.get(month, 0))
+        targets[str(defect)][str(month)] = (
+            float(defect_count) / total_panels if total_panels > 0 else 0.0
+        )
+    return targets
 
 
 def pad_daily_data_to_end(
@@ -114,10 +156,5 @@ def pad_daily_data_to_end(
         unique_codes.assign(_key=1),
         on="_key",
     ).drop(columns="_key")
-    merged = full_grid.merge(
-        result[["warehousing_time", "defect_desc", "defect_panel_count"]],
-        on=["warehousing_time", "defect_desc"],
-        how="left",
-    )
-    merged["defect_panel_count"] = merged["defect_panel_count"].fillna(0).astype(int)
-    return merged
+    full_grid["defect_panel_count"] = 0
+    return full_grid
