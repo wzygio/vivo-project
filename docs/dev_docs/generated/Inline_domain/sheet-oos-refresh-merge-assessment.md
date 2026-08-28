@@ -26,7 +26,7 @@
 
 ## 2. 必须修正的缺陷（合并前）
 
-### 2.1 【高】企业加密工作簿路径：生成门控失效 + `__flags` 会被系统覆写
+### 2.1 【高】企业加密工作簿路径：生成门控失效 + `__flags` 会被系统覆写（✅ 已修复 2026-08-28，见 §6）
 
 - 位置：`src/inline_domain/core/shared/sheet_oos_decoration.py:354-356, 642-643, 672-674`，`migrate_legacy_flags_if_needed`（`:431-463`）
 - 问题：`_workbook_sheet_names` 对加密工作簿返回 `None` → `current_sheet_exists` 恒为 False → `should_regenerate_detail` 恒返回 `missing` → **每次调用都重写**，PRD 4.2/11.3 生成门控对加密文件完全失效；同时每次 persist 都用旧产品 sheet 的迁移结果**覆写 `__flags`**，管理员对决策台账的编辑会被系统冲掉。而真实 SPC 工作簿当前正是企业加密文件。
@@ -46,7 +46,7 @@
 
 注意缓解因素：新代码首次成功写入时，COM 回退会把整个工作簿重写为明文 xlsx，之后 openpyxl 就能正常列举 sheet，此缺陷暂时消失。但只要文件再次处于加密状态（例如管理员重新上传了加密工作簿），问题立即复发。
 
-### 2.2 【高】决策台账下载恒空，覆盖语义上传可清空全部决策
+### 2.2 【高】决策台账下载恒空，覆盖语义上传可清空全部决策（✅ 已修复 2026-08-28，见 §6）
 
 - 位置：`src/inline_domain/application/shared/decorated_features.py:175-179`、`spc_service.py:147-152`、`ctq_service.py:63-71`、`app/sections/spc/sheet_oos_admin.py:74-76`
 - 问题：`fetch_decorated_features` 的缓存 payload 只带 `decoration_df/decoration_path/decoration_sheet`，**不含 `decision_df`/`refresh_reason`**；service 重建 ViewModel 时这些字段全丢。后果：
@@ -55,13 +55,13 @@
   - 管理界面"本次载荷重建原因"永远不显示（PRD §8 可观测性打折扣）。
 - 修正方向：payload 与两个 service 的 `_view_model_from_payload` 携带 `decision_df`（ADR-0001 下 DataFrame 可过缓存边界，无技术障碍）。
 
-### 2.3 【高】页头"刷新数据"存在假成功路径
+### 2.3 【高】页头"刷新数据"存在假成功路径（✅ 已修复 2026-08-28，见 §6）
 
 - 位置：`app/components/page_header.py:128-144`、`src/inline_domain/composition.py:104-109`、`src/inline_domain/infrastructure/measurement/measurement_snapshot_repository.py:70-71`
 - 问题：`refresh_raw_measurements` 以 `not result.empty` 当成功信号；L1 仓储 DB 失败时降级返回旧快照（非空），被报为成功并推进 revision、失效 L2——PRD 11.1"任一失败则不失效"被架空。monitor 侧 `safe_refresh_snapshots`（`monitor_service.py:694-710`）`success_flag` 恒 True，同类问题。
 - 修正方向：composition 层区分"刷新成功 / 降级旧快照 / 真空数据"三种结果，仅真成功才推进 revision。
 
-### 2.4 【高】加密 + `__flags` 缺失时，两个决策读取入口行为矛盾
+### 2.4 【高】加密 + `__flags` 缺失时，两个决策读取入口行为矛盾（✅ 已修复 2026-08-28，见 §6）
 
 - 位置：`sheet_oos_decoration.py:380-382`（`load_sheet_oos_decisions`）vs `:452-453`（`migrate_legacy_flags_if_needed`）
 - 问题：前者因 `names is None` 跳过存在性检查，COM 读缺失 sheet 抛 `SheetOosDecorationReadError`（违反其自身"决策 sheet 不存在返回空台账"契约）；后者无条件走旧表迁移。全新加密工作簿的首次签名读取会向页面抛错而非优雅走空签名。
@@ -129,8 +129,41 @@ master 自 merge-base 以来前进 15+ 提交，其中与本分支强相关：`6
 
 ## 5. 建议行动顺序
 
-1. 在本分支先修 4 个高严重度缺陷（§2.1–2.4）+ 中 severity 的 WriteError 可见性与 `get_cached_alarm_detail_tables` TTL，补齐加密路径（`sheet_names=None`）单测。
+1. ~~在本分支先修 4 个高严重度缺陷（§2.1–2.4）~~ **已完成（2026-08-28，见 §6）**；中 severity 的 WriteError 可见性与 `get_cached_alarm_detail_tables` TTL 仍待修。
 2. 确认部署形态（是否存在多进程 Streamlit worker），决定是否需要文件级锁。
 3. rebase 到 master，按 §3.1 处理语义冲突：摘除 clip_rules 链路、decoration_admin 写模型替换、excel_tools 以本分支为底择优合并、spc_dashboard 人工移植。
 4. 处理 resources 路径搬迁与既有 `__flags` 数据迁移（若试用期间已积累真实决策）。
 5. 合并后执行：`tests/unit/inline_domain` 全量回归 + 集成测试 + SPC smoke + 管理员 UI 验收（PRD 12.3）。
+
+## 6. 修复记录（2026-08-28）
+
+4 个高严重度缺陷已在本分支工作树修复（**未提交**，改动基于 HEAD `3a0588e`；顺带修复了 §2.5 中"handler 异常未捕获"低危项）。
+
+### 6.1 改动摘要
+
+**缺陷 2.1 + 2.4（加密工作簿门控与读取语义）**
+- `excel_tools.py` 新增 `list_workbook_sheet_names()`：openpyxl 枚举失败时回退 Excel COM 枚举 sheet 名，双失败才返回 `None`；`_read_encrypted_xlsx_via_com` 对缺失 sheet 返回空 DataFrame（与明文读取语义对齐，避免首次 persist 读 `__refresh_meta__` 崩溃）。
+- `sheet_oos_decoration.py`：`_workbook_sheet_names` 委托新枚举函数；`load_sheet_oos_decisions` 与 `migrate_legacy_flags_if_needed` 在 `names=None`（文件不可读）时统一抛 `SheetOosDecorationReadError`，不再静默迁移/覆写；`__flags` 存在性判断对加密文件真实生效，4h 门控恢复。
+
+**缺陷 2.2（决策台账过缓存边界）**
+- `decorated_features.py` payload 的 `sheet_oos_decoration` 字典新增 `decision_sheet`/`decision_df`/`refresh_reason`（DataFrame + str，符合 ADR-0001；缓存键不受影响）。
+- `spc_service.py` / `ctq_service.py` 的 `_view_model_from_payload` 透传三字段，旧缓存条目缺键时降级为默认值不抛错。下载决策台账、上传一致性检测、重建原因 caption 随之接通（`sheet_oos_admin.py`/`spc_dashboard.py` 无需改动）。
+
+**缺陷 2.3（刷新假成功）**
+- `measurement_snapshot_repository.py` 新增 frozen dataclass `MeasurementRefreshResult(measurements, refreshed_from_db)` 与 `refresh_measurements()`；`get_measurements` 对外行为不变，新增实例状态 `last_refresh_from_db`。
+- `composition.py` 的 `refresh_raw_measurements` 改返回 `refreshed_from_db`：空窗口算成功，DB 失败降级旧快照返回 False。
+- `monitor_service.py` 的 `safe_refresh_snapshots`：单产品异常 → 整体 False；经 `_resolve_raw_refresh_status` 沿组合链读到底层 raw 仓储的 `last_refresh_from_db`，降级即 False。
+- `page_header.py`：handler 抛异常按失败处理（不推进 revision、不清 L2、走失败提示）。
+
+### 6.2 测试验证
+
+- 新增测试：`test_sheet_oos_refresh_encrypted.py`（加密场景 4 例，COM 全程 mock）、`test_composition_refresh.py`、`test_monitor_safe_refresh.py`，以及 page_header / sheet_oos_admin / spc / ctq / excel_tools / repository 既有测试文件的补充用例。
+- 全量回归 `uv run pytest tests/unit tests/integration`：**560 passed / 9 failed / 3 skipped**。
+- 9 个失败经 `git stash` 在干净 HEAD 上复跑确认**全部为既有失败，与本次修复无关**：`test_hot_reload`、`test_aoi_rs_page`、`test_spc_dashboard`（箱线图）、`test_code_selector_filter`×2（`count_threshold` 签名漂移）、`test_yield_dashboard_plotly_keys`、`test_yield_global_data_policy`×2（config 断言漂移）、`test_spc_db`（真实 DB 集成测试，环境/数据依赖）。
+
+### 6.3 遗留问题（不阻塞，建议后续工单）
+
+1. monitor 侧刷新状态经 `_resolve_raw_refresh_status` 沿私有属性链下探，属务实但有耦合的写法；理想做法是 `MeasurementPreparationPort`/`SpcRepository`/`InlineMonitorRepository` 逐层透传刷新状态。
+2. §2.5 中危项仍开放：WriteError 被 service 吞成"暂无数据"（失败可见性）、`get_cached_alarm_detail_tables` 无 TTL、meta 读-改-写在锁外、首次迁移 `"empty"` 签名多写一次。
+3. `load_refresh_meta` 对加密工作簿 COM 短暂不可用时按"meta 缺失 → 触发一次重写"处理，属既有自愈语义。
+4. 上述 9 个既有失败测试与本分支无关，建议另行安排修复（其中 yield config 断言漂移可能随 master 演进已变化）。

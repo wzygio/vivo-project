@@ -110,7 +110,8 @@ def fetch_decorated_features(
 
     Returns a native-payload dict (ADR-0001): decorated sheet_features_df,
     decorated raw_measurements_df, ``spec_empty`` flag, and the decoration
-    payload (decoration_df / decoration_path / decoration_sheet) or None.
+    payload (decoration_df / decoration_path / decoration_sheet /
+    decision_sheet / decision_df / refresh_reason) or None.
     """
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in _DATA_TYPE_FILTER_BY_SCOPE:
@@ -176,5 +177,8 @@ def fetch_decorated_features(
             "decoration_df": decoration_result.decoration_df,
             "decoration_path": str(decoration_result.decoration_path),
             "decoration_sheet": decoration_result.decoration_sheet,
+            "decision_sheet": decoration_result.decision_sheet,
+            "decision_df": decoration_result.decision_df,
+            "refresh_reason": decoration_result.refresh_reason,
         },
     }

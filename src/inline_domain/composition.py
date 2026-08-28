@@ -101,9 +101,13 @@ def refresh_raw_measurements(
     prod_code: str,
     end_date: str,
 ) -> bool:
-    result = build_raw_measurement_repository(db_manager, prod_code).get_measurements(
+    """页头「刷新数据」L1 handler：仅在真实从数据库刷新成功时返回 True。
+
+    空数据窗口（数据库正常返回空）算成功；数据库失败降级旧快照时返回 False，
+    让上层保留 revision 与 L2 缓存（PRD 11.1）。
+    """
+    result = build_raw_measurement_repository(db_manager, prod_code).refresh_measurements(
         prod_code=prod_code,
         end_date=end_date,
-        force_refresh=True,
     )
-    return not result.empty
+    return result.refreshed_from_db

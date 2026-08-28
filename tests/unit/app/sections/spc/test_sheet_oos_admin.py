@@ -23,6 +23,12 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationResult,
     get_decision_sheet_name,
 )
+from src.inline_domain.application.shared.decorated_features import (
+    InMemoryFeaturesSource,
+    fetch_decorated_features,
+)
+from src.inline_domain.application.spc.spc_service import SpcReportService
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
     replace_workbook_sheets,
@@ -384,3 +390,78 @@ def test_admin_upload_failure_shows_error_without_rerun(monkeypatch, tmp_path: P
     assert "请关闭 Excel 后重试" in messages["error"][0]
     assert messages["success"] == []
     assert messages["rerun"] == []
+
+
+# ---------------------------------------------------------------------------
+# 缓存 payload 链路回归（缺陷：decision_df 在 payload 边界丢失）
+# ---------------------------------------------------------------------------
+
+
+def test_cached_payload_decisions_flow_to_download_and_unchanged_upload(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """fetch_decorated_features → SPC view model 重建后：
+    下载产出包含真实决策台账行；规范化一致的上传判定为 unchanged。"""
+    fetch_decorated_features.clear()
+    monkeypatch.setattr(
+        ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
+    )
+    resources = tmp_path / "resources"
+    resources.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(
+        resources / "spc_sheet_oos_decoration.xlsx", engine="openpyxl"
+    ) as writer:
+        _decision_df(False).to_excel(writer, sheet_name="M678__flags", index=False)
+
+    measurements_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "sheet_start_time": "2026-08-05 09:00:00",
+                "sheet_id": "S1",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "site_name": "P1",
+                "param_value": 10.0,
+                "data_type": "SPC",
+            }
+        ]
+    )
+    spec_df = pd.DataFrame(
+        [
+            {
+                "prod_code": "M678",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "usl": 12.0,
+                "lsl": 8.0,
+                "ucl": 11.5,
+                "lcl": 8.5,
+                "target": 10.0,
+            }
+        ]
+    )
+    payload = fetch_decorated_features(
+        InMemoryFeaturesSource(measurements_df, spec_df),
+        "M678",
+        "spc",
+        "2026-08-01",
+        "2026-08-10",
+        "admin-chain-payload",
+    )
+    view_model = SpcReportService._view_model_from_payload(
+        {"sheet_oos_decoration": payload["sheet_oos_decoration"]}
+    )
+    result = view_model.sheet_oos_decoration_result
+
+    assert result is not None
+    assert result.decision_df is not None and not result.decision_df.empty
+    assert result.decision_sheet == "M678__flags"
+    assert result.refresh_reason
+
+    sheets = build_decision_download_sheets(result)
+    assert sheets["决策台账"]["flag"].tolist() == [False]
+
+    outcome = apply_decision_upload(result, _decision_df(False))
+    assert outcome.status == "unchanged"

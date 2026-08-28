@@ -6,6 +6,7 @@ import pytest
 
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
+    list_workbook_sheet_names,
     read_workbook_sheet,
     replace_workbook_sheet,
     replace_workbook_sheets,
@@ -294,3 +295,122 @@ class TestReplaceWorkbookSheets:
         assert isinstance(result, WorkbookWriteResult)
         with pytest.raises(AttributeError):
             result.written = False
+
+
+class TestListWorkbookSheetNames:
+    """list_workbook_sheet_names：openpyxl 直通 / COM 回退 / 双失败三分支。"""
+
+    def test_returns_empty_list_for_missing_file(self, tmp_path: Path) -> None:
+        assert list_workbook_sheet_names(tmp_path / "missing.xlsx") == []
+
+    def test_lists_sheet_names_via_openpyxl(self, tmp_path: Path) -> None:
+        workbook = tmp_path / "shared.xlsx"
+        with pd.ExcelWriter(workbook, engine="openpyxl") as writer:
+            pd.DataFrame({"a": [1]}).to_excel(writer, index=False, sheet_name="M626")
+            pd.DataFrame({"b": [2]}).to_excel(writer, index=False, sheet_name="M678__flags")
+
+        assert list_workbook_sheet_names(workbook) == ["M626", "M678__flags"]
+
+    def test_falls_back_to_com_for_encrypted_file(self, monkeypatch, tmp_path: Path) -> None:
+        workbook = tmp_path / "encrypted.xlsx"
+        workbook.write_bytes(b"\x00enterprise-encrypted")
+
+        import openpyxl
+        import src.shared_kernel.utils.excel_tools as excel_tools
+
+        monkeypatch.setattr(
+            openpyxl, "load_workbook",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("encrypted")),
+        )
+        monkeypatch.setattr(
+            excel_tools, "_list_sheet_names_via_com",
+            lambda path: ["M678", "M678__flags"],
+        )
+
+        assert list_workbook_sheet_names(workbook) == ["M678", "M678__flags"]
+
+    def test_returns_none_when_openpyxl_and_com_both_fail(self, monkeypatch, tmp_path: Path) -> None:
+        workbook = tmp_path / "encrypted.xlsx"
+        workbook.write_bytes(b"\x00enterprise-encrypted")
+
+        import openpyxl
+        import src.shared_kernel.utils.excel_tools as excel_tools
+
+        monkeypatch.setattr(
+            openpyxl, "load_workbook",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("encrypted")),
+        )
+
+        def _broken_com(path):
+            raise RuntimeError("COM unavailable")
+
+        monkeypatch.setattr(excel_tools, "_list_sheet_names_via_com", _broken_com)
+
+        assert list_workbook_sheet_names(workbook) is None
+
+
+def test_com_read_returns_empty_for_missing_sheet(monkeypatch, tmp_path: Path) -> None:
+    """COM 读取指定 sheet 缺失时返回空 DataFrame（与明文读取语义一致）。"""
+    import sys
+    import types
+
+    import src.shared_kernel.utils.excel_tools as excel_tools
+
+    workbook = tmp_path / "encrypted.xlsx"
+    workbook.write_bytes(b"\x00enterprise-encrypted")
+
+    class _FakeWorksheet:
+        def __init__(self, name):
+            self.Name = name
+
+    class _FakeWorksheets:
+        def __init__(self, names):
+            self._sheets = [_FakeWorksheet(name) for name in names]
+
+        def __iter__(self):
+            return iter(self._sheets)
+
+        def __call__(self, key):
+            for ws in self._sheets:
+                if ws.Name == key:
+                    return ws
+            raise KeyError(key)
+
+    class _FakeWorkbook:
+        def __init__(self, names):
+            self.Worksheets = _FakeWorksheets(names)
+
+        def Close(self, SaveChanges=False):
+            pass
+
+    class _FakeWorkbooks:
+        def __init__(self, wb):
+            self._wb = wb
+
+        def Open(self, path, ReadOnly=True):
+            return self._wb
+
+    class _FakeExcel:
+        def __init__(self, wb):
+            self.Workbooks = _FakeWorkbooks(wb)
+            self.Visible = False
+            self.DisplayAlerts = False
+
+        def Quit(self):
+            pass
+
+    fake_wb = _FakeWorkbook(["M626"])
+    fake_client = types.ModuleType("win32com.client")
+    fake_client.DispatchEx = lambda app: _FakeExcel(fake_wb)
+    fake_win32com = types.ModuleType("win32com")
+    fake_win32com.client = fake_client
+    fake_pythoncom = types.ModuleType("pythoncom")
+    fake_pythoncom.CoInitialize = lambda: None
+    fake_pythoncom.CoUninitialize = lambda: None
+
+    monkeypatch.setitem(sys.modules, "win32com", fake_win32com)
+    monkeypatch.setitem(sys.modules, "win32com.client", fake_client)
+    monkeypatch.setitem(sys.modules, "pythoncom", fake_pythoncom)
+
+    result = excel_tools._read_encrypted_xlsx_via_com(workbook, "M678")
+    assert result.empty

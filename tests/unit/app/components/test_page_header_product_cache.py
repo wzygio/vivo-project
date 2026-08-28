@@ -267,3 +267,106 @@ def test_refresh_data_does_not_reload_modules_or_config(
 
     assert reloaded == []
     assert config_loads == []
+
+
+def test_refresh_data_handler_exception_is_treated_as_failure(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """handler 抛异常按失败处理：不推进 revision、不清 L2、提示失败。"""
+    _redirect_revision_writes_to_tmp(monkeypatch, tmp_path)
+
+    def exploding_handler():
+        raise RuntimeError("snapshot refresh blew up")
+
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[exploding_handler],
+        cached_funcs=None,
+        product_cache_scope="M626",
+        session_state={"inline_view_model_1": object()},
+    )
+    revision_before = page_header.get_product_cache_revision(
+        "M626", revision_dir=tmp_path
+    )
+
+    refresh_callback()
+
+    assert (
+        page_header.get_product_cache_revision("M626", revision_dir=tmp_path)
+        == revision_before
+    )
+    assert "inline_view_model_1" in st_stub.session_state
+    assert "❌ 数据库连接或快照更新失败，已保留当前缓存视图。" in st_stub.toasts
+
+
+def test_refresh_data_db_failure_with_snapshot_fallback_keeps_revision(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """DB 失败但降级返回非空旧快照时，页头仍按失败处理（假成功回归）。"""
+    import pandas as pd
+
+    from src.inline_domain import composition
+    from src.inline_domain.infrastructure.measurement.measurement_snapshot_repository import (
+        InlineMeasurementSnapshotRepository,
+    )
+
+    _redirect_revision_writes_to_tmp(monkeypatch, tmp_path)
+
+    snapshot_dir = tmp_path / "snapshots"
+    snapshot_dir.mkdir()
+    stale = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M626",
+                "start_time": pd.Timestamp("2026-08-13 08:00:00"),
+                "sheet_id": "SHEET-1",
+                "lot_id": "FALLBACK",
+                "step_id": "11620",
+                "param_name": "TDSUM",
+                "site_name": "S1",
+                "unit_id": "EQ-1",
+                "param_value": 3.0,
+            }
+        ]
+    )
+    stale.to_parquet(snapshot_dir / "inline_measurements_M626.parquet", index=False)
+
+    def failing_loader(*_args):
+        raise RuntimeError("database unavailable")
+
+    repository = InlineMeasurementSnapshotRepository(
+        snapshot_dir=snapshot_dir,
+        db_manager=SimpleNamespace(engine=object()),
+        measurement_loader=failing_loader,
+    )
+    monkeypatch.setattr(
+        composition,
+        "build_raw_measurement_repository",
+        lambda *_args, **_kwargs: repository,
+    )
+
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[
+            lambda: composition.refresh_raw_measurements(object(), "M626", "2026-08-13")
+        ],
+        cached_funcs=None,
+        product_cache_scope="M626",
+        session_state={"inline_view_model_1": object()},
+    )
+    revision_before = page_header.get_product_cache_revision(
+        "M626", revision_dir=tmp_path
+    )
+
+    refresh_callback()
+
+    assert (
+        page_header.get_product_cache_revision("M626", revision_dir=tmp_path)
+        == revision_before
+    )
+    assert "inline_view_model_1" in st_stub.session_state
+    assert "❌ 数据库连接或快照更新失败，已保留当前缓存视图。" in st_stub.toasts
+    assert "✅ L1 快照与 L2 缓存已刷新。" not in st_stub.toasts

@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.shared_kernel.utils.excel_tools import (
     _read_encrypted_xlsx_via_com,
+    list_workbook_sheet_names,
     read_workbook_sheet,
     replace_workbook_sheets,
 )
@@ -345,19 +346,8 @@ def _empty_decisions_frame(key_columns: Iterable[str] | None = None) -> pd.DataF
 
 
 def _workbook_sheet_names(xlsx_path: Path) -> list[str] | None:
-    """openpyxl 可打开时返回 sheet 名列表；企业加密等打不开时返回 None。"""
-    if not xlsx_path.exists():
-        return []
-    try:
-        import openpyxl
-
-        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
-    except Exception:
-        return None
-    try:
-        return list(wb.sheetnames)
-    finally:
-        wb.close()
+    """枚举 sheet 名：openpyxl 优先，企业加密回退 COM；都失败（文件不可读）返回 None。"""
+    return list_workbook_sheet_names(xlsx_path)
 
 
 def load_sheet_oos_decisions(
@@ -369,8 +359,8 @@ def load_sheet_oos_decisions(
     """读取决策 sheet（<产品>__flags）中的用户决策台账。
 
     文件或决策 sheet 不存在（首次迁移前）返回空决策台账；
-    决策 sheet 存在但读取失败必须抛 SheetOosDecorationReadError，
-    不得降级为空——否则用户决策会被覆盖丢失。
+    工作簿不可读（openpyxl 与 COM 都无法枚举 sheet）或决策 sheet 存在但读取失败
+    必须抛 SheetOosDecorationReadError，不得降级为空——否则用户决策会被覆盖丢失。
     """
     keys = _resolve_key_columns(key_columns)
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
@@ -378,7 +368,12 @@ def load_sheet_oos_decisions(
         return _empty_decisions_frame(keys)
     decision_sheet = get_decision_sheet_name(sheet_name)
     names = _workbook_sheet_names(decoration_path)
-    if names is not None and decision_sheet not in names:
+    if names is None:
+        # 文件不可读：无法确认 __flags 是否存在，读、迁移、写都必须停止
+        raise SheetOosDecorationReadError(
+            f"Unable to enumerate sheets of existing Sheet OOS decoration workbook: {decoration_path}"
+        )
+    if decision_sheet not in names:
         return _empty_decisions_frame(keys)
     try:
         df = read_workbook_sheet(decoration_path, decision_sheet)
@@ -439,17 +434,25 @@ def migrate_legacy_flags_if_needed(
     - __flags 已存在 → 直接读取返回（不再迁移）；
     - 不存在但旧产品 sheet 存在 → 提取键列 + flag，重复键保留最后一行，
       全部 flag（含显式 True）都保留；
-    - 产品 sheet 也不存在 → 空决策台账。
+    - 产品 sheet 也不存在 → 空决策台账；
+    - 工作簿不可读（openpyxl 与 COM 均无法枚举 sheet）→ 抛
+      SheetOosDecorationReadError：此时无法确认 __flags 是否已存在，
+      盲目迁移会把用户维护的决策台账整体覆写。
     """
     keys = _resolve_key_columns(key_columns)
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
     decision_sheet = get_decision_sheet_name(sheet_name)
     names = _workbook_sheet_names(decoration_path)
-    if names is not None and decision_sheet in names:
+    if names is None:
+        # 文件不可读：与 load_sheet_oos_decisions 语义一致，抛错而非静默迁移
+        raise SheetOosDecorationReadError(
+            f"Unable to enumerate sheets of existing Sheet OOS decoration workbook: {decoration_path}"
+        )
+    if decision_sheet in names:
         return load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
-    if names is not None and (sheet_name or "Sheet1") not in names:
+    if (sheet_name or "Sheet1") not in names:
         return _empty_decisions_frame(keys)
-    # names 为 None（无法列举 sheet，如企业加密）或旧产品 sheet 存在：从旧表迁移
+    # 旧产品 sheet 存在且 __flags 缺失：从旧表迁移
     legacy = load_sheet_oos_decoration(product_dir, file_name, sheet_name, key_columns)
     if legacy.empty:
         return _empty_decisions_frame(keys)

@@ -337,3 +337,37 @@ def test_gate_params_default_to_legacy_behavior(decoration_root: Path) -> None:
 
     assert payload["sheet_features_df"]["sheet_max"].tolist() == [100.0]
     assert payload["sheet_oos_decoration"] is None
+
+
+# ---------------------------------------------------------------------------
+# 决策台账载荷（PRD §5.9/§7.2）：缓存 payload 必须携带 decision_df 等字段
+# ---------------------------------------------------------------------------
+def test_payload_carries_decision_ledger_and_refresh_reason(
+    decoration_root: Path,
+) -> None:
+    """spc scope 下 payload 的 sheet_oos_decoration 必须含决策台账、决策 sheet 名
+    与刷新原因，否则 service 层重建的 SheetOosDecorationResult 会丢掉 decision_df。"""
+    workbook = decoration_root / "spc_sheet_oos_decoration.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "prod_code": PROD,
+                "step_id": "100",
+                "param_name": "THK",
+                "sheet_id": "S1",
+                "flag": False,
+            }
+        ]
+    ).to_excel(workbook, sheet_name=f"{PROD}__flags", index=False, engine="openpyxl")
+
+    payload = fetch_decorated_features(
+        _source(), PROD, "spc", START_DATE, END_DATE, "payload-decision-ledger"
+    )
+
+    decoration = payload["sheet_oos_decoration"]
+    assert decoration["decision_sheet"] == f"{PROD}__flags"
+    decision_df = decoration["decision_df"]
+    assert isinstance(decision_df, pd.DataFrame)
+    assert decision_df["flag"].tolist() == [False]
+    assert isinstance(decoration["refresh_reason"], str)
+    assert decoration["refresh_reason"]

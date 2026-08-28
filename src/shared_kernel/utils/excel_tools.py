@@ -42,6 +42,47 @@ def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
         return _read_encrypted_xlsx_via_com(xlsx_path, sheet_name)
 
 
+def list_workbook_sheet_names(xlsx_path: Path) -> list[str] | None:
+    """枚举工作簿的 sheet 名列表。
+
+    openpyxl 可打开时直接返回；企业加密等打不开时回退 Excel COM 枚举；
+    两者都失败返回 None——调用方必须据此区分"文件不可读"与"sheet 不存在"，
+    不得把 None 当作空清单继续后续读写流程。
+    文件不存在返回空列表（与"文件缺失"语义一致）。
+
+    Args:
+        xlsx_path: 共享工作簿路径
+
+    Returns:
+        sheet 名列表；文件不存在为 []；无法枚举（加密且 COM 也不可用）为 None
+    """
+    if not xlsx_path.exists():
+        return []
+    try:
+        import openpyxl
+
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    except Exception as openpyxl_error:
+        logging.warning(
+            "[excel_tools] openpyxl 无法枚举 %s 的 sheet，尝试 Excel COM: %s",
+            xlsx_path.name,
+            openpyxl_error,
+        )
+        try:
+            return _list_sheet_names_via_com(xlsx_path)
+        except Exception as com_error:
+            logging.error(
+                "[excel_tools] Excel COM 枚举 %s 的 sheet 也失败: %s",
+                xlsx_path.name,
+                com_error,
+            )
+            return None
+    try:
+        return list(wb.sheetnames)
+    finally:
+        wb.close()
+
+
 def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
     """通过 Excel COM 读出工作簿的全部 sheets（用于加密工作簿的整体重写回退）。"""
     try:
@@ -331,6 +372,9 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
         excel.DisplayAlerts = False
         wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
         if sheet_name:
+            # sheet 缺失与明文读取语义一致：返回空 DataFrame 而非抛错
+            if sheet_name not in [worksheet.Name for worksheet in wb.Worksheets]:
+                return pd.DataFrame()
             ws = wb.Worksheets(sheet_name)
         else:
             ws = wb.Worksheets(1)
@@ -360,6 +404,53 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
                 pass
         used_range = None
         ws = None
+        wb = None
+        try:
+            if excel is not None:
+                excel.Quit()
+        except Exception:
+            pass
+        excel = None
+        if com_initialized:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+
+def _list_sheet_names_via_com(xlsx_path: Path) -> list[str]:
+    """[COM fallback] 通过 Excel COM 枚举加密工作簿的 sheet 名（透明解密）。
+
+    与 _read_encrypted_xlsx_via_com 共用 COM 启动/清理模式；
+    失败时抛异常交由 list_workbook_sheet_names 决定降级语义。
+    """
+    try:
+        import win32com.client
+        import pythoncom
+    except ImportError:
+        raise ImportError("win32com 未安装，无法枚举加密工作簿的 sheet 名。")
+
+    com_initialized = False
+    try:
+        pythoncom.CoInitialize()
+        com_initialized = True
+    except Exception:
+        pass
+
+    excel = None
+    wb = None
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
+        return [worksheet.Name for worksheet in wb.Worksheets]
+    finally:
+        if wb is not None:
+            try:
+                wb.Close(SaveChanges=False)
+            except Exception:
+                pass
         wb = None
         try:
             if excel is not None:

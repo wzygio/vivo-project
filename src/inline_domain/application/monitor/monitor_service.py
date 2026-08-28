@@ -676,7 +676,9 @@ class MonitorAnalysisService:
     ) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写 (Safe Overwrite)。
-        返回 True 表示刷新调度成功；返回 False 仅表示底层可能挂了，但不影响前端读取旧数据。
+        返回 True 表示所有产品快照均真实从数据库刷新成功；
+        任一产品抛异常或降级到旧快照（数据库失败）时返回 False，
+        上层据此保留 revision 与 L2 缓存（PRD 11.1）。
         """
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
@@ -694,8 +696,6 @@ class MonitorAnalysisService:
             success_flag = True
 
             for prod in search_prods:
-                repo = _repository_factory(prod)
-
                 current_fetch_config = config_instance.model_copy()
                 current_fetch_config.prod_code = prod
                 current_fetch_config.start_date = start_dt.strftime("%Y-%m-%d")
@@ -703,12 +703,47 @@ class MonitorAnalysisService:
                 current_fetch_config.data_type_filter = "ALL"
 
                 logging.info(f"🔄 [Service] 向底层下发 {prod} 强刷指令 (Force Refresh)...")
-                
-                # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖
-                df = repo.get_spc_measurements(current_fetch_config, force_refresh=True)
+
+                try:
+                    repo = _repository_factory(prod)
+
+                    # [核心联动] 强刷指令穿透！Repository 内部会安全地尝试覆盖；
+                    # 返回的 df 可能是降级后的旧快照，不能作为成功依据，
+                    # 真实刷新状态经 _resolve_raw_refresh_status 读取。
+                    repo.get_spc_measurements(current_fetch_config, force_refresh=True)
+                except Exception as exc:
+                    logging.error(f"❌ [Service] 产品 {prod} 强刷调度失败: {exc}")
+                    success_flag = False
+                    continue
+
+                if MonitorAnalysisService._resolve_raw_refresh_status(repo) is False:
+                    logging.error(
+                        f"❌ [Service] 产品 {prod} 强刷未命中数据库，已降级为旧快照。"
+                    )
+                    success_flag = False
 
             return success_flag
             
         except Exception as e:
             logging.error(f"❌ 安全覆写代理调度失败: {e}")
             return False
+
+    @staticmethod
+    def _resolve_raw_refresh_status(repo: object) -> Optional[bool]:
+        """Best-effort 读取底层量测快照仓储的真实刷新状态。
+
+        组合根中 InlineMonitorRepository -> SpcRepository -> preparation -> raw
+        为纯代理链，中间层不透传刷新状态；这里沿链防御性查找
+        ``last_refresh_from_db``。任一节点的状态为 False 都说明该产品的强制
+        刷新降级到了旧快照。测试替身等不含该结构时返回 None（不判罚）。
+        """
+        status = getattr(repo, "last_refresh_from_db", None)
+        if status is not None:
+            return bool(status)
+        spc_source = getattr(repo, "_spc_source", None)
+        preparation = getattr(spc_source, "_preparation", None)
+        raw = getattr(preparation, "raw_measurements", None)
+        status = getattr(raw, "last_refresh_from_db", None)
+        if status is None:
+            return None
+        return bool(status)

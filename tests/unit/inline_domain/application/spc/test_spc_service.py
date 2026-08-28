@@ -387,3 +387,57 @@ def test_spc_service_threads_gate_params_to_shared_pipeline(monkeypatch) -> None
     assert recorded["prod_code"] == "M626"
     assert recorded["product_revision"] == "rev-spc"
     assert recorded["decision_signature"] == "sig-spc"
+
+
+def _decoration_payload_with_decisions() -> dict:
+    return {
+        "decoration_df": pd.DataFrame(),
+        "decoration_path": "resources/spc_sheet_oos_decoration.xlsx",
+        "decoration_sheet": "M626",
+        "decision_sheet": "M626__flags",
+        "decision_df": pd.DataFrame(
+            [
+                {
+                    "prod_code": "M626",
+                    "step_id": "S1",
+                    "param_name": "THK",
+                    "sheet_id": "LOT00000101",
+                    "flag": False,
+                }
+            ]
+        ),
+        "refresh_reason": "decision_changed",
+    }
+
+
+def test_view_model_from_payload_preserves_decision_ledger() -> None:
+    """缓存 payload 往返后 decision_df/decision_sheet/refresh_reason 不得丢失。"""
+    payload = {"sheet_oos_decoration": _decoration_payload_with_decisions()}
+
+    report = SpcReportService._view_model_from_payload(payload)
+
+    result = report.sheet_oos_decoration_result
+    assert result is not None
+    assert result.decision_sheet == "M626__flags"
+    assert result.decision_df is not None
+    assert result.decision_df["flag"].tolist() == [False]
+    assert result.refresh_reason == "decision_changed"
+
+
+def test_view_model_from_payload_tolerates_legacy_decoration_payload() -> None:
+    """旧缓存条目（无决策字段）重建时退化为默认空值，不抛错。"""
+    payload = {
+        "sheet_oos_decoration": {
+            "decoration_df": pd.DataFrame(),
+            "decoration_path": "resources/spc_sheet_oos_decoration.xlsx",
+            "decoration_sheet": "M626",
+        },
+    }
+
+    report = SpcReportService._view_model_from_payload(payload)
+
+    result = report.sheet_oos_decoration_result
+    assert result is not None
+    assert result.decision_df is None
+    assert result.decision_sheet == ""
+    assert result.refresh_reason == ""

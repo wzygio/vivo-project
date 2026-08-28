@@ -61,6 +61,7 @@ class CtqReportService:
         decoration_result = None
         if isinstance(decoration_payload, dict):
             decoration_df = decoration_payload.get("decoration_df")
+            decision_df = decoration_payload.get("decision_df")
             decoration_result = SheetOosDecorationResult(
                 raw_measurements_df=raw_measurements_df,
                 decoration_df=(
@@ -68,6 +69,9 @@ class CtqReportService:
                 ),
                 decoration_path=Path(str(decoration_payload.get("decoration_path", ""))),
                 decoration_sheet=str(decoration_payload.get("decoration_sheet", "Sheet1")),
+                decision_sheet=str(decoration_payload.get("decision_sheet", "")),
+                decision_df=decision_df if isinstance(decision_df, pd.DataFrame) else None,
+                refresh_reason=str(decoration_payload.get("refresh_reason", "")),
             )
 
         return CtqReportViewModel(

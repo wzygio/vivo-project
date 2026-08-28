@@ -128,7 +128,12 @@ def render_page_header(
         all_success = True
         for handler in refresh_handlers:
             if callable(handler):
-                is_success = handler()
+                try:
+                    is_success = handler()
+                except Exception:
+                    # handler 抛异常同样视为失败：不推进 revision、不清 L2。
+                    logging.exception("❌ [UI] L1 数据快照刷新任务执行异常。")
+                    is_success = False
                 if is_success is False:
                     all_success = False
 

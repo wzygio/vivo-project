@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 import logging
 import os
 from pathlib import Path
 import threading
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from uuid import uuid4
 
 import pandas as pd
@@ -24,6 +25,20 @@ if TYPE_CHECKING:
 
 MeasurementLoader = Callable[["DatabaseManager", str, str, str], pd.DataFrame]
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class MeasurementRefreshResult:
+    """Outcome of loading measurements, distinguishing data content from DB success.
+
+    ``refreshed_from_db`` is True only when the loader returned normally during
+    this call (an empty window is still a successful refresh); it is False when
+    the load failed and the result fell back to the previous snapshot, or when
+    a cached snapshot was served without hitting the database.
+    """
+
+    measurements: pd.DataFrame
+    refreshed_from_db: bool
 
 
 class InlineMeasurementSnapshotRepository:
@@ -43,6 +58,8 @@ class InlineMeasurementSnapshotRepository:
         self.snapshot_dir = snapshot_dir
         self.db_manager = db_manager
         self.measurement_loader = measurement_loader
+        # 最近一次强制刷新是否真正从数据库成功（None 表示尚未强制刷新）。
+        self.last_refresh_from_db: Optional[bool] = None
 
     def get_measurements(
         self,
@@ -50,16 +67,42 @@ class InlineMeasurementSnapshotRepository:
         end_date: str,
         force_refresh: bool = False,
     ) -> pd.DataFrame:
+        result = self._load_measurements(prod_code, end_date, force_refresh)
+        if force_refresh:
+            self.last_refresh_from_db = result.refreshed_from_db
+        return result.measurements
+
+    def refresh_measurements(
+        self,
+        prod_code: str,
+        end_date: str,
+    ) -> MeasurementRefreshResult:
+        """Force a DB refresh and report whether the data truly came from the DB.
+
+        An empty data window counts as success when the loader returned
+        normally; only loader failures (served via the old snapshot fallback)
+        report ``refreshed_from_db=False``.
+        """
+        result = self._load_measurements(prod_code, end_date, force_refresh=True)
+        self.last_refresh_from_db = result.refreshed_from_db
+        return result
+
+    def _load_measurements(
+        self,
+        prod_code: str,
+        end_date: str,
+        force_refresh: bool,
+    ) -> MeasurementRefreshResult:
         end_timestamp = pd.Timestamp(end_date)
         start_date = (end_timestamp - relativedelta(months=3)).strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
         if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):
-            return self._read_snapshot(snapshot_path)
+            return MeasurementRefreshResult(self._read_snapshot(snapshot_path), False)
 
         with self._lock_for(snapshot_path):
             if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):
-                return self._read_snapshot(snapshot_path)
+                return MeasurementRefreshResult(self._read_snapshot(snapshot_path), False)
             try:
                 measurements = self.measurement_loader(
                     self.db_manager,
@@ -69,13 +112,13 @@ class InlineMeasurementSnapshotRepository:
                 )
             except Exception:
                 logger.exception("Failed to refresh Inline measurement snapshot for %s", prod_code)
-                return self._fallback(snapshot_path)
+                return MeasurementRefreshResult(self._fallback(snapshot_path), False)
             if measurements.empty:
-                return self._fallback(snapshot_path)
+                return MeasurementRefreshResult(self._fallback(snapshot_path), True)
 
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
             self._write_snapshot(snapshot_path, measurements)
-            return measurements.copy()
+            return MeasurementRefreshResult(measurements.copy(), True)
 
     def _is_fresh(self, snapshot_path: Path, end_timestamp: pd.Timestamp) -> bool:
         if not snapshot_path.exists():
