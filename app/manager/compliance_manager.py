@@ -1,4 +1,4 @@
-﻿"""
+"""
 数据修饰配置文件管理模块 (Compliance Config Manager)
 
 功能：
@@ -27,8 +27,8 @@ from src.shared_kernel.config import ConfigLoader
 # 管理界面与运行时修饰引擎共用唯一配置文件。
 CONFIG_PATH = ConfigLoader.get_compliance_config_path()
 
-# 报废Sheet路径
-SCRAP_SHEET_PATH = Path("resources/scrap_sheets.xlsx")
+# 报废Sheet路径（路径由 inline_domain 配置路由）
+SCRAP_SHEET_PATH = ConfigLoader.get_domain_resource_path("inline_domain", "scrap_sheets", "scrap_sheets.xlsx")
 
 
 def _ensure_config_exists():
@@ -123,7 +123,7 @@ def render_compliance_config_panel(
     config = load_compliance_config()
     
     with st.expander("🔧 数据修饰配置", expanded=False):
-        st.info("配置来源：`resources/compliance_config.xlsx`。每一行都是启用规则，支持 ALL。")
+        st.info(f"配置来源：`{CONFIG_PATH}`。每一行都是启用规则，支持 ALL。")
         visible_rules = _filter_rules_for_selection(
             config,
             data_type,
@@ -183,7 +183,7 @@ def render_scrap_sheet_uploader():
     """
     报废Sheet覆写面板
     
-    参考 render_trend_override_uploader 的交互样式：
+    参考 render_yield_config_uploader 的交互样式：
     - 左列：步骤1 下载标准模板（现有文件或空模板）
     - 右列：步骤2 上传覆盖文件
     """

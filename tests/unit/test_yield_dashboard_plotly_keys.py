@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pandas as pd
 import plotly.graph_objects as go
 
-from app.sections import yield_dashboard
+from app.sections.yield_domain import yield_dashboard
 
 
 class _Context:

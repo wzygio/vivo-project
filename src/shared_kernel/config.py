@@ -131,9 +131,106 @@ class ConfigLoader:
             raise ValueError(f"配置不符合 Schema 定义: {e}") from e
 
     @classmethod
+    def get_snapshot_ttl_hours(cls) -> int:
+        """
+        从 global.yaml 读取数据快照缓存 TTL（小时），各模块统一。
+        读取失败或配置非法时回退到默认 8 小时。
+        """
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        default_ttl = 8
+        try:
+            snapshot_conf = cls._load_yaml(yaml_path).get("data_snapshot", {})
+            ttl_hours = int(snapshot_conf.get("ttl_hours", default_ttl))
+            if ttl_hours <= 0:
+                raise ValueError(f"data_snapshot.ttl_hours 必须为正整数，当前值: {ttl_hours}")
+            return ttl_hours
+        except Exception as e:
+            logging.error(f"❌ 读取数据快照 TTL 配置失败: {e}，回退到默认 {default_ttl} 小时。")
+            return default_ttl
+
+    @classmethod
+    def get_service_cache_ttl_seconds(cls, cache_name: str, default_hours: int) -> int:
+        """
+        从 global.yaml 的 service_cache.ttl_hours 段读取指定 Service 缓存 TTL，返回秒。
+        读取失败或配置非法时回退到 default_hours。
+        """
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        try:
+            cache_conf = cls._load_yaml(yaml_path).get("service_cache", {})
+            ttl_map = cache_conf.get("ttl_hours", {})
+            ttl_hours = int(ttl_map.get(cache_name, default_hours))
+            if ttl_hours <= 0:
+                raise ValueError(
+                    f"service_cache.ttl_hours.{cache_name} 必须为正整数，当前值: {ttl_hours}"
+                )
+            return ttl_hours * 3600
+        except Exception as e:
+            logging.error(
+                f"❌ 读取 Service 缓存 TTL 配置失败 ({cache_name}): {e}，"
+                f"回退到默认 {default_hours} 小时。"
+            )
+            return default_hours * 3600
+
+    @classmethod
+    def get_domain_config_path(cls, domain: str) -> Path:
+        """
+        [路由] 解析 domain 配置文件路径。
+        优先读取 global.yaml 的 domain_config 段；未配置时回退到
+        config/domain/<domain>.yaml 约定路径。
+        """
+        root_dir = cls.get_project_root()
+        router = cls._load_yaml(root_dir / "config" / "global.yaml").get("domain_config", {})
+        configured = router.get(domain) if isinstance(router, dict) else None
+        if configured:
+            path = Path(str(configured))
+            return path if path.is_absolute() else root_dir / path
+        return root_dir / "config" / "domain" / f"{domain}.yaml"
+
+    @classmethod
+    def load_domain_config(cls, domain: str) -> Dict[str, Any]:
+        """加载指定 domain 的 YAML 配置（路径由 global.yaml 路由决定）。"""
+        return cls._load_yaml(cls.get_domain_config_path(domain))
+
+    @classmethod
+    def get_domain_resource_dir(cls, domain: str) -> Path:
+        """
+        解析 domain 资源目录：读取 domain 配置 resources.dir，
+        未配置时回退到 resources/<domain>。
+        """
+        root_dir = cls.get_project_root()
+        resources_conf = cls.load_domain_config(domain).get("resources", {})
+        configured = resources_conf.get("dir") if isinstance(resources_conf, dict) else None
+        if configured:
+            path = Path(str(configured))
+            return path if path.is_absolute() else root_dir / path
+        return root_dir / "resources" / domain
+
+    @classmethod
+    def get_domain_resource_path(cls, domain: str, key: str, default_name: Optional[str] = None) -> Path:
+        """
+        解析 domain 资源文件路径：读取 domain 配置 resources.files[key]。
+        配置值为纯文件名时相对 resources.dir 解析；含目录分隔符时相对项目根目录解析。
+        未配置时以 default_name 回退到 domain 资源目录下。
+        """
+        root_dir = cls.get_project_root()
+        resources_conf = cls.load_domain_config(domain).get("resources", {})
+        files = resources_conf.get("files", {}) if isinstance(resources_conf, dict) else {}
+        configured = files.get(key) if isinstance(files, dict) else None
+        if configured:
+            path = Path(str(configured))
+            if path.is_absolute():
+                return path
+            if len(path.parts) > 1:
+                return root_dir / path
+            return cls.get_domain_resource_dir(domain) / path
+        if default_name:
+            return cls.get_domain_resource_dir(domain) / default_name
+        raise KeyError(f"{domain} 配置的 resources.files 中未找到资源键: {key}")
+
+    @classmethod
     def get_compliance_config_path(cls) -> Path:
         """Return the single workbook used by the manager and runtime engine."""
-        return cls.get_project_root() / "resources" / "compliance_config.xlsx"
+        return cls.get_domain_resource_path("inline_domain", "compliance_config", "compliance_config.xlsx")
 
     @classmethod
     def get_compliance_config(cls) -> dict:
@@ -151,13 +248,9 @@ class ConfigLoader:
 
     @classmethod
     def get_spc_period_sigma_source(cls) -> str:
-        """Read the SPC capability period sigma source from spc_config.yaml."""
-        root_dir = cls.get_project_root()
-        global_yaml_path = root_dir / "config" / "spc_config.yaml"
-
+        """Read the SPC capability period sigma source from the inline domain config."""
         try:
-            global_conf = cls._load_yaml(global_yaml_path)
-            spc_conf = global_conf.get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
             report_conf = spc_conf.get("spc_cpk", {})
             return str(report_conf.get("period_sigma_source", "sheet_mean")).strip().lower()
         except Exception as e:
@@ -166,10 +259,9 @@ class ConfigLoader:
 
     @classmethod
     def get_spc_period_box_source(cls) -> str:
-        """Read the SPC capability period boxplot sample source from spc_config.yaml."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+        """Read the SPC capability period boxplot sample source from the inline domain config."""
         try:
-            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
             report_conf = spc_conf.get("spc_cpk", {})
             source = str(report_conf.get("period_box_source", "point_value")).strip().lower()
             return source if source in {"sheet_mean", "point_value"} else "point_value"
@@ -178,47 +270,28 @@ class ConfigLoader:
             return "point_value"
 
     @classmethod
-    def get_spc_sheet_oos_clip_rules(cls) -> list[dict[str, object]]:
-        """Read normalized parameter-specific Sheet OOS clipping rules."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
+    def get_spc_line_chart_param_name_contains(cls) -> list[str]:
+        """Read parameter-name tokens rendered as SPC Sheet point line charts."""
         try:
-            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
-            decoration_conf = spc_conf.get("sheet_oos_decoration", {})
-            configured_rules = decoration_conf.get("param_clip_rules", [])
-            if not isinstance(configured_rules, list):
+            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            chart_conf = spc_conf.get("chart", {})
+            configured_values = chart_conf.get("line_param_name_contains", [])
+            if not isinstance(configured_values, list):
                 return []
-
-            normalized_rules: list[dict[str, object]] = []
-            for rule in configured_rules:
-                if not isinstance(rule, dict):
-                    continue
-                needle = str(rule.get("param_name_contains", "")).strip()
-                if not needle:
-                    continue
-                try:
-                    lower_offset = float(rule.get("lower_offset", 0.0))
-                    upper_offset = float(rule.get("upper_offset", 0.0))
-                except (TypeError, ValueError):
-                    continue
-                normalized_rules.append(
-                    {
-                        "param_name_contains": needle,
-                        "lower_offset": lower_offset,
-                        "upper_offset": upper_offset,
-                    }
-                )
-            return normalized_rules
-        except Exception as e:
-            logging.error(f"❌ 读取 SPC Sheet OOS 截断规则失败: {e}")
+            return [
+                str(value).strip()
+                for value in configured_values
+                if value is not None and str(value).strip()
+            ]
+        except Exception as exc:
+            logging.error("❌ 读取 SPC 前端折线图参数配置失败: %s", exc)
             return []
 
     @classmethod
     def get_auto_decoration_param_exemptions(cls) -> list[str]:
         """Read parameter-name tokens that bypass automatic value clipping."""
-        yaml_path = cls.get_project_root() / "config" / "spc_config.yaml"
         try:
-            spc_conf = cls._load_yaml(yaml_path).get("spc", {})
-            decoration_conf = spc_conf.get("auto_decoration", {})
+            decoration_conf = cls.load_domain_config("inline_domain").get("auto_decoration", {})
             configured_values = decoration_conf.get(
                 "exempt_param_name_contains",
                 [],
@@ -256,14 +329,14 @@ class ConfigLoader:
 
     @classmethod
     def get_equipment_config(cls) -> dict[str, Any]:
-        """Load the critical-parts configuration from equipment_config.yaml."""
-        yaml_path = cls.get_project_root() / "config" / "equipment_config.yaml"
-        config = cls._load_yaml(yaml_path)
+        """Load the critical-parts configuration from the equipment domain config."""
+        config = cls.load_domain_config("equipment_domain")
         equipment = config.get("equipment", {})
         if not isinstance(equipment, dict):
-            raise ValueError("equipment_config.yaml: 'equipment' must be a mapping")
+            raise ValueError("equipment_domain.yaml: 'equipment' must be a mapping")
         if not equipment:
             raise ValueError(
-                f"equipment_config.yaml is missing required 'equipment' settings: {yaml_path}"
+                "equipment_domain.yaml is missing required 'equipment' settings: "
+                f"{cls.get_domain_config_path('equipment_domain')}"
             )
         return equipment

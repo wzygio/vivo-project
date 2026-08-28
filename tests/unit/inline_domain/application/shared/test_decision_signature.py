@@ -127,10 +127,10 @@ def test_scope_decision_signature_uses_scope_workbook(
     """scope 便捷入口：spc/ctq 各自定位自己的工作簿；文件缺失 -> empty。"""
     monkeypatch.setattr(
         decision_signature_module.ConfigLoader,
-        "get_project_root",
-        staticmethod(lambda: tmp_path),
+        "get_domain_resource_dir",
+        classmethod(lambda _cls, _domain: tmp_path / "resources" / "inline_domain"),
     )
-    resources = tmp_path / "resources"
+    resources = tmp_path / "resources" / "inline_domain"
     workbook = _write_workbook_with_flags(resources / "spc_sheet_oos_decoration.xlsx")
 
     spc_signature = decision_signature_module.get_scope_decision_signature("spc", PROD)

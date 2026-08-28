@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-from src.inline_domain.infrastructure.measurement.step_description_loader import (
+from src.inline_domain.infrastructure.shared.step_description_loader import (
     STEP_DESCRIPTION_COLUMNS,
     build_step_description_map,
     load_step_descriptions,

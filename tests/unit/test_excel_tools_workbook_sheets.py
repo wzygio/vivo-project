@@ -52,7 +52,9 @@ def test_read_workbook_sheet_falls_back_to_com_for_encrypted_file(monkeypatch, t
 
 def test_replace_workbook_sheet_creates_new_workbook(tmp_path: Path) -> None:
     workbook = tmp_path / "shared.xlsx"
-    replace_workbook_sheet(workbook, "M678", pd.DataFrame({"a": [1, 2]}))
+    assert replace_workbook_sheet(
+        workbook, "M678", pd.DataFrame({"a": [1, 2]})
+    ) is True
 
     assert workbook.exists()
     result = pd.read_excel(workbook, sheet_name="M678")
@@ -65,7 +67,9 @@ def test_replace_workbook_sheet_preserves_other_sheets(tmp_path: Path) -> None:
         pd.DataFrame({"keep": [1]}).to_excel(writer, index=False, sheet_name="M626")
         pd.DataFrame({"old": [9]}).to_excel(writer, index=False, sheet_name="M678")
 
-    replace_workbook_sheet(workbook, "M678", pd.DataFrame({"new": [5]}))
+    assert replace_workbook_sheet(
+        workbook, "M678", pd.DataFrame({"new": [5]})
+    ) is True
 
     preserved = pd.read_excel(workbook, sheet_name="M626")
     replaced = pd.read_excel(workbook, sheet_name="M678")
@@ -73,22 +77,29 @@ def test_replace_workbook_sheet_preserves_other_sheets(tmp_path: Path) -> None:
     pd.testing.assert_frame_equal(replaced, pd.DataFrame({"new": [5]}))
 
 
-def test_replace_workbook_sheet_skips_locked_workbook_without_raising(monkeypatch, tmp_path: Path) -> None:
+def test_replace_workbook_sheet_reports_locked_workbook(monkeypatch, tmp_path: Path) -> None:
     workbook = tmp_path / "shared.xlsx"
     original = pd.DataFrame({"a": [1]})
     original.to_excel(workbook, index=False, sheet_name="M678")
 
-    import openpyxl
+    real_replace = os.replace
 
-    def _locked_save(self, path):
-        raise PermissionError("locked")
+    def _locked_replace(source, target):
+        if Path(target) == workbook:
+            raise PermissionError("locked")
+        return real_replace(source, target)
 
-    monkeypatch.setattr(openpyxl.Workbook, "save", _locked_save)
+    monkeypatch.setattr(os, "replace", _locked_replace)
 
-    replace_workbook_sheet(workbook, "M678", pd.DataFrame({"a": [2]}))
+    succeeded = replace_workbook_sheet(workbook, "M678", pd.DataFrame({"a": [2]}))
 
-    # 原内容未被破坏
+    assert succeeded is False
+    # 原内容未被破坏，且保留可恢复备份。
     pd.testing.assert_frame_equal(pd.read_excel(workbook, sheet_name="M678"), original)
+    pd.testing.assert_frame_equal(
+        pd.read_excel(workbook.with_suffix(".xlsx.bak"), sheet_name="M678"),
+        original,
+    )
 
 
 def test_replace_workbook_sheet_rewrites_encrypted_workbook_via_com(monkeypatch, tmp_path: Path) -> None:
@@ -113,12 +124,33 @@ def test_replace_workbook_sheet_rewrites_encrypted_workbook_via_com(monkeypatch,
         lambda path: {"M626": pd.DataFrame({"keep": [1]}), "M678": pd.DataFrame({"old": [9]})},
     )
 
-    replace_workbook_sheet(workbook, "M678", pd.DataFrame({"new": [5]}))
+    assert replace_workbook_sheet(
+        workbook, "M678", pd.DataFrame({"new": [5]})
+    ) is True
 
     monkeypatch.undo()  # 恢复 openpyxl.load_workbook，以便真实读回结果
 
     pd.testing.assert_frame_equal(pd.read_excel(workbook, sheet_name="M626"), pd.DataFrame({"keep": [1]}))
     pd.testing.assert_frame_equal(pd.read_excel(workbook, sheet_name="M678"), pd.DataFrame({"new": [5]}))
+    assert workbook.with_suffix(".xlsx.bak").read_bytes() == b"\x00enterprise-encrypted"
+
+
+def test_replace_workbook_sheet_skips_locked_workbook_without_raising(monkeypatch, tmp_path: Path) -> None:
+    workbook = tmp_path / "shared.xlsx"
+    original = pd.DataFrame({"a": [1]})
+    original.to_excel(workbook, index=False, sheet_name="M678")
+
+    import openpyxl
+
+    def _locked_save(self, path):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(openpyxl.Workbook, "save", _locked_save)
+
+    assert replace_workbook_sheet(workbook, "M678", pd.DataFrame({"a": [2]})) is False
+
+    # 原内容未被破坏
+    pd.testing.assert_frame_equal(pd.read_excel(workbook, sheet_name="M678"), original)
 
 
 class TestReplaceWorkbookSheets:

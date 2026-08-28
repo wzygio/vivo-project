@@ -8,20 +8,23 @@ from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepos
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
 from src.inline_domain.infrastructure.ctq.ctq_repository import CtqRepository
-from src.inline_domain.infrastructure.measurement.measurement_snapshot_repository import (
+from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
 )
-from src.inline_domain.infrastructure.measurement.measurement_metadata_loader import (
+from src.inline_domain.infrastructure.shared.measurement_metadata_loader import (
     InlineMeasurementMetadataRepository,
 )
-from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
+from src.inline_domain.infrastructure.shared.main_process_history_repository import (
     InlineMainProcessHistoryRepository,
 )
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository
 from src.inline_domain.infrastructure.monitor.scrap_repository import InlineScrapRepository
+from src.inline_domain.infrastructure.spc.spc_data_correction import (
+    apply_spc_value_corrections,
+)
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -33,6 +36,7 @@ def build_raw_measurement_repository(
     return InlineMeasurementSnapshotRepository(
         snapshot_dir=Path("data") / prod_code,
         db_manager=db_manager,
+        measurement_corrector=apply_spc_value_corrections,
     )
 
 

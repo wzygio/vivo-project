@@ -103,36 +103,6 @@ def test_prepare_decorated_data_clips_points_and_recomputes_sheet_features(tmp_p
     assert result.sheet_features_df["sheet_max"].iloc[0] < 6.0
 
 
-def test_prepare_decorated_data_applies_configured_clip_rules(monkeypatch, tmp_path: Path) -> None:
-    raw_measurements = _raw_measurements()
-    raw_measurements.loc[raw_measurements["param_value"] == 8.0, "param_value"] = 6.2
-    monkeypatch.setattr(
-        decorated_data.ConfigLoader,
-        "get_spc_sheet_oos_clip_rules",
-        staticmethod(
-            lambda: [
-                {
-                    "param_name_contains": "PPA",
-                    "lower_offset": -0.5,
-                    "upper_offset": 0.5,
-                }
-            ]
-        ),
-    )
-
-    result = prepare_decorated_data(
-        raw_measurements_df=raw_measurements,
-        spec_df=_spec_limits(),
-        prod_code="Z571",
-        scope="spc",
-        product_dir=tmp_path / "resources",
-        persist=False,
-    )
-
-    assert result.raw_measurements_df["param_value"].max() == 6.2
-    assert result.sheet_features_df["sheet_max"].iloc[0] == 6.2
-
-
 def test_prepare_decorated_data_respects_flag_false_for_real_values(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
     _write_flag_workbook(product_dir, OOS_DECORATION_FILE_NAME, False)

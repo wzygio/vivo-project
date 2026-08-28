@@ -269,6 +269,13 @@ revision 改变必须使 `should_regenerate_detail()` 返回 `product_revision_c
 
 4 小时是修饰明细的最大复用周期，不修改 L1 仓储现有 8 小时 TTL。
 
+> **2026-08-28 合并裁定（修订）**：周期 TTL 上限随 master 的
+> `service_cache.ttl_hours` 体系统一，`inline_spc_report_payload` 与
+> `inline_decorated_features` 当前配置为 12h，因此"到点自动重建"的实际周期
+> 为 12h 而非 4h。手动刷新（推进产品 revision）与决策上传（决策签名变化）
+> 经缓存键即时生效，不受周期 TTL 影响。core 层 `should_regenerate_detail`
+> 的 4h 门控保留，作为进入共享函数后的最小复用周期。
+
 - `fetch_decorated_features` 保持 4 小时 TTL；
 - 所有可能在外层遮挡共享缓存的 SPC/CTQ/Monitor payload 缓存必须保证最多 4 小时后能再次进入共享生成判定；
 - CTQ 当前外层缓存无 TTL，需要补齐 4 小时 TTL，或调整边界确保共享层的 4 小时判定可达；

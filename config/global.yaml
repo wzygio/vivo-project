@@ -1,6 +1,24 @@
 # 应用程序级别的设置
 application:
-  cache_ttl_hours: 4 # 缓存时间（小时）
+  cache_ttl_hours: 12 # 缓存时间（小时）
+
+# 数据快照缓存策略（各模块统一，唯一真理来源）
+data_snapshot:
+  ttl_hours: 12 # 数据快照缓存有效期（小时）
+
+# Service 层 L2 缓存（@st.cache_data）TTL 统一配置，单位：小时
+service_cache:
+  ttl_hours:
+    equipment_parts_report_payload: 12 # 关键备件报表 payload
+    inline_spc_report_payload: 12 # SPC 报表 payload
+    inline_ctq_report_payload: 4 # CTQ 报表 payload
+    inline_decorated_features: 12 # Sheet OOS 修饰共享特征
+
+# 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
+domain_config:
+  inline_domain: config/domain/inline_domain.yaml
+  yield_domain: config/domain/yield_domain.yaml
+  equipment_domain: config/domain/equipment_domain.yaml
 
 product_registry:
   enabled_products:
@@ -10,6 +28,7 @@ product_registry:
     - "M673"
     - "Z517"
     - "Z576"
+    - "Z553"
 
 # Yield 域通用数据策略。产品配置只声明产品差异。
 data_source:

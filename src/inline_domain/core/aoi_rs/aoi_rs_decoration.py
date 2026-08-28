@@ -2,7 +2,7 @@
 
 与 SPC/CTQ/AOI_TT 对齐（见 docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md）：
 
-- 工作簿 `resources/aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet，
+- 工作簿 `resources/inline_domain/aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet，
   复用共享引擎三态语义：flag=Delete 删除图点、False 释放真实值、True（默认）截断；
 - By Lot 与 By Sheet 两张图规格来源不同（LOT_RATIO vs SHEET_ID/GLASS_ID），
   工作簿以 ``chart_kind`` 列区分图口径，``point_id`` 在 lot 图取 lot_id、
@@ -40,7 +40,7 @@ AOI_RS_OOS_KEY_COLUMNS = [
     "chart_kind",
     "point_id",
 ]
-AOI_RS_OOS_DETAIL_COLUMNS = [*AOI_RS_OOS_KEY_COLUMNS, "value", "spec"]
+AOI_RS_OOS_DETAIL_COLUMNS = [*AOI_RS_OOS_KEY_COLUMNS, "value", "spec", "sheet_start_time"]
 
 # chart_kind -> (点帧 id 列, 值列)
 _CHART_POINT_META = {
@@ -76,6 +76,10 @@ def _normalized_points(
     result["point_id"] = result[id_col].fillna("").astype(str)
     result["chart_kind"] = chart_kind
     result["value"] = pd.to_numeric(result[value_col], errors="coerce")
+    # 预警需要按上一 ISO 周筛选：sheet/lot 的起始时间来自点帧聚合的 first_start_time
+    result["sheet_start_time"] = pd.to_datetime(
+        result.get("first_start_time"), errors="coerce"
+    )
     return result
 
 
@@ -139,7 +143,7 @@ def _apply_chart_decoration(
     if value_col != "value":
         decorated[value_col] = decorated["value"]
         decorated = decorated.drop(columns=["value"])
-    return decorated.drop(columns=["spec", "chart_kind", "point_id"])
+    return decorated.drop(columns=["spec", "chart_kind", "point_id", "sheet_start_time"])
 
 
 def prepare_aoi_rs_decoration(

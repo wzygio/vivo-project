@@ -106,11 +106,11 @@ def test_ctq_service_loads_ctq_distributions_without_capability_fields(
         "THK": "box",
     }
     assert report.sheet_oos_decoration_result is not None
-    assert report.sheet_oos_decoration_result.decoration_path.parent == tmp_path / "resources"
+    assert report.sheet_oos_decoration_result.decoration_path.parent == tmp_path / "resources" / "inline_domain"
     assert report.sheet_oos_decoration_result.decoration_sheet == "M678"
-    assert not (tmp_path / "resources" / "ctq_sheet_oos_detail.xlsx").exists()
+    assert not (tmp_path / "resources" / "inline_domain" / "ctq_sheet_oos_detail.xlsx").exists()
     assert [
-        path.name for path in (tmp_path / "resources").glob("*.xlsx")
+        path.name for path in (tmp_path / "resources" / "inline_domain").glob("*.xlsx")
     ] == ["ctq_sheet_oos_decoration.xlsx"]
     assert not hasattr(report, "period_capability_df")
     assert not hasattr(report, "cpk_decoration_result")

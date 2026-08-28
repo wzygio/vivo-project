@@ -120,7 +120,7 @@ def _build_code_options_by_group(
 def build_batch_code_options_by_group(
     source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
     rate_threshold: float,
-    count_threshold: int,
+    count_threshold: int = 10,
     filter_by: str = "rate"
 ) -> Dict[str, List[str]]:
     """Return eligible Codes by Group for batch rendering, without UI placeholders."""
@@ -186,28 +186,63 @@ def create_group_batch_selection_ui(
     group_key = f"{key_prefix}_groups"
     current_groups = st.session_state.get(group_key)
     if not isinstance(current_groups, list):
-        st.session_state[group_key] = active_groups
+        st.session_state[group_key] = []
     else:
-        normalized_groups = [group for group in current_groups if group in active_groups]
-        st.session_state[group_key] = normalized_groups if normalized_groups else active_groups
+        st.session_state[group_key] = [
+            group for group in current_groups if group in active_groups
+        ]
 
     with st.container():
-        group_col, metric_col, query_col, _ = st.columns(
-            [2.2, 0.8, 0.9, 3.1],
+        group_col, code_col, query_col, _ = st.columns(
+            [2.2, 2.2, 0.9, 1.7],
             vertical_alignment="bottom",
         )
         with group_col:
             selected_groups = st.multiselect(
                 "不良 Group",
                 options=active_groups,
-                help="默认全选；取消勾选可临时隐藏某些 Group。",
+                help="可多选；下拉列表支持 Select all。",
+                placeholder="请选择 Defect Group",
                 key=group_key,
             )
 
+        active_codes = list(
+            dict.fromkeys(
+                code
+                for group_name in selected_groups
+                for code in code_options_by_group.get(group_name, [])
+            )
+        )
+        code_key = f"{key_prefix}_codes"
+        current_codes = st.session_state.get(code_key)
+        if not isinstance(current_codes, list):
+            st.session_state[code_key] = []
+        else:
+            st.session_state[code_key] = [
+                code for code in current_codes if code in active_codes
+            ]
+
+        with code_col:
+            selected_codes = st.multiselect(
+                "不良 Code",
+                options=active_codes,
+                help="可多选；下拉列表支持 Select all。",
+                placeholder="请选择 Defect Code",
+                key=code_key,
+            )
+
+        selected_code_set = set(selected_codes)
         codes_by_group = {
-            group_name: code_options_by_group.get(group_name, [])
+            group_name: [
+                code
+                for code in code_options_by_group.get(group_name, [])
+                if code in selected_code_set
+            ]
             for group_name in selected_groups
-            if code_options_by_group.get(group_name, [])
+            if any(
+                code in selected_code_set
+                for code in code_options_by_group.get(group_name, [])
+            )
         }
         total_codes = sum(len(codes) for codes in codes_by_group.values())
 

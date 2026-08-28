@@ -16,7 +16,7 @@ st_aggrid_stub.DataReturnMode = types.SimpleNamespace()
 st_aggrid_stub.JsCode = lambda code: code
 sys.modules.setdefault("st_aggrid", st_aggrid_stub)
 
-from app.sections.monitor.monitor_dashboard import (
+from app.sections.inline_domain.monitor.monitor_dashboard import (
     MonitorFilterState,
     _apply_compliance_visibility_filter,
     filter_and_rollup_monitor_data,

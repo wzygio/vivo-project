@@ -23,6 +23,7 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
+from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,13 @@ def _empty_features_payload(spec_empty: bool = True) -> dict[str, object]:
     }
 
 
-@st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=12,
+    ttl=ConfigLoader.get_service_cache_ttl_seconds(
+        "inline_decorated_features", default_hours=4
+    ),
+)
 def fetch_decorated_features(
     _features_source: SpcDataPort,
     prod_code: str,
@@ -95,8 +102,8 @@ def fetch_decorated_features(
     变化（页头刷新缓存）都会产生新缓存条目，从而触发当前明细重建。
 
     ``scope`` selects the decoration calibre:
-    - ``"spc"``: ``resources/spc_sheet_oos_decoration.xlsx`` (sheet = product);
-    - ``"ctq"``: ``resources/ctq_sheet_oos_decoration.xlsx`` (sheet = product,
+    - ``"spc"``: ``resources/inline_domain/spc_sheet_oos_decoration.xlsx`` (sheet = product);
+    - ``"ctq"``: ``resources/inline_domain/ctq_sheet_oos_decoration.xlsx`` (sheet = product,
       missing sheet = empty decoration semantics, handled by the engine);
     - ``"none"``: decoration skipped entirely, only preprocess feature
       computation (same exemption as aoi_tt).

@@ -21,14 +21,15 @@ from app.components.page_header import (
 )
 from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
-from app.components.file_uploader import render_trend_override_uploader
-from app.charts.mwd_chart import (
+from app.components.file_uploader import render_yield_config_uploader
+from app.charts.yield_domain.mwd_chart import (
     prepare_union_data_for_filter
 )
 # [新增引入区块渲染组件]
-from app.sections.yield_dashboard import (
+from app.sections.yield_domain.yield_dashboard import (
     render_macro_trend_section,
     render_code_compact_expanders,
+    render_alert_code_expanders,
 )
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
@@ -64,27 +65,37 @@ render_page_header(
     product_cache_scope=active_config.data_source.product_code,
 )
 
-# [Refactor] 4. 渲染趋势图覆盖文件上传组件
+# [Refactor] 4. 渲染 Yield 配置文件上传组件
 query_params = st.query_params
 if query_params.get("admin") == "true":
-    render_trend_override_uploader(active_config, product_dir)
-ExcelService.inject_excel_overrides_to_config(active_config, product_dir)
+    render_yield_config_uploader(active_config, product_dir)
+ExcelService.inject_mapping_config_to_config(active_config)
 
 # ==============================================================================
 #  数据加载
 # ==============================================================================
+modifier_table_path = YieldAnalysisService.resolve_modifier_table_path(
+    active_config,
+    product_dir,
+)
+modifier_signature = YieldAnalysisService.compute_snapshot_signature(
+    modifier_table_path
+)
+
 with st.spinner("正在加载全维度分析数据..."):
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=product_cache_signature
+        snapshot_signature=product_cache_signature,
+        modifier_signature=modifier_signature,
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
-        snapshot_signature=product_cache_signature
+        snapshot_signature=product_cache_signature,
+        modifier_signature=modifier_signature,
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config,
@@ -101,7 +112,9 @@ with st.spinner("正在加载全维度分析数据..."):
     mapping_data = YieldAnalysisService.get_mapping_data(
         active_config,
         _db_manager=db_manager,
-        snapshot_signature=product_cache_signature
+        snapshot_signature=product_cache_signature,
+        product_dir=product_dir,
+        modifier_signature=modifier_signature,
     )
     warning_lines = YieldAnalysisService.load_static_warning_lines(
         active_config,
@@ -151,7 +164,23 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         time_period=30
     )
 
-
+    # 5. 自动预警缺陷图像：对趋势波动与 Lot 超规命中的 Defect Code 自动出图
+    alert_records = AlertService.get_dashboard_alert_records(
+        mwd_group_data=mwd_group_data,
+        mwd_code_data=mwd_code_data,
+    )
+    render_alert_code_expanders(
+        trend_records=alert_records,
+        lot_oos_records=oos_records,
+        warning_lines=warning_lines,
+        mwd_code_data=mwd_code_data,
+        lot_data=lot_data,
+        sheet_data=sheet_data,
+        mapping_data=mapping_data,
+        hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
+        product_code=active_config.data_source.product_code,
+        mapping_layout=active_config.processing.get('mapping_layout'),
+    )
 
 # ==============================================================================
 #  第一部分: 宏观监控 (Group级趋势)
@@ -169,7 +198,7 @@ st.subheader("2️⃣ 入库不良率分析 (Code Level)")
 # 1. 准备“全能候选池”
 master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
 
-# 2. 渲染 Group 批量筛选器
+# 2. 渲染 Group / Code 批量筛选器
 selection = create_group_batch_selection_ui(
     source_data=master_df,
     key_prefix="unified_focus"
@@ -178,7 +207,7 @@ selection = create_group_batch_selection_ui(
 selected_groups = selection.get("groups", [])
 codes_by_group = selection.get("codes_by_group", {})
 if not selected_groups or not codes_by_group:
-    st.info("请选择至少一个包含有效 Code 的 Defect Group。")
+    st.info("请至少选择一个 Defect Group 和 Defect Code。")
     st.stop()
 
 if not selection.get("should_render", False):

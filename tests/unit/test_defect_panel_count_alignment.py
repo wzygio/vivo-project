@@ -1,18 +1,46 @@
+# tests/unit/test_defect_panel_count_alignment.py
+"""facade 端到端：指定良损驱动的 MWD 月/周/日趋势。"""
 import pandas as pd
+import pytest
 
 from src.shared_kernel.config_model import AppConfig
 from yield_domain.core.mwd_trend import mwd_trend_processor as trend_module
 from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
 
 
+def _config() -> AppConfig:
+    return AppConfig.model_validate(
+        {
+            "application": {"cache_ttl_hours": 4},
+            "data_source": {"product_code": "PTEST"},
+            "processing": {},
+        }
+    )
+
+
+def _panel_details(days, defective) -> pd.DataFrame:
+    """构造 panel 明细：每天 10 片 panel；defective = {day: [(suffix, group, code)]}。"""
+    rows = []
+    for day in days:
+        defect_map = {suffix: (group, code) for suffix, group, code in defective.get(day, [])}
+        for number in range(10):
+            suffix = f"P{number:02d}"
+            group, code = defect_map.get(suffix, (None, None))
+            rows.append(
+                {
+                    "warehousing_time": day,
+                    "panel_id": f"{day}-{suffix}",
+                    "defect_group": group,
+                    "defect_desc": code,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def test_code_formatter_exposes_full_weekly_history_but_keeps_ui_at_three_weeks() -> None:
     weekly = pd.DataFrame(
         {
-            "warehousing_time": pd.date_range(
-                "2026-05-24",
-                periods=6,
-                freq="7D",
-            ),
+            "warehousing_time": pd.date_range("2026-05-24", periods=6, freq="7D"),
             "total_panels": [10_000] * 6,
             "defect_group": ["Array_Line"] * 6,
             "defect_desc": ["CodeA"] * 6,
@@ -41,225 +69,119 @@ def test_code_formatter_exposes_full_weekly_history_but_keeps_ui_at_three_weeks(
     ]
 
 
-def test_code_daily_counts_are_reconciled_to_raw_monthly_integer_total() -> None:
-    daily = pd.DataFrame(
-        {
-            "warehousing_time": pd.to_datetime(
-                ["2026-05-01", "2026-05-02", "2026-05-03"]
-            ),
-            "total_panels": [100, 100, 100],
-            "defect_group": ["Array_Pixel"] * 3,
-            "defect_desc": ["CodeA"] * 3,
-            "defect_panel_count": [5, 3, 2],
-        }
-    )
-    raw_daily = daily.copy()
-    raw_daily["defect_panel_count"] = [2, 1, 1]
-
-    result = MWDTrendProcessor.reconcile_code_daily_counts(
-        daily,
-        raw_daily,
-    )
-
-    assert result["defect_panel_count"].tolist() == [2, 1, 1]
-    assert result["defect_panel_count"].sum() == 4
-    assert pd.api.types.is_integer_dtype(result["defect_panel_count"])
-
-
-def test_zero_ema_total_falls_back_to_daily_input_weights() -> None:
-    daily = pd.DataFrame(
-        {
-            "warehousing_time": pd.to_datetime(
-                ["2026-06-01", "2026-06-02", "2026-06-03"]
-            ),
-            "total_panels": [0, 100, 200],
-            "defect_group": ["Array_Line"] * 3,
-            "defect_desc": ["CodeB"] * 3,
-            "defect_panel_count": [0, 0, 0],
-        }
-    )
-    raw_daily = daily.copy()
-    raw_daily["defect_panel_count"] = [1, 1, 1]
-
-    result = MWDTrendProcessor.reconcile_code_daily_counts(daily, raw_daily)
-
-    assert result["defect_panel_count"].tolist() == [0, 1, 2]
-    assert result["defect_panel_count"].sum() == 3
-
-
-def test_zero_raw_monthly_target_clears_ema_counts() -> None:
-    daily = pd.DataFrame(
-        {
-            "warehousing_time": pd.to_datetime(["2026-06-01", "2026-06-02"]),
-            "total_panels": [0, 100],
-            "defect_group": ["Array_Line"] * 2,
-            "defect_desc": ["CodeB"] * 2,
-            "defect_panel_count": [4, 7],
-        }
-    )
-    raw_daily = daily.copy()
-    raw_daily["defect_panel_count"] = 0
-
-    result = MWDTrendProcessor.reconcile_code_daily_counts(daily, raw_daily)
-
-    assert result["defect_panel_count"].tolist() == [0, 0]
-
-
-def test_reconciliation_redistributes_counts_that_exceed_daily_input() -> None:
-    daily = pd.DataFrame(
-        {
-            "warehousing_time": pd.to_datetime(["2026-07-01", "2026-07-02"]),
-            "total_panels": [100, 100],
-            "defect_group": ["Array_Mura"] * 2,
-            "defect_desc": ["CodeC"] * 2,
-            "defect_panel_count": [1000, 0],
-        }
-    )
-    raw_daily = daily.copy()
-    raw_daily["defect_panel_count"] = [50, 100]
-
-    result = MWDTrendProcessor.reconcile_code_daily_counts(daily, raw_daily)
-
-    assert result["defect_panel_count"].tolist() == [100, 50]
-    assert result["defect_panel_count"].sum() == 150
-
-
-def test_manual_overrides_run_after_calibration_with_daily_precedence() -> None:
-    calibrated_daily = pd.DataFrame(
-        {
-            "warehousing_time": pd.to_datetime(
-                ["2026-07-01", "2026-07-02", "2026-07-03"]
-            ),
-            "total_panels": [10, 10, 10],
-            "defect_group": ["Array_Pixel"] * 3,
-            "defect_desc": ["CodeA"] * 3,
-            "defect_panel_count": [1, 1, 1],
-        }
-    )
-
-    result = MWDTrendProcessor.apply_code_manual_overrides_to_daily(
-        calibrated_daily,
-        monthly_values={"CodeA": {"2026-07": 0.1}},
-        weekly_values={"CodeA": {"2026-W27": 0.2}},
-        daily_values={"CodeA": {"2026-07-02": 0.3}},
-    )
-
-    assert result["defect_panel_count"].tolist() == [2, 3, 2]
-    assert pd.api.types.is_integer_dtype(result["defect_panel_count"])
-
-
-def test_code_level_pipeline_removes_ema_tail_count_inflation(monkeypatch) -> None:
-    panel_rows = []
-    for day in ["20260501", "20260502", "20260503"]:
-        for panel_number in range(10):
-            is_defect = day == "20260501" and panel_number == 0
-            panel_rows.append(
-                {
-                    "warehousing_time": day,
-                    "panel_id": f"{day}-P{panel_number:02d}",
-                    "defect_group": "Array_Pixel" if is_defect else None,
-                    "defect_desc": "CodeA" if is_defect else None,
-                }
-            )
-    panel_details = pd.DataFrame(panel_rows)
-    empty_baseline = pd.DataFrame(columns=trend_module.CODE_BASELINE_COLUMNS)
-    monkeypatch.setattr(
-        trend_module,
-        "_ensure_code_baseline_current",
-        lambda *args, **kwargs: empty_baseline,
-    )
-    monkeypatch.setattr(
-        trend_module,
-        "_load_code_baseline_frame",
-        lambda *args, **kwargs: empty_baseline,
-    )
-    config = AppConfig.model_validate(
-        {
-            "application": {"cache_ttl_hours": 4},
-            "data_source": {"product_code": "PTEST"},
-            "processing": {},
-        }
-    )
+def test_specified_rate_drives_code_monthly_total() -> None:
+    days = ["20260501", "20260502", "20260503"]
+    panel_details = _panel_details(days, {"20260501": [("P00", "Array_Pixel", "CodeA")]})
+    targets = {"CodeA": {"2026-05": 0.2}}  # 30 片投入 × 0.2 = 6 片不良
 
     result = MWDTrendProcessor.create_code_level_mwd_trend_data(
         panel_details_df=panel_details,
-        config=config,
-        ema_span=3,
-        scaling_factor=1.0,
-        volatility=0.0,
-        warning_lines={},
+        config=_config(),
+        modifier_targets=targets,
         target_end_date=pd.Timestamp("2026-05-03"),
     )
 
     assert result is not None
-    code_daily = result["daily_full"][
-        result["daily_full"]["defect_desc"] == "CodeA"
-    ]
-    assert code_daily["defect_panel_count"].sum() == 1
-    assert result["monthly"].loc[
-        result["monthly"]["defect_desc"] == "CodeA",
-        "defect_panel_count",
-    ].sum() == 1
+    code_daily = result["daily_full"][result["daily_full"]["defect_desc"] == "CodeA"]
+    assert code_daily["defect_panel_count"].sum() == 6
+    monthly = result["monthly"][result["monthly"]["defect_desc"] == "CodeA"]
+    assert monthly["defect_panel_count"].sum() == 6
+    weekly = result["weekly_full"][result["weekly_full"]["defect_desc"] == "CodeA"]
+    assert weekly["defect_panel_count"].sum() == 6
 
 
-def test_code_level_pipeline_reaggregates_after_daily_manual_override(monkeypatch) -> None:
-    panel_rows = []
-    for day in ["20260501", "20260502", "20260503"]:
-        for panel_number in range(10):
-            is_defect = day == "20260501" and panel_number == 0
-            panel_rows.append(
-                {
-                    "warehousing_time": day,
-                    "panel_id": f"{day}-P{panel_number:02d}",
-                    "defect_group": "Array_Pixel" if is_defect else None,
-                    "defect_desc": "CodeA" if is_defect else None,
-                }
-            )
-    panel_details = pd.DataFrame(panel_rows)
-    empty_baseline = pd.DataFrame(columns=trend_module.CODE_BASELINE_COLUMNS)
-    monkeypatch.setattr(
-        trend_module,
-        "_ensure_code_baseline_current",
-        lambda *args, **kwargs: empty_baseline,
-    )
-    monkeypatch.setattr(
-        trend_module,
-        "_load_code_baseline_frame",
-        lambda *args, **kwargs: empty_baseline,
-    )
-    config = AppConfig.model_validate(
-        {
-            "application": {"cache_ttl_hours": 4},
-            "data_source": {"product_code": "PTEST"},
-            "processing": {
-                "code_daily_values": {"CodeA": {"2026-05-02": 0.3}},
-            },
-        }
-    )
+def test_unspecified_code_falls_back_to_raw_counts() -> None:
+    days = ["20260501", "20260502", "20260503"]
+    panel_details = _panel_details(days, {"20260501": [("P00", "Array_Pixel", "CodeA")]})
 
     result = MWDTrendProcessor.create_code_level_mwd_trend_data(
         panel_details_df=panel_details,
-        config=config,
-        ema_span=3,
-        scaling_factor=1.0,
-        volatility=0.0,
-        warning_lines={},
+        config=_config(),
+        modifier_targets={},
         target_end_date=pd.Timestamp("2026-05-03"),
     )
 
-    assert result is not None
-    code_daily = result["daily_full"][
-        result["daily_full"]["defect_desc"] == "CodeA"
-    ]
-    assert code_daily.loc[
-        code_daily["warehousing_time"] == pd.Timestamp("2026-05-02"),
-        "defect_panel_count",
-    ].item() == 3
-    assert result["weekly"].loc[
-        result["weekly"]["defect_desc"] == "CodeA",
-        "defect_panel_count",
-    ].sum() == code_daily["defect_panel_count"].sum()
-    assert result["monthly"].loc[
-        result["monthly"]["defect_desc"] == "CodeA",
-        "defect_panel_count",
-    ].sum() == code_daily["defect_panel_count"].sum()
+    code_daily = result["daily_full"][result["daily_full"]["defect_desc"] == "CodeA"]
+    assert code_daily["defect_panel_count"].sum() == 1  # 原始不良数
+
+
+def test_output_contract_keys_and_determinism() -> None:
+    days = ["20260501", "20260502", "20260503"]
+    panel_details = _panel_details(days, {"20260501": [("P00", "Array_Pixel", "CodeA")]})
+    targets = {"CodeA": {"2026-05": 0.2}}
+
+    first = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details, _config(), targets, target_end_date=pd.Timestamp("2026-05-03")
+    )
+    second = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details, _config(), targets, target_end_date=pd.Timestamp("2026-05-03")
+    )
+
+    assert set(first) == {"monthly", "weekly", "weekly_full", "daily_full", "daily"}
+    pd.testing.assert_frame_equal(first["daily_full"], second["daily_full"])
+
+
+def test_group_sheet_only_overrides_monthly_group_result() -> None:
+    days = ["20260501", "20260502", "20260503"]
+    panel_details = _panel_details(
+        days,
+        {
+            "20260501": [("P00", "Array_Pixel", "CodeA")],
+            "20260502": [("P01", "Array_Pixel", "CodeB"), ("P02", "OLED_Mura", "CodeC")],
+        },
+    )
+    config = _config()
+    group_targets = {
+        "Array_Pixel": {"2026-05": 0.5},
+        "OLED_Mura": {"2026-05": 0.2},
+    }
+    code_targets = {
+        "CodeA": {"2026-05": 0.2},
+        "CodeB": {"2026-05": 0.1},
+        "CodeC": {"2026-05": 0.1},
+    }
+    code_results = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details_df=panel_details,
+        config=config,
+        modifier_targets=code_targets,
+        target_end_date=pd.Timestamp("2026-05-03"),
+    )
+    group_results = MWDTrendProcessor.create_mwd_trend_data(
+        panel_details_df=panel_details,
+        mwd_code_data=code_results,
+        config=config,
+        modifier_targets=group_targets,
+        target_end_date=pd.Timestamp("2026-05-03"),
+    )
+
+    assert group_results is not None
+    group_monthly = group_results["monthly"]
+    pixel = group_monthly[group_monthly["defect_group"] == "Array_Pixel"]
+    assert pixel["defect_rate"].sum() == pytest.approx(0.5)
+    mura = group_monthly[group_monthly["defect_group"] == "OLED_Mura"]
+    assert mura["defect_rate"].sum() == pytest.approx(0.2)
+
+    code_daily = code_results["daily_full"]
+    expected_daily = code_daily.groupby(["time_period", "defect_group"])[
+        "defect_panel_count"
+    ].sum()
+    group_daily_rows = group_results["daily_full"].copy()
+    group_daily_rows["defect_panel_count"] = (
+        group_daily_rows["defect_rate"] * group_daily_rows["total_panels"]
+    ).round().astype(int)
+    group_daily = group_daily_rows.set_index(
+        ["time_period", "defect_group"]
+    )["defect_panel_count"]
+    pd.testing.assert_series_equal(
+        group_daily.sort_index(),
+        expected_daily.sort_index(),
+        check_names=False,
+    )
+
+    # Group 月度指定只覆盖月度展示，不反向改写 Code 汇总得到的日度/周度事实。
+    assert group_daily_rows["defect_panel_count"].sum() == 12
+    weekly_counts = (
+        group_results["weekly"]["defect_rate"]
+        * group_results["weekly"]["total_panels"]
+    ).round().astype(int)
+    assert weekly_counts.sum() == 12

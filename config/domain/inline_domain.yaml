@@ -1,0 +1,34 @@
+spc:
+  spc_cpk:
+    # sheet_mean: original mode, sigma uses period Sheet Mean std.
+    # point_value: hidden comparison mode, sigma uses period point-level param_value std.
+    period_sigma_source: "point_value"
+    # sheet_mean: one Sheet Mean per Sheet
+    # point_value: every valid measurement point.
+    period_box_source: "point_value"
+
+
+  # Sheet 点位图样式由前端按参数名决定；匹配不区分大小写，按普通文本处理。
+  chart:
+    line_param_name_contains:
+      - "UNI"
+
+# Inline 共享自动修饰参数豁免：AOI_TT 与 AOI_RS 均消费该规则。
+# 参数名包含任一配置值时保留真实值；Delete 仍优先。
+# 匹配不区分大小写，按普通文本而非正则表达式处理。
+auto_decoration:
+  exempt_param_name_contains:
+    - "PPA"
+
+# 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）
+resources:
+  dir: resources/inline_domain
+  files:
+    aoi_rs_sheet_oos_decoration: aoi_rs_sheet_oos_decoration.xlsx
+    aoi_tt_sheet_oos_decoration: aoi_tt_sheet_oos_decoration.xlsx
+    compliance_config: compliance_config.xlsx
+    ctq_sheet_oos_decoration: ctq_sheet_oos_decoration.xlsx
+    scrap_sheets: scrap_sheets.xlsx
+    spc_cpk_decoration: spc_cpk_decoration.xlsx
+    spc_outlier_filters: spc_outlier_filters.xlsx
+    spc_sheet_oos_decoration: spc_sheet_oos_decoration.xlsx

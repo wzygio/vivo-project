@@ -1,0 +1,8 @@
+# Yield 域配置（资源文件路径；dir 相对项目根目录，files 值为纯文件名时相对 dir 解析）
+resources:
+  dir: resources/yield_domain
+  files:
+    mapping_config: mapping_config.xlsx
+    override_rates: override_rates.xlsx
+    static_warning_lines: 入库不良率规格.xlsx
+    yield_modifier_table: 入库良率修饰表.xlsx

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 CTQ_OOS_DECORATION_FILE_NAME = "ctq_sheet_oos_decoration.xlsx"
 
-# scope -> 用户维护的修饰工作簿文件名（resources/ 根目录，每产品一个 sheet）
+# scope -> 用户维护的修饰工作簿文件名（inline_domain 资源目录下，每产品一个 sheet）
 SCOPE_DECORATION_FILE_NAME = {
     "spc": OOS_DECORATION_FILE_NAME,
     "ctq": CTQ_OOS_DECORATION_FILE_NAME,
@@ -45,12 +45,13 @@ class DecoratedData:
 def resolve_product_resource_dir(prod_code: str, product_dir: Path | None = None) -> Path:
     """Resolve the shared resources directory used by the per-sheet decoration workbooks.
 
-    Decoration workbooks live at ``resources/`` root with one sheet per product;
+    Decoration workbooks live in the inline domain resources directory (routed via
+    ``config/domain/inline_domain.yaml``) with one sheet per product;
     ``product_dir`` stays an explicit override for tests.
     """
     if product_dir is not None:
         return product_dir
-    return ConfigLoader.get_project_root() / "resources"
+    return ConfigLoader.get_domain_resource_dir("inline_domain")
 
 
 def _preprocess_sheet_features_by_type(measure_df: pd.DataFrame, spec_df: pd.DataFrame) -> pd.DataFrame:
@@ -105,7 +106,6 @@ def prepare_decorated_data(
         sheet_features_df=original_features_df,
         product_dir=resolve_product_resource_dir(prod_code, product_dir),
         persist_files=persist,
-        clip_rules=ConfigLoader.get_spc_sheet_oos_clip_rules(),
         decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
         decoration_sheet_name=prod_code,
         scope=normalized_scope,

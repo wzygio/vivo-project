@@ -8,31 +8,35 @@ from typing import Optional
 from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.utils.excel_tools import read_workbook_sheet, replace_workbook_sheet
 from src.yield_domain.application.excel_service import ExcelService
+from src.yield_domain.core.mwd_trend.modifier_table import MODIFIER_TABLE_COLUMNS
+
+YIELD_MODIFIER_CONFIG_KEY = "yield_modifier_config"
+YIELD_MODIFIER_TEMPLATES = {
+    "Group级": pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS),
+    "Code级": pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS),
+}
 
 def _product_sheet_name(prod_code: str, template_sheet_name: str) -> str:
     """按汇总规则派生产品在共享工作簿中的 sheet 名：Sheet1 -> 产品号，其余 -> <产品号>_<原名>。"""
     return prod_code if template_sheet_name == "Sheet1" else f"{prod_code}_{template_sheet_name}"
 
-def render_trend_override_uploader(config: AppConfig, product_dir: Path):
+def render_yield_config_uploader(config: AppConfig, product_dir: Path):
     """
-    [企业级后台组件] 渲染开发者专属的配置文件与覆盖数据管理中心。
+    [企业级后台组件] 渲染开发者专属的 Yield 配置与数据管理中心。
     使用 st.tabs 支持多个 YAML 配置文件的上传与无缝重载。
     """
-    with st.expander("🛠️ 开发者后台：配置与数据覆写管理", expanded=False):
+    with st.expander("开发者后台：Yield 配置与数据管理", expanded=False):
         
         # 建立多标签页视图
-        tab1, tab2, tab3, tab4 = st.tabs(["📈 趋势图数据修正", "⚠️ 预警规格线配置", "🎯 Sheet不良率覆写", "🗺️ Mapping修饰配置"])
+        tab1, tab2, tab3, tab4 = st.tabs(["入库良率修饰表", "⚠️ 预警规格线配置", "🎯 Sheet不良率覆写", "🗺️ Mapping修饰配置"])
         
-        # --- Tab 1: 趋势图人工修正 ---
+        # --- Tab 1: 入库良率修饰表 ---
         with tab1:
             _render_file_manager_tab(
                 config=config, 
                 product_dir=product_dir, 
-                config_key='mwd_override_config',
-                template_dfs={
-                    'Group级': pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率']),
-                    'Code级': pd.DataFrame(columns=['目标名称', '周期类型', '时间标签', '期望不良率'])
-                }
+                config_key=YIELD_MODIFIER_CONFIG_KEY,
+                template_dfs=YIELD_MODIFIER_TEMPLATES,
             )
             
         # --- Tab 2: 预警规格线 ---
@@ -179,7 +183,7 @@ def _render_file_manager_tab(
         return
     
     if target_path is None:
-        # 按产品 sheet 汇总模式：共享工作簿位于 resources 根目录，本产品数据在各自的 sheet 中
+        # 按产品 sheet 汇总模式：共享工作簿位于 yield_domain 资源目录，本产品数据在各自的 sheet 中
         per_product_sheets = True
         file_name = override_res.file_name
         target_path = product_dir.parent / file_name
@@ -230,7 +234,12 @@ def _render_file_manager_tab(
         uploaded_file = st.file_uploader(f"请上传填好的 Excel 文件", type=['xlsx'], key=f"up_{config_key}")
         
         if uploaded_file is not None:
-            if st.button(f"🚀 确认覆盖并刷新 ({file_name})", type="primary", use_container_width=True, key=f"btn_{config_key}"):
+            if st.button(
+                f"确认覆盖并刷新 ({file_name})",
+                type="primary",
+                width="stretch",
+                key=f"btn_{config_key}",
+            ):
                 try:
                     if per_product_sheets:
                         # 共享工作簿：按模板 sheet 名映射写回本产品对应的 sheet，不影响其他产品
@@ -238,7 +247,16 @@ def _render_file_manager_tab(
                         written_sheets = 0
                         for tpl_name in template_dfs:
                             if tpl_name in uploaded_xls:
-                                replace_workbook_sheet(target_path, _product_sheet_name(prod_code, tpl_name), uploaded_xls[tpl_name])
+                                write_succeeded = replace_workbook_sheet(
+                                    target_path,
+                                    _product_sheet_name(prod_code, tpl_name),
+                                    uploaded_xls[tpl_name],
+                                )
+                                if not write_succeeded:
+                                    st.error(
+                                        f"无法写入 {tpl_name}：工作簿可能正被占用，请关闭后重试。"
+                                    )
+                                    return
                                 written_sheets += 1
                         if written_sheets == 0:
                             st.error(f"上传文件中未找到任何预期的 Sheet 页（{list(template_dfs)}），未做修改。")

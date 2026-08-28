@@ -6,7 +6,7 @@ import logging
 
 import streamlit as st
 
-from src.inline_domain.infrastructure.measurement.step_description_loader import (
+from src.inline_domain.infrastructure.shared.step_description_loader import (
     build_step_description_map,
     load_step_descriptions,
 )

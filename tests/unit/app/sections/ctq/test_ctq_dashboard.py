@@ -2,8 +2,8 @@ from contextlib import nullcontext
 
 import pandas as pd
 
-from app.sections.ctq import ctq_dashboard
-from app.sections.ctq.ctq_dashboard import (
+from app.sections.inline_domain.ctq import ctq_dashboard
+from app.sections.inline_domain.ctq.ctq_dashboard import (
     create_ctq_period_overview_chart,
     render_ctq_indicator_sections,
 )

@@ -125,28 +125,6 @@ def test_apply_sheet_oos_decoration_clips_flagged_points_inside_specs_determinis
     assert decorated_a["param_value"].tolist() == decorated_b["param_value"].tolist()
 
 
-def test_apply_sheet_oos_decoration_uses_configured_ppa_expanded_clip_bounds() -> None:
-    raw_measurements = _raw_measurements()
-    raw_measurements.loc[raw_measurements["sheet_id"] == "S1", "param_value"] = [7.5, 6.2]
-
-    decorated = apply_sheet_oos_decoration(
-        raw_measurements,
-        _sheet_features(),
-        clip_rules=[
-            {
-                "param_name_contains": "PPA",
-                "lower_offset": -0.5,
-                "upper_offset": 0.5,
-            }
-        ],
-    )
-
-    s1_values = decorated.loc[decorated["sheet_id"] == "S1", "param_value"].tolist()
-    assert s1_values[0] < 6.5
-    assert s1_values[0] > -6.5
-    assert s1_values[1] == 6.2
-
-
 def test_apply_sheet_oos_decoration_keeps_real_values_when_flag_false() -> None:
     decoration_df = build_sheet_oos_detail(_sheet_features())
     decoration_df["flag"] = [False, True]

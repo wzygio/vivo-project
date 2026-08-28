@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pandas as pd
 
 from src.inline_domain import composition
-from src.inline_domain.infrastructure.measurement.measurement_snapshot_repository import (
+from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
 )
 

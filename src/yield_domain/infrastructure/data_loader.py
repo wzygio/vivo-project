@@ -62,7 +62,8 @@ def load_panel_details(
         and dmp.productcode = '{prod_code}'
         and dwp.sub_prod_type in ('{work_orders_str}')
     """
-    # 注意：上面的 SQL 中去掉了 order by batch_no, lot_id, sheet_id, panel_id; 数据库只负责“拿数据”，不要让它负责“排数据”，尤其是跨表大查询时
+    # 注意：上面的 SQL 中去掉了 order by batch_no, lot_id, sheet_id, panel_id; 
+    # 数据库只负责“拿数据”，不要让它负责“排数据”，尤其是跨表大查询时
 
     try:
         if db_manager.engine is None:

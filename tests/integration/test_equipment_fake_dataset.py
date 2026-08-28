@@ -56,7 +56,7 @@ def test_current_baseline_fabrication_covers_every_part_type_with_recent_times(
     monkeypatch,
 ) -> None:
     now = pd.Timestamp("2026-08-12 18:30:00")
-    baseline_path = Path("resources/critical_parts_baseline.csv")
+    baseline_path = Path("resources/equipment_domain/critical_parts_baseline.csv")
     spec_df = load_spec_baseline(baseline_path)
     runtime = replace(get_equipment_runtime_config(), snapshot_dir=tmp_path)
     monkeypatch.setattr(data_loader, "get_equipment_runtime_config", lambda: runtime)
@@ -85,7 +85,7 @@ def test_report_service_prefers_real_snapshot_and_fills_its_gaps_from_fabricatio
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    baseline_path = Path("resources/critical_parts_baseline.csv")
+    baseline_path = Path("resources/equipment_domain/critical_parts_baseline.csv")
     spec_df = load_spec_baseline(baseline_path)
     runtime = get_equipment_runtime_config()
     as_of = pd.Timestamp.now().floor("s")

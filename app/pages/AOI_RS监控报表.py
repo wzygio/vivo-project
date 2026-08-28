@@ -22,19 +22,26 @@ from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
-from app.sections.aoi_rs.aoi_rs_dashboard import (
+from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
+    build_aoi_rs_sheet_oos_alerts,
     filter_aoi_rs_report,
     get_default_aoi_rs_start_date,
+    load_cached_aoi_rs_sheet_oos_decoration,
     render_aoi_rs_filters,
     render_aoi_rs_indicator_sections,
+    render_aoi_rs_sheet_oos_alert_indicator_sections,
 )
+from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.composition import build_aoi_rs_repository, refresh_aoi_rs_snapshots
+from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_DECORATION_FILE_NAME
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_RS_PAGE_CACHE_SIGNATURE = "aoi_rs_report_v1"
@@ -92,6 +99,45 @@ selected_factory, selected_codes, selected_steps, should_render_report = render_
     indicator_df=indicator_df,
     step_desc_map=step_desc_map,
 )
+
+# 单片异常预警：只读加载工作簿（企业加密读取失败降级为 None，不阻断报表）
+product_resource_dir = resolve_product_resource_dir(current_product)
+decoration_path = product_resource_dir / AOI_RS_OOS_DECORATION_FILE_NAME
+if decoration_path.exists():
+    decoration_stat = decoration_path.stat()
+    sheet_oos_decoration_df = load_cached_aoi_rs_sheet_oos_decoration(
+        decoration_stat.st_mtime_ns,
+        decoration_stat.st_size,
+        current_product,
+        str(product_resource_dir),
+    )
+else:
+    sheet_oos_decoration_df = None
+
+sheet_oos_alerts_df = build_aoi_rs_sheet_oos_alerts(
+    sheet_oos_decoration_df,
+    reference_date=default_end_dt.date(),
+)
+iso_week_start, _ = previous_iso_week_range(default_end_dt.date())
+iso_week = iso_week_start.isocalendar()
+render_sheet_oos_alert_center(
+    sheet_oos_alerts_df,
+    title=f"单片异常预警中心（上一周 {iso_week.year}-W{iso_week.week:02d}）",
+    has_source_data=sheet_oos_decoration_df is not None,
+    step_desc_map=step_desc_map,
+)
+render_aoi_rs_sheet_oos_alert_indicator_sections(
+    alerts_df=sheet_oos_alerts_df,
+    rs_details_df=rs_details_df,
+    pass_through_df=pass_through_df,
+    spec_df=spec_df,
+    indicators_df=indicator_df,
+    lot_points_df=view_model.lot_points_df,
+    sheet_points_df=view_model.sheet_points_df,
+    end_date=default_end_dt.date(),
+    step_desc_map=step_desc_map,
+)
+
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")
     st.stop()

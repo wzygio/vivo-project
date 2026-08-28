@@ -1,6 +1,6 @@
 import pandas as pd
 
-from app.charts.mwd_chart import create_code_trend_chart
+from app.charts.yield_domain.mwd_chart import create_code_trend_chart
 
 
 def test_code_trend_chart_adds_throughput_line_on_secondary_axis() -> None:

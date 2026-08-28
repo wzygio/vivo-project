@@ -8,7 +8,7 @@
 ## 用户决策与修正点（已确认）
 
 - **D2（CTQ 修饰口径）**：切换。monitor 的 CTQ 数据改用 ctq 修饰口径。事实核查：ctq 修饰已汇总为
-  `resources/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet，
+  `resources/inline_domain/ctq_sheet_oos_decoration.xlsx`（一个文件、每产品一个 sheet，
   `ctq_data_decoration.py:18,30-38`），与 SPC 共用同一引擎，仅文件名不同。
 - **D3（AOI 归属）**：monitor 的 AOI 对应 aoi_tt；aoi_tt 在本次范围内，aoi_rs 不在。
 - **修正点 1（段 1 归属）**：spc_repository 中的可复用逻辑**必须全部**入

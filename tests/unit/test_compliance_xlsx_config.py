@@ -79,8 +79,8 @@ def test_config_loader_reads_the_shared_resources_workbook(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    resources_dir = tmp_path / "resources"
-    resources_dir.mkdir()
+    resources_dir = tmp_path / "resources" / "inline_domain"
+    resources_dir.mkdir(parents=True)
     _write_compliance_config(resources_dir / "compliance_config.xlsx")
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 

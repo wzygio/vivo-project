@@ -148,109 +148,6 @@ class ExcelService:
                 except Exception as e:
                     logging.error(f"无法移除锁文件: {e}")
 
-    # ==============================================================================
-    #                      Excel 覆盖适配器 (Adapter)
-    # ==============================================================================
-    @staticmethod
-    def _read_override_excel_via_com(
-        excel_path: Path,
-        sheet_names: tuple[str, str] = ("Group级", "Code级"),
-    ) -> Dict[str, pd.DataFrame]:
-        """Read the known trend-override sheets through Excel COM."""
-        from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
-
-        return {
-            sheet_name: _read_encrypted_xlsx_via_com(excel_path, sheet_name=sheet_name)
-            for sheet_name in sheet_names
-        }
-
-    @staticmethod
-    def _parse_override_excel(
-        excel_path: Path,
-        sheet_names: tuple[str, str] = ("Group级", "Code级"),
-    ) -> Dict[str, Dict[str, Dict[str, float]]]:
-        """解析双Sheet页的覆盖配置Excel为嵌套字典格式"""
-        overrides = {
-            'group_monthly_values': {}, 'group_weekly_values': {}, 'group_daily_values': {},
-            'code_monthly_values': {}, 'code_weekly_values': {}, 'code_daily_values': {}
-        }
-        if not excel_path.exists():
-            return overrides
-
-        try:
-            try:
-                xls = pd.read_excel(excel_path, sheet_name=None, engine="openpyxl")
-            except Exception as openpyxl_error:
-                logging.warning(
-                    "读取趋势覆盖 Excel 失败，尝试 Excel COM 解密读取: %s",
-                    openpyxl_error,
-                )
-                xls = ExcelService._read_override_excel_via_com(excel_path, sheet_names)
-            
-            def _parse_sheet(df, level_prefix):
-                if df.empty: return
-                for _, row in df.iterrows():
-                    target = str(row.get('目标名称', '')).strip()
-                    period_cn = str(row.get('周期类型', '')).strip()
-                    time_key = str(row.get('时间标签', '')).strip()
-                    rate_val = row.get('期望不良率', 0.0)
-                    
-                    if not target or target == 'nan' or not period_cn or not time_key or pd.isna(rate_val):
-                        continue
-                        
-                    # 智能兼容百分比字符串 (如 "1.03%") 和 小数 (如 0.0103)
-                    if isinstance(rate_val, str) and '%' in rate_val:
-                        rate_val = float(rate_val.replace('%', '')) / 100.0
-                    else:
-                        rate_val = float(rate_val)
-                        # 防呆设计：如果业务人员手滑输入了 1.5 但没加 %，强制转换为 0.015
-                        if rate_val > 1.0: 
-                            rate_val = rate_val / 100.0
-
-                    period_map = {'月度': 'monthly', '周度': 'weekly', '日度': 'daily'}
-                    period_en = period_map.get(period_cn)
-                    if not period_en: continue
-                    
-                    dict_key = f"{level_prefix}_{period_en}_values"
-                    if target not in overrides[dict_key]:
-                        overrides[dict_key][target] = {}
-                    overrides[dict_key][target][time_key] = rate_val
-
-            if sheet_names[0] in xls:
-                _parse_sheet(xls[sheet_names[0]], 'group')
-            if sheet_names[1] in xls:
-                _parse_sheet(xls[sheet_names[1]], 'code')
-                
-        except Exception as e:
-            logging.error(f"解析覆盖Excel失败: {e}", exc_info=True)
-            
-        return overrides
-
-    @staticmethod
-    def inject_excel_overrides_to_config(config: AppConfig, product_dir: Path):
-        """
-        [核心] 在数据进入底层运算前，拦截并用 Excel 的数据覆盖 YAML 的配置。
-        底层 mwd_trend_processor.py 完全无感知。
-        """
-        ExcelService.inject_mapping_config_to_config(config)
-
-        override_res = config.paths.get('mwd_override_config')
-        if not override_res: 
-            return
-        
-        # 汇总工作簿位于 resources 根目录，按 <产品号>_Group级 / <产品号>_Code级 sheet 区分
-        excel_path = product_dir.parent / override_res.file_name
-        prod_code = config.data_source.product_code
-        excel_overrides = ExcelService._parse_override_excel(
-            excel_path,
-            sheet_names=(f"{prod_code}_Group级", f"{prod_code}_Code级"),
-        )
-        
-        # 将解析出的字典注入到 config.processing 中，完美替换原有的 YAML 节点
-        for key, value_dict in excel_overrides.items():
-            if value_dict:  # 如果 Excel 中有配置，则覆盖
-                config.processing[key] = value_dict
-
     @staticmethod
     def parse_mapping_config_excel(
         excel_path: Path,
@@ -375,7 +272,7 @@ class ExcelService:
     def get_mapping_config_path() -> Path:
         from src.shared_kernel.config import ConfigLoader
 
-        return ConfigLoader.get_project_root() / "resources" / ExcelService.MAPPING_CONFIG_FILE_NAME
+        return ConfigLoader.get_domain_resource_path("yield_domain", "mapping_config", ExcelService.MAPPING_CONFIG_FILE_NAME)
 
     @staticmethod
     def _read_mapping_config_via_com(excel_path: Path) -> pd.DataFrame:

@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_INPUT_PATH = PROJECT_ROOT / "resources" / "spc_sheet_oos_decoration.xlsx"
+DEFAULT_INPUT_PATH = PROJECT_ROOT / "resources" / "inline_domain" / "spc_sheet_oos_decoration.xlsx"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "output" / "ppa_oos_weekly_summary.xlsx"
 DEFAULT_SNAPSHOT_DIR = PROJECT_ROOT / "data"
 DEFAULT_PRODUCT_ORDER = ("M626", "M678", "M673", "Z517", "Z571")

@@ -78,8 +78,10 @@ def get_scope_decision_signature(
 ) -> str:
     """scope 便捷入口：按 scope 定位用户维护的修饰工作簿并计算决策签名。
 
-    ``product_dir`` 为测试用显式覆盖；默认解析到 ``resources/`` 根目录
-    （与 ``prepare_decorated_data`` 的工作簿定位保持一致）。
+    ``product_dir`` 为测试用显式覆盖；默认经
+    ``ConfigLoader.get_domain_resource_dir("inline_domain")`` 解析到
+    ``resources/inline_domain/``（与 ``prepare_decorated_data`` 的
+    ``resolve_product_resource_dir`` 工作簿定位保持一致）。
     """
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
@@ -87,7 +89,7 @@ def get_scope_decision_signature(
     base_dir = (
         Path(product_dir)
         if product_dir is not None
-        else ConfigLoader.get_project_root() / "resources"
+        else ConfigLoader.get_domain_resource_dir("inline_domain")
     )
     workbook_path = base_dir / SCOPE_DECORATION_FILE_NAME[normalized_scope]
     return get_decision_signature(workbook_path, prod_code)

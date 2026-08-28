@@ -169,37 +169,6 @@ def _clip_inside_spec(row: pd.Series, side: str) -> float:
     return float(lsl) + margin
 
 
-def _apply_clip_rules(
-    spec_df: pd.DataFrame,
-    clip_rules: Iterable[dict[str, object]] | None,
-) -> pd.DataFrame:
-    """Return effective clip bounds without changing the official spec columns upstream."""
-    result = spec_df.copy()
-    if not clip_rules or "param_name" not in result.columns:
-        return result
-
-    matched = pd.Series(False, index=result.index)
-    param_names = result["param_name"].fillna("").astype(str)
-    for rule in clip_rules:
-        needle = str(rule.get("param_name_contains", "")).strip()
-        if not needle:
-            continue
-        try:
-            lower_offset = float(rule.get("lower_offset", 0.0))
-            upper_offset = float(rule.get("upper_offset", 0.0))
-        except (TypeError, ValueError):
-            continue
-        rule_mask = ~matched & param_names.str.contains(needle, case=False, regex=False)
-        result.loc[rule_mask, "lsl"] = (
-            pd.to_numeric(result.loc[rule_mask, "lsl"], errors="coerce") + lower_offset
-        )
-        result.loc[rule_mask, "usl"] = (
-            pd.to_numeric(result.loc[rule_mask, "usl"], errors="coerce") + upper_offset
-        )
-        matched |= rule_mask
-    return result
-
-
 def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:
     """Return Sheet-level rows whose point max/min crosses USL/LSL."""
     required_cols = {"factory", *OOS_KEY_COLUMNS, "sheet_start_time", "sheet_max", "sheet_min", "sheet_mean", "usl", "lsl"}
@@ -764,7 +733,6 @@ def apply_sheet_oos_decoration(
     raw_measurements_df: pd.DataFrame,
     sheet_features_df: pd.DataFrame,
     decoration_df: pd.DataFrame | None = None,
-    clip_rules: Iterable[dict[str, object]] | None = None,
 ) -> pd.DataFrame:
     """Apply Sheet actions: Delete excludes points, True clips OOS points, False keeps them."""
     if raw_measurements_df.empty or "param_value" not in raw_measurements_df.columns:
@@ -788,10 +756,7 @@ def apply_sheet_oos_decoration(
         return df
 
     spec_cols = [*OOS_KEY_COLUMNS, "usl", "lsl"]
-    spec_df = _apply_clip_rules(
-        _normalize_key_columns(active_df[spec_cols].copy()),
-        clip_rules,
-    ).rename(
+    spec_df = _normalize_key_columns(active_df[spec_cols].copy()).rename(
         columns={"usl": "_oos_usl", "lsl": "_oos_lsl"}
     )
     df = _normalize_key_columns(df)
@@ -813,7 +778,6 @@ def prepare_sheet_oos_decoration(
     sheet_features_df: pd.DataFrame,
     product_dir: Path,
     persist_files: bool = True,
-    clip_rules: Iterable[dict[str, object]] | None = None,
     decoration_file_name: str = OOS_DECORATION_FILE_NAME,
     decoration_sheet_name: str | None = None,
     *,
@@ -859,7 +823,6 @@ def prepare_sheet_oos_decoration(
         raw_measurements_df,
         sheet_features_df,
         decoration_df,
-        clip_rules=clip_rules,
     )
     return SheetOosDecorationResult(
         raw_measurements_df=decorated_df,

@@ -2,7 +2,8 @@ from contextlib import nullcontext
 
 import pandas as pd
 
-from app.sections import parts_dashboard, parts_filters
+from app.sections.equipment_domain import parts_filters
+from app.sections.equipment_domain import parts_dashboard
 
 
 def _report_df() -> pd.DataFrame:

@@ -14,6 +14,7 @@ from src.inline_domain.application.shared.decorated_features import (
 from src.inline_domain.core.ctq.indicator_chart import assign_ctq_indicator_chart_type
 from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.ctq.ports import CtqDataPort
@@ -82,7 +83,13 @@ class CtqReportService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=1, ttl=4 * 60 * 60)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=1,
+        ttl=ConfigLoader.get_service_cache_ttl_seconds(
+            "inline_ctq_report_payload", default_hours=4
+        ),
+    )
     def fetch_ctq_report_payload(
         _data_port: "CtqDataPort",
         query_config_json: str,

@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # 被测对象
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from src.shared_kernel.config import ConfigLoader
@@ -38,7 +38,7 @@ class TestDiagnoseEncryptedXlsx:
 
     def test_rule_file_exists(self, resource_dir):
         """确认规则文件存在"""
-        rule_file = resource_dir / "spc_outlier_filters.xlsx"
+        rule_file = resource_dir / "inline_domain" / "spc_outlier_filters.xlsx"
         assert rule_file.exists(), "spc_outlier_filters.xlsx 必须存在"
 
     def test_rule_file_is_not_valid_zip(self, resource_dir):
@@ -47,7 +47,7 @@ class TestDiagnoseEncryptedXlsx:
         正常的 .xlsx 本质上是 ZIP 文件，应以 504b0304 开头。
         加密后的文件头为 00000000040707020605060107040503。
         """
-        rule_file = resource_dir / "spc_outlier_filters.xlsx"
+        rule_file = resource_dir / "inline_domain" / "spc_outlier_filters.xlsx"
         with open(rule_file, "rb") as f:
             header = f.read(16)
 
@@ -67,7 +67,7 @@ class TestDiagnoseEncryptedXlsx:
         【问题复现】使用 pd.read_excel + openpyxl 读取时抛出 BadZipFile。
         这与生产日志中的错误完全一致。
         """
-        rule_file = resource_dir / "spc_outlier_filters.xlsx"
+        rule_file = resource_dir / "inline_domain" / "spc_outlier_filters.xlsx"
         with pytest.raises(zipfile.BadZipFile, match="File is not a zip file"):
             pd.read_excel(rule_file, engine="openpyxl")
 
@@ -76,7 +76,7 @@ class TestDiagnoseEncryptedXlsx:
         【对比验证】scrap_sheets.xlsx 是正常的 ZIP 格式，
         说明加密策略并非针对所有 xlsx，而是特定文件。
         """
-        scrap_file = resource_dir / "scrap_sheets.xlsx"
+        scrap_file = resource_dir / "inline_domain" / "scrap_sheets.xlsx"
         assert scrap_file.exists()
         with open(scrap_file, "rb") as f:
             header = f.read(4)
@@ -267,7 +267,7 @@ class TestEnhancedErrorHandling:
         """
         验证：当规则文件是加密 xlsx 时，增强版逻辑应安全降级并返回原始 df。
         """
-        rule_file = resource_dir / "spc_outlier_filters.xlsx"
+        rule_file = resource_dir / "inline_domain" / "spc_outlier_filters.xlsx"
         with caplog.at_level(logging.WARNING):
             result = self._enhanced_apply_outlier_filters(sample_measurement_df, "M626", rule_file)
 

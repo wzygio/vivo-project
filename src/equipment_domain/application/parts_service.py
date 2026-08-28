@@ -28,6 +28,7 @@ from src.equipment_domain.core.parts_calculator import (
     batch_calculate_progress_and_status,
 )
 from src.equipment_domain.config import get_equipment_runtime_config
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -76,7 +77,11 @@ class PartsReportService:
             return False
 
     @staticmethod
-    @st.cache_data(ttl=3600)  # 每小时重入 L1，由快照自身的 TTL 决定是否更新
+    @st.cache_data(
+        ttl=ConfigLoader.get_service_cache_ttl_seconds(
+            "equipment_parts_report_payload", default_hours=1
+        )
+    )  # TTL 统一由 config/global.yaml 的 service_cache 配置，到期重入 L1，由快照自身的 TTL 决定是否更新
     def fetch_report_payload(
         _db_manager,
         baseline_path: str,

@@ -7,7 +7,7 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository

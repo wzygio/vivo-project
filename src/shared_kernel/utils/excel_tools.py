@@ -1,13 +1,15 @@
 # src/vivo_project/utils/utils.py
-import pandas as pd
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Optional
+
+import pandas as pd
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
@@ -163,14 +165,15 @@ def replace_workbook_sheets(
 
     事务语义：所有目标 sheet 要么全部生效，要么全部不生效——
     先在同目录临时文件中完成保存并用 openpyxl 回读验证
-    （目标 sheet 存在且行数符合预期），再 os.replace 原子替换正式文件；
+    （目标 sheet 存在且表头/行列数符合预期），再 os.replace 原子替换正式文件；
     任一环节失败均返回 written=False，正式文件保持不变。
 
     - 企业加密等 openpyxl 无法打开的文件回退为：COM 读出全部 sheets，
       合并更新后整体重写为明文 xlsx（logger.warning 明确记录）；
     - 文件被占用（PermissionError，如 Excel 打开中）返回 written=False，
       error 含“请关闭 Excel 后重试”提示，不抛错；
-    - 正式文件不存在时按同样流程新建。
+    - 正式文件不存在时按同样流程新建；
+    - 正式文件存在时，原子替换前先备份为 `<文件名>.bak`（同目录），供失败恢复。
 
     Args:
         xlsx_path: 共享工作簿路径
@@ -205,6 +208,7 @@ def _replace_workbook_sheets_locked(
     )
     tmp_path = Path(tmp_handle.name)
     tmp_handle.close()
+    backup_staged_path: Path | None = None
 
     try:
         wb = None
@@ -247,12 +251,27 @@ def _replace_workbook_sheets_locked(
                     ws.append(row)
             wb.save(tmp_path)
 
-        # 回读临时文件验证：目标 sheet 存在且行数（含表头）符合预期
+        # 回读临时文件验证：目标 sheet 存在且表头/行列数符合预期
         verify_error = _verify_temp_workbook(tmp_path, sheets)
         if verify_error is not None:
             return WorkbookWriteResult(
                 written=False, path=xlsx_path, updated_sheets=(), error=verify_error
             )
+
+        if xlsx_path.exists():
+            # 替换前将正式文件备份为 <文件名>.bak（同目录临时文件 + os.replace 原子落位）
+            backup_path = xlsx_path.with_suffix(f"{xlsx_path.suffix}.bak")
+            backup_handle = tempfile.NamedTemporaryFile(
+                prefix=f".{xlsx_path.stem}-backup-",
+                suffix=".tmp",
+                dir=xlsx_path.parent,
+                delete=False,
+            )
+            backup_staged_path = Path(backup_handle.name)
+            backup_handle.close()
+            shutil.copy2(xlsx_path, backup_staged_path)
+            os.replace(backup_staged_path, backup_path)
+            backup_staged_path = None
 
         os.replace(tmp_path, xlsx_path)
         return WorkbookWriteResult(
@@ -279,12 +298,17 @@ def _replace_workbook_sheets_locked(
                 tmp_path.unlink()
         except OSError:
             pass
+        if backup_staged_path is not None:
+            try:
+                backup_staged_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _verify_temp_workbook(
     tmp_path: Path, sheets: Mapping[str, pd.DataFrame]
 ) -> str | None:
-    """回读临时工作簿验证目标 sheet 存在且行数（含表头）符合预期；失败返回错误信息。"""
+    """回读临时工作簿验证目标 sheet 存在且表头/行列数符合预期；失败返回错误信息。"""
     import openpyxl
 
     try:
@@ -295,8 +319,19 @@ def _verify_temp_workbook(
         for name, df in sheets.items():
             if name not in wb.sheetnames:
                 return f"临时工作簿验证失败: 目标 sheet [{name}] 缺失"
+            worksheet = wb[name]
+            if len(df.columns) > 0:
+                header_rows = list(worksheet.iter_rows(max_row=1, values_only=True))
+                headers = list(header_rows[0]) if header_rows else []
+                if headers[: len(df.columns)] != list(df.columns):
+                    return f"临时工作簿验证失败: sheet [{name}] 表头与预期不一致"
+                if (worksheet.max_column or 0) != len(df.columns):
+                    return (
+                        f"临时工作簿验证失败: sheet [{name}] 列数 "
+                        f"{worksheet.max_column}，预期 {len(df.columns)}"
+                    )
             expected_rows = len(df) + 1  # 含表头行
-            actual_rows = wb[name].max_row or 0
+            actual_rows = worksheet.max_row or 0
             if actual_rows != expected_rows:
                 return (
                     f"临时工作簿验证失败: sheet [{name}] 行数 {actual_rows}，"
@@ -307,18 +342,22 @@ def _verify_temp_workbook(
     return None
 
 
-def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -> None:
+def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -> bool:
     """在共享工作簿中替换（或新建）指定 sheet，保留其他 sheet 的内容与格式。
 
     [兼容包装] 内部委托 replace_workbook_sheets；新代码请直接使用
     replace_workbook_sheets 并显式检查 WorkbookWriteResult.written。
 
-    兼容语义：失败（如文件被 Excel 占用）时仅记录告警，不抛错。
+    兼容语义：返回明确成功状态；失败（如文件被 Excel 占用）时仅记录告警
+    并返回 False，不抛错，源文件保持不变。
 
     Args:
         xlsx_path: 共享工作簿路径（不存在则新建单 sheet 工作簿）
         sheet_name: 目标 sheet 名
         df: 写入的数据
+
+    Returns:
+        目标 Sheet 已持久化时为 True；文件占用导致未写入时为 False。
     """
     result = replace_workbook_sheets(xlsx_path, {sheet_name: df})
     if not result.written:
@@ -326,6 +365,7 @@ def replace_workbook_sheet(xlsx_path: Path, sheet_name: str, df: pd.DataFrame) -
             "[excel_tools] 写入工作簿 %s [%s] 失败: %s",
             xlsx_path, sheet_name, result.error,
         )
+    return result.written
 
 
 def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = None) -> pd.DataFrame:
@@ -547,7 +587,7 @@ def batch_export_spc_rules_to_csv(
         生成的 csv 文件路径列表
     """
     if resource_dir is None:
-        resource_dir = ConfigLoader.get_project_root() / "resources"
+        resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
 
     target_files = ["spc_outlier_filters.xlsx"]
     csv_dir = resource_dir / csv_subdir

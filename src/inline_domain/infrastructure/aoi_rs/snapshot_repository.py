@@ -24,6 +24,8 @@ from src.inline_domain.infrastructure.aoi_rs.data_loader import (
     load_rs_spec_limits,
 )
 
+from src.shared_kernel.config import ConfigLoader
+
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 class AoiRsSnapshotRepository:
     """Persist and reuse one product's normalized AOI_RS source facts."""
 
-    SNAPSHOT_TTL_HOURS = 8
+    # TTL 统一由 config/global.yaml 的 data_snapshot.ttl_hours 提供
     SNAPSHOT_POLICY_VERSION = "aoi-rs-raw-v1"
     _locks_guard = threading.Lock()
     _snapshot_locks: dict[str, threading.Lock] = {}
@@ -55,6 +57,7 @@ class AoiRsSnapshotRepository:
         self.details_loader = details_loader
         self.pass_through_loader = pass_through_loader
         self.spec_loader = spec_loader
+        self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
 
     def get_rs_details(
         self,

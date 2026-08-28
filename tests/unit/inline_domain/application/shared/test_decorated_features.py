@@ -57,7 +57,7 @@ def decoration_root(monkeypatch, tmp_path: Path) -> Path:
     monkeypatch.setattr(
         ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
     )
-    resources = tmp_path / "resources"
+    resources = tmp_path / "resources" / "inline_domain"
     resources.mkdir(parents=True, exist_ok=True)
     return resources
 

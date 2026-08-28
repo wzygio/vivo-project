@@ -20,6 +20,7 @@ import pandas as pd
 STATUS_OVER = "超规"
 STATUS_WARNING = "预警"
 STATUS_NORMAL = "正常"
+DISPLAY_CAP_POWER = 2.0
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,10 @@ class PartsAlertPolicy:
             raise ValueError("decoration_min_ratio must not exceed decoration_max_ratio")
         if not 0 < self.display_progress_max_ratio < 1:
             raise ValueError("display_progress_max_ratio must be between 0 and 1")
+        if self.decoration_min_ratio >= self.display_progress_max_ratio:
+            raise ValueError(
+                "decoration_min_ratio must be lower than display_progress_max_ratio"
+            )
 
 RAW_VALUE_COLUMN = "原始测量值"
 OVER_SPEC_COLUMN = "是否超规"
@@ -153,16 +158,19 @@ def cap_display_value_below_visible_100(
     actual_value: Optional[float],
     spec_limit: Optional[float],
     policy: PartsAlertPolicy,
+    seed_value: object,
 ) -> float:
     """
-    将展示测量值限制在不会被整数百分比渲染成 100% 的范围内。
+    将超过展示上限的测量值稳定截断到低值偏置的修饰区间。
 
     Args:
         actual_value: 待展示测量值
         spec_limit: 寿命规格
+        policy: 预警与展示修饰策略
+        seed_value: 用于生成可复现截断值的业务种子
 
     Returns:
-        float: 若进度过高则压到配置的展示进度上限 * 规格线
+        float: 若进度过高则映射到修饰下限和展示上限之间
     """
     numeric_actual = _coerce_float(actual_value)
     numeric_spec = _coerce_float(spec_limit)
@@ -170,18 +178,36 @@ def cap_display_value_below_visible_100(
         return 0.0
     if numeric_spec is None or numeric_spec <= 0:
         return numeric_actual
-    display_cap = numeric_spec * policy.display_progress_max_ratio
-    if numeric_actual > display_cap:
-        return display_cap
-    return numeric_actual
+    display_upper = numeric_spec * policy.display_progress_max_ratio
+    if numeric_actual <= display_upper:
+        return numeric_actual
+    cap_ratio = _stable_display_cap_ratio(seed_value, policy)
+    return numeric_spec * cap_ratio
+
+
+def _stable_unit_fraction(seed_value: object) -> float:
+    """将业务种子稳定映射到 ``[0, 1)``。"""
+    digest = hashlib.md5(str(seed_value).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) / 2**32
 
 
 def _stable_spec_ratio(seed_value: object, policy: PartsAlertPolicy) -> float:
     """根据行标识稳定生成配置修饰比例区间内的值。"""
-    digest = hashlib.md5(str(seed_value).encode("utf-8")).hexdigest()
-    normalized = int(digest[:8], 16) / 0xFFFFFFFF
+    normalized = _stable_unit_fraction(seed_value)
     return policy.decoration_min_ratio + (
         normalized * (policy.decoration_max_ratio - policy.decoration_min_ratio)
+    )
+
+
+def _stable_display_cap_ratio(
+    seed_value: object,
+    policy: PartsAlertPolicy,
+) -> float:
+    """生成越接近展示上限概率越低的稳定截断比例。"""
+    normalized = _stable_unit_fraction(f"display-cap|{seed_value}")
+    weighted = normalized**DISPLAY_CAP_POWER
+    return policy.decoration_min_ratio + weighted * (
+        policy.display_progress_max_ratio - policy.decoration_min_ratio
     )
 
 
@@ -198,6 +224,7 @@ def _build_seed(row: pd.Series, row_index: object) -> str:
         str(row.get("机台号-腔室", "")),
         str(row.get("参数名称", "")),
         str(row.get("日期", "")),
+        str(row.get("测量时间", "")),
     ]
     return "|".join(seed_parts)
 
@@ -264,8 +291,9 @@ def apply_over_spec_alert_and_decoration(
         for row_index, row in group.iterrows():
             actual_value = _coerce_float(row[value_col])
             spec_limit = _coerce_float(row[spec_col])
+            seed_value = _build_seed(row, row_index)
             if bool(row[over_spec_col]):
-                ratio = _stable_spec_ratio(_build_seed(row, row_index), policy)
+                ratio = _stable_spec_ratio(seed_value, policy)
                 decorated_value = calculate_decorated_over_spec_value(
                     actual_value=actual_value,
                     spec_limit=spec_limit,
@@ -277,6 +305,7 @@ def apply_over_spec_alert_and_decoration(
                     actual_value=decorated_value,
                     spec_limit=spec_limit,
                     policy=policy,
+                    seed_value=seed_value,
                 )
                 result.at[row_index, value_col] = capped_value
                 result.at[row_index, decoration_col] = DECORATION_STATUS_DECORATED
@@ -286,6 +315,7 @@ def apply_over_spec_alert_and_decoration(
                     actual_value=actual_value,
                     spec_limit=spec_limit,
                     policy=policy,
+                    seed_value=seed_value,
                 )
                 if capped_value != actual_value:
                     result.at[row_index, value_col] = capped_value

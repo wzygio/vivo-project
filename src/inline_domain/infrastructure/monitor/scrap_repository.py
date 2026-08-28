@@ -18,15 +18,14 @@ class InlineScrapRepository:
 
     def get_scrap_data(self, prod_code: str) -> pd.DataFrame:
         """
-        [报废数据适配器] 从 resources/scrap_sheets.xlsx 读取报废数据，
+        [报废数据适配器] 从 resources/inline_domain/scrap_sheets.xlsx 读取报废数据，
         按 prod_code 过滤后转换为与 SPC 管道兼容的格式（OOC 伪装）。
 
         注意：scrap_sheets.xlsx 是统一文件，内部已包含所有产品的数据，
               通过 '产品型号' 列进行过滤。
         """
         try:
-            project_root = ConfigLoader.get_project_root()
-            scrap_path = project_root / "resources" / "scrap_sheets.xlsx"
+            scrap_path = ConfigLoader.get_domain_resource_path("inline_domain", "scrap_sheets", "scrap_sheets.xlsx")
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L1] scrap_path={scrap_path}, exists={scrap_path.exists()}")
 
             if not scrap_path.exists():

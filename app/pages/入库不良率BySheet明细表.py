@@ -13,7 +13,7 @@ from app.components.page_header import (
 )
 
 # 引入区块渲染组件
-from app.sections.table_details import (
+from app.sections.yield_domain.table_details import (
     render_sheet_group_summary_section,
     render_sheet_code_details_section,
     render_sheet_top20_section

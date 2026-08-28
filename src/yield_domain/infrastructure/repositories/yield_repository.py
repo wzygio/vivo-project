@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 from datetime import datetime, timedelta
 
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
@@ -29,12 +30,11 @@ class PanelRepository:
     [仓储层] PanelRepository
     职责：Service 层与数据库的接口。
     [能力]: 
-    1. TTL 缓存保护 (12h 内不连库)
+    1. TTL 缓存保护 (有效期内不连库，TTL 见 config/global.yaml 的 data_snapshot.ttl_hours)
     2. 增量更新 (只查最近 3 天)
     3. 滚动窗口 (自动裁剪过期数据)
     """
 
-    SNAPSHOT_TTL_HOURS = 8 # 缓存有效期
     INCREMENTAL_BUFFER_DAYS = 2 # 增量缓冲
 
     def __init__(
@@ -52,6 +52,8 @@ class PanelRepository:
         self.snapshot_path = snapshot_path
         self.data_policy = data_policy
         self.use_snapshot = use_snapshot
+        # 缓存有效期，统一来自 config/global.yaml 的 data_snapshot.ttl_hours
+        self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
 
     def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -93,7 +95,7 @@ class PanelRepository:
                                 is_cache_fresh = True
                                 logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h, 最新数据日期: {max_cached_date.date()} >= 请求截止日期: {req_end_dt.date()})。")
                             else:
-                                logging.info(f"⏰ [YieldRepo] 缓存虽未过12h，但缺少目标尾部数据 (缓存最新: {max_cached_date.date()}, 请求截止: {req_end_dt.date()})，触发增量拉取！")
+                                logging.info(f"⏰ [YieldRepo] 缓存虽未过{self.SNAPSHOT_TTL_HOURS}h，但缺少目标尾部数据 (缓存最新: {max_cached_date.date()}, 请求截止: {req_end_dt.date()})，触发增量拉取！")
                         else:
                             logging.info(f"⏰ [YieldRepo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
             except Exception as e:

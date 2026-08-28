@@ -5,8 +5,8 @@ from datetime import date
 
 import pandas as pd
 
-from app.sections.aoi_rs import aoi_rs_dashboard
-from app.sections.aoi_rs.aoi_rs_dashboard import (
+from app.sections.inline_domain.aoi_rs import aoi_rs_dashboard
+from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
     create_aoi_rs_point_chart,
     create_aoi_rs_trend_chart,
     filter_aoi_rs_report,

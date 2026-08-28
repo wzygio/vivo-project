@@ -27,7 +27,7 @@ import pytest
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from src.inline_domain.infrastructure.monitor.scrap_repository import (
@@ -449,7 +449,7 @@ def _write_scrap_excel(scrap_path: Path) -> None:
 def test_scrap_data_transforms_excel_into_ooc_contract(
     monkeypatch, tmp_path: Path
 ) -> None:
-    _write_scrap_excel(tmp_path / "resources" / "scrap_sheets.xlsx")
+    _write_scrap_excel(tmp_path / "resources" / "inline_domain" / "scrap_sheets.xlsx")
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "scrap_factory_mapping.yaml").write_text(

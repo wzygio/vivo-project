@@ -10,11 +10,11 @@
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Application（spc / ctq / monitor / aoi_tt service）          │
+│ Application（spc / ctq / monitor / aoi_tt / aoi_rs service）          │
 │   各自持有本模块 port，repository↔service 1:1                 │
 ├────────────────────────────────────────────────────────────┤
 │ Infrastructure                                              │
-│  measurement/        共享测量能力（唯一数据源入口）            │
+│  shared/             共享测量能力（唯一数据源入口，原 measurement/）            │
 │  spc/                SPC 薄投影（data_type_filter="SPC"）     │
 │  ctq/                CTQ 薄投影（data_type_filter="CTQ"）     │
 │  aoi_tt/             AOI_TT 投影（规格表 param_type 识别）    │
@@ -26,18 +26,18 @@
 ```
 
 **核心原则**：spc / ctq / aoi_tt / monitor 是**平行业务模块**。任何可复用的取数与
-制备逻辑只允许归属 `measurement/`；业务模块的 repository 只做投影与门面，不承载
+制备逻辑只允许归属 `shared/`；业务模块的 repository 只做投影与门面，不承载
 跨模块共享逻辑。
 
 ---
 
-## 2. measurement/ —— 共享测量能力
+## 2. shared/ —— 共享测量能力（原 `measurement/`）
 
 | 文件 | 职责 | 对外接口 |
 |---|---|---|
 | `measurement_data_loader.py` | 三厂测量 DAO：一次参数化 UNION ALL（ARRAY/OLED/TP）+ 产品字典 join，产品/时间过滤下推 SQL | `load_raw_measurements(db, start, end, prod)` |
 | `measurement_metadata_loader.py` | 参数元数据 DAO：白名单目录 `eda.IMP_SPC_TZBJX`、规格表 `mdw.dwd_imp_dv_param_spec` | `InlineMeasurementMetadataRepository`（实现 `MeasurementMetadataPort`） |
-| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：3 个月滚动窗口、8h TTL、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
+| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：3 个月滚动窗口、TTL 统一配置于 `config/global.yaml` 的 `data_snapshot.ttl_hours`、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
 | `main_process_history_repository.py` | 主制程 OUT 履历 DAO（6 条 factory×route SQL） | `InlineMainProcessHistoryRepository`（实现 `MainProcessHistoryPort`） |
 | `main_process_trace.py` | 主制程追溯**纯函数**（路由 + 最近前序匹配，零 I/O） | `attach_main_process_spec` / `apply_main_process_history` |
 | `measurement_preprocessor.py` | 排除参数关键字过滤（`LOSS`），纯函数 | `filter_excluded_param_names` |
@@ -64,7 +64,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
   → 排除参数过滤（LOSS 关键字）
   → 排序去重（prod/factory/sheet/step/param/site 六键 keep="last"）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤
-  → 异常点过滤（resources/spc_outlier_filters.xlsx，规则键 prod/step/param）
+  → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，规则键 prod/step/param）
   → 时间窗口 [start, end+1d) + factory/step_id/param_name 维度过滤
   → 主制程追溯（attach_main_process_spec → 履历查询 → apply_main_process_history）
 ```
@@ -89,7 +89,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 | spc | `spc/spc_repository.py`（约 30 行） | 委托制备 port，`data_type_filter="SPC"` 由应用层固定 |
 | ctq | `ctq/ctq_repository.py` | 委托制备 port，`data_type_filter="CTQ"` 在 repository 注入 |
 | aoi_tt | `aoi_tt/aoi_tt_repository.py` | 直接用快照 + 规格 DAO；规格表 `param_type IS NULL` 识别 TT；保留 lot；不走白名单/异常点/追溯/覆盖 |
-| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/scrap_sheets.xlsx`（全产品单文件）+ `config/scrap_factory_mapping.yaml` 厂别推断，伪装为 OOC 行 |
+| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/inline_domain/scrap_sheets.xlsx`（全产品单文件）+ `config/scrap_factory_mapping.yaml` 厂别推断，伪装为 OOC 行 |
 | aoi_rs | `aoi_rs/data_loader.py` | 独立 DAO，不在共享体系内 |
 
 **注意**：monitor 的 AOI 与 aoi_tt 不是同一份数据（参数识别、lot 粒度、语义均不同），
@@ -106,13 +106,15 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 （scope → 工作簿文件名映射；spc/ctq 的独立 wrapper 已删除）：
 
 ```python
-@st.cache_data(show_spinner=False, max_entries=12, ttl=4 * 60 * 60)
+# ttl 统一由 config/global.yaml 的 service_cache.ttl_hours.inline_decorated_features 配置
+@st.cache_data(show_spinner=False, max_entries=12,
+               ttl=ConfigLoader.get_service_cache_ttl_seconds("inline_decorated_features", default_hours=4))
 def fetch_decorated_features(_features_source, prod_code, scope,
                              start_date, end_date, snapshot_signature="") -> dict
 ```
 
-- scope：`spc` → `resources/spc_sheet_oos_decoration.xlsx`；`ctq` →
-  `resources/ctq_sheet_oos_decoration.xlsx`；`none` → 免修饰（monitor 的 AOI 行）。
+- scope：`spc` → `resources/inline_domain/spc_sheet_oos_decoration.xlsx`；`ctq` →
+  `resources/inline_domain/ctq_sheet_oos_decoration.xlsx`；`none` → 免修饰（monitor 的 AOI 行）。
 - 缓存 key 含时间窗口：窗口一致时跨模块命中同一条目（一致性由此保证）。
 - 审计文件落盘语义：缓存 miss 时写一次，命中不重写；
   **操作契约：手工编辑修饰工作簿后须在页面点「刷新缓存」生效**。
@@ -131,7 +133,7 @@ def fetch_decorated_features(_features_source, prod_code, scope,
   margin 与稳定哈希复用引擎常量。
 
 aoi 模块的对齐（2026-08-14 起）：aoi_tt / aoi_rs 各有修饰工作簿
-（`resources/aoi_tt_sheet_oos_decoration.xlsx` /
+（`resources/inline_domain/aoi_tt_sheet_oos_decoration.xlsx` /
 `aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet），默认行为 = 自动截断
 （向后兼容），用户可置 flag=False 释放真实值或 Delete 删除；
 aoi_rs 工作簿以 `chart_kind`（lot/sheet）+ `point_id` 区分两张图的图点。

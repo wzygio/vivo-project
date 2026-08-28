@@ -4,12 +4,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.sections.spc import spc_dashboard
-from app.sections.spc.spc_dashboard import (
+from app.sections.inline_domain.spc import spc_dashboard
+from app.sections.inline_domain.spc.spc_dashboard import (
     _create_period_capability_table,
     _create_period_overview_chart,
     _create_sheet_points_box_chart,
     _create_sheet_points_box_charts,
+    build_spc_sheet_oos_alerts,
     build_weekly_cpk_alerts,
     filter_spc_report_by_alerts,
     filter_spc_report,
@@ -19,6 +20,7 @@ from app.sections.spc.spc_dashboard import (
     get_steps_for_factory,
     render_cpk_alert_center,
     render_cpk_alert_indicator_sections,
+    render_sheet_oos_alert_indicator_sections,
     render_spc_decoration_admin,
     render_spc_indicator_sections,
 )
@@ -600,7 +602,7 @@ def test_render_indicator_sections_forwards_point_box_source_and_measurements(mo
     assert captured["raw_measurements_df"].equals(raw_measurements)
 
 
-def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters(monkeypatch) -> None:
+def test_render_indicator_sections_uses_frontend_config_for_line_parameters(monkeypatch) -> None:
     captured: dict[str, dict[str, object]] = {}
 
     class FakeColumn:
@@ -639,7 +641,12 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
         capture_sheet,
     )
 
-    sheet_features = _sample_sheet_features().assign(param_name="SE_L1T_UNI", chart_type="line")
+    monkeypatch.setattr(
+        spc_dashboard.ConfigLoader,
+        "get_spc_line_chart_param_name_contains",
+        staticmethod(lambda: ["UNI"]),
+    )
+    sheet_features = _sample_sheet_features().assign(param_name="SE_L1T_UNI")
     raw_measurements = pd.DataFrame(
         [
             {
@@ -648,7 +655,6 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
                 "param_name": "SE_L1T_UNI",
                 "sheet_start_time": "2026-06-24",
                 "param_value": 8.5,
-                "chart_type": "line",
             }
         ]
     )
@@ -656,7 +662,6 @@ def test_render_indicator_sections_forwards_backend_line_type_for_uni_parameters
         factory="ARRAY",
         step_id="15260",
         param_name="SE_L1T_UNI",
-        chart_type="line",
     )
 
     render_spc_indicator_sections(
@@ -895,6 +900,27 @@ def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_
     assert fig.layout.yaxis.range[1] > 15.0
 
 
+def test_period_overview_chart_draws_upper_lines_when_lower_specs_are_null() -> None:
+    sheet_features_df = _sample_sheet_features().assign(
+        usl=9.9,
+        lsl=None,
+        ucl=7.5,
+        lcl=None,
+        target=None,
+    )
+
+    figure = _create_period_overview_chart(
+        sheet_features_df=sheet_features_df,
+        period_capability_df=pd.DataFrame(),
+        title="OLED | 21200 | MT_CH_PRESS_MANTISSA",
+    )
+
+    annotation_texts = {annotation.text for annotation in figure.layout.annotations}
+
+    assert annotation_texts == {"USL: 9.9", "UCL: 7.5"}
+    assert figure.layout.yaxis.range[1] > 9.9
+
+
 def test_sheet_points_box_chart_marks_unknown_when_main_process_trace_is_missing() -> None:
     raw_measurements_df = pd.DataFrame(
         [
@@ -1129,7 +1155,7 @@ def test_sheet_points_box_chart_preserves_tiny_upper_spec_values_in_labels() -> 
     assert annotation_texts == {"USL: 1.6e-11", "UCL: 9.7e-12"}
 
 
-def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line() -> None:
+def test_sheet_points_box_chart_uses_point_lines_when_frontend_style_is_line() -> None:
     raw_measurements_df = pd.DataFrame(
         [
             {
@@ -1169,8 +1195,23 @@ def test_sheet_points_box_chart_uses_point_lines_when_backend_chart_type_is_line
     assert not [trace for trace in fig.data if trace.type == "box"]
     line_trace = next(trace for trace in fig.data if trace.type == "scatter")
     assert line_trace.mode == "lines+markers"
+    assert list(line_trace.x) == [
+        "S1<br>06-01 08时",
+        "S1<br>06-01 08时",
+        "S2<br>06-02 09时",
+        "S2<br>06-02 09时",
+    ]
     assert list(line_trace.y) == [3.0, 5.0, 4.0, 6.0]
+    assert [tuple(row) for row in line_trace.customdata] == [
+        ("S1", "2026-06-01 08:00:00"),
+        ("S1", "2026-06-01 08:00:00"),
+        ("S2", "2026-06-02 09:00:00"),
+        ("S2", "2026-06-02 09:00:00"),
+    ]
     assert line_trace.name == "Point Value"
+    assert fig.layout.xaxis.type != "date"
+    assert list(fig.layout.xaxis.categoryarray) == ["S1<br>06-01 08时", "S2<br>06-02 09时"]
+    assert fig.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
 
 
 def test_sheet_points_box_chart_expands_axis_when_param_values_exceed_specs() -> None:
@@ -1290,3 +1331,161 @@ def test_render_cpk_alert_indicator_sections_reuses_memoized_charts(monkeypatch)
 
     render_cpk_alert_indicator_sections(**kwargs)
     assert len(build_calls) == 1  # 第二次：memo 命中，不再构建
+
+
+def _sample_sheet_oos_decoration_result(
+    tmp_path: Path,
+    decoration_df: pd.DataFrame,
+) -> SheetOosDecorationResult:
+    return SheetOosDecorationResult(
+        raw_measurements_df=pd.DataFrame(),
+        decoration_df=decoration_df,
+        decoration_path=tmp_path / "spc_sheet_oos_decoration.xlsx",
+        decoration_sheet="M678",
+    )
+
+
+def _sheet_oos_decoration_row(
+    sheet_id: str,
+    sheet_start_time: str,
+    flag: object,
+    *,
+    param_name: str = "4PP_Rs",
+) -> dict[str, object]:
+    return {
+        "factory": "ARRAY",
+        "prod_code": "M678",
+        "step_id": "15260",
+        "param_name": param_name,
+        "sheet_id": sheet_id,
+        "sheet_start_time": sheet_start_time,
+        "oos_type": "USL",
+        "flag": flag,
+    }
+
+
+def test_build_spc_sheet_oos_alerts_keeps_false_flag_records_from_previous_week(tmp_path: Path) -> None:
+    decoration_df = pd.DataFrame(
+        [
+            _sheet_oos_decoration_row("S2", "2026-08-19 08:00:00", False),
+            _sheet_oos_decoration_row("S1", "2026-08-18 10:00:00", False),
+        ]
+    )
+    result = _sample_sheet_oos_decoration_result(tmp_path, decoration_df)
+
+    alerts_df = build_spc_sheet_oos_alerts(result, reference_date=date(2026, 8, 25))
+
+    assert alerts_df.columns.tolist() == ["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]
+    # 按超规时间倒序
+    assert alerts_df["Sheet ID"].tolist() == ["S2", "S1"]
+    assert alerts_df["超规时间"].map(type).eq(str).all()
+    assert alerts_df["厂别"].tolist() == ["ARRAY", "ARRAY"]
+    assert alerts_df["站点"].tolist() == ["15260", "15260"]
+    assert alerts_df["超规类型"].tolist() == ["USL", "USL"]
+
+
+def test_build_spc_sheet_oos_alerts_excludes_true_and_delete_flags(tmp_path: Path) -> None:
+    decoration_df = pd.DataFrame(
+        [
+            _sheet_oos_decoration_row("S1", "2026-08-18 10:00:00", True),
+            _sheet_oos_decoration_row("S2", "2026-08-19 08:00:00", "Delete"),
+            _sheet_oos_decoration_row("S3", "2026-08-20 09:00:00", False),
+        ]
+    )
+    result = _sample_sheet_oos_decoration_result(tmp_path, decoration_df)
+
+    alerts_df = build_spc_sheet_oos_alerts(result, reference_date=date(2026, 8, 25))
+
+    assert alerts_df["Sheet ID"].tolist() == ["S3"]
+
+
+def test_build_spc_sheet_oos_alerts_excludes_records_outside_previous_week(tmp_path: Path) -> None:
+    decoration_df = pd.DataFrame(
+        [
+            _sheet_oos_decoration_row("S1", "2026-08-10 10:00:00", False),  # 上上周
+            _sheet_oos_decoration_row("S2", "2026-08-24 00:00:00", False),  # 本周一（半开区间外）
+            _sheet_oos_decoration_row("S3", "2026-08-25 09:00:00", False),  # 本周
+            _sheet_oos_decoration_row("S4", "2026-08-17 00:00:00", False),  # 上周一（区间内）
+        ]
+    )
+    result = _sample_sheet_oos_decoration_result(tmp_path, decoration_df)
+
+    alerts_df = build_spc_sheet_oos_alerts(result, reference_date=date(2026, 8, 25))
+
+    assert alerts_df["Sheet ID"].tolist() == ["S4"]
+
+
+def test_build_spc_sheet_oos_alerts_returns_empty_display_when_result_is_none() -> None:
+    alerts_df = build_spc_sheet_oos_alerts(None, reference_date=date(2026, 8, 25))
+
+    assert alerts_df.empty
+    assert alerts_df.columns.tolist() == ["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]
+
+
+def test_render_sheet_oos_alert_indicator_sections_skips_rendering_when_no_alerts(monkeypatch) -> None:
+    render_calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        spc_dashboard,
+        "render_spc_indicator_sections",
+        lambda **kwargs: render_calls.append(kwargs),
+    )
+
+    render_sheet_oos_alert_indicator_sections(
+        alerts_df=pd.DataFrame(columns=["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]),
+        period_capability_df=pd.DataFrame(),
+        sheet_features_df=pd.DataFrame(),
+        raw_measurements_df=pd.DataFrame(),
+        period_box_source="point_value",
+    )
+
+    assert render_calls == []
+
+
+def test_render_sheet_oos_alert_indicator_sections_filters_by_alert_keys(monkeypatch) -> None:
+    alerts_df = pd.DataFrame(
+        [
+            {
+                "厂别": "ARRAY",
+                "站点": "S1",
+                "参数名称": "P1",
+                "Sheet ID": "SHEET-1",
+                "超规时间": "2026-08-18 10:00:00",
+                "超规类型": "USL",
+            }
+        ]
+    )
+    report_df = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P1", "value": 1},
+            {"factory": "ARRAY", "step_id": "S1", "param_name": "P2", "value": 2},
+        ]
+    )
+    captured: dict[str, object] = {}
+    expander_calls: list[tuple[str, bool]] = []
+
+    def fake_expander(label: str, expanded: bool = False):
+        expander_calls.append((label, expanded))
+        return nullcontext()
+
+    monkeypatch.setattr(spc_dashboard.st, "expander", fake_expander)
+    monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        spc_dashboard,
+        "render_spc_indicator_sections",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    render_sheet_oos_alert_indicator_sections(
+        alerts_df=alerts_df,
+        period_capability_df=report_df,
+        sheet_features_df=report_df,
+        raw_measurements_df=report_df,
+        period_box_source="point_value",
+    )
+
+    assert expander_calls == [("🚨 单片异常预警指标图像（1 个指标）", False)]
+    assert captured["period_box_source"] == "point_value"
+    assert captured["chart_key_prefix"] == "spc_oos_alert"
+    assert captured["memo_signature"]
+    for frame_name in ["period_capability_df", "sheet_features_df", "raw_measurements_df"]:
+        assert captured[frame_name]["param_name"].tolist() == ["P1"]

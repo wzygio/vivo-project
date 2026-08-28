@@ -1,7 +1,7 @@
 # Inline Sheet OOS 数据修饰机制
 
 > 分析对象：`src/inline_domain/core/shared/sheet_oos_decoration.py` 及其 SPC/CTQ/Monitor 调用链  
-> 重点文件：`resources/spc_sheet_oos_decoration.xlsx`  
+> 重点文件：`resources/inline_domain/spc_sheet_oos_decoration.xlsx`  
 > 核验日期：2026-08-18
 
 ## 1. 结论
@@ -12,7 +12,7 @@ Sheet OOS 修饰不是对源数据库或 Inline Parquet 快照的回写，而是
 - `False`：保留真实越规值；
 - `Delete`：从当前报表数据集中删除对应产品、站点、参数、Sheet 的全部点位。
 
-`resources/spc_sheet_oos_decoration.xlsx` 同时承担两个职责：
+`resources/inline_domain/spc_sheet_oos_decoration.xlsx` 同时承担两个职责：
 
 1. 保存当前查询窗口内识别出的 Sheet 级 OOS 明细；
 2. 保存用户针对这些明细维护的 `flag` 决策。
@@ -60,8 +60,8 @@ SPC 与 CTQ 共用同一套引擎，但使用不同工作簿，避免两种口�
 
 | `scope` | 工作簿 | sheet 名 |
 |---|---|---|
-| `spc` | `resources/spc_sheet_oos_decoration.xlsx` | 产品号，如 `M678` |
-| `ctq` | `resources/ctq_sheet_oos_decoration.xlsx` | 产品号 |
+| `spc` | `resources/inline_domain/spc_sheet_oos_decoration.xlsx` | 产品号，如 `M678` |
+| `ctq` | `resources/inline_domain/ctq_sheet_oos_decoration.xlsx` | 产品号 |
 | `none` | 不读写工作簿 | 不适用 |
 
 默认运行路径固定到项目根目录的 `resources/`，不是 `resources/<product>/`。测试可以通过 `product_dir` 显式覆盖该位置。
@@ -144,7 +144,7 @@ lower_oos = sheet_min < lsl
 (prod_code, scope, start_date, end_date, snapshot_signature)
 ```
 
-缓存命中时直接返回上次计算结果，不读取也不重写工作簿。SPC 共享特征缓存的 TTL 为 4 小时、最多 12 个条目；上层 SPC 报表缓存也为 4 小时。以下情况通常会形成 miss：
+缓存命中时直接返回上次计算结果，不读取也不重写工作簿。SPC 共享特征缓存最多 12 个条目，其 TTL 与上层 SPC 报表缓存的 TTL 统一由 `config/global.yaml` 的 `service_cache.ttl_hours` 段配置（当前均为 4 小时）。以下情况通常会形成 miss：
 
 - 首次访问；
 - 产品、SPC/CTQ scope 或日期窗口变化；
@@ -229,22 +229,7 @@ False, 0, no, n, 否, 不修饰, 不截断
 
 `Delete` 不区分大小写。系统按四列业务键删除匹配的全部原始点位，因此该 Sheet/参数不会进入后续 Sheet 特征、图表、能力计算或自动预警。它不会删除数据库记录、Parquet 快照或工作簿中的其他参数。
 
-## 9. 参数专用截断边界
-
-`config/spc_config.yaml` 可配置 `param_clip_rules`：
-
-```yaml
-spc:
-  sheet_oos_decoration:
-    param_clip_rules:
-      - param_name_contains: "PPA"
-        lower_offset: -0.5
-        upper_offset: 0.5
-```
-
-规则按顺序匹配，首个命中的规则生效。偏移只修改截断阶段使用的有效 `lsl/usl`，不会修改上游官方规格列，也不会改变“是否生成 OOS 明细”的判断。当前配置中的示例已注释，实际等同于无专用偏移。
-
-## 10. 管理员下载与上传
+## 9. 管理员下载与上传
 
 管理员页面提供以下操作：
 
@@ -256,9 +241,9 @@ spc:
 
 上传入口不会严格校验完整 13 列、`flag` 枚举、重复键或产品号是否与当前 sheet 一致。上传的额外列可短暂写入工作簿，但下一次自动刷新会重新收敛到标准 13 列。建议上传前保留下载表结构，只修改 `flag`。
 
-## 11. 数据一致性与已知边界
+## 10. 数据一致性与已知边界
 
-### 11.1 已有保护
+### 10.1 已有保护
 
 - 读取失败时不会静默把已有用户状态当作空表；
 - 更新一个产品 sheet 时保留其他产品 sheet；
@@ -267,7 +252,7 @@ spc:
 - 原始测量快照不被修饰结果反向污染；
 - 缓存载荷只保存 DataFrame、dict、字符串和标量，符合 ADR-0001。
 
-### 11.2 风险与运维注意事项
+### 10.2 风险与运维注意事项
 
 | 风险 | 当前表现 |
 |---|---|
@@ -281,7 +266,7 @@ spc:
 | 手工外部修改受缓存影响 | 不清缓存时，页面不保证立即读取新 flag |
 | 加密状态可能改变 | COM 读取后由 openpyxl 重写会产出明文标准 xlsx |
 
-## 12. 推荐操作流程
+## 11. 推荐操作流程
 
 1. 从管理员后台下载当前产品修饰表；
 2. 只修改 `flag`，不要修改四列业务键；
@@ -293,7 +278,7 @@ spc:
 
 如需长期保留历史 OOS 与人工决策，不应依赖当前工作簿；应另建只追加的审计存储，并记录生效时间、操作者、原值、动作和查询窗口。
 
-## 13. 测试与源码索引
+## 12. 测试与源码索引
 
 现有测试覆盖：
 

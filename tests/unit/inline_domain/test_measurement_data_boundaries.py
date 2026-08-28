@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
-from src.inline_domain.infrastructure.measurement.measurement_preparation import (
+from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 
@@ -94,8 +94,8 @@ def test_monitor_infrastructure_contains_no_reusable_measurement_dao() -> None:
     assert forbidden_modules.isdisjoint(path.name for path in monitor_root.glob("*.py"))
 
 
-def test_shared_measurement_dao_lives_in_measurement_infrastructure() -> None:
-    measurement_root = INLINE_ROOT / "infrastructure" / "measurement"
+def test_shared_measurement_dao_lives_in_shared_infrastructure() -> None:
+    measurement_root = INLINE_ROOT / "infrastructure" / "shared"
     expected_modules = {
         "measurement_data_loader.py",
         "measurement_metadata_loader.py",

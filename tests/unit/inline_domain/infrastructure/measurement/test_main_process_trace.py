@@ -1,10 +1,10 @@
 import pandas as pd
 
-from src.inline_domain.infrastructure.measurement.main_process_trace import (
+from src.inline_domain.infrastructure.shared.main_process_trace import (
     apply_main_process_history,
     attach_main_process_spec,
 )
-from src.inline_domain.infrastructure.measurement.main_process_history_repository import (
+from src.inline_domain.infrastructure.shared.main_process_history_repository import (
     InlineMainProcessHistoryRepository,
 )
 

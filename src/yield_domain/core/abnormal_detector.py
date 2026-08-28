@@ -81,6 +81,73 @@ class AbnormalDetector:
         return None
 
     # ==========================================================================
+    #  逻辑 B+: 系统趋势结构化告警记录 (驱动按 Defect Code 自动出图)
+    # ==========================================================================
+    @staticmethod
+    def detect_system_trend_records(
+        group_monthly: pd.DataFrame,
+        code_monthly: pd.DataFrame
+    ) -> List[Dict[str, Any]]:
+        """与 detect_system_trend_alerts 同判定口径，但返回结构化记录。
+
+        记录字段: level ("group"/"code"), defect_group, defect_desc (group 级为 None),
+        time_period, curr_rate, prev_rate, rules (命中的规则列表)。
+        """
+        records: List[Dict[str, Any]] = []
+
+        if group_monthly is not None and not group_monthly.empty:
+            df_g = group_monthly.sort_values('time_period')
+            for grp, sub_df in df_g.groupby('defect_group'):
+                rec = AbnormalDetector._check_single_series_record(
+                    sub_df, level="group", defect_group=str(grp), defect_desc=None
+                )
+                if rec: records.append(rec)
+
+        if code_monthly is not None and not code_monthly.empty:
+            df_c = code_monthly.sort_values('time_period')
+            for desc, sub_df in df_c.groupby('defect_desc'):
+                group_val = None
+                if 'defect_group' in sub_df.columns:
+                    group_val = sub_df['defect_group'].iloc[-1]
+                rec = AbnormalDetector._check_single_series_record(
+                    sub_df, level="code", defect_group=group_val, defect_desc=str(desc)
+                )
+                if rec: records.append(rec)
+
+        return records
+
+    @staticmethod
+    def _check_single_series_record(
+        sub_df: pd.DataFrame, *, level: str, defect_group, defect_desc
+    ) -> Dict[str, Any] | None:
+        """单条时间序列最后两个点的结构化判定，规则与文本接口完全一致。"""
+        if len(sub_df) < 2: return None
+
+        curr_row = sub_df.iloc[-1]
+        prev_row = sub_df.iloc[-2]
+
+        r_curr = float(curr_row['defect_rate'])
+        r_prev = float(prev_row['defect_rate'])
+
+        is_doubled = (r_curr > r_prev * AbnormalDetector.THRESHOLD_DOUBLING_RATIO) and (r_curr > AbnormalDetector.THRESHOLD_DOUBLING_BASE)
+        is_surged = (r_curr - r_prev > AbnormalDetector.THRESHOLD_SURGE_DELTA)
+
+        if is_doubled or is_surged:
+            rules = []
+            if is_doubled: rules.append("环比翻倍")
+            if is_surged: rules.append("增幅>0.2%")
+            return {
+                "level": level,
+                "defect_group": defect_group,
+                "defect_desc": defect_desc,
+                "time_period": curr_row['time_period'],
+                "curr_rate": r_curr,
+                "prev_rate": r_prev,
+                "rules": rules,
+            }
+        return None
+
+    # ==========================================================================
     #  逻辑 B: 外部基准报表批次比对 (新需求)
     # ==========================================================================
     @staticmethod
