@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-18
-- Last amended: 2026-08-27（Code 日度改为月度目标驱动，删除原始日度回退）
+- Last amended: 2026-08-28（修饰表缓存失效收敛到页头手动刷新）
 - Scope: `src/yield_domain/core/mwd_trend/`、`src/yield_domain/core/mapping/mapping_processor.py`、`src/yield_domain/core/defect_modifier.py`、`src/yield_domain/application/{yield_service,excel_service}.py`、`app/pages/入库不良率分析看板.py`、`config/products/*.yaml`、`tools/update_yield_modifier_table.py`
 - Trace: Issue `.scratch/mwd-processor-opt/issues/01-simplify-yield-modifier-pipeline.md`、
   Plan `.planning/2026-08-18-mwd-processor-opt/`、
@@ -52,8 +52,10 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    通常小于 1。
 6. **当月良损口径 = 趋势图同款 panel 明细**（D5）：即 `defect_multipliers`
    修饰后的展示数据，使 Mapping 数学严格成立（展示原始 × 指定/展示原始 = 指定）。
-7. **缓存 key 含修饰表签名**：页面以 `compute_snapshot_signature(修饰表路径)`
-   传入趋势/Mapping 缓存方法，业务改表后下次刷新即生效；写回发生在 cache miss 时。
+7. **缓存失效由产品 revision 统一控制**：页面不再以修饰表修改时间生成独立缓存键；
+   业务改表后由页头“刷新缓存”推进当前产品 revision，再使趋势/Mapping 缓存失效。
+   “刷新数据”在底层快照刷新成功后同步推进同一 revision；刷新失败则保留原 revision
+   和缓存视图。修饰表写回发生在 cache miss 时。
 8. `load_static_warning_lines`（入库不良率规格.xlsx）保留：其消费方还有
    sheet_lot/capping、页面警戒线展示、alert_center（D4）；仅趋势侧入参随
    TrendRegulator 删除。Lot/Sheet 级良损生成逻辑（sheet_lot 链路）不变（C1）。

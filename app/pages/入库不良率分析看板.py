@@ -74,28 +74,19 @@ ExcelService.inject_mapping_config_to_config(active_config)
 # ==============================================================================
 #  数据加载
 # ==============================================================================
-modifier_table_path = YieldAnalysisService.resolve_modifier_table_path(
-    active_config,
-    product_dir,
-)
-modifier_signature = YieldAnalysisService.compute_snapshot_signature(
-    modifier_table_path
-)
-
+# 配置资源不使用文件时间签名；仅由页头按钮推进的产品 revision 使缓存失效。
 with st.spinner("正在加载全维度分析数据..."):
     mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
         snapshot_signature=product_cache_signature,
-        modifier_signature=modifier_signature,
     )
     mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
         active_config,
         product_dir,
         _db_manager=db_manager,
         snapshot_signature=product_cache_signature,
-        modifier_signature=modifier_signature,
     )
     lot_data = YieldAnalysisService.get_lot_defect_rates(
         active_config,
@@ -114,7 +105,6 @@ with st.spinner("正在加载全维度分析数据..."):
         _db_manager=db_manager,
         snapshot_signature=product_cache_signature,
         product_dir=product_dir,
-        modifier_signature=modifier_signature,
     )
     warning_lines = YieldAnalysisService.load_static_warning_lines(
         active_config,
