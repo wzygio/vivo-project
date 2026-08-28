@@ -28,7 +28,7 @@ Code 日度不良数**不读取、不拟合、也不回落到 Panel 明细中的
 Panel 明细在 Code 日度路径中只提供：
 
 - 每日总投入 `total_panels`，作为每个 Code 当日的分配容量；
-- 实际出现过的 `(Defect Group, Code)` 唯一清单，用于建立日度输出网格。
+- 实际出现过的 `(Defect Group, Code)` 唯一清单，用于建立日度输出网格；
 - 按自然月、Code 汇总的原始月度良损，作为月度目标的最后回退。
 
 原始月度良损只保留月度聚合结果，不保留原始日度分布。最终有效月度目标始终按
@@ -47,11 +47,13 @@ Mapping 使用同一修饰表计算月度倍率，但在倍率应用后仍执行
 - `src/yield_domain/core/mwd_trend/modifier_table.py`
 
 页面计算“入库良率修饰表”的文件签名，并将其作为 Streamlit 缓存参数传给 Group
-趋势、Code 趋势和 Mapping。缓存未命中时，
+趋势、Code 趋势和 Mapping。三个消费者统一调用 `get_modifier_context`，以产品、Panel
+快照签名和修饰表签名共享缓存；只有该缓存未命中时才由
 `YieldAnalysisService._build_modifier_context` 执行：
 
 1. 读取 `<产品>_Group级` 与 `<产品>_Code级` Sheet；
-2. 使用经过全局 `defect_multipliers` 修饰后的 Panel 明细计算当月原始良损；
+2. 使用经过全局 `defect_multipliers` 修饰后的 Panel 明细，在同一当月切片上一次计算
+   Group/Code 两级原始良损；
 3. 更新当月原始良损和缩放倍数；
 4. 从 Code Sheet 生成 Code MWD 使用的 `targets`；
 5. 从 Group Sheet 生成只用于 Group 月度覆写的 `group_targets`；
@@ -89,8 +91,8 @@ Code 日度汇总得到的月度基础值。
 主要程序：
 
 - `mwd_trend/mwd_trend_processor.py::create_code_level_mwd_trend_data`
+- `mwd_trend/data_preparation.py::prepare_code_raw_data`
 - `mwd_trend/daily_generator.py::generate_daily_counts`
-- `mwd_trend/daily_generator.py::_generate_defect_daily`
 - `mwd_trend/daily_generator.py::allocate_integer_counts`
 
 处理单位是单个 `(Defect Group, Code)`：
@@ -103,6 +105,10 @@ Code 日度汇总得到的月度基础值。
 6. 叠加确定性哈希噪声，形成日度分配权重；
 7. 逐自然月计算目标整数；
 8. 在单日投入容量内，按权重分配月度目标，并写入最终日度不良数。
+
+实现上，完整 Code 长表只解析一次日期、生成一次月份键；各 Code/月的结果先写入
+NumPy 数组，全部完成后一次赋回 `defect_panel_count`。这只减少 pandas 固定开销，
+不改变任何公式或分配顺序。
 
 对月份 `m`，月度目标整数为：
 
@@ -387,7 +393,7 @@ w_d = 插值基线 × 1000
 
 #### 第四步：整数分配
 
-使用当前 `_generate_defect_daily` 实际运行上述输入，最大余数法处理后的输出为：
+使用当前 `generate_daily_counts` 实际运行上述输入，最大余数法处理后的输出为：
 
 | 日期 | 最终整数不良数 |
 |---|---:|

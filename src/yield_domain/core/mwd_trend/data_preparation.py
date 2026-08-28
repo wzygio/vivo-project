@@ -8,37 +8,6 @@ from datetime import datetime as dt
 import pandas as pd
 
 
-def prepare_group_raw_data(
-    df: pd.DataFrame,
-    target_end_date: dt | None = None,
-) -> tuple[pd.DataFrame, pd.Timestamp, list[str]]:
-    """Convert panel details to a Group-level daily wide table."""
-    working = df.copy()
-    working["warehousing_time"] = pd.to_datetime(
-        working["warehousing_time"], format="%Y%m%d"
-    )
-
-    data_last_day = working["warehousing_time"].max()
-    last_day = pd.to_datetime(target_end_date) if target_end_date else data_last_day
-    logging.info(
-        "[Group Raw Data] target end=%s, data max=%s",
-        last_day.strftime("%Y-%m-%d"),
-        data_last_day.strftime("%Y-%m-%d"),
-    )
-
-    raw_daily = working.groupby(working["warehousing_time"].dt.date)[
-        "panel_id"
-    ].nunique().to_frame(name="total_panels")
-    daily_defect = working.groupby(
-        [working["warehousing_time"].dt.date, "defect_group"]
-    )["panel_id"].nunique().unstack(level="defect_group").fillna(0)
-    raw_daily = pd.concat([raw_daily, daily_defect], axis=1).fillna(0)
-    raw_daily.index = pd.to_datetime(raw_daily.index)
-
-    target_defects = sorted(working["defect_group"].dropna().unique().tolist())
-    return raw_daily, last_day, target_defects
-
-
 def prepare_code_raw_data(
     df: pd.DataFrame,
     target_end_date: dt | None = None,

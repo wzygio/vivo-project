@@ -113,6 +113,31 @@ class TestGenerateDailyCounts:
         # 但月度合计仍精确达标
         assert result["defect_panel_count"].sum() == round(0.002 * (31 * 10000 - 10000))
 
+    def test_multiple_codes_parse_dates_only_once(self, monkeypatch):
+        import src.yield_domain.core.mwd_trend.daily_generator as module
+
+        first = _padded_daily({"2026-07": 3})
+        second = first.assign(defect_desc="G向单暗线")
+        padded = pd.concat([first, second], ignore_index=True)
+        targets = {
+            "G向单亮线": {"2026-07": 0.001},
+            "G向单暗线": {"2026-07": 0.002},
+        }
+        real_to_datetime = pd.to_datetime
+        calls = 0
+
+        def counting_to_datetime(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return real_to_datetime(*args, **kwargs)
+
+        monkeypatch.setattr(module.pd, "to_datetime", counting_to_datetime)
+
+        result = generate_daily_counts(padded, targets, "M999")
+
+        assert calls == 1
+        assert len(result) == len(padded)
+
 
 import numpy as np
 

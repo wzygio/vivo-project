@@ -41,8 +41,9 @@ round(回退后的目标良损 / 当月原始良损, 3)
 ```
 
 原始良损为零或缺失时，Mapping 倍率回退为 `1.0`。工作簿读取复用共享的
-`read_workbook_sheet`；企业加密文件才回退 Excel COM。写回失败时不推进签名，
-后续同步会继续重试。
+`read_workbook_sheet`；确切的 Sheet 缺失返回空表，其他格式 `ValueError` 回退 Excel
+COM，COM 仍失败时向上抛出，避免误覆盖人工值。写回失败时不推进签名，后续同步会
+继续重试。
 
 ## 三、Code 日度生成与 Group 汇总
 
@@ -68,8 +69,9 @@ Code 使用 `daily_generator.generate_daily_counts`，执行以下算法：
 ```
 
 Group 不执行上述日度生成算法。`mwd_trend_processor.py` 将 Code 最终日度按
-`(日期, defect_group)` 求和得到 Group 日度，再聚合 Group 周度和月度基础值；
-Group Sheet 只覆写最终 Group 月度结果。
+`(日期, defect_group)` 求和得到 Group 日度；日期和每日投入直接复用 Code
+`daily_full`，不再从 Panel 准备原始 Group 日度宽表。随后聚合 Group 周度和月度基础
+值；Group Sheet 只覆写最终 Group 月度结果。
 
 ## 四、跨月平滑的准确边界
 
@@ -96,4 +98,5 @@ Mapping 月度倍率的轻量防御规则为：非有限值、负数或超过 10
 - `aggregation.py`：从最终日度聚合周度、月度；
 - `formatting.py`：生成前端使用的数据结构；
 - `mapping/mapping_processor.py`：应用 Code 月度倍率后继续既有级联逻辑；
-- `application/yield_service.py`：同步修饰表、构建两级目标并接入缓存。
+- `application/yield_service.py`：通过 `get_modifier_context` 共享修饰表同步、两级目标和
+  Mapping 倍率缓存。

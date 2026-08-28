@@ -50,6 +50,34 @@ def test_read_workbook_sheet_falls_back_to_com_for_encrypted_file(monkeypatch, t
     pd.testing.assert_frame_equal(result, expected)
 
 
+def test_read_workbook_sheet_does_not_treat_format_value_error_as_missing_sheet(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """非 Sheet 缺失的 ValueError 必须进入 COM 回退，不能静默返回空表。"""
+    workbook = tmp_path / "encrypted.xlsx"
+    workbook.write_bytes(b"\x00not-a-real-xlsx")
+    expected = pd.DataFrame({"a": [1]})
+
+    monkeypatch.setattr(
+        pd,
+        "read_excel",
+        lambda *a, **k: (_ for _ in ()).throw(
+            ValueError("Excel file format cannot be determined")
+        ),
+    )
+    import src.shared_kernel.utils.excel_tools as excel_tools
+
+    monkeypatch.setattr(
+        excel_tools,
+        "_read_encrypted_xlsx_via_com",
+        lambda path, sheet_name=None: expected,
+    )
+
+    result = read_workbook_sheet(workbook, "M678")
+
+    pd.testing.assert_frame_equal(result, expected)
+
+
 def test_replace_workbook_sheet_creates_new_workbook(tmp_path: Path) -> None:
     workbook = tmp_path / "shared.xlsx"
     assert replace_workbook_sheet(

@@ -186,3 +186,38 @@ def test_group_sheet_only_overrides_monthly_group_result() -> None:
         * group_results["weekly"]["total_panels"]
     ).round().astype(int)
     assert weekly_counts.sum() == 12
+
+
+def test_group_daily_reuses_code_daily_calendar_without_parsing_panel_dates() -> None:
+    """Group 日度的日期、投入和不良数均来自最终 Code 日度事实。"""
+    panel_details = pd.DataFrame(
+        {
+            "warehousing_time": ["not-a-date"],
+            "panel_id": ["P01"],
+            "defect_group": ["Array_Pixel"],
+            "defect_desc": ["CodeA"],
+        }
+    )
+    code_daily = pd.DataFrame(
+        {
+            "time_period": ["2026-05-01", "2026-05-02"],
+            "total_panels": [10, 12],
+            "defect_group": ["Array_Pixel", "Array_Pixel"],
+            "defect_desc": ["CodeA", "CodeA"],
+            "defect_panel_count": [2, 3],
+            "defect_rate": [0.2, 0.25],
+        }
+    )
+
+    result = MWDTrendProcessor.create_mwd_trend_data(
+        panel_details_df=panel_details,
+        config=_config(),
+        mwd_code_data={"daily_full": code_daily},
+        target_end_date=pd.Timestamp("2026-05-02"),
+    )
+
+    assert result is not None
+    daily = result["daily_full"]
+    assert daily["total_panels"].tolist() == [10, 12]
+    counts = (daily["defect_rate"] * daily["total_panels"]).round().astype(int)
+    assert counts.tolist() == [2, 3]

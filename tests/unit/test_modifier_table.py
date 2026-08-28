@@ -50,7 +50,7 @@ def _row(defect, month, raw_loss=None, specified=None):
 
 
 class TestReadModifierTable:
-    """读取修饰表：按 <产品>_Group级 / <产品>_Code级 分 Sheet，异常时按空表语义。"""
+    """读取修饰表：按 <产品>_Group级 / <产品>_Code级 分 Sheet。"""
 
     def test_reads_group_and_code_sheets(self, tmp_path):
         path = tmp_path / "modifier.xlsx"
@@ -96,8 +96,27 @@ class TestReadModifierTable:
         assert table["code"].empty
         assert com_calls == 0
 
+    def test_unreadable_workbook_is_not_silently_treated_as_empty(
+        self, tmp_path, monkeypatch
+    ):
+        path = tmp_path / "modifier.xlsx"
+        path.write_bytes(b"broken")
 
-from src.yield_domain.core.mwd_trend.modifier_table import compute_current_month_loss
+        monkeypatch.setattr(
+            "src.yield_domain.core.mwd_trend.modifier_table._read_sheet",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                ValueError("workbook format is unreadable")
+            ),
+        )
+
+        with pytest.raises(ValueError, match="format is unreadable"):
+            read_modifier_table(path, "M999")
+
+
+from src.yield_domain.core.mwd_trend.modifier_table import (
+    compute_current_month_loss,
+    compute_current_month_losses,
+)
 
 
 def _panel_rows():
@@ -132,6 +151,26 @@ class TestComputeCurrentMonthLoss:
     def test_month_without_data_returns_empty(self):
         loss = compute_current_month_loss(_panel_rows(), level="code", month="2026-06")
         assert loss.empty
+
+    def test_both_levels_share_one_date_parse(self, monkeypatch):
+        """Group/Code 当月良损必须复用同一份日期解析和当月切片。"""
+        import src.yield_domain.core.mwd_trend.modifier_table as module
+
+        real_to_datetime = pd.to_datetime
+        calls = 0
+
+        def counting_to_datetime(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return real_to_datetime(*args, **kwargs)
+
+        monkeypatch.setattr(module.pd, "to_datetime", counting_to_datetime)
+
+        losses = compute_current_month_losses(_panel_rows(), month="2026-07")
+
+        assert calls == 1
+        assert losses["group"]["Array_Line"] == pytest.approx(1.0)
+        assert losses["code"]["G向单亮线"] == pytest.approx(0.5)
 
 
 from src.yield_domain.core.mwd_trend.modifier_table import (

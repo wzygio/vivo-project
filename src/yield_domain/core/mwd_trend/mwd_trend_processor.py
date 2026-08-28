@@ -28,7 +28,6 @@ from yield_domain.core.mwd_trend.daily_generator import (
 from yield_domain.core.mwd_trend.data_preparation import (
     pad_daily_data_to_end as _pad_daily_data_to_today,
     prepare_code_raw_data as _prepare_code_raw_data,
-    prepare_group_raw_data as _prepare_group_raw_data,
 )
 from yield_domain.core.mwd_trend.formatting import (
     format_code_results as _format_code_results,
@@ -53,19 +52,21 @@ class MWDTrendProcessor:
             return None
 
         try:
-            raw_daily, last_day, target_defects = _prepare_group_raw_data(
-                panel_details_df,
-                target_end_date,
-            )
-            padded_daily = _pad_daily_data_to_today(
-                raw_daily,
-                is_group_level=True,
-                end_date=last_day,
+            target_defects = sorted(
+                panel_details_df["defect_group"].dropna().unique().tolist()
             )
             group_daily = _build_group_daily_from_code_data(
-                padded_daily,
                 mwd_code_data.get("daily_full"),
                 target_defects,
+            )
+            if group_daily.empty:
+                return _format_group_results(
+                    pd.DataFrame(), pd.DataFrame(), group_daily, target_defects
+                )
+            last_day = (
+                pd.to_datetime(target_end_date)
+                if target_end_date is not None
+                else group_daily.index.max()
             )
             monthly = _safe_trend_aggregator(
                 group_daily, last_day, "M", is_group_level=True
@@ -126,31 +127,42 @@ class MWDTrendProcessor:
 
 
 def _build_group_daily_from_code_data(
-    daily_skeleton: pd.DataFrame,
     code_daily: pd.DataFrame | None,
     target_defects: list[str],
 ) -> pd.DataFrame:
-    """Aggregate final Code daily counts into a Group-wide daily table."""
-    result = daily_skeleton[["total_panels"]].copy()
-    for group in target_defects:
-        result[group] = 0
+    """从最终 Code 日度复用日期/投入，并汇总出 Group 日度宽表。"""
     if code_daily is None or code_daily.empty:
-        return result
+        return pd.DataFrame(columns=["total_panels", *target_defects])
 
-    source = code_daily.copy()
+    source = code_daily[
+        ["time_period", "total_panels", "defect_group", "defect_panel_count"]
+    ].copy()
     source["warehousing_time"] = pd.to_datetime(
         source["time_period"],
         errors="coerce",
     )
-    counts = source.groupby(["warehousing_time", "defect_group"])[
-        "defect_panel_count"
-    ].sum()
-    available_groups = set(counts.index.get_level_values("defect_group"))
-    for group in target_defects:
-        if group not in available_groups:
-            continue
-        group_counts = counts.xs(group, level="defect_group", drop_level=True)
-        result[group] = result.index.map(group_counts).fillna(0).astype(int)
+    source = source.dropna(subset=["warehousing_time"])
+    if source.empty:
+        return pd.DataFrame(columns=["total_panels", *target_defects])
+
+    daily_totals = source.groupby("warehousing_time", sort=True, observed=True)[
+        "total_panels"
+    ].first()
+    group_counts = (
+        source.groupby(
+            ["warehousing_time", "defect_group"],
+            sort=True,
+            observed=True,
+        )["defect_panel_count"]
+        .sum()
+        .unstack("defect_group", fill_value=0)
+        .reindex(index=daily_totals.index, columns=target_defects, fill_value=0)
+    )
+    result = pd.concat(
+        [daily_totals.rename("total_panels"), group_counts], axis=1
+    )
+    result[target_defects] = result[target_defects].fillna(0).astype(int)
+    result.index.name = "warehousing_time"
     return result
 
 

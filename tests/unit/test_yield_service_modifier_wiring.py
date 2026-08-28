@@ -126,6 +126,61 @@ class TestBuildModifierContext:
         assert context["factors"] == {}
 
 
+def test_modifier_context_is_shared_across_consumers(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """相同快照/修饰签名下，页面各消费者只触发一次上下文构建。"""
+    panel_df = _panel_details()
+    expected = {
+        "targets": {},
+        "group_targets": {},
+        "factors": {},
+        "signature": "stable",
+    }
+    calls = 0
+
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "get_modified_panel_details",
+        staticmethod(lambda *args, **kwargs: panel_df),
+    )
+
+    def build_once(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return expected
+
+    monkeypatch.setattr(
+        YieldAnalysisService,
+        "_build_modifier_context",
+        staticmethod(build_once),
+    )
+    YieldAnalysisService.get_modifier_context.clear()
+
+    first = YieldAnalysisService.get_modifier_context(
+        _config(),
+        tmp_path / "M999",
+        snapshot_signature="same-panel",
+        modifier_signature="same-modifier",
+    )
+    second = YieldAnalysisService.get_modifier_context(
+        _config(),
+        tmp_path / "M999",
+        snapshot_signature="same-panel",
+        modifier_signature="same-modifier",
+    )
+    third = YieldAnalysisService.get_modifier_context(
+        _config(),
+        tmp_path / "M999",
+        snapshot_signature="same-panel",
+        modifier_signature="changed-modifier",
+    )
+
+    assert calls == 2
+    assert first == second == third == expected
+
+
 def test_group_service_passes_code_daily_source_to_group_processor(
     monkeypatch,
     tmp_path,
@@ -147,7 +202,7 @@ def test_group_service_passes_code_daily_source_to_group_processor(
     )
     monkeypatch.setattr(
         YieldAnalysisService,
-        "_build_modifier_context",
+        "get_modifier_context",
         staticmethod(
             lambda *args, **kwargs: {
                 "group_targets": group_targets,

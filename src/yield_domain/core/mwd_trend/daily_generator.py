@@ -103,48 +103,9 @@ def interpolated_base_rates(
 
     anchor_times = np.array([a[0].value for a in anchors], dtype=float)
     anchor_rates = np.array([a[1] for a in anchors], dtype=float)
-    date_values = pd.to_datetime(dates).astype("int64").to_numpy(dtype=float)
+    date_values = pd.DatetimeIndex(dates).asi8.astype(float)
     # np.interp 两端自动按最近锚点平延
     return np.interp(date_values, anchor_times, anchor_rates)
-
-
-def _generate_defect_daily(
-    defect_df: pd.DataFrame,
-    month_rates: dict[str, float],
-    product_code: str,
-    defect: str,
-    volatility: float,
-) -> pd.DataFrame:
-    """对单个缺陷生成日度不良数（逐月闭环整数分配）。"""
-    result = defect_df.copy()
-    result["defect_panel_count"] = 0
-    result["warehousing_time"] = pd.to_datetime(result["warehousing_time"])
-    result["_month"] = result["warehousing_time"].dt.strftime("%Y-%m")
-
-    base_rates = interpolated_base_rates(result["warehousing_time"], month_rates)
-    noises = np.array(
-        [
-            1.0
-            + volatility
-            * (2.0 * _hash_unit_interval(product_code, defect, date) - 1.0)
-            for date in result["warehousing_time"]
-        ]
-    )
-    result["_weight"] = base_rates * noises * result["total_panels"].to_numpy(float)
-
-    for month, month_rows in result.groupby("_month", sort=False):
-        rate = month_rates[month]
-        month_panels = float(month_rows["total_panels"].sum())
-        target_total = int(round(rate * month_panels))
-        allocated = allocate_integer_counts(
-            month_rows["_weight"].to_numpy(dtype=float),
-            month_rows["total_panels"].to_numpy(dtype=float),
-            target_total,
-        )
-        result.loc[month_rows.index, "defect_panel_count"] = allocated
-
-    result["defect_panel_count"] = result["defect_panel_count"].astype(int)
-    return result.drop(columns=["_month", "_weight"])
 
 
 def generate_daily_counts(
@@ -181,10 +142,9 @@ def generate_daily_counts(
     )
     working = padded_daily.copy()
     working["warehousing_time"] = pd.to_datetime(working["warehousing_time"])
+    working["_month"] = working["warehousing_time"].dt.strftime("%Y-%m")
     required_targets = (
-        working.assign(_month=working["warehousing_time"].dt.strftime("%Y-%m"))[
-            ["defect_desc", "_month"]
-        ]
+        working[["defect_desc", "_month"]]
         .drop_duplicates()
         .itertuples(index=False, name=None)
     )
@@ -199,17 +159,41 @@ def generate_daily_counts(
         )
         raise ValueError(f"月度良损目标未覆盖全部 Code/月: {missing_text}")
 
-    pieces = []
-    for (group, defect), defect_df in working.groupby(
-        ["defect_group", "defect_desc"], sort=False
-    ):
+    generated_counts = np.zeros(len(working), dtype=int)
+    for (_group, defect), positions in working.groupby(
+        ["defect_group", "defect_desc"], sort=False, observed=True
+    ).indices.items():
+        positions = np.asarray(positions, dtype=int)
         month_rates = effective_targets[defect]
-        pieces.append(
-            _generate_defect_daily(
-                defect_df, month_rates, product_code, defect, volatility
-            )
+        defect_dates = working["warehousing_time"].iloc[positions]
+        defect_months = working["_month"].iloc[positions].to_numpy()
+        capacities = working["total_panels"].iloc[positions].to_numpy(dtype=float)
+        base_rates = interpolated_base_rates(defect_dates, month_rates)
+        noises = np.fromiter(
+            (
+                1.0
+                + volatility
+                * (2.0 * _hash_unit_interval(product_code, defect, date) - 1.0)
+                for date in defect_dates
+            ),
+            dtype=float,
+            count=len(positions),
         )
-    return pd.concat(pieces).sort_index()
+        weights = base_rates * noises * capacities
+
+        for month in pd.unique(defect_months):
+            month_positions = np.flatnonzero(defect_months == month)
+            target_total = int(
+                round(float(month_rates[month]) * capacities[month_positions].sum())
+            )
+            generated_counts[positions[month_positions]] = allocate_integer_counts(
+                weights[month_positions],
+                capacities[month_positions],
+                target_total,
+            )
+
+    working["defect_panel_count"] = generated_counts
+    return working.drop(columns="_month").sort_index()
 
 
 def _merge_monthly_targets(

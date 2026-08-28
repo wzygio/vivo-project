@@ -111,8 +111,8 @@ def _read_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
 def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.DataFrame]:
     """读取 `<产品>_Group级` / `<产品>_Code级` 两个 Sheet。
 
-    文件不存在、Sheet 缺失或读取失败时，对应级别返回带标准列的空表（空表语义：
-    调用方按"无指定"处理；Code 日度生成阶段会回退原始月度良损）。
+    文件不存在或 Sheet 缺失时，对应级别返回带标准列的空表（空表语义：调用方
+    按"无指定"处理）；工作簿无法读取时抛出异常，避免误把人工指定当作空值。
     """
     xlsx_path = Path(xlsx_path)
     table: dict[str, pd.DataFrame] = {}
@@ -121,18 +121,7 @@ def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.Data
             table[level] = _empty_table()
             continue
         sheet_name = f"{product_code}_{suffix}"
-        try:
-            df = _read_sheet(xlsx_path, sheet_name)
-        except ModifierTableValidationError:
-            raise
-        except Exception as error:
-            logging.warning(
-                "[modifier_table] 读取 %s 的 %s 失败，按空表处理: %s",
-                xlsx_path.name,
-                suffix,
-                error,
-            )
-            df = _empty_table()
+        df = _read_sheet(xlsx_path, sheet_name)
         if df.empty:
             df = _empty_table()
         else:
@@ -171,29 +160,53 @@ def compute_current_month_loss(
     Returns:
         index 为不良类型、值为良损的 Series；当月无数据时返回空 Series。
     """
-    key_column = {"group": "defect_group", "code": "defect_desc"}[level]
-    if panel_details_df.empty:
-        return pd.Series(dtype=float)
+    return compute_current_month_losses(panel_details_df, month)[level]
 
-    working = panel_details_df.copy()
+
+def compute_current_month_losses(
+    panel_details_df: pd.DataFrame,
+    month: str,
+) -> dict[str, pd.Series]:
+    """一次准备当月 Panel 切片，同时返回 Group/Code 两级原始良损。"""
+    empty = {
+        "group": pd.Series(dtype=float),
+        "code": pd.Series(dtype=float),
+    }
+    if panel_details_df.empty:
+        return empty
+
+    working = panel_details_df[
+        ["warehousing_time", "panel_id", "defect_group", "defect_desc"]
+    ].copy()
     working["warehousing_time"] = pd.to_datetime(
         working["warehousing_time"], format="%Y%m%d", errors="coerce"
     )
+    month_period = pd.Period(month, freq="M")
+    month_start = month_period.start_time
+    next_month_start = (month_period + 1).start_time
     working = working[
-        working["warehousing_time"].dt.strftime("%Y-%m") == month
+        working["warehousing_time"].ge(month_start)
+        & working["warehousing_time"].lt(next_month_start)
     ]
     if working.empty:
-        return pd.Series(dtype=float)
+        return empty
 
     total_panels = working["panel_id"].nunique()
-    defective = (
-        working[working[key_column].notna()]
-        .groupby(key_column)["panel_id"]
-        .nunique()
-    )
     if total_panels == 0:
-        return pd.Series(dtype=float)
-    return defective / total_panels
+        return empty
+
+    losses: dict[str, pd.Series] = {}
+    for level, key_column in (
+        ("group", "defect_group"),
+        ("code", "defect_desc"),
+    ):
+        defective = (
+            working[working[key_column].notna()]
+            .groupby(key_column)["panel_id"]
+            .nunique()
+        )
+        losses[level] = defective / total_panels
+    return losses
 
 
 def _parse_table_rates(table_df: pd.DataFrame) -> pd.DataFrame:
@@ -377,12 +390,13 @@ def sync_modifier_table(
     stored = _load_stored_signatures(signature_path)
     table = read_modifier_table(xlsx_path, product_code)
     committed_signatures = stored.copy()
+    current_month_losses = compute_current_month_losses(
+        panel_details_df, month=current_month
+    )
 
     for level in ("group", "code"):
         sheet_name = f"{product_code}_{'Group级' if level == 'group' else 'Code级'}"
-        loss = compute_current_month_loss(
-            panel_details_df, level=level, month=current_month
-        )
+        loss = current_month_losses[level]
         updated, loss_changed = _apply_current_month_loss(
             table[level], loss, current_month
         )

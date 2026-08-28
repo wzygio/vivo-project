@@ -33,15 +33,28 @@ def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
         return pd.DataFrame()
     try:
         return pd.read_excel(xlsx_path, sheet_name=sheet_name)
-    except ValueError:
-        # Worksheet named 'X' not found —— sheet 缺失视为无数据
-        return pd.DataFrame()
+    except ValueError as openpyxl_error:
+        if _is_missing_sheet_error(openpyxl_error):
+            return pd.DataFrame()
+        logging.warning(
+            "[excel_tools] 标准读取 %s [%s] 发生格式错误，尝试 Excel COM: %s",
+            xlsx_path.name,
+            sheet_name,
+            openpyxl_error,
+        )
+        return _read_encrypted_xlsx_via_com(xlsx_path, sheet_name)
     except Exception as openpyxl_error:
         logging.warning(
             "[excel_tools] 标准读取 %s [%s] 失败，尝试 Excel COM: %s",
             xlsx_path.name, sheet_name, openpyxl_error,
         )
         return _read_encrypted_xlsx_via_com(xlsx_path, sheet_name)
+
+
+def _is_missing_sheet_error(error: ValueError) -> bool:
+    """仅识别 pandas 对目标 Sheet 不存在给出的 ValueError。"""
+    message = str(error).strip()
+    return message.startswith("Worksheet named ") and message.endswith(" not found")
 
 
 def list_workbook_sheet_names(xlsx_path: Path) -> list[str] | None:

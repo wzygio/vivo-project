@@ -218,6 +218,30 @@ class YieldAnalysisService:
 
     @staticmethod
     @st.cache_data(show_spinner=False)
+    def get_modifier_context(
+        config: AppConfig,
+        product_dir: Path,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+        modifier_signature: str = "",
+    ) -> Dict[str, Any]:
+        """按 Panel 快照和修饰表签名共享趋势/Mapping 修饰上下文。"""
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config, _db_manager, snapshot_signature
+        )
+        if panel_df.empty:
+            return {
+                "targets": {},
+                "group_targets": {},
+                "factors": {},
+                "signature": "empty-empty",
+            }
+        return YieldAnalysisService._build_modifier_context(
+            config, product_dir, panel_df
+        )
+
+    @staticmethod
+    @st.cache_data(show_spinner=False)
     def get_mwd_trend_data(
         config: AppConfig, 
         product_dir: Path, 
@@ -242,10 +266,12 @@ class YieldAnalysisService:
         if not mwd_code_data:
             return None
         
-        modifier_context = YieldAnalysisService._build_modifier_context(
+        modifier_context = YieldAnalysisService.get_modifier_context(
             config,
             product_dir,
-            panel_df,
+            _db_manager,
+            snapshot_signature,
+            modifier_signature,
         )
 
         return MWDTrendProcessor.create_mwd_trend_data(
@@ -275,8 +301,12 @@ class YieldAnalysisService:
         _, target_end_dt = YieldAnalysisService.get_time_window()
         
         # 同步入库良率修饰表（cache miss 时顺带写回）并取目标良损
-        modifier_context = YieldAnalysisService._build_modifier_context(
-            config, product_dir, panel_df
+        modifier_context = YieldAnalysisService.get_modifier_context(
+            config,
+            product_dir,
+            _db_manager,
+            snapshot_signature,
+            modifier_signature,
         )
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
@@ -377,8 +407,12 @@ class YieldAnalysisService:
         if panel_df.empty: return pd.DataFrame()
         monthly_factors = None
         if product_dir is not None:
-            modifier_context = YieldAnalysisService._build_modifier_context(
-                config, product_dir, panel_df
+            modifier_context = YieldAnalysisService.get_modifier_context(
+                config,
+                product_dir,
+                _db_manager,
+                snapshot_signature,
+                modifier_signature,
             )
             monthly_factors = modifier_context["factors"]
         return prepare_mapping_data(
