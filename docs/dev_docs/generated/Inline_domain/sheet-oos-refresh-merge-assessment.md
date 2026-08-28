@@ -167,3 +167,40 @@ master 自 merge-base 以来前进 15+ 提交，其中与本分支强相关：`6
 2. §2.5 中危项仍开放：WriteError 被 service 吞成"暂无数据"（失败可见性）、`get_cached_alarm_detail_tables` 无 TTL、meta 读-改-写在锁外、首次迁移 `"empty"` 签名多写一次。
 3. `load_refresh_meta` 对加密工作簿 COM 短暂不可用时按"meta 缺失 → 触发一次重写"处理，属既有自愈语义。
 4. 上述 9 个既有失败测试与本分支无关，建议另行安排修复（其中 yield config 断言漂移可能随 master 演进已变化）。
+
+## 7. 合并记录（2026-08-28，merge commit `ec63f3e`）
+
+master 已合入本分支。用户裁定与执行结果：
+
+### 7.1 裁定执行对照
+
+| 事项 | 裁定 | 执行 |
+|---|---|---|
+| decoration_admin 写模型 | 保留分支模型 | master 的共享 UI 壳（key_prefix/report_name 参数化）保留，写路径换为 `sheet_oos_admin` 逻辑（只写 `__flags`、失败不清缓存不 rerun）；`sheet_oos_admin.py` 无 spc 硬编码，直接落于 `app/sections/inline_domain/shared/` 供 SPC/CTQ 共用 |
+| clip_rules 链路 | 整条摘除 | 合并后全仓 `clip_rules` 零引用（master 删除自动生效，分支侧引用随冲突解决消除） |
+| excel_tools 原子写 | 采用分支方案 | 多 sheet 事务 + `WorkbookWriteResult` 为底；移植了 master 的 `.bak` 备份（替换前备份正式文件）与表头/行列校验（并入 `_verify_temp_workbook`）；单 sheet `replace_workbook_sheet` 保持 bool 返回兼容 master 调用方 |
+| 修饰工作簿迁至 resources/inline_domain/ | 保留 master 方案 | 分支新增的 `decision_signature.py` 默认资源路径已对齐 `ConfigLoader.get_domain_resource_dir("inline_domain")`（修复了会导致决策签名静默恒为空的断链） |
+| override_rates / scrap_sheets / 入库不良率规格 | 采用 master 版 | 分支提交与工作树的二进制变更全部放弃 |
+| TTL 12h vs 4h | 保留 master 12h | 周期重建实为 12h；手动刷新/决策上传经缓存键即时生效；PRD 5.8 已加注记；TTL 守卫测试改为"必须配置且 ≤12h" |
+| PPA_FALLBACK_VALUE_OFFSET | 保持 -1 | 修正 master 侧测试期望值（9.5→9.0）与模块 docstring（-0.5→-1） |
+
+### 7.2 冲突解决明细
+
+- 页面（SPC/CTQ）：master 为底（新 import 路径 + 预警中心接线），重放分支的 revision/决策签名参数与 `SheetOosDecorationReadError` 处理。
+- `spc_service.py`：master 配置化 TTL + 分支两个缓存键参数 + decision payload 透传三方叠加；`ctq_service.py` 硬编码 TTL 并入配置体系（`global.yaml` 新增 `inline_ctq_report_payload: 4`）。
+- `measurement_snapshot_repository.py`（master 迁至 `infrastructure/shared/`）：`measurement_corrector` + 配置化 TTL + 分支 `MeasurementRefreshResult`/`last_refresh_from_db` 三族能力叠加；分支侧 import 全部对齐新路径。
+- dashboard 移植：分支对旧 `spc_dashboard.py` 的改动全部落在 admin 函数，已并入共享壳 `decoration_admin.py`；旧目录 `app/sections/spc/` 删除。
+- `ARCHITECTURE.md`：master 结构 + 分支门控段落。
+
+### 7.3 合并后回归
+
+`uv run pytest tests/unit tests/integration`：**702 passed / 6 failed / 3 skipped**。
+6 个失败均为 HEAD 或 master 的既有失败，与合并无关（页头覆盖断言、AOI_RS 门户导航、yield config 断言漂移 ×3、真实 DB 集成测试）。合并引入的 4 个失败（test 适配问题）已全部修复。
+
+### 7.4 合并后遗留
+
+1. CPK 修饰后台（`render_cpk_decoration_admin`）仍是"覆盖写 + 全局清缓存"旧模型——`spc_cpk_decoration.xlsx` 是 PRD 明确 NON-GOAL，未动；如需统一另行决策。
+2. §6.3 遗留项仍开放（monitor 刷新状态属性链下探、WriteError 页面可见性、`get_cached_alarm_detail_tables` 无 TTL 等）。
+3. `_cached_decision_signature` 的 4h TTL 仍为硬编码，未并入 `service_cache` 配置体系（影响小，仅签名重读频率）。
+4. 6 个既有失败测试建议另行修复。
+5. 建议后续执行 SPC smoke 与管理员 UI 验收（PRD 12.3）后再合并回 master。
