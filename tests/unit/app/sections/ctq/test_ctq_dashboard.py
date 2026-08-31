@@ -59,6 +59,7 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     chamber_figure = object()
     time_figure = object()
     rendered_figures: list[object] = []
+    column_calls: list[int] = []
     captured: dict[str, object] = {}
     sheet_features_df = pd.DataFrame(
         [
@@ -76,6 +77,11 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     raw_measurements_df = sheet_features_df.rename(columns={"sheet_mean": "param_value"})
 
     monkeypatch.setattr(ctq_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(
+        ctq_dashboard.st,
+        "columns",
+        lambda count: column_calls.append(count) or [nullcontext() for _ in range(count)],
+    )
     monkeypatch.setattr(
         ctq_dashboard.st,
         "plotly_chart",
@@ -110,6 +116,7 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     )
 
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
+    assert column_calls == [3]
     assert "chart_type" not in captured
     assert captured["sheet_chart_type"] == "line"
 

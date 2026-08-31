@@ -353,7 +353,11 @@ def build_period_capability_report(
     raw_measurements: pd.DataFrame | None = None,
     sigma_source: str = PERIOD_SIGMA_SOURCE_SHEET_MEAN,
 ) -> pd.DataFrame:
-    """Aggregate M/W/D CPM and CPK rows with Sheet means and point-level sigma."""
+    """Aggregate M/W/D rows with Sheet means and point-level sigma.
+
+    CPM/CPK are computed for month and week periods only; day-period rows
+    carry NaN capability metrics.
+    """
     required_cols = {
         "prod_code",
         "factory",
@@ -460,6 +464,11 @@ def build_period_capability_report(
             ["mean_value", "std_value", "usl", "lsl"]
         ].itertuples(index=False, name=None)
     ]
+    # CPM/CPK are only meaningful at month/week granularity; day rows keep
+    # mean/std for charting but no longer carry capability metrics.
+    day_mask = result["period_type"].astype(str).eq("day")
+    if day_mask.any():
+        result.loc[day_mask, ["cpm", "cpk"]] = np.nan
     result = result.drop(columns=["sheet_std_value"])
     result = result[
         [

@@ -180,21 +180,19 @@ def _render_ctq_indicator_payload(
 ) -> None:
     """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
     with st.expander(payload["label"], expanded=True):
-        st.plotly_chart(
-            payload["period_figure"],
-            width="stretch",
-            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "period"),
+        period_column, chamber_column, time_column = st.columns(3)
+        chart_slots = (
+            (period_column, "period_figure", "period"),
+            (chamber_column, "chamber_figure", "chamber"),
+            (time_column, "time_figure", "time"),
         )
-        st.plotly_chart(
-            payload["chamber_figure"],
-            width="stretch",
-            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "chamber"),
-        )
-        st.plotly_chart(
-            payload["time_figure"],
-            width="stretch",
-            key=_build_ctq_chart_key(chart_key_prefix, payload["label"], "time"),
-        )
+        for column, figure_name, chart_slot in chart_slots:
+            with column:
+                st.plotly_chart(
+                    payload[figure_name],
+                    width="stretch",
+                    key=_build_ctq_chart_key(chart_key_prefix, payload["label"], chart_slot),
+                )
 
 
 def render_ctq_indicator_sections(

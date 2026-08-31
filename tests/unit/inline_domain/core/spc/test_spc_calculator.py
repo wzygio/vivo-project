@@ -292,6 +292,12 @@ def test_build_period_capability_report_groups_month_week_day() -> None:
     assert may_row["cpk"] == 5.0 / (3.0 * math.sqrt(2.0))
     assert "2026-04" not in report["period_label"].tolist()
 
+    week_rows = report[report["period_type"] == "week"]
+    assert week_rows[["cpm", "cpk"]].notna().any().all()
+    day_rows = report[report["period_type"] == "day"]
+    assert not day_rows.empty
+    assert day_rows[["cpm", "cpk"]].isna().all().all()
+
 
 def test_build_period_capability_report_uses_sheet_mean_for_mu_and_point_values_for_sigma() -> None:
     sheet_features = pd.DataFrame(
@@ -383,8 +389,8 @@ def test_build_period_capability_report_uses_sheet_mean_for_mu_and_point_values_
     assert day_row["sigma_source"] == PERIOD_SIGMA_SOURCE_POINT_VALUE
     assert day_row["mean_value"] == expected_mean
     assert day_row["std_value"] == expected_point_std
-    assert day_row["cpk"] == calculate_cpk(expected_mean, expected_point_std, 55.0, 45.0)
-    assert day_row["cpm"] == calculate_cpm(expected_mean, expected_point_std, 55.0, 45.0, 50.0)
+    assert pd.isna(day_row["cpk"])
+    assert pd.isna(day_row["cpm"])
 
 
 def test_build_period_capability_report_defaults_to_sheet_mean_sigma_when_raw_measurements_exist() -> None:
@@ -451,7 +457,7 @@ def test_build_period_capability_report_defaults_to_sheet_mean_sigma_when_raw_me
 
     assert day_row["sigma_source"] == PERIOD_SIGMA_SOURCE_SHEET_MEAN
     assert day_row["std_value"] == expected_sheet_std
-    assert day_row["cpk"] == calculate_cpk(50.0, expected_sheet_std, 55.0, 45.0)
+    assert pd.isna(day_row["cpk"])
 
 
 def test_build_period_capability_report_calculates_single_sheet_period_with_point_sigma() -> None:
@@ -506,8 +512,8 @@ def test_build_period_capability_report_calculates_single_sheet_period_with_poin
 
     assert day_row["sample_count"] == 1
     assert day_row["point_count"] == 2
-    assert pd.notna(day_row["cpm"])
-    assert pd.notna(day_row["cpk"])
+    assert pd.isna(day_row["cpm"])
+    assert pd.isna(day_row["cpk"])
 
 
 def test_build_period_capability_report_keeps_older_days_for_metric_backfill() -> None:
@@ -536,7 +542,7 @@ def test_build_period_capability_report_keeps_older_days_for_metric_backfill() -
     latest_day = day_rows[day_rows["period_label"] == "2026-06-08"].iloc[0]
 
     assert first_day["sample_count"] == 2
-    assert pd.notna(first_day["cpm"])
+    assert pd.isna(first_day["cpm"])
     assert latest_day["sample_count"] == 1
     assert pd.isna(latest_day["cpm"])
 

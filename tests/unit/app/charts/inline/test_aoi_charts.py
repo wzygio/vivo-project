@@ -98,6 +98,8 @@ def test_point_chart_draws_one_line_per_code_with_spec() -> None:
     assert len(lines) == 3  # A 线 + B 线 + A 的规格线
     # x 按首次过货时间排序
     assert list(lines[0].x) == ["L1", "L2"]
+    assert figure.layout.xaxis.tickangle == -50
+    assert figure.layout.xaxis.tickfont.size == 9
 
 
 def test_point_chart_uses_code_display_names() -> None:
@@ -151,6 +153,8 @@ def test_sheet_point_chart_keeps_sheet_axis_and_adds_hour_pass_time() -> None:
     assert figure.layout.xaxis.type == "category"
     assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
     assert list(figure.layout.xaxis.categoryarray) == expected_labels
+    assert figure.layout.xaxis.tickangle == -50
+    assert figure.layout.xaxis.tickfont.size == 9
     assert list(figure.data[0].x) == expected_labels
 
 

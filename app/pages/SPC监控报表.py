@@ -26,10 +26,12 @@ from app.components.page_header import (
 from app.sections.inline_domain.spc.spc_dashboard import (
     build_spc_sheet_oos_alerts,
     build_weekly_cpk_alerts,
+    build_weekly_cpm_alerts,
     filter_spc_report,
     get_default_spc_start_date,
     render_cpk_alert_center,
     render_cpk_alert_indicator_sections,
+    render_cpm_alert_center,
     render_sheet_oos_alert_indicator_sections,
     render_spc_filters,
     render_spc_indicator_sections,
@@ -137,6 +139,10 @@ cpk_alerts_df = build_weekly_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
 )
+cpm_alerts_df = build_weekly_cpm_alerts(
+    period_capability_df,
+    reference_date=default_end_dt.date(),
+)
 
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
@@ -148,6 +154,13 @@ if is_admin:
     
 render_cpk_alert_center(
     cpk_alerts_df,
+    has_capability_data=not period_capability_df.empty,
+    step_desc_map=step_desc_map,
+)
+
+# CPM 预警只做提示；“自动预警指标图像”依旧仅由 CPK 预警控制。
+render_cpm_alert_center(
+    cpm_alerts_df,
     has_capability_data=not period_capability_df.empty,
     step_desc_map=step_desc_map,
 )

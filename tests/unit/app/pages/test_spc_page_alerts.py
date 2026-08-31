@@ -27,6 +27,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     loaded_signatures: list[str] = []
     header_kwargs: dict[str, object] = {}
     rendered_alerts: list[pd.DataFrame] = []
+    rendered_cpm_alerts: list[pd.DataFrame] = []
     period_capability_df = pd.DataFrame(
         [
             {
@@ -114,6 +115,15 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     )
     monkeypatch.setattr(
         spc_dashboard,
+        "render_cpm_alert_center",
+        lambda alerts_df, **_kwargs: (
+            rendered_cpm_alerts.append(alerts_df.copy()),
+            events.append("cpm_alerts"),
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        spc_dashboard,
         "render_cpk_alert_indicator_sections",
         lambda **_kwargs: events.append("alert_charts"),
         raising=False,
@@ -146,4 +156,5 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
             "CPK值": 1.278,
         }
     ]
-    assert events == ["header", "filters", "alerts", "alert_charts", "charts"]
+    assert events == ["header", "filters", "alerts", "cpm_alerts", "alert_charts", "charts"]
+    assert rendered_cpm_alerts[0].empty

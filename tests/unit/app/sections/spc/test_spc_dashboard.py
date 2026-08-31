@@ -12,6 +12,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     _create_sheet_points_box_charts,
     build_spc_sheet_oos_alerts,
     build_weekly_cpk_alerts,
+    build_weekly_cpm_alerts,
     filter_spc_report_by_alerts,
     filter_spc_report,
     get_available_factories,
@@ -164,6 +165,106 @@ def test_build_weekly_cpk_alerts_excludes_decorated_records() -> None:
     )
 
     assert alerts_df["参数名称"].tolist() == ["4PP_Rs"]
+
+
+def test_build_weekly_cpm_alerts_returns_only_values_from_previous_week() -> None:
+    period_capability_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "MONTH_TYPE",
+                "period_type": "month",
+                "period_label": "2026-07",
+                "cpm": 0.80,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41260",
+                "param_name": "DAY_TYPE",
+                "period_type": "day",
+                "period_label": "2026-07-22",
+                "cpm": 1.10,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpm": 0.90,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41140",
+                "param_name": "SE_L1T",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpm": 1.20,
+            },
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "AT_THRESHOLD",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpm": 1.33,
+            },
+            {
+                "factory": "OLED",
+                "step_id": "21200",
+                "param_name": "CURRENT_WEEK",
+                "period_type": "week",
+                "period_label": "2026-W31",
+                "cpm": 0.80,
+            },
+        ]
+    )
+
+    alerts_df = build_weekly_cpm_alerts(
+        period_capability_df,
+        reference_date=date(2026, 7, 28),
+    )
+
+    assert alerts_df.to_dict("records") == [
+        {
+            "厂别": "ARRAY",
+            "站点": "15260",
+            "参数名称": "4PP_Rs",
+            "超规周次": "2026-W30",
+            "CPM值": 0.90,
+        },
+        {
+            "厂别": "TP",
+            "站点": "41140",
+            "参数名称": "SE_L1T",
+            "超规周次": "2026-W30",
+            "CPM值": 1.20,
+        },
+    ]
+
+
+def test_build_weekly_cpm_alerts_returns_empty_when_cpm_column_missing() -> None:
+    period_capability_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpk": 0.90,
+            }
+        ]
+    )
+
+    alerts_df = build_weekly_cpm_alerts(
+        period_capability_df,
+        reference_date=date(2026, 7, 28),
+    )
+
+    assert alerts_df.empty
+    assert alerts_df.columns.tolist() == ["厂别", "站点", "参数名称", "超规周次", "CPM值"]
 
 
 def test_filter_spc_report_by_alerts_matches_exact_indicator_combinations() -> None:

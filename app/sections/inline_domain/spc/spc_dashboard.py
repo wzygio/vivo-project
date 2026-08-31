@@ -50,6 +50,8 @@ from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
 SPC_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
 CPK_ALERT_THRESHOLD = 1.33
 CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规周次", "CPK值"]
+CPM_ALERT_THRESHOLD = 1.33
+CPM_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规周次", "CPM值"]
 CPK_ALERT_KEY_COLUMN_MAP = {
     "厂别": "factory",
     "站点": "step_id",
@@ -78,15 +80,20 @@ def get_default_spc_start_date(end_date: date) -> date:
     return get_period_window_start(end_date)
 
 
-def build_weekly_cpk_alerts(
+def _build_weekly_capability_alerts(
     period_capability_df: pd.DataFrame,
-    threshold: float = CPK_ALERT_THRESHOLD,
+    *,
+    metric_column: str,
+    value_label: str,
+    alert_columns: list[str],
+    threshold: float,
+    decorated_column: str | None = None,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold, undecorated CPK records from the previous full week."""
-    required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", "cpk"}
+    """Return below-threshold weekly capability records from the previous full week."""
+    required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", metric_column}
     if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
-        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+        return pd.DataFrame(columns=alert_columns)
 
     reference_day = pd.Timestamp(reference_date or date.today()).normalize()
     current_week_start = reference_day - pd.Timedelta(days=reference_day.weekday())
@@ -98,21 +105,23 @@ def build_weekly_cpk_alerts(
         period_capability_df["period_type"].astype(str).eq("week")
     ].copy()
     if capability_df.empty:
-        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+        return pd.DataFrame(columns=alert_columns)
 
-    capability_df["cpk"] = pd.to_numeric(capability_df["cpk"], errors="coerce")
-    is_decorated = (
-        capability_df["cpk_decorated"].fillna(False).astype(bool)
-        if "cpk_decorated" in capability_df.columns
-        else pd.Series(False, index=capability_df.index, dtype=bool)
-    )
+    capability_df[metric_column] = pd.to_numeric(capability_df[metric_column], errors="coerce")
+    below_threshold = capability_df[metric_column].lt(threshold)
+    if decorated_column is not None:
+        is_decorated = (
+            capability_df[decorated_column].fillna(False).astype(bool)
+            if decorated_column in capability_df.columns
+            else pd.Series(False, index=capability_df.index, dtype=bool)
+        )
+        below_threshold &= ~is_decorated
     alert_rows = capability_df[
-        capability_df["cpk"].lt(threshold)
+        below_threshold
         & capability_df["period_label"].astype(str).eq(target_week_label)
-        & ~is_decorated
     ].copy()
     if alert_rows.empty:
-        return pd.DataFrame(columns=CPK_ALERT_COLUMNS)
+        return pd.DataFrame(columns=alert_columns)
 
     alerts_df = alert_rows.rename(
         columns={
@@ -120,15 +129,83 @@ def build_weekly_cpk_alerts(
             "step_id": "站点",
             "param_name": "参数名称",
             "period_label": "超规周次",
-            "cpk": "CPK值",
+            metric_column: value_label,
         }
-    )[CPK_ALERT_COLUMNS]
+    )[alert_columns]
     alerts_df["超规周次"] = alerts_df["超规周次"].astype(str)
     return alerts_df.sort_values(
-        ["厂别", "站点", "参数名称", "CPK值"],
+        ["厂别", "站点", "参数名称", value_label],
         ascending=[True, True, True, True],
         kind="stable",
     ).reset_index(drop=True)
+
+
+def build_weekly_cpk_alerts(
+    period_capability_df: pd.DataFrame,
+    threshold: float = CPK_ALERT_THRESHOLD,
+    reference_date: date | None = None,
+) -> pd.DataFrame:
+    """Return below-threshold, undecorated CPK records from the previous full week."""
+    return _build_weekly_capability_alerts(
+        period_capability_df,
+        metric_column="cpk",
+        value_label="CPK值",
+        alert_columns=CPK_ALERT_COLUMNS,
+        threshold=threshold,
+        decorated_column="cpk_decorated",
+        reference_date=reference_date,
+    )
+
+
+def build_weekly_cpm_alerts(
+    period_capability_df: pd.DataFrame,
+    threshold: float = CPM_ALERT_THRESHOLD,
+    reference_date: date | None = None,
+) -> pd.DataFrame:
+    """Return below-threshold CPM records from the previous full week."""
+    return _build_weekly_capability_alerts(
+        period_capability_df,
+        metric_column="cpm",
+        value_label="CPM值",
+        alert_columns=CPM_ALERT_COLUMNS,
+        threshold=threshold,
+        reference_date=reference_date,
+    )
+
+
+def _render_capability_alert_center(
+    alerts_df: pd.DataFrame,
+    *,
+    metric_label: str,
+    value_label: str,
+    has_capability_data: bool,
+    threshold: float,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Render the product-level weekly capability alert summary and details."""
+    has_alerts = not alerts_df.empty
+    with st.expander(
+        f"{metric_label}预警中心（{metric_label} < {threshold:.2f}）",
+        expanded=has_alerts,
+    ):
+        if has_alerts:
+            st.error(f"检测到 {len(alerts_df)} 条 {metric_label} 预警，请关注。")
+            display_alerts_df = alerts_df
+            if step_desc_map:
+                display_alerts_df = alerts_df.copy()
+                display_alerts_df["站点"] = display_alerts_df["站点"].map(
+                    lambda step: format_step_label(step, step_desc_map)
+                )
+            st.dataframe(
+                display_alerts_df,
+                column_config={value_label: st.column_config.NumberColumn(value_label, format="%.3f")},
+                hide_index=True,
+                use_container_width=True,
+            )
+        elif has_capability_data:
+            st.success(f"未发现低于 {threshold:.2f} 的 {metric_label}。")
+        else:
+            st.info(f"当前产品暂无可计算的 {metric_label} 数据。")
 
 
 def render_cpk_alert_center(
@@ -139,29 +216,35 @@ def render_cpk_alert_center(
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render the product-level CPK alert summary and details."""
-    has_alerts = not alerts_df.empty
-    with st.expander(
-        f"CPK预警中心（CPK < {threshold:.2f}）",
-        expanded=has_alerts,
-    ):
-        if has_alerts:
-            st.error(f"检测到 {len(alerts_df)} 条 CPK 预警，请关注。")
-            display_alerts_df = alerts_df
-            if step_desc_map:
-                display_alerts_df = alerts_df.copy()
-                display_alerts_df["站点"] = display_alerts_df["站点"].map(
-                    lambda step: format_step_label(step, step_desc_map)
-                )
-            st.dataframe(
-                display_alerts_df,
-                column_config={"CPK值": st.column_config.NumberColumn("CPK值", format="%.3f")},
-                hide_index=True,
-                use_container_width=True,
-            )
-        elif has_capability_data:
-            st.success(f"未发现低于 {threshold:.2f} 的 CPK。")
-        else:
-            st.info("当前产品暂无可计算的 CPK 数据。")
+    _render_capability_alert_center(
+        alerts_df,
+        metric_label="CPK",
+        value_label="CPK值",
+        has_capability_data=has_capability_data,
+        threshold=threshold,
+        step_desc_map=step_desc_map,
+    )
+
+
+def render_cpm_alert_center(
+    alerts_df: pd.DataFrame,
+    *,
+    has_capability_data: bool,
+    threshold: float = CPM_ALERT_THRESHOLD,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Render the product-level CPM alert summary and details.
+
+    CPM 预警仅做提示，不驱动“自动预警指标图像”（仍由 CPK 预警控制）。
+    """
+    _render_capability_alert_center(
+        alerts_df,
+        metric_label="CPM",
+        value_label="CPM值",
+        has_capability_data=has_capability_data,
+        threshold=threshold,
+        step_desc_map=step_desc_map,
+    )
 
 
 def filter_spc_report_by_alerts(
