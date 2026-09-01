@@ -106,24 +106,17 @@ def _source() -> InMemoryFeaturesSource:
 def _write_decoration_workbook(
     resources: Path, file_name: str, flag: object
 ) -> Path:
+    """预写用户决策台账（<产品>__flags）；旧产品 sheet 的 flag 永远不再生效。"""
     path = resources / file_name
     row = {
-        "factory": "ARRAY",
         "prod_code": PROD,
         "step_id": "100",
         "param_name": "THK",
         "sheet_id": "S1",
-        "sheet_start_time": "2026-08-05 09:00:00",
-        "sheet_max": 100.0,
-        "sheet_min": 50.0,
-        "sheet_mean": 75.0,
-        "usl": 60.0,
-        "lsl": 40.0,
-        "oos_type": "USL",
         "flag": flag,
     }
-    pd.DataFrame([row], columns=DECORATION_COLUMNS).to_excel(
-        path, sheet_name=PROD, index=False, engine="openpyxl"
+    pd.DataFrame([row]).to_excel(
+        path, sheet_name=f"{PROD}__flags", index=False, engine="openpyxl"
     )
     return path
 

@@ -13,6 +13,10 @@ service_cache:
     inline_spc_report_payload: 12 # SPC 报表 payload
     inline_ctq_report_payload: 4 # CTQ 报表 payload
     inline_decorated_features: 12 # Sheet OOS 修饰共享特征
+    inline_aoi_tt_report_payload: 12 # AOI_TT 报表 payload
+    inline_aoi_rs_report_payload: 12 # AOI_RS 报表 payload
+    inline_monitor_alarm_details: 12 # 自动预警看板报警明细表
+    inline_monitor_dashboard_payload: 12 # 自动预警看板大盘 payload
 
 # 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
 domain_config:

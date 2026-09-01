@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+from src.inline_domain.application.aoi_rs import aoi_rs_service
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.shared_kernel.config import ConfigLoader
@@ -217,6 +218,31 @@ def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
     assert t3_sheet["rs_qty"].iloc[0] == 5
 
 
+def test_service_passes_scope_revision_and_decision_signature_to_prepare(monkeypatch) -> None:
+    """product_revision/decision_signature 进入缓存 key 并透传到 core 门控（scope='aoi_rs'）。"""
+    captured: dict[str, object] = {}
+
+    def fake_prepare(_lot_points_df, _sheet_points_df, _spec_df, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(lot_points_df=pd.DataFrame(), sheet_points_df=pd.DataFrame())
+
+    monkeypatch.setattr(aoi_rs_service, "prepare_aoi_rs_decoration", fake_prepare)
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=_data_port(_details_df(), _pass_df(), _spec_df()),
+        query_config_json=_config_json(),
+        snapshot_signature="gate-pass-through",
+        product_revision="R9",
+        decision_signature="sig-x",
+    )
+
+    assert captured["scope"] == "aoi_rs"
+    assert captured["prod_code"] == "M678"
+    assert captured["product_revision"] == "R9"
+    assert captured["decision_signature"] == "sig-x"
+
+
 def _chart_spec_df() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -270,6 +296,7 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
     monkeypatch, _tmp_project_root: Path
 ) -> None:
     # sheet 图 SHT-A01 释放真实值；lot 图 LOT-A1 整行删除
+    # （AOI 的决策唯一来源是 <产品>__flags，写入产品 sheet 的 flag 不生效）
     pd.DataFrame(
         [
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11629",
@@ -279,7 +306,7 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
         ]
     ).to_excel(
         _tmp_project_root / "resources" / "inline_domain" / "aoi_rs_sheet_oos_decoration.xlsx",
-        sheet_name="M678",
+        sheet_name="M678__flags",
         index=False,
         engine="openpyxl",
     )

@@ -67,13 +67,27 @@ class AoiTtReportService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=3)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=3,
+        ttl=ConfigLoader.get_service_cache_ttl_seconds(
+            "inline_aoi_tt_report_payload", default_hours=12
+        ),
+    )
     def fetch_aoi_tt_report_payload(
         _data_port: "AoiTtDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> dict[str, object]:
-        """缓存仅含 DataFrame 的原生 payload；失败降级为空。"""
+        """缓存仅含 DataFrame 的原生 payload；失败降级为空。
+
+        max_entries=3 避免多产品互相驱逐；TTL 由 config/global.yaml 的
+        service_cache 段统一配置（周期上限 12h）。product_revision /
+        decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
+        或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
+        """
         try:
             query_config = AoiTtQueryConfig.model_validate_json(query_config_json)
         except Exception as exc:
@@ -86,7 +100,7 @@ class AoiTtReportService:
                 return AoiTtReportService._empty_payload()
             spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
             # 超规片修饰：工作簿三态 flag（Delete 删除 / False 释放 / True 默认截断），
-            # 无工作簿时与引入前的自动截断行为一致
+            # 无工作簿时与引入前的自动截断行为一致；scope 门控决定是否真正落盘
             tt_details_df = prepare_aoi_tt_decoration(
                 tt_details_df,
                 spec_df,
@@ -95,6 +109,9 @@ class AoiTtReportService:
                 exempt_param_name_contains=(
                     ConfigLoader.get_auto_decoration_param_exemptions()
                 ),
+                scope="aoi_tt",
+                product_revision=product_revision,
+                decision_signature=decision_signature,
             ).tt_details_df
             indicators_df = _build_indicators(tt_details_df)
             return {
@@ -111,11 +128,15 @@ class AoiTtReportService:
         _data_port: "AoiTtDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> AoiTtReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         payload = AoiTtReportService.fetch_aoi_tt_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
         return AoiTtReportService._view_model_from_payload(payload)

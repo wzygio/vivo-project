@@ -67,12 +67,15 @@ def _build_chart_points(
     pass_through_df: pd.DataFrame,
     spec_df: pd.DataFrame,
     prod_code: str,
+    product_revision: str = "",
+    decision_signature: str = "",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
     修饰统一位于 service 层（D4：是否修饰由 application 层决定，前端只渲染）。
     By Lot 用 LOT_RATIO 规格、By Sheet 用 SHEET_ID/GLASS_ID 规格，两图分别修饰；
     工作簿 flag=Delete 删除图点、False 释放真实值、True（默认）截断。
+    product_revision/decision_signature 透传到 core 刷新门控。
     """
     result = prepare_aoi_rs_decoration(
         build_lot_point_df(rs_details_df, pass_through_df),
@@ -81,6 +84,9 @@ def _build_chart_points(
         product_dir=resolve_product_resource_dir(prod_code),
         prod_code=prod_code,
         exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
+        scope="aoi_rs",
+        product_revision=product_revision,
+        decision_signature=decision_signature,
     )
     return result.lot_points_df, result.sheet_points_df
 
@@ -115,13 +121,27 @@ class AoiRsReportService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=3)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=3,
+        ttl=ConfigLoader.get_service_cache_ttl_seconds(
+            "inline_aoi_rs_report_payload", default_hours=12
+        ),
+    )
     def fetch_aoi_rs_report_payload(
         _data_port: "AoiRsDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> dict[str, object]:
-        """缓存仅含 DataFrame 的原生 payload；失败降级为空。"""
+        """缓存仅含 DataFrame 的原生 payload；失败降级为空。
+
+        max_entries=3 避免多产品互相驱逐；TTL 由 config/global.yaml 的
+        service_cache 段统一配置（周期上限 12h）。product_revision /
+        decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
+        或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
+        """
         try:
             query_config = AoiRsQueryConfig.model_validate_json(query_config_json)
         except Exception as exc:
@@ -135,9 +155,15 @@ class AoiRsReportService:
             pass_through_df = _data_port.get_pass_through(query_config)
             spec_df = _data_port.get_rs_spec_limits(query_config.prod_code)
             # 超规修饰在 service 层完成：By Lot 用 LOT_RATIO 规格、By Sheet 用
-            # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）
+            # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）；
+            # scope 门控决定是否真正落盘
             lot_points_df, sheet_points_df = _build_chart_points(
-                rs_details_df, pass_through_df, spec_df, query_config.prod_code
+                rs_details_df,
+                pass_through_df,
+                spec_df,
+                query_config.prod_code,
+                product_revision=product_revision,
+                decision_signature=decision_signature,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {
@@ -157,11 +183,15 @@ class AoiRsReportService:
         _data_port: "AoiRsDataPort",
         query_config_json: str,
         snapshot_signature: str = "",
+        product_revision: str = "",
+        decision_signature: str = "",
     ) -> AoiRsReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         payload = AoiRsReportService.fetch_aoi_rs_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
         return AoiRsReportService._view_model_from_payload(payload)

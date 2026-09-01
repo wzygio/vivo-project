@@ -1,7 +1,7 @@
 """Sheet OOS 修饰刷新机制集成测试（Phase 7.1）。
 
-端到端验证：旧格式迁移、决策变更同步、系统自写无二次触发、
-revision 推进立即重建、写失败保留旧状态。
+端到端验证：旧格式工作簿首写（空 __flags、不继承旧表 flag）、决策变更同步、
+系统自写无二次触发、revision 推进立即重建、写失败保留旧状态。
 全部使用 tmp_path 真实工作簿，不触碰真实 resources/。
 """
 
@@ -90,9 +90,8 @@ def _raw_measurements() -> pd.DataFrame:
 def _write_legacy_workbook(product_dir: Path) -> Path:
     """构造旧格式工作簿：单产品 sheet（明细列 + flag），含重复键与显式 True。
 
-    - S1 flag=False（用户关闭修饰）
-    - S2 重复键 [True, Delete] → 迁移后 keep=last 应为 Delete
-    - S9 flag=True（历史键，显式 True 必须保留）
+    - S1 flag=False、S2 重复键 [True, Delete]、S9 flag=True（历史键）
+    - 新语义下这些 flag 永远不生效（不做迁移），仅用于验证"不继承"与首写行为
     """
     product_dir.mkdir(parents=True, exist_ok=True)
     workbook_path = product_dir / OOS_DECORATION_FILE_NAME
@@ -135,11 +134,12 @@ def _flags_by_sheet_id(df: pd.DataFrame) -> dict[str, object]:
 
 
 # ---------------------------------------------------------------------------
-# 场景 1：旧格式迁移端到端 + 二次运行幂等
+# 场景 1：旧格式工作簿首写端到端（不迁移 flag）+ 二次运行幂等
 # ---------------------------------------------------------------------------
 
 
-def test_legacy_migration_end_to_end_and_idempotent_second_run(tmp_path: Path) -> None:
+def test_first_write_creates_empty_flags_and_idempotent_second_run(tmp_path: Path) -> None:
+    """旧产品 sheet 的 flag 永远不再生效：首写生成空 __flags，全部键默认 True。"""
     product_dir = tmp_path / "resources"
     workbook_path = _write_legacy_workbook(product_dir)
 
@@ -148,22 +148,22 @@ def test_legacy_migration_end_to_end_and_idempotent_second_run(tmp_path: Path) -
     assert result.refresh_reason == "missing"
     assert result.decision_sheet == "Z571__flags"
 
-    # __flags 决策台账：全部 flag 保留（含显式 True 的历史键 S9），重复键 keep=last
+    # __flags 决策台账：空台账（不继承旧产品 sheet 中的 False/Delete/True）
     decisions = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
     assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
-    assert decisions["sheet_id"].tolist() == ["S1", "S2", "S9"]
-    assert _flags_by_sheet_id(decisions) == {"S1": False, "S2": "Delete", "S9": True}
+    assert decisions.empty
 
-    # 产品 sheet 重建为当前明细（历史键 S9 不进入），flag 按决策台账生效
+    # 产品 sheet 重建为当前明细（历史键 S9 不进入），全部 flag 默认 True
     product = _read_product_sheet(workbook_path)
     assert product["sheet_id"].tolist() == ["S1", "S2"]
-    assert _flags_by_sheet_id(product) == {"S1": False, "S2": "Delete"}
+    assert _flags_by_sheet_id(product) == {"S1": True, "S2": True}
     assert result.decoration_df["sheet_id"].tolist() == ["S1", "S2"]
 
-    # 三态作用于 raw：S1 flag=False 保留真实值；S2 Delete 剔除点位
+    # 全部默认 True：S1/S2 均自动修饰，截断到 spec 内（不再是原始超限值）
     decorated = result.raw_measurements_df
-    assert decorated["sheet_id"].tolist() == ["S1"]
-    assert decorated["param_value"].iloc[0] == 7.5
+    assert decorated["sheet_id"].tolist() == ["S1", "S2"]
+    assert decorated["param_value"].between(-6.0, 6.0).all()
+    assert not decorated["param_value"].isin([7.5, -7.5]).any()
 
     # __refresh_meta__ 写入且字段齐全
     meta = load_refresh_meta(product_dir, OOS_DECORATION_FILE_NAME, SCOPE, SHEET)
@@ -177,14 +177,13 @@ def test_legacy_migration_end_to_end_and_idempotent_second_run(tmp_path: Path) -
     meta_sheet = read_workbook_sheet(workbook_path, REFRESH_META_SHEET_NAME)
     assert set(REFRESH_META_COLUMNS).issubset(meta_sheet.columns)
 
-    # 二次运行幂等：TTL 内不重写，决策台账不变
+    # 二次运行幂等：TTL 内不重写，决策台账仍为空
     mtime_before = workbook_path.stat().st_mtime_ns
     second = _run_prepare(product_dir, revision="R1", now=NOW + timedelta(hours=1))
     assert second.refresh_reason == "unchanged"
     assert workbook_path.stat().st_mtime_ns == mtime_before
     decisions_after = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    assert decisions_after["sheet_id"].tolist() == ["S1", "S2", "S9"]
-    assert _flags_by_sheet_id(decisions_after) == {"S1": False, "S2": "Delete", "S9": True}
+    assert decisions_after.empty
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +196,9 @@ def test_decision_change_triggers_rewrite_and_updates_signature(tmp_path: Path) 
     workbook_path = _write_legacy_workbook(product_dir)
     _run_prepare(product_dir, revision="R1", now=NOW)
 
-    # 用户直接编辑 __flags：S1 False→True（恢复修饰）、S2 Delete→False（恢复展示）
-    decisions = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    decisions.loc[decisions["sheet_id"] == "S1", "flag"] = True
-    decisions.loc[decisions["sheet_id"] == "S2", "flag"] = False
+    # 用户直接编辑 __flags：写入 S1=True（保持修饰）、S2=False（关闭修饰）
+    decisions = _read_product_sheet(workbook_path)[[*OOS_KEY_COLUMNS]].copy()
+    decisions["flag"] = [True, False]
     write_result = replace_workbook_sheets(workbook_path, {"Z571__flags": decisions})
     assert write_result.written, write_result.error
     expected_signature = compute_decision_signature(decisions)
@@ -262,8 +260,14 @@ def test_self_written_workbook_does_not_retrigger_within_ttl(tmp_path: Path) -> 
 
 def test_revision_change_rebuilds_immediately(tmp_path: Path, monkeypatch) -> None:
     product_dir = tmp_path / "resources"
-    _write_legacy_workbook(product_dir)
+    workbook_path = _write_legacy_workbook(product_dir)
     _run_prepare(product_dir, revision="R1", now=NOW)
+
+    # 预写用户决策台账（__flags 只记人为决策）：S1 关闭修饰、S2 标记 Delete
+    decisions = _read_product_sheet(workbook_path)[[*OOS_KEY_COLUMNS]].copy()
+    decisions["flag"] = [False, "Delete"]
+    write_result = replace_workbook_sheets(workbook_path, {"Z571__flags": decisions})
+    assert write_result.written, write_result.error
 
     write_calls: list[tuple[str, ...]] = []
     real_replace = sheet_oos_decoration.replace_workbook_sheets

@@ -1,10 +1,12 @@
 """AOI_TT 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
+from src.inline_domain.application.aoi_tt import aoi_tt_service
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
 from src.shared_kernel.config import ConfigLoader
@@ -246,9 +248,35 @@ def _over_spec_port() -> type:
 
 
 def _write_aoi_tt_workbook(resources: Path, rows: list[dict]) -> Path:
+    """把人工决策写入决策台账 sheet（AOI 的决策唯一来源是 <产品>__flags）。"""
     path = resources / "aoi_tt_sheet_oos_decoration.xlsx"
-    pd.DataFrame(rows).to_excel(path, sheet_name="M678", index=False, engine="openpyxl")
+    pd.DataFrame(rows).to_excel(path, sheet_name="M678__flags", index=False, engine="openpyxl")
     return path
+
+
+def test_service_passes_scope_revision_and_decision_signature_to_prepare(monkeypatch) -> None:
+    """product_revision/decision_signature 进入缓存 key 并透传到 core 门控（scope='aoi_tt'）。"""
+    captured: dict[str, object] = {}
+
+    def fake_prepare(tt_details_df, _spec_df, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(tt_details_df=tt_details_df)
+
+    monkeypatch.setattr(aoi_tt_service, "prepare_aoi_tt_decoration", fake_prepare)
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(_details_df(), _spec_df()),
+        query_config_json=_config_json(),
+        snapshot_signature="gate-pass-through",
+        product_revision="R9",
+        decision_signature="sig-x",
+    )
+
+    assert captured["scope"] == "aoi_tt"
+    assert captured["prod_code"] == "M678"
+    assert captured["product_revision"] == "R9"
+    assert captured["decision_signature"] == "sig-x"
 
 
 def test_service_persists_aoi_tt_decoration_workbook(_tmp_project_root: Path) -> None:

@@ -14,6 +14,12 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
+    AOI_RS_OOS_DECORATION_FILE_NAME,
+)
+from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
+    AOI_TT_OOS_DECORATION_FILE_NAME,
+)
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
@@ -30,6 +36,8 @@ CTQ_OOS_DECORATION_FILE_NAME = "ctq_sheet_oos_decoration.xlsx"
 SCOPE_DECORATION_FILE_NAME = {
     "spc": OOS_DECORATION_FILE_NAME,
     "ctq": CTQ_OOS_DECORATION_FILE_NAME,
+    "aoi_tt": AOI_TT_OOS_DECORATION_FILE_NAME,
+    "aoi_rs": AOI_RS_OOS_DECORATION_FILE_NAME,
 }
 
 
