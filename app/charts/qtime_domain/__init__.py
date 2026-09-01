@@ -1,0 +1,1 @@
+"""Q-Time presentation adapters."""

@@ -3,7 +3,7 @@
 ## Purpose
 
 天柱专项报表系统面向 OLED/Array 显示制造质量分析，提供入库不良率（Yield）、
-SPC/CTQ、自动预警和关键备件寿命管理报表。
+SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
 
 ## Operating Model
 
@@ -23,6 +23,7 @@ SPC/CTQ、自动预警和关键备件寿命管理报表。
 | `src/yield_domain/` | Yield 趋势、Lot/Sheet、Mapping、告警和导出。 |
 | `src/inline_domain/` | SPC、CTQ 和自动预警。 |
 | `src/equipment_domain/` | 关键备件规格、寿命计算和快照匹配。 |
+| `src/qtime_domain/` | Q-Time 筛选、Lot 等待时长明细和数据库适配。 |
 | `src/shared_kernel/` | 配置、数据库单例、输出路径和跨领域工具。 |
 | `config/` | 应用与产品配置。 |
 | `resources/` | 版本控制的产品资源、规格、人工覆盖和前端静态文件。 |
