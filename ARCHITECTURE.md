@@ -2,8 +2,8 @@
 
 ## 项目定位
 
-`vivo-project` 是面向显示制造质量分析的 Streamlit 报表系统，覆盖四类
-业务能力：入库不良率（Yield）、SPC/CTQ 监控、自动预警和关键备件寿命管理。
+`vivo-project` 是面向显示制造质量分析的 Streamlit 报表系统，覆盖五类
+业务能力：入库不良率（Yield）、SPC/CTQ 监控、自动预警、Q-Time 过货监控和关键备件寿命管理。
 
 系统采用标准 `src` 布局：`app/` 负责交互和展示，`src/` 承载领域逻辑，
 `src/shared_kernel/` 提供跨领域配置、数据库和通用工具。
@@ -48,7 +48,20 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 | `yield_domain` | 入库不良率趋势、Code/Group MWD、Lot/Sheet 明细、缺陷 Mapping、告警和 Office 导出。 | `YieldAnalysisService`、`AlertService`、`PanelRepository` |
 | `inline_domain` | SPC、CTQ 与自动预警的测量查询、能力计算、OOS 修饰和监控汇总。 | `SpcReportService`、`CtqReportService`、`MonitorAnalysisService`、`SpcRepository` |
 | `equipment_domain` | 关键备件规格基线、寿命计算、状态预警，以及真实与仿造快照的匹配。 | `PartsReportService`、`PartsRepository` |
+| `qtime_domain` | 站点间过货等待时长、规格、厂别/路径/产品筛选与 Lot 明细。 | `QTimeReportService`、`QTimeRepository` |
 | `shared_kernel` | 配置模型与加载、数据库连接、输出目录、合规配置和 Excel/CSV 工具。 | `ConfigLoader`、`DatabaseManager` |
+
+### Q-Time 数据流
+
+1. `QTimeRepository` 从 `eda.imp_qtime_tzbjx` 获取产品选项，从
+   `mdw.qtime_tzbjx` 获取厂别限定路径和 Lot 级明细；所有筛选使用绑定参数，
+   时间窗口为 `[start_time, end_time)`。
+2. 厂别由 `f_step` 的首字符稳定映射：`1*` → ARRAY、`2*` → OLED、其余 → TP。
+   `QTimeReportService` 只依赖 `QTimeDataPort`，页面不直接查询数据库。
+3. `app/pages/Q_Time监控报表.py` 是薄组合入口；筛选、查询门控、空/错误状态由
+   `app/sections/qtime_domain/` 拥有，柱线图模型由 `app/charts/qtime_domain/` 构建。
+4. 当前 Q-Time 目标表没有快照降级契约。数据库连接或 SELECT 权限失败时，
+   仓储保留异常因果链，页面只显示不含 SQL、凭据和 traceback 的稳定错误信息。
 
 ### Yield 数据流
 
@@ -172,6 +185,7 @@ MWD 指定良损、Group/Code Sheet 优先级与 Mapping 边界见
 | `src/yield_domain/` | Yield 的 application/core/infrastructure 分层实现。 |
 | `src/inline_domain/` | SPC、CTQ、自动预警的 application/core/infrastructure 分层实现。 |
 | `src/equipment_domain/` | 关键备件的 application/core/infrastructure 分层实现。 |
+| `src/qtime_domain/` | Q-Time 的 application/core/infrastructure 分层实现。 |
 | `src/shared_kernel/` | 共享配置、数据库、输出路径和工具。 |
 | `config/` | 全局、产品、SPC、设备和合规配置。 |
 | `resources/` | 受版本控制的产品资源、基线、人工修饰与前端静态文件。 |
