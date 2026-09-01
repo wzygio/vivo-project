@@ -22,6 +22,23 @@ processing:
   use_local_snapshot: True
   snapshot_path: 'data/snapshot_Z517.parquet'
 
+  # 5. defect_code倍率调节
+  defect_multipliers:
+    # Array_Line
+    'S向亮线': 0.7
+    'G向单亮线': 0.5
+    'G向单暗线': 0.8
+    # # Array_Pixel
+    # Array_Mura
+    'S向ELA Mura': 0
+    'G向ELA Mura': 0
+    'G向带状Mura': 0
+    # OLED_Mura
+    '彩斑Mura': 0.7
+    '大面积片状彩斑Mura': 0
+    # TP
+    'Short Test NG': 0.2
+
   mapping_layout:
     row_labels:
       - '1A'

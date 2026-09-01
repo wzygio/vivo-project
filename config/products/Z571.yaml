@@ -25,7 +25,7 @@ processing:
   defect_capping:
     enable: True
   
-    # 5. defect_code倍率调节
+  # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
     'S向亮线': 0.7

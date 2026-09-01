@@ -237,14 +237,14 @@ def render_cpm_alert_center(
 
     CPM 预警仅做提示，不驱动“自动预警指标图像”（仍由 CPK 预警控制）。
     """
-    _render_capability_alert_center(
-        alerts_df,
-        metric_label="CPM",
-        value_label="CPM值",
-        has_capability_data=has_capability_data,
-        threshold=threshold,
-        step_desc_map=step_desc_map,
-    )
+    # _render_capability_alert_center(
+    #     alerts_df,
+    #     metric_label="CPM",
+    #     value_label="CPM值",
+    #     has_capability_data=has_capability_data,
+    #     threshold=threshold,
+    #     step_desc_map=step_desc_map,
+    # )
 
 
 def filter_spc_report_by_alerts(

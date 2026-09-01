@@ -31,16 +31,17 @@ processing:
   defect_multipliers:
     # Array_Line
     'S向亮线': 0.7
+    'S向单暗线': 0.6
     # Array_Pixel
+    '群亮点': 0.9
+    '暗点': 0.5
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
     'G向带状Mura': 0
-    'S向线状Mura': 0.2
-    '白画面黑斑Mura': 0.2
     # OLED_Mura
     '彩斑Mura': 0.5
-    'S向边缘Mura': 0.6
+    '大面积片状彩斑Mura': 0
 
   # 6. sheet/lot波动调节
   sheet_hotspot_config: 
