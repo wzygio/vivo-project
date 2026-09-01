@@ -84,7 +84,7 @@
 - [x] 6.2 全量 `pytest tests/unit -q`：无新失败（对照 0.1 基线）。
 
 ### Phase 7 — E2E（目标：全部通过）
-- [x] 7.1 启动应用（localhost:8503），跑既有 `tests/e2e/spc_cpk_decoration.js`、
+- [x] 7.1 启动应用（localhost:8503），跑既有 `tests/e2e/spc_cpk_cpm_decoration.js`、
   `spc_cpk_alert.js`、`aoi_tt_report.js`、`monitor_compliance_config.js` 等；验证：无抛错。
 - [x] 7.2 新增 aoi_rs 修饰 E2E（工作簿 flag=False/Delete 行为）+ CTQ 浏览器烟测
   （截图存 `output/test-results/`）；验证：断言通过、无 traceback。

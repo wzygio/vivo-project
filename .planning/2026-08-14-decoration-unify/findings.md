@@ -40,8 +40,8 @@
 
 ### E2E 现状
 - `tests/e2e/*.js` 为 playwright 脚本（page => {}），打 localhost:8503 的 Streamlit
-  （如 `spc_cpk_decoration.js` 用 `?admin=true`）。既有文件：spc_cpk_alert /
-  spc_cpk_decoration / spc_filter_layout_mt_ch / spc_main_process_chamber /
+  （如 `spc_cpk_cpm_decoration.js` 用 `?admin=true`）。既有文件：spc_cpk_alert /
+  spc_cpk_cpm_decoration / spc_filter_layout_mt_ch / spc_main_process_chamber /
   aoi_tt_report / monitor_compliance_config。无 ctq、aoi_rs 的 e2e。
 - 上一计划（2026-08-13-inline-pipeline-reuse）E2E 方式：起应用 + playwright-cli
   跑脚本/截图签核，产物存 `output/test-results/`（AGENTS.md 安全边界要求）。

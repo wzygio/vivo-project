@@ -419,7 +419,7 @@ detail_row_count
 - 不修改 L1 Parquet 的 8 小时 TTL、三个月窗口、数据库失败降级或策略版本；
 - 不把实际 L1 快照版本加入页面缓存签名；
 - 不把工作簿改造成完整历史 OOS 事实仓库；只持久化人工决策；
-- 不修改 `spc_cpk_decoration.xlsx`；
+- 不修改 `spc_cpk_cpm_decoration.xlsx`；
 - 不在本次迁移 AOI_TT/AOI_RS 专用修饰文件；
 - 不引入用户身份、审批流或决策审计数据库。
 

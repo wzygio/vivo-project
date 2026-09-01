@@ -13,7 +13,7 @@
   - ctq：同 spc 列结构；当前仅 M626 有 2 行（均 True）
   - aoi_tt：时间列名 `start_time`；所有 sheet 当前 0 行
   - aoi_rs：企业加密（须 COM）；列 `prod_code,factory,step_id,rs_code,chart_kind,point_id,value,spec,flag`；**无时间列**
-- spc_cpk_decoration.xlsx 的 flag 语义相反（opt-in 修饰），趋势波动预警不读它，直接用 `build_weekly_cpk_alerts` 既有判据。
+- spc_cpk_cpm_decoration.xlsx 的 flag 语义相反（opt-in 修饰），趋势波动预警不读它，直接用 `build_weekly_cpk_alerts` 既有判据。
 - ISO 上周范式：`tools/generate_ppa_oos_weekly_summary.py:previous_calendar_week` 返回 `[上周一, 本周一)` 半开区间；项目无共享工具函数。
 - Service/ViewModel：spc/ctq 的 ViewModel 已含 `sheet_oos_decoration_result`；aoi_tt/aoi_rs 不含，需读工作簿。
 

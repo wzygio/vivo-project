@@ -244,6 +244,38 @@ def test_build_weekly_cpm_alerts_returns_only_values_from_previous_week() -> Non
     ]
 
 
+def test_build_weekly_cpm_alerts_excludes_decorated_rows() -> None:
+    period_capability_df = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "step_id": "15260",
+                "param_name": "4PP_Rs",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpm": 0.90,
+                "cpm_decorated": True,
+            },
+            {
+                "factory": "TP",
+                "step_id": "41140",
+                "param_name": "SE_L1T",
+                "period_type": "week",
+                "period_label": "2026-W30",
+                "cpm": 1.20,
+                "cpm_decorated": False,
+            },
+        ]
+    )
+
+    alerts_df = build_weekly_cpm_alerts(
+        period_capability_df,
+        reference_date=date(2026, 7, 28),
+    )
+
+    assert alerts_df["参数名称"].tolist() == ["SE_L1T"]
+
+
 def test_build_weekly_cpm_alerts_returns_empty_when_cpm_column_missing() -> None:
     period_capability_df = pd.DataFrame(
         [
@@ -480,15 +512,21 @@ def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(mon
     cpk_result = CpkDecorationResult(
         period_capability_df=pd.DataFrame(),
         decoration_df=pd.DataFrame(),
-        decoration_path=tmp_path / "spc_cpk_decoration.xlsx",
+        decoration_path=tmp_path / "spc_cpk_cpm_decoration.xlsx",
         decoration_sheet="M678",
+    )
+    cpm_result = CpkDecorationResult(
+        period_capability_df=pd.DataFrame(),
+        decoration_df=pd.DataFrame(),
+        decoration_path=tmp_path / "spc_cpk_cpm_decoration.xlsx",
+        decoration_sheet="M678_cpm",
     )
 
     monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(
         spc_dashboard.st,
         "tabs",
-        lambda labels: tab_labels.extend(labels) or [nullcontext(), nullcontext()],
+        lambda labels: tab_labels.extend(labels) or [nullcontext() for _ in labels],
     )
     monkeypatch.setattr(spc_dashboard.st, "columns", lambda *_args, **_kwargs: [FakeColumn()] * 2)
     monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
@@ -496,9 +534,9 @@ def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(mon
     monkeypatch.setattr(spc_dashboard.st, "download_button", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "file_uploader", lambda *_args, **_kwargs: None)
 
-    render_spc_decoration_admin(oos_result, cpk_result)
+    render_spc_decoration_admin(oos_result, cpk_result, cpm_result)
 
-    assert tab_labels == ["超规片修饰", "CPK修饰"]
+    assert tab_labels == ["超规片修饰", "CPK修饰", "CPM修饰"]
 
 
 def test_default_cpm_start_date_uses_previous_month_first_day() -> None:

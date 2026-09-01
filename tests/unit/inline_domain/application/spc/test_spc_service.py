@@ -170,11 +170,13 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
     assert "chart_type" not in report.indicators_df.columns
     assert set(report.period_capability_df["sigma_source"]) == {"sheet_mean"}
     assert set(report.period_capability_df["cpk_decorated"]) == {False}
+    assert set(report.period_capability_df["cpm_decorated"]) == {False}
     assert set(report.raw_measurements_df["data_type"]) == {"SPC"}
     assert set(report.raw_measurements_df["main_process_unit_id"]) == {"MAIN-EQP-01"}
     assert set(report.raw_measurements_df["main_process_trace_source"]) == {"array_sht"}
     assert report.sheet_oos_decoration_result is not None
     assert report.cpk_decoration_result is not None
+    assert report.cpm_decoration_result is not None
 
 
 def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypatch, tmp_path: Path) -> None:
@@ -255,6 +257,7 @@ def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
     assert set(report.indicators_df["param_name"]) == {"PPA_THK"}
     assert report.period_capability_df.empty
     assert report.cpk_decoration_result is not None
+    assert report.cpm_decoration_result is not None
 
 
 def test_period_capability_end_date_follows_latest_available_sheet_date() -> None:

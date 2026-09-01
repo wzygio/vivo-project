@@ -29,6 +29,6 @@ resources:
     compliance_config: compliance_config.xlsx
     ctq_sheet_oos_decoration: ctq_sheet_oos_decoration.xlsx
     scrap_sheets: scrap_sheets.xlsx
-    spc_cpk_decoration: spc_cpk_decoration.xlsx
+    spc_cpk_cpm_decoration: spc_cpk_cpm_decoration.xlsx
     spc_outlier_filters: spc_outlier_filters.xlsx
     spc_sheet_oos_decoration: spc_sheet_oos_decoration.xlsx

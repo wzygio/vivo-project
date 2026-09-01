@@ -128,7 +128,7 @@ generated 分析文档核实，无阻塞问题。D6（aoi 工作簿键列）为�
 service（D4）、aoi_tt/aoi_rs 工作簿三态（新能力，默认行为兼容）。
 验证：tests/unit 417 passed / 5 failed（=既有基线）；E2E 九脚本在锁定环境
 （.venv / streamlit 1.60）全部通过，含 aoi_rs flag=Delete 端到端轨迹断言与
-spc_cpk_decoration 8 行修饰值全匹配；截图/产物见 output/test-results、output/screenshots。
+spc_cpk_cpm_decoration 8 行修饰值全匹配；截图/产物见 output/test-results、output/screenshots。
 过程修正：E2E 运行环境从系统 Python（1.49，缺 streamlit_echarts）改为 .venv；
 全部 e2e 脚本适配 1.60 aria-label 行为。架构决策见 ADR-0014。
 有意排除：monitor AOI 组 scope 切换（按 PRD 约定单独立项）。

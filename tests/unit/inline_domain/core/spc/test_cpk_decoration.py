@@ -5,9 +5,12 @@ import pandas as pd
 
 from src.inline_domain.core.spc import cpk_decoration
 from src.inline_domain.core.spc.cpk_decoration import (
+    apply_capability_decoration,
     apply_cpk_decoration,
     load_cpk_decoration,
+    prepare_capability_decoration,
     prepare_cpk_decoration,
+    resolve_capability_decoration_sheet,
 )
 
 
@@ -79,6 +82,53 @@ def test_cpk_decoration_matches_excel_numeric_step_id_to_runtime_string() -> Non
 
     assert decorated_df["cpk"].tolist() == [1.46]
     assert decorated_df["cpk_decorated"].tolist() == [True]
+
+
+def test_cpm_decoration_uses_cpm_columns_and_decorated_flag() -> None:
+    computed_df = _capability_frame(1.46).rename(columns={"cpk": "cpm"})
+
+    result = prepare_capability_decoration(
+        period_capability_df=computed_df,
+        product_dir=Path("."),
+        persist_files=False,
+        sheet_name="M678_cpm",
+        metric="cpm",
+    )
+
+    assert result.decoration_sheet == "M678_cpm"
+    assert result.decoration_df["flag"].tolist() == [False]
+    assert result.decoration_df["cpm_corrected"].tolist() == [1.46]
+    assert result.period_capability_df["cpm"].tolist() == [1.46]
+    assert result.period_capability_df["cpm_decorated"].tolist() == [False]
+
+    enabled_df = result.decoration_df.assign(cpm_corrected=1.72, flag=True)
+    decorated_df = apply_capability_decoration(computed_df, enabled_df, metric="cpm")
+
+    assert decorated_df["cpm"].tolist() == [1.72]
+    assert decorated_df["cpm_decorated"].tolist() == [True]
+
+
+def test_cpk_and_cpm_decoration_sheets_coexist_in_one_workbook(tmp_path: Path) -> None:
+    computed_df = _capability_frame(1.46)
+
+    cpk_result = prepare_capability_decoration(
+        period_capability_df=computed_df,
+        product_dir=tmp_path,
+        sheet_name=resolve_capability_decoration_sheet("M678", "cpk"),
+        metric="cpk",
+    )
+    cpm_result = prepare_capability_decoration(
+        period_capability_df=computed_df.rename(columns={"cpk": "cpm"}),
+        product_dir=tmp_path,
+        sheet_name=resolve_capability_decoration_sheet("M678", "cpm"),
+        metric="cpm",
+    )
+
+    assert cpk_result.decoration_sheet == "M678"
+    assert cpm_result.decoration_sheet == "M678_cpm"
+    decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
+    assert pd.read_excel(decoration_path, sheet_name="M678")["cpk_corrected"].tolist() == [1.46]
+    assert pd.read_excel(decoration_path, sheet_name="M678_cpm")["cpm_corrected"].tolist() == [1.46]
 
 
 def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_file(

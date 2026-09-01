@@ -12,7 +12,7 @@
 | `resources\inline_domain\compliance_config.xlsx` | monitor | 面板显示数据修饰 |
 | `resources\inline_domain\ctq_sheet_oos_decoration.xlsx` | ctq | sheet明细修饰 |
 | `resources\inline_domain\scrap_sheets.xlsx` | monitor | 报废品ID |
-| `resources\inline_domain\spc_cpk_decoration.xlsx` | spc_cpk | cpk数据修饰 |
+| `resources\inline_domain\spc_cpk_cpm_decoration.xlsx` | spc_cpk | cpk数据修饰 |
 | `resources\inline_domain\spc_outlier_filters.xlsx` | spc | spc点位数据筛选 |
 | `resources\inline_domain\spc_sheet_oos_decoration.xlsx` | spc_sheet | sheet明细修饰 |
 

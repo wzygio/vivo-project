@@ -10,7 +10,7 @@
 
 迁移范围（7 类，detail 明细文件不迁移）：
     codebaseline / 入库不良率规格 / 趋势图人工修正 / override_rates /
-    spc_cpk_decoration / spc_sheet_oos_decoration / ctq_sheet_oos_decoration
+    spc_cpk_cpm_decoration / spc_sheet_oos_decoration / ctq_sheet_oos_decoration
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ TARGETS = [
     ("入库不良率规格.xlsx", "{p}_入库不良率规格.xlsx", False),
     ("趋势图人工修正.xlsx", "{p}_趋势图人工修正.xlsx", False),
     ("override_rates.xlsx", "{p}_override_rates.xlsx", False),
-    ("spc_cpk_decoration.xlsx", "spc_cpk_decoration.xlsx", True),
+    ("spc_cpk_cpm_decoration.xlsx", "spc_cpk_cpm_decoration.xlsx", True),
     ("spc_sheet_oos_decoration.xlsx", "spc_sheet_oos_decoration.xlsx", True),
     ("ctq_sheet_oos_decoration.xlsx", "ctq_sheet_oos_decoration.xlsx", True),
 ]

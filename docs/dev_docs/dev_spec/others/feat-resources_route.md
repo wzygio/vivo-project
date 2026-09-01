@@ -22,6 +22,6 @@
     - `resources\M626\M626_趋势图人工修正.xlsx`：`src\yield_domain\core\mwd_trend\mwd_trend_processor.py`
     - `resources\M626\M626_入库不良率规格.xlsx`:`src\yield_domain\core\mwd_trend\mwd_trend_processor.py`
     - `resources\M626\M626_codebaseline.xlsx`:`src\yield_domain\core\mwd_trend\mwd_trend_processor.py`
-    - `resources\M626\spc_cpk_decoration.xlsx`:`src\inline_domain\core\spc\cpk_decoration.py`
+    - `resources\M626\spc_cpk_cpm_decoration.xlsx`:`src\inline_domain\core\spc\cpk_decoration.py`
     - `resources\M626\spc_sheet_oos_decoration.xlsx`:`src\inline_domain\application\spc\spc_data_decoration.py`
     - `resources\M626\ctq_sheet_oos_decoration.xlsx`:`src\inline_domain\application\ctq\ctq_data_decoration.py`

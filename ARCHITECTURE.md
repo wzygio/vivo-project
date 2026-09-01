@@ -117,8 +117,9 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
   点位图类型统一由 `app/charts/inline/chart_type.py` 根据
-  `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
-  `resources/inline_domain/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态：
+  `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK/CPM 人工修饰文件
+  `resources/inline_domain/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
+  CPK 沿用产品名 sheet，CPM 使用 `{prod_code}_cpm` sheet，两者共存于同一工作簿；
   既有周期键的人工值/flag 原样保留，当前能力结果中新出现的周期键以
   `flag=False` 追加；刷新不会重建或覆盖既有人工决策。
 - PNL 指标规格的版本/产品收严分析是独立离线工具，归

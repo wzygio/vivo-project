@@ -149,6 +149,7 @@ if is_admin:
     render_spc_decoration_admin(
         getattr(view_model, "sheet_oos_decoration_result", None),
         getattr(view_model, "cpk_decoration_result", None),
+        getattr(view_model, "cpm_decoration_result", None),
     )
     
 render_cpk_alert_section(

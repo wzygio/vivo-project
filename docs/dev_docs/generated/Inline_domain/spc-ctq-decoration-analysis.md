@@ -94,7 +94,7 @@ flag 归一化入口是 `_normalize_flag_action()`（:92）：先判 Delete，�
 此外 SPC 还有**第二层修饰 —— CPK 修饰**（`src/inline_domain/core/spc/cpk_decoration.py`）：
 
 - 作用于周期能力值（M/W/D 的 cpk），而非原始点位；CPK 由修饰后的点位数据计算；
-- 工作簿为 `spc_cpk_decoration.xlsx`，键含 `period_type/period_label`，
+- 工作簿为 `spc_cpk_cpm_decoration.xlsx`，键含 `period_type/period_label`，
   `cpk_corrected` 列默认填计算值，用户可手工改写；
 - flag 语义为 opt-in：空值默认 `False`（显示计算值），
   用户显式置 True 才用修饰表中的 `cpk_corrected` 覆盖（`cpk_decoration.py:75-80` 注释）。
@@ -110,7 +110,7 @@ flag 归一化入口是 `_normalize_flag_action()`（:92）：先判 Delete，�
 | 工作簿文件名 | `spc_sheet_oos_decoration.xlsx`（引擎默认值） | `ctq_sheet_oos_decoration.xlsx`（通过 `decoration_file_name` 参数传入，:77） |
 | 持久化开关参数名 | `persist_files` | `persist_decoration` |
 | 修饰前特征 | 由引擎调用方显式计算并保留在返回值中 | 不保留（CTQ 无真实/修正对比需求） |
-| 第二层修饰 | CPK 修饰（`spc_cpk_decoration.xlsx`） | 无（CTQ 没有能力报表） |
+| 第二层修饰 | CPK 修饰（`spc_cpk_cpm_decoration.xlsx`） | 无（CTQ 没有能力报表） |
 | 资源目录解析函数 | `resolve_product_resource_dir()` | `resolve_ctq_product_resource_dir()`，实现完全相同 |
 | `_preprocess_sheet_features_by_type` | 定义在 spc 侧，被 shared 复用 | 在 ctq 侧重复定义了一份（:41-55），逻辑相同 |
 

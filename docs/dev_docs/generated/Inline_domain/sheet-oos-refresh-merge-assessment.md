@@ -199,7 +199,7 @@ master 已合入本分支。用户裁定与执行结果：
 
 ### 7.4 合并后遗留
 
-1. CPK 修饰后台（`render_cpk_decoration_admin`）仍是"覆盖写 + 全局清缓存"旧模型——`spc_cpk_decoration.xlsx` 是 PRD 明确 NON-GOAL，未动；如需统一另行决策。
+1. CPK 修饰后台（`render_cpk_decoration_admin`）仍是"覆盖写 + 全局清缓存"旧模型——`spc_cpk_cpm_decoration.xlsx` 是 PRD 明确 NON-GOAL，未动；如需统一另行决策。
 2. §6.3 遗留项仍开放（monitor 刷新状态属性链下探、WriteError 页面可见性、`get_cached_alarm_detail_tables` 无 TTL 等）。
 3. `_cached_decision_signature` 的 4h TTL 仍为硬编码，未并入 `service_cache` 配置体系（影响小，仅签名重读频率）。
 4. 6 个既有失败测试建议另行修复。

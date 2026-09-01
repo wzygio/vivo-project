@@ -40,9 +40,9 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationResult,
 )
 from src.inline_domain.core.spc.cpk_decoration import (
-    CPK_DECORATION_COLUMNS,
     CPK_KEY_COLUMNS,
     CpkDecorationResult,
+    capability_decoration_columns,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
@@ -162,13 +162,14 @@ def build_weekly_cpm_alerts(
     threshold: float = CPM_ALERT_THRESHOLD,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold CPM records from the previous full week."""
+    """Return below-threshold, undecorated CPM records from the previous full week."""
     return _build_weekly_capability_alerts(
         period_capability_df,
         metric_column="cpm",
         value_label="CPM值",
         alert_columns=CPM_ALERT_COLUMNS,
         threshold=threshold,
+        decorated_column="cpm_decorated",
         reference_date=reference_date,
     )
 
@@ -408,52 +409,63 @@ def filter_spc_report(
     )
 
 
-def render_cpk_decoration_admin(
+def render_capability_decoration_admin(
     decoration_result: CpkDecorationResult,
     *,
+    metric_label: str = "CPK",
+    key_prefix: str = "spc_cpk_cpm_decoration",
     show_expander: bool = True,
 ) -> None:
-    """Render the opt-in CPK decoration file controls."""
+    """Render the opt-in capability (CPK/CPM) decoration file controls."""
+    metric = metric_label.lower()
+    corrected_column = f"{metric}_corrected"
     decoration_download_df = (
         decoration_result.decoration_df
         if not decoration_result.decoration_df.empty
-        else pd.DataFrame(columns=CPK_DECORATION_COLUMNS)
+        else pd.DataFrame(columns=capability_decoration_columns(metric))
     )
-    container = st.expander("开发者后台：SPC CPK 修饰", expanded=False) if show_expander else nullcontext()
+    container = (
+        st.expander(f"开发者后台：SPC {metric_label} 修饰", expanded=False)
+        if show_expander
+        else nullcontext()
+    )
     with container:
-        st.caption("默认 flag=False，CPK 显示基于修饰后点位的计算值；启用后显示修饰表中的 cpk_corrected。")
+        st.caption(
+            f"默认 flag=False，{metric_label} 显示基于修饰后点位的计算值；"
+            f"启用后显示修饰表中的 {corrected_column}。"
+        )
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_decoration, c_upload = st.columns([1, 1.2])
 
         with c_decoration:
-            st.markdown("#### 下载 CPK 修饰表")
+            st.markdown(f"#### 下载 {metric_label} 修饰表")
             st.download_button(
                 label="下载修饰表",
-                data=_excel_bytes({"CPK修饰表": decoration_download_df}),
+                data=_excel_bytes({f"{metric_label}修饰表": decoration_download_df}),
                 file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="spc_cpk_decoration_download",
+                key=f"{key_prefix}_download",
                 use_container_width=True,
             )
 
         with c_upload:
-            st.markdown("#### 上传 CPK 修饰表")
+            st.markdown(f"#### 上传 {metric_label} 修饰表")
             uploaded_file = st.file_uploader(
                 "上传包含 flag 字段的 Excel",
                 type=["xlsx"],
-                key="spc_cpk_decoration_upload",
+                key=f"{key_prefix}_upload",
                 label_visibility="collapsed",
             )
             if uploaded_file is not None:
                 if st.button(
                     "确认覆盖并刷新",
                     type="primary",
-                    key="spc_cpk_decoration_upload_btn",
+                    key=f"{key_prefix}_upload_btn",
                     use_container_width=True,
                 ):
                     try:
                         uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
-                        required_columns = {*CPK_KEY_COLUMNS, "cpk_corrected", "flag"}
+                        required_columns = {*CPK_KEY_COLUMNS, corrected_column, "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
@@ -464,20 +476,49 @@ def render_cpk_decoration_admin(
                             decoration_result.decoration_sheet,
                             uploaded_df,
                         )
-                        st.success("CPK 修饰表已覆盖，正在刷新缓存。")
+                        st.success(f"{metric_label} 修饰表已覆盖，正在刷新缓存。")
                         st.cache_data.clear()
                         st.rerun()
                     except Exception as exc:
-                        st.error(f"保存 CPK 修饰表失败：{exc}")
+                        st.error(f"保存 {metric_label} 修饰表失败：{exc}")
+
+
+def render_cpk_decoration_admin(
+    decoration_result: CpkDecorationResult,
+    *,
+    show_expander: bool = True,
+) -> None:
+    """Render the opt-in CPK decoration file controls."""
+    render_capability_decoration_admin(
+        decoration_result,
+        metric_label="CPK",
+        key_prefix="spc_cpk_cpm_decoration",
+        show_expander=show_expander,
+    )
+
+
+def render_cpm_decoration_admin(
+    decoration_result: CpkDecorationResult,
+    *,
+    show_expander: bool = True,
+) -> None:
+    """Render the opt-in CPM decoration file controls."""
+    render_capability_decoration_admin(
+        decoration_result,
+        metric_label="CPM",
+        key_prefix="spc_cpm_decoration",
+        show_expander=show_expander,
+    )
 
 
 def render_spc_decoration_admin(
     sheet_oos_decoration_result: SheetOosDecorationResult | None,
     cpk_decoration_result: CpkDecorationResult | None,
+    cpm_decoration_result: CpkDecorationResult | None = None,
 ) -> None:
-    """Render the one admin expander containing isolated OOS and CPK decorators."""
+    """Render the one admin expander containing isolated OOS and CPK/CPM decorators."""
     with st.expander("开发者后台：SPC 数据修饰", expanded=False):
-        oos_tab, cpk_tab = st.tabs(["超规片修饰", "CPK修饰"])
+        oos_tab, cpk_tab, cpm_tab = st.tabs(["超规片修饰", "CPK修饰", "CPM修饰"])
         with oos_tab:
             if sheet_oos_decoration_result is None:
                 st.info("当前没有可管理的超规片修饰数据。")
@@ -488,6 +529,11 @@ def render_spc_decoration_admin(
                 st.info("当前没有可管理的 CPK 修饰数据。")
             else:
                 render_cpk_decoration_admin(cpk_decoration_result, show_expander=False)
+        with cpm_tab:
+            if cpm_decoration_result is None:
+                st.info("当前没有可管理的 CPM 修饰数据。")
+            else:
+                render_cpm_decoration_admin(cpm_decoration_result, show_expander=False)
 
 
 def _format_metric_value(value: object) -> str:

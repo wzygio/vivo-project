@@ -79,6 +79,6 @@ D5 CPK 仅基于修饰后点位计算（`cpk_actual` 移除）。
   code_selector ×2、yield_global_data_policy ×2，与本改动无关）。
 - E2E（.venv / streamlit 1.60，全部通过）：aoi_tt_report、aoi_rs_report、
   aoi_rs_decoration_delete（工作簿 flag=Delete 端到端生效）、ctq_report、
-  spc_cpk_decoration（8 行修饰值全匹配）、spc_cpk_alert、spc_filter_layout_mt_ch、
+  spc_cpk_cpm_decoration（8 行修饰值全匹配）、spc_cpk_alert、spc_filter_layout_mt_ch、
   spc_main_process_chamber、monitor_compliance_config；截图与产物见
   `output/test-results/`、`output/screenshots/`。

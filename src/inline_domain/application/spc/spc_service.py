@@ -16,7 +16,11 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     SheetOosDecorationReadError,
     SheetOosDecorationResult,
 )
-from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult, prepare_cpk_decoration
+from src.inline_domain.core.spc.cpk_decoration import (
+    CpkDecorationResult,
+    prepare_capability_decoration,
+    resolve_capability_decoration_sheet,
+)
 from src.inline_domain.application.shared.decorated_features import (
     fetch_decorated_features,
 )
@@ -75,6 +79,7 @@ class SpcReportViewModel:
     indicators_df: pd.DataFrame
     sheet_oos_decoration_result: SheetOosDecorationResult | None = None
     cpk_decoration_result: CpkDecorationResult | None = None
+    cpm_decoration_result: CpkDecorationResult | None = None
 
     @property
     def lot_cpm_df(self) -> pd.DataFrame:
@@ -99,6 +104,7 @@ class SpcReportService:
             "indicators_df": pd.DataFrame(),
             "sheet_oos_decoration": None,
             "cpk_decoration": None,
+            "cpm_decoration": None,
         }
 
     @staticmethod
@@ -108,7 +114,6 @@ class SpcReportService:
         raw_measurements_df = payload.get("raw_measurements_df")
         indicators_df = payload.get("indicators_df")
         decoration_payload = payload.get("sheet_oos_decoration")
-        cpk_decoration_payload = payload.get("cpk_decoration")
 
         period_capability_df = (
             period_capability_df if isinstance(period_capability_df, pd.DataFrame) else pd.DataFrame()
@@ -133,15 +138,23 @@ class SpcReportService:
                 refresh_reason=str(decoration_payload.get("refresh_reason", "")),
             )
 
-        cpk_decoration_result = None
-        if isinstance(cpk_decoration_payload, dict):
-            decoration_df = cpk_decoration_payload.get("decoration_df")
-            cpk_decoration_result = CpkDecorationResult(
+        def _build_capability_decoration_result(
+            capability_payload: object,
+        ) -> CpkDecorationResult | None:
+            if not isinstance(capability_payload, dict):
+                return None
+            capability_decoration_df = capability_payload.get("decoration_df")
+            return CpkDecorationResult(
                 period_capability_df=period_capability_df,
-                decoration_df=decoration_df if isinstance(decoration_df, pd.DataFrame) else pd.DataFrame(),
-                decoration_path=Path(str(cpk_decoration_payload.get("decoration_path", ""))),
-                decoration_sheet=str(cpk_decoration_payload.get("decoration_sheet", "Sheet1")),
+                decoration_df=capability_decoration_df
+                if isinstance(capability_decoration_df, pd.DataFrame)
+                else pd.DataFrame(),
+                decoration_path=Path(str(capability_payload.get("decoration_path", ""))),
+                decoration_sheet=str(capability_payload.get("decoration_sheet", "Sheet1")),
             )
+
+        cpk_decoration_result = _build_capability_decoration_result(payload.get("cpk_decoration"))
+        cpm_decoration_result = _build_capability_decoration_result(payload.get("cpm_decoration"))
 
         return SpcReportViewModel(
             period_capability_df=period_capability_df,
@@ -150,6 +163,7 @@ class SpcReportService:
             indicators_df=indicators_df,
             sheet_oos_decoration_result=decoration_result,
             cpk_decoration_result=cpk_decoration_result,
+            cpm_decoration_result=cpm_decoration_result,
         )
 
     @staticmethod
@@ -225,12 +239,21 @@ class SpcReportService:
                     else None,
                     sigma_source=resolved_period_sigma_source,
                 )
-            cpk_decoration_result = prepare_cpk_decoration(
+            product_resource_dir = resolve_product_resource_dir(query_config.prod_code)
+            cpk_decoration_result = prepare_capability_decoration(
                 period_capability_df=period_capability_df,
-                product_dir=resolve_product_resource_dir(query_config.prod_code),
-                sheet_name=query_config.prod_code,
+                product_dir=product_resource_dir,
+                sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpk"),
+                metric="cpk",
             )
             period_capability_df = cpk_decoration_result.period_capability_df
+            cpm_decoration_result = prepare_capability_decoration(
+                period_capability_df=period_capability_df,
+                product_dir=product_resource_dir,
+                sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpm"),
+                metric="cpm",
+            )
+            period_capability_df = cpm_decoration_result.period_capability_df
             indicators_df = (
                 sheet_features_df[["prod_code", "factory", "step_id", "param_name"]]
                 .drop_duplicates()
@@ -249,6 +272,11 @@ class SpcReportService:
                     "decoration_df": cpk_decoration_result.decoration_df,
                     "decoration_path": str(cpk_decoration_result.decoration_path),
                     "decoration_sheet": cpk_decoration_result.decoration_sheet,
+                },
+                "cpm_decoration": {
+                    "decoration_df": cpm_decoration_result.decoration_df,
+                    "decoration_path": str(cpm_decoration_result.decoration_path),
+                    "decoration_sheet": cpm_decoration_result.decoration_sheet,
                 },
             }
         except SheetOosDecorationReadError as exc:

@@ -88,7 +88,7 @@
   Delete 端到端生效。脚本修正后重跑通过（output/test-results/aoi_rs_delete_e2e.png）；
   验证后 flag 已恢复 True。
 - [x] CTQ E2E 通过（tests/e2e/ctq_report.js，截图 output/test-results/ctq_e2e.png）。
-- spc_cpk_decoration.js 首次失败排查：就绪指示硬编码旧预警指标 "ARRAY | 12450 | OVL1_Y"
+- spc_cpk_cpm_decoration.js 首次失败排查：就绪指示硬编码旧预警指标 "ARRAY | 12450 | OVL1_Y"
   （预警周次随日期滚动，当前 W32 预警为 ARRAY|1J140|SE_L1T，CPK=1.155）。
   离线直连 DB 复核（build_spc_repository + get_spc_report_data，新代码路径）：
   CD1/1L650 期望值 1.663/1.554/1.385/1.365/1.441/1.381/1.389/1.396 与新单轨计算
@@ -109,7 +109,7 @@
 | aoi_rs_report.js | 通过 | output/test-results/aoi_rs_e2e.png (21:06) |
 | aoi_rs_decoration_delete.js | 通过 | output/test-results/aoi_rs_delete_e2e.png (21:12)，轨迹数据断言 hits=[] |
 | ctq_report.js | 通过 | output/test-results/ctq_e2e.png (21:17) |
-| spc_cpk_decoration.js | 通过 | output/test-results/spc-cpk-decoration/e2e-pass.png (21:23)，8 行修饰值全匹配 |
+| spc_cpk_cpm_decoration.js | 通过 | output/test-results/spc-cpk-decoration/e2e-pass.png (21:23)，8 行修饰值全匹配 |
 | spc_cpk_alert.js | 通过 | 返回 result 无异常 (~21:28) |
 | spc_filter_layout_mt_ch.js | 通过 | 返回 result 无异常 (~21:33) |
 | spc_main_process_chamber.js | 通过 | output/screenshots/spc_main_process_chamber_e2e.png (21:39) |

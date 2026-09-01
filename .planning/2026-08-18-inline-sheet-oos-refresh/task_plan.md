@@ -103,7 +103,7 @@
 
 ## 非目标（与 issue 一致）
 
-OOS 判定/截断算法/flag 解析、L1 8h TTL 与快照策略、`spc_cpk_decoration.xlsx`、
+OOS 判定/截断算法/flag 解析、L1 8h TTL 与快照策略、`spc_cpk_cpm_decoration.xlsx`、
 AOI_TT/AOI_RS 工作簿迁移、历史 OOS 事实仓库、用户身份/审批/审计库。
 
 ## Errors Encountered

@@ -47,7 +47,7 @@ Related: `.scratch/decoration-unify/issues/01-unify-decoration-into-shared.md`�
 
 - OOS 判定、稳定哈希截断、PPA clip rule、三态 flag 解析本身。
 - L1 Parquet 的 8h TTL、三个月窗口、数据库失败降级、策略版本；不新增 L1 revision 文件，不把 L1 mtime/hash 加入页面缓存签名。
-- `spc_cpk_decoration.xlsx`；AOI_TT/AOI_RS 自有修饰工作簿的迁移。
+- `spc_cpk_cpm_decoration.xlsx`；AOI_TT/AOI_RS 自有修饰工作簿的迁移。
 - 把工作簿改造成历史 OOS 事实仓库；用户身份、审批流、决策审计数据库。
 
 ## Questions to resolve
@@ -104,7 +104,7 @@ Related: `.scratch/decoration-unify/issues/01-unify-decoration-into-shared.md`�
 
 **Out of scope:**
 
-- OOS 判定/截断算法/flag 解析、L1 8h TTL 与快照策略、`spc_cpk_decoration.xlsx`、AOI_TT/AOI_RS 工作簿迁移、用户身份与审计数据库。
+- OOS 判定/截断算法/flag 解析、L1 8h TTL 与快照策略、`spc_cpk_cpm_decoration.xlsx`、AOI_TT/AOI_RS 工作簿迁移、用户身份与审计数据库。
 
 ## Comments
 
