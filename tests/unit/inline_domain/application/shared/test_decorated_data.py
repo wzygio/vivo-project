@@ -63,26 +63,19 @@ def _spec_limits() -> pd.DataFrame:
 
 
 def _write_flag_workbook(product_dir: Path, file_name: str, flag: object) -> None:
+    """预写用户决策台账（<产品>__flags）；旧产品 sheet 的 flag 永远不再生效。"""
     product_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         [
             {
-                "factory": "OLED",
                 "prod_code": "Z571",
                 "step_id": "21200",
                 "param_name": "PPA_B_X",
                 "sheet_id": "S1",
-                "sheet_start_time": "2026-07-01 08:00:00",
-                "sheet_max": 8.0,
-                "sheet_min": 0.0,
-                "sheet_mean": 4.0,
-                "usl": 6.0,
-                "lsl": -6.0,
-                "oos_type": "USL",
                 "flag": flag,
             }
         ]
-    ).to_excel(product_dir / file_name, index=False, sheet_name="Z571")
+    ).to_excel(product_dir / file_name, index=False, sheet_name="Z571__flags")
 
 
 def test_prepare_decorated_data_clips_points_and_recomputes_sheet_features(tmp_path: Path) -> None:

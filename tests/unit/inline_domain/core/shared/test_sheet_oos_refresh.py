@@ -1,7 +1,8 @@
 """Sheet OOS 修饰 core 层改造测试（PRD §5.1/§5.2/§5.3/§5.5）。
 
 覆盖：生成判定纯函数、决策 sheet（<产品>__flags）读写与签名、
-旧表迁移（幂等）、__refresh_meta__ 读写、持久化编排与兼容语义。
+__refresh_meta__ 读写、持久化编排与兼容语义。
+旧产品 sheet 的 flag 永不生效（不做旧表迁移）；首写生成空 __flags。
 全部使用 tmp_path 临时工作簿，不触碰真实 resources/。
 """
 
@@ -25,7 +26,6 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     load_refresh_meta,
     load_sheet_oos_decisions,
     merge_detail_with_decoration_flags,
-    migrate_legacy_flags_if_needed,
     persist_sheet_oos_decoration,
     prepare_sheet_oos_decoration,
     should_regenerate_detail,
@@ -233,7 +233,7 @@ def test_load_sheet_oos_decisions_returns_empty_when_missing(tmp_path: Path) -> 
     assert decisions.empty
     assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
 
-    # 文件存在但 __flags sheet 不存在（首次迁移前）
+    # 文件存在但 __flags sheet 不存在（尚未首次写入）
     _write_workbook(product_dir, {"Z571": pd.DataFrame({"a": [1]})})
     decisions = load_sheet_oos_decisions(product_dir, sheet_name="Z571")
     assert decisions.empty
@@ -271,80 +271,7 @@ def test_load_sheet_oos_decisions_raises_when_existing_sheet_unreadable(
 
 
 # ---------------------------------------------------------------------------
-# 4) migrate_legacy_flags_if_needed
-# ---------------------------------------------------------------------------
-
-
-def test_migrate_legacy_flags_preserves_all_flags_and_keeps_last_duplicate(tmp_path: Path) -> None:
-    product_dir = _make_product_dir(tmp_path)
-    legacy = pd.DataFrame(
-        [
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S1", "flag": True},
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S2", "flag": False},
-            # 重复键：保留最后一行
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S2", "flag": "Delete"},
-            # 显式 True 也必须保留（不得被当作默认值丢弃）
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S3", "flag": True},
-        ]
-    )
-    _write_workbook(product_dir, {"Z571": legacy})
-
-    decisions = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-
-    assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
-    assert decisions["sheet_id"].tolist() == ["S1", "S2", "S3"]
-    # S2 重复键取最后一行（Delete）；S1/S3 的显式 True 保留
-    assert decisions["flag"].astype(str).tolist() == ["True", "Delete", "True"]
-
-
-def test_migrate_legacy_flags_empty_when_no_legacy_sheet(tmp_path: Path) -> None:
-    product_dir = _make_product_dir(tmp_path)
-    decisions = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-    assert decisions.empty
-    assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
-
-
-def test_migrate_legacy_flags_empty_when_legacy_sheet_has_no_rows(tmp_path: Path) -> None:
-    product_dir = _make_product_dir(tmp_path)
-    _write_workbook(
-        product_dir,
-        {"Z571": pd.DataFrame(columns=[*OOS_KEY_COLUMNS, "flag"])},
-    )
-    decisions = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-    assert decisions.empty
-    assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
-
-
-def test_migrate_legacy_flags_is_idempotent(tmp_path: Path) -> None:
-    product_dir = _make_product_dir(tmp_path)
-    workbook_path = product_dir / OOS_DECORATION_FILE_NAME
-    legacy = pd.DataFrame(
-        [
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S1", "flag": True},
-            {"prod_code": "Z571", "step_id": "21200", "param_name": "P1", "sheet_id": "S2", "flag": False},
-        ]
-    )
-    _write_workbook(product_dir, {"Z571": legacy})
-
-    first = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-    # 模拟首次持久化把决策台账物化到 __flags
-    _write_workbook(product_dir, {"Z571__flags": first})
-
-    second = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-    assert len(second) == len(first)
-    assert second["sheet_id"].tolist() == first["sheet_id"].tolist()
-    assert second["flag"].astype(str).tolist() == first["flag"].astype(str).tolist()
-
-    # __flags 存在后不再从旧产品 sheet 迁移（旧表后续改动不影响决策台账）
-    _write_workbook(product_dir, {"Z571": legacy.assign(flag=[False, False])})
-    third = migrate_legacy_flags_if_needed(product_dir, sheet_name="Z571")
-    assert len(third) == len(first)
-    assert third["flag"].astype(str).tolist() == first["flag"].astype(str).tolist()
-    assert workbook_path.exists()
-
-
-# ---------------------------------------------------------------------------
-# 5) merge 输入为决策台账：历史键不进明细、同键重现恢复 flag
+# 4) merge 输入为决策台账：历史键不进明细、同键重现恢复 flag
 # ---------------------------------------------------------------------------
 
 
@@ -368,7 +295,7 @@ def test_merge_with_decision_ledger_drops_history_and_restores_flag() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 6) __refresh_meta__ 读写
+# 5) __refresh_meta__ 读写
 # ---------------------------------------------------------------------------
 
 
@@ -437,7 +364,7 @@ def test_persist_meta_upsert_preserves_other_scopes(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 7) 持久化编排：判定驱动写入、写失败抛错、旧语义兼容
+# 6) 持久化编排：判定驱动写入、写失败抛错、旧语义兼容
 # ---------------------------------------------------------------------------
 
 
@@ -530,7 +457,7 @@ def test_persist_legacy_mode_always_writes_and_skips_meta(tmp_path: Path, monkey
 
 
 def test_persist_reads_decisions_from_flags_sheet_not_product_sheet(tmp_path: Path) -> None:
-    """决策来源于 __flags；迁移后用户改旧产品 sheet 的 flag 不再生效。"""
+    """决策只来源于 __flags；旧产品 sheet 的 flag 永远不再生效（不做迁移）。"""
     product_dir = _make_product_dir(tmp_path)
     detail = build_sheet_oos_detail(_sheet_features())
 
@@ -548,7 +475,7 @@ def test_persist_reads_decisions_from_flags_sheet_not_product_sheet(tmp_path: Pa
 
 
 # ---------------------------------------------------------------------------
-# 8) prepare_sheet_oos_decoration 兼容性
+# 7) prepare_sheet_oos_decoration 兼容性
 # ---------------------------------------------------------------------------
 
 

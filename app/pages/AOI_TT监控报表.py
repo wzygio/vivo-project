@@ -20,6 +20,7 @@ import streamlit as st
 from app.components.page_header import (
     build_product_cache_signature,
     extract_cached_funcs,
+    get_product_cache_revision,
     render_page_header,
 )
 from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
@@ -37,9 +38,11 @@ from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
+from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_aoi_tt_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v1"
@@ -77,11 +80,25 @@ render_page_header(
     ],
 )
 
+# Phase 4 门控：共享产品 revision + 两阶段决策签名进入 L2 缓存键；
+# 决策表读取失败时显式失败（不降级为空决策）。
+product_revision = get_product_cache_revision(current_product)
+try:
+    decision_signature = get_scope_decision_signature("aoi_tt", current_product)
+except SheetOosDecorationReadError:
+    st.error(
+        "AOI_TT 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
+        "然后点击页头“刷新缓存”重试。"
+    )
+    st.stop()
+
 with st.spinner("正在加载 AOI TT 数据..."):
     view_model = AoiTtReportService.get_aoi_tt_report_data(
         _data_port=aoi_tt_data_port,
         query_config_json=query_config.model_dump_json(),
         snapshot_signature=product_cache_signature,
+        product_revision=product_revision,
+        decision_signature=decision_signature,
     )
 
 tt_details_df = view_model.tt_details_df

@@ -2,7 +2,6 @@
 # 🛠️ Action: 全文件替换 (修复 Pydantic 赋值 Bug 与 ALL 扫描逻辑)
 
 import logging
-import hashlib
 import pandas as pd
 
 # [Phase 1] 调试追踪专用 Logger
@@ -18,6 +17,7 @@ from dataclasses import dataclass
 # 引入底层配置与仓储层
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
+from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
@@ -271,30 +271,13 @@ class MonitorAnalysisService:
             return []
 
     @staticmethod
-    def compute_snapshot_signature(data_root: Path, target_prod: str) -> str:
-        """
-        [企业级缓存签名] 计算 SPC 快照目录的聚合签名。
-        当任意产品的快照被删除、重建或修改时，签名改变，触发 L1 Cache Miss。
-        """
-        hash_md5 = hashlib.md5()
-        
-        if target_prod.upper() == "ALL":
-            products = MonitorAnalysisService.discover_monitor_products(data_root)
-            if not products:
-                return "NOT_EXISTS"
-            dirs = [data_root / prod for prod in products]
-        else:
-            dirs = [data_root / target_prod]
-        
-        for d in sorted(dirs, key=lambda x: x.name):
-            for f in sorted(d.glob("*.parquet"), key=lambda x: x.name):
-                stat = f.stat()
-                hash_md5.update(f"{f.name}_{stat.st_mtime}_{stat.st_size}".encode())
-        
-        return hash_md5.hexdigest()[:8]
-
-    @staticmethod
-    @st.cache_data(show_spinner=False, max_entries=1, ttl=4 * 60 * 60)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=1,
+        ttl=ConfigLoader.get_service_cache_ttl_seconds(
+            "inline_monitor_dashboard_payload", default_hours=12
+        ),
+    )
     def fetch_dashboard_data_dict(
         _repository_factory: MonitorSpcRepositoryFactory,
         query_config_json: str, 

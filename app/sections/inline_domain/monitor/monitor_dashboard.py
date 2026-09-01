@@ -18,6 +18,7 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 from src.inline_domain.composition import build_monitor_repository
 from src.inline_domain.core.monitor.monitor_calculator import sanitize_to_compliant
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 ALARM_DETAIL_MONITOR_TYPES = ["SPC", "CTQ", "AOI", "报废"]
@@ -419,16 +420,45 @@ def _normalise_alarm_detail_frame(df: pd.DataFrame, monitor_type: str, alarm_typ
     return normalised
 
 
-@st.cache_data(show_spinner=False, max_entries=4)
+def _stable_cache_key_fragment(mapping: dict | None) -> str:
+    """把 prod -> 签名（可嵌套 scope -> 签名）映射序列化为排序后的稳定字符串，
+    作为 st.cache_data 缓存键的一部分；dict 内容变化即产生不同的键。"""
+    if not mapping:
+        return ""
+    parts = []
+    for key in sorted(mapping):
+        value = mapping[key]
+        if isinstance(value, dict):
+            value = _stable_cache_key_fragment(value)
+        parts.append(f"{key}={value}")
+    return ";".join(parts)
+
+
+@st.cache_data(
+    show_spinner=False,
+    max_entries=4,
+    ttl=ConfigLoader.get_service_cache_ttl_seconds(
+        "inline_monitor_alarm_details", default_hours=12
+    ),
+)
 def get_cached_alarm_detail_tables(
     _db_manager: DatabaseManager,
     query_config_json: str,
     time_type: str,
     snapshot_signature: str,
     compliance_signature: str,
+    revision_signature: str = "",
+    decision_signature: str = "",
 ) -> dict[str, pd.DataFrame]:
-    """Build cached physical alarm details for the admin table."""
-    del snapshot_signature, compliance_signature
+    """Build cached physical alarm details for the admin table.
+
+    TTL 由 config/global.yaml 的 service_cache.ttl_hours.inline_monitor_alarm_details
+    配置（默认 12h）；缓存键除查询参数外还包含 snapshot/compliance 签名、
+    产品 revision 与决策签名（``revision_signature``/``decision_signature``，
+    由页面把 product_revisions/decision_signatures 序列化为稳定字符串后传入），
+    用户编辑 __flags 或刷新缓存换 revision 时触发缓存 miss 与明细重建。
+    """
+    del snapshot_signature, compliance_signature, revision_signature, decision_signature
 
     alarm_frames: list[pd.DataFrame] = []
     for monitor_type in ALARM_DETAIL_MONITOR_TYPES:
@@ -515,8 +545,14 @@ def render_alarm_detail_tables(
     filter_state: MonitorFilterState,
     snapshot_signature: str,
     is_admin: bool = False,
+    product_revisions: dict | None = None,
+    decision_signatures: dict | None = None,
 ) -> None:
-    """Render cached alarm detail tables, grouped by monitor type."""
+    """Render cached alarm detail tables, grouped by monitor type.
+
+    ``product_revisions``/``decision_signatures`` 为页面按产品（及 scope）预算的
+    revision 与决策签名映射；序列化为稳定字符串后进入缓存键，签名变化即重建明细。
+    """
     if not is_admin:
         return
 
@@ -528,6 +564,8 @@ def render_alarm_detail_tables(
             "MIXED",
             snapshot_signature,
             _get_compliance_file_signature(),
+            _stable_cache_key_fragment(product_revisions),
+            _stable_cache_key_fragment(decision_signatures),
         )
 
     monitor_types = _selected_alarm_monitor_types(filter_state.data_type_filter)

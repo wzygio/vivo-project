@@ -183,4 +183,6 @@ if is_admin:
         filter_state=filter_state,
         snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
         is_admin=is_admin,
+        product_revisions=product_revisions,
+        decision_signatures=decision_signatures,
     )

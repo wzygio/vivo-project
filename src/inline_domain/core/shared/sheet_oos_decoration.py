@@ -327,7 +327,7 @@ def load_sheet_oos_decisions(
 ) -> pd.DataFrame:
     """读取决策 sheet（<产品>__flags）中的用户决策台账。
 
-    文件或决策 sheet 不存在（首次迁移前）返回空决策台账；
+    文件或决策 sheet 不存在时返回空决策台账；
     工作簿不可读（openpyxl 与 COM 都无法枚举 sheet）或决策 sheet 存在但读取失败
     必须抛 SheetOosDecorationReadError，不得降级为空——否则用户决策会被覆盖丢失。
     """
@@ -390,49 +390,6 @@ def compute_decision_signature(
         for row in df[[*keys, DECISION_FLAG_COLUMN]].itertuples(index=False, name=None)
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def migrate_legacy_flags_if_needed(
-    product_dir: Path,
-    file_name: str = OOS_DECORATION_FILE_NAME,
-    sheet_name: str | None = None,
-    key_columns: Iterable[str] | None = None,
-) -> pd.DataFrame:
-    """旧表迁移（幂等）：返回决策台账 df（键列 + flag）。
-
-    - __flags 已存在 → 直接读取返回（不再迁移）；
-    - 不存在但旧产品 sheet 存在 → 提取键列 + flag，重复键保留最后一行，
-      全部 flag（含显式 True）都保留；
-    - 产品 sheet 也不存在 → 空决策台账；
-    - 工作簿不可读（openpyxl 与 COM 均无法枚举 sheet）→ 抛
-      SheetOosDecorationReadError：此时无法确认 __flags 是否已存在，
-      盲目迁移会把用户维护的决策台账整体覆写。
-    """
-    keys = _resolve_key_columns(key_columns)
-    decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
-    decision_sheet = get_decision_sheet_name(sheet_name)
-    names = _workbook_sheet_names(decoration_path)
-    if names is None:
-        # 文件不可读：与 load_sheet_oos_decisions 语义一致，抛错而非静默迁移
-        raise SheetOosDecorationReadError(
-            f"Unable to enumerate sheets of existing Sheet OOS decoration workbook: {decoration_path}"
-        )
-    if decision_sheet in names:
-        return load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
-    if (sheet_name or "Sheet1") not in names:
-        return _empty_decisions_frame(keys)
-    # 旧产品 sheet 存在且 __flags 缺失：从旧表迁移
-    legacy = load_sheet_oos_decoration(product_dir, file_name, sheet_name, key_columns)
-    if legacy.empty:
-        return _empty_decisions_frame(keys)
-    legacy = _normalize_key_columns(legacy, keys)
-    if DECISION_FLAG_COLUMN not in legacy.columns:
-        legacy[DECISION_FLAG_COLUMN] = True
-    return (
-        legacy[[*keys, DECISION_FLAG_COLUMN]]
-        .drop_duplicates(keys, keep="last")
-        .reset_index(drop=True)
-    )
 
 
 def build_refresh_meta_row(
@@ -603,7 +560,7 @@ def _persist_sheet_oos_decoration(
     now: datetime | None,
     force: bool,
 ) -> _SheetOosPersistOutcome:
-    """持久化编排：迁移/读取决策台账 → merge → 判定 → 需要时原子写多 sheet。"""
+    """持久化编排：读取决策台账 → merge → 判定 → 需要时原子写多 sheet。"""
     product_dir.mkdir(parents=True, exist_ok=True)
     decoration_path = get_sheet_oos_decoration_path(product_dir, file_name)
     sheet = sheet_name or "Sheet1"
@@ -614,8 +571,9 @@ def _persist_sheet_oos_decoration(
     decision_sheet_exists = sheet_names is not None and decision_sheet in sheet_names
     current_sheet_exists = sheet_names is not None and sheet in sheet_names
 
-    # 决策来源于 __flags（首次运行时从旧产品 sheet 迁移），历史键不进当前明细
-    decisions = migrate_legacy_flags_if_needed(product_dir, file_name, sheet_name, keys)
+    # 决策只来源于 __flags（缺失即空台账，2026-09-01 起不再从旧产品 sheet 迁移），
+    # 历史键不进当前明细
+    decisions = load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
     merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
 
     effective_now = now or datetime.now()
@@ -642,7 +600,7 @@ def _persist_sheet_oos_decoration(
     if decision.should_write:
         sheets_to_write: dict[str, pd.DataFrame] = {sheet: merged}
         if not decision_sheet_exists:
-            # 首次迁移：把决策台账物化到 __flags，之后归用户维护
+            # 首次写入：物化空决策台账到 __flags，之后归用户维护
             sheets_to_write[decision_sheet] = decisions
         if scope is not None:
             meta_row = build_refresh_meta_row(
@@ -709,7 +667,8 @@ def persist_sheet_oos_decoration(
 ) -> pd.DataFrame:
     """Refresh the user-maintained Sheet OOS decoration sheet in the shared workbook.
 
-    决策来源于决策 sheet（<产品>__flags，首次运行时自动从旧产品 sheet 迁移）。
+    决策只来源于决策 sheet（<产品>__flags），缺失即空台账，不从旧产品
+    sheet 迁移（2026-09-01 起；__flags 只记录人为决策）。
     传入 scope 后启用刷新判定（meta 缺失/revision 或决策签名变化/TTL 4h 到期才写）；
     不传 scope 时保持旧语义：总是持久化且不维护 __refresh_meta__。
     写入失败（written=False，如文件被 Excel 占用）抛 SheetOosDecorationWriteError。
@@ -813,7 +772,7 @@ def prepare_sheet_oos_decoration(
         decisions_df = outcome.decisions_df
         refresh_reason = outcome.refresh_decision.reason
     else:
-        decisions_df = migrate_legacy_flags_if_needed(
+        decisions_df = load_sheet_oos_decisions(
             product_dir, decoration_file_name, decoration_sheet_name
         )
         decoration_df = merge_detail_with_decoration_flags(detail_df, decisions_df)

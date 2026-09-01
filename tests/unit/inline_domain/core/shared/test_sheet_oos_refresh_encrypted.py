@@ -1,4 +1,4 @@
-"""企业加密工作簿场景：sheet 名枚举 COM 回退后的门控/迁移/读取语义。
+"""企业加密工作簿场景：sheet 名枚举 COM 回退后的门控/首写/读取语义。
 
 企业加密的模拟方式（不依赖真实 Excel）：monkeypatch openpyxl.load_workbook
 使其对目标工作簿抛错，excel_tools 的 COM 枚举/读取回退改用未打补丁的真实
@@ -6,9 +6,9 @@ openpyxl 句柄实现——等价于"COM 能透明解密读取"的行为契约�
 
 覆盖（缺陷 1/2 修复回归）：
 - 加密 + __flags 已存在 → 4h 门控生效，persist 不重写、不覆写 __flags；
-- 加密 + __flags 缺失但旧产品 sheet 存在 → 迁移一次物化 __flags，幂等；
+- 加密 + __flags 缺失但旧产品 sheet 存在 → 首写物化空 __flags（不继承旧表 flag），幂等；
 - 加密 + __flags 缺失 → load_sheet_oos_decisions 返回空台账而非抛错；
-- openpyxl 与 COM 都无法枚举 → 读/迁移/persist 一律抛 SheetOosDecorationReadError。
+- openpyxl 与 COM 都无法枚举 → 读/persist 一律抛 SheetOosDecorationReadError。
 """
 
 from datetime import datetime, timedelta
@@ -28,7 +28,6 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     build_sheet_oos_detail,
     compute_decision_signature,
     load_sheet_oos_decisions,
-    migrate_legacy_flags_if_needed,
     persist_sheet_oos_decoration,
 )
 from src.shared_kernel.utils.excel_tools import (
@@ -231,43 +230,39 @@ def test_encrypted_workbook_with_flags_sheet_skips_rewrite_within_ttl(
 
 
 # ---------------------------------------------------------------------------
-# b) 加密 + __flags 缺失但旧产品 sheet 存在：迁移一次生成 __flags，幂等
+# b) 加密 + __flags 缺失但旧产品 sheet 存在：首写生成空 __flags（不继承），幂等
 # ---------------------------------------------------------------------------
 
 
-def test_encrypted_workbook_migrates_legacy_flags_once_and_idempotent(
+def test_encrypted_workbook_first_write_creates_empty_flags_idempotent(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """旧产品 sheet 的 flag 永不生效：首写物化空 __flags，全部键默认 True。"""
     product_dir = _make_product_dir(tmp_path)
     detail = build_sheet_oos_detail(_sheet_features())
     workbook = _write_workbook(product_dir, {SHEET: _legacy_product_sheet()})
     com_read_sheet = _simulate_encrypted_workbook(monkeypatch, workbook)
     write_calls = _spy_writes(monkeypatch)
 
-    persist_sheet_oos_decoration(product_dir, detail, **_persist_kwargs())
+    merged = persist_sheet_oos_decoration(product_dir, detail, **_persist_kwargs())
 
-    # 首次运行：迁移旧表并把决策台账物化到 __flags
+    # 首次运行：不继承旧产品 sheet 的 flag（S1=False 不生效），物化空 __flags
     assert write_calls == [(SHEET, f"{SHEET}__flags", REFRESH_META_SHEET_NAME)]
+    assert merged["flag"].tolist() == [True, True]
     decisions = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    assert decisions["sheet_id"].tolist() == ["S1", "S2"]
-    assert decisions["flag"].tolist() == [False, True]
+    assert decisions.empty
+    assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
 
-    # 二次运行：__flags 已存在 → 不再触碰旧产品 sheet，TTL 内不重写
-    monkeypatch.setattr(
-        sheet_oos_decoration,
-        "load_sheet_oos_decoration",
-        lambda *a, **k: (_ for _ in ()).throw(
-            AssertionError("__flags 已存在，不应再从旧产品 sheet 迁移")
-        ),
-    )
+    # 二次运行：__flags 已存在，TTL 内不重写；旧表 flag 仍不生效
     bytes_before = workbook.read_bytes()
-    persist_sheet_oos_decoration(
+    merged_again = persist_sheet_oos_decoration(
         product_dir, detail, **_persist_kwargs(now=NOW + timedelta(hours=1))
     )
     assert len(write_calls) == 1
     assert workbook.read_bytes() == bytes_before
+    assert merged_again["flag"].tolist() == [True, True]
     flags_after = com_read_sheet(workbook, f"{SHEET}__flags")
-    assert flags_after["flag"].tolist() == [False, True]
+    assert flags_after.empty
 
 
 # ---------------------------------------------------------------------------
@@ -314,9 +309,7 @@ def test_unreadable_workbook_raises_read_error(tmp_path: Path, monkeypatch) -> N
 
     with pytest.raises(SheetOosDecorationReadError):
         load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    with pytest.raises(SheetOosDecorationReadError):
-        migrate_legacy_flags_if_needed(product_dir, sheet_name=SHEET)
-    # persist 路径不得静默继续（避免用迁移结果覆写不可读文件中的 __flags）
+    # persist 路径不得静默继续（避免覆写不可读文件中的 __flags）
     with pytest.raises(SheetOosDecorationReadError):
         persist_sheet_oos_decoration(product_dir, detail, **_persist_kwargs())
 
