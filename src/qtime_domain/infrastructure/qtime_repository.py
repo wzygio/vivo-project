@@ -87,7 +87,7 @@ class QTimeRepository:
             FROM mdw.qtime_tzbjx
             WHERE timekey >= :start_time
               AND timekey < :end_time
-              AND step_desc = :step_desc
+              AND step_desc IN :step_descriptions
               AND CASE
                     WHEN f_step LIKE '1%' THEN 'ARRAY'
                     WHEN f_step LIKE '2%' THEN 'OLED'
@@ -98,12 +98,14 @@ class QTimeRepository:
             "start_time": query.start_time.strftime("%Y%m%d%H%M%S"),
             "end_time": query.end_time.strftime("%Y%m%d%H%M%S"),
             "shop": query.shop,
-            "step_desc": query.step_desc,
+            "step_descriptions": query.step_descriptions,
         }
         if query.products:
             sql = f"{sql} AND prodcode IN :products"
             params["products"] = query.products
-        statement = text(f"{sql} ORDER BY step_desc, lot_id, timekey")
+        statement = text(f"{sql} ORDER BY step_desc, lot_id, timekey").bindparams(
+            bindparam("step_descriptions", expanding=True)
+        )
         if query.products:
             statement = statement.bindparams(bindparam("products", expanding=True))
 

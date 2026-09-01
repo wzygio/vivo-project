@@ -36,6 +36,7 @@ def test_qtime_repository_executes_the_full_filter_contract() -> None:
                 "('A->B','L3',1,'P','25500','25600',3.0,0.8,'20260802030000','M626'),"
                 "('A->B','L4',1,'P','15500','15600',2.5,0.9,'20260901000000','M626'),"
                 "('A->B','L5',1,'P','15500','15600',2.5,1.0,'20260802040000','M678')"
+                ",('B->C','L6',1,'P','15500','15700',3.0,0.7,'20260802050000','M626')"
             )
         )
 
@@ -44,10 +45,10 @@ def test_qtime_repository_executes_the_full_filter_contract() -> None:
         start_time=datetime(2026, 8, 2),
         end_time=datetime(2026, 9, 1),
         shop="ARRAY",
-        step_desc="A->B",
+        step_descriptions=("A->B", "B->C"),
         products=("M626",),
     )
 
     assert repository.list_products() == ("M626", "M678")
-    assert repository.list_step_descriptions("ARRAY") == ("A->B",)
-    assert repository.fetch_details(query)["lot_id"].tolist() == ["L1", "L2"]
+    assert repository.list_step_descriptions("ARRAY") == ("A->B", "B->C")
+    assert repository.fetch_details(query)["lot_id"].tolist() == ["L1", "L2", "L6"]

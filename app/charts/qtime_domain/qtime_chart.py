@@ -7,55 +7,77 @@ import plotly.graph_objects as go
 
 
 BAR_COLOR = "#31c7c9"
+BAR_COLORS = (BAR_COLOR, "#2563eb", "#7c3aed", "#0891b2", "#0f766e")
 SPEC_COLOR = "#ef4444"
 
 
-def build_qtime_figure(details: pd.DataFrame) -> go.Figure:
+def build_qtime_figure(
+    details: pd.DataFrame,
+    *,
+    title: str = "北极星QTime监控",
+) -> go.Figure:
     """Build the Lot wait-time bars and optional row-level specification line."""
     frame = details.copy()
-    lot_ids = frame.get("lot_id", pd.Series(dtype="object")).fillna("").astype(str)
-    wait_times = _numeric_column(frame, "wait_time")
-    step_names = frame.get("step_desc", pd.Series(dtype="object")).dropna()
-    series_name = str(step_names.iloc[0]) if not step_names.empty else "Q-Time"
+    if "step_desc" in frame:
+        step_names = frame["step_desc"].fillna("Q-Time").astype(str)
+    else:
+        step_names = pd.Series("Q-Time", index=frame.index, dtype="object")
+    frame = frame.assign(_step_name=step_names)
+    step_groups = list(frame.groupby("_step_name", sort=False))
 
     figure = go.Figure()
-    figure.add_bar(
-        x=lot_ids,
-        y=wait_times,
-        name=series_name,
-        marker_color=BAR_COLOR,
-        hovertemplate="Lot %{x}<br>等待时长 %{y:.2f} h<extra></extra>",
-    )
+    for index, (step_name, group) in enumerate(step_groups):
+        figure.add_bar(
+            x=_lot_ids(group),
+            y=_numeric_column(group, "wait_time"),
+            name=str(step_name),
+            marker_color=BAR_COLORS[index % len(BAR_COLORS)],
+            hovertemplate="Lot %{x}<br>等待时长 %{y:.2f} h<extra></extra>",
+        )
 
-    specs = _numeric_column(frame, "q_spec")
-    if specs.notna().any():
+    is_first_spec = True
+    for _step_name, group in step_groups:
+        specs = _numeric_column(group, "q_spec")
+        if not specs.notna().any():
+            continue
         figure.add_scatter(
-            x=lot_ids,
+            x=_lot_ids(group),
             y=specs,
             name="QTime规格",
             mode="lines",
             line={"color": SPEC_COLOR, "width": 2},
             hovertemplate="QTime规格 %{y:.2f} h<extra></extra>",
+            legendgroup="qtime-spec",
+            showlegend=is_first_spec,
         )
+        is_first_spec = False
 
     figure.update_layout(
-        title={"text": "北极星QTime监控", "x": 0.5, "xanchor": "center"},
+        title={"text": title, "x": 0.5, "xanchor": "center"},
         height=430,
-        margin={"l": 50, "r": 24, "t": 72, "b": 110},
+        margin={"l": 50, "r": 24, "t": 72, "b": 82},
         legend={"orientation": "h", "x": 0.5, "xanchor": "center", "y": 1.02},
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
         bargap=0.35,
-        xaxis={"title": "Lot ID", "tickangle": -90, "showgrid": False},
+        barmode="group",
+        xaxis={"title": "Lot ID", "tickangle": -45, "showgrid": False},
         yaxis={
             "title": "等待时长（小时）",
             "rangemode": "tozero",
             "gridcolor": "#d7dde5",
-            "zeroline": False,
+            "zeroline": True,
+            "zerolinecolor": "#94a3b8",
+            "zerolinewidth": 1.5,
         },
         hovermode="x unified",
     )
     return figure
+
+
+def _lot_ids(frame: pd.DataFrame) -> pd.Series:
+    values = frame.get("lot_id", pd.Series(index=frame.index, dtype="object"))
+    return values.fillna("").astype(str)
 
 
 def _numeric_column(frame: pd.DataFrame, column: str) -> pd.Series:

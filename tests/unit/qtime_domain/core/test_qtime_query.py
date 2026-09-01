@@ -13,7 +13,7 @@ def test_qtime_query_requires_a_positive_half_open_time_window() -> None:
             start_time=datetime(2026, 9, 1, 8, 0),
             end_time=datetime(2026, 9, 1, 8, 0),
             shop="ARRAY",
-            step_desc="M3_DE->M3_STR",
+            step_descriptions=("M3_DE->M3_STR",),
         )
 
 
@@ -33,9 +33,19 @@ def test_qtime_query_normalizes_path_and_product_filters() -> None:
         start_time=datetime(2026, 8, 1),
         end_time=datetime(2026, 9, 1),
         shop="ARRAY",
-        step_desc="  A->B  ",
+        step_descriptions=("  A->B  ", "", "A->B", " B->C "),
         products=(" M626 ", "", "M626", " M678"),
     )
 
-    assert query.step_desc == "A->B"
+    assert query.step_descriptions == ("A->B", "B->C")
     assert query.products == ("M626", "M678")
+
+
+def test_qtime_query_requires_at_least_one_path() -> None:
+    with pytest.raises(ValidationError):
+        QTimeQuery(
+            start_time=datetime(2026, 8, 1),
+            end_time=datetime(2026, 9, 1),
+            shop="ARRAY",
+            step_descriptions=(),
+        )

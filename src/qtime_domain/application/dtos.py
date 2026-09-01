@@ -17,13 +17,17 @@ class QTimeQuery(BaseModel):
     start_time: datetime
     end_time: datetime
     shop: Shop
-    step_desc: str = Field(min_length=1)
+    step_descriptions: tuple[str, ...] = Field(min_length=1)
     products: tuple[str, ...] = ()
 
-    @field_validator("step_desc", mode="before")
+    @field_validator("step_descriptions", mode="before")
     @classmethod
-    def normalize_step_description(cls, value: object) -> str:
-        return str(value).strip()
+    def normalize_step_descriptions(cls, value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        values = (value,) if isinstance(value, str) else value
+        normalized = (str(description).strip() for description in values)
+        return tuple(dict.fromkeys(item for item in normalized if item))
 
     @field_validator("products", mode="before")
     @classmethod

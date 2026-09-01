@@ -48,7 +48,7 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 | `yield_domain` | 入库不良率趋势、Code/Group MWD、Lot/Sheet 明细、缺陷 Mapping、告警和 Office 导出。 | `YieldAnalysisService`、`AlertService`、`PanelRepository` |
 | `inline_domain` | SPC、CTQ 与自动预警的测量查询、能力计算、OOS 修饰和监控汇总。 | `SpcReportService`、`CtqReportService`、`MonitorAnalysisService`、`SpcRepository` |
 | `equipment_domain` | 关键备件规格基线、寿命计算、状态预警，以及真实与仿造快照的匹配。 | `PartsReportService`、`PartsRepository` |
-| `qtime_domain` | 站点间过货等待时长、规格、厂别/路径/产品筛选与 Lot 明细。 | `QTimeReportService`、`QTimeRepository` |
+| `qtime_domain` | 站点间过货等待时长、规格、厂别/路径/产品筛选与 Lot 明细；含 IJP 溢流监控子域（多维筛选、By天 CODE 占比堆叠图与缺陷明细）。 | `QTimeReportService`、`QTimeRepository`、`IjpReportService`、`IjpRepository` |
 | `shared_kernel` | 配置模型与加载、数据库连接、输出目录、合规配置和 Excel/CSV 工具。 | `ConfigLoader`、`DatabaseManager` |
 
 ### Q-Time 数据流
@@ -118,8 +118,9 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
   点位图类型统一由 `app/charts/inline/chart_type.py` 根据
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK 人工修饰文件
-  `resources/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态，只按周期键
-  合并到新结果，刷新时不会重建既有 sheet。
+  `resources/inline_domain/spc_cpk_decoration.xlsx` 的产品 sheet 是用户维护状态：
+  既有周期键的人工值/flag 原样保留，当前能力结果中新出现的周期键以
+  `flag=False` 追加；刷新不会重建或覆盖既有人工决策。
 - PNL 指标规格的版本/产品收严分析是独立离线工具，归
   `tools/indicator_improvement/` 所有，不进入 `src/inline_domain` 的应用服务、
   Core 或组合根；其输入为离线 Excel，输出为 `output/` 下的可重建报告。

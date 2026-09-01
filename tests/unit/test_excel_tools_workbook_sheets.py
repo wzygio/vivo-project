@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, tzinfo
 from pathlib import Path
 
 import pandas as pd
@@ -6,11 +7,30 @@ import pytest
 
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
+    _normalize_excel_com_value,
     list_workbook_sheet_names,
     read_workbook_sheet,
     replace_workbook_sheet,
     replace_workbook_sheets,
 )
+
+
+class _ComLikeTimezone(tzinfo):
+    def utcoffset(self, _value):
+        return None
+
+    def dst(self, _value):
+        return timedelta(0)
+
+
+def test_normalize_excel_com_value_returns_plain_naive_datetime() -> None:
+    com_datetime = datetime(2026, 8, 24, 12, 34, 56, 789000, tzinfo=_ComLikeTimezone())
+
+    normalized = _normalize_excel_com_value(com_datetime)
+
+    assert type(normalized) is datetime
+    assert normalized == datetime(2026, 8, 24, 12, 34, 56, 789000)
+    assert normalized.tzinfo is None
 
 
 def test_read_workbook_sheet_returns_empty_for_missing_file(tmp_path: Path) -> None:

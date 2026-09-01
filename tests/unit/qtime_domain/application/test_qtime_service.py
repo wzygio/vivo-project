@@ -29,7 +29,7 @@ def test_service_exposes_filter_options_and_report_through_the_data_port() -> No
         start_time=datetime(2026, 8, 2),
         end_time=datetime(2026, 9, 1),
         shop="ARRAY",
-        step_desc="M3_DE->M3_STR",
+        step_descriptions=("M3_DE->M3_STR",),
     )
 
     options = service.get_filter_options("ARRAY")

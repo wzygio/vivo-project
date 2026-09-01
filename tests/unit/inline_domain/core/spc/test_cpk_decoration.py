@@ -67,6 +67,20 @@ def test_cpk_decoration_accepts_existing_ture_flag_typo() -> None:
     assert decorated_df["cpk_decorated"].tolist() == [True]
 
 
+def test_cpk_decoration_matches_excel_numeric_step_id_to_runtime_string() -> None:
+    computed_df = _capability_frame(1.46)
+    decoration_df = prepare_cpk_decoration(
+        period_capability_df=computed_df,
+        product_dir=Path("."),
+        persist_files=False,
+    ).decoration_df.assign(step_id=12140.0, cpk_corrected=pd.NA, flag=True)
+
+    decorated_df = apply_cpk_decoration(computed_df, decoration_df)
+
+    assert decorated_df["cpk"].tolist() == [1.46]
+    assert decorated_df["cpk_decorated"].tolist() == [True]
+
+
 def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_file(
     monkeypatch,
     tmp_path: Path,
@@ -83,7 +97,9 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     monkeypatch.setattr(
         cpk_decoration.pd,
         "read_excel",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(BadZipFile("File is not a zip file")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("Excel file format cannot be determined")
+        ),
     )
     monkeypatch.setattr(
         cpk_decoration,
@@ -122,6 +138,46 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: 
     assert result.period_capability_df["cpk"].tolist() == [1.72]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True]
     # 共享工作簿中的其他 sheet 不受影响
+    other_loaded = pd.read_excel(decoration_path, sheet_name="OTHER")
+    assert other_loaded["note"].tolist() == ["keep-me"]
+
+
+def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
+    tmp_path: Path,
+) -> None:
+    existing_capability_df = _capability_frame(1.46)
+    new_capability_df = _capability_frame(0.919).assign(
+        period_type="week",
+        period_label="2026-W35",
+        period_sort=208,
+        period_start="2026-08-24",
+        period_end="2026-08-30",
+    )
+    decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
+    existing_df = prepare_cpk_decoration(
+        period_capability_df=existing_capability_df,
+        product_dir=tmp_path,
+        persist_files=False,
+    ).decoration_df.assign(cpk_corrected=1.72, flag=True)
+    other_sheet_df = pd.DataFrame([{"prod_code": "OTHER", "note": "keep-me"}])
+    with pd.ExcelWriter(decoration_path, engine="openpyxl") as writer:
+        existing_df.to_excel(writer, index=False, sheet_name="M678")
+        other_sheet_df.to_excel(writer, index=False, sheet_name="OTHER")
+
+    result = prepare_cpk_decoration(
+        period_capability_df=pd.concat(
+            [existing_capability_df, new_capability_df],
+            ignore_index=True,
+        ),
+        product_dir=tmp_path,
+        sheet_name="M678",
+    )
+
+    persisted_df = pd.read_excel(decoration_path, sheet_name="M678")
+    assert persisted_df["period_label"].tolist() == ["2026-07-20", "2026-W35"]
+    assert persisted_df["cpk_corrected"].tolist() == [1.72, 0.919]
+    assert persisted_df["flag"].tolist() == [True, False]
+    assert result.period_capability_df["cpk_decorated"].tolist() == [True, False]
     other_loaded = pd.read_excel(decoration_path, sheet_name="OTHER")
     assert other_loaded["note"].tolist() == ["keep-me"]
 

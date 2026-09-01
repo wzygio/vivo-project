@@ -24,6 +24,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_sheet_oos_alert_indicator_sections,
     render_spc_decoration_admin,
     render_spc_indicator_sections,
+    suppress_temporary_cpk_alerts,
 )
 from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult
 from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
@@ -165,6 +166,24 @@ def test_build_weekly_cpk_alerts_excludes_decorated_records() -> None:
     )
 
     assert alerts_df["参数名称"].tolist() == ["4PP_Rs"]
+
+
+def test_suppress_temporary_cpk_alerts_hides_only_the_two_m626_indicators() -> None:
+    alerts_df = pd.DataFrame(
+        [
+            {"厂别": "ARRAY", "站点": "1L650", "参数名称": "CD1", "超规周次": "2026-W35", "CPK值": 0.919},
+            {"厂别": "TP", "站点": "41450", "参数名称": "OVL1_Y", "超规周次": "2026-W35", "CPK值": 1.204},
+            {"厂别": "ARRAY", "站点": "18650", "参数名称": "CD1", "超规周次": "2026-W35", "CPK值": 1.277},
+        ]
+    )
+
+    suppressed_df = suppress_temporary_cpk_alerts(alerts_df, prod_code="M626")
+    other_product_df = suppress_temporary_cpk_alerts(alerts_df, prod_code="M673")
+
+    assert suppressed_df[["厂别", "站点", "参数名称"]].to_dict("records") == [
+        {"厂别": "ARRAY", "站点": "18650", "参数名称": "CD1"}
+    ]
+    assert other_product_df.equals(alerts_df)
 
 
 def test_build_weekly_cpm_alerts_returns_only_values_from_previous_week() -> None:

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Mapping, Optional
 
@@ -13,6 +14,21 @@ import pandas as pd
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
+
+
+def _normalize_excel_com_value(value: object) -> object:
+    """Convert COM datetime subclasses to plain naive datetimes for pandas/openpyxl."""
+    if isinstance(value, datetime):
+        return datetime(
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
+            value.microsecond,
+        )
+    return value
 
 
 def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
@@ -126,8 +142,11 @@ def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
             if data is None or len(data) < 1:
                 sheets[ws.Name] = pd.DataFrame()
                 continue
-            headers = list(data[0])
-            rows = [list(row) for row in data[1:]]
+            headers = [_normalize_excel_com_value(value) for value in data[0]]
+            rows = [
+                [_normalize_excel_com_value(value) for value in row]
+                for row in data[1:]
+            ]
             sheets[ws.Name] = pd.DataFrame(rows, columns=headers)
         return sheets
     finally:
@@ -439,8 +458,11 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
             return pd.DataFrame()
 
         # COM 返回 tuple of tuples，首行为表头
-        headers = list(data[0])
-        rows = [list(row) for row in data[1:]]
+        headers = [_normalize_excel_com_value(value) for value in data[0]]
+        rows = [
+            [_normalize_excel_com_value(value) for value in row]
+            for row in data[1:]
+        ]
         df = pd.DataFrame(rows, columns=headers)
 
         logging.info(f"[xlsx_to_csv] 使用 COM (Excel.Application) 读取加密文件 {xlsx_path.name} 成功, shape={df.shape}")

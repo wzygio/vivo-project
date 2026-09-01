@@ -67,7 +67,7 @@ def test_fetch_details_uses_bound_filters_and_returns_the_report_contract(monkey
         start_time=datetime(2026, 8, 2, 1, 0),
         end_time=datetime(2026, 9, 1, 1, 0),
         shop="ARRAY",
-        step_desc="M3_DE->M3_STR",
+        step_descriptions=("M3_DE->M3_STR", "M4_DE->M4_STR"),
         products=("M626", "M626'); DROP TABLE qtime; --"),
     )
 
@@ -78,10 +78,11 @@ def test_fetch_details_uses_bound_filters_and_returns_the_report_contract(monkey
         "start_time": "20260802010000",
         "end_time": "20260901010000",
         "shop": "ARRAY",
-        "step_desc": "M3_DE->M3_STR",
+        "step_descriptions": ("M3_DE->M3_STR", "M4_DE->M4_STR"),
         "products": ("M626", "M626'); DROP TABLE qtime; --"),
     }
     assert "DROP TABLE" not in captured["statement"]
+    assert "step_desc IN" in captured["statement"]
     assert list(result.columns) == [
         "step_desc",
         "lot_id",

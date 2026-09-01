@@ -57,6 +57,16 @@ CPK_ALERT_KEY_COLUMN_MAP = {
     "站点": "step_id",
     "参数名称": "param_name",
 }
+# Temporary, product-scoped UI suppression. It removes alerts and their derived
+# auto-warning charts without changing the underlying capability values.
+TEMPORARY_CPK_ALERT_SUPPRESSIONS = {
+    "M626": frozenset(
+        {
+            ("ARRAY", "1L650", "CD1"),
+            ("TP", "41450", "OVL1_Y"),
+        }
+    ),
+}
 SPC_OOS_ALERT_COLUMN_MAP = {
     "factory": "厂别",
     "step_id": "站点",
@@ -155,6 +165,27 @@ def build_weekly_cpk_alerts(
         decorated_column="cpk_decorated",
         reference_date=reference_date,
     )
+
+
+def suppress_temporary_cpk_alerts(
+    alerts_df: pd.DataFrame,
+    *,
+    prod_code: str,
+) -> pd.DataFrame:
+    """Remove explicitly approved product indicators from the UI alert stream."""
+    suppressions = TEMPORARY_CPK_ALERT_SUPPRESSIONS.get(str(prod_code).strip(), frozenset())
+    required_columns = {"厂别", "站点", "参数名称"}
+    if alerts_df.empty or not suppressions or not required_columns.issubset(alerts_df.columns):
+        return alerts_df.copy()
+
+    is_suppressed = pd.Series(False, index=alerts_df.index, dtype=bool)
+    for factory, step_id, param_name in suppressions:
+        is_suppressed |= (
+            alerts_df["厂别"].astype(str).str.strip().eq(factory)
+            & alerts_df["站点"].astype(str).str.strip().eq(step_id)
+            & alerts_df["参数名称"].astype(str).str.strip().eq(param_name)
+        )
+    return alerts_df.loc[~is_suppressed].copy().reset_index(drop=True)
 
 
 def build_weekly_cpm_alerts(

@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
 
 from src.shared_kernel.utils.excel_tools import (
+    _is_missing_sheet_error,
     _read_encrypted_xlsx_via_com,
-    replace_workbook_sheet,
+    replace_workbook_sheets,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,8 +69,18 @@ def _normalize_key_columns(df: pd.DataFrame) -> pd.DataFrame:
     result = df.copy()
     for column in CPK_KEY_COLUMNS:
         if column in result.columns:
-            result[column] = result[column].fillna("").astype(str)
+            result[column] = result[column].map(_normalize_key_value)
     return result
+
+
+def _normalize_key_value(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    if isinstance(value, Integral):
+        return str(int(value))
+    if isinstance(value, Real) and float(value).is_integer():
+        return str(int(value))
+    return str(value).strip()
 
 
 def _parse_flag(value: object) -> bool:
@@ -115,9 +127,11 @@ def load_cpk_decoration(product_dir: Path, sheet_name: str | None = None) -> pd.
         else:
             try:
                 loaded_df = pd.read_excel(path, sheet_name=sheet_name)
-            except ValueError:
-                # 指定 sheet 缺失 —— 与文件缺失语义一致
-                return _empty_decoration_frame()
+            except ValueError as excel_error:
+                if _is_missing_sheet_error(excel_error):
+                    # 指定 sheet 缺失 —— 与文件缺失语义一致
+                    return _empty_decoration_frame()
+                raise
     except Exception as excel_exc:
         try:
             loaded_df = _read_encrypted_xlsx_via_com(path, sheet_name)
@@ -172,7 +186,11 @@ def _decoration_sheet_exists(decoration_path: Path, sheet_name: str | None) -> b
     try:
         import openpyxl
 
-        return sheet_name in openpyxl.load_workbook(decoration_path, read_only=True).sheetnames
+        workbook = openpyxl.load_workbook(decoration_path, read_only=True)
+        try:
+            return sheet_name in workbook.sheetnames
+        finally:
+            workbook.close()
     except Exception:
         # 企业加密等 openpyxl 无法打开的工作簿按“已存在”处理，避免破坏用户文件
         logger.warning(
@@ -180,6 +198,31 @@ def _decoration_sheet_exists(decoration_path: Path, sheet_name: str | None) -> b
             decoration_path,
         )
         return True
+
+
+def _append_missing_detail_rows(
+    existing_decoration_df: pd.DataFrame,
+    current_decoration_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Append current keys absent from the user ledger without changing prior decisions."""
+    existing_df = _normalize_key_columns(
+        _ordered_existing_columns(existing_decoration_df, CPK_DECORATION_COLUMNS)
+    )
+    current_df = _normalize_key_columns(
+        _ordered_existing_columns(current_decoration_df, CPK_DECORATION_COLUMNS)
+    )
+    if existing_df.empty or current_df.empty:
+        return existing_df
+
+    existing_keys = pd.MultiIndex.from_frame(existing_df[CPK_KEY_COLUMNS])
+    current_keys = pd.MultiIndex.from_frame(current_df[CPK_KEY_COLUMNS])
+    missing_rows = current_df.loc[~current_keys.isin(existing_keys)].drop_duplicates(
+        CPK_KEY_COLUMNS,
+        keep="last",
+    )
+    if missing_rows.empty:
+        return existing_df
+    return pd.concat([existing_df, missing_rows], ignore_index=True)[CPK_DECORATION_COLUMNS]
 
 
 def persist_cpk_decoration(
@@ -191,13 +234,33 @@ def persist_cpk_decoration(
     product_dir.mkdir(parents=True, exist_ok=True)
     decoration_path = get_cpk_decoration_path(product_dir)
     target_sheet = sheet_name or "Sheet1"
+    existing_decoration_df = load_cpk_decoration(product_dir, sheet_name)
     decoration_to_write = merge_detail_with_decoration_flags(
         detail_df,
-        load_cpk_decoration(product_dir, sheet_name),
+        existing_decoration_df,
     )
-    if not _decoration_sheet_exists(decoration_path, sheet_name):
-        # replace_workbook_sheet 内部已处理 PermissionError（仅告警跳过）
-        replace_workbook_sheet(decoration_path, target_sheet, decoration_to_write)
+    sheet_exists = _decoration_sheet_exists(decoration_path, sheet_name)
+    persisted_df = decoration_to_write
+    should_write = not sheet_exists
+    if sheet_exists and not existing_decoration_df.empty:
+        persisted_df = _append_missing_detail_rows(
+            existing_decoration_df,
+            decoration_to_write,
+        )
+        should_write = len(persisted_df) > len(existing_decoration_df)
+
+    if should_write:
+        write_result = replace_workbook_sheets(
+            decoration_path,
+            {target_sheet: persisted_df},
+        )
+        if not write_result.written:
+            logger.warning(
+                "[SPC] failed to persist CPK decoration sheet %s [%s]: %s",
+                decoration_path,
+                target_sheet,
+                write_result.error,
+            )
     return decoration_to_write
 
 

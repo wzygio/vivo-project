@@ -26,6 +26,7 @@ const LINKS = {
     AOI_RS: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Yield_Monitoring%252FDefect_Monitoring%252FDB114.RS_Density_Analyze_for_BJX_Report.cpt&ref_t=design&op=view&ref_c=5984e028-78ba-4264-857b-d9ee3d00fcca",
     CTQ: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/6883bfc0-b11b-4548-8e78-3b6a3474f0d0?preview=true",
     QTIME: "http://10.72.26.31:8503/Q_Time监控报表",
+    IJP_OVERFLOW: "http://10.72.26.31:8503/IJP溢流监控报表",
     IQC: "http://10.73.17.17:8080/webroot/decision/view/report?viewlet=Quality_Monitoring%252FPQC%252FI03_Search_TianZhu_IQC_Mateial_OKNG_Ratel.cpt&ref_t=design&op=view&ref_c=4b854cd4-c836-4724-ba9d-0ad9a72584e5"
 };
 
@@ -62,6 +63,7 @@ const APP_CONFIG = {
             name: "Q-time",
             children: [
                 { name: "Q-time", url: LINKS.QTIME },
+                { name: "IJP溢流监控", url: LINKS.IJP_OVERFLOW },
             ]
         },
         {
@@ -130,7 +132,7 @@ const APP_CONFIG = {
             icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>', 
             subs: [ 
                 {l:'', v:'Q-time', url: LINKS.QTIME },          
-                     
+                {l:'', v:'IJP溢流', url: LINKS.IJP_OVERFLOW },          
             ]
         },
         { 

@@ -253,5 +253,5 @@ def test_every_streamlit_page_uses_the_shared_page_header():
         if "render_page_header(" not in page_file.read_text(encoding="utf-8")
     ]
 
-    assert len(page_files) == 12
+    assert len(page_files) == 13
     assert pages_without_header == []

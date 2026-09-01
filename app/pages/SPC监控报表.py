@@ -36,6 +36,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_spc_filters,
     render_spc_indicator_sections,
     render_spc_decoration_admin,
+    suppress_temporary_cpk_alerts,
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
@@ -138,6 +139,10 @@ selected_factory, selected_params, selected_steps, should_render_report = render
 cpk_alerts_df = build_weekly_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
+)
+cpk_alerts_df = suppress_temporary_cpk_alerts(
+    cpk_alerts_df,
+    prod_code=current_product,
 )
 cpm_alerts_df = build_weekly_cpm_alerts(
     period_capability_df,

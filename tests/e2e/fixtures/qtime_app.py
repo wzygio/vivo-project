@@ -21,7 +21,11 @@ from src.qtime_domain.application.errors import QTimeDataAccessError
 class FixtureQTimeService:
     def get_filter_options(self, shop: str) -> dict[str, tuple[str, ...]]:
         paths = {
-            "ARRAY": ("M3_DE->M3_STR", "Shipping->Cutting"),
+            "ARRAY": (
+                "M3_DE->M3_STR",
+                "PSI_ELA->PSI_PHT",
+                "Shipping->Cutting",
+            ),
             "OLED": ("OLED_OUT->OLED_IN",),
             "TP": ("TP_OUT->TP_IN",),
         }
@@ -32,7 +36,7 @@ class FixtureQTimeService:
 
     def get_report(self, query) -> pd.DataFrame:
         products = query.products or ("M626",)
-        if query.step_desc == "Shipping->Cutting":
+        if query.step_descriptions == ("Shipping->Cutting",):
             return pd.DataFrame()
         if products == ("M678",):
             raise QTimeDataAccessError(
@@ -56,7 +60,7 @@ class FixtureQTimeService:
         return pd.DataFrame(
             [
                 {
-                    "step_desc": query.step_desc,
+                    "step_desc": step_description,
                     "lot_id": lot_id,
                     "prod_qty": 1,
                     "sub_prod_type": "P",
@@ -68,9 +72,10 @@ class FixtureQTimeService:
                     "shop": query.shop,
                     "prodcode": products[0],
                 }
+                for step_description in query.step_descriptions
+                if step_description != "Shipping->Cutting"
                 for index, (lot_id, wait_time) in enumerate(
-                    zip(lot_ids, wait_times, strict=True),
-                    start=1,
+                    zip(lot_ids, wait_times, strict=True), start=1
                 )
             ]
         )
