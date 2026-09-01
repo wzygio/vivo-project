@@ -1,4 +1,4 @@
-# Task：Q-Time报表开发
+# Task：IJP溢流报表开发
 - 身份：我是一家OLED显示屏制造公司的大数据分析工程师
 - 项目：我们正在开发的是一款面向客户的企业级报表，现在需要开发其中的IJP溢流监控报表
 - 任务：目前内部已经基于FineReport平台（帆软）开发了一份现成的报表，请你根据我提供的sql语句及报表样式，将其使用“python + streamlit”复刻出来（样式一致即可）
@@ -15,11 +15,8 @@
 其它你想要了解的专有名词可以参考：`references\domain\GLOSSARY.md`
 
 ### 报表样式
-1. 前端样式：
-- 开发界面（FineReport中的开发截图）：`docs\dev_docs\dev_spec\qtime_domain\IJP溢流报表样式-开发界面.png`
-
+1. 前端样式：开发界面（FineReport中的开发截图）参考`docs\dev_docs\dev_spec\qtime_domain\IJP溢流报表样式-开发界面.png`
 2. 前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
-
 3. 后端架构：在`src`下新建一个domain，遵循DDD架构完成开发，具体架构可参考`ARCHITECTURE.md`
 
 ## Workflow

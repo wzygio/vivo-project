@@ -16,7 +16,9 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     database = object()
     data_port = object()
     service = object()
-    active_config = SimpleNamespace()
+    active_config = SimpleNamespace(
+        data_source=SimpleNamespace(product_code="M626"),
+    )
 
     monkeypatch.setattr(
         qtime_dashboard.st,
@@ -48,7 +50,9 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     monkeypatch.setattr(
         qtime_dashboard,
         "render_qtime_dashboard",
-        lambda received: events.append(("dashboard", received)),
+        lambda received, selected_product: events.append(
+            ("dashboard", received, selected_product)
+        ),
         raising=False,
     )
 
@@ -65,7 +69,7 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
         ),
         ("repository", database),
         ("service", data_port),
-        ("dashboard", service),
+        ("dashboard", service, "M626"),
     ]
 
 

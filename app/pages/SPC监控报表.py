@@ -29,14 +29,12 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     build_weekly_cpm_alerts,
     filter_spc_report,
     get_default_spc_start_date,
-    render_cpk_alert_center,
-    render_cpk_alert_indicator_sections,
-    render_cpm_alert_center,
+    render_cpk_alert_section,
+    render_cpm_alert_section,
     render_sheet_oos_alert_indicator_sections,
     render_spc_filters,
     render_spc_indicator_sections,
     render_spc_decoration_admin,
-    suppress_temporary_cpk_alerts,
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
@@ -140,10 +138,6 @@ cpk_alerts_df = build_weekly_cpk_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
 )
-cpk_alerts_df = suppress_temporary_cpk_alerts(
-    cpk_alerts_df,
-    prod_code=current_product,
-)
 cpm_alerts_df = build_weekly_cpm_alerts(
     period_capability_df,
     reference_date=default_end_dt.date(),
@@ -157,24 +151,19 @@ if is_admin:
         getattr(view_model, "cpk_decoration_result", None),
     )
     
-render_cpk_alert_center(
+render_cpk_alert_section(
     cpk_alerts_df,
     has_capability_data=not period_capability_df.empty,
+    period_capability_df=period_capability_df,
+    sheet_features_df=sheet_features_df,
+    raw_measurements_df=raw_measurements_df,
+    period_box_source=ConfigLoader.get_spc_period_box_source(),
     step_desc_map=step_desc_map,
 )
 
-# CPM 预警只做提示；“自动预警指标图像”依旧仅由 CPK 预警控制。
-render_cpm_alert_center(
+render_cpm_alert_section(
     cpm_alerts_df,
     has_capability_data=not period_capability_df.empty,
-    step_desc_map=step_desc_map,
-)
-
-
-
-
-render_cpk_alert_indicator_sections(
-    alerts_df=cpk_alerts_df,
     period_capability_df=period_capability_df,
     sheet_features_df=sheet_features_df,
     raw_measurements_df=raw_measurements_df,

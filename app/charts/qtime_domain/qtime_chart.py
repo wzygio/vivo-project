@@ -35,7 +35,6 @@ def build_qtime_figure(
             hovertemplate="Lot %{x}<br>等待时长 %{y:.2f} h<extra></extra>",
         )
 
-    is_first_spec = True
     for _step_name, group in step_groups:
         specs = _numeric_column(group, "q_spec")
         if not specs.notna().any():
@@ -48,9 +47,8 @@ def build_qtime_figure(
             line={"color": SPEC_COLOR, "width": 2},
             hovertemplate="QTime规格 %{y:.2f} h<extra></extra>",
             legendgroup="qtime-spec",
-            showlegend=is_first_spec,
+            showlegend=False,
         )
-        is_first_spec = False
 
     figure.update_layout(
         title={"text": title, "x": 0.5, "xanchor": "center"},

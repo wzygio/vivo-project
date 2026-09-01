@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
-import pandas as pd
 from pydantic import ValidationError
 import streamlit as st
 
@@ -14,16 +13,6 @@ from src.qtime_domain.application.errors import QTimeDataAccessError
 from src.qtime_domain.application.qtime_service import QTimeReportService
 
 
-TABLE_COLUMN_MAP = {
-    "step_desc": "QTime / 监控",
-    "lot_id": "LotID / 批次号",
-    "prod_qty": "ProductQTY / 产品数量",
-    "sub_prod_type": "ProductionType / 产品类型",
-    "f_step": "FromOperation / From站点",
-    "t_step": "ToOperation / To站点",
-    "q_spec": "T_TimeMeasure / Q_Time标准 (H)",
-    "wait_time": "WaitTime / 等待时长 (H)",
-}
 RESULT_STATE_KEY = "qtime_report_result"
 SIGNATURE_STATE_KEY = "qtime_report_signature"
 
@@ -41,33 +30,19 @@ def build_date_window(start_date: date, end_date: date) -> tuple[datetime, datet
     )
 
 
-def build_qtime_table(details: pd.DataFrame) -> pd.DataFrame:
-    """Return the stable bilingual detail table used by the report."""
-    source_columns = list(TABLE_COLUMN_MAP)
-    table = details.reindex(columns=source_columns).rename(columns=TABLE_COLUMN_MAP).copy()
-    for column in (
-        "T_TimeMeasure / Q_Time标准 (H)",
-        "WaitTime / 等待时长 (H)",
-    ):
-        numeric_values = pd.to_numeric(table[column], errors="coerce")
-        table[column] = numeric_values.round().astype("Int64")
-    table.insert(0, "No / 序号", range(1, len(table) + 1))
-    return table
-
-
-def render_qtime_dashboard(service: QTimeReportService) -> None:
+def render_qtime_dashboard(
+    service: QTimeReportService,
+    selected_product: str,
+) -> None:
     """Render filters, gated query results, and explicit operational states."""
     st.subheader("北极星QTime监控", anchor=False, text_alignment="center")
     default_start, default_end = default_date_range(date.today())
 
     with st.container(border=True):
-        shop_column, start_column, end_column = st.columns([0.8, 1.2, 1.2])
-        with shop_column:
-            shop = st.selectbox(
-                "厂别",
-                options=("ARRAY", "OLED", "TP"),
-                key="qtime_shop",
-            )
+        start_column, end_column, shop_column, path_column, search_column = st.columns(
+            [0.8, 0.8, 0.65, 2.2, 0.55],
+            vertical_alignment="bottom",
+        )
         with start_column:
             start_date = st.date_input(
                 "开始日期",
@@ -82,6 +57,12 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
                 key="qtime_end_date",
                 width="stretch",
             )
+        with shop_column:
+            shop = st.selectbox(
+                "厂别",
+                options=("ARRAY", "OLED", "TP"),
+                key="qtime_shop",
+            )
 
         try:
             options = service.get_filter_options(shop)
@@ -89,24 +70,15 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             st.error(str(exc))
             return
 
-        product_column, path_column, search_column = st.columns([1.4, 2.2, 0.8])
-        with product_column:
-            products = st.multiselect(
-                "产品（留空表示全部）",
-                options=options["products"],
-                key="qtime_products",
-            )
         with path_column:
             step_descriptions = st.multiselect(
-                "站点 From-To",
+                "站点",
                 options=options["step_descriptions"],
                 default=list(options["step_descriptions"][:1]),
                 placeholder="请选择一个或多个路径",
                 key="qtime_step_descriptions",
             )
         with search_column:
-            st.write("")
-            st.write("")
             should_query = st.button(
                 "查询",
                 type="primary",
@@ -120,7 +92,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         end_date,
         shop,
         step_descriptions,
-        products,
+        selected_product,
     )
     if should_query:
         _run_query(
@@ -129,7 +101,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             end_date=end_date,
             shop=shop,
             step_descriptions=step_descriptions,
-            products=products,
+            selected_product=selected_product,
             signature=signature,
         )
 
@@ -157,19 +129,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
                 key=f"qtime_lot_chart_{index}",
             )
 
-    table = build_qtime_table(details)
-    styled_table = table.style.set_properties(**{"text-align": "center"}).apply(
-        _zebra_row,
-        axis=1,
-    )
-    st.dataframe(
-        styled_table,
-        width="stretch",
-        hide_index=True,
-        height=min(620, 42 + len(table) * 35),
-    )
-
-
 def _run_query(
     service: QTimeReportService,
     *,
@@ -177,7 +136,7 @@ def _run_query(
     end_date: date,
     shop: Shop,
     step_descriptions: list[str],
-    products: list[str],
+    selected_product: str,
     signature: tuple[object, ...],
 ) -> None:
     try:
@@ -187,7 +146,7 @@ def _run_query(
             end_time=end_time,
             shop=shop,
             step_descriptions=tuple(step_descriptions),
-            products=tuple(products),
+            products=(selected_product,),
         )
         details = service.get_report(query)
     except ValidationError as exc:
@@ -207,11 +166,6 @@ def _filter_signature(
     end_date: date,
     shop: Shop,
     step_descriptions: list[str],
-    products: list[str],
+    selected_product: str,
 ) -> tuple[object, ...]:
-    return (start_date, end_date, shop, tuple(step_descriptions), tuple(products))
-
-
-def _zebra_row(row: pd.Series) -> list[str]:
-    color = "#dbeeff" if row.name % 2 else "#f7fbff"
-    return [f"background-color: {color}" for _ in row]
+    return (start_date, end_date, shop, tuple(step_descriptions), selected_product)

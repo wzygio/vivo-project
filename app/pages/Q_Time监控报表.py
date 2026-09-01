@@ -40,4 +40,7 @@ render_page_header(
     cached_funcs=[],
 )
 repository = build_qtime_repository(DatabaseManager())
-render_qtime_dashboard(QTimeReportService(repository))
+render_qtime_dashboard(
+    QTimeReportService(repository),
+    active_config.data_source.product_code,
+)

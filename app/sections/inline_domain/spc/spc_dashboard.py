@@ -57,16 +57,6 @@ CPK_ALERT_KEY_COLUMN_MAP = {
     "站点": "step_id",
     "参数名称": "param_name",
 }
-# Temporary, product-scoped UI suppression. It removes alerts and their derived
-# auto-warning charts without changing the underlying capability values.
-TEMPORARY_CPK_ALERT_SUPPRESSIONS = {
-    "M626": frozenset(
-        {
-            ("ARRAY", "1L650", "CD1"),
-            ("TP", "41450", "OVL1_Y"),
-        }
-    ),
-}
 SPC_OOS_ALERT_COLUMN_MAP = {
     "factory": "厂别",
     "step_id": "站点",
@@ -167,27 +157,6 @@ def build_weekly_cpk_alerts(
     )
 
 
-def suppress_temporary_cpk_alerts(
-    alerts_df: pd.DataFrame,
-    *,
-    prod_code: str,
-) -> pd.DataFrame:
-    """Remove explicitly approved product indicators from the UI alert stream."""
-    suppressions = TEMPORARY_CPK_ALERT_SUPPRESSIONS.get(str(prod_code).strip(), frozenset())
-    required_columns = {"厂别", "站点", "参数名称"}
-    if alerts_df.empty or not suppressions or not required_columns.issubset(alerts_df.columns):
-        return alerts_df.copy()
-
-    is_suppressed = pd.Series(False, index=alerts_df.index, dtype=bool)
-    for factory, step_id, param_name in suppressions:
-        is_suppressed |= (
-            alerts_df["厂别"].astype(str).str.strip().eq(factory)
-            & alerts_df["站点"].astype(str).str.strip().eq(step_id)
-            & alerts_df["参数名称"].astype(str).str.strip().eq(param_name)
-        )
-    return alerts_df.loc[~is_suppressed].copy().reset_index(drop=True)
-
-
 def build_weekly_cpm_alerts(
     period_capability_df: pd.DataFrame,
     threshold: float = CPM_ALERT_THRESHOLD,
@@ -204,20 +173,30 @@ def build_weekly_cpm_alerts(
     )
 
 
-def _render_capability_alert_center(
+def _render_capability_alert_section(
     alerts_df: pd.DataFrame,
     *,
     metric_label: str,
     value_label: str,
     has_capability_data: bool,
     threshold: float,
+    period_capability_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
     step_desc_map: dict[str, str] | None = None,
+    memo_state_key: str,
+    signature_base: str,
+    chart_key_prefix: str,
 ) -> None:
-    """Render the product-level weekly capability alert summary and details."""
+    """Render one expander per metric: 预警表在上，对应的自动预警指标图像在下。
+
+    父 Expander 无论是否有超规都默认展开；每个指标的图像仍保留独立的子折叠面板。
+    """
     has_alerts = not alerts_df.empty
     with st.expander(
         f"{metric_label}预警中心（{metric_label} < {threshold:.2f}）",
-        expanded=has_alerts,
+        expanded=True,
     ):
         if has_alerts:
             st.error(f"检测到 {len(alerts_df)} 条 {metric_label} 预警，请关注。")
@@ -238,44 +217,95 @@ def _render_capability_alert_center(
         else:
             st.info(f"当前产品暂无可计算的 {metric_label} 数据。")
 
+        if not has_alerts:
+            return
 
-def render_cpk_alert_center(
+        alert_capability_df = filter_spc_report_by_alerts(period_capability_df, alerts_df)
+        alert_sheet_features_df = filter_spc_report_by_alerts(sheet_features_df, alerts_df)
+        alert_raw_measurements_df = filter_spc_report_by_alerts(raw_measurements_df, alerts_df)
+        if alert_sheet_features_df.empty:
+            st.warning("预警指标暂无可绘制的 Sheet 数据。")
+            return
+
+        indicator_count = (
+            alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
+            if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
+            else 0
+        )
+        st.markdown(f"**🚨 {metric_label}自动预警指标图像（{indicator_count} 个指标）**")
+        st.caption(
+            f"以下图像由 {metric_label} 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。"
+        )
+        render_spc_indicator_sections(
+            period_capability_df=alert_capability_df,
+            sheet_features_df=alert_sheet_features_df,
+            raw_measurements_df=alert_raw_measurements_df,
+            period_box_source=period_box_source,
+            memo_signature=_alert_charts_signature(
+                alerts_df, alert_sheet_features_df, base=signature_base
+            ),
+            memo_state_key=memo_state_key,
+            chart_key_prefix=chart_key_prefix,
+            step_desc_map=step_desc_map,
+        )
+
+
+def render_cpk_alert_section(
     alerts_df: pd.DataFrame,
     *,
     has_capability_data: bool,
+    period_capability_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
     threshold: float = CPK_ALERT_THRESHOLD,
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
-    """Render the product-level CPK alert summary and details."""
-    _render_capability_alert_center(
+    """Render the CPK alert center: 预警表 + CPK 超规指标的自动预警图像。"""
+    _render_capability_alert_section(
         alerts_df,
         metric_label="CPK",
         value_label="CPK值",
         has_capability_data=has_capability_data,
         threshold=threshold,
+        period_capability_df=period_capability_df,
+        sheet_features_df=sheet_features_df,
+        raw_measurements_df=raw_measurements_df,
+        period_box_source=period_box_source,
         step_desc_map=step_desc_map,
+        memo_state_key="spc_alert_charts_memo",
+        signature_base="spc_alert_charts",
+        chart_key_prefix="spc_alert",
     )
 
 
-def render_cpm_alert_center(
+def render_cpm_alert_section(
     alerts_df: pd.DataFrame,
     *,
     has_capability_data: bool,
+    period_capability_df: pd.DataFrame,
+    sheet_features_df: pd.DataFrame,
+    raw_measurements_df: pd.DataFrame,
+    period_box_source: str = "point_value",
     threshold: float = CPM_ALERT_THRESHOLD,
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
-    """Render the product-level CPM alert summary and details.
-
-    CPM 预警仅做提示，不驱动“自动预警指标图像”（仍由 CPK 预警控制）。
-    """
-    # _render_capability_alert_center(
-    #     alerts_df,
-    #     metric_label="CPM",
-    #     value_label="CPM值",
-    #     has_capability_data=has_capability_data,
-    #     threshold=threshold,
-    #     step_desc_map=step_desc_map,
-    # )
+    """Render the CPM alert center: 预警表 + CPM 超规指标的自动预警图像。"""
+    _render_capability_alert_section(
+        alerts_df,
+        metric_label="CPM",
+        value_label="CPM值",
+        has_capability_data=has_capability_data,
+        threshold=threshold,
+        period_capability_df=period_capability_df,
+        sheet_features_df=sheet_features_df,
+        raw_measurements_df=raw_measurements_df,
+        period_box_source=period_box_source,
+        step_desc_map=step_desc_map,
+        memo_state_key="spc_cpm_alert_charts_memo",
+        signature_base="spc_cpm_alert_charts",
+        chart_key_prefix="spc_cpm_alert",
+    )
 
 
 def filter_spc_report_by_alerts(
@@ -706,43 +736,6 @@ def _alert_charts_signature(
         f"{len(alerts_df)}|{alerts_df.astype(str).to_csv(index=False)}".encode("utf-8")
     ).hexdigest()[:16]
     return f"{base}|alerts={fingerprint}"
-
-
-def render_cpk_alert_indicator_sections(
-    alerts_df: pd.DataFrame,
-    period_capability_df: pd.DataFrame,
-    sheet_features_df: pd.DataFrame,
-    raw_measurements_df: pd.DataFrame,
-    period_box_source: str = "point_value",
-    step_desc_map: dict[str, str] | None = None,
-) -> None:
-    """Render every alerted indicator directly, without requiring filter interaction."""
-    if alerts_df.empty:
-        return
-
-    alert_capability_df = filter_spc_report_by_alerts(period_capability_df, alerts_df)
-    alert_sheet_features_df = filter_spc_report_by_alerts(sheet_features_df, alerts_df)
-    alert_raw_measurements_df = filter_spc_report_by_alerts(raw_measurements_df, alerts_df)
-    if alert_sheet_features_df.empty:
-        st.warning("预警指标暂无可绘制的 Sheet 数据。")
-        return
-
-    indicator_count = (
-        alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
-        if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
-        else 0
-    )
-    with st.expander(f"🚨 自动预警指标图像（{indicator_count} 个指标）", expanded=False):
-        st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
-        render_spc_indicator_sections(
-            period_capability_df=alert_capability_df,
-            sheet_features_df=alert_sheet_features_df,
-            raw_measurements_df=alert_raw_measurements_df,
-            period_box_source=period_box_source,
-            memo_signature=_alert_charts_signature(alerts_df, alert_sheet_features_df),
-            chart_key_prefix="spc_alert",
-            step_desc_map=step_desc_map,
-        )
 
 
 def render_sheet_oos_alert_indicator_sections(

@@ -88,9 +88,10 @@ const APP_CONFIG = {
             ]
         },
         {
-            name: "IQC监控",
+            name: "特殊指标",
             children: [
                 { name: "IQC", url: LINKS.IQC },
+                { name: "IJP", url: LINKS.IJP_OVERFLOW },
             ]
         },
         {
@@ -127,8 +128,8 @@ const APP_CONFIG = {
             ]
         },
         { 
-            id: 'Q-time', 
-            label: 'Q-time监控', 
+            id: '特殊指标', 
+            label: '特殊指标', 
             icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>', 
             subs: [ 
                 {l:'', v:'Q-time', url: LINKS.QTIME },          

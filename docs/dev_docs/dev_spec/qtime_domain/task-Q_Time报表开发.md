@@ -6,7 +6,7 @@
 ## References
 
 ### Terms
-Q-Time：两个站点之间的过货时间。如果过货时间过长说明生产中某个环节可能发生异常，导致产品滞留，延长OLED材料的暴露时间，进而影响产品质量。
+- Q-Time：两个站点之间的过货时间。如果过货时间过长说明生产中某个环节可能发生异常，导致产品滞留，延长OLED材料的暴露时间，进而影响产品质量。
 
 其它你想要了解的专有名词可以参考：`references\domain\GLOSSARY.md`
 
@@ -65,13 +65,11 @@ ${IF(LEN(cmbtshop)=0,"","AND SHOP IN ('"+cmbtshop+"')")}
 ```
 
 ### 报表样式
-前端样式：
-1. 开发界面（FineReport中的开发截图）：`docs\dev_docs\dev_spec\qtime_domain\Q-Time报表样式-开发界面.png`
-2. 使用界面（其中展示了筛选条件）：`docs\dev_docs\dev_spec\qtime_domain\Q-Time报表样式-使用界面.png`
-
-前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
-
-后端架构：在`src`下新建一个domain，遵循DDD架构完成开发，具体架构可参考`ARCHITECTURE.md`
+1. 前端样式：
+    - 开发界面（FineReport中的开发截图）：`docs\dev_docs\dev_spec\qtime_domain\Q-Time报表样式-开发界面.png`
+    - 使用界面（其中展示了筛选条件）：`docs\dev_docs\dev_spec\qtime_domain\Q-Time报表样式-使用界面.png`
+2. 前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
+3. 后端架构：在`src`下新建一个domain，遵循DDD架构完成开发，具体架构可参考`ARCHITECTURE.md`
 
 ## Workflow
 1. 请分析报表样式图片，了解呈现样式及所需数据

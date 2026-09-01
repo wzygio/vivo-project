@@ -19,12 +19,11 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     get_default_spc_start_date,
     get_params_for_factory_steps,
     get_steps_for_factory,
-    render_cpk_alert_center,
-    render_cpk_alert_indicator_sections,
+    render_cpk_alert_section,
+    render_cpm_alert_section,
     render_sheet_oos_alert_indicator_sections,
     render_spc_decoration_admin,
     render_spc_indicator_sections,
-    suppress_temporary_cpk_alerts,
 )
 from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult
 from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
@@ -168,24 +167,6 @@ def test_build_weekly_cpk_alerts_excludes_decorated_records() -> None:
     assert alerts_df["参数名称"].tolist() == ["4PP_Rs"]
 
 
-def test_suppress_temporary_cpk_alerts_hides_only_the_two_m626_indicators() -> None:
-    alerts_df = pd.DataFrame(
-        [
-            {"厂别": "ARRAY", "站点": "1L650", "参数名称": "CD1", "超规周次": "2026-W35", "CPK值": 0.919},
-            {"厂别": "TP", "站点": "41450", "参数名称": "OVL1_Y", "超规周次": "2026-W35", "CPK值": 1.204},
-            {"厂别": "ARRAY", "站点": "18650", "参数名称": "CD1", "超规周次": "2026-W35", "CPK值": 1.277},
-        ]
-    )
-
-    suppressed_df = suppress_temporary_cpk_alerts(alerts_df, prod_code="M626")
-    other_product_df = suppress_temporary_cpk_alerts(alerts_df, prod_code="M673")
-
-    assert suppressed_df[["厂别", "站点", "参数名称"]].to_dict("records") == [
-        {"厂别": "ARRAY", "站点": "18650", "参数名称": "CD1"}
-    ]
-    assert other_product_df.equals(alerts_df)
-
-
 def test_build_weekly_cpm_alerts_returns_only_values_from_previous_week() -> None:
     period_capability_df = pd.DataFrame(
         [
@@ -308,7 +289,7 @@ def test_filter_spc_report_by_alerts_matches_exact_indicator_combinations() -> N
     assert result["value"].tolist() == [1, 3]
 
 
-def test_render_cpk_alert_indicator_sections_renders_only_alerted_indicators(monkeypatch) -> None:
+def test_render_cpk_alert_section_renders_only_alerted_indicators(monkeypatch) -> None:
     alerts_df = pd.DataFrame(
         [{"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规日期": "2026-07-21"}]
     )
@@ -319,6 +300,9 @@ def test_render_cpk_alert_indicator_sections_renders_only_alerted_indicators(mon
         ]
     )
     captured: dict[str, object] = {}
+    monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_dashboard.st, "error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "dataframe", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
@@ -327,8 +311,9 @@ def test_render_cpk_alert_indicator_sections_renders_only_alerted_indicators(mon
         lambda **kwargs: captured.update(kwargs),
     )
 
-    render_cpk_alert_indicator_sections(
+    render_cpk_alert_section(
         alerts_df=alerts_df,
+        has_capability_data=True,
         period_capability_df=report_df,
         sheet_features_df=report_df,
         raw_measurements_df=report_df,
@@ -340,7 +325,7 @@ def test_render_cpk_alert_indicator_sections_renders_only_alerted_indicators(mon
         assert captured[frame_name]["param_name"].tolist() == ["P1"]
 
 
-def test_render_cpk_alert_center_expands_and_displays_alert_details(monkeypatch) -> None:
+def test_render_cpk_alert_section_expands_and_displays_alert_details(monkeypatch) -> None:
     expander_calls: list[tuple[str, bool]] = []
     error_messages: list[str] = []
     rendered_tables: list[pd.DataFrame] = []
@@ -362,45 +347,118 @@ def test_render_cpk_alert_center_expands_and_displays_alert_details(monkeypatch)
 
     monkeypatch.setattr(spc_dashboard.st, "expander", fake_expander)
     monkeypatch.setattr(spc_dashboard.st, "error", error_messages.append)
+    monkeypatch.setattr(spc_dashboard.st, "warning", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         spc_dashboard.st,
         "dataframe",
         lambda frame, **_kwargs: rendered_tables.append(frame),
     )
 
-    render_cpk_alert_center(alerts_df, has_capability_data=True)
+    render_cpk_alert_section(
+        alerts_df,
+        has_capability_data=True,
+        period_capability_df=pd.DataFrame(),
+        sheet_features_df=pd.DataFrame(),
+        raw_measurements_df=pd.DataFrame(),
+    )
 
     assert expander_calls == [("CPK预警中心（CPK < 1.33）", True)]
     assert error_messages == ["检测到 1 条 CPK 预警，请关注。"]
     assert rendered_tables[0].equals(alerts_df)
 
 
-def test_render_cpk_alert_center_distinguishes_missing_capability_data(monkeypatch) -> None:
+def test_render_cpk_alert_section_distinguishes_missing_capability_data(monkeypatch) -> None:
+    expander_calls: list[tuple[str, bool]] = []
     info_messages: list[str] = []
     success_messages: list[str] = []
 
-    monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    def fake_expander(label: str, expanded: bool = False):
+        expander_calls.append((label, expanded))
+        return nullcontext()
+
+    monkeypatch.setattr(spc_dashboard.st, "expander", fake_expander)
     monkeypatch.setattr(spc_dashboard.st, "info", info_messages.append)
     monkeypatch.setattr(spc_dashboard.st, "success", success_messages.append)
 
-    render_cpk_alert_center(pd.DataFrame(), has_capability_data=False)
+    render_cpk_alert_section(
+        pd.DataFrame(),
+        has_capability_data=False,
+        period_capability_df=pd.DataFrame(),
+        sheet_features_df=pd.DataFrame(),
+        raw_measurements_df=pd.DataFrame(),
+    )
 
+    assert expander_calls == [("CPK预警中心（CPK < 1.33）", True)]
     assert info_messages == ["当前产品暂无可计算的 CPK 数据。"]
     assert success_messages == []
 
 
-def test_render_cpk_alert_center_shows_all_clear_when_weekly_cpk_is_normal(monkeypatch) -> None:
+def test_render_cpk_alert_section_shows_all_clear_when_weekly_cpk_is_normal(monkeypatch) -> None:
+    expander_calls: list[tuple[str, bool]] = []
     info_messages: list[str] = []
     success_messages: list[str] = []
 
-    monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    def fake_expander(label: str, expanded: bool = False):
+        expander_calls.append((label, expanded))
+        return nullcontext()
+
+    monkeypatch.setattr(spc_dashboard.st, "expander", fake_expander)
     monkeypatch.setattr(spc_dashboard.st, "info", info_messages.append)
     monkeypatch.setattr(spc_dashboard.st, "success", success_messages.append)
 
-    render_cpk_alert_center(pd.DataFrame(), has_capability_data=True)
+    render_cpk_alert_section(
+        pd.DataFrame(),
+        has_capability_data=True,
+        period_capability_df=pd.DataFrame(),
+        sheet_features_df=pd.DataFrame(),
+        raw_measurements_df=pd.DataFrame(),
+    )
 
+    assert expander_calls == [("CPK预警中心（CPK < 1.33）", True)]
     assert success_messages == ["未发现低于 1.33 的 CPK。"]
     assert info_messages == []
+
+
+def test_render_cpm_alert_section_renders_cpm_alert_charts(monkeypatch) -> None:
+    """CPM 预警同样自动渲染对应超规指标的图像。"""
+    expander_calls: list[tuple[str, bool]] = []
+    markdown_messages: list[str] = []
+    captured: dict[str, object] = {}
+    alerts_df = pd.DataFrame(
+        [{"厂别": "ARRAY", "站点": "S1", "参数名称": "P1", "超规周次": "2026-W29", "CPM值": 1.10}]
+    )
+    report_df = pd.DataFrame(
+        [{"factory": "ARRAY", "step_id": "S1", "param_name": "P1", "value": 1}]
+    )
+
+    def fake_expander(label: str, expanded: bool = False):
+        expander_calls.append((label, expanded))
+        return nullcontext()
+
+    monkeypatch.setattr(spc_dashboard.st, "expander", fake_expander)
+    monkeypatch.setattr(spc_dashboard.st, "error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "markdown", markdown_messages.append)
+    monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        spc_dashboard,
+        "render_spc_indicator_sections",
+        lambda **kwargs: captured.update(kwargs),
+    )
+
+    render_cpm_alert_section(
+        alerts_df,
+        has_capability_data=True,
+        period_capability_df=report_df,
+        sheet_features_df=report_df,
+        raw_measurements_df=report_df,
+    )
+
+    assert expander_calls == [("CPM预警中心（CPM < 1.33）", True)]
+    assert markdown_messages == ["**🚨 CPM自动预警指标图像（1 个指标）**"]
+    assert captured["memo_state_key"] == "spc_cpm_alert_charts_memo"
+    assert captured["chart_key_prefix"] == "spc_cpm_alert"
+    assert captured["sheet_features_df"]["param_name"].tolist() == ["P1"]
 
 
 def test_admin_decoration_panel_places_oos_and_cpk_controls_in_separate_tabs(monkeypatch, tmp_path: Path) -> None:
@@ -1387,7 +1445,7 @@ def test_sheet_points_box_charts_returns_chamber_and_time_views() -> None:
     assert [trace.name for trace in time_fig.data if trace.type == "box"] == ["S1", "S2"]
 
 
-def test_render_cpk_alert_indicator_sections_reuses_memoized_charts(monkeypatch) -> None:
+def test_render_cpk_alert_section_reuses_memoized_charts(monkeypatch) -> None:
     """同一版预警数据重复渲染时不应重建图表（memo 命中）。"""
     build_calls: list[str] = []
 
@@ -1417,6 +1475,9 @@ def test_render_cpk_alert_indicator_sections_reuses_memoized_charts(monkeypatch)
 
     monkeypatch.setattr(spc_dashboard.st, "session_state", {})
     monkeypatch.setattr(spc_dashboard.st, "expander", lambda *_args, **_kwargs: nullcontext())
+    monkeypatch.setattr(spc_dashboard.st, "error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "dataframe", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(spc_dashboard.st, "markdown", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "caption", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         spc_dashboard.st,
@@ -1442,14 +1503,15 @@ def test_render_cpk_alert_indicator_sections_reuses_memoized_charts(monkeypatch)
 
     kwargs = dict(
         alerts_df=alerts_df,
+        has_capability_data=True,
         period_capability_df=report_df,
         sheet_features_df=report_df,
         raw_measurements_df=report_df,
     )
-    render_cpk_alert_indicator_sections(**kwargs)
+    render_cpk_alert_section(**kwargs)
     assert len(build_calls) == 1  # 首次：构建一次
 
-    render_cpk_alert_indicator_sections(**kwargs)
+    render_cpk_alert_section(**kwargs)
     assert len(build_calls) == 1  # 第二次：memo 命中，不再构建
 
 

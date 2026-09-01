@@ -30,15 +30,16 @@ class FixtureQTimeService:
             "TP": ("TP_OUT->TP_IN",),
         }
         return {
-            "products": ("M626", "M678"),
             "step_descriptions": paths[shop],
         }
 
     def get_report(self, query) -> pd.DataFrame:
-        products = query.products or ("M626",)
+        if query.products != ("M626",):
+            raise AssertionError("Q-Time query must use the Page Header product")
+        products = query.products
         if query.step_descriptions == ("Shipping->Cutting",):
             return pd.DataFrame()
-        if products == ("M678",):
+        if query.shop == "TP":
             raise QTimeDataAccessError(
                 "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
             )
@@ -82,4 +83,4 @@ class FixtureQTimeService:
 
 
 st.set_page_config(page_title="Q-Time E2E", layout="wide")
-render_qtime_dashboard(FixtureQTimeService())
+render_qtime_dashboard(FixtureQTimeService(), selected_product="M626")

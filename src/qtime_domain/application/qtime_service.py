@@ -11,7 +11,6 @@ from src.qtime_domain.application.ports import QTimeDataPort
 
 
 class QTimeFilterOptions(TypedDict):
-    products: tuple[str, ...]
     step_descriptions: tuple[str, ...]
 
 
@@ -21,7 +20,6 @@ class QTimeReportService:
 
     def get_filter_options(self, shop: Shop) -> QTimeFilterOptions:
         return {
-            "products": self._data_port.list_products(),
             "step_descriptions": self._data_port.list_step_descriptions(shop),
         }
 

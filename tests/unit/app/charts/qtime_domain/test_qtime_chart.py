@@ -22,6 +22,7 @@ def test_qtime_figure_renders_wait_time_bars_and_the_matching_specification() ->
     assert list(figure.data[1].y) == [2.5, 2.5]
     assert figure.data[1].name == "QTime规格"
     assert figure.data[1].line.color == "#ef4444"
+    assert figure.data[1].showlegend is False
     assert figure.layout.xaxis.tickangle == -45
     assert figure.layout.yaxis.zeroline is True
     assert figure.layout.yaxis.zerolinecolor == "#94a3b8"
@@ -57,5 +58,5 @@ def test_qtime_figure_keeps_selected_paths_visually_distinct() -> None:
     assert [trace.name for trace in figure.data[:2]] == ["A->B", "B->C"]
     assert list(figure.data[2].x) == ["L001", "L002"]
     assert list(figure.data[3].x) == ["L003", "L004"]
-    assert figure.data[2].showlegend is True
+    assert figure.data[2].showlegend is False
     assert figure.data[3].showlegend is False

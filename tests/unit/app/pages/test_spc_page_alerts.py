@@ -107,7 +107,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     )
     monkeypatch.setattr(
         spc_dashboard,
-        "render_cpk_alert_center",
+        "render_cpk_alert_section",
         lambda alerts_df, **_kwargs: (
             rendered_alerts.append(alerts_df.copy()),
             events.append("alerts"),
@@ -115,18 +115,11 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     )
     monkeypatch.setattr(
         spc_dashboard,
-        "render_cpm_alert_center",
+        "render_cpm_alert_section",
         lambda alerts_df, **_kwargs: (
             rendered_cpm_alerts.append(alerts_df.copy()),
             events.append("cpm_alerts"),
         ),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        spc_dashboard,
-        "render_cpk_alert_indicator_sections",
-        lambda **_kwargs: events.append("alert_charts"),
-        raising=False,
     )
     monkeypatch.setattr(
         spc_dashboard,
@@ -156,5 +149,5 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
             "CPK值": 1.278,
         }
     ]
-    assert events == ["header", "filters", "alerts", "cpm_alerts", "alert_charts", "charts"]
+    assert events == ["header", "filters", "alerts", "cpm_alerts", "charts"]
     assert rendered_cpm_alerts[0].empty

@@ -11,7 +11,7 @@ class FakeQTimeDataPort:
         self.received_query: QTimeQuery | None = None
 
     def list_products(self) -> tuple[str, ...]:
-        return ("M626", "M678")
+        raise AssertionError("Page Header owns the Q-Time product selection")
 
     def list_step_descriptions(self, shop: str) -> tuple[str, ...]:
         assert shop == "ARRAY"
@@ -35,9 +35,6 @@ def test_service_exposes_filter_options_and_report_through_the_data_port() -> No
     options = service.get_filter_options("ARRAY")
     report = service.get_report(query)
 
-    assert options == {
-        "products": ("M626", "M678"),
-        "step_descriptions": ("M3_DE->M3_STR",),
-    }
+    assert options == {"step_descriptions": ("M3_DE->M3_STR",)}
     assert report.to_dict("records") == [{"lot_id": "L001", "wait_time": 0.41}]
     assert port.received_query is query
