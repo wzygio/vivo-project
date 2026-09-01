@@ -8,7 +8,7 @@ import time
 
 # --- 1. 基础配置与导入 ---
 from app.manager.session_manager import SessionManager
-from app.components.page_header import render_page_header
+from app.components.page_header import perform_hard_reset, render_page_header
 from src.shared_kernel.config import ConfigLoader
 from yield_domain.application.file_manager_service import FileManagerService
 from yield_domain.application.excel_service import ExcelService
@@ -52,12 +52,21 @@ category_map = [
 # ==============================================================================
 #  界面区域 A: 统一上传接口
 # ==============================================================================
+# 管理员硬重置入口：与页头「刷新缓存」同一套逻辑，仅 ?admin=true 可见
+if st.query_params.get("admin") == "true":
+    st.button(
+        "🔄 刷新缓存",
+        key="btn_clear_专项资料台账周报",
+        on_click=perform_hard_reset,
+        help="清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发",
+    )
+
 st.caption("浏览、下载或在线预览各产品的分析报告与台账。")
 
 with st.expander("📤 上传新台账/周报/专项资料", expanded=False):
     uploaded_files = st.file_uploader(
-        "选择要上传的文件 (支持 xlsx, ppt, pptx, pdf，支持批量上传)", 
-        type=['xlsx', 'ppt', 'pptx', 'pdf'], 
+        "选择要上传的文件 (支持 xlsx, ppt, pptx, pdf, md，支持批量上传)",
+        type=['xlsx', 'ppt', 'pptx', 'pdf', 'md'],
         accept_multiple_files=True,
         key="project_file_uploader_top"
     )
@@ -105,6 +114,8 @@ for title, files, default_expanded in category_map:
                 icon, mime = "📗", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             elif f_type == 'PDF':
                 icon, mime = "📕", "application/pdf"
+            elif f_type == 'MARKDOWN':
+                icon, mime = "📄", "text/markdown"
             else: 
                 icon, mime = "📊", "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
@@ -260,13 +271,18 @@ if st.session_state.viewing_file:
         elif curr_type in ['PDF', 'PPT']:
             service = PDFService(img_cache_rel_dir, project_root) if curr_type == 'PDF' else PPTService(img_cache_rel_dir, project_root)
             images = service.get_images()
-            
+
             if images:
                 st.info(f"共加载 {len(images)} 页内容")
                 for idx, img_path in enumerate(images):
                     st.image(str(img_path), caption=f"Page {idx+1}", use_container_width=True)
             else:
                 st.warning("缓存图片丢失，请重新点击“查看”按钮。")
+
+        elif curr_type == 'MARKDOWN':
+            abs_curr_file_path = doc_source_dir / curr_file
+            md_content = abs_curr_file_path.read_text(encoding='utf-8')
+            st.markdown(md_content)
                 
     except Exception as e:
         st.error(f"预览渲染出错: {e}")

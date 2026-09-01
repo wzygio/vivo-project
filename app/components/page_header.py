@@ -85,6 +85,59 @@ def invalidate_page_cache(
     return "global"
 
 
+def perform_hard_reset(
+    cached_funcs: list | None = None,
+    product_cache_scope: str | None = None,
+) -> None:
+    """执行「刷新缓存」的完整硬重置流程，可被页头按钮或独立页面按钮复用。"""
+    # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
+    cache_scope = invalidate_page_cache(
+        cached_funcs,
+        product_code=product_cache_scope,
+    )
+
+    # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
+    for key in list(st.session_state.keys()):
+        if "view_model" in key: # type: ignore
+            del st.session_state[key]
+
+    # ---- 阶段 3: 手动热重载 = 代码重载 + 配置重读（总是执行） ----
+    # 自动热重载已降级为被动检测（detect_project_changes 只置提示标记），
+    # 代码与配置的统一生效全部收敛到本按钮。
+    try:
+        from app.utils.reloader import deep_reload_modules
+        deep_reload_modules()
+        logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
+    except ImportError:
+        logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
+
+    try:
+        current_product = st.session_state.get(SessionManager.KEY_PRODUCT)
+        if current_product:
+            SessionManager.load_and_set_config(current_product)
+            logging.info(f"♻️ [Hard Reset] 配置已强制重读: {current_product}")
+    except Exception as exc:
+        logging.warning(f"⚠️ [Hard Reset] 配置重读失败，保留现有配置: {exc}")
+
+    st.session_state.pop("code_update_pending", None)
+
+    # ---- 阶段 4: 清除页面级签名/视图状态，按钮点击后才允许缓存失效 ----
+    for key in list(st.session_state.keys()):
+        key_str = str(key)
+        if (
+            key_str.startswith("yield_composite_key_")
+            or key_str.startswith("yield_snapshot_sig_")
+            or key_str.startswith("spc_snapshot_sig_")
+            or key_str == "parts_baseline_sig"
+        ):
+            del st.session_state[key]
+
+    if cache_scope == "product":
+        st.toast(f"🔄 {product_cache_scope} 缓存已刷新 · 代码与配置已重载", icon="✅")
+    else:
+        st.toast("🔄 缓存已刷新 · 代码与配置已重载", icon="✅")
+
+
 def render_page_header(
     title: Optional[str] = None,
     config: AppConfig = None,
@@ -159,52 +212,7 @@ def render_page_header(
     # 产品页面通过共享版本键仅失效当前产品；聚合/无产品页面保留旧的
     # func.clear() + 模块重载行为。
     def _hard_reset_callback():
-        # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
-        cache_scope = invalidate_page_cache(
-            cached_funcs,
-            product_code=product_cache_scope,
-        )
-
-        # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
-        for key in list(st.session_state.keys()):
-            if "view_model" in key: # type: ignore
-                del st.session_state[key]
-
-        # ---- 阶段 3: 手动热重载 = 代码重载 + 配置重读（总是执行） ----
-        # 自动热重载已降级为被动检测（detect_project_changes 只置提示标记），
-        # 代码与配置的统一生效全部收敛到本按钮。
-        try:
-            from app.utils.reloader import deep_reload_modules
-            deep_reload_modules()
-            logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
-        except ImportError:
-            logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
-
-        try:
-            current_product = st.session_state.get(SessionManager.KEY_PRODUCT)
-            if current_product:
-                SessionManager.load_and_set_config(current_product)
-                logging.info(f"♻️ [Hard Reset] 配置已强制重读: {current_product}")
-        except Exception as exc:
-            logging.warning(f"⚠️ [Hard Reset] 配置重读失败，保留现有配置: {exc}")
-
-        st.session_state.pop("code_update_pending", None)
-
-        # ---- 阶段 4: 清除页面级签名/视图状态，按钮点击后才允许缓存失效 ----
-        for key in list(st.session_state.keys()):
-            key_str = str(key)
-            if (
-                key_str.startswith("yield_composite_key_")
-                or key_str.startswith("yield_snapshot_sig_")
-                or key_str.startswith("spc_snapshot_sig_")
-                or key_str == "parts_baseline_sig"
-            ):
-                del st.session_state[key]
-
-        if cache_scope == "product":
-            st.toast(f"🔄 {product_cache_scope} 缓存已刷新 · 代码与配置已重载", icon="✅")
-        else:
-            st.toast("🔄 缓存已刷新 · 代码与配置已重载", icon="✅")
+        perform_hard_reset(cached_funcs, product_cache_scope)
 
     # 产品筛选与管理员操作使用独立边框分组，避免把常规筛选误认为维护操作。
     product_column, admin_column = st.columns(

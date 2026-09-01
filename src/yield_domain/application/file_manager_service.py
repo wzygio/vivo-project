@@ -14,7 +14,7 @@ class FileManagerService:
             return {'ledger': [], 'weekly': [], 'others': []}
 
         # 支持的扩展名
-        valid_exts = ('.xlsx', '.xls', '.pptx', '.ppt', '.pdf')
+        valid_exts = ('.xlsx', '.xls', '.pptx', '.ppt', '.pdf', '.md', '.markdown')
         
         classified = {
             'ledger': [], # 北极星台账类
@@ -49,4 +49,6 @@ class FileManagerService:
             return 'PPT'
         elif ext == '.pdf':
             return 'PDF'
+        elif ext in ['.md', '.markdown']:
+            return 'MARKDOWN'
         return 'UNKNOWN'
