@@ -32,6 +32,7 @@ processing:
     'G向单亮线': 0.5
     'G向单暗线': 0.8
     # # Array_Pixel
+    '暗点': 0.8
     # Array_Mura
     'S向ELA Mura': 0
     'G向ELA Mura': 0
