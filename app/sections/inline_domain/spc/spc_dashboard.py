@@ -544,12 +544,14 @@ def _format_metric_value(value: object) -> str:
 
 
 def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.DataFrame:
-    """Return one CPM/CPK row per recent month, week, or day period."""
-    period_column = "周期"
-    metric_columns = ["CPM", "CPK"]
+    """Return a transposed CPM/CPK table: 周期为列，CPM/CPK 为行（仅月/周）。
+
+    日度不再计算 CPM/CPK，明细表仅保留月度与周度周期。
+    """
+    metric_column = "指标"
     required_cols = {"period_type", "period_label"}
     if period_capability_df.empty or not required_cols.issubset(period_capability_df.columns):
-        return pd.DataFrame(columns=[period_column, *metric_columns])
+        return pd.DataFrame(columns=[metric_column])
 
     df = period_capability_df.copy()
     if "period_sort" not in df.columns:
@@ -559,7 +561,7 @@ def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.Da
             df[col] = pd.NA
 
     frames: list[pd.DataFrame] = []
-    for period_type in ["month", "week", "day"]:
+    for period_type in ["month", "week"]:
         type_df = df[df["period_type"] == period_type].copy()
         if type_df.empty:
             continue
@@ -570,10 +572,12 @@ def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.Da
         frames.append(type_df.tail(PERIOD_WINDOW_LIMITS[period_type]))
 
     if not frames:
-        return pd.DataFrame(columns=[period_column, *metric_columns])
+        return pd.DataFrame(columns=[metric_column])
 
     selected_df = pd.concat(frames, ignore_index=True).copy()
-    records: list[dict[str, str]] = []
+    period_names: list[str] = []
+    cpm_values: list[str] = []
+    cpk_values: list[str] = []
     seen_periods: set[str] = set()
 
     for _, row in selected_df.iterrows():
@@ -584,15 +588,14 @@ def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.Da
         if not period_name or period_name in seen_periods:
             continue
         seen_periods.add(period_name)
-        records.append(
-            {
-                period_column: period_name,
-                "CPM": _format_metric_value(row.get("cpm")),
-                "CPK": _format_metric_value(row.get("cpk")),
-            }
-        )
+        period_names.append(period_name)
+        cpm_values.append(_format_metric_value(row.get("cpm")))
+        cpk_values.append(_format_metric_value(row.get("cpk")))
 
-    return pd.DataFrame(records, columns=[period_column, *metric_columns])
+    table_data: dict[str, list[str]] = {metric_column: ["CPM", "CPK"]}
+    for idx, period_name in enumerate(period_names):
+        table_data[period_name] = [cpm_values[idx], cpk_values[idx]]
+    return pd.DataFrame(table_data)
 
 
 def _build_indicator_render_payload(
@@ -658,33 +661,28 @@ def _render_indicator_payload(
         metric_cols[2].metric("中位CPM", payload["cpm_median"])
         metric_cols[3].metric("最小CPM", payload["cpm_min"])
 
-        period_col, capability_col = st.columns([1.15, 1], gap="large")
-        with period_col:
-            st.plotly_chart(
-                payload["fig1"],
+        capability_table = payload["capability_table"]
+        if not capability_table.empty:
+            st.dataframe(
+                capability_table,
+                hide_index=True,
                 width="stretch",
-                key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "period"),
+                height=min(420, 38 + 35 * len(capability_table)),
             )
-        with capability_col:
-            capability_table = payload["capability_table"]
-            if not capability_table.empty:
-                st.dataframe(
-                    capability_table,
-                    hide_index=True,
-                    width="stretch",
-                    height=min(420, 38 + 35 * len(capability_table)),
-                )
 
-        st.plotly_chart(
-            payload["chamber_fig"],
-            width="stretch",
-            key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "chamber"),
+        period_column, chamber_column, time_column = st.columns(3)
+        chart_slots = (
+            (period_column, "fig1", "period"),
+            (chamber_column, "chamber_fig", "chamber"),
+            (time_column, "time_fig", "time"),
         )
-        st.plotly_chart(
-            payload["time_fig"],
-            width="stretch",
-            key=_build_indicator_chart_key(chart_key_prefix, payload["label"], "time"),
-        )
+        for column, figure_name, chart_slot in chart_slots:
+            with column:
+                st.plotly_chart(
+                    payload[figure_name],
+                    width="stretch",
+                    key=_build_indicator_chart_key(chart_key_prefix, payload["label"], chart_slot),
+                )
 
 
 def render_spc_indicator_sections(

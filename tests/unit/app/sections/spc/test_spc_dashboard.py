@@ -890,7 +890,7 @@ def test_render_indicator_sections_uses_frontend_config_for_line_parameters(monk
     assert captured["sheet"]["chart_type"] == "line"
 
 
-def test_render_indicator_sections_places_sheet_distributions_on_full_width_rows(monkeypatch) -> None:
+def test_render_indicator_sections_places_charts_side_by_side_in_one_row(monkeypatch) -> None:
     column_specs: list[int | list[float]] = []
     rendered_figures: list[object] = []
     rendered_tables: list[pd.DataFrame] = []
@@ -953,8 +953,8 @@ def test_render_indicator_sections_places_sheet_distributions_on_full_width_rows
         raw_measurements_df=raw_measurements,
     )
 
-    assert column_specs == [4, [1.15, 1]]
-    assert rendered_tables[0].columns.tolist() == ["周期", "CPM", "CPK"]
+    assert column_specs == [4, 3]
+    assert rendered_tables[0].columns.tolist() == ["指标", "月 2026-06"]
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
 
 
@@ -1005,19 +1005,17 @@ def test_indicator_payload_assigns_unique_plotly_keys_across_page_sections(monke
 def test_period_capability_table_shows_cpm_and_cpk_together() -> None:
     table = _create_period_capability_table(_sample_full_period_capability())
 
-    assert table.columns.tolist() == ["周期", "CPM", "CPK"]
-    assert table["周期"].tolist() == [
+    assert table.columns.tolist() == [
+        "指标",
         "月 2026-05",
         "月 2026-06",
         "周 2026-W24",
         "周 2026-W25",
         "周 2026-W26",
-        "日 2026-06-23",
-        "日 2026-06-24",
-        "日 2026-06-25",
     ]
-    assert table.loc[0, "CPM"] == "1.100"
-    assert table.loc[0, "CPK"] == "1.000"
+    assert table["指标"].tolist() == ["CPM", "CPK"]
+    assert table.loc[0, "月 2026-05"] == "1.100"
+    assert table.loc[1, "月 2026-05"] == "1.000"
 
 
 def test_period_overview_chart_handles_empty_capability_with_reserved_period_axis() -> None:
@@ -1084,22 +1082,16 @@ def test_period_capability_table_limits_each_period_type_to_compact_window() -> 
 
     table = _create_period_capability_table(period_capability_df)
 
-    assert table.columns.tolist() == ["周期", "CPM", "CPK"]
-    assert table["周期"].tolist() == [
+    assert table.columns.tolist() == [
+        "指标",
         "月 2026-06",
         "月 2026-07",
         "周 2026-W22",
         "周 2026-W23",
         "周 2026-W27",
-        "日 2026-06-02",
-        "日 2026-06-03",
-        "日 2026-06-04",
-        "日 2026-06-05",
-        "日 2026-06-06",
-        "日 2026-06-07",
-        "日 2026-07-02",
     ]
-    assert table.loc[table["周期"] == "月 2026-07", "CPM"].item() == "-"
+    assert table["指标"].tolist() == ["CPM", "CPK"]
+    assert table.loc[0, "月 2026-07"] == "-"
 
 
 def test_period_overview_chart_expands_measurement_axis_when_sheet_mean_exceeds_specs() -> None:

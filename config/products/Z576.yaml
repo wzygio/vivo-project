@@ -1,0 +1,48 @@
+# Z576参考产品：M673；高PPI产品，Array段良率较低
+# 数据加载相关的参数
+data_source:
+  product_code: "Z576"
+
+# 本地文件读取
+paths:
+  static_warning_lines: 
+    file_name: '入库不良率规格.xlsx'
+    sheet_name: 'Z576'
+
+  rate_override_config:
+    file_name: "override_rates.xlsx"
+    sheet_name: "Z576"
+
+  yield_modifier_config:
+    file_name: "入库良率修饰表.xlsx"
+
+# 数据处理相关的参数
+processing:
+  use_local_snapshot: True
+  snapshot_path: 'data/snapshot_Z576.parquet'
+  
+  defect_capping:
+    enable: True
+
+  defect_multipliers:
+    # Array_Line
+    'S向亮线': 0.6
+    # Array_Pixel
+    '暗点': 0.7
+    'B暗点': 0.7
+    '群亮点': 0.5
+    # Array_Mura
+    'S向ELA Mura': 0
+    'G向ELA Mura': 0
+    'G向带状Mura': 0
+    # OLED_Mura
+    '彩斑Mura': 0.4
+    '大面积片状彩斑Mura': 0
+
+  sheet_hotspot_config: 
+    enable: True
+    random_seed: 2025
+    hide_hotspot_config: {
+        'fluctuation_sheet': 0.2,  
+        'fluctuation_lot': 0.2,
+    }

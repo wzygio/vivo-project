@@ -1,0 +1,65 @@
+# 参考产品：M678
+# 数据加载相关的参数
+data_source:
+  product_code: "Z553"
+
+# 本地文件读取
+paths:
+  static_warning_lines: 
+    file_name: '入库不良率规格.xlsx'
+    sheet_name: 'Z553'
+
+  rate_override_config:
+    file_name: "override_rates.xlsx"
+    sheet_name: "Z553"
+
+  yield_modifier_config:
+    file_name: "入库良率修饰表.xlsx"
+
+# 数据处理相关的参数
+processing:
+  use_local_snapshot: True
+  snapshot_path: 'data/snapshot_Z553.parquet'
+  
+  defect_capping:
+    enable: True
+
+  # 3. lot阵列投入时间
+  array_input_time:
+    custom_times:
+      # 高发sheet_id：共计 5 个
+      L3MR58E5C08: '20250805'
+      L3MR58E5C03: '20250805' 
+      L3MR58E5C10: '20250805'
+      L3MR58E5C26: '20250805'
+      L3MR58E5C04: '20250805'
+
+  # 5. defect_code倍率调节
+  defect_multipliers:
+    # Array_Line
+    'S向亮线': 0.7
+    'G向单亮线': 0.5
+    'G向单暗线': 0.8
+    # Array_Pixel
+    '暗点': 0.5
+    '群暗点': 0.8
+    'G3亮点': 0.2
+    '群亮点': 0.3
+    '大面积亮点': 0
+    'HBM亮点': 0
+    # Array_Mura
+    'S向ELA Mura': 0
+    'G向ELA Mura': 0
+    'G向带状Mura': 0
+    # OLED_Mura
+    '彩斑Mura': 0.2
+    # TP
+    'TP复测NG': 0.2
+
+  sheet_hotspot_config: 
+      enable: True
+      random_seed: 2025
+      hide_hotspot_config: {
+          'fluctuation_sheet': 0.2,  
+          'fluctuation_lot': 0.2,
+      }

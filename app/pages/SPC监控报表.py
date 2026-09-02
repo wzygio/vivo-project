@@ -61,7 +61,6 @@ SPC_DECORATION_FILE_ERRORS = (
     else ()
 )
 
-
 st.set_page_config(page_title="SPC监控报表", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
