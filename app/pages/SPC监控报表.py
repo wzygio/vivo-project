@@ -200,7 +200,6 @@ if not should_render_report:
     st.info("当前筛选条件尚未查询。")
     st.stop()
 
-
 filtered_period_capability_df = filter_spc_report(
     report_df=period_capability_df,
     selected_factory=selected_factory,

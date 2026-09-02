@@ -48,20 +48,36 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 | `yield_domain` | 入库不良率趋势、Code/Group MWD、Lot/Sheet 明细、缺陷 Mapping、告警和 Office 导出。 | `YieldAnalysisService`、`AlertService`、`PanelRepository` |
 | `inline_domain` | SPC、CTQ 与自动预警的测量查询、能力计算、OOS 修饰和监控汇总。 | `SpcReportService`、`CtqReportService`、`MonitorAnalysisService`、`SpcRepository` |
 | `equipment_domain` | 关键备件规格基线、寿命计算、状态预警，以及真实与仿造快照的匹配。 | `PartsReportService`、`PartsRepository` |
-| `qtime_domain` | 站点间过货等待时长、规格、厂别/路径/产品筛选与 Lot 明细；含 IJP 溢流监控子域（多维筛选、By天 CODE 占比堆叠图与缺陷明细）。 | `QTimeReportService`、`QTimeRepository`、`IjpReportService`、`IjpRepository` |
+| `indicator_domain` | 指标监控聚合领域。`qtime` 子模块负责站点间等待时长、规格、超规预警与人工修饰；`ijp` 子模块负责溢流监控、多维筛选、By天 CODE 占比与缺陷明细。 | `QTimeReportService`、`QTimeRepository`、`QTimeDecorationRepository`、`IjpReportService`、`IjpRepository` |
 | `shared_kernel` | 配置模型与加载、数据库连接、输出目录、合规配置和 Excel/CSV 工具。 | `ConfigLoader`、`DatabaseManager` |
 
-### Q-Time 数据流
+### 指标监控数据流
+
+`indicator_domain` 在 application、core、infrastructure 三层中均以 `qtime/`
+和 `ijp/` 作为同级子模块，二者只共享领域组合根和 shared kernel，不互相导入私有实现。
+
+#### Q-Time
 
 1. `QTimeRepository` 从 `eda.imp_qtime_tzbjx` 获取产品选项，从
    `mdw.qtime_tzbjx` 获取厂别限定路径和 Lot 级明细；所有筛选使用绑定参数，
    时间窗口为 `[start_time, end_time)`。
 2. 厂别由 `f_step` 的首字符稳定映射：`1*` → ARRAY、`2*` → OLED、其余 → TP。
-   `QTimeReportService` 只依赖 `QTimeDataPort`，页面不直接查询数据库。
+   `QTimeReportService` 依赖 `QTimeDataPort` 与 `QTimeDecorationPort`，页面不直接查询数据库或读写修饰工作簿。
 3. `app/pages/Q_Time监控报表.py` 是薄组合入口；筛选、查询门控、空/错误状态由
-   `app/sections/qtime_domain/` 拥有，柱线图模型由 `app/charts/qtime_domain/` 构建。
+   `app/sections/indicator_domain/qtime/` 拥有，柱线图模型由
+   `app/charts/indicator_domain/qtime/` 构建。
 4. 当前 Q-Time 目标表没有快照降级契约。数据库连接或 SELECT 权限失败时，
    仓储保留异常因果链，页面只显示不含 SQL、凭据和 traceback 的稳定错误信息。
+5. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
+   的“决策台账”以 `(prodcode, step_desc, lot_id, timekey)` 为键。`flag=True` 将等待时长
+   确定性修饰到规格内，`flag=False` 保留真实值并进入预警中心，`flag=Delete` 删除记录。
+   上传只覆盖决策台账，当前超规明细仅作为下载参考，不反向写入数据库。
+
+#### IJP
+
+IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位于 `core/ijp/`，
+数据库仓储位于 `infrastructure/ijp/`；页面区块与图表分别位于
+`app/sections/indicator_domain/ijp/` 和 `app/charts/indicator_domain/ijp/`。
 
 ### Yield 数据流
 
@@ -187,7 +203,7 @@ MWD 指定良损、Group/Code Sheet 优先级与 Mapping 边界见
 | `src/yield_domain/` | Yield 的 application/core/infrastructure 分层实现。 |
 | `src/inline_domain/` | SPC、CTQ、自动预警的 application/core/infrastructure 分层实现。 |
 | `src/equipment_domain/` | 关键备件的 application/core/infrastructure 分层实现。 |
-| `src/qtime_domain/` | Q-Time 的 application/core/infrastructure 分层实现。 |
+| `src/indicator_domain/` | 指标监控领域；每层下的 `qtime/`、`ijp/` 为同级子模块。 |
 | `src/shared_kernel/` | 共享配置、数据库、输出路径和工具。 |
 | `config/` | 全局、产品、SPC、设备和合规配置。 |
 | `resources/` | 受版本控制的产品资源、基线、人工修饰与前端静态文件。 |

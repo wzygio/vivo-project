@@ -1,0 +1,1 @@
+"""Indicator-domain chart adapters."""

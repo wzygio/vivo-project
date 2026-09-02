@@ -23,7 +23,7 @@ SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
 | `src/yield_domain/` | Yield 趋势、Lot/Sheet、Mapping、告警和导出。 |
 | `src/inline_domain/` | SPC、CTQ 和自动预警。 |
 | `src/equipment_domain/` | 关键备件规格、寿命计算和快照匹配。 |
-| `src/qtime_domain/` | Q-Time 筛选、Lot 等待时长明细和数据库适配。 |
+| `src/indicator_domain/` | 指标监控领域；Q-Time 与 IJP 作为同级子模块，分别承担过货时长及溢流监控。 |
 | `src/shared_kernel/` | 配置、数据库单例、输出路径和跨领域工具。 |
 | `config/` | 应用与产品配置。 |
 | `resources/` | 版本控制的产品资源、规格、人工覆盖和前端静态文件。 |

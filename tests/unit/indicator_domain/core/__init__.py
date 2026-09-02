@@ -1,0 +1,1 @@
+"""Indicator core tests."""

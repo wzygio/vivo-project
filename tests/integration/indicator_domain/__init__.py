@@ -1,0 +1,1 @@
+"""Indicator-domain integration tests."""

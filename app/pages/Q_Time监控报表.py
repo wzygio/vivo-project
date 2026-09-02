@@ -19,10 +19,9 @@ import streamlit as st
 
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
-from app.sections.qtime_domain.qtime_dashboard import render_qtime_dashboard
+from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard
 from app.utils.app_setup import AppSetup
-from src.qtime_domain.application.qtime_service import QTimeReportService
-from src.qtime_domain.composition import build_qtime_repository
+from src.indicator_domain.composition import build_qtime_service
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -39,8 +38,7 @@ render_page_header(
     config=active_config,
     cached_funcs=[],
 )
-repository = build_qtime_repository(DatabaseManager())
 render_qtime_dashboard(
-    QTimeReportService(repository),
+    build_qtime_service(DatabaseManager()),
     active_config.data_source.product_code,
 )

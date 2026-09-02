@@ -4,17 +4,15 @@ from types import SimpleNamespace
 
 from app.components import page_header
 from app.manager.session_manager import SessionManager
-from app.sections.qtime_domain import ijp_dashboard
+from app.sections.indicator_domain.ijp import dashboard as ijp_dashboard
 from app.utils.app_setup import AppSetup
-from src.qtime_domain import composition
-from src.qtime_domain.application.ijp import ijp_service
+from src.indicator_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 
 def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
     events: list[object] = []
     database = object()
-    data_port = object()
     service = object()
     active_config = SimpleNamespace()
 
@@ -37,12 +35,7 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: database)
     monkeypatch.setattr(
         composition,
-        "build_ijp_repository",
-        lambda received: events.append(("repository", received)) or data_port,
-    )
-    monkeypatch.setattr(
-        ijp_service,
-        "IjpReportService",
+        "build_ijp_service",
         lambda received: events.append(("service", received)) or service,
     )
     monkeypatch.setattr(
@@ -63,7 +56,6 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
             "header",
             {"title": "IJP溢流监控报表", "config": active_config, "cached_funcs": []},
         ),
-        ("repository", database),
-        ("service", data_port),
+        ("service", database),
         ("dashboard", service),
     ]

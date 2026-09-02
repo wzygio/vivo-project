@@ -50,7 +50,7 @@ and factoryname = 'ARRAY'
 
 ## 制造工艺
 
-- **Q-Time（过货时间）**：同一生产载体从 From 站点离开到进入 To 站点之间的等待时长。等待超过对应 `q_spec` 表示该环节可能发生滞留，可能增加 OLED 材料暴露时间并影响质量。Q-Time 报表采用 `[start_time, end_time)` 时间窗口，并按 Lot 展示 `wait_time` 与规格。
+- **Q-Time（过货时间）**：同一生产载体从 From 站点离开到进入 To 站点之间的等待时长。`wait_time > q_spec` 表示该环节可能发生滞留，可能增加 OLED 材料暴露时间并影响质量。Q-Time 报表采用 `[start_time, end_time)` 时间窗口，并按 Lot 展示等待时长与规格；人工修饰中 `flag=True` 表示修饰到规格内，`False` 表示保留真实超规并预警，`Delete` 表示删除记录。
 - **四大工艺**：`ARRAY`、`OLED`、`TP`、`CELL`。
   - **ARRAY（阵列）**：制作 TFT 背板。
   - **OLED（蒸镀／EVA，Evaporation）**：制作有机发光层。

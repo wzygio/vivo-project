@@ -14,9 +14,9 @@ for import_path in (project_root, project_root / "src"):
     if path_text not in sys.path:
         sys.path.insert(0, path_text)
 
-from app.sections.qtime_domain.ijp_dashboard import render_ijp_dashboard
-from src.qtime_domain.application.ijp.errors import IjpDataAccessError
-from src.qtime_domain.core.ijp_overflow import (
+from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
+from src.indicator_domain.application.ijp.errors import IjpDataAccessError
+from src.indicator_domain.core.ijp.overflow import (
     IJP_EQUIPMENTS,
     IJP_LINES,
     IJP_RS_CODES,

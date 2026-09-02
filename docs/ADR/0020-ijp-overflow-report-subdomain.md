@@ -1,13 +1,13 @@
 # ADR-0020：IJP 溢流监控报表子域与双方言 SQL 契约
 
-- Status: Accepted
+- Status: Superseded by ADR-0021
 - Date: 2026-09-01
 - Scope: `src/qtime_domain/{core/ijp_overflow.py,application/ijp/,infrastructure/ijp_repository.py}`、
   `src/qtime_domain/composition.py`、`app/pages/IJP溢流监控报表.py`、
   `app/sections/qtime_domain/ijp_dashboard.py`、`app/charts/qtime_domain/ijp_chart.py`
 - Trace: Issue `.scratch/ijp-overflow-report/issues/01-create-ijp-overflow-report.md`、
   Plan `.planning/2026-09-01-ijp-overflow-report/`、
-  数据源分析 `docs/dev_docs/dev_spec/qtime_domain/datasource-IJP溢流报表分析.md`、
+  数据源分析 `docs/dev_docs/dev_spec/indicator_domain/datasource-IJP溢流报表分析.md`、
   E2E 证据 `output/test-results/ijp/`
 
 ## Context

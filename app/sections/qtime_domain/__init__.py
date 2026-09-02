@@ -1,1 +1,0 @@
-"""Q-Time page sections."""

@@ -1,11 +1,11 @@
 # ADR-0019：Q-Time 报表数据源与展示边界
 
-- Status: Accepted
+- Status: Superseded by ADR-0021
 - Date: 2026-09-01
 - Scope: `src/qtime_domain/`、`app/{pages,sections,charts}/qtime_domain/`、`app/pages/Q_Time监控报表.py`
 - Trace: Issue `.scratch/qtime-report/issues/01-create-qtime-report.md`、
   Plan `.planning/2026-09-01-qtime-report/`、
-  Data source `docs/dev_docs/dev_spec/qtime_domain/Q-Time数据源分析.md`
+  Data source `docs/dev_docs/dev_spec/indicator_domain/Q-Time数据源分析.md`
 
 ## Context
 

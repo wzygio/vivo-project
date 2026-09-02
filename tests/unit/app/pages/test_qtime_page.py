@@ -4,17 +4,15 @@ from types import SimpleNamespace
 
 from app.components import page_header
 from app.manager.session_manager import SessionManager
-from app.sections.qtime_domain import qtime_dashboard
+from app.sections.indicator_domain.qtime import dashboard as qtime_dashboard
 from app.utils.app_setup import AppSetup
-from src.qtime_domain import composition
-from src.qtime_domain.application import qtime_service
+from src.indicator_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 
 def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     events: list[object] = []
     database = object()
-    data_port = object()
     service = object()
     active_config = SimpleNamespace(
         data_source=SimpleNamespace(product_code="M626"),
@@ -39,12 +37,7 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: database)
     monkeypatch.setattr(
         composition,
-        "build_qtime_repository",
-        lambda received: events.append(("repository", received)) or data_port,
-    )
-    monkeypatch.setattr(
-        qtime_service,
-        "QTimeReportService",
+        "build_qtime_service",
         lambda received: events.append(("service", received)) or service,
     )
     monkeypatch.setattr(
@@ -67,8 +60,7 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
             "header",
             {"title": "Q-Time监控报表", "config": active_config, "cached_funcs": []},
         ),
-        ("repository", database),
-        ("service", data_port),
+        ("service", database),
         ("dashboard", service, "M626"),
     ]
 

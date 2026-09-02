@@ -14,32 +14,45 @@ for import_path in (project_root, project_root / "src"):
     if path_text not in sys.path:
         sys.path.insert(0, path_text)
 
-from app.sections.qtime_domain.qtime_dashboard import render_qtime_dashboard
-from src.qtime_domain.application.errors import QTimeDataAccessError
+from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard
+from src.indicator_domain.application.qtime.dtos import QTimeStepOption
+from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
+from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
+from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
+from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
 
 
 class FixtureQTimeService:
-    def get_filter_options(self, shop: str) -> dict[str, tuple[str, ...]]:
+    def get_filter_options(
+        self,
+        shop: str,
+    ) -> dict[str, tuple[QTimeStepOption, ...]]:
         paths = {
             "ARRAY": (
-                "M3_DE->M3_STR",
-                "PSI_ELA->PSI_PHT",
-                "Shipping->Cutting",
+                QTimeStepOption("M3_DE->M3_STR", "15500", "15600"),
+                QTimeStepOption("PSI_ELA->PSI_PHT", "11300", "11400"),
+                QTimeStepOption("Shipping->Cutting", "2X999", "31000"),
             ),
-            "OLED": ("OLED_OUT->OLED_IN",),
-            "TP": ("TP_OUT->TP_IN",),
+            "OLED": (QTimeStepOption("OLED_OUT->OLED_IN", "21100", "21200"),),
+            "TP": (QTimeStepOption("TP_OUT->TP_IN", "31000", "31100"),),
         }
         return {
-            "step_descriptions": paths[shop],
+            "step_options": paths[shop],
         }
 
-    def get_report(self, query) -> pd.DataFrame:
-        if query.products != ("M626",):
+    def get_current_monitoring(
+        self,
+        *,
+        shop: str,
+        step_descriptions: tuple[str, ...],
+        products: tuple[str, ...],
+    ) -> QTimeMonitoringResult:
+        if products != ("M626",):
             raise AssertionError("Q-Time query must use the Page Header product")
-        products = query.products
-        if query.step_descriptions == ("Shipping->Cutting",):
-            return pd.DataFrame()
-        if query.shop == "TP":
+        if step_descriptions == ("Shipping->Cutting",):
+            empty = pd.DataFrame()
+            return QTimeMonitoringResult(empty, empty, empty, empty, Path("qtime.xlsx"))
+        if shop == "TP":
             raise QTimeDataAccessError(
                 "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
             )
@@ -58,7 +71,7 @@ class FixtureQTimeService:
             "L3MY6800QAA",
         ]
         wait_times = [0.41, 1.26, 1.18, 0.65, 0.51, 1.40, 1.14, 0.18, 0.09, 0.67, 1.21, 0.30]
-        return pd.DataFrame(
+        raw_details = pd.DataFrame(
             [
                 {
                     "step_desc": step_description,
@@ -67,19 +80,41 @@ class FixtureQTimeService:
                     "sub_prod_type": "P",
                     "f_step": "15500",
                     "t_step": "15600",
-                    "q_spec": 2.5,
+                    "q_spec": 1.0,
                     "wait_time": wait_time,
                     "timekey": f"20260802{index:02d}0000",
-                    "shop": query.shop,
+                    "shop": shop,
                     "prodcode": products[0],
                 }
-                for step_description in query.step_descriptions
+                for step_description in step_descriptions
                 if step_description != "Shipping->Cutting"
                 for index, (lot_id, wait_time) in enumerate(
                     zip(lot_ids, wait_times, strict=True), start=1
                 )
             ]
         )
+        decisions = pd.DataFrame(
+            [
+                {
+                    "prodcode": products[0],
+                    "step_desc": step_descriptions[0],
+                    "lot_id": "L3MY67005AA",
+                    "timekey": "20260802020000",
+                    "flag": False,
+                }
+            ]
+        )
+        decorated = apply_qtime_decoration(raw_details, decisions)
+        return QTimeMonitoringResult(
+            details=decorated.details,
+            alerts=build_qtime_alerts(decorated.decoration),
+            decoration=decorated.decoration,
+            decisions=decisions,
+            decoration_path=Path("resources/qtime_domain/qtime_oos_decoration.xlsx"),
+        )
+
+    def update_decisions(self, file_bytes: bytes):
+        raise AssertionError("Fixture tests do not upload a decoration workbook")
 
 
 st.set_page_config(page_title="Q-Time E2E", layout="wide")

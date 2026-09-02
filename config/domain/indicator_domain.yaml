@@ -1,0 +1,4 @@
+resources:
+  dir: resources/indicator_domain/qtime
+  files:
+    qtime_oos_decoration: qtime_oos_decoration.xlsx

@@ -19,10 +19,9 @@ import streamlit as st
 
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
-from app.sections.qtime_domain.ijp_dashboard import render_ijp_dashboard
+from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
 from app.utils.app_setup import AppSetup
-from src.qtime_domain.application.ijp.ijp_service import IjpReportService
-from src.qtime_domain.composition import build_ijp_repository
+from src.indicator_domain.composition import build_ijp_service
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -39,5 +38,4 @@ render_page_header(
     config=active_config,
     cached_funcs=[],
 )
-repository = build_ijp_repository(DatabaseManager())
-render_ijp_dashboard(IjpReportService(repository))
+render_ijp_dashboard(build_ijp_service(DatabaseManager()))
