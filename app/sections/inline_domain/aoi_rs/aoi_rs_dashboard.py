@@ -52,7 +52,9 @@ from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     AOI_RS_OOS_KEY_COLUMNS,
 )
 from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
-from src.inline_domain.core.shared.sheet_oos_decoration import load_sheet_oos_decoration
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    load_sheet_oos_decoration,
+)
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 
 logger = logging.getLogger(__name__)

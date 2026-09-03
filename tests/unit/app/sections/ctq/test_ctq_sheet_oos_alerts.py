@@ -9,7 +9,9 @@ from app.sections.inline_domain.ctq.ctq_dashboard import (
     build_ctq_sheet_oos_alerts,
     render_ctq_sheet_oos_alert_indicator_sections,
 )
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
+)
 
 # 2026-08-25 为周二：上一 ISO 周 = [2026-08-17, 2026-08-24)
 REFERENCE_DATE = date(2026, 8, 25)

@@ -5,6 +5,7 @@ import pytest
 
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
+from src.shared_kernel.snapshot_window import snapshot_window_start
 
 
 def test_enabled_policy_shifts_manufacturing_time_without_mutating_source() -> None:
@@ -65,13 +66,11 @@ def test_policy_translates_display_window_to_source_time() -> None:
         ("2026-10-01", "2026-07-01"),
     ],
 )
-def test_snapshot_window_starts_at_third_prior_month_first_day(
+def test_snapshot_window_always_starts_at_third_prior_month_first_day(
     display_end: str,
     expected: str,
 ) -> None:
-    policy = DataForwardPolicy(enabled=True, offset_days=4)
-
-    assert policy.snapshot_start(display_end) == pd.Timestamp(expected)
+    assert snapshot_window_start(display_end) == pd.Timestamp(expected)
 
 
 def test_policy_signature_changes_with_mode_and_offset() -> None:
@@ -93,12 +92,6 @@ def test_disabled_policy_preserves_time_values_and_dtype() -> None:
     )
 
     pd.testing.assert_frame_equal(result, source)
-
-
-def test_disabled_policy_preserves_legacy_snapshot_window_start() -> None:
-    policy = DataForwardPolicy(enabled=False, offset_days=4)
-
-    assert policy.snapshot_start("2026-09-02") == pd.Timestamp("2026-06-02")
 
 
 def test_missing_global_policy_defaults_to_disabled(tmp_path, monkeypatch) -> None:

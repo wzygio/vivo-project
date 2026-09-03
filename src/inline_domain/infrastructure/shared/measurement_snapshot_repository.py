@@ -19,6 +19,7 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     load_raw_measurements,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_window import snapshot_window_start
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -103,7 +104,7 @@ class InlineMeasurementSnapshotRepository:
         force_refresh: bool,
     ) -> MeasurementRefreshResult:
         end_timestamp = pd.Timestamp(end_date)
-        start_date = self.data_forward_policy.snapshot_start(end_timestamp).strftime("%Y-%m-%d")
+        start_date = snapshot_window_start(end_timestamp).strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
         if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):

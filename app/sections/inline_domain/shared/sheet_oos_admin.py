@@ -19,11 +19,13 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     DECISION_FLAG_COLUMN,
     OOS_DECORATION_COLUMNS,
     OOS_KEY_COLUMNS,
-    SheetOosDecorationResult,
     _normalize_flag_action,
     _normalize_key_columns,
     compute_decision_signature,
     get_decision_sheet_name,
+)
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
 )
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
 

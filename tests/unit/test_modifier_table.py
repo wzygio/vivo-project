@@ -28,8 +28,8 @@ from pathlib import Path
 
 from src.yield_domain.core.mwd_trend.modifier_table import (
     MODIFIER_TABLE_COLUMNS,
-    read_modifier_table,
 )
+from src.yield_domain.infrastructure.modifier_table_repository import read_modifier_table
 
 
 def _write_table(path: Path, sheet_name: str, rows: list[dict]):
@@ -103,7 +103,7 @@ class TestReadModifierTable:
         path.write_bytes(b"broken")
 
         monkeypatch.setattr(
-            "src.yield_domain.core.mwd_trend.modifier_table._read_sheet",
+            "src.yield_domain.infrastructure.modifier_table_repository._read_sheet",
             lambda *args, **kwargs: (_ for _ in ()).throw(
                 ValueError("workbook format is unreadable")
             ),
@@ -291,8 +291,8 @@ class TestComputeScaleFactors:
 
 from src.yield_domain.core.mwd_trend.modifier_table import (
     specified_signature,
-    sync_modifier_table,
 )
+from src.yield_domain.application.modifier_table_service import sync_modifier_table
 
 
 class TestSyncModifierTable:
@@ -307,7 +307,7 @@ class TestSyncModifierTable:
             return True
 
         monkeypatch.setattr(
-            "src.yield_domain.core.mwd_trend.modifier_table.replace_workbook_sheet",
+            "src.yield_domain.application.modifier_table_service.write_modifier_sheet",
             fake_replace,
         )
         return writes
@@ -393,7 +393,7 @@ class TestSyncModifierTable:
             return False
 
         monkeypatch.setattr(
-            "src.yield_domain.core.mwd_trend.modifier_table.replace_workbook_sheet",
+            "src.yield_domain.application.modifier_table_service.write_modifier_sheet",
             boom,
         )
         signature_path = tmp_path / "sig.json"

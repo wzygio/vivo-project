@@ -76,6 +76,12 @@
 - 视觉证据：`output/test-results/data-forward/enabled.png`、`disabled.png`，1365×768 无横向溢出或错误态。
 - 文档已更新：`CONTEXT.md`、`ARCHITECTURE.md`、`references/domain/GLOSSARY.md`。
 
+### Phase 5: Project Record
+
+- **Status:** ADR complete; merge verification pending
+- 用户于 2026-09-03 明确要求在合并前输出 ADR，覆盖 development-flow 默认的合并后沉淀顺序。
+- 新增 `docs/ADR/0022-source-and-display-time-boundary.md`，决策、替代方案、后果、风险和验证证据均与 `feat/data-forward` 的实际实现一致。
+
 ## 5-Question Reboot Check
 
 | Question | Answer |

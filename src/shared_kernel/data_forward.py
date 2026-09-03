@@ -55,11 +55,3 @@ class DataForwardPolicy:
         """Translate a caller-facing display window to its source-time window."""
         offset = pd.Timedelta(days=self.effective_days)
         return pd.Timestamp(display_start) - offset, pd.Timestamp(display_end) - offset
-
-    def snapshot_start(self, display_end: object) -> pd.Timestamp:
-        """Return the configured snapshot start while preserving legacy mode."""
-        normalized_end = pd.Timestamp(display_end).normalize()
-        if not self.enabled:
-            return normalized_end - pd.DateOffset(months=3)
-        month_start = normalized_end.replace(day=1)
-        return month_start - pd.DateOffset(months=3)

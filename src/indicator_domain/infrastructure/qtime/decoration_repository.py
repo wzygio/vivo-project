@@ -6,17 +6,18 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.indicator_domain.application.qtime.decoration_service import (
+    DECISION_SHEET_NAME,
+)
 from src.indicator_domain.application.qtime.errors import QTimeDecorationAccessError
 from src.indicator_domain.core.qtime.decoration import (
     DECISION_COLUMNS,
-    DECISION_SHEET_NAME,
     QTIME_KEY_COLUMNS,
 )
 from src.shared_kernel.utils.excel_tools import (
     read_workbook_sheet,
     replace_workbook_sheets,
 )
-
 
 SAFE_DECORATION_ERROR = "Q-Time 修饰工作簿读写失败，请关闭 Excel 后重试。"
 
@@ -50,6 +51,4 @@ class QTimeDecorationRepository:
             {DECISION_SHEET_NAME: decisions[DECISION_COLUMNS].copy()},
         )
         if not result.written:
-            raise QTimeDecorationAccessError(
-                result.error or SAFE_DECORATION_ERROR
-            )
+            raise QTimeDecorationAccessError(result.error or SAFE_DECORATION_ERROR)

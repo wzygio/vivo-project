@@ -13,7 +13,11 @@ from src.indicator_domain.application.qtime.decoration_service import (
     QTimeDecisionUploadResult,
     parse_qtime_decision_upload,
 )
-from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption, Shop
+from src.indicator_domain.application.qtime.dtos import (
+    QTimeQuery,
+    QTimeStepOption,
+    Shop,
+)
 from src.indicator_domain.application.qtime.ports import (
     QTimeDataPort,
     QTimeDecorationPort,

@@ -12,7 +12,9 @@ from src.inline_domain.application.shared.decorated_features import (
     fetch_decorated_features,
 )
 from src.inline_domain.core.ctq.indicator_chart import assign_ctq_indicator_chart_type
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 

@@ -5,7 +5,11 @@ from typing import Protocol
 
 import pandas as pd
 
-from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption, Shop
+from src.indicator_domain.application.qtime.dtos import (
+    QTimeQuery,
+    QTimeStepOption,
+    Shop,
+)
 
 
 class QTimeDataPort(Protocol):

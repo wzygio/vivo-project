@@ -44,7 +44,9 @@ from src.inline_domain.application.shared.decision_signature import get_scope_de
 from src.inline_domain.composition import build_aoi_rs_repository, refresh_aoi_rs_snapshots
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_DECORATION_FILE_NAME
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_RS_PAGE_CACHE_SIGNATURE = "aoi_rs_report_v1"

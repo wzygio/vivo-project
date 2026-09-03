@@ -20,7 +20,9 @@ from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
 )
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
+)
 from src.shared_kernel.config import ConfigLoader
 
 PROD = "M678"

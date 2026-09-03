@@ -22,7 +22,7 @@ from src.inline_domain.infrastructure.shared.measurement_preparation import (
 )
 from src.inline_domain.infrastructure.monitor.monitor_repository import InlineMonitorRepository
 from src.inline_domain.infrastructure.monitor.scrap_repository import InlineScrapRepository
-from src.inline_domain.infrastructure.spc.spc_data_correction import (
+from src.inline_domain.core.shared.measurement_correction import (
     apply_spc_value_corrections,
 )
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository

@@ -24,6 +24,7 @@ from src.inline_domain.infrastructure.aoi_rs.data_loader import (
 )
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_window import snapshot_window_start
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -82,9 +83,7 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": self.data_forward_policy.snapshot_start(
-                        end_timestamp
-                    ).strftime("%Y-%m-%d"),
+                    "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -122,9 +121,7 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": self.data_forward_policy.snapshot_start(
-                        end_timestamp
-                    ).strftime("%Y-%m-%d"),
+                    "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -155,9 +152,7 @@ class AoiRsSnapshotRepository:
         end_timestamp = pd.Timestamp(query.end_date)
         loader_query = query.model_copy(
             update={
-                "start_date": self.data_forward_policy.snapshot_start(
-                    end_timestamp
-                ).strftime("%Y-%m-%d"),
+                "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
             }
         )
         try:

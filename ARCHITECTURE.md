@@ -66,12 +66,15 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 3. `app/pages/Q_Time监控报表.py` 是薄组合入口；筛选、查询门控、空/错误状态由
    `app/sections/indicator_domain/qtime/` 拥有，柱线图模型由
    `app/charts/indicator_domain/qtime/` 构建。
-4. 当前 Q-Time 目标表没有快照降级契约。数据库连接或 SELECT 权限失败时，
-   仓储保留异常因果链，页面只显示不含 SQL、凭据和 traceback 的稳定错误信息。
+4. `QTimeRepository` 将产品选项、分厂路径选项和查询契约级明细保存到
+   `data/indicator_domain/qtime/`。明细 Parquet 保留源 `timekey`，加载范围从
+   截止日第三个前序自然月的 1 日开始；TTL 内复用，数据库失败时只回退到同一
+   查询契约的旧快照。没有可用快照时仍返回不含 SQL、凭据和 traceback 的稳定错误。
 5. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
    的“决策台账”以 `(prodcode, step_desc, lot_id, timekey)` 为键。`flag=True` 将等待时长
    确定性修饰到规格内，`flag=False` 保留真实值并进入预警中心，`flag=Delete` 删除记录。
-   上传只覆盖决策台账，当前超规明细仅作为下载参考，不反向写入数据库。
+   规则位于 `core/qtime/decoration.py`；Excel 仓储只负责决策台账持久化。上传只覆盖
+   决策台账，当前超规明细仅作为下载参考，不反向写入数据库。
 
 #### IJP
 
@@ -104,10 +107,11 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 - `infrastructure/measurement/` 拥有三厂 Inline 测量事实的数据库读取和产品级
   Parquet 快照。共享快照只保存预处理前的稳定字段超集；TTL、策略版本、强制
   刷新、原子写入和数据库失败降级均在这一适配器内完成。快照写入前可通过
-  `measurement_corrector` 钩子应用数值修正（当前规则见
-  `infrastructure/spc/spc_data_correction.py`：M673 且 param_name 含 PPA 且
+  `measurement_corrector` 钩子应用数值修正（当前纯规则见
+  `core/shared/measurement_correction.py`：M673 且 param_name 含 PPA 且
   site_name∈[96,114] 的记录 param_value 减 5，属真实量测偏差修正；其余
-  所有 PPA 记录统一减 0.5），由 `composition.py` 注入。
+  所有 PPA 记录统一减 1），由 `composition.py` 注入。这是已确认系统性偏差的
+  源校正例外，不属于快照后的报表修饰。
 - `application/*/ports.py` 定义消费方拥有的出站端口；`composition.py` 是显式
   组合根。SPC、CTQ、AOI_TT、AOI_RS 应用服务只依赖端口，不读取 Parquet，也不构造
   基础设施仓储。
@@ -122,7 +126,9 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   起止日期、快照签名、产品 revision 与决策签名）：scope='spc'/'ctq' 分别使用
   对应 OOS 修饰工作簿，scope='none' 跳过修饰；monitor 按 data_type 分组路由
   scope（SPC→spc、CTQ→ctq、AOI→none）。缓存 miss 时修饰工作簿落盘一次，
-  命中不重写；spc/ctq 下行到 core 的刷新门控（meta + 4h TTL + revision/决策
+  命中不重写；`application/shared/sheet_oos_decoration_service.py` 编排纯 Core
+  规则与 `infrastructure/shared/sheet_oos_decoration_repository.py` 工作簿适配器；
+  刷新门控（meta + 4h TTL + revision/决策
   签名比对）判定是否真正重写明细。决策签名由
   `application/shared/decision_signature.py` 两阶段生成：file_stat
   (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
@@ -176,7 +182,8 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 
 - 全局 `data_forward` 策略定义源时间到显示时间的映射。原始 Parquet 始终保存
   源时间；快照仓储在读取输出边界前推时间，直接查询仓储先把页面显示窗口反向
-  换算为源时间窗口，再将结果映射回显示时间。关闭策略时保留旧时间与旧快照窗口。
+  换算为源时间窗口，再将结果映射回显示时间。关闭策略时保留真实时间；快照加载
+  窗口独立于该策略，始终从截止日第三个前序自然月的月初开始。
 - 所有承载前推后数据的页面缓存签名都包含策略启停状态和偏移天数，避免启停或
   调整天数后复用旧时间轴缓存。
 - 页面可缓存的应用服务只返回 DataFrame、标量或原生容器；缓存外再构造
@@ -195,6 +202,12 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 `docs/ADR/0012-shared-inline-measurement-snapshot.md`。
 AOI_RS 专属产品级快照边界见
 `docs/ADR/0015-aoi-rs-product-local-snapshot.md`。
+Q-Time 查询契约级源快照与修饰分层见
+`docs/ADR/0023-qtime-local-source-snapshot-and-decoration-boundary.md`。
+跨领域数据修饰的统一业务与分层范式见
+`references/design/feat_design/data-decoration-architecture.md`。
+制造事实源时间、报表显示时间、查询窗口反算与策略缓存隔离见
+`docs/ADR/0022-source-and-display-time-boundary.md`。
 Inline/Yield 页面级自动预警（单片异常 flag=FALSE 口径、上一 ISO 周、
 异常项自动出图）见 `docs/ADR/0017-inline-alert-center.md`。
 MWD 指定良损、Group/Code Sheet 优先级与 Mapping 边界见

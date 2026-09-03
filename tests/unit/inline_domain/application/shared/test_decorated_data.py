@@ -167,8 +167,8 @@ def test_prepare_decorated_data_threads_gate_params_to_core(
     monkeypatch, tmp_path: Path
 ) -> None:
     """prepare_decorated_data 把 scope/prod_code/product_revision/decision_signature
-    透传到 core prepare_sheet_oos_decoration（启用刷新门控）。"""
-    from src.inline_domain.core.shared.sheet_oos_decoration import (
+    透传到 application prepare_sheet_oos_decoration（启用刷新门控）。"""
+    from src.inline_domain.application.shared.sheet_oos_decoration_service import (
         SheetOosDecorationResult,
     )
 

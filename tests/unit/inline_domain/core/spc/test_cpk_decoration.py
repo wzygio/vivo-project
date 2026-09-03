@@ -3,14 +3,20 @@ from zipfile import BadZipFile
 
 import pandas as pd
 
-from src.inline_domain.core.spc import cpk_decoration
+from src.inline_domain.infrastructure.spc import (
+    capability_decoration_repository as cpk_decoration,
+)
+from src.inline_domain.application.spc.capability_decoration_service import (
+    prepare_capability_decoration,
+    prepare_cpk_decoration,
+)
 from src.inline_domain.core.spc.cpk_decoration import (
     apply_capability_decoration,
     apply_cpk_decoration,
-    load_cpk_decoration,
-    prepare_capability_decoration,
-    prepare_cpk_decoration,
     resolve_capability_decoration_sheet,
+)
+from src.inline_domain.infrastructure.spc.capability_decoration_repository import (
+    load_cpk_decoration,
 )
 
 

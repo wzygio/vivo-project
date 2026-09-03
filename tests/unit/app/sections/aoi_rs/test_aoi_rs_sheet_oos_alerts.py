@@ -18,7 +18,9 @@ from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
     render_aoi_rs_sheet_oos_alert_indicator_sections,
 )
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 
 REFERENCE_DATE = date(2026, 8, 25)  # 周二：上一 ISO 周为 [周一 00:00, 本周一 00:00)
 

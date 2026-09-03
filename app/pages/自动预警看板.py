@@ -33,7 +33,9 @@ from src.inline_domain.application.shared.decorated_features import fetch_decora
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.composition import build_monitor_repository
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 MONITOR_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"

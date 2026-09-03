@@ -20,8 +20,10 @@ from app.sections.inline_domain.shared.sheet_oos_admin import (
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_COLUMNS,
     OOS_KEY_COLUMNS,
-    SheetOosDecorationResult,
     get_decision_sheet_name,
+)
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
 )
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,

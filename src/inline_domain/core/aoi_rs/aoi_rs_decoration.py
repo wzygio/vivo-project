@@ -14,23 +14,12 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 
 import pandas as pd
 
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import attach_spec_values
 from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
-from src.inline_domain.core.shared.sheet_oos_decoration import (
-    load_sheet_oos_decisions,
-    merge_detail_with_decoration_flags,
-    persist_sheet_oos_decoration,
-)
-
-logger = logging.getLogger(__name__)
 
 AOI_RS_OOS_DECORATION_FILE_NAME = "aoi_rs_sheet_oos_decoration.xlsx"
 AOI_RS_OOS_KEY_COLUMNS = [
@@ -48,17 +37,6 @@ _CHART_POINT_META = {
     "lot": ("lot_id", "value"),
     "sheet": ("sheet_id", "rs_qty"),
 }
-
-
-@dataclass(frozen=True)
-class AoiRsDecorationResult:
-    """AOI_RS 图表点帧经工作簿三态修饰后的结果。"""
-
-    lot_points_df: pd.DataFrame
-    sheet_points_df: pd.DataFrame
-    decoration_df: pd.DataFrame
-    decoration_path: Path
-    decoration_sheet: str
 
 
 def _normalized_points(
@@ -147,57 +125,15 @@ def _apply_chart_decoration(
     return decorated.drop(columns=["spec", "chart_kind", "point_id", "sheet_start_time"])
 
 
-def prepare_aoi_rs_decoration(
+def apply_aoi_rs_decoration(
     lot_points_df: pd.DataFrame,
     sheet_points_df: pd.DataFrame,
     spec_df: pd.DataFrame,
-    product_dir: Path,
     prod_code: str,
-    persist: bool = True,
+    decoration_df: pd.DataFrame,
     exempt_param_name_contains: Iterable[str] | None = None,
-    *,
-    scope: str | None = None,
-    product_revision: str = "",
-    decision_signature: str = "",
-    now: datetime | None = None,
-) -> AoiRsDecorationResult:
-    """对 By Lot / By Sheet 点帧应用三态修饰与参数豁免。
-
-    ``persist=True`` 且传入 ``scope`` 时启用共享刷新门控（与 SPC/CTQ 一致）：
-    产品明细 sheet / meta 缺失、``product_revision`` 或 ``decision_signature``
-    变化、或距上次成功写入超过 TTL 才重写工作簿，否则只算不写；
-    meta 行按 (scope, prod_code) 隔离记录在 ``__refresh_meta__``。
-    不传 ``scope`` 保持旧语义（总是持久化、不维护 meta）。
-
-    决策来源只有 ``<产品>__flags``：缺失即空台账（__flags 只记录人为决策，
-    2026-09-01 起不再从旧产品 sheet 迁移）。
-    """
-    detail_df = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
-    if persist:
-        decoration_df = persist_sheet_oos_decoration(
-            product_dir,
-            detail_df,
-            AOI_RS_OOS_DECORATION_FILE_NAME,
-            prod_code,
-            key_columns=AOI_RS_OOS_KEY_COLUMNS,
-            scope=scope,
-            prod_code=prod_code,
-            product_revision=product_revision,
-            decision_signature=decision_signature,
-            now=now,
-        )
-    else:
-        decoration_df = merge_detail_with_decoration_flags(
-            detail_df,
-            load_sheet_oos_decisions(
-                product_dir,
-                AOI_RS_OOS_DECORATION_FILE_NAME,
-                prod_code,
-                key_columns=AOI_RS_OOS_KEY_COLUMNS,
-            ),
-            key_columns=AOI_RS_OOS_KEY_COLUMNS,
-        )
-
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply already-loaded tri-state decisions to both AOI-RS chart frames."""
     lot_decorated = _apply_chart_decoration(
         lot_points_df,
         spec_df,
@@ -214,17 +150,4 @@ def prepare_aoi_rs_decoration(
         prod_code,
         exempt_param_name_contains,
     )
-    logger.info(
-        "[AOI_RS] Sheet OOS decoration prepared for %s: oos=%s, lot=%s, sheet=%s",
-        prod_code,
-        len(decoration_df),
-        len(lot_decorated),
-        len(sheet_decorated),
-    )
-    return AoiRsDecorationResult(
-        lot_points_df=lot_decorated,
-        sheet_points_df=sheet_decorated,
-        decoration_df=decoration_df,
-        decoration_path=product_dir / AOI_RS_OOS_DECORATION_FILE_NAME,
-        decoration_sheet=prod_code,
-    )
+    return lot_decorated, sheet_decorated

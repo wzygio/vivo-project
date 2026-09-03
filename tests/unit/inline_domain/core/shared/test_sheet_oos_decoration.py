@@ -4,11 +4,18 @@ from zipfile import BadZipFile
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.shared import sheet_oos_decoration
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
+    OOS_KEY_COLUMNS,
+    _exclude_delete_flagged_measurements,
     apply_sheet_oos_decoration,
     build_sheet_oos_detail,
+    merge_detail_with_decoration_flags,
+)
+from src.inline_domain.infrastructure.shared import (
+    sheet_oos_decoration_repository as sheet_oos_decoration,
+)
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     load_sheet_oos_decoration,
     persist_sheet_oos_decoration,
 )
@@ -174,7 +181,7 @@ def test_merge_detail_preserves_delete_action_but_ignores_edited_statistics() ->
         123.0,
     ]
 
-    merged = sheet_oos_decoration.merge_detail_with_decoration_flags(
+    merged = merge_detail_with_decoration_flags(
         detail,
         existing,
     )
@@ -255,7 +262,7 @@ def test_persist_sheet_oos_decoration_writes_only_decoration_and_preserves_flags
     assert decoration["flag"].tolist() == [True, True]
 
     # 用户在决策 sheet（Z571__flags）中把 S1 改为 False；同时验证其他 sheet 不受影响
-    decisions = decoration[[*sheet_oos_decoration.OOS_KEY_COLUMNS, "flag"]].copy()
+    decisions = decoration[[*OOS_KEY_COLUMNS, "flag"]].copy()
     decisions.loc[decisions["sheet_id"] == "S1", "flag"] = False
     other_sheet_df = pd.DataFrame([{"prod_code": "OTHER", "note": "keep-me"}])
     write_result = replace_workbook_sheets(
@@ -296,13 +303,13 @@ def test_generic_key_columns_round_trip_for_non_spc_modules(tmp_path: Path) -> N
 
     # 用户把 S2 行改成 Delete、S1 行改成 False 后重新 merge，flag 被保留
     user_df = decoration_df.assign(flag=["False", "Delete"])
-    merged = sheet_oos_decoration.merge_detail_with_decoration_flags(
+    merged = merge_detail_with_decoration_flags(
         detail_df, user_df, key_columns=key_columns
     )
     assert merged["flag"].tolist() == [False, "Delete"]
 
     # 自定义键列的 Delete 行能从明细中剔除
-    excluded = sheet_oos_decoration._exclude_delete_flagged_measurements(
+    excluded = _exclude_delete_flagged_measurements(
         detail_df, merged, key_columns=key_columns
     )
     assert excluded["sheet_id"].tolist() == ["S1"]

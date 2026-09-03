@@ -9,7 +9,7 @@ import pandas as pd
 from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
 )
-from src.inline_domain.infrastructure.spc.spc_data_correction import (
+from src.inline_domain.core.shared.measurement_correction import (
     apply_spc_value_corrections,
 )
 

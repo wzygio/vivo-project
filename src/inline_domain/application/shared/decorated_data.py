@@ -21,8 +21,8 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
     AOI_TT_OOS_DECORATION_FILE_NAME,
 )
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
-from src.inline_domain.core.shared.sheet_oos_decoration import (
-    OOS_DECORATION_FILE_NAME,
+from src.inline_domain.core.shared.sheet_oos_decoration import OOS_DECORATION_FILE_NAME
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
     prepare_sheet_oos_decoration,
 )

@@ -25,8 +25,12 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_spc_decoration_admin,
     render_spc_indicator_sections,
 )
-from src.inline_domain.core.spc.cpk_decoration import CpkDecorationResult
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.application.spc.capability_decoration_service import (
+    CpkDecorationResult,
+)
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
+)
 
 
 def _sample_report_df() -> pd.DataFrame:

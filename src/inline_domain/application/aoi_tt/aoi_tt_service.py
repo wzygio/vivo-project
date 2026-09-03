@@ -11,7 +11,7 @@ import streamlit as st
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
-from src.inline_domain.core.aoi_tt.aoi_tt_decoration import prepare_aoi_tt_decoration
+from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:

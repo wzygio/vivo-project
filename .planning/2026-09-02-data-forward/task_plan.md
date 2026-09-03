@@ -54,7 +54,7 @@ Phase 5
 ### Phase 5: Documentation and Delivery
 
 - [x] 更新稳定领域术语/运行边界文档，记录源时间、显示时间和原始快照不平移契约。
-- [ ] development-flow checklist 全部以证据关闭后创建 ADR；测试未通过不得写 ADR。
+- [x] 创建 ADR-0022，记录源时间/显示时间、原始快照、窗口换算、新鲜度和缓存边界；按用户指示在合并前完成，并注明 master 合并待办。
 - [ ] 复核 worktree diff/status，保留主工作区用户改动，报告有意排除项和所有验证证据。
 - **Status:** in_progress
 

@@ -31,15 +31,26 @@ Array,Target,PVD,MO,Mo DEPO,41000KWH,1K200,3AFS01-SPU-PM5,%TRGTLIFE%_G_MAX
     entered_snapshot_load = threading.Event()
     continue_snapshot_load = threading.Event()
 
-    def blocking_snapshot_load(_db_manager, _spec_df) -> pd.DataFrame:
+    def blocking_snapshot_load(
+        _db_manager,
+        _spec_df,
+        *,
+        as_of: pd.Timestamp,
+        max_age_days: int,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        del as_of, max_age_days
         entered_snapshot_load.set()
         assert continue_snapshot_load.wait(timeout=10)
-        return snapshot_df
+        return snapshot_df, pd.DataFrame()
 
     original_module = parts_service
     original_service = original_module.PartsReportService
     original_service.fetch_report_payload.clear()
-    monkeypatch.setattr(original_module, "load_part_life_snapshot", blocking_snapshot_load)
+    monkeypatch.setattr(
+        original_module,
+        "load_report_part_life_snapshots",
+        blocking_snapshot_load,
+    )
     outcome: dict[str, object] = {}
 
     def load_report() -> None:

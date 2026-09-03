@@ -7,8 +7,6 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-
-QTIME_DECORATION_FILE_NAME = "qtime_oos_decoration.xlsx"
 QTIME_KEY_COLUMNS = ["prodcode", "step_desc", "lot_id", "timekey"]
 QTIME_DETAIL_COLUMNS = [
     "shop",
@@ -24,7 +22,6 @@ QTIME_DETAIL_COLUMNS = [
 ]
 QTIME_DECORATION_COLUMNS = [*QTIME_DETAIL_COLUMNS, "flag"]
 DELETE_ACTION = "Delete"
-DECISION_SHEET_NAME = "决策台账"
 DECISION_COLUMNS = [*QTIME_KEY_COLUMNS, "flag"]
 
 
@@ -40,7 +37,9 @@ def build_qtime_oos_detail(details: pd.DataFrame) -> pd.DataFrame:
     if details.empty or not required.issubset(details.columns):
         return pd.DataFrame(columns=QTIME_DETAIL_COLUMNS)
 
-    source_columns = [column for column in QTIME_DETAIL_COLUMNS if column != "over_hours"]
+    source_columns = [
+        column for column in QTIME_DETAIL_COLUMNS if column != "over_hours"
+    ]
     result = details.loc[:, source_columns].copy()
     result["q_spec"] = pd.to_numeric(result["q_spec"], errors="coerce")
     result["wait_time"] = pd.to_numeric(result["wait_time"], errors="coerce")

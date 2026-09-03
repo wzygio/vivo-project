@@ -15,8 +15,10 @@ import pytest
 from src.inline_domain.application.shared import decision_signature as decision_signature_module
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     EMPTY_DECISION_SIGNATURE,
-    SheetOosDecorationReadError,
     get_decision_sheet_name,
+)
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
 )
 
 PROD = "M678"
