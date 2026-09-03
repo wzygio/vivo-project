@@ -48,10 +48,14 @@ def test_repository_reuses_one_product_snapshot_for_repeated_reads(tmp_path) -> 
     first = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
     second = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
 
-    assert calls == [("2026-05-13", "2026-08-13", "M678")]
+    assert calls == [("2026-05-01", "2026-08-13", "M678")]
     assert first.equals(second)
     assert first.loc[0, "lot_id"] == "LOT-1"
-    assert (tmp_path / "inline_measurements_M678.parquet").exists()
+    assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-17 08:00:00")
+    snapshot_path = tmp_path / "inline_measurements_M678.parquet"
+    assert pd.read_parquet(snapshot_path).loc[0, "start_time"] == pd.Timestamp(
+        "2026-08-13 08:00:00"
+    )
 
 
 def test_repository_refreshes_snapshot_without_current_raw_policy(tmp_path) -> None:

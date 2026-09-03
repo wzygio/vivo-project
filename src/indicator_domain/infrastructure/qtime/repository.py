@@ -10,6 +10,7 @@ from sqlalchemy import bindparam, text
 
 from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption, Shop
 from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -37,6 +38,7 @@ class QTimeRepository:
 
     def __init__(self, db_manager: "DatabaseManager") -> None:
         self._engine = db_manager.engine
+        self._data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def list_products(self) -> tuple[str, ...]:
         frame = self._read_frame(
@@ -107,9 +109,13 @@ class QTimeRepository:
                     ELSE 'TP'
                   END = :shop
         """
+        source_start, source_end = self._data_forward_policy.to_source_window(
+            pd.Timestamp(query.start_time),
+            pd.Timestamp(query.end_time),
+        )
         params: dict[str, object] = {
-            "start_time": query.start_time.strftime("%Y%m%d%H%M%S"),
-            "end_time": query.end_time.strftime("%Y%m%d%H%M%S"),
+            "start_time": source_start.strftime("%Y%m%d%H%M%S"),
+            "end_time": source_end.strftime("%Y%m%d%H%M%S"),
             "shop": query.shop,
             "step_descriptions": query.step_descriptions,
         }
@@ -141,11 +147,16 @@ class QTimeRepository:
             logger.error("Q-Time database read failed: %s", type(exc).__name__)
             raise QTimeDataAccessError(SAFE_DATA_ERROR) from exc
 
-    @staticmethod
-    def _normalize_details(frame: pd.DataFrame) -> pd.DataFrame:
+    def _normalize_details(self, frame: pd.DataFrame) -> pd.DataFrame:
         normalized = frame.copy()
         normalized.columns = normalized.columns.str.lower()
         normalized = normalized.reindex(columns=DETAIL_COLUMNS)
         for column in ("prod_qty", "q_spec", "wait_time"):
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+        timekey = pd.to_datetime(
+            normalized["timekey"],
+            format="%Y%m%d%H%M%S",
+            errors="coerce",
+        ) + pd.Timedelta(days=self._data_forward_policy.effective_days)
+        normalized["timekey"] = timekey.dt.strftime("%Y%m%d%H%M%S")
         return normalized

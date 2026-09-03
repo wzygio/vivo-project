@@ -25,6 +25,7 @@ from src.indicator_domain.core.ijp.overflow import (
     map_bottom_breakout,
     map_panel_location,
 )
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -91,6 +92,7 @@ class IjpRepository:
 
     def __init__(self, db_manager: "DatabaseManager") -> None:
         self._engine = db_manager.engine
+        self._data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def list_product_codes(self) -> tuple[str, ...]:
         frame = self._read_frame(
@@ -195,6 +197,10 @@ class IjpRepository:
         if frame.empty:
             return frame.reindex(columns=DAILY_COLUMNS)
         frame["code_num"] = pd.to_numeric(frame["code_num"], errors="coerce").fillna(0)
+        shifted_day = pd.to_datetime(frame["day"], errors="coerce") + pd.Timedelta(
+            days=self._data_forward_policy.effective_days
+        )
+        frame["day"] = shifted_day.dt.strftime("%Y-%m-%d")
         totals = frame.groupby("day")["code_num"].transform("sum")
         frame["ratio"] = (frame["code_num"] / totals.where(totals > 0)).round(3)
         return frame.reindex(columns=DAILY_COLUMNS)
@@ -223,9 +229,13 @@ class IjpRepository:
         window_start: datetime,
     ) -> tuple[object, dict[str, object]]:
         sql = f"{select}\n{_JOINED_FROM}"
+        source_start, source_end = self._data_forward_policy.to_source_window(
+            pd.Timestamp(window_start),
+            pd.Timestamp(query.end_time),
+        )
         params: dict[str, object] = {
-            "start_time": _format_timestamp(window_start),
-            "end_time": _format_timestamp(query.end_time),
+            "start_time": _format_timestamp(source_start.to_pydatetime()),
+            "end_time": _format_timestamp(source_end.to_pydatetime()),
             "equip_whitelist": IJP_EQUIPMENTS,
             "code_whitelist": IJP_RS_CODES,
         }
@@ -259,11 +269,14 @@ class IjpRepository:
     def _dialect_name(self) -> str:
         return getattr(getattr(self._engine, "dialect", None), "name", "") or ""
 
-    @staticmethod
-    def _window_params(start_time: datetime, end_time: datetime) -> dict[str, object]:
+    def _window_params(self, start_time: datetime, end_time: datetime) -> dict[str, object]:
+        source_start, source_end = self._data_forward_policy.to_source_window(
+            pd.Timestamp(start_time),
+            pd.Timestamp(end_time),
+        )
         return {
-            "start_time": _format_timestamp(start_time),
-            "end_time": _format_timestamp(end_time),
+            "start_time": _format_timestamp(source_start.to_pydatetime()),
+            "end_time": _format_timestamp(source_end.to_pydatetime()),
         }
 
     def _read_frame(
@@ -295,11 +308,10 @@ class IjpRepository:
         values = frame.iloc[:, 0].dropna().astype(str).str.strip()
         return tuple(sorted(value for value in values.unique() if value))
 
-    @staticmethod
-    def _shape_details(frame: pd.DataFrame, query: IjpQuery) -> pd.DataFrame:
+    def _shape_details(self, frame: pd.DataFrame, query: IjpQuery) -> pd.DataFrame:
         if frame.empty:
             return frame.reindex(columns=DETAIL_COLUMNS)
-        shaped = frame.copy()
+        shaped = self._data_forward_policy.shift_frame(frame, ("print_time",))
         shaped["panel_id"] = shaped["image_name"].map(extract_panel_id)
         shaped["image_url"] = shaped["image_name"].map(build_image_url)
         shaped["panel_location"] = [

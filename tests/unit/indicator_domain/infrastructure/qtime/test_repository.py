@@ -64,7 +64,7 @@ def test_fetch_details_uses_bound_filters_and_returns_the_report_contract(monkey
                     "T_STEP": "15600",
                     "Q_SPEC": "2.5",
                     "WAIT_TIME": "0.41",
-                    "TIMEKEY": "20260802010000",
+                    "TIMEKEY": "20260729010000",
                     "SHOP": "ARRAY",
                     "PRODCODE": "M626",
                 }
@@ -86,8 +86,8 @@ def test_fetch_details_uses_bound_filters_and_returns_the_report_contract(monkey
 
     assert captured["engine"] is engine
     assert captured["params"] == {
-        "start_time": "20260802010000",
-        "end_time": "20260901010000",
+        "start_time": "20260729010000",
+        "end_time": "20260828010000",
         "shop": "ARRAY",
         "step_descriptions": ("M3_DE->M3_STR", "M4_DE->M4_STR"),
         "products": ("M626", "M626'); DROP TABLE qtime; --"),
@@ -109,6 +109,7 @@ def test_fetch_details_uses_bound_filters_and_returns_the_report_contract(monkey
     ]
     assert result.loc[0, "q_spec"] == 2.5
     assert result.loc[0, "wait_time"] == 0.41
+    assert result.loc[0, "timekey"] == "20260802010000"
 
 
 def test_database_failures_are_exposed_as_a_safe_domain_error(monkeypatch) -> None:

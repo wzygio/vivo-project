@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.data_loader import (
@@ -58,6 +57,7 @@ class AoiRsSnapshotRepository:
         self.pass_through_loader = pass_through_loader
         self.spec_loader = spec_loader
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
+        self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def get_rs_details(
         self,
@@ -82,7 +82,9 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": (end_timestamp - relativedelta(months=3)).strftime("%Y-%m-%d"),
+                    "start_date": self.data_forward_policy.snapshot_start(
+                        end_timestamp
+                    ).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -120,7 +122,9 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": (end_timestamp - relativedelta(months=3)).strftime("%Y-%m-%d"),
+                    "start_date": self.data_forward_policy.snapshot_start(
+                        end_timestamp
+                    ).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -151,7 +155,9 @@ class AoiRsSnapshotRepository:
         end_timestamp = pd.Timestamp(query.end_date)
         loader_query = query.model_copy(
             update={
-                "start_date": (end_timestamp - relativedelta(months=3)).strftime("%Y-%m-%d"),
+                "start_date": self.data_forward_policy.snapshot_start(
+                    end_timestamp
+                ).strftime("%Y-%m-%d"),
             }
         )
         try:
@@ -307,12 +313,16 @@ class AoiRsSnapshotRepository:
             snapshot_temp.unlink(missing_ok=True)
             metadata_temp.unlink(missing_ok=True)
 
-    @staticmethod
-    def _filter_window(details: pd.DataFrame, query: AoiRsQueryConfig) -> pd.DataFrame:
+    def _filter_window(
+        self,
+        details: pd.DataFrame,
+        query: AoiRsQueryConfig,
+    ) -> pd.DataFrame:
+        displayed = self.data_forward_policy.shift_frame(details, ("start_time",))
         start = pd.Timestamp(query.start_date)
         end = pd.Timestamp(query.end_date) + pd.Timedelta(days=1)
-        start_time = pd.to_datetime(details["start_time"], errors="coerce")
-        return details[start_time.ge(start) & start_time.lt(end)].reset_index(drop=True)
+        start_time = pd.to_datetime(displayed["start_time"], errors="coerce")
+        return displayed[start_time.ge(start) & start_time.lt(end)].reset_index(drop=True)
 
     @classmethod
     def _lock_for(cls, snapshot_path: Path) -> threading.Lock:

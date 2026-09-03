@@ -137,6 +137,6 @@ def test_report_service_prefers_real_snapshot_and_fills_its_gaps_from_fabricatio
     assert view_model.report_df.loc[0, "原始测量值"] == real_value
     assert measured["原始测量值"].notna().all()
     assert measured["使用进度"].max() <= runtime.alert_policy.display_progress_max_ratio * 100
-    assert view_model.last_update == str(as_of)
+    assert view_model.last_update == str(as_of + pd.Timedelta(days=4))
     assert view_model.normal_count > 0
     assert output_path.name.startswith("part_life_fabricated_")

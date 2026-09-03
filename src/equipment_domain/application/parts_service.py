@@ -115,6 +115,15 @@ class PartsReportService:
             max_age_days=runtime_config.measurement_max_age_days,
         )
         fabricated_snapshot_df = load_fabricated_part_life_snapshot(spec_df)
+        data_forward_policy = ConfigLoader.get_data_forward_policy()
+        snapshot_df = data_forward_policy.shift_frame(
+            snapshot_df,
+            ("glass_start_time",),
+        )
+        fabricated_snapshot_df = data_forward_policy.shift_frame(
+            fabricated_snapshot_df,
+            ("glass_start_time",),
+        )
 
         # 3. 真实记录优先；仅真实缺失时使用独立仿造快照。
         report_df = build_and_match_all(

@@ -107,6 +107,7 @@ available_factories = MONITOR_FACTORY_OPTIONS
 product_revisions = {
     prod: get_product_cache_revision(prod) for prod in available_products
 }
+data_forward_signature = ConfigLoader.get_data_forward_policy().signature
 try:
     decision_signatures = {
         prod: {
@@ -147,7 +148,10 @@ with st.spinner("正在加载 ALL 监控数据..."):
         time_type='MIXED',
         force_compliant=True,
         data_type_filter="ALL",
-        snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
+        snapshot_signature=(
+            f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}:"
+            f"{data_forward_signature}"
+        ),
         product_revisions=product_revisions,
         decision_signatures=decision_signatures,
     )
@@ -181,7 +185,10 @@ if is_admin:
         db_manager=db_manager,
         query_config_json=query_config_all.model_dump_json(),
         filter_state=filter_state,
-        snapshot_signature=f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}",
+        snapshot_signature=(
+            f"{MONITOR_PAGE_CACHE_SIGNATURE}:{get_compliance_file_signature()}:"
+            f"{data_forward_signature}"
+        ),
         is_admin=is_admin,
         product_revisions=product_revisions,
         decision_signatures=decision_signatures,

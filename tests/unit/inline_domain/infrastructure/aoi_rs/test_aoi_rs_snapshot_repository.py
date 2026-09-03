@@ -27,7 +27,7 @@ def _details() -> pd.DataFrame:
             {
                 "factory": "ARRAY",
                 "prod_code": "M678",
-                "start_time": pd.Timestamp("2026-08-10 08:00:00"),
+                "start_time": pd.Timestamp("2026-08-06 08:00:00"),
                 "sheet_id": "SHT-A01",
                 "lot_id": "LOT-A1",
                 "step_id": "11629",
@@ -44,7 +44,7 @@ def _pass_through() -> pd.DataFrame:
             {
                 "factory": "ARRAY",
                 "prod_code": "M678",
-                "start_time": pd.Timestamp("2026-08-10 07:00:00"),
+                "start_time": pd.Timestamp("2026-08-06 07:00:00"),
                 "sheet_id": "SHT-A01",
                 "lot_id": "LOT-A1",
                 "step_id": "11629",
@@ -72,10 +72,14 @@ def test_rs_details_reuse_fresh_product_snapshot_without_reloading_database(
     second = repository.get_rs_details(_query())
 
     assert loader_calls == [loader_calls[0]]
-    assert loader_calls[0].start_date == "2026-05-10"
+    assert loader_calls[0].start_date == "2026-05-01"
     assert loader_calls[0].end_date == "2026-08-10"
     pd.testing.assert_frame_equal(first, second)
-    assert (tmp_path / "aoi_rs_details_M678.parquet").exists()
+    assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-10 08:00:00")
+    snapshot_path = tmp_path / "aoi_rs_details_M678.parquet"
+    assert pd.read_parquet(snapshot_path).loc[0, "start_time"] == pd.Timestamp(
+        "2026-08-06 08:00:00"
+    )
 
 
 def test_pass_through_reuses_its_own_fresh_product_snapshot(

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 import streamlit as st
+from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.config_model import AppConfig
 from app.manager.session_manager import SessionManager
 
@@ -62,7 +63,11 @@ def build_product_cache_signature(
         normalized_product,
         revision_dir=revision_dir,
     )
-    return f"{base_signature}|product={normalized_product}|revision={revision}"
+    data_forward_signature = ConfigLoader.get_data_forward_policy().signature
+    return (
+        f"{base_signature}|product={normalized_product}|revision={revision}"
+        f"|data_forward={data_forward_signature}"
+    )
 
 
 def invalidate_page_cache(

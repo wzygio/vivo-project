@@ -107,6 +107,10 @@ class InlineScrapRepository:
                 if col not in df.columns:
                     df[col] = np.nan
 
+            df = ConfigLoader.get_data_forward_policy().shift_frame(
+                df,
+                ("sheet_start_time",),
+            )
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
             return df
 
