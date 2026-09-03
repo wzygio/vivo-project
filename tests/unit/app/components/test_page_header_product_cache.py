@@ -110,6 +110,7 @@ class _StreamlitStub:
         self.query_params = {"admin": "true"}
         self.toasts: list[str] = []
         self.button_callbacks: dict[str, object] = {}
+        self.selectbox_labels: list[str] = []
         self.cache_data = SimpleNamespace(clear=lambda: None)
         self.cache_resource = SimpleNamespace(clear=lambda: None)
 
@@ -129,6 +130,7 @@ class _StreamlitStub:
         return _ContainerStub()
 
     def selectbox(self, label, *, options, index=0, **kwargs):
+        self.selectbox_labels.append(label)
         return options[index]
 
     def button(self, label, *, key=None, on_click=None, **kwargs) -> None:
@@ -389,3 +391,105 @@ def test_refresh_data_db_failure_with_snapshot_fallback_keeps_revision(
     assert "inline_view_model_1" in st_stub.session_state
     assert "❌ 数据库连接或快照更新失败，已保留当前缓存视图。" in st_stub.toasts
     assert "✅ L1 快照与 L2 缓存已刷新。" not in st_stub.toasts
+
+
+def test_show_product_filter_false_skips_product_selectbox(monkeypatch) -> None:
+    """show_product_filter=False：无产品筛选框，管理员操作列保持正常布局。"""
+    st_stub = _StreamlitStub()
+    monkeypatch.setattr(page_header, "st", st_stub)
+    monkeypatch.setattr(
+        page_header,
+        "detect_project_changes",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(SessionManager, "AVAILABLE_PRODUCTS", ["M626"])
+    config = SimpleNamespace(data_source=SimpleNamespace(product_code="M626"))
+
+    page_header.render_page_header(
+        title="测试页",
+        config=config,
+        show_product_filter=False,
+    )
+
+    assert st_stub.selectbox_labels == []
+    assert "btn_refresh_测试页" in st_stub.button_callbacks
+    assert "btn_clear_测试页" in st_stub.button_callbacks
+
+
+def test_show_product_filter_default_keeps_product_selectbox(monkeypatch) -> None:
+    """默认行为不变：其余页面仍渲染产品筛选 selectbox。"""
+    st_stub = _StreamlitStub()
+    monkeypatch.setattr(page_header, "st", st_stub)
+    monkeypatch.setattr(
+        page_header,
+        "detect_project_changes",
+        lambda *args, **kwargs: False,
+    )
+    monkeypatch.setattr(SessionManager, "AVAILABLE_PRODUCTS", ["M626"])
+    config = SimpleNamespace(data_source=SimpleNamespace(product_code="M626"))
+
+    page_header.render_page_header(title="测试页", config=config)
+
+    assert st_stub.selectbox_labels == ["📦 当前产品型号"]
+
+
+def test_hard_reset_clears_alert_matrix_loaded_state(monkeypatch) -> None:
+    """「刷新缓存」后矩阵已加载状态被清除（页面回到按钮门控）。"""
+    st_stub = _StreamlitStub(
+        {"alert_matrix_board_loaded": True, "unrelated_key": 1}
+    )
+    monkeypatch.setattr(page_header, "st", st_stub)
+    fake_reloader = types.ModuleType("app.utils.reloader")
+    fake_reloader.deep_reload_modules = lambda: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "app.utils.reloader", fake_reloader)
+
+    page_header.perform_hard_reset([], None)
+
+    assert "alert_matrix_board_loaded" not in st_stub.session_state
+    assert st_stub.session_state["unrelated_key"] == 1
+
+
+def test_refresh_data_clears_alert_matrix_loaded_state(monkeypatch) -> None:
+    """「刷新数据」成功后同样清除矩阵已加载状态。"""
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[lambda: True],
+        cached_funcs=[_CachedFunctionStub()],
+        product_cache_scope=None,
+        session_state={"alert_matrix_board_loaded": True},
+    )
+
+    refresh_callback()
+
+    assert "alert_matrix_board_loaded" not in st_stub.session_state
+
+
+def test_hard_reset_clears_monitor_query_state(monkeypatch) -> None:
+    """「刷新缓存」后超规片自动预警的查询已提交状态被清除（回到查询门控）。"""
+    st_stub = _StreamlitStub(
+        {"monitor_query_signature": ("ALL", ("M678",), ("ARRAY",)), "unrelated_key": 1}
+    )
+    monkeypatch.setattr(page_header, "st", st_stub)
+    fake_reloader = types.ModuleType("app.utils.reloader")
+    fake_reloader.deep_reload_modules = lambda: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "app.utils.reloader", fake_reloader)
+
+    page_header.perform_hard_reset([], None)
+
+    assert "monitor_query_signature" not in st_stub.session_state
+    assert st_stub.session_state["unrelated_key"] == 1
+
+
+def test_refresh_data_clears_monitor_query_state(monkeypatch) -> None:
+    """「刷新数据」成功后同样清除查询已提交状态。"""
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[lambda: True],
+        cached_funcs=[_CachedFunctionStub()],
+        product_cache_scope=None,
+        session_state={"monitor_query_signature": ("ALL", ("M678",), ("ARRAY",))},
+    )
+
+    refresh_callback()
+
+    assert "monitor_query_signature" not in st_stub.session_state

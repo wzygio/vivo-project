@@ -25,6 +25,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from pydantic import ValidationError
 
 from app.components.page_header import (
     build_product_cache_signature,
@@ -38,7 +39,7 @@ from app.sections.inline_domain.monitor.alert_matrix_service import (
 from app.sections.inline_domain.spc.spc_dashboard import get_default_spc_start_date
 from src.indicator_domain.application.qtime.cached_monitoring import (
     MISSING_DECISION_FILE_STAT,
-    get_cached_monitoring,
+    get_cached_shop_monitoring,
     get_qtime_decision_file_stat,
 )
 from src.indicator_domain.composition import build_qtime_service
@@ -113,8 +114,13 @@ def load_all_product_qtime_monitoring(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """全产品 Q-Time (details, alerts)：3 个 shop 各查一次（全站点）后 union。
 
-    矩阵 payload（按 prodcode 拆分）与点击详情（按产品过滤）共用此入口，
-    均命中 ``get_cached_monitoring`` 的 L2 缓存，不会重复打库。
+    统一走 ``get_cached_shop_monitoring`` 公共入口：矩阵 payload（按 prodcode
+    拆分）、点击详情（按产品过滤）与 Q-Time 页面（页内内存过滤）命中同一组
+    (shop, 全站点, 全产品) L2 缓存条目，不会重复打库。厂别无站点时
+    ``QTimeQuery`` 校验上抛 ValidationError，维持既有 skip 语义。
+
+    alerts 帧在 union 时按 shop 打标（``assign`` 返回新帧，不污染共享缓存
+    对象）：ARRAY/OLED/TP 本身即厂别，供矩阵单元格 ``alert_factories`` 提取。
     """
     service = build_qtime_service(db_manager)
     stat = get_qtime_decision_file_stat(service.decoration_path)
@@ -122,23 +128,18 @@ def load_all_product_qtime_monitoring(
     details_frames: list[pd.DataFrame] = []
     alerts_frames: list[pd.DataFrame] = []
     for shop in QTIME_SHOPS:
-        options = service.get_filter_options(shop)  # type: ignore[arg-type]
-        step_descriptions = tuple(
-            option.step_desc for option in options["step_options"]
-        )
-        if not step_descriptions:
-            continue
-        result = get_cached_monitoring(
-            service,
-            shop=shop,  # type: ignore[arg-type]
-            step_descriptions=step_descriptions,
-            products=(),
-            as_of=reference_date,
-            decision_mtime_ns=mtime_ns,
-            decision_size=size,
-        )
+        try:
+            result = get_cached_shop_monitoring(
+                service,
+                shop=shop,  # type: ignore[arg-type]
+                as_of=reference_date,
+                decision_mtime_ns=mtime_ns,
+                decision_size=size,
+            )
+        except ValidationError:
+            continue  # 厂别无站点：与既有 skip 行为一致
         details_frames.append(result.details)
-        alerts_frames.append(result.alerts)
+        alerts_frames.append(result.alerts.assign(shop=shop))
     details_df = (
         pd.concat(details_frames, ignore_index=True) if details_frames else pd.DataFrame()
     )

@@ -6,7 +6,7 @@
 - 再次打开同单元格命中 st.cache_data（loader 不重算）；
 - 点击 🟢/⚪/⬜ 只显示说明文案、不产生详情计算；
 - 详情加载失败降级为 error，不影响矩阵；
-- 矩阵整体失败降级为 info；
+- 矩阵整体失败降级为 warning（渲染面不出现 st.info）；
 - sheet OOS / CPK / yield 详情的渲染管线接线（chart key 前缀 matrix_detail）。
 """
 
@@ -181,7 +181,10 @@ def test_matrix_renders_title_legend_groups_and_four_states() -> None:
     app = _new_app("render-basic").run()
 
     assert not app.exception
-    assert any("预警矩阵（上一周 2026-W35）" in m.value for m in app.markdown)
+    # 矩阵内部不再渲染「预警矩阵」标题（页面模块 subheader 承担）；
+    # 渲染面不出现 st.info 提醒条（UI 优化轮次禁令）
+    assert not any("预警矩阵（上一周" in m.value for m in app.markdown)
+    assert len(app.info) == 0
 
     captions = [c.value for c in app.caption]
     assert any("🟢" in c and "🔴" in c and "⚪" in c and "⬜" in c for c in captions)
@@ -214,7 +217,10 @@ def test_error_cell_tooltip_carries_message() -> None:
     assert "修饰工作簿不存在" in no_data_button.help
 
 
-def test_board_degrades_to_info_when_payload_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_board_degrades_to_warning_when_payload_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """整板加载失败降级为 st.warning（错误必须可见），不阻断页面其余部分。"""
     def _raise(**_kwargs):
         raise RuntimeError("签名采集异常")
 
@@ -224,7 +230,8 @@ def test_board_degrades_to_info_when_payload_fails(monkeypatch: pytest.MonkeyPat
     app.run()
 
     assert not app.exception
-    assert any("预警矩阵暂时不可用" in m.value for m in app.info)
+    assert len(app.info) == 0
+    assert any("预警矩阵暂时不可用" in w.value for w in app.warning)
 
 
 # ---------------------------------------------------------------------------
@@ -501,3 +508,99 @@ def test_detail_bundle_cache_key_semantics() -> None:
     alert_matrix_detail.get_cached_matrix_detail(**{**kwargs, "signature": "sig-b"})
     assert len(calls) == 2  # 签名变化触发重算
     alert_matrix_detail._cached_matrix_detail_bundle.clear()
+
+
+# ---------------------------------------------------------------------------
+# Phase 8：矩阵区筛选条（监控类型切行 / 产品切列 / 厂别切单元格状态）
+# ---------------------------------------------------------------------------
+def _cell_buttons(app: AppTest) -> dict:
+    return {
+        b.key: b for b in app.button if b.key and b.key.startswith("matrix_cell_")
+    }
+
+
+def test_matrix_filter_bar_renders_with_defaults() -> None:
+    app = _new_app("filter-bar-defaults").run()
+
+    assert not app.exception
+    type_select = app.selectbox(key="alert_matrix_data_type")
+    assert type_select.value == "ALL"
+    product_select = app.multiselect(key="alert_matrix_products")
+    assert list(product_select.value) == PRODUCTS
+    factory_select = app.multiselect(key="alert_matrix_factories")
+    assert list(factory_select.value) == ["ARRAY", "OLED", "TP"]
+    # 默认全选：矩阵行列完整
+    assert len(_cell_buttons(app)) == ROW_COUNT * len(PRODUCTS)
+
+
+def test_product_filter_slices_columns_client_side() -> None:
+    app = _new_app("filter-product").run()
+    app.multiselect(key="alert_matrix_products").set_value(["M678"]).run()
+
+    assert not app.exception
+    buttons = _cell_buttons(app)
+    assert len(buttons) == ROW_COUNT
+    assert all(key.endswith("_M678") for key in buttons)
+
+
+def test_monitor_type_filter_slices_rows_client_side() -> None:
+    app = _new_app("filter-type").run()
+    app.selectbox(key="alert_matrix_data_type").set_value("AOI").run()
+
+    assert not app.exception
+    buttons = _cell_buttons(app)
+    # AOI 映射 aoi_rs + aoi_tt 两行
+    assert len(buttons) == 2 * len(PRODUCTS)
+    assert all(
+        key.startswith("matrix_cell_aoi_rs_sheet_oos_")
+        or key.startswith("matrix_cell_aoi_tt_sheet_oos_")
+        for key in buttons
+    )
+
+    app.selectbox(key="alert_matrix_data_type").set_value("Q-Time").run()
+    buttons = _cell_buttons(app)
+    assert len(buttons) == len(PRODUCTS)
+    assert all(key.startswith("matrix_cell_qtime_sheet_oos_") for key in buttons)
+
+    app.selectbox(key="alert_matrix_data_type").set_value("Yield").run()
+    buttons = _cell_buttons(app)
+    assert len(buttons) == 2 * len(PRODUCTS)
+
+
+def test_factory_filter_slices_alert_cell_state() -> None:
+    """厂别切片：选中厂别与 alert_factories 交集为空则 🔴→🟢；不支持行保持原状态。"""
+    app = _new_app("filter-factory").run()
+    app.multiselect(key="alert_matrix_factories").set_value(["ARRAY"]).run()
+
+    assert not app.exception
+    buttons = _cell_buttons(app)
+    # qtime M678 alert_factories=["OLED"] → 交集空 → 🟢
+    assert buttons[matrix_cell_button_key("qtime_sheet_oos", "M678")].label == "🟢"
+    # spc M678 alert_factories=["ARRAY","TP"] → 交集非空 → 保持 🔴
+    assert buttons[matrix_cell_button_key("spc_sheet_oos", "M678")].label == "🔴"
+    # spc_cpk M678 alert_factories=["TP"] → 🟢
+    assert buttons[matrix_cell_button_key("spc_cpk_trend", "M678")].label == "🟢"
+    # yield 趋势波动行不支持厂别细分 → 保持原状态 🔴
+    assert (
+        buttons[matrix_cell_button_key("yield_trend_fluctuation", "M678")].label == "🔴"
+    )
+
+
+def test_legend_notes_rows_without_factory_breakdown() -> None:
+    app = _new_app("legend-factory-note").run()
+
+    captions = [c.value for c in app.caption]
+    assert any(
+        "不支持厂别细分" in c and "Yield 趋势波动" in c and "Yield 单片异常" in c
+        for c in captions
+    )
+
+
+def test_empty_product_selection_shows_caption() -> None:
+    app = _new_app("filter-empty-product").run()
+    app.multiselect(key="alert_matrix_products").set_value([]).run()
+
+    assert not app.exception
+    assert not _cell_buttons(app)
+    assert len(app.info) == 0
+    assert any("产品型号" in c.value for c in app.caption)

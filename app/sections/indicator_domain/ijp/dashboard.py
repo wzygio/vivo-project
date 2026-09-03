@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pandas as pd
 from pydantic import ValidationError
@@ -25,6 +25,21 @@ TABLE_COLUMN_MAP = {
 }
 RESULT_STATE_KEY = "ijp_report_result"
 DETAIL_LIMIT = 5000
+TARGET_HELP = (
+    "在“OLED RS Overflow By天”图中绘制一条水平参考线。"
+    "它只用于目视对照，不筛选数据，也不会触发告警。"
+)
+
+
+def date_range_to_datetimes(
+    start_date: date,
+    end_date: date,
+) -> tuple[datetime, datetime]:
+    """Convert inclusive calendar dates to their complete datetime bounds."""
+    return (
+        datetime.combine(start_date, time.min),
+        datetime.combine(end_date, time.max),
+    )
 
 
 def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
@@ -49,26 +64,27 @@ def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
 def render_ijp_dashboard(service: IjpReportService) -> None:
     """Render filters, gated query results, and explicit operational states."""
     st.subheader("OLED IJP 溢流监控", anchor=False, text_alignment="center")
-    today_seven = datetime.now().replace(hour=7, minute=0, second=0, microsecond=0)
-    default_end = today_seven
-    default_start = today_seven - timedelta(days=1)
+    default_end = date.today()
+    default_start = default_end - timedelta(days=1)
 
     with st.container(border=True):
         start_column, end_column, target_column, search_column = st.columns(
             [1.2, 1.2, 0.8, 0.6]
         )
         with start_column:
-            start_time = st.datetime_input(
-                "开始时间",
+            start_date = st.date_input(
+                "开始日期",
                 value=default_start,
                 key="ijp_start_time",
+                format="YYYY/MM/DD",
                 width="stretch",
             )
         with end_column:
-            end_time = st.datetime_input(
-                "结束时间",
+            end_date = st.date_input(
+                "结束日期",
                 value=default_end,
                 key="ijp_end_time",
+                format="YYYY/MM/DD",
                 width="stretch",
             )
         with target_column:
@@ -78,6 +94,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
                 min_value=0.0,
                 max_value=100.0,
                 placeholder="不填不画",
+                help=TARGET_HELP,
                 key="ijp_target",
                 width="stretch",
             )
@@ -90,6 +107,11 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
                 width="stretch",
                 key="ijp_search",
             )
+
+        start_time, end_time = date_range_to_datetimes(start_date, end_date)
+        if end_date < start_date:
+            st.error("结束日期不能早于开始日期")
+            return
 
         try:
             options = service.get_filter_options(
@@ -104,6 +126,10 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
 
         code_column, name_column, type_column, glass_column = st.columns(4)
         with code_column:
+            _retain_available_multiselect_values(
+                "ijp_product_codes",
+                options["product_codes"],
+            )
             product_codes = st.multiselect(
                 "产品型号", options=options["product_codes"], key="ijp_product_codes"
             )
@@ -267,6 +293,18 @@ def _run_query(
 
 def _filter_signature(*values: object) -> tuple[object, ...]:
     return tuple(tuple(value) if isinstance(value, list) else value for value in values)
+
+
+def _retain_available_multiselect_values(
+    key: str,
+    options: tuple[str, ...],
+) -> None:
+    """Drop stale widget values that are no longer present in its option set."""
+    current = tuple(st.session_state.get(key, ()))
+    available = set(options)
+    retained = [value for value in current if value in available]
+    if list(current) != retained:
+        st.session_state[key] = retained
 
 
 def _zebra_row(row: pd.Series) -> list[str]:

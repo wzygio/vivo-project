@@ -2,6 +2,9 @@
 
 - 行清单与判据全部复用既有实现（PRD §3.1），本模块只做"记录集合 → 四态"映射；
 - 单元格四态契约：ok（达标）/ alert（不达标）/ no_data（无数据）/ error（加载失败）；
+  alert 单元格附带 ``alert_factories``（预警记录涉及的厂别，排序去重），
+  供矩阵厂别筛选做客户端切片；无厂别信息的行（yield 两行）在行声明上以
+  ``supports_factory_filter=False`` 标记；
 - 时间窗统一为上一 ISO 周（半开 [上周一, 本周一)）；yield 趋势波动为例外
   （period 制口径，探测记录非空即 alert，与既有看板一致）；
 - 只读：sheet OOS 行经 ``load_sheet_oos_decoration`` 只读加载，绝不调用
@@ -97,21 +100,42 @@ class AlertMatrixContext:
 
 @dataclass(frozen=True)
 class AlertMatrixRow:
-    """矩阵行声明：显示信息 + 单元格 evaluator（(prod_code, context) -> cell dict）。"""
+    """矩阵行声明：显示信息 + 单元格 evaluator（(prod_code, context) -> cell dict）。
+
+    ``supports_factory_filter``：该行预警记录是否携带厂别信息（矩阵厂别筛选做
+    客户端单元格切片）；False 的行（yield 两行）在厂别筛选时保持原状态。
+    """
 
     row_key: str
     display_name: str
     module_group: str
     time_scope: str
-    evaluator: Callable[[str, AlertMatrixContext], dict[str, str]]
+    evaluator: Callable[[str, AlertMatrixContext], dict[str, Any]]
+    supports_factory_filter: bool = True
 
 
-def _cell(row_key: str, prod_code: str, state: str, message: str = "") -> dict[str, str]:
+def _cell(
+    row_key: str,
+    prod_code: str,
+    state: str,
+    message: str = "",
+    alert_factories: Iterable[str] = (),
+) -> dict[str, Any]:
     return {
         "state": state,
         "detail_key": f"{row_key}|{prod_code}",
         "message": message,
+        # 有预警记录涉及的厂别列表（排序去重）；非 alert 态或无厂别信息时为空
+        "alert_factories": list(alert_factories),
     }
+
+
+def _extract_factories(frame: pd.DataFrame | None, column: str) -> tuple[str, ...]:
+    """从预警记录帧提取厂别列表：排序去重、大小写归一；缺列/空帧返回空。"""
+    if frame is None or frame.empty or column not in frame.columns:
+        return ()
+    values = {str(value).strip().upper() for value in frame[column].dropna()}
+    return tuple(sorted(value for value in values if value))
 
 
 def _error_message(exc: Exception) -> str:
@@ -124,11 +148,17 @@ def _error_message(exc: Exception) -> str:
     return f"加载失败（{type(exc).__name__}）"
 
 
-def _alerts_cell(row_key: str, prod_code: str, has_alerts: bool) -> dict[str, str]:
+def _alerts_cell(
+    row_key: str,
+    prod_code: str,
+    has_alerts: bool,
+    alert_factories: Iterable[str] = (),
+) -> dict[str, Any]:
     return _cell(
         row_key,
         prod_code,
         CELL_STATE_ALERT if has_alerts else CELL_STATE_OK,
+        alert_factories=alert_factories if has_alerts else (),
     )
 
 
@@ -168,7 +198,12 @@ def _sheet_oos_evaluator(
             time_column=time_column,
             reference_date=context.reference_date,
         )
-        return _alerts_cell(row_key, prod_code, not alerts_df.empty)
+        return _alerts_cell(
+            row_key,
+            prod_code,
+            not alerts_df.empty,
+            _extract_factories(alerts_df, "factory"),
+        )
 
     return evaluate
 
@@ -188,7 +223,10 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
         threshold=CPK_ALERT_THRESHOLD,
         reference_date=context.reference_date,
     )
-    return _alerts_cell(row_key, prod_code, not alerts_df.empty)
+    # CPK 预警记录为中文列（厂别/站点/参数名称/超规周次/CPK值）
+    return _alerts_cell(
+        row_key, prod_code, not alerts_df.empty, _extract_factories(alerts_df, "厂别")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -273,14 +311,21 @@ def _evaluate_qtime_sheet_oos(prod_code: str, context: AlertMatrixContext) -> di
     if prod_alerts.empty:
         return _cell(row_key, prod_code, CELL_STATE_OK)
     times = _parse_qtime_timekey(prod_alerts["timekey"])
-    has_weekly_alert = bool(((times >= start) & (times < end)).any())
-    return _alerts_cell(row_key, prod_code, has_weekly_alert)
+    weekly_mask = (times >= start) & (times < end)
+    weekly_alerts = prod_alerts.loc[weekly_mask]
+    # shop 打标列由 load_all_product_qtime_monitoring 在 union 时写入（shop 即厂别）
+    return _alerts_cell(
+        row_key,
+        prod_code,
+        not weekly_alerts.empty,
+        _extract_factories(weekly_alerts, "shop"),
+    )
 
 
 def _guarded_evaluator(
     row_key: str,
-    evaluator: Callable[[str, AlertMatrixContext], dict[str, str]],
-) -> Callable[[str, AlertMatrixContext], dict[str, str]]:
+    evaluator: Callable[[str, AlertMatrixContext], dict[str, Any]],
+) -> Callable[[str, AlertMatrixContext], dict[str, Any]]:
     """给 evaluator 装上单元格级降级：任何异常 → error 态，非法状态 → error 态。"""
 
     def evaluate(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
@@ -381,6 +426,8 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
         module_group="yield",
         time_scope=_PREVIOUS_WEEK_SCOPE,
         evaluator=_guarded_evaluator("yield_lot_oos", _evaluate_yield_lot_oos),
+        # compute_lot_oos_records 记录无厂别列 → 不支持厂别细分
+        supports_factory_filter=False,
     ),
     AlertMatrixRow(
         row_key="yield_trend_fluctuation",
@@ -388,6 +435,8 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
         module_group="yield",
         time_scope="月/周环比（period 制）",
         evaluator=_guarded_evaluator("yield_trend_fluctuation", _evaluate_yield_trend),
+        # get_dashboard_alert_records 记录无厂别列 → 不支持厂别细分
+        supports_factory_filter=False,
     ),
     AlertMatrixRow(
         row_key="qtime_sheet_oos",
@@ -408,7 +457,7 @@ def _evaluate_cell(
     row: AlertMatrixRow,
     prod_code: str,
     context: AlertMatrixContext,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """单 (行, 产品) 求值；evaluator 已带降级守卫（见 _guarded_evaluator）。"""
     return row.evaluator(prod_code, context)
 
@@ -435,7 +484,7 @@ def build_alert_matrix_payload(
     week_start, week_end = previous_iso_week_range(reference)
     iso = week_start.isocalendar()
 
-    cells: dict[tuple[str, str], dict[str, str]] = {}
+    cells: dict[tuple[str, str], dict[str, Any]] = {}
     for row in MATRIX_ROWS:
         for prod_code in product_list:
             cells[(row.row_key, prod_code)] = _evaluate_cell(row, prod_code, context)
@@ -448,6 +497,7 @@ def build_alert_matrix_payload(
                 "display_name": row.display_name,
                 "module_group": row.module_group,
                 "time_scope": row.time_scope,
+                "factory_filter_supported": row.supports_factory_filter,
             }
             for row in MATRIX_ROWS
         ],

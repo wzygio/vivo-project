@@ -68,6 +68,48 @@ def render_monitor_control_panel(available_products: list[str], available_factor
     
     return MonitorFilterState(selected_products=prods, selected_factories=facs, data_type_filter=data_type)
 
+
+# --------------------------------------------------------------------------
+# 「查询」门控（2026-09-03 需求：页面打开不自动全量加载）
+# --------------------------------------------------------------------------
+# 已提交筛选签名的 session_state 键；perform_hard_reset 阶段 4 与
+# _refresh_data_callback（app/components/page_header.py）负责清除。
+MONITOR_QUERY_SIGNATURE_KEY = "monitor_query_signature"
+
+
+def monitor_filter_signature(filter_state: MonitorFilterState) -> tuple:
+    """当前筛选条件的确定性签名：任一维度变化即产生新签名。"""
+    return (
+        str(filter_state.data_type_filter),
+        tuple(sorted(str(prod) for prod in filter_state.selected_products)),
+        tuple(sorted(str(factory) for factory in filter_state.selected_factories)),
+    )
+
+
+def _submit_monitor_query(signature: tuple) -> None:
+    st.session_state[MONITOR_QUERY_SIGNATURE_KEY] = signature
+
+
+def render_monitor_query_gate(filter_state: MonitorFilterState) -> bool:
+    """渲染「查询」主按钮并判定当前筛选签名是否已提交。
+
+    未提交（含筛选变更后签名过期）时静默返回 False——不渲染任何说明文案，
+    门控语义由「查询」按钮本身承担（2026-09-03 UI 优化轮次：本页渲染面
+    禁用 st.info 提醒条）；调用方不得执行签名预算与数据加载，避免展示与
+    筛选不一致的旧数据（仿 Q-Time 页签名过期模式）。已提交状态普通 rerun 保持。
+    """
+    signature = monitor_filter_signature(filter_state)
+    st.button(
+        "🔍 查询",
+        type="primary",
+        key="btn_monitor_query_submit",
+        on_click=_submit_monitor_query,
+        args=(signature,),
+        help="按当前筛选条件加载超规片自动预警数据（签名预算 + 全量监控数据）。",
+    )
+    stored = st.session_state.get(MONITOR_QUERY_SIGNATURE_KEY)
+    return stored == signature
+
 # =========================================================================
 # 大盘汇总图 (Chart)
 # =========================================================================
@@ -570,7 +612,7 @@ def render_alarm_detail_tables(
 
     monitor_types = _selected_alarm_monitor_types(filter_state.data_type_filter)
     if not monitor_types:
-        st.info("当前监控类型暂无报警明细。")
+        st.caption("当前监控类型暂无报警明细。")
         return
 
     has_any = False
@@ -591,7 +633,7 @@ def render_alarm_detail_tables(
             view_df = _filter_alarm_detail_by_status(type_df, selected_statuses)
 
             if view_df.empty:
-                st.info("当前筛选条件下无报警明细。")
+                st.caption("当前筛选条件下无报警明细。")
                 continue
 
             st.dataframe(
@@ -602,7 +644,7 @@ def render_alarm_detail_tables(
             )
 
     if not has_any:
-        st.info("当前产品、厂别和监控类型下无可展示的报警明细。")
+        st.caption("当前产品、厂别和监控类型下无可展示的报警明细。")
 
 # =========================================================================
 # 数据联动处理引擎 (Data Binding Engine)

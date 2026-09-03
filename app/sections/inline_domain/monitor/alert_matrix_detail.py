@@ -693,7 +693,7 @@ def _render_spc_cpk_detail(
         expanded=True,
     ):
         if alerts_df.empty:
-            st.info("当前已无上一周 CPK 预警（数据可能已更新）。")
+            st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
             return
         st.error(f"检测到 {len(alerts_df)} 条 CPK 预警，请关注。")
         display_df = alerts_df
@@ -746,7 +746,7 @@ def _render_yield_detail(
     )
     with st.expander(title, expanded=True):
         if not records:
-            st.info("当前已无预警记录（数据可能已更新）。")
+            st.caption("当前已无预警记录（数据可能已更新）。")
             return
         st.error(f"检测到 {len(records)} 条预警记录，请关注。")
         st.dataframe(pd.DataFrame(records), hide_index=True, width="stretch")
@@ -784,7 +784,7 @@ def _render_qtime_detail(
     render_qtime_alert_center(alerts_df, total_lots=int(bundle["total_lots"]))
 
     if details_df.empty:
-        st.info("当前产品暂无 Q-Time 明细数据。")
+        st.caption("当前产品暂无 Q-Time 明细数据。")
         return
 
     gate = RenderGate()
@@ -842,7 +842,7 @@ def _render_detail_bundle(
             bundle, row_key=row_key, prod_code=prod_code, memo_base=memo_base
         )
     else:
-        st.info("该行暂不支持详情查看。")
+        st.caption("该行暂不支持详情查看。")
 
 
 def _close_detail() -> None:
@@ -896,13 +896,13 @@ def render_alert_matrix_detail(
             st.success("该产品该项上一周期无预警（达标）。")
             return
         if state == CELL_STATE_NO_DATA:
-            st.info(cell.get("message") or "无数据。")
+            st.caption(cell.get("message") or "无数据。")
             return
         if state == CELL_STATE_ERROR:
             st.warning(f"加载失败：{cell.get('message') or '未知原因'}")
             return
         if state != CELL_STATE_ALERT:
-            st.info(f"当前状态（{state}）无详情可查看。")
+            st.caption(f"当前状态（{state}）无详情可查看。")
             return
 
         # 仅 🔴 单元格进入懒加载：loader 注册表在此才构建。
@@ -911,7 +911,7 @@ def render_alert_matrix_detail(
         )
         loader = active_loaders.get(row_key)
         if loader is None:
-            st.info("该行暂不支持详情查看。")
+            st.caption("该行暂不支持详情查看。")
             return
 
         try:

@@ -94,3 +94,38 @@ def _cached_monitoring(
         products=products,
         as_of=as_of,
     )
+
+
+def get_cached_shop_monitoring(
+    _service: QTimeReportService,
+    *,
+    shop: Shop,
+    as_of: date | None,
+    decision_mtime_ns: int,
+    decision_size: int,
+) -> QTimeMonitoringResult:
+    """厂别级公共入口：该厂别全部站点 + 全产品（products=()）的一次计算。
+
+    矩阵（全产品聚合）与 Q-Time 页面（页内内存过滤）共用此入口，命中
+    ``_cached_monitoring`` 同一组 (shop, 全站点, 全产品) 缓存条目，
+    不新增缓存键维度。无站点（QTimeQuery min_length=1）或取站点失败时
+    错误上抛，由调用方降级（页面 error / 矩阵单元格 ⬜）。
+    """
+    options = _service.get_filter_options(shop)
+    step_descriptions = tuple(
+        option.step_desc for option in options["step_options"]
+    )
+    return get_cached_monitoring(
+        _service,
+        shop=shop,
+        step_descriptions=step_descriptions,
+        products=(),
+        as_of=as_of,
+        decision_mtime_ns=decision_mtime_ns,
+        decision_size=decision_size,
+    )
+
+
+def get_qtime_cached_funcs() -> list:
+    """页头「刷新缓存」需清理的 qtime L2 缓存函数清单（矩阵清单同款模式）。"""
+    return [_cached_monitoring]

@@ -1,10 +1,14 @@
-from datetime import datetime
+from datetime import date, datetime, time
 from pathlib import Path
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
-from app.sections.indicator_domain.ijp.dashboard import build_ijp_table
+from app.sections.indicator_domain.ijp.dashboard import (
+    TARGET_HELP,
+    build_ijp_table,
+    date_range_to_datetimes,
+)
 
 FIXTURE_PATH = (
     Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "ijp_app.py"
@@ -76,6 +80,9 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
     assert app.subheader[0].value == "OLED IJP 溢流监控"
+    assert len(app.date_input) == 2
+    assert not app.datetime_input
+    assert app.number_input(key="ijp_target").help == TARGET_HELP
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
 
@@ -90,11 +97,11 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
 def test_ijp_dashboard_rejects_an_inverted_time_window() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
-    app.datetime_input(key="ijp_start_time").set_value(datetime(2026, 9, 2, 7, 0))
-    app.datetime_input(key="ijp_end_time").set_value(datetime(2026, 9, 1, 7, 0))
+    app.date_input(key="ijp_start_time").set_value(date(2026, 9, 2))
+    app.date_input(key="ijp_end_time").set_value(date(2026, 9, 1))
     app.button(key="ijp_search").click().run()
 
-    assert app.error[0].value == "结束时间不能早于开始时间"
+    assert app.error[0].value == "结束日期不能早于开始日期"
     assert not app.dataframe
 
 
@@ -127,3 +134,13 @@ def test_ijp_dashboard_invalidates_stale_results_when_filters_change() -> None:
 
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
+
+
+def test_date_range_to_datetimes_covers_whole_calendar_days() -> None:
+    start_time, end_time = date_range_to_datetimes(
+        date(2026, 9, 2),
+        date(2026, 9, 3),
+    )
+
+    assert start_time == datetime.combine(date(2026, 9, 2), time.min)
+    assert end_time == datetime.combine(date(2026, 9, 3), time.max)

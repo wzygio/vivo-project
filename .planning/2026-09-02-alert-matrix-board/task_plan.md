@@ -79,9 +79,32 @@
 
 - 验收过程中发现：`app/pages/自动预警看板.py` 缺少其它页面都有的 sys.path bootstrap（pyproject 锚定 + root/src 注入），矩阵引入 `yield_domain` 顶层导入后，在"新进程直接访问该页 URL（未先过 Home）"场景下报 `ModuleNotFoundError: No module named 'yield_domain'`（既有 yield 页面各有 bootstrap 所以从未暴露）。已按 `AOI_RS监控报表.py:1-16` 同款惯例补齐页面头部 bootstrap；`py_compile` 通过，`tests/unit/app` 286 passed / 2 failed（均为基线预存在）。
 
+### Phase 7 — qtime 全产品公共管线 + 页面全产品化 + 矩阵按钮门控（2026-09-03）
+
+- [x] 7.1 qtime 公共管线：`cached_monitoring.py` 新增 `get_cached_shop_monitoring`（厂别全部站点 + products=()，复用 `_cached_monitoring` 同一组缓存键维度）与 `get_qtime_cached_funcs()` 清理清单；矩阵 `load_all_product_qtime_monitoring` 统一走该入口（厂别无站点 ValidationError → 维持 skip）。验证：单元测试 —— 矩阵式调用与页面式调用共享缓存条目（fetch 计数不增）、as_of=None 归一、无站点上抛、取站点失败上抛、清理清单可 clear。【证据：`tests/unit/indicator_domain/application/qtime/test_cached_monitoring.py` 新增 6 项，全文件 16 passed】
+- [x] 7.2 Q-Time 页面全产品化：`render_page_header` 新增 `show_product_filter=True` 参数（其余 12 页默认行为不变）；`Q_Time监控报表.py` 传 `show_product_filter=False` + `cached_funcs=get_qtime_cached_funcs()`；`dashboard.py` 筛选区改为 产品 multiselect（默认全选）→ 厂别 → 站点 → 查询，`_run_query` 走 `get_cached_shop_monitoring` 后按产品/站点内存过滤 details/alerts/decoration 三帧（`dataclasses.replace`），session 签名含产品选择，空产品禁用查询。验证：AppTest —— 产品框默认全选且顺序为产品→厂别→站点、单产品内存过滤（三帧 prodcode 唯一 + 预警数收缩）、空产品禁用、页头无产品筛选框（stub 断言）。【证据：`test_qtime_dashboard.py` 10 passed（新增 3 项 + 更新 2 项）；`test_qtime_page.py` 2 passed；`test_page_header_product_cache.py` 新增 4 项 passed】
+- [x] 7.3 矩阵渲染按钮门控：`自动预警看板.py` 页首默认显示说明文案 +「🚦 加载预警矩阵」主按钮（on_click 置 `alert_matrix_board_loaded`），已加载后渲染矩阵 +「收起预警矩阵」；`perform_hard_reset` 阶段 4 与 `_refresh_data_callback` 清除该 session key；文案明确按钮仅读取缓存 payload。验证：单元测试 —— 刷新缓存/刷新数据后已加载状态清除。【证据：`test_hard_reset_clears_alert_matrix_loaded_state`、`test_refresh_data_clears_alert_matrix_loaded_state` passed】
+- [x] 7.4 E2E 回归：fixture `qtime_app.py` 改为多产品假数据（M626+M678，products=() 语义）。【证据：`tests/e2e/qtime_report.js` {"ok":true}、`tests/e2e/alert_matrix_board.js` counts 🔴×4 ⚪×1 ⬜×1 🟢×10 + 缓存重建令牌 10:31:15→10:31:19；截图 `output/test-results/qtime_report_e2e.png`、`qtime_report_tp_error_e2e.png`、`alert_matrix_board_e2e.png`、`alert_matrix_detail_qtime_e2e.png`、`alert_matrix_cache_rebuild_e2e.png`（2026-09-03 10:30-10:31）】
+
+### Phase 8 — 页头产品筛选移除 + 超规片预警查询门控 + 矩阵筛选条（2026-09-03 需求轮次）
+
+- [x] 8.1 页头产品筛选移除：`自动预警看板.py` 传 `show_product_filter=False`（参数为 Phase 7.2 既有能力，本页为全产品视图）。验证：页面组合层测试断言 header kwargs。【证据：`tests/unit/app/pages/test_auto_warning_page.py::test_page_hides_header_product_filter_and_gates_data_loading` passed】
+- [x] 8.2 「超规片自动预警」查询门控：`monitor_dashboard.py` 新增 `render_monitor_query_gate`（筛选签名 = 监控类型+产品+厂别排序元组，session key `monitor_query_signature`，on_click 提交；签名过期回到未提交态并提示）；`自动预警看板.py` 签名预算 + `get_monitor_dashboard_data` + 汇总图 + Top10 + admin 明细表全部移入门控块；`perform_hard_reset` 阶段 4 与 `_refresh_data_callback` 清除该 key。验证：AppTest 门控 harness（未点击不加载/点击加载/rerun 保持/三维度签名变更回到未提交态）+ 页面组合层 monkeypatch 计数 + 页头清除用例。【证据：`tests/unit/app/sections/monitor/test_monitor_query_gate.py` 6 项 + fixture `fixtures/monitor_query_gate_app.py`；`test_auto_warning_page.py` 2 项（未点击 load_calls==0 且 decision_calls==0；点击后 14 次签名预算 + 1 次加载）；`test_page_header_product_cache.py::test_hard_reset_clears_monitor_query_state` / `test_refresh_data_clears_monitor_query_state` passed】
+- [x] 8.3 矩阵区筛选条（与下方控制台同观感，key 前缀 `alert_matrix_`）：监控类型 selectbox（ALL/SPC/CTQ/AOI(含两行)/Yield/Q-Time，客户端切行）、产品型号 multiselect（默认全选，客户端切列）、厂别 multiselect（ARRAY/OLED/TP 默认全选，单元格状态 = 选中厂别 ∩ `alert_factories` 非空则 🔴，纯客户端切片）。验证：AppTest 筛选条默认值/切列/切行/切单元格/空产品提示。【证据：`test_alert_matrix_ui.py` 新增 6 项 passed；fixture `alert_matrix_app.py` 单元格补 `alert_factories`、行补 `factory_filter_supported`】
+- [x] 8.4 单元格 payload 扩展 `alert_factories`：sheet OOS 四行取记录 `factory` 列（排序去重、大小写归一）；spc CPK 行取 `厂别` 列；qtime 行按 shop 打标（`load_all_product_qtime_monitoring` union 时 `assign(shop=shop)` 返回新帧，不污染共享 L2 缓存对象）；yield 两行记录结构无厂别列（`compute_lot_oos_records` / `get_dashboard_alert_records` 已核实）→ 行声明 `supports_factory_filter=False`，厂别筛选保持原状态并在图例注明。验证：服务层提取用例 + shop 打标用例 + 行标记用例。【证据：`test_alert_matrix_service.py` 新增 6 项 passed（含 tp/TP 大小写归一、已修饰/本周记录不计入、qtime 本周 ARRAY 不计入、yield 行回退）；矩阵服务既有 36 项零改动全部通过】
+- [x] 8.5 回归：`pytest tests/unit tests/integration -q --no-header -p no:cacheprovider`。【证据：913 passed / 5 failed（51.61s）——5 项均为基线预存在失败（test_hot_reload 页头仅列专项资料两页、aoi_rs portal、yield_global_data_policy ×2、yield_dashboard_plotly_keys），逐项核对无新增；基线 891 → 913，新增 22 项全绿】
+- 本页面改动按需求方禁令只用单元测试 + AppTest 验证，未跑任何触及自动预警看板的 E2E（含 `tests/e2e/alert_matrix_board.js` fixture harness）。
+
+### Phase 9 — UI 优化：去除 st.info 提醒条 + 模块化标题/Expander 收纳（2026-09-03 需求轮次）
+
+- [x] 9.1 渲染面禁用 st.info：门控提示类（矩阵「加载」说明、查询门控两条签名文案）直接删除，门控语义由按钮承担；空态/无数据类一律改 `st.caption` 灰字（矩阵空数据/空产品/空行、详情区无数据/不支持/状态说明、admin 明细表三处空态）；错误类保留并升级——矩阵整板加载失败由 info 升为 `st.warning`（错误必须可见），其余 st.error/st.warning 不动。共享排查：grep 确认 `monitor_dashboard.py` 仅被 `自动预警看板.py` 引用（无其他页面共享），直接改行为，无需参数开关；`render_monitor_detail_section`/`show_drilldown_modal` 不在该页渲染路径（页面早已不调用），未动。【证据：`grep -rn monitor_dashboard app/` 仅页面一处 import；`test_monitor_query_gate.py::_assert_no_info` 6 项用例、`test_alert_matrix_ui.py` 默认渲染 `len(app.info)==0` 断言通过】
+- [x] 9.2 模块化结构：模块一 `st.subheader("🚦 预警矩阵")` + `st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=True)`（未加载仅按钮；已加载矩阵本体+收起按钮+详情区）；模块二 `st.subheader("⚠️ 超规片自动预警")` + `st.expander("筛选控制台与预警结果", expanded=True)`（控制台 + admin 修饰面板原位 + 查询按钮 + 门控内容）；subheader 与 expander 文案不重复；矩阵内部 `#### 🚦 预警矩阵` 标题移除（避免三层重复，周次信息由图例 caption 承担）。嵌套 expander（模块 expander 包详情/明细 expander）经 AppTest 探针确认 Streamlit 1.60 支持。【证据：`test_auto_warning_page.py::_assert_module_structure`（两模块 subheader + expanded=True expander + 文案不重复 + infos==[]）2 项通过；嵌套探针 AppTest `expanders: ['outer','inner']` 无异常】
+- [x] 9.3 测试更新与回归：fixture/断言同步（info→caption/warning、矩阵内部标题移除）；门控行为（未点击不加载、签名变更回未提交态）不变。用户在门控块内新增的 `data_forward_signature`（`ConfigLoader.get_data_forward_policy().signature` 进入两处 snapshot_signature）原样保留。【证据：聚焦套件 92 passed；全量回归见 progress.md Session 7】
+
 ## 范围守卫（Out of scope，不得纳入）
 
 - 不修改任何预警判定算法/阈值；不改 Header 筛选与 SessionManager；不新增推送/通知；不重排既有汇总图/Top10；不为 qtime 建本地快照。
+- **2026-09-03 需求方指令：禁止对"自动预警界面"（`app/pages/自动预警看板.py` 真实页面）进行任何 E2E 测试。** 既往矩阵 E2E 均为隔离 fixture harness（`tests/e2e/fixtures/alert_matrix_app.py`，不触真实页面/数据/工作簿）；此后连该 fixture 脚本也暂停执行，矩阵改动以单元测试 + AppTest 验证。
 
 ## 风险与对策（详见 PRD §6）
 

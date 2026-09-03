@@ -135,6 +135,8 @@ def perform_hard_reset(
             or key_str.startswith("spc_snapshot_sig_")
             or key_str.startswith("matrix_detail_")
             or key_str == "parts_baseline_sig"
+            or key_str == "alert_matrix_board_loaded"
+            or key_str == "monitor_query_signature"
         ):
             del st.session_state[key]
 
@@ -150,6 +152,7 @@ def render_page_header(
     cached_funcs: list = None,
     refresh_handlers: list = None,
     product_cache_scope: str | None = None,
+    show_product_filter: bool = True,
 ) -> None:
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
     # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
@@ -212,6 +215,11 @@ def render_page_header(
             if "view_model" in key: # type: ignore
                 del st.session_state[key]
 
+        # 预警矩阵已加载状态一并清除（回到按钮门控，重新读取缓存展示）；
+        # 超规片自动预警的查询已提交签名一并清除（回到查询门控）。
+        st.session_state.pop("alert_matrix_board_loaded", None)
+        st.session_state.pop("monitor_query_signature", None)
+
         st.toast("✅ L1 快照与 L2 缓存已刷新。", icon="🎉")
         logging.info("🔄 [UI] L1 数据快照刷新完毕，已同步失效 L2 页面缓存。")
 
@@ -221,25 +229,28 @@ def render_page_header(
         perform_hard_reset(cached_funcs, product_cache_scope)
 
     # 产品筛选与管理员操作使用独立边框分组，避免把常规筛选误认为维护操作。
+    # show_product_filter=False（如 Q-Time 页，产品多选内聚在页面筛选区）时
+    # 跳过产品 selectbox，管理员操作列布局不变。
     product_column, admin_column = st.columns(
         [2, 4],
         vertical_alignment="bottom",
     )
-    with product_column:
-        with st.container(border=True):
-            st.caption("产品筛选")
-            current_prod = config.data_source.product_code
-            available_prods = SessionManager.AVAILABLE_PRODUCTS
-            selected_prod = st.selectbox(
-                "📦 当前产品型号",
-                options=available_prods,
-                index=available_prods.index(current_prod) if current_prod in available_prods else 0,
-                key=f"header_prod_sel_{title}",
-                label_visibility="collapsed",
-            )
-            if selected_prod != current_prod:
-                SessionManager.load_and_set_config(selected_prod)
-                st.rerun()
+    if show_product_filter:
+        with product_column:
+            with st.container(border=True):
+                st.caption("产品筛选")
+                current_prod = config.data_source.product_code
+                available_prods = SessionManager.AVAILABLE_PRODUCTS
+                selected_prod = st.selectbox(
+                    "📦 当前产品型号",
+                    options=available_prods,
+                    index=available_prods.index(current_prod) if current_prod in available_prods else 0,
+                    key=f"header_prod_sel_{title}",
+                    label_visibility="collapsed",
+                )
+                if selected_prod != current_prod:
+                    SessionManager.load_and_set_config(selected_prod)
+                    st.rerun()
 
     if is_admin:
         with admin_column:

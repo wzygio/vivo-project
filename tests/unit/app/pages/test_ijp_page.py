@@ -54,7 +54,12 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
         "config",
         (
             "header",
-            {"title": "IJP溢流监控报表", "config": active_config, "cached_funcs": []},
+            {
+                "title": "IJP溢流监控报表",
+                "config": active_config,
+                "cached_funcs": [],
+                "show_product_filter": False,
+            },
         ),
         ("service", database),
         ("dashboard", service),

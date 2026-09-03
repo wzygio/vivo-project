@@ -38,4 +38,7 @@ def build_ijp_repository(db_manager: DatabaseManager) -> IjpRepository:
 
 
 def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
-    return IjpReportService(build_ijp_repository(db_manager))
+    return IjpReportService(
+        build_ijp_repository(db_manager),
+        enabled_product_codes=tuple(ConfigLoader.get_enabled_products()),
+    )

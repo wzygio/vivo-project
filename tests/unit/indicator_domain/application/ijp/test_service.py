@@ -3,9 +3,11 @@ from datetime import datetime
 import pandas as pd
 import pytest
 
+from src.indicator_domain import composition
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
+from src.shared_kernel.config import ConfigLoader
 
 START = datetime(2026, 8, 31, 7, 0)
 END = datetime(2026, 9, 1, 7, 0)
@@ -72,6 +74,41 @@ def test_service_exposes_filter_options_with_cascading_inputs() -> None:
     assert "TOP" in options["panel_locations"]
     assert port.received_product_codes == ("M678",)
     assert port.received_picis == ("LOT1",)
+
+
+def test_service_scopes_options_and_queries_to_enabled_products() -> None:
+    port = FakeIjpDataPort()
+    service = IjpReportService(port, enabled_product_codes=("M678", "Z571"))
+
+    options = service.get_filter_options(START, END)
+    service.get_details(_query())
+
+    assert options["product_codes"] == ("M678",)
+    assert port.received_product_codes == ("M678", "Z571")
+    assert port.received_query is not None
+    assert port.received_query.product_codes == ("M678", "Z571")
+
+
+def test_composition_builds_ijp_service_with_global_enabled_products(
+    monkeypatch,
+) -> None:
+    port = FakeIjpDataPort()
+    database = object()
+    monkeypatch.setattr(
+        composition,
+        "build_ijp_repository",
+        lambda received: port if received is database else None,
+    )
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_enabled_products",
+        classmethod(lambda cls: ["M678"]),
+    )
+
+    service = composition.build_ijp_service(database)
+    options = service.get_filter_options(START, END)
+
+    assert options["product_codes"] == ("M678",)
 
 
 def test_service_delegates_report_reads_to_the_port() -> None:

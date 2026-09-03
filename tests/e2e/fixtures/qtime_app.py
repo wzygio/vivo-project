@@ -21,6 +21,9 @@ from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
 from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
 
+# fixture 假数据覆盖的产品集合；products=()（全产品）时返回全部
+FIXTURE_PRODUCTS = ("M626", "M678")
+
 
 class FixtureQTimeService:
     @property
@@ -49,14 +52,14 @@ class FixtureQTimeService:
         *,
         shop: str,
         step_descriptions: tuple[str, ...],
-        products: tuple[str, ...],
+        products: tuple[str, ...] = (),
         as_of=None,
     ) -> QTimeMonitoringResult:
-        if products != ("M626",):
-            raise AssertionError("Q-Time query must use the Page Header product")
-        if step_descriptions == ("Shipping->Cutting",):
-            empty = pd.DataFrame()
-            return QTimeMonitoringResult(empty, empty, empty, empty, Path("qtime.xlsx"))
+        # 新管线恒以 products=()（全产品）调用；非空 products 按调用方过滤语义返回
+        requested = tuple(products) or FIXTURE_PRODUCTS
+        unknown = [product for product in requested if product not in FIXTURE_PRODUCTS]
+        if unknown:
+            raise AssertionError(f"fixture 不含这些产品线的假数据: {unknown}")
         if shop == "TP":
             raise QTimeDataAccessError(
                 "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
@@ -89,8 +92,9 @@ class FixtureQTimeService:
                     "wait_time": wait_time,
                     "timekey": f"20260802{index:02d}0000",
                     "shop": shop,
-                    "prodcode": products[0],
+                    "prodcode": prodcode,
                 }
+                for prodcode in requested
                 for step_description in step_descriptions
                 if step_description != "Shipping->Cutting"
                 for index, (lot_id, wait_time) in enumerate(
@@ -101,12 +105,13 @@ class FixtureQTimeService:
         decisions = pd.DataFrame(
             [
                 {
-                    "prodcode": products[0],
+                    "prodcode": prodcode,
                     "step_desc": step_descriptions[0],
                     "lot_id": "L3MY67005AA",
                     "timekey": "20260802020000",
                     "flag": False,
                 }
+                for prodcode in requested
             ]
         )
         decorated = apply_qtime_decoration(raw_details, decisions)
@@ -123,4 +128,4 @@ class FixtureQTimeService:
 
 
 st.set_page_config(page_title="Q-Time E2E", layout="wide")
-render_qtime_dashboard(FixtureQTimeService(), selected_product="M626")
+render_qtime_dashboard(FixtureQTimeService())

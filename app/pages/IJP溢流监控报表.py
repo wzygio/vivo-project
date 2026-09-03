@@ -37,5 +37,6 @@ render_page_header(
     title="IJP溢流监控报表",
     config=active_config,
     cached_funcs=[],
+    show_product_filter=False,
 )
 render_ijp_dashboard(build_ijp_service(DatabaseManager()))

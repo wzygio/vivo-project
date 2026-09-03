@@ -36,12 +36,13 @@ st.set_page_config(page_title="alert-matrix-fixture", layout="wide")
 
 PRODUCTS = ["M678", "Z571"]
 
-# 行级状态覆盖：默认全 🟢，以下单元格覆盖为其他三态
+# 行级状态覆盖：默认全 🟢，以下单元格覆盖为其他三态；
+# alert 单元格附带 alert_factories（厂别细分切片用），yield 行不支持厂别细分。
 ALERT_CELLS = [
-    ("qtime_sheet_oos", "M678"),
-    ("spc_sheet_oos", "M678"),
-    ("spc_cpk_trend", "M678"),
-    ("yield_trend_fluctuation", "M678"),
+    ("qtime_sheet_oos", "M678", ["OLED"]),
+    ("spc_sheet_oos", "M678", ["ARRAY", "TP"]),
+    ("spc_cpk_trend", "M678", ["TP"]),
+    ("yield_trend_fluctuation", "M678", []),
 ]
 NO_DATA_CELL = ("ctq_sheet_oos", "M678")
 ERROR_CELL = ("yield_lot_oos", "Z571")
@@ -49,16 +50,29 @@ ERROR_MESSAGE = "修饰工作簿读取失败，请确认文件可正常打开且
 NO_DATA_MESSAGE = "修饰工作簿不存在"
 
 
-def _cell(row_key: str, prod: str, state: str, message: str = "") -> dict[str, str]:
-    return {"state": state, "detail_key": f"{row_key}|{prod}", "message": message}
+def _cell(
+    row_key: str,
+    prod: str,
+    state: str,
+    message: str = "",
+    alert_factories: list[str] | None = None,
+) -> dict:
+    return {
+        "state": state,
+        "detail_key": f"{row_key}|{prod}",
+        "message": message,
+        "alert_factories": list(alert_factories or []),
+    }
 
 
-cells: dict[tuple[str, str], dict[str, str]] = {}
+cells: dict[tuple[str, str], dict] = {}
 for row in MATRIX_ROWS:
     for prod in PRODUCTS:
         cells[(row.row_key, prod)] = _cell(row.row_key, prod, CELL_STATE_OK)
-for row_key, prod in ALERT_CELLS:
-    cells[(row_key, prod)] = _cell(row_key, prod, CELL_STATE_ALERT)
+for row_key, prod, factories in ALERT_CELLS:
+    cells[(row_key, prod)] = _cell(
+        row_key, prod, CELL_STATE_ALERT, alert_factories=factories
+    )
 cells[NO_DATA_CELL] = _cell(*NO_DATA_CELL, CELL_STATE_NO_DATA, NO_DATA_MESSAGE)
 cells[ERROR_CELL] = _cell(*ERROR_CELL, CELL_STATE_ERROR, ERROR_MESSAGE)
 
@@ -71,6 +85,7 @@ payload = {
             "display_name": row.display_name,
             "module_group": row.module_group,
             "time_scope": row.time_scope,
+            "factory_filter_supported": row.supports_factory_filter,
         }
         for row in MATRIX_ROWS
     ],

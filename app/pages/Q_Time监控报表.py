@@ -20,6 +20,9 @@ import streamlit as st
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard
+from src.indicator_domain.application.qtime.cached_monitoring import (
+    get_qtime_cached_funcs,
+)
 from app.utils.app_setup import AppSetup
 from src.indicator_domain.composition import build_qtime_service
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -36,9 +39,7 @@ active_config = SessionManager.get_active_config()
 render_page_header(
     title="Q-Time监控报表",
     config=active_config,
-    cached_funcs=[],
+    cached_funcs=get_qtime_cached_funcs(),
+    show_product_filter=False,
 )
-render_qtime_dashboard(
-    build_qtime_service(DatabaseManager()),
-    active_config.data_source.product_code,
-)
+render_qtime_dashboard(build_qtime_service(DatabaseManager()))

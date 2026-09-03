@@ -727,3 +727,132 @@ def test_default_signature_components_cover_all_dimensions(monkeypatch) -> None:
     for scope in ("spc", "ctq", "aoi_tt", "aoi_rs"):
         assert components["scope_decision_signatures"][f"{scope}|M678"] == f"sig-{scope}-M678"
     assert components["qtime_decision_file_stat"] == [111, 222]
+
+
+# ---------------------------------------------------------------------------
+# 单元格 alert_factories 与行级厂别细分标记（Phase 8：矩阵厂别筛选）
+# ---------------------------------------------------------------------------
+def test_sheet_oos_alert_cell_carries_sorted_unique_factories(tmp_path: Path) -> None:
+    """预警单元格附带 alert_factories：flag=FALSE 且上周记录的 factory 排序去重。"""
+    _write_decoration_workbook(
+        tmp_path,
+        "spc",
+        [
+            {**_spc_row("S1", False, LAST_WEEK), "factory": "TP"},
+            {**_spc_row("S2", False, LAST_WEEK), "factory": "OLED"},
+            {**_spc_row("S3", False, LAST_WEEK), "factory": "tp"},  # 大小写归一去重
+            {**_spc_row("S4", True, LAST_WEEK), "factory": "ARRAY"},  # 已修饰不计入
+            {**_spc_row("S5", False, THIS_WEEK), "factory": "ARRAY"},  # 本周不计入
+        ],
+    )
+
+    cell = _evaluate("spc_sheet_oos", _make_context(inline_resource_dir=tmp_path))
+
+    assert cell["state"] == CELL_STATE_ALERT
+    assert cell["alert_factories"] == ["OLED", "TP"]
+
+
+def test_sheet_oos_ok_cell_has_empty_alert_factories(tmp_path: Path) -> None:
+    _write_decoration_workbook(
+        tmp_path, "spc", [_spc_row("S1", True, LAST_WEEK)]
+    )
+
+    cell = _evaluate("spc_sheet_oos", _make_context(inline_resource_dir=tmp_path))
+
+    assert cell["state"] == CELL_STATE_OK
+    assert cell["alert_factories"] == []
+
+
+def test_spc_cpk_alert_cell_carries_factories() -> None:
+    capability_df = pd.DataFrame(
+        [
+            _cpk_row(PREV_WEEK_LABEL, 1.10),  # factory=OLED
+            {**_cpk_row(PREV_WEEK_LABEL, 1.20), "factory": "TP"},
+            _cpk_row(PREV_WEEK_LABEL, 1.50),  # 高于阈值不计入
+        ]
+    )
+    context = _make_context(spc_cpk_loader=lambda prod: capability_df)
+
+    cell = _evaluate("spc_cpk_trend", context)
+
+    assert cell["state"] == CELL_STATE_ALERT
+    assert cell["alert_factories"] == ["OLED", "TP"]
+
+
+def test_qtime_alert_cell_carries_shop_factories() -> None:
+    """qtime 行 alert_factories 取自预警记录的 shop 打标（shop 即厂别）。"""
+    details, alerts = _qtime_frames(
+        [
+            {**_qtime_alert(PROD, "20260826100000"), "shop": "TP"},
+            {**_qtime_alert(PROD, "20260827100000"), "shop": "OLED"},
+            {**_qtime_alert(PROD, "20260901100000"), "shop": "ARRAY"},  # 本周不计入
+        ],
+        details=[{"prodcode": PROD, "timekey": "20260826100000"}],
+    )
+    context = _make_context(qtime_monitoring_loader=lambda: (details, alerts))
+
+    cell = _evaluate("qtime_sheet_oos", context)
+
+    assert cell["state"] == CELL_STATE_ALERT
+    assert cell["alert_factories"] == ["OLED", "TP"]
+
+
+def test_yield_rows_do_not_support_factory_filter() -> None:
+    """yield 两行记录结构无厂别列：行标记不支持厂别细分，单元格 alert_factories 为空。"""
+    payload = build_alert_matrix_payload(
+        products=[PROD],
+        context=_make_context(
+            yield_lot_loader=lambda prod: (_lot_data(["20260826"]), WARNING_LINES),
+            yield_trend_loader=lambda prod: _trend_data(spike=True),
+        ),
+    )
+
+    row_flags = {
+        row["row_key"]: row["factory_filter_supported"] for row in payload["rows"]
+    }
+    assert row_flags["yield_lot_oos"] is False
+    assert row_flags["yield_trend_fluctuation"] is False
+    for row_key, flag in row_flags.items():
+        if not row_key.startswith("yield_"):
+            assert flag is True, row_key
+
+    assert payload["cells"][("yield_lot_oos", PROD)]["state"] == CELL_STATE_ALERT
+    assert payload["cells"][("yield_lot_oos", PROD)]["alert_factories"] == []
+    assert payload["cells"][("yield_trend_fluctuation", PROD)]["alert_factories"] == []
+
+
+def test_load_all_product_qtime_monitoring_tags_shop_on_union(monkeypatch) -> None:
+    """全产品 qtime union 时按 shop 打标（ARRAY/OLED/TP 本身即厂别）。"""
+    from types import SimpleNamespace
+
+    from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
+
+    def _result(shop: str) -> QTimeMonitoringResult:
+        return QTimeMonitoringResult(
+            details=pd.DataFrame([{"prodcode": "M678", "timekey": "20260826100000"}]),
+            alerts=pd.DataFrame([{"prodcode": "M678", "timekey": "20260826100000"}]),
+            decoration=pd.DataFrame(),
+            decisions=pd.DataFrame(),
+            decoration_path=None,
+        )
+
+    monkeypatch.setattr(
+        cache_module,
+        "build_qtime_service",
+        lambda db: SimpleNamespace(decoration_path=None),
+    )
+    monkeypatch.setattr(
+        cache_module, "get_qtime_decision_file_stat", lambda path: None
+    )
+    monkeypatch.setattr(
+        cache_module,
+        "get_cached_shop_monitoring",
+        lambda service, *, shop, as_of, decision_mtime_ns, decision_size: _result(shop),
+    )
+
+    details_df, alerts_df = cache_module.load_all_product_qtime_monitoring(
+        object(), date(2026, 9, 2)
+    )
+
+    assert alerts_df["shop"].tolist() == ["ARRAY", "OLED", "TP"]
+    assert "shop" not in details_df.columns
