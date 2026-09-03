@@ -60,7 +60,10 @@
     - 在架构改动上有哪些巨大的风险点
     - 以上问题是否有解决的可能
 2. 最终给出你的意见，并将以上分析结果汇总为一份报告写入如下路径：`docs\dev_docs\generated\others`
+3. 我们先以`indicator_domain`中`qtime`为例，生成一份预警矩阵看看效果。请依照你刚刚的分析结果`docs\dev_docs\generated\others\alert-center-matrix-board-feasibility.md`，请生成一份PRD到以下路径：`docs\PRD`
+4. 使用`grill-with-docs`对应PRD进行压力测试，排查问题：
+    - 如果有无法解决的业务逻辑问题，可以向我询问
+5. 调用`developement-flow`完成开发
 
-【Hint】
-我可以接受一些妥协，比如：
-- 不再自动渲染图像，改为点击后在再进行查询
+## Goal
+不断迭代优化直至E2E测试通过

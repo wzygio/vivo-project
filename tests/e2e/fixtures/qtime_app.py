@@ -115,7 +115,7 @@ class FixtureQTimeService:
             alerts=build_qtime_alerts(decorated.decoration),
             decoration=decorated.decoration,
             decisions=decisions,
-            decoration_path=Path("resources/qtime_domain/qtime_oos_decoration.xlsx"),
+            decoration_path=Path("resources/indicator_domain/qtime/qtime_oos_decoration.xlsx"),
         )
 
     def update_decisions(self, file_bytes: bytes):

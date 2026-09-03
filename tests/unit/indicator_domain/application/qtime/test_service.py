@@ -31,7 +31,7 @@ class FakeQTimeDataPort:
 
 
 class FakeQTimeDecorationPort:
-    decoration_path = Path("resources/qtime_domain/qtime_oos_decoration.xlsx")
+    decoration_path = Path("resources/indicator_domain/qtime/qtime_oos_decoration.xlsx")
 
     def load_decisions(self) -> pd.DataFrame:
         return pd.DataFrame(
