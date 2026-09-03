@@ -26,6 +26,14 @@
 - 6.4 真实数据手工抽查：用户决定跳过（2026-09-03），以集成测试口径一致性证据替代；6.5 留主 agent 统一核验。
 - 环境备注：验收期间将 8503 真实 app 重启为当前分支代码（原进程 runOnSave=false 不会加载新代码），进程保持运行。
 
+## 2026-09-03 — Session 4（合并 + 模块 4 项目沉淀，主 agent）
+
+- 主 agent 复验：`pytest tests/unit` 855 passed / 5 failed（均为基线预存在）、`tests/integration` 23 passed；6.5 勾选。
+- 需求方确认合并：工作区清理（仅暂存本任务文件；`tests/e2e/fixtures/qtime_app.py` 用 `git add -p` 只暂存本任务 2 个 hunk，用户路径修正 hunk 经单文件 stash 保留）→ feat 分支提交 `d8141a3` → checkout master → merge（fast-forward，d8141a3）→ stash pop 恢复用户改动，全部保留。
+- 合并后 master 复验：unit 855 passed / 5 failed（基线预存在）、integration 23 passed。
+- 8503 端口 Streamlit 进程按需求方决定保留运行（当前分支代码）。
+- 模块 4：ADR `docs/ADR/0022-alert-matrix-board-and-qtime-cache.md` 创建（编号接续 0021，遵循 docs/ADR 模板）。
+
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
