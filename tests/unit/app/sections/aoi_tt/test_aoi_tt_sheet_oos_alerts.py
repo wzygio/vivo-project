@@ -12,7 +12,9 @@ from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
     load_aoi_tt_oos_decoration,
     render_aoi_tt_sheet_oos_alert_indicator_sections,
 )
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 
 # 参考日 2026-08-25（周二）：上一 ISO 周 = [2026-08-17 00:00, 2026-08-24 00:00)
 REF = date(2026, 8, 25)

@@ -165,6 +165,75 @@ def test_ensure_bootstraps_missing_snapshot_and_loader_maintains_it_automaticall
     assert (loaded["glass_start_time"] == before["glass_start_time"] + pd.Timedelta(days=1)).all()
 
 
+def test_report_snapshot_boundary_filters_source_time_before_display_shift(
+    monkeypatch,
+) -> None:
+    as_of = pd.Timestamp("2026-08-10 12:00:00")
+    source_real = pd.DataFrame(
+        {
+            "glass_start_time": [pd.Timestamp("2026-08-08 08:00:00")],
+            "value": [42.0],
+        }
+    )
+    source_fabricated = pd.DataFrame(
+        {
+            "glass_start_time": [pd.Timestamp("2026-08-09 09:00:00")],
+            "value": [24.0],
+        }
+    )
+    filtered_times: list[pd.Timestamp] = []
+
+    monkeypatch.setattr(
+        data_loader,
+        "load_part_life_snapshot",
+        lambda _db, _specs: source_real.copy(),
+    )
+    monkeypatch.setattr(
+        data_loader,
+        "load_fabricated_part_life_snapshot",
+        lambda _specs, *, now: source_fabricated.copy(),
+    )
+
+    def capture_source_filter(
+        frame: pd.DataFrame,
+        *,
+        as_of: pd.Timestamp,
+        max_age_days: int,
+    ) -> pd.DataFrame:
+        del as_of, max_age_days
+        filtered_times.extend(frame["glass_start_time"].tolist())
+        return frame.copy()
+
+    monkeypatch.setattr(
+        data_loader,
+        "filter_recent_part_life_measurements",
+        capture_source_filter,
+    )
+
+    displayed_real, displayed_fabricated = (
+        data_loader.load_report_part_life_snapshots(
+            object(),
+            _specs(),
+            as_of=as_of,
+            max_age_days=3,
+        )
+    )
+
+    assert filtered_times == [pd.Timestamp("2026-08-08 08:00:00")]
+    assert displayed_real.loc[0, "glass_start_time"] == pd.Timestamp(
+        "2026-08-12 08:00:00"
+    )
+    assert displayed_fabricated.loc[0, "glass_start_time"] == pd.Timestamp(
+        "2026-08-13 09:00:00"
+    )
+    assert source_real.loc[0, "glass_start_time"] == pd.Timestamp(
+        "2026-08-08 08:00:00"
+    )
+    assert source_fabricated.loc[0, "glass_start_time"] == pd.Timestamp(
+        "2026-08-09 09:00:00"
+    )
+
+
 def test_update_rejects_malformed_and_unmappable_snapshots() -> None:
     malformed = pd.DataFrame({"step_id": ["S1"]})
     with pytest.raises(ValueError, match="missing fabricated snapshot columns"):

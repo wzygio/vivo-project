@@ -1,20 +1,9 @@
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass
 from numbers import Integral, Real
-from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
-
-from src.shared_kernel.utils.excel_tools import (
-    _is_missing_sheet_error,
-    _read_encrypted_xlsx_via_com,
-    replace_workbook_sheets,
-)
-
-logger = logging.getLogger(__name__)
 
 CPK_DECORATION_FILE_NAME = "spc_cpk_cpm_decoration.xlsx"
 CPK_KEY_COLUMNS = [
@@ -73,20 +62,6 @@ def resolve_capability_decoration_sheet(prod_code: str, metric: str) -> str:
     if _validate_metric(metric) == CAPABILITY_METRIC_CPM:
         return f"{prod_code}{CPM_DECORATION_SHEET_SUFFIX}"
     return prod_code
-
-
-@dataclass(frozen=True)
-class CpkDecorationResult:
-    """Capability values computed from decorated points, optionally overridden by user-maintained corrections."""
-
-    period_capability_df: pd.DataFrame
-    decoration_df: pd.DataFrame
-    decoration_path: Path
-    decoration_sheet: str
-
-
-def get_cpk_decoration_path(product_dir: Path) -> Path:
-    return product_dir / CPK_DECORATION_FILE_NAME
 
 
 def _empty_detail_frame(metric: str) -> pd.DataFrame:
@@ -161,51 +136,6 @@ def build_capability_detail(
     ).reset_index(drop=True)
 
 
-def load_capability_decoration(
-    product_dir: Path,
-    sheet_name: str | None = None,
-    metric: str = CAPABILITY_METRIC_CPK,
-) -> pd.DataFrame:
-    _validate_metric(metric)
-    path = get_cpk_decoration_path(product_dir)
-    if not path.exists():
-        return _empty_decoration_frame(metric)
-    try:
-        if sheet_name is None:
-            loaded_df = pd.read_excel(path, engine="openpyxl")
-        else:
-            try:
-                loaded_df = pd.read_excel(path, sheet_name=sheet_name)
-            except ValueError as excel_error:
-                if _is_missing_sheet_error(excel_error):
-                    # 指定 sheet 缺失 —— 与文件缺失语义一致
-                    return _empty_decoration_frame(metric)
-                raise
-    except Exception as excel_exc:
-        try:
-            loaded_df = _read_encrypted_xlsx_via_com(path, sheet_name)
-            logger.info(
-                "[SPC] loaded enterprise-encrypted %s decoration file via Excel COM: %s",
-                metric.upper(),
-                path,
-            )
-        except Exception as com_exc:
-            logger.warning(
-                "[SPC] failed to read %s decoration file %s with openpyxl (%s) and Excel COM (%s)",
-                metric.upper(),
-                path,
-                excel_exc,
-                com_exc,
-            )
-            return _empty_decoration_frame(metric)
-    if loaded_df.empty:
-        return _empty_decoration_frame(metric)
-    return _ordered_existing_columns(
-        _normalize_key_columns(loaded_df),
-        capability_decoration_columns(metric),
-    )
-
-
 def merge_capability_detail_with_decoration_flags(
     detail_df: pd.DataFrame,
     existing_decoration_df: pd.DataFrame,
@@ -242,29 +172,6 @@ def merge_capability_detail_with_decoration_flags(
     return result.drop(columns=["_user_corrected_value"])[decoration_columns]
 
 
-def _decoration_sheet_exists(decoration_path: Path, sheet_name: str | None) -> bool:
-    """Return True when the target decoration sheet already exists or cannot be inspected safely."""
-    if not decoration_path.exists():
-        return False
-    if sheet_name is None:
-        return True
-    try:
-        import openpyxl
-
-        workbook = openpyxl.load_workbook(decoration_path, read_only=True)
-        try:
-            return sheet_name in workbook.sheetnames
-        finally:
-            workbook.close()
-    except Exception:
-        # 企业加密等 openpyxl 无法打开的工作簿按“已存在”处理，避免破坏用户文件
-        logger.warning(
-            "[SPC] unable to inspect decoration workbook sheets, treating %s as existing",
-            decoration_path,
-        )
-        return True
-
-
 def _append_missing_detail_rows(
     existing_decoration_df: pd.DataFrame,
     current_decoration_df: pd.DataFrame,
@@ -290,50 +197,6 @@ def _append_missing_detail_rows(
     if missing_rows.empty:
         return existing_df
     return pd.concat([existing_df, missing_rows], ignore_index=True)[decoration_columns]
-
-
-def persist_capability_decoration(
-    product_dir: Path,
-    detail_df: pd.DataFrame,
-    sheet_name: str | None = None,
-    metric: str = CAPABILITY_METRIC_CPK,
-) -> pd.DataFrame:
-    """Create the user-maintained decoration sheet when it does not exist yet."""
-    _validate_metric(metric)
-    product_dir.mkdir(parents=True, exist_ok=True)
-    decoration_path = get_cpk_decoration_path(product_dir)
-    target_sheet = sheet_name or "Sheet1"
-    existing_decoration_df = load_capability_decoration(product_dir, sheet_name, metric)
-    decoration_to_write = merge_capability_detail_with_decoration_flags(
-        detail_df,
-        existing_decoration_df,
-        metric,
-    )
-    sheet_exists = _decoration_sheet_exists(decoration_path, sheet_name)
-    persisted_df = decoration_to_write
-    should_write = not sheet_exists
-    if sheet_exists and not existing_decoration_df.empty:
-        persisted_df = _append_missing_detail_rows(
-            existing_decoration_df,
-            decoration_to_write,
-            metric,
-        )
-        should_write = len(persisted_df) > len(existing_decoration_df)
-
-    if should_write:
-        write_result = replace_workbook_sheets(
-            decoration_path,
-            {target_sheet: persisted_df},
-        )
-        if not write_result.written:
-            logger.warning(
-                "[SPC] failed to persist %s decoration sheet %s [%s]: %s",
-                metric.upper(),
-                decoration_path,
-                target_sheet,
-                write_result.error,
-            )
-    return decoration_to_write
 
 
 def apply_capability_decoration(
@@ -370,42 +233,7 @@ def apply_capability_decoration(
     return result.drop(columns=[corrected_column])
 
 
-def prepare_capability_decoration(
-    period_capability_df: pd.DataFrame,
-    product_dir: Path,
-    persist_files: bool = True,
-    sheet_name: str | None = None,
-    metric: str = CAPABILITY_METRIC_CPK,
-) -> CpkDecorationResult:
-    """Build chart-ready values selected by the user-maintained decoration sheet."""
-    _validate_metric(metric)
-    detail_df = build_capability_detail(period_capability_df, metric)
-    decoration_df = (
-        persist_capability_decoration(product_dir, detail_df, sheet_name, metric)
-        if persist_files
-        else merge_capability_detail_with_decoration_flags(
-            detail_df,
-            load_capability_decoration(product_dir, sheet_name, metric),
-            metric,
-        )
-    )
-    period_capability_df = apply_capability_decoration(
-        period_capability_df,
-        decoration_df,
-        metric,
-    )
-    return CpkDecorationResult(
-        period_capability_df=period_capability_df,
-        decoration_df=decoration_df,
-        decoration_path=get_cpk_decoration_path(product_dir),
-        decoration_sheet=sheet_name or "Sheet1",
-    )
-
-
 # 兼容既有调用/测试的别名（默认 metric="cpk"）。
 build_cpk_detail = build_capability_detail
-load_cpk_decoration = load_capability_decoration
 merge_detail_with_decoration_flags = merge_capability_detail_with_decoration_flags
-persist_cpk_decoration = persist_capability_decoration
 apply_cpk_decoration = apply_capability_decoration
-prepare_cpk_decoration = prepare_capability_decoration

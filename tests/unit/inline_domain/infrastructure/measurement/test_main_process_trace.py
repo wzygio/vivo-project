@@ -188,7 +188,7 @@ def test_load_main_process_history_routes_array_eqp_to_sheet_out_history(monkeyp
                     "sheet_id": "S1",
                     "main_step_id": "15100",
                     "main_process_unit_id": "ARRAY-EQP-01",
-                    "event_timekey": "20260810093000123456",
+                    "event_timekey": "20260806093000123456",
                     "main_process_trace_source": "array_sht",
                     "source_rank": 1,
                 }
@@ -206,8 +206,8 @@ def test_load_main_process_history_routes_array_eqp_to_sheet_out_history(monkeyp
     assert "mdw.dwt_inout_sht" in captured["sql"]
     assert "inout_type = 'out'" in captured["sql"]
     assert captured["params"] == {
-        "history_start": "20260701",
-        "history_end": "20260810",
+        "history_start": "20260627",
+        "history_end": "20260806",
         "material_ids": ["S1"],
         "main_step_ids": ["15100"],
     }
@@ -238,7 +238,7 @@ def test_load_main_process_history_routes_array_chamber_with_sub_unit_priority(m
                     "sheet_id": "S1",
                     "main_step_id": "15100",
                     "main_process_unit_id": "ARRAY-CVD-CH01",
-                    "event_timekey": "20260810093000123456",
+                    "event_timekey": "20260806093000123456",
                     "main_process_trace_source": "array_sub_unit_sht",
                     "source_rank": 1,
                 },
@@ -449,7 +449,7 @@ def test_enrich_measurements_with_main_process_trace_returns_routed_point_payloa
                     "sheet_id": "S1",
                     "main_step_id": "15100",
                     "main_process_unit_id": "MAIN-EQP-01",
-                    "event_timekey": "20260810093000123456",
+                    "event_timekey": "20260806093000123456",
                     "main_process_trace_source": "array_sht",
                     "source_rank": 1,
                 }

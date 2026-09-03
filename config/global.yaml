@@ -6,6 +6,11 @@ application:
 data_snapshot:
   ttl_hours: 12 # 数据快照缓存有效期（小时）
 
+# 制造事实显示时间策略：客户报表展示源数据四天后的日期。
+data_forward:
+  enabled: true
+  offset_days: 4
+
 # Service 层 L2 缓存（@st.cache_data）TTL 统一配置，单位：小时
 service_cache:
   ttl_hours:

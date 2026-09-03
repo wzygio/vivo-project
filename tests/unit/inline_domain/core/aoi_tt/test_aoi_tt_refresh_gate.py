@@ -10,8 +10,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.inline_domain.core.aoi_tt.aoi_tt_decoration import prepare_aoi_tt_decoration
-from src.inline_domain.core.shared import sheet_oos_decoration
+from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
+from src.inline_domain.infrastructure.shared import (
+    sheet_oos_decoration_repository as sheet_oos_decoration,
+)
 from src.inline_domain.core.shared.sheet_oos_decoration import REFRESH_META_SHEET_NAME
 
 NOW = datetime(2026, 8, 18, 12, 0, 0)

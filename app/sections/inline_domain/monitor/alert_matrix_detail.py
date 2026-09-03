@@ -60,7 +60,9 @@ from src.inline_domain.core.shared.sheet_oos_alerts import (
     build_sheet_oos_alerts,
     previous_iso_week_range,
 )
-from src.inline_domain.core.shared.sheet_oos_decoration import load_sheet_oos_decoration
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    load_sheet_oos_decoration,
+)
 from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)

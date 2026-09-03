@@ -54,7 +54,7 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
     AOI_TT_OOS_KEY_COLUMNS,
 )
 from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
-from src.inline_domain.core.shared.sheet_oos_decoration import (
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
     load_sheet_oos_decoration,
 )

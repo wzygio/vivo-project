@@ -1,8 +1,8 @@
 # src/vivo_project/core/sheet_lot_processor.py
-import pandas as pd
 import logging
-from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import pandas as pd
 
 # [Refactor] 移除全局 CONFIG, PROJECT_ROOT, RESOURCE_DIR
 from src.shared_kernel.config_model import AppConfig
@@ -10,24 +10,22 @@ from src.yield_domain.core.sheet_lot.aggregation import (
     _calculate_lot_base_info_with_median_time,
     _calculate_raw_rates,
     _get_desc_to_group_map,
-    _prepare_code_level_details,
     _reaggregate_groups_from_codes,
-)
-from src.yield_domain.core.sheet_lot.simulation import (
-    _distribute_sheet_from_lot,
-    _expand_code_rows_to_positive_daily_entities,
-    _simulate_concentration,
 )
 from src.yield_domain.core.sheet_lot.capping import (
     _apply_defect_capping,
-    _apply_random_cap_and_floor,
+    _apply_random_cap_and_floor,  # noqa: F401 - legacy compatibility export
     _filter_by_pass_rate,
 )
 from src.yield_domain.core.sheet_lot.overrides import (
     _calculate_lot_override_rate_heuristic,
-    _load_override_excel,
     _override_rates,
 )
+from src.yield_domain.core.sheet_lot.simulation import (
+    _distribute_sheet_from_lot,
+    _simulate_concentration,
+)
+
 
 def _filter_lots_by_warehousing_window(
     lot_base: pd.DataFrame,
@@ -65,7 +63,7 @@ def calculate_sheet_defect_rates(
     array_input_times_df: pd.DataFrame,
     lot_results: Dict[str, Any], # 接收 Lot 结果
     config: AppConfig,          
-    product_dir: Path,         
+    override_df: pd.DataFrame | None = None,
 ) -> Dict[str, Any] | None:
     """(V5.0) Sheet 级完全听命于 Lot 发牌"""
     logging.info("开始Sheet级计算 (Lot局域分发 -> 覆盖 模式)...")
@@ -125,22 +123,6 @@ def calculate_sheet_defect_rates(
         # 此时的 current_code_details 已经是完美的、且截断过的数据
         current_code_details = sim_code_details
 
-        # --- 6. 应用覆盖 (Override) ---
-        # [Refactor] 从 config.paths 中获取 FileResource 对象
-        override_res = config.paths.get('rate_override_config')
-        
-        override_file_path = None
-        override_sheet_name = ""
-        
-        if override_res:
-             override_file_path = product_dir.parent / override_res.file_name
-             override_sheet_name = override_res.sheet_name or ""
-        
-        override_df, _ = _load_override_excel(
-            override_file_path, 
-            override_sheet_name
-        )
-        
         desc_map = _get_desc_to_group_map(panel_details_df)
         
         final_code_details = _override_rates(
@@ -184,8 +166,8 @@ def calculate_lot_defect_rates(
     array_input_times_df: pd.DataFrame, # 接收时间表
     mwd_code_data: Dict[str, pd.DataFrame] | None,
     config: AppConfig,
-    product_dir: Path,
-    warning_lines: Optional[Dict[str, dict]] = None
+    warning_lines: Optional[Dict[str, dict]] = None,
+    override_df: pd.DataFrame | None = None,
 ) -> Dict[str, Any] | None:
     """(V5.0) 独立执行 Lot 级数据模拟"""
     logging.info("开始Lot级计算 (独立模拟 -> 截断 -> 覆盖 模式)...")
@@ -236,23 +218,8 @@ def calculate_lot_defect_rates(
             # [修复]: 原代码这里少写了 ['code_level_details']，已补充
             current_code_details = current_lot_results['code_level_details']
 
-        # --- 6. 覆盖 (Override) ---
-        override_res = config.paths.get('rate_override_config')
-        
-        override_file_path = None
-        override_sheet_name = ""
-        
-        if override_res:
-                override_file_path = product_dir.parent / override_res.file_name
-                override_sheet_name = override_res.sheet_name or ""
-
-        override_sheet_df, _= _load_override_excel(
-            override_file_path, 
-            override_sheet_name
-        )
-        
         override_lot_avg = _calculate_lot_override_rate_heuristic(
-            override_df=override_sheet_df,
+            override_df=override_df,
             lot_base_info_df=lot_base,
             mwd_code_data=mwd_code_data
         )

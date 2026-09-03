@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 # 引入我们定义的 Pydantic 模型
 from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
+from src.shared_kernel.data_forward import DataForwardPolicy
 
 class ConfigLoader:
     """
@@ -147,6 +148,18 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 读取数据快照 TTL 配置失败: {e}，回退到默认 {default_ttl} 小时。")
             return default_ttl
+
+    @classmethod
+    def get_data_forward_policy(cls) -> DataForwardPolicy:
+        """Load the global manufacturing source-time display policy."""
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        data_forward = cls._load_yaml(yaml_path).get("data_forward", {})
+        if not isinstance(data_forward, dict):
+            raise ValueError("global.yaml: 'data_forward' must be a mapping")
+        return DataForwardPolicy(
+            enabled=data_forward.get("enabled", False),
+            offset_days=data_forward.get("offset_days", 4),
+        )
 
     @classmethod
     def get_service_cache_ttl_seconds(cls, cache_name: str, default_hours: int) -> int:

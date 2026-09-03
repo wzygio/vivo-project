@@ -1,4 +1,4 @@
-"""SPC 原始量测数值修正规则。
+"""Inline 原始量测数值修正的纯业务规则。
 
 在本地 Parquet 快照生成之前应用，修正写入快照并由快照仓库返回，
 确保所有下游（SPC/CTQ/monitor 等）消费到的都是修正后的数值。
@@ -33,6 +33,7 @@ M673_PPA_SITE_MIN = 96
 M673_PPA_SITE_MAX = 114
 M673_PPA_VALUE_OFFSET = -5.0
 PPA_FALLBACK_VALUE_OFFSET = -1
+
 
 def apply_spc_value_corrections(measurements: pd.DataFrame) -> pd.DataFrame:
     """返回应用 SPC 数值修正后的量测副本；空表或无命中时原样返回。"""

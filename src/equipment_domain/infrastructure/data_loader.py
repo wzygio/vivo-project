@@ -26,6 +26,7 @@ from src.equipment_domain.infrastructure.fake_data import (
 from src.equipment_domain.infrastructure.fake_data_updater import (
     ensure_fabricated_snapshot_file,
 )
+from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -236,6 +237,36 @@ def filter_recent_part_life_measurements(
         inclusive="both",
     )
     return snapshot_df.loc[recent_mask].copy()
+
+
+def load_report_part_life_snapshots(
+    db_manager: "DatabaseManager",
+    spec_df: pd.DataFrame,
+    *,
+    as_of: pd.Timestamp,
+    max_age_days: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return real and fabricated snapshots on the report display-time axis.
+
+    Snapshot creation, persistence, and freshness filtering all use source
+    timestamps. The display offset is applied only to copied frames returned
+    across this repository boundary.
+    """
+    source_snapshot = load_part_life_snapshot(db_manager, spec_df)
+    recent_source_snapshot = filter_recent_part_life_measurements(
+        source_snapshot,
+        as_of=as_of,
+        max_age_days=max_age_days,
+    )
+    source_fabricated_snapshot = load_fabricated_part_life_snapshot(
+        spec_df,
+        now=as_of,
+    )
+    policy = ConfigLoader.get_data_forward_policy()
+    return (
+        policy.shift_frame(recent_source_snapshot, ("glass_start_time",)),
+        policy.shift_frame(source_fabricated_snapshot, ("glass_start_time",)),
+    )
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:
     """Read configured Excel sheets via COM and generate one flattened CSV."""

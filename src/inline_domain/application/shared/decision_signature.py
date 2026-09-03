@@ -25,6 +25,8 @@ from src.inline_domain.application.shared.decorated_data import (
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     EMPTY_DECISION_SIGNATURE,
     compute_decision_signature,
+)
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     load_sheet_oos_decisions,
 )
 from src.shared_kernel.config import ConfigLoader

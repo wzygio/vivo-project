@@ -19,8 +19,10 @@ from app.sections.inline_domain.shared.sheet_oos_admin import (
 )
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     DELETE_ACTION,
-    SheetOosDecorationResult,
     get_decision_sheet_name,
+)
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
 )
 
 

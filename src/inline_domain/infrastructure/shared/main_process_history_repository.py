@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from sqlalchemy import text
 
+from src.shared_kernel.config import ConfigLoader
+
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -138,6 +140,7 @@ class InlineMainProcessHistoryRepository:
 
     def __init__(self, db_manager: "DatabaseManager") -> None:
         self.db_manager = db_manager
+        self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def get_main_process_history(
         self,
@@ -159,9 +162,13 @@ class InlineMainProcessHistoryRepository:
             if target.empty:
                 continue
 
+            source_start, source_end = self.data_forward_policy.to_source_window(
+                pd.Timestamp(history_start),
+                pd.Timestamp(history_end),
+            )
             params = {
-                "history_start": _format_history_date(history_start),
-                "history_end": _format_history_date(history_end),
+                "history_start": _format_history_date(source_start),
+                "history_end": _format_history_date(source_end),
                 "material_ids": target["sheet_id"].dropna().astype(str).drop_duplicates().tolist(),
                 "main_step_ids": target["main_step_id"].dropna().astype(str).drop_duplicates().tolist(),
             }
@@ -179,4 +186,7 @@ class InlineMainProcessHistoryRepository:
             format="%Y%m%d%H%M%S",
             errors="coerce",
         )
-        return history[HISTORY_OUTPUT_COLUMNS]
+        return self.data_forward_policy.shift_frame(
+            history[HISTORY_OUTPUT_COLUMNS],
+            (MAIN_PROCESS_EVENT_TIME_COLUMN,),
+        )

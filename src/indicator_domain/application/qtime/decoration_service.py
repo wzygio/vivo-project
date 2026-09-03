@@ -10,13 +10,12 @@ import pandas as pd
 
 from src.indicator_domain.core.qtime.decoration import (
     DECISION_COLUMNS,
-    DECISION_SHEET_NAME,
     QTIME_DECORATION_COLUMNS,
     QTIME_KEY_COLUMNS,
     normalize_qtime_flag,
 )
 
-
+DECISION_SHEET_NAME = "决策台账"
 DETAIL_SHEET_NAME = "当前超规明细"
 VALID_FLAG_TOKENS = {
     "true",

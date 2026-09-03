@@ -22,12 +22,13 @@ if TYPE_CHECKING:
 
 # --- Core (Processors) ---
 from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
+from src.yield_domain.application.modifier_table_service import sync_modifier_table
 from yield_domain.core.mwd_trend.modifier_table import (
     compute_scale_factors,
     resolve_monthly_targets,
     specified_signature,
-    sync_modifier_table,
 )
+from src.yield_domain.infrastructure.rate_override_repository import load_rate_overrides
 from yield_domain.core.sheet_lot.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
@@ -359,6 +360,11 @@ class YieldAnalysisService:
             product_dir,
             snapshot_signature,
         )
+        override_resource = config.paths.get("rate_override_config")
+        override_df, _ = load_rate_overrides(
+            product_dir.parent / override_resource.file_name if override_resource else None,
+            override_resource.sheet_name or "" if override_resource else "",
+        )
 
         # 3. 核心计算
         return calculate_lot_defect_rates(
@@ -366,8 +372,8 @@ class YieldAnalysisService:
             array_input_times_df=array_times_df, # 传入原生时间表
             mwd_code_data=mwd_code_data,
             config=config,
-            product_dir=product_dir,
-            warning_lines=warning_lines
+            warning_lines=warning_lines,
+            override_df=override_df,
         )
 
     @staticmethod
@@ -398,12 +404,18 @@ class YieldAnalysisService:
         )
         if not lot_results: return None
 
+        override_resource = config.paths.get("rate_override_config")
+        override_df, _ = load_rate_overrides(
+            product_dir.parent / override_resource.file_name if override_resource else None,
+            override_resource.sheet_name or "" if override_resource else "",
+        )
+
         return calculate_sheet_defect_rates(
             panel_details_df=panel_df,
             array_input_times_df=array_times_df,
             lot_results=lot_results, # 注入 Lot 结果
             config=config,
-            product_dir=product_dir
+            override_df=override_df,
         )
 
     # ==========================================================================

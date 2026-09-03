@@ -16,10 +16,8 @@ import pandas as pd
 import streamlit as st
 
 from src.equipment_domain.infrastructure.data_loader import (
-    filter_recent_part_life_measurements,
     load_spec_baseline,
-    load_part_life_snapshot,
-    load_fabricated_part_life_snapshot,
+    load_report_part_life_snapshots,
     PartsRepository,
 )
 from src.equipment_domain.core.parts_matcher import build_and_match_all
@@ -108,13 +106,12 @@ class PartsReportService:
 
         # 2. 查询数据库快照数据
         runtime_config = get_equipment_runtime_config()
-        snapshot_df = load_part_life_snapshot(_db_manager, spec_df)
-        snapshot_df = filter_recent_part_life_measurements(
-            snapshot_df,
+        snapshot_df, fabricated_snapshot_df = load_report_part_life_snapshots(
+            _db_manager,
+            spec_df,
             as_of=pd.Timestamp.now().floor("s"),
             max_age_days=runtime_config.measurement_max_age_days,
         )
-        fabricated_snapshot_df = load_fabricated_part_life_snapshot(spec_df)
 
         # 3. 真实记录优先；仅真实缺失时使用独立仿造快照。
         report_df = build_and_match_all(

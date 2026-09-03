@@ -15,7 +15,7 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_lot_point_df,
     build_sheet_point_df,
 )
-from src.inline_domain.core.aoi_rs.aoi_rs_decoration import prepare_aoi_rs_decoration
+from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:

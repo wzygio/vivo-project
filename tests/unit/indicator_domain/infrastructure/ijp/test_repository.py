@@ -24,7 +24,16 @@ def test_fetch_details_uses_bound_parameters_for_every_user_filter(monkeypatch) 
     def fake_read_sql(statement, engine, params):
         captured.update(statement=str(statement), params=params)
         return pd.DataFrame(
-            columns=["print_time", "productcode", "glass_id", "printer", "rs_code", "image_name"]
+            [
+                {
+                    "print_time": "2026-08-27 08:00:00",
+                    "productcode": "M678",
+                    "glass_id": "G1",
+                    "printer": "3CEE01-IK2-PR1",
+                    "rs_code": "C3DM1",
+                    "image_name": "G1_A01.jpg",
+                }
+            ]
         )
 
     monkeypatch.setattr(ijp_repository.pd, "read_sql", fake_read_sql)
@@ -57,7 +66,16 @@ def test_fetch_details_omits_optional_clauses_when_filters_are_empty(monkeypatch
     def fake_read_sql(statement, engine, params):
         captured.update(statement=str(statement), params=params)
         return pd.DataFrame(
-            columns=["print_time", "productcode", "glass_id", "printer", "rs_code", "image_name"]
+            [
+                {
+                    "print_time": "2026-08-27 08:00:00",
+                    "productcode": "M678",
+                    "glass_id": "G1",
+                    "printer": "3CEE01-IK2-PR1",
+                    "rs_code": "C3DM1",
+                    "image_name": "G1_A01.jpg",
+                }
+            ]
         )
 
     monkeypatch.setattr(ijp_repository.pd, "read_sql", fake_read_sql)
@@ -67,7 +85,10 @@ def test_fetch_details_omits_optional_clauses_when_filters_are_empty(monkeypatch
 
     assert "product_names" not in captured["params"]
     assert "picis" not in captured["params"]
+    assert captured["params"]["start_time"] == "2026-08-27 07:00:00"
+    assert captured["params"]["end_time"] == "2026-08-28 07:00:00"
     assert list(result.columns) == ijp_repository.DETAIL_COLUMNS
+    assert result.loc[0, "print_time"] == pd.Timestamp("2026-08-31 08:00:00")
 
 
 def test_fetch_daily_ratios_expands_the_window_by_seven_days(monkeypatch) -> None:
@@ -77,7 +98,7 @@ def test_fetch_daily_ratios_expands_the_window_by_seven_days(monkeypatch) -> Non
         captured.update(statement=str(statement), params=params)
         return pd.DataFrame(
             {
-                "day": ["2026-08-31", "2026-08-31", "2026-09-01"],
+                "day": ["2026-08-27", "2026-08-27", "2026-08-28"],
                 "rs_code": ["C3DM1", "C3RA1", "C3DM1"],
                 "code_num": [3, 1, 2],
             }
@@ -88,8 +109,9 @@ def test_fetch_daily_ratios_expands_the_window_by_seven_days(monkeypatch) -> Non
 
     ratios = repository.fetch_daily_ratios(_query())
 
-    assert captured["params"]["start_time"] == "2026-08-24 07:00:00"
-    assert captured["params"]["end_time"] == "2026-09-01 07:00:00"
+    assert captured["params"]["start_time"] == "2026-08-20 07:00:00"
+    assert captured["params"]["end_time"] == "2026-08-28 07:00:00"
+    assert ratios["day"].tolist() == ["2026-08-31", "2026-08-31", "2026-09-01"]
     assert ratios["ratio"].tolist() == [0.75, 0.25, 1.0]
 
 

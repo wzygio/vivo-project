@@ -1,114 +1,13 @@
 # src/vivo_project/core/sheet_lot/overrides.py
 import logging
 from collections import defaultdict
-from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
-import comtypes
-import comtypes.client
 import numpy as np
 import pandas as pd
 
 from src.yield_domain.core.sheet_lot.simulation import _to_iso_week_keys
 
-def _load_override_excel(
-    override_file_path: Optional[Path],
-    override_sheet_name: str
-) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
-    """
-    [Refactor] 接收完整的 Path 对象
-    """
-    if not override_file_path or not override_sheet_name:
-        return None, None
-        
-    logging.info(f"--- [COM Loader] 开始加载覆盖数据 (文件: '{override_file_path.name}') ---")
-    abs_path = str(override_file_path.resolve())
-
-    if not override_file_path.exists():
-        logging.error(f"[COM] 文件不存在: {abs_path}")
-        return None, None
-
-    # --- COM 初始化 ---
-    try:
-        comtypes.CoInitialize()
-    except:
-        pass 
-
-    excel_app = None
-    workbook = None
-    
-    try:
-        # [逻辑保持不变，仅路径来源变了]
-        logging.info("[COM] 正在启动 Excel 应用程序实例...")
-        excel_app = comtypes.client.CreateObject("Excel.Application")
-        excel_app.Visible = False
-        excel_app.DisplayAlerts = False 
-
-        logging.info(f"[COM] 正在打开工作簿: {abs_path}")
-        workbook = excel_app.Workbooks.Open(abs_path)
-
-        try:
-            sheet = workbook.Sheets(override_sheet_name)
-        except Exception:
-            logging.error(f"[COM] 找不到名为 '{override_sheet_name}' 的 Sheet 页。")
-            return None, None
-
-        raw_data = sheet.UsedRange.Value()
-        
-        if not raw_data or len(raw_data) < 2:
-            logging.warning("[COM] Excel 数据为空或只有表头。")
-            return None, None
-
-        logging.info(f"[COM] 成功通过 Excel 提取数据，共 {len(raw_data)} 行。")
-
-        header = raw_data[0]
-        rows = raw_data[1:]
-        
-        rows_cleaned = []
-        for row in rows:
-            rows_cleaned.append(list(row) if row else [None]*len(header))
-
-        df = pd.DataFrame(rows_cleaned, columns=list(header))
-
-        expected_cols = ['lot_id', 'sheet_id', 'override_rate', 'defect_desc']
-        
-        df.columns = [str(c).strip() for c in df.columns]
-        
-        missing_cols = [col for col in expected_cols if col not in df.columns]
-        if missing_cols:
-            logging.error(f"[COM] 缺少必需列: {missing_cols}。实际列: {df.columns.to_list()}")
-            return None, None
-
-        if df['override_rate'].dtype == 'object':
-             df['override_rate'] = df['override_rate'].astype(str).str.rstrip('%')
-             df['override_rate'] = pd.to_numeric(df['override_rate'], errors='coerce')
-             if df['override_rate'].mean() > 1.0:
-                 df['override_rate'] = df['override_rate'] / 100.0
-
-        df['defect_desc'] = df['defect_desc'].astype(str).str.strip()
-        df.dropna(subset=expected_cols, inplace=True)
-        
-        lot_override_df = df.groupby(['lot_id', 'defect_desc'])['override_rate'].mean().reset_index()
-        lot_override_df.rename(columns={'override_rate': 'override_rate_avg'}, inplace=True)
-
-        return df[expected_cols], lot_override_df[['lot_id', 'defect_desc', 'override_rate_avg']]
-
-    except Exception as e:
-        logging.error(f"[COM] Excel 读取失败: {e}", exc_info=True)
-        return None, None
-
-    finally:
-        if workbook:
-            try:
-                workbook.Close(False)
-            except: pass
-        if excel_app:
-            try:
-                excel_app.Quit()
-            except: pass
-        try:
-            comtypes.CoUninitialize()
-        except: pass
 
 def _calculate_lot_override_rate_heuristic(
     override_df: pd.DataFrame,
@@ -298,7 +197,7 @@ def _override_rates(
             # 4. 执行
             if not matched_indices.empty:
                 # --- 替换 ---
-                if is_target_trace: logging.warning(f"    -> [动作] 找到匹配缺陷记录，执行替换。")
+                if is_target_trace: logging.warning("    -> [动作] 找到匹配缺陷记录，执行替换。")
                 target_df.loc[matched_indices, 'defect_rate'] = override_rate
                 if 'total_panels' in target_df.columns:
                     panels = target_df.loc[matched_indices, 'total_panels']
@@ -310,7 +209,7 @@ def _override_rates(
                         processed_ids.add(target_entity_id) 
             else:
                 # --- 插入 (仅针对合法存在的实体插入它原先没有的缺陷) ---
-                if is_target_trace: logging.warning(f"    -> [动作] 该合法实体未包含该缺陷，准备插入新缺陷记录。")
+                if is_target_trace: logging.warning("    -> [动作] 该合法实体未包含该缺陷，准备插入新缺陷记录。")
                 
                 # [优化]: 寻找最精确的模板行，优先抓取该实体自身的物理基础信息(如时间、过货率)
                 entity_rows = all_sim_df[all_sim_df[entity_id_col].astype(str).str.strip() == target_entity_id]

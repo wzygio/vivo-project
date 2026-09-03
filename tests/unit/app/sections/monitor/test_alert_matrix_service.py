@@ -102,7 +102,9 @@ def test_default_products_come_from_enabled_products(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROW_MAP
 from src.inline_domain.application.shared.decorated_data import SCOPE_DECORATION_FILE_NAME
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 
 LAST_WEEK = "2026-08-26 10:00:00"  # 上一 ISO 周内
 THIS_WEEK = "2026-09-01 10:00:00"  # 本周（应被排除）

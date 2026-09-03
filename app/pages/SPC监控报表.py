@@ -49,7 +49,9 @@ from src.inline_domain.application.shared.decision_signature import get_scope_de
 from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationReadError
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
 
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
 SpcReportService = spc_service.SpcReportService

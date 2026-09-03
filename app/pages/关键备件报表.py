@@ -37,7 +37,11 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.equipment_domain.application.parts_service import PartsReportService
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
-from app.components.page_header import extract_cached_funcs, render_page_header
+from app.components.page_header import (
+    build_product_cache_signature,
+    extract_cached_funcs,
+    render_page_header,
+)
 from app.manager.session_manager import SessionManager
 from app.sections.equipment_domain.parts_filters import (
     apply_parts_filters,
@@ -69,6 +73,10 @@ st.set_page_config(
 
 active_config = SessionManager.get_active_config()
 db_manager = DatabaseManager()
+parts_report_cache_signature = build_product_cache_signature(
+    PARTS_REPORT_CACHE_SIGNATURE,
+    active_config.data_source.product_code,
+)
 render_page_header(
     "📋 关键备件报表",
     active_config,
@@ -106,7 +114,7 @@ with st.spinner("正在从数据库加载备件寿命数据..."):
         view_model = PartsReportService.get_report_data(
             _db_manager=db_manager,
             baseline_path=str(BASELINE_PATH),
-            snapshot_signature=PARTS_REPORT_CACHE_SIGNATURE,
+            snapshot_signature=parts_report_cache_signature,
         )
     except Exception as e:
         st.error(f"❌ 数据加载失败: {e}")

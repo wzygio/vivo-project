@@ -45,6 +45,25 @@ def test_product_cache_revision_changes_only_the_selected_product(tmp_path: Path
     assert m673_after == m673_before
 
 
+def test_product_cache_signature_includes_data_forward_policy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        page_header.ConfigLoader,
+        "get_data_forward_policy",
+        lambda: SimpleNamespace(signature="data-forward-v1:enabled:4d"),
+    )
+
+    signature = page_header.build_product_cache_signature(
+        "report-v1",
+        "M626",
+        revision_dir=tmp_path,
+    )
+
+    assert signature.endswith("|data_forward=data-forward-v1:enabled:4d")
+
+
 def test_product_scoped_invalidation_does_not_clear_whole_function_cache(
     monkeypatch,
 ) -> None:

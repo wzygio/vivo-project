@@ -1,8 +1,8 @@
 # Inline Sheet OOS 数据修饰机制
 
-> 分析对象：`src/inline_domain/core/shared/sheet_oos_decoration.py` 及其 SPC/CTQ/Monitor 调用链  
+> 分析对象：Inline Sheet OOS 的 Core 规则、Application 编排、Infrastructure 台账适配器及其 SPC/CTQ/Monitor 调用链
 > 重点文件：`resources/inline_domain/spc_sheet_oos_decoration.xlsx`  
-> 核验日期：2026-08-18
+> 核验日期：2026-09-03
 
 ## 1. 结论
 
@@ -34,10 +34,9 @@ fetch_decorated_features                 Streamlit L2 缓存
 prepare_decorated_data
         ├── 原始点位数据 + 规格 → 原始 Sheet 特征
         ├── prepare_sheet_oos_decoration
-        │     ├── 识别当前 OOS 明细
-        │     ├── 读取并合并工作簿中的人工 flag
-        │     ├── 缓存 miss 时替换当前产品 sheet
-        │     └── 对点位值执行 True / False / Delete
+        │     ├── Core：识别当前 OOS 明细、合并决策、执行三态规则
+        │     ├── Infrastructure：读取工作簿中的人工 flag
+        │     └── Infrastructure：需要刷新时原子替换当前产品 sheet
         └── 用修饰后的点位重新计算 Sheet 特征
               │
               ▼
@@ -50,7 +49,9 @@ prepare_decorated_data
 |---|---|
 | `application/shared/decorated_features.py` | 共享缓存边界；按 `scope` 路由 SPC/CTQ/免修饰口径 |
 | `application/shared/decorated_data.py` | 先计算原始 Sheet 特征，执行修饰，再重算特征 |
-| `core/shared/sheet_oos_decoration.py` | OOS 识别、工作簿合并、三态处理、确定性截断 |
+| `core/shared/sheet_oos_decoration.py` | 纯业务规则：OOS 识别、明细与决策合并、三态处理、确定性截断 |
+| `application/shared/sheet_oos_decoration_service.py` | 编排 Core 规则和台账端口，返回修饰结果及刷新原因 |
+| `infrastructure/shared/sheet_oos_decoration_repository.py` | Excel 明细、人工决策和刷新元数据的读取及原子持久化 |
 | `shared_kernel/utils/excel_tools.py` | 指定 sheet 的读取与替换；企业加密 Excel 的 COM 回退 |
 | `app/sections/spc/spc_dashboard.py` | 管理员下载、上传、覆盖和缓存刷新入口；CTQ 复用该 UI |
 
@@ -295,6 +296,8 @@ False, 0, no, n, 否, 不修饰, 不截断
 关键源码：
 
 - `src/inline_domain/core/shared/sheet_oos_decoration.py`
+- `src/inline_domain/application/shared/sheet_oos_decoration_service.py`
+- `src/inline_domain/infrastructure/shared/sheet_oos_decoration_repository.py`
 - `src/inline_domain/application/shared/decorated_data.py`
 - `src/inline_domain/application/shared/decorated_features.py`
 - `src/inline_domain/application/spc/spc_service.py`

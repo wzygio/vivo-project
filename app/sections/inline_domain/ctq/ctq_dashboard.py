@@ -30,7 +30,9 @@ from app.sections.inline_domain.shared.alert_center import (
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
-from src.inline_domain.core.shared.sheet_oos_decoration import SheetOosDecorationResult
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    SheetOosDecorationResult,
+)
 from src.shared_kernel.config import ConfigLoader
 
 CTQ_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS

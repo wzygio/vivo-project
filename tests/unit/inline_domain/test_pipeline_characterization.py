@@ -456,6 +456,10 @@ def test_scrap_data_transforms_excel_into_ooc_contract(
         'mappings:\n  "21230": ARRAY\ndefault_prefix_rules:\n  "31": OLED\n',
         encoding="utf-8",
     )
+    (config_dir / "global.yaml").write_text(
+        "data_forward:\n  enabled: true\n  offset_days: 4\n",
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
     )
@@ -470,6 +474,10 @@ def test_scrap_data_transforms_excel_into_ooc_contract(
     # Column-name standardization and type coercion
     # (报废站点 is read back from Excel as an integer).
     assert pd.api.types.is_datetime64_any_dtype(result["sheet_start_time"])
+    assert result["sheet_start_time"].dt.strftime("%Y-%m-%d").tolist() == [
+        "2026-08-05",
+        "2026-08-07",
+    ]
     assert set(result["step_id"].astype(str)) == {"21230"}
 
     # Factory inferred from the scrap step mapping.

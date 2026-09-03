@@ -12,23 +12,29 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.shared import sheet_oos_decoration
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
+    prepare_sheet_oos_decoration,
+)
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
     OOS_KEY_COLUMNS,
     REFRESH_META_SHEET_NAME,
     RefreshDecision,
-    SheetOosDecorationReadError,
-    SheetOosDecorationWriteError,
     build_refresh_meta_row,
     build_sheet_oos_detail,
     compute_decision_signature,
+    merge_detail_with_decoration_flags,
+    should_regenerate_detail,
+)
+from src.inline_domain.infrastructure.shared import (
+    sheet_oos_decoration_repository as sheet_oos_decoration,
+)
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+    SheetOosDecorationWriteError,
     load_refresh_meta,
     load_sheet_oos_decisions,
-    merge_detail_with_decoration_flags,
     persist_sheet_oos_decoration,
-    prepare_sheet_oos_decoration,
-    should_regenerate_detail,
 )
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,

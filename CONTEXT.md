@@ -38,6 +38,8 @@ SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
 
 ## Hard Boundaries
 
+- 报表日期前推只改变仓储输出的显示时间轴；数据库事实与原始 Parquet 保持源时间，
+  直接查询窗口需在仓储边界反向换算，相关缓存签名需包含前推策略。
 - 未获得具体任务与回归证明前，不重构已验证的 Yield 浓度和 Mapping 算法。
 - 不随意修改 `DatabaseManager` 的单例与重试语义。
 - 不移除页面数据流中的 `st.cache_data`；缓存只跨越原生 payload，ViewModel

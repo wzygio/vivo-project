@@ -100,7 +100,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 
 ## 5. 应用层共享缓存（application/shared/decorated_features.py）
 
-修饰引擎（`core/shared/sheet_oos_decoration.py`）与特征计算本是共享领域逻辑；
+修饰规则（`core/shared/sheet_oos_decoration.py`）与特征计算是共享领域逻辑；
 模块间唯一差异是**修饰口径（scope）**。应用层统一入口为
 `application/shared/decorated_data.py::prepare_decorated_data(scope=...)`
 （scope → 工作簿文件名映射；spc/ctq 的独立 wrapper 已删除）：
@@ -123,9 +123,11 @@ def fetch_decorated_features(_features_source, prod_code, scope,
 - monitor 按 data_type 分组路由：SPC→spc、CTQ→ctq（D2）、AOI→none（D3）。
 - 强刷链路：三个页面的 `funcs_to_clear` 均登记该函数。
 
-修饰算法在 `core/shared/` 单一来源：
+修饰算法在 `core/shared/` 单一来源，工作簿读写则由
+`infrastructure/shared/sheet_oos_decoration_repository.py` 负责，
+`application/shared/sheet_oos_decoration_service.py` 编排两者：
 
-- `sheet_oos_decoration.py`：工作簿三态引擎（Delete 删除 / True 截断 / False 释放），
+- `sheet_oos_decoration.py`：纯三态引擎（Delete 删除 / True 截断 / False 释放），
   键列可参数化（`key_columns`，默认为 SPC/CTQ 的
   `[prod_code, step_id, param_name, sheet_id]`）；
 - `auto_decoration.py`：无工作簿截断（`auto_clip_over_spec` /

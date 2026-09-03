@@ -17,16 +17,20 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.shared import sheet_oos_decoration
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     EMPTY_DECISION_SIGNATURE,
     OOS_DECORATION_FILE_NAME,
     OOS_KEY_COLUMNS,
     REFRESH_META_SHEET_NAME,
-    SheetOosDecorationReadError,
     build_refresh_meta_row,
     build_sheet_oos_detail,
     compute_decision_signature,
+)
+from src.inline_domain.infrastructure.shared import (
+    sheet_oos_decoration_repository as sheet_oos_decoration,
+)
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
     load_sheet_oos_decisions,
     persist_sheet_oos_decoration,
 )

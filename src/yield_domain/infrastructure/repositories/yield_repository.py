@@ -54,6 +54,7 @@ class PanelRepository:
         self.use_snapshot = use_snapshot
         # 缓存有效期，统一来自 config/global.yaml 的 data_snapshot.ttl_hours
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
+        self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
         """
@@ -88,7 +89,11 @@ class PanelRepository:
                         is_cache_fresh = False
                     else:
                         max_cached_date = df_cache[time_col].max()
-                        real_target_dt = min(req_end_dt, datetime.now()) # 修复1: 修正未来日期的越界比较
+                        source_target, _ = self.data_forward_policy.to_source_window(
+                            pd.Timestamp(req_end_dt),
+                            pd.Timestamp(req_end_dt),
+                        )
+                        real_target_dt = min(source_target.to_pydatetime(), datetime.now())
 
                         if age_hours < self.SNAPSHOT_TTL_HOURS:
                             if max_cached_date.date() >= real_target_dt.date():
@@ -194,10 +199,11 @@ class PanelRepository:
                 
                 df_final = df_to_save
 
-            # 最后的防御性过滤：确保返回给业务层的数据严格符合请求范围
-            mask = (df_final[time_col] >= req_start_dt) & \
-                   (df_final[time_col] <= req_end_dt)
-            df_final = df_final[mask].copy()
+            # 最后的防御性过滤按显示时间执行；原始快照仍保留源时间。
+            displayed = self.data_forward_policy.shift_frame(df_final, (time_col,))
+            mask = (displayed[time_col] >= req_start_dt) & \
+                   (displayed[time_col] <= req_end_dt)
+            df_final = displayed[mask].copy()
             
             return self._apply_data_policy(df_final).reset_index(drop=True)
 
@@ -273,9 +279,10 @@ class PanelRepository:
     ) -> pd.DataFrame:
         # 保持原有逻辑不变
         if not lot_ids: return pd.DataFrame()
-        return load_array_input_times(
+        times = load_array_input_times(
             db_manager=self.db,
             lot_ids=lot_ids,
             enable_custom_times=True if custom_times else False,
             custom_times=custom_times
         )
+        return self.data_forward_policy.shift_frame(times, ("array_input_time",))

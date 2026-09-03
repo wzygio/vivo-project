@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-
 FALSE_FLAG_TOKENS = {"false", "0", "no", "n", "否", "不修饰", "不截断"}
 
 

@@ -11,7 +11,7 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
-from src.inline_domain.core.shared.sheet_oos_decoration import (
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig

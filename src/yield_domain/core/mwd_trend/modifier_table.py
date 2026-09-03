@@ -1,4 +1,4 @@
-"""入库良率修饰表管理器。
+"""入库良率修饰的纯业务规则。
 
 职责：读取/解析 `resources/yield_domain/入库良率修饰表.xlsx`（企业加密，Sheet 按
 `<产品型号>_Group级` / `<产品型号>_Code级` 划分），计算当月原始良损、
@@ -10,16 +10,8 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import logging
-from pathlib import Path
 
 import pandas as pd
-
-from src.shared_kernel.utils.excel_tools import (
-    read_workbook_sheet,
-    replace_workbook_sheet,
-)
 
 MODIFIER_TABLE_COLUMNS = [
     "不良类型",
@@ -101,48 +93,6 @@ def _validate_rate_values(
 
 def _empty_table() -> pd.DataFrame:
     return pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS)
-
-
-def _read_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
-    """复用共享读取边界；缺 Sheet 返回空表，加密文件才回退 COM。"""
-    return read_workbook_sheet(xlsx_path, sheet_name)
-
-
-def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.DataFrame]:
-    """读取 `<产品>_Group级` / `<产品>_Code级` 两个 Sheet。
-
-    文件不存在或 Sheet 缺失时，对应级别返回带标准列的空表（空表语义：调用方
-    按"无指定"处理）；工作簿无法读取时抛出异常，避免误把人工指定当作空值。
-    """
-    xlsx_path = Path(xlsx_path)
-    table: dict[str, pd.DataFrame] = {}
-    for level, suffix in (("group", "Group级"), ("code", "Code级")):
-        if not xlsx_path.exists():
-            table[level] = _empty_table()
-            continue
-        sheet_name = f"{product_code}_{suffix}"
-        df = _read_sheet(xlsx_path, sheet_name)
-        if df.empty:
-            df = _empty_table()
-        else:
-            missing = [c for c in MODIFIER_TABLE_COLUMNS if c not in df.columns]
-            if missing:
-                logging.warning(
-                    "[modifier_table] %s[%s] 缺少列 %s，缺失列按空值补齐。",
-                    xlsx_path.name,
-                    suffix,
-                    missing,
-                )
-                for column in missing:
-                    df[column] = None
-            df = df[MODIFIER_TABLE_COLUMNS]
-            _validate_rate_values(
-                df,
-                product_code=product_code,
-                sheet_name=sheet_name,
-            )
-        table[level] = df
-    return table
 
 
 def compute_current_month_loss(
@@ -308,24 +258,6 @@ def specified_signature(table_df: pd.DataFrame) -> str:
     return hashlib.blake2b("|".join(tokens).encode("utf-8"), digest_size=8).hexdigest()
 
 
-def _load_stored_signatures(signature_path: Path) -> dict[str, str]:
-    try:
-        return json.loads(Path(signature_path).read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _store_signatures(signature_path: Path, signatures: dict[str, str]) -> None:
-    try:
-        signature_path = Path(signature_path)
-        signature_path.parent.mkdir(parents=True, exist_ok=True)
-        signature_path.write_text(
-            json.dumps(signatures, ensure_ascii=False), encoding="utf-8"
-        )
-    except Exception as error:
-        logging.warning("[modifier_table] 签名写入失败（忽略）: %s", error)
-
-
 def _apply_current_month_loss(
     table_df: pd.DataFrame,
     loss: pd.Series,
@@ -366,94 +298,3 @@ def _apply_current_month_loss(
             )
             changed = True
     return updated, changed
-
-
-def sync_modifier_table(
-    xlsx_path: Path,
-    product_code: str,
-    panel_details_df: pd.DataFrame,
-    current_month: str,
-    signature_path: Path | None = None,
-    read_only: bool = False,
-) -> dict[str, pd.DataFrame]:
-    """同步修饰表：更新当月良损、按需重算缩放倍数并写回。
-
-    - 每次调用只更新 `current_month` 的 `当月良损`（缺失行追加）；
-    - `指定良损` 签名变化或当月良损内容变化时才写回工作簿；
-    - 写回（含缩放倍数整列重算）失败不影响内存中的返回表，但保留旧签名以便重试；
-    - 返回内存中的最新表（无论写回是否成功）；
-    - ``read_only=True``（矩阵等只读消费方）：内存合并口径完全一致，
-      但绝不写工作簿、绝不写签名文件。
-    """
-    xlsx_path = Path(xlsx_path)
-    signature_path = Path(
-        signature_path
-        or xlsx_path.with_suffix(".sig.json")
-    )
-    stored = _load_stored_signatures(signature_path)
-    table = read_modifier_table(xlsx_path, product_code)
-    committed_signatures = stored.copy()
-    current_month_losses = compute_current_month_losses(
-        panel_details_df, month=current_month
-    )
-
-    for level in ("group", "code"):
-        sheet_name = f"{product_code}_{'Group级' if level == 'group' else 'Code级'}"
-        loss = current_month_losses[level]
-        updated, loss_changed = _apply_current_month_loss(
-            table[level], loss, current_month
-        )
-        signature = specified_signature(updated)
-        signature_key = f"{product_code}:{level}"
-
-        # 缩放倍数整列重算（口径含上月回退），保证与趋势生成一致
-        factors = compute_scale_factors(updated)
-        if not updated.empty:
-            updated[COL_SCALE_FACTOR] = [
-                factors.get(
-                    (str(d).strip(), str(m).strip()), 1.0
-                )
-                for d, m in zip(updated[COL_DEFECT], updated[COL_MONTH])
-            ]
-
-        need_write = (
-            not read_only
-            and not updated.empty
-            and (loss_changed or stored.get(signature_key) != signature)
-        )
-        if need_write:
-            try:
-                write_succeeded = replace_workbook_sheet(
-                    xlsx_path,
-                    sheet_name,
-                    updated,
-                )
-            except Exception as error:
-                write_succeeded = False
-                logging.error(
-                    "[modifier_table] 写回 %s[%s] 失败，保留旧签名以便重试: %s",
-                    xlsx_path.name,
-                    sheet_name,
-                    error,
-                    exc_info=True,
-                )
-            if write_succeeded:
-                committed_signatures[signature_key] = signature
-                logging.info(
-                    "[modifier_table] 已写回 %s[%s]（当月良损%s更新，指定%s变化）。",
-                    xlsx_path.name,
-                    sheet_name,
-                    "有" if loss_changed else "无",
-                    "有" if stored.get(signature_key) != signature else "无",
-                )
-            else:
-                logging.error(
-                    "[modifier_table] 未写回 %s[%s]，签名未推进；下次同步将重试。",
-                    xlsx_path.name,
-                    sheet_name,
-                )
-        table[level] = updated
-
-    if not read_only:
-        _store_signatures(signature_path, committed_signatures)
-    return table

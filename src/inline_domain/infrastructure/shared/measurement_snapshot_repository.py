@@ -13,13 +13,13 @@ from typing import Optional, TYPE_CHECKING
 from uuid import uuid4
 
 import pandas as pd
-from dateutil.relativedelta import relativedelta
 
 from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     RAW_MEASUREMENT_COLUMNS,
     load_raw_measurements,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_window import snapshot_window_start
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -64,6 +64,7 @@ class InlineMeasurementSnapshotRepository:
         self.measurement_loader = measurement_loader
         self.measurement_corrector = measurement_corrector
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
+        self.data_forward_policy = ConfigLoader.get_data_forward_policy()
         # 最近一次强制刷新是否真正从数据库成功（None 表示尚未强制刷新）。
         self.last_refresh_from_db: Optional[bool] = None
 
@@ -76,7 +77,7 @@ class InlineMeasurementSnapshotRepository:
         result = self._load_measurements(prod_code, end_date, force_refresh)
         if force_refresh:
             self.last_refresh_from_db = result.refreshed_from_db
-        return result.measurements
+        return self.data_forward_policy.shift_frame(result.measurements, ("start_time",))
 
     def refresh_measurements(
         self,
@@ -91,7 +92,10 @@ class InlineMeasurementSnapshotRepository:
         """
         result = self._load_measurements(prod_code, end_date, force_refresh=True)
         self.last_refresh_from_db = result.refreshed_from_db
-        return result
+        return MeasurementRefreshResult(
+            self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
+            result.refreshed_from_db,
+        )
 
     def _load_measurements(
         self,
@@ -100,7 +104,7 @@ class InlineMeasurementSnapshotRepository:
         force_refresh: bool,
     ) -> MeasurementRefreshResult:
         end_timestamp = pd.Timestamp(end_date)
-        start_date = (end_timestamp - relativedelta(months=3)).strftime("%Y-%m-%d")
+        start_date = snapshot_window_start(end_timestamp).strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
         if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):

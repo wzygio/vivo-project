@@ -12,13 +12,17 @@ from src.inline_domain.core.spc.spc_calculator import (
     build_period_capability_report,
     normalize_period_sigma_source,
 )
-from src.inline_domain.core.shared.sheet_oos_decoration import (
-    SheetOosDecorationReadError,
+from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
-from src.inline_domain.core.spc.cpk_decoration import (
+from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+    SheetOosDecorationReadError,
+)
+from src.inline_domain.application.spc.capability_decoration_service import (
     CpkDecorationResult,
     prepare_capability_decoration,
+)
+from src.inline_domain.core.spc.cpk_decoration import (
     resolve_capability_decoration_sheet,
 )
 from src.inline_domain.application.shared.decorated_features import (
