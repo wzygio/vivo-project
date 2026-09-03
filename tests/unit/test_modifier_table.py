@@ -409,3 +409,80 @@ class TestSyncModifierTable:
         assert not table["code"].empty
         stored = __import__("json").loads(signature_path.read_text(encoding="utf-8"))
         assert stored == {"M999:code": "stale-code", "M999:group": "stale-group"}
+
+
+class TestSyncModifierTableReadOnly:
+    """read_only=True（矩阵等只读消费方）：内存口径与写模式一致，但绝不落盘。"""
+
+    @pytest.fixture
+    def captured_writes(self, monkeypatch):
+        writes = {}
+
+        def fake_replace(path, sheet_name, df):
+            writes[sheet_name] = df.copy()
+            return True
+
+        monkeypatch.setattr(
+            "src.yield_domain.core.mwd_trend.modifier_table.replace_workbook_sheet",
+            fake_replace,
+        )
+        return writes
+
+    def test_read_only_computes_in_memory_but_writes_nothing(
+        self, tmp_path, captured_writes
+    ):
+        path = tmp_path / "modifier.xlsx"
+        signature_path = tmp_path / "sig.json"
+
+        table = sync_modifier_table(
+            path,
+            "M999",
+            _panel_rows(),
+            current_month="2026-07",
+            signature_path=signature_path,
+            read_only=True,
+        )
+
+        # 内存表仍合并当月良损（与写模式判定口径一致）
+        assert not table["code"].empty
+        july = table["code"][table["code"]["时间标签"] == "2026-07"]
+        assert set(july["不良类型"]) == {"G向单亮线", "HBM亮点", "G向单暗线"}
+        # 但工作簿与签名文件都未被创建/改写
+        assert captured_writes == {}
+        assert not path.exists()
+        assert not signature_path.exists()
+
+    def test_read_only_preserves_existing_workbook_bytes(self, tmp_path, monkeypatch):
+        _write_table(
+            tmp_path / "modifier.xlsx",
+            "M999_Code级",
+            [
+                {
+                    "不良类型": "G向单亮线",
+                    "周期类型": "月度",
+                    "时间标签": "2026-06",
+                    "当月良损": 0.01,
+                    "指定良损": 0.02,
+                    "缩放倍数": None,
+                }
+            ],
+        )
+        path = tmp_path / "modifier.xlsx"
+        bytes_before = path.read_bytes()
+        mtime_before = path.stat().st_mtime_ns
+
+        table = sync_modifier_table(
+            path,
+            "M999",
+            _panel_rows(),
+            current_month="2026-07",
+            signature_path=tmp_path / "sig.json",
+            read_only=True,
+        )
+
+        assert path.read_bytes() == bytes_before
+        assert path.stat().st_mtime_ns == mtime_before
+        assert not (tmp_path / "sig.json").exists()
+        # 内存中按既有口径回退指定良损并追加当月行
+        july = table["code"][table["code"]["时间标签"] == "2026-07"]
+        assert not july.empty

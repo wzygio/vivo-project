@@ -44,6 +44,13 @@ class QTimeReportService:
         self._data_port = data_port
         self._decoration_port = decoration_port
 
+    @property
+    def decoration_path(self) -> Path | None:
+        """决策台账工作簿路径（只读）；未配置 decoration_port 时返回 None。"""
+        if self._decoration_port is None:
+            return None
+        return self._decoration_port.decoration_path
+
     def get_filter_options(self, shop: Shop) -> QTimeFilterOptions:
         return {
             "step_options": self._data_port.list_step_options(shop),

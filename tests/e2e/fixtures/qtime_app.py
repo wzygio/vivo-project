@@ -23,6 +23,10 @@ from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
 
 
 class FixtureQTimeService:
+    @property
+    def decoration_path(self) -> Path:
+        return Path("resources/indicator_domain/qtime/qtime_oos_decoration.xlsx")
+
     def get_filter_options(
         self,
         shop: str,
@@ -46,6 +50,7 @@ class FixtureQTimeService:
         shop: str,
         step_descriptions: tuple[str, ...],
         products: tuple[str, ...],
+        as_of=None,
     ) -> QTimeMonitoringResult:
         if products != ("M626",):
             raise AssertionError("Q-Time query must use the Page Header product")

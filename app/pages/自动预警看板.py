@@ -1,3 +1,20 @@
+import sys
+from pathlib import Path
+
+current_dir = Path(__file__).resolve().parent
+project_root = None
+for parent in [current_dir] + list(current_dir.parents):
+    if (parent / "pyproject.toml").exists():
+        project_root = parent
+        break
+if project_root:
+    root_str = str(project_root)
+    src_str = str(project_root / "src")
+    if root_str not in sys.path:
+        sys.path.insert(0, root_str)
+    if src_str not in sys.path:
+        sys.path.insert(0, src_str)
+
 import streamlit as st
 import pandas as pd
 from functools import partial
@@ -20,6 +37,10 @@ from app.sections.inline_domain.monitor.monitor_dashboard import (
     render_monitor_summary_chart,
     render_station_top10_section,
     filter_and_rollup_monitor_data,
+)
+from app.sections.inline_domain.monitor.alert_matrix import render_alert_matrix_board
+from app.sections.inline_domain.monitor.alert_matrix_cache import (
+    get_alert_matrix_cached_funcs,
 )
 # [新增] 导入数据修饰配置模块（文件配置版）
 from app.manager.compliance_manager import (
@@ -82,7 +103,7 @@ funcs_to_clear = extract_cached_funcs(MonitorAnalysisService) + [
     get_cached_query_window,
     get_cached_alarm_detail_tables,
     get_cached_step_description_map,
-]
+] + get_alert_matrix_cached_funcs()
 render_page_header(
     title="自动预警看板",
     config=active_config,
@@ -94,6 +115,15 @@ render_page_header(
         )
     ],
 )
+
+# --------------------------------------------------------------------------
+# 页首：产品 × 监控参数 预警矩阵（PRD-2026-09-02 §4.2）
+# 矩阵为全产品视图，不参与 Header 单产品筛选（D3）；payload 经 L2 缓存集中
+# 计算后一次性渲染；点击 🔴 单元格在矩阵下方懒加载预警明细与图像。
+# --------------------------------------------------------------------------
+render_alert_matrix_board(db_manager=db_manager, step_desc_map=step_desc_map)
+
+st.divider()
 
 # --------------------------------------------------------------------------
 # 页面积木组装层 (UI Assembly)

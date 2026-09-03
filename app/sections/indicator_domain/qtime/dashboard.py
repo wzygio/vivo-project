@@ -10,6 +10,11 @@ from app.sections.indicator_domain.qtime.alert_center import render_qtime_alert_
 from app.sections.indicator_domain.qtime.decoration_admin import (
     render_qtime_decoration_admin,
 )
+from src.indicator_domain.application.qtime.cached_monitoring import (
+    MISSING_DECISION_FILE_STAT,
+    get_cached_monitoring,
+    get_qtime_decision_file_stat,
+)
 from src.indicator_domain.application.qtime.dtos import QTimeStepOption, Shop
 from src.indicator_domain.application.qtime.errors import (
     QTimeDataAccessError,
@@ -129,10 +134,18 @@ def _run_query(
     signature: tuple[object, ...],
 ) -> None:
     try:
-        monitoring = service.get_current_monitoring(
+        file_stat = get_qtime_decision_file_stat(service.decoration_path)
+        decision_mtime_ns, decision_size = (
+            file_stat if file_stat is not None else MISSING_DECISION_FILE_STAT
+        )
+        monitoring = get_cached_monitoring(
+            service,
             shop=shop,
             step_descriptions=tuple(option.step_desc for option in step_options),
             products=(selected_product,),
+            as_of=None,
+            decision_mtime_ns=decision_mtime_ns,
+            decision_size=decision_size,
         )
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")

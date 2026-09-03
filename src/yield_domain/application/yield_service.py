@@ -186,6 +186,7 @@ class YieldAnalysisService:
         config: AppConfig,
         product_dir: Path,
         panel_df: pd.DataFrame,
+        read_only: bool = False,
     ) -> Dict[str, Any]:
         """同步入库良率修饰表并产出趋势/Mapping 所需上下文。
 
@@ -205,6 +206,7 @@ class YieldAnalysisService:
             config.data_source.product_code,
             panel_df,
             current_month,
+            read_only=read_only,
         )
         return {
             "targets": resolve_monthly_targets(table["code"], months),
@@ -224,6 +226,7 @@ class YieldAnalysisService:
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
         modifier_signature: str = "",
+        read_only: bool = False,
     ) -> Dict[str, Any]:
         """按 Panel 快照和修饰表签名共享趋势/Mapping 修饰上下文。"""
         panel_df = YieldAnalysisService.get_modified_panel_details(
@@ -237,7 +240,7 @@ class YieldAnalysisService:
                 "signature": "empty-empty",
             }
         return YieldAnalysisService._build_modifier_context(
-            config, product_dir, panel_df
+            config, product_dir, panel_df, read_only=read_only
         )
 
     @staticmethod
@@ -248,6 +251,7 @@ class YieldAnalysisService:
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
         modifier_signature: str = "",
+        read_only: bool = False,
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
@@ -262,6 +266,7 @@ class YieldAnalysisService:
             _db_manager,
             snapshot_signature,
             modifier_signature,
+            read_only=read_only,
         )
         if not mwd_code_data:
             return None
@@ -272,6 +277,7 @@ class YieldAnalysisService:
             _db_manager,
             snapshot_signature,
             modifier_signature,
+            read_only=read_only,
         )
 
         return MWDTrendProcessor.create_mwd_trend_data(
@@ -290,6 +296,7 @@ class YieldAnalysisService:
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
         modifier_signature: str = "",
+        read_only: bool = False,
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
@@ -307,6 +314,7 @@ class YieldAnalysisService:
             _db_manager,
             snapshot_signature,
             modifier_signature,
+            read_only=read_only,
         )
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
@@ -325,7 +333,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
-        snapshot_signature: str = "") -> Dict[str, Any] | None:
+        snapshot_signature: str = "",
+        read_only: bool = False) -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
@@ -343,7 +352,7 @@ class YieldAnalysisService:
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _db_manager, snapshot_signature
+            config, product_dir, _db_manager, snapshot_signature, read_only=read_only
         )
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             config,
@@ -367,7 +376,8 @@ class YieldAnalysisService:
         config: AppConfig, 
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
-        snapshot_signature: str = "") -> Dict[str, Any] | None:
+        snapshot_signature: str = "",
+        read_only: bool = False) -> Dict[str, Any] | None:
         """[重构] 计算 Sheet 级良率 (听命于 Lot 级数据)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
@@ -384,7 +394,7 @@ class YieldAnalysisService:
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
-            config, product_dir, _db_manager, snapshot_signature
+            config, product_dir, _db_manager, snapshot_signature, read_only=read_only
         )
         if not lot_results: return None
 
@@ -401,7 +411,7 @@ class YieldAnalysisService:
     # ==========================================================================
     @staticmethod
     @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor: float = 1.0, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "", product_dir: Path | None = None, modifier_signature: str = "") -> pd.DataFrame:
+    def get_mapping_data(config: AppConfig, scaling_factor: float = 1.0, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "", product_dir: Path | None = None, modifier_signature: str = "", read_only: bool = False) -> pd.DataFrame:
         """准备 Mapping 数据（不良数 = 全局倍率 × 月度缩放倍数 × 级联衰减）"""
         panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
         if panel_df.empty: return pd.DataFrame()
@@ -413,6 +423,7 @@ class YieldAnalysisService:
                 _db_manager,
                 snapshot_signature,
                 modifier_signature,
+                read_only=read_only,
             )
             monthly_factors = modifier_context["factors"]
         return prepare_mapping_data(

@@ -201,11 +201,16 @@ def render_ctq_indicator_sections(
     period_box_source: str = "point_value",
     step_desc_map: dict[str, str] | None = None,
     chart_key_prefix: str = "ctq_report",
+    memo_signature: str | None = None,
+    memo_state_key: str = "ctq_alert_charts_memo",
 ) -> None:
     """Render capability-free CTQ distribution figures by indicator.
 
     两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
     避免图表随计算进度一张一张跳出导致页面抖动卡顿。
+
+    传入 memo_signature 时（自动预警/矩阵详情区），构建结果按签名缓存在
+    session_state：同一版数据重复 rerun 只渲染不重建（与 SPC 同款约定）。
     """
     if sheet_features_df.empty:
         st.info("当前筛选条件下无 CTQ 数据。")
@@ -236,7 +241,12 @@ def render_ctq_indicator_sections(
             )
         )
 
-    for payload in gate.collect():
+    payloads = (
+        gate.collect_memoized(memo_state_key, memo_signature)
+        if memo_signature is not None
+        else gate.collect()
+    )
+    for payload in payloads:
         _render_ctq_indicator_payload(payload, chart_key_prefix=chart_key_prefix)
 
 

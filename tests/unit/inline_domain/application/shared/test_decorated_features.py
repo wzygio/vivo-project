@@ -364,3 +364,31 @@ def test_payload_carries_decision_ledger_and_refresh_reason(
     assert decision_df["flag"].tolist() == [False]
     assert isinstance(decoration["refresh_reason"], str)
     assert decoration["refresh_reason"]
+
+
+# ---------------------------------------------------------------------------
+# 缓存容量（Phase 2，PRD §4.4）：矩阵模式 7 产品 × 3 scope = 21 条目不淘汰
+# ---------------------------------------------------------------------------
+MATRIX_PRODUCTS = ("M626", "M673", "M678", "Z517", "Z553", "Z571", "Z576")
+MATRIX_SCOPES = ("spc", "ctq", "none")
+
+
+def test_max_entries_keeps_all_matrix_product_scope_entries(
+    decoration_root: Path,
+) -> None:
+    source = _CountingSource()
+
+    for prod_code in MATRIX_PRODUCTS:
+        for scope in MATRIX_SCOPES:
+            fetch_decorated_features(
+                source, prod_code, scope, START_DATE, END_DATE, "capacity"
+            )
+    expected_entries = len(MATRIX_PRODUCTS) * len(MATRIX_SCOPES)
+    assert source.measure_calls == expected_entries
+
+    # 最早写入的条目仍须命中缓存：被淘汰则 measure_calls 增加。
+    fetch_decorated_features(
+        source, MATRIX_PRODUCTS[0], MATRIX_SCOPES[0], START_DATE, END_DATE, "capacity"
+    )
+
+    assert source.measure_calls == expected_entries

@@ -374,13 +374,16 @@ def sync_modifier_table(
     panel_details_df: pd.DataFrame,
     current_month: str,
     signature_path: Path | None = None,
+    read_only: bool = False,
 ) -> dict[str, pd.DataFrame]:
     """同步修饰表：更新当月良损、按需重算缩放倍数并写回。
 
     - 每次调用只更新 `current_month` 的 `当月良损`（缺失行追加）；
     - `指定良损` 签名变化或当月良损内容变化时才写回工作簿；
     - 写回（含缩放倍数整列重算）失败不影响内存中的返回表，但保留旧签名以便重试；
-    - 返回内存中的最新表（无论写回是否成功）。
+    - 返回内存中的最新表（无论写回是否成功）；
+    - ``read_only=True``（矩阵等只读消费方）：内存合并口径完全一致，
+      但绝不写工作簿、绝不写签名文件。
     """
     xlsx_path = Path(xlsx_path)
     signature_path = Path(
@@ -414,7 +417,8 @@ def sync_modifier_table(
             ]
 
         need_write = (
-            not updated.empty
+            not read_only
+            and not updated.empty
             and (loss_changed or stored.get(signature_key) != signature)
         )
         if need_write:
@@ -450,5 +454,6 @@ def sync_modifier_table(
                 )
         table[level] = updated
 
-    _store_signatures(signature_path, committed_signatures)
+    if not read_only:
+        _store_signatures(signature_path, committed_signatures)
     return table

@@ -76,7 +76,7 @@ def _empty_features_payload(spec_empty: bool = True) -> dict[str, object]:
 
 @st.cache_data(
     show_spinner=False,
-    max_entries=12,
+    max_entries=32,
     ttl=ConfigLoader.get_service_cache_ttl_seconds(
         "inline_decorated_features", default_hours=4
     ),

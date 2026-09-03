@@ -128,6 +128,7 @@ def perform_hard_reset(
             key_str.startswith("yield_composite_key_")
             or key_str.startswith("yield_snapshot_sig_")
             or key_str.startswith("spc_snapshot_sig_")
+            or key_str.startswith("matrix_detail_")
             or key_str == "parts_baseline_sig"
         ):
             del st.session_state[key]

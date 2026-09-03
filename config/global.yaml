@@ -17,6 +17,8 @@ service_cache:
     inline_aoi_rs_report_payload: 12 # AOI_RS 报表 payload
     inline_monitor_alarm_details: 12 # 自动预警看板报警明细表
     inline_monitor_dashboard_payload: 12 # 自动预警看板大盘 payload
+    qtime_monitoring: 12 # Q-Time 当前监控结果（PRD §4.3）
+    alert_matrix_payload: 12 # 自动预警矩阵 payload（PRD §4.1）
 
 # 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
 domain_config:
