@@ -16,6 +16,7 @@ TT_DETAIL_COLUMNS = [
     "step_id", "tt_name", "tt_qty",
 ]
 ParticleSizeLoader = Callable[[AoiTtQueryConfig], pd.DataFrame]
+ParticleSizeRatioLoader = Callable[[], pd.DataFrame]
 
 
 def _project_tt_param_set(specs: pd.DataFrame) -> pd.DataFrame:
@@ -42,10 +43,12 @@ class AoiTtRepository:
         raw_measurements: MeasurementSnapshotPort,
         metadata: MeasurementMetadataPort,
         particle_size_loader: ParticleSizeLoader | None = None,
+        particle_size_ratio_loader: ParticleSizeRatioLoader | None = None,
     ) -> None:
         self.raw_measurements = raw_measurements
         self.metadata = metadata
         self.particle_size_loader = particle_size_loader
+        self.particle_size_ratio_loader = particle_size_ratio_loader
 
     def get_tt_details(self, query: AoiTtQueryConfig) -> pd.DataFrame:
         raw = self.raw_measurements.get_measurements(query.prod_code, query.end_date)
@@ -89,3 +92,8 @@ class AoiTtRepository:
         if self.particle_size_loader is None:
             return pd.DataFrame()
         return self.particle_size_loader(query)
+
+    def get_particle_size_ratios(self) -> pd.DataFrame:
+        if self.particle_size_ratio_loader is None:
+            return pd.DataFrame()
+        return self.particle_size_ratio_loader()

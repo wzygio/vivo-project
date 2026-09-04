@@ -1,4 +1,4 @@
-"""Load ARRAY AOI defect counts grouped by Particle Size."""
+"""Load ARRAY/TP defect counts grouped by Particle Size."""
 
 from __future__ import annotations
 
@@ -11,6 +11,9 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.infrastructure.shared.array_defect_data_loader import (
     ARRAY_PARTICLE_COUNT_COLUMNS,
     load_array_aoi_particle_size_counts,
+)
+from src.inline_domain.infrastructure.shared.tp_defect_data_loader import (
+    load_tp_particle_size_counts,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
@@ -27,24 +30,35 @@ def load_particle_size_counts(
     query: AoiTtQueryConfig,
     *,
     data_forward_policy: DataForwardPolicy | None = None,
-    data_loader: Callable[..., pd.DataFrame] = load_array_aoi_particle_size_counts,
+    array_data_loader: Callable[..., pd.DataFrame] = load_array_aoi_particle_size_counts,
+    tp_data_loader: Callable[..., pd.DataFrame] = load_tp_particle_size_counts,
 ) -> pd.DataFrame:
-    """Return O/L AOI defect counts without multiplying rows through the SPC join."""
-    if query.factory and query.factory.upper() != "ARRAY":
+    """Return S/M/L/H defect counts for ARRAY/TP without SPC join multiplication."""
+    requested_factory = query.factory.upper() if query.factory else None
+    if requested_factory == "OLED":
         return pd.DataFrame(columns=PARTICLE_SIZE_COUNT_COLUMNS)
-    if query.tt_name and query.tt_name.upper() != "TDSUM":
+    if requested_factory and requested_factory not in {"ARRAY", "TP"}:
         return pd.DataFrame(columns=PARTICLE_SIZE_COUNT_COLUMNS)
     policy = data_forward_policy or ConfigLoader.get_data_forward_policy()
     display_start = pd.Timestamp(query.start_date)
     display_end = pd.Timestamp(query.end_date) + pd.Timedelta(days=1)
     source_start, source_end = policy.to_source_window(display_start, display_end)
-    result = data_loader(
-        db_manager,
-        prod_code=query.prod_code,
-        start_time=source_start.to_pydatetime(),
-        end_time=source_end.to_pydatetime(),
-        step_id=query.step_id,
-    )
+    loaders = []
+    if requested_factory in {None, "ARRAY"}:
+        loaders.append(array_data_loader)
+    if requested_factory in {None, "TP"}:
+        loaders.append(tp_data_loader)
+    frames = [
+        loader(
+            db_manager,
+            prod_code=query.prod_code,
+            start_time=source_start.to_pydatetime(),
+            end_time=source_end.to_pydatetime(),
+            step_id=query.step_id,
+        )
+        for loader in loaders
+    ]
+    result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if result.empty:
         return pd.DataFrame(columns=PARTICLE_SIZE_COUNT_COLUMNS)
 

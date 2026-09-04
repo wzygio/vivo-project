@@ -1,6 +1,6 @@
 # ADR-0024：AOI_TT Particle Size 的分源计数与聚合边界
 
-- Status: Accepted
+- Status: Superseded by ADR-0025
 - Date: 2026-09-03
 - Scope: `src/inline_domain/{application,core,infrastructure}/`、`app/pages/AOI_TT监控报表.py`、`app/sections/inline_domain/aoi_tt/`
 - Extends: ADR-0008 的 TT 参数、趋势分母与规格口径；ADR-0012 的共享事实和薄业务投影边界继续有效。

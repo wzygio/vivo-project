@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from datetime import date
+import hashlib
 
 import pandas as pd
 
@@ -21,7 +22,9 @@ from src.inline_domain.core.spc.spc_calculator import build_available_period_axi
 _INDICATOR_KEYS = ["factory", "step_id", "tt_name", "particle_size"]
 # 规格表无 factory 列（step_id 全局唯一隐含厂别），规格匹配备用键
 _SPEC_KEYS = ["step_id", "tt_name"]
-PARTICLE_SIZE_OPTIONS = ("Total", "O", "L")
+PARTICLE_SIZE_OPTIONS = ("Total", "S", "M", "L", "H")
+PARTICLE_SIZE_FACTORIES = frozenset({"ARRAY", "TP"})
+PARTICLE_SIZES = PARTICLE_SIZE_OPTIONS[1:]
 _PARTICLE_JOIN_KEYS = ["factory", "prod_code", "step_id", "sheet_id"]
 
 
@@ -29,15 +32,14 @@ def build_particle_size_details(
     tt_details_df: pd.DataFrame,
     particle_counts_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """为每个 ARRAY/TDSUM Sheet 补齐 O/L 明细，同时原样保留 Total 明细。"""
+    """为 ARRAY/TP Sheet 补齐 S/M/L/H 实表明细，同时保留 Total。"""
     if tt_details_df.empty:
         return tt_details_df.assign(particle_size=pd.Series(dtype="object"))
 
     total_details = tt_details_df.copy()
     total_details["particle_size"] = "Total"
     eligible = total_details[
-        total_details["factory"].astype(str).str.upper().eq("ARRAY")
-        & total_details["tt_name"].astype(str).str.upper().eq("TDSUM")
+        total_details["factory"].astype(str).str.upper().isin(PARTICLE_SIZE_FACTORIES)
     ]
     if eligible.empty:
         return total_details
@@ -47,7 +49,7 @@ def build_particle_size_details(
         .drop_duplicates([*_PARTICLE_JOIN_KEYS, "tt_name"], keep="first")
         .drop(columns=["tt_qty", "particle_size"])
     )
-    particle_sizes = pd.DataFrame({"particle_size": ["O", "L"]})
+    particle_sizes = pd.DataFrame({"particle_size": PARTICLE_SIZES})
     expanded = sheet_base.merge(particle_sizes, how="cross")
 
     if particle_counts_df.empty:
@@ -61,7 +63,7 @@ def build_particle_size_details(
             counts["particle_qty"], errors="coerce"
         ).fillna(0)
         counts = (
-            counts[counts["particle_size"].isin({"O", "L"})]
+            counts[counts["particle_size"].isin(PARTICLE_SIZES)]
             .groupby([*_PARTICLE_JOIN_KEYS, "particle_size"], as_index=False)["particle_qty"]
             .sum()
             .rename(columns={"particle_qty": "tt_qty"})
@@ -75,6 +77,83 @@ def build_particle_size_details(
 
     expanded = expanded.reindex(columns=total_details.columns)
     return pd.concat([total_details, expanded], ignore_index=True)
+
+
+def _stable_ratio_factor(seed: str, particle_size: str, ratio_jitter: float) -> float:
+    digest = hashlib.sha256(f"{seed}|{particle_size}".encode("utf-8")).digest()
+    unit_value = int.from_bytes(digest[:8], "big") / ((1 << 64) - 1)
+    return 1.0 + ratio_jitter * ((2.0 * unit_value) - 1.0)
+
+
+def build_generated_particle_size_details(
+    tt_details_df: pd.DataFrame,
+    ratio_spec_df: pd.DataFrame,
+    *,
+    ratio_jitter: float = 0.1,
+) -> pd.DataFrame:
+    """按站点比例为 ARRAY/TP 的每个 Sheet 稳定生成 S/M/L/H 明细。
+
+    相同业务键和配置总是产生相同结果；各粒径权重在配置比例的相对
+    ``ratio_jitter`` 范围内扰动并重新归一化。规格缺失的站点保持 Total-only。
+    """
+    if tt_details_df.empty:
+        return tt_details_df.assign(particle_size=pd.Series(dtype="object"))
+
+    total_details = tt_details_df.copy()
+    total_details["particle_size"] = "Total"
+    if ratio_spec_df.empty:
+        return total_details
+
+    jitter = min(max(float(ratio_jitter), 0.0), 1.0)
+    ratios = ratio_spec_df.copy()
+    ratios["step_id"] = ratios["step_id"].astype(str).str.strip()
+    ratios["particle_size"] = ratios["particle_size"].astype(str).str.strip().str.upper()
+    ratios["ratio"] = pd.to_numeric(ratios["ratio"], errors="coerce")
+    ratios = ratios[
+        ratios["particle_size"].isin(PARTICLE_SIZES) & ratios["ratio"].gt(0)
+    ]
+    ratio_maps = {
+        step_id: group.set_index("particle_size")["ratio"].to_dict()
+        for step_id, group in ratios.groupby("step_id", sort=False)
+        if set(group["particle_size"]) == set(PARTICLE_SIZES)
+    }
+    if not ratio_maps:
+        return total_details
+
+    eligible = total_details[
+        total_details["factory"].astype(str).str.upper().isin(PARTICLE_SIZE_FACTORIES)
+        & total_details["step_id"].astype(str).isin(ratio_maps)
+    ]
+    if eligible.empty:
+        return total_details
+
+    generated_rows: list[dict[str, object]] = []
+    for row in eligible.itertuples(index=False):
+        row_data = row._asdict()
+        numeric_total = pd.to_numeric(row_data["tt_qty"], errors="coerce")
+        total_qty = float(numeric_total) if pd.notna(numeric_total) else 0.0
+        seed = "|".join(
+            str(row_data.get(key, ""))
+            for key in ("factory", "prod_code", "step_id", "sheet_id", "tt_name")
+        )
+        base_ratios = ratio_maps[str(row_data["step_id"])]
+        weights = {
+            size: float(base_ratios[size]) * _stable_ratio_factor(seed, size, jitter)
+            for size in PARTICLE_SIZES
+        }
+        weight_total = sum(weights.values())
+        allocated = 0.0
+        for index, size in enumerate(PARTICLE_SIZES):
+            quantity = (
+                total_qty - allocated
+                if index == len(PARTICLE_SIZES) - 1
+                else total_qty * weights[size] / weight_total
+            )
+            allocated += quantity
+            generated_rows.append({**row_data, "particle_size": size, "tt_qty": quantity})
+
+    generated = pd.DataFrame(generated_rows).reindex(columns=total_details.columns)
+    return pd.concat([total_details, generated], ignore_index=True)
 
 
 def _prepare_details(tt_details_df: pd.DataFrame) -> pd.DataFrame:

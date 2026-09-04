@@ -53,8 +53,8 @@ async page => {
   const filterHeading = page.getByRole("heading", { name: "筛选", exact: true });
   await filterHeading.waitFor({ timeout: 120_000 });
 
-  // Particle Size 多选默认必须是 Total/O/L 全选。
-  for (const size of ["Total", "O", "L"]) {
+  // Particle Size 多选默认必须是 Total/S/M/L/H 全选。
+  for (const size of ["Total", "S", "M", "L", "H"]) {
     await page
       .getByRole("button", { name: `${size}, close by backspace`, exact: true })
       .waitFor({ timeout: 120_000 });
@@ -112,7 +112,7 @@ async page => {
     .first()
     .waitFor({ timeout: 300_000 });
 
-  for (const size of ["Total", "O", "L"]) {
+  for (const size of ["Total", "S", "M", "L", "H"]) {
     await page
       .getByText(`Particle Size：${size}`, { exact: true })
       .first()
@@ -120,14 +120,14 @@ async page => {
   }
 
   await page.waitForFunction(
-    () => document.querySelectorAll(".js-plotly-plot").length >= 9,
+    () => document.querySelectorAll(".js-plotly-plot").length >= 15,
     undefined,
     { timeout: 300_000 },
   );
 
   const chartCount = await page.locator(".js-plotly-plot").count();
-  if (chartCount < 9 || chartCount % 9 !== 0) {
-    throw new Error(`全选图表数量不符合每参数 3 粒径 × 3 图：实际 ${chartCount}`);
+  if (chartCount < 15 || chartCount % 15 !== 0) {
+    throw new Error(`全选图表数量不符合每参数 5 粒径 × 3 图：实际 ${chartCount}`);
   }
 
   await page.screenshot({
@@ -135,25 +135,22 @@ async page => {
     fullPage: false,
   });
 
-  // 探索性组合筛选：只保留 Total；O/L 图和标签都必须消失。
+  // 探索性组合筛选：只保留 Total；S/M/L/H 图和标签都必须消失。
   const particleSelector = page.getByRole("combobox", { name: /Particle Size$/ });
-  await particleSelector.focus();
-  await page.keyboard.press("Backspace");
+  for (const size of ["H", "L", "M", "S"]) {
+    await particleSelector.focus();
+    await page.keyboard.press("Backspace");
+    await page
+      .getByRole("button", { name: `${size}, close by backspace`, exact: true })
+      .waitFor({ state: "hidden", timeout: 120_000 });
+  }
   await page
-    .getByRole("button", { name: "L, close by backspace", exact: true })
-    .waitFor({ state: "hidden", timeout: 120_000 });
-  await particleSelector.focus();
-  await page.keyboard.press("Backspace");
-  await page
-    .getByRole("button", { name: "O, close by backspace", exact: true })
-    .waitFor({ state: "hidden", timeout: 120_000 });
-  await page
-    .getByText("Particle Size：O", { exact: true })
+    .getByText("Particle Size：S", { exact: true })
     .waitFor({ state: "hidden", timeout: 300_000 });
   const totalOnlyCount = await page.locator(".js-plotly-plot").count();
-  if (totalOnlyCount * 3 !== chartCount) {
+  if (totalOnlyCount * 5 !== chartCount) {
     throw new Error(
-      `单粒径图表数量未按 3:1 收敛：全选 ${chartCount}，Total-only ${totalOnlyCount}`,
+      `单粒径图表数量未按 5:1 收敛：全选 ${chartCount}，Total-only ${totalOnlyCount}`,
     );
   }
   await page.keyboard.press("Escape");

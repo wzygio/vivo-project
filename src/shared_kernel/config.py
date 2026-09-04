@@ -321,6 +321,38 @@ class ConfigLoader:
             return []
 
     @classmethod
+    def get_aoi_tt_particle_size_generation_enabled(cls) -> bool:
+        """Return whether AOI_TT Particle Size values are generated from ratios."""
+        try:
+            report_conf = cls.load_domain_config("inline_domain").get("aoi_tt", {})
+            particle_conf = report_conf.get("particle_size", {})
+            return bool(particle_conf.get("generate_from_ratios", True))
+        except Exception as exc:
+            logging.error("❌ 读取 AOI_TT Particle Size 模式失败: %s", exc)
+            return True
+
+    @classmethod
+    def get_aoi_tt_particle_size_ratio_jitter(cls) -> float:
+        """Return the bounded relative jitter used by stable ratio generation."""
+        try:
+            report_conf = cls.load_domain_config("inline_domain").get("aoi_tt", {})
+            particle_conf = report_conf.get("particle_size", {})
+            configured = float(particle_conf.get("ratio_jitter", 0.1))
+            return min(max(configured, 0.0), 1.0)
+        except Exception as exc:
+            logging.error("❌ 读取 AOI_TT Particle Size 扰动比例失败: %s", exc)
+            return 0.1
+
+    @classmethod
+    def get_aoi_tt_particle_size_ratio_spec_path(cls) -> Path:
+        """Resolve the AOI_TT station-level Particle Size ratio workbook."""
+        return cls.get_domain_resource_path(
+            "inline_domain",
+            "aoi_tt_particle_size_ratio_spec",
+            "AOI_TT-比例规格表.xlsx",
+        )
+
+    @classmethod
     def get_scrap_factory_mapping(cls) -> dict:
         """
         [新增] 获取报废站点 → 厂别映射配置

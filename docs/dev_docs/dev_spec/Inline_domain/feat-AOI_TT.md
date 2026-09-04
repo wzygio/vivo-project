@@ -67,7 +67,12 @@ left join mdw.dwr_mes_productspec dmp
 
 ## References
 ### 数据表
-- defect明细表：`eda.ARRAY_DEFECT_T`，用于获取“particle size”
+- defect明细表：用于获取“particle size
+```
+--eda.ARRAY_DEFECT_T	- 阵列缺陷明细表
+--eda.OLED_DEFECT_T		- OLED缺陷明细表
+--eda.TSP_DEFECT_T		- TP缺陷明细表
+```
 - spc明细表：用于获取缺点点位数（param_value）
 ```
 --eda.spc_tzbjx_array   — ARRAY SPC 测量明细表（时序数据）
@@ -174,16 +179,29 @@ limit 10
 
 ---
 
-# Task1-1-1：AOI_TT报表优化
+# Task1-1-1：AOI_TT报表优化-数据生成
 当前已经完成了“Task1-1：AOI_TT报表区分particle_size”，我们需要在此基础上进行优化：
 
-## Step1
-“particle size”的筛选对于不同工艺段不同：
+## Step1：“particle size”筛选
+对于不同工艺段，数据表名称、字段名称与“particle size”的筛选皆不同，具体如下表所示：
 
 | 厂别 | 表名 | 字段名 | 可选范围 |
 | --- | --- | --- | --- |
-| ARRAY | ARRAY_DEFECT_T | item119 |  |
-| OLED | OLED_DEFECT_T | item2 | 不启用该功能 |
-| TP | TSP_DEFECT_T | item2 | 所有非NULL |
+| ARRAY | ARRAY_DEFECT_T | item119 | S/M/L/H |
+| OLED | OLED_DEFECT_T | item2 | 暂时不用区分 |
+| TP | TSP_DEFECT_T | item2 | S/M/L/H |
 
-## Step2
+请你参考上表对原有程序完成优化（主要是后端优化，前端样式不变）
+
+## Step2：按照比例生成
+上面是正确的计算方式，但是这样计算过于复杂，也不便于修改。
+
+我们直接采用数据生成的方式，将total的数量按照一定比例分配到各Size上去。要求如下：
+- 分配比例根据各站点的不同有所不同，具体请参考`resources\inline_domain\AOI_TT-比例规格表.xlsx`中的`比例规格表`
+- 各sheet的比例应该是围绕`比例规格表`中的比例数字随机生成，且比例生成后不能改变（否则数据会变化），请你思考如何实现这一点
+- 请在`config\domain\inline_domain.yaml`中设置一个flag来切换两种模式（默认为“数据生成”模式）
+
+## Goal
+请按照`developement-flow`完成上述两个步骤的开发，不断迭代优化直至E2E测试通过
+- 如果有无法解决的业务问题可以向我询问，否则直接执行到底完成开发
+

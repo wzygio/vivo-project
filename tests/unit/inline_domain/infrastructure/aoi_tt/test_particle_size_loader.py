@@ -33,6 +33,19 @@ def _database() -> SimpleNamespace:
         )
         connection.execute(
             text(
+                "CREATE TABLE eda.spc_tzbjx_tsp ("
+                "product_spec TEXT, glass_id TEXT, glass_start_time TEXT, "
+                "step_id TEXT, param_name TEXT, param_value INTEGER)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE TABLE eda.TSP_DEFECT_T ("
+                "cut_id TEXT, step_id TEXT, item2 TEXT, cut_start_time TEXT)"
+            )
+        )
+        connection.execute(
+            text(
                 "CREATE TABLE mdw.dwr_mes_productspec ("
                 "productspecname TEXT, productcode TEXT)"
             )
@@ -52,12 +65,26 @@ def _database() -> SimpleNamespace:
         connection.execute(
             text(
                 "INSERT INTO eda.ARRAY_DEFECT_T VALUES "
-                "('SHEET-1', '11620', 'AOI', 'O', '2026-08-01 08:01:00'),"
-                "('SHEET-1', '11620', 'AOI', ' o ', '2026-08-01 08:02:00'),"
+                "('SHEET-1', '11620', 'AOI', 'S', '2026-08-01 08:01:00'),"
+                "('SHEET-1', '11620', 'AOI', ' s ', '2026-08-01 08:02:00'),"
                 "('SHEET-1', '11620', 'AOI', 'L', '2026-08-01 08:03:00'),"
                 "('SHEET-1', '11620', 'AOI', 'M', '2026-08-01 08:04:00'),"
                 "('SHEET-1', '11620', 'RS',  'O', '2026-08-01 08:05:00'),"
                 "('SHEET-2', '11620', 'AOI', 'L', '2026-08-02 08:01:00')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO eda.spc_tzbjx_tsp VALUES "
+                "('SPEC-M678', 'TP-1', '2026-08-03 08:00:00', '43620', 'TDSUM', 5)"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO eda.TSP_DEFECT_T VALUES "
+                "('TP-1', '43620', 'S', '2026-08-03 08:01:00'),"
+                "('TP-1', '43620', ' m ', '2026-08-03 08:02:00'),"
+                "('TP-1', '43620', 'O', '2026-08-03 08:03:00')"
             )
         )
     return SimpleNamespace(engine=engine)
@@ -68,6 +95,7 @@ def test_load_particle_size_counts_uses_unique_sheet_product_mapping() -> None:
         prod_code="M678",
         start_date="2026-08-01",
         end_date="2026-08-10",
+        factory="ARRAY",
     )
 
     result = load_particle_size_counts(
@@ -87,19 +115,28 @@ def test_load_particle_size_counts_uses_unique_sheet_product_mapping() -> None:
             "particle_size": "L",
             "particle_qty": 1,
         },
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": result.loc[1, "start_time"],
+                "sheet_id": "SHEET-1",
+                "step_id": "11620",
+                "particle_size": "M",
+                "particle_qty": 1,
+            },
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": result.loc[2, "start_time"],
+                "sheet_id": "SHEET-1",
+                "step_id": "11620",
+                "particle_size": "S",
+                "particle_qty": 2,
+            },
         {
             "factory": "ARRAY",
             "prod_code": "M678",
-            "start_time": result.loc[1, "start_time"],
-            "sheet_id": "SHEET-1",
-            "step_id": "11620",
-            "particle_size": "O",
-            "particle_qty": 2,
-        },
-        {
-            "factory": "ARRAY",
-            "prod_code": "M678",
-            "start_time": result.loc[2, "start_time"],
+                "start_time": result.loc[3, "start_time"],
             "sheet_id": "SHEET-2",
             "step_id": "11620",
             "particle_size": "L",
@@ -113,6 +150,7 @@ def test_load_particle_size_counts_maps_source_time_to_display_time() -> None:
         prod_code="M678",
         start_date="2026-08-05",
         end_date="2026-08-10",
+        factory="ARRAY",
     )
 
     result = load_particle_size_counts(
@@ -125,7 +163,27 @@ def test_load_particle_size_counts_maps_source_time_to_display_time() -> None:
     assert result["start_time"].min().date().isoformat() == "2026-08-05"
 
 
-def test_load_particle_size_counts_returns_empty_outside_array_tdsum() -> None:
+def test_load_particle_size_counts_uses_tp_item2_without_array_aoi_filter() -> None:
+    query = AoiTtQueryConfig(
+        prod_code="M678",
+        start_date="2026-08-01",
+        end_date="2026-08-10",
+        factory="TP",
+    )
+
+    result = load_particle_size_counts(
+        _database(),
+        query,
+        data_forward_policy=DataForwardPolicy(enabled=False),
+    )
+
+    assert result[["factory", "sheet_id", "step_id", "particle_size", "particle_qty"]].to_dict("records") == [
+        {"factory": "TP", "sheet_id": "TP-1", "step_id": "43620", "particle_size": "M", "particle_qty": 1},
+        {"factory": "TP", "sheet_id": "TP-1", "step_id": "43620", "particle_size": "S", "particle_qty": 1},
+    ]
+
+
+def test_load_particle_size_counts_returns_empty_for_oled() -> None:
     query = AoiTtQueryConfig(
         prod_code="M678",
         start_date="2026-08-01",

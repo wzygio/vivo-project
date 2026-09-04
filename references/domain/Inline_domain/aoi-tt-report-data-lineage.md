@@ -12,7 +12,7 @@ AOI_TT 报表用于观察不同产品、厂别和 AOI 站点下的 Total Defect�
 
 > 厂别 + 站点 + TT 名称
 
-ARRAY 的 `TDSUM` 指标还可按 `Particle Size` 切分为 `Total`、`O`、`L`。`Total` 是 SPC 单片总缺陷数；`O`、`L` 是缺陷明细中对应粒径的缺陷行数。三者是同一指标下的展示切片，不改变指标身份。
+ARRAY 与 TP 的 TT 指标还可按 `Particle Size` 切分为 `Total`、`S`、`M`、`L`、`H`。`Total` 是 SPC 单片总缺陷数；S/M/L/H 默认由站点比例稳定分配，也可切换为缺陷明细中的真实分类计数。OLED 暂时只展示 Total。
 
 报表围绕同一份 TT 单片明细形成四类结果：
 
@@ -26,7 +26,7 @@ AOI_TT 属于“越小越好”指标，使用 USL 和 UCL 两条上限作为图
 ## 3. 总体数据流
 
 ```text
-三厂 Inline 测量事实 + ARRAY AOI 缺陷明细 + 产品映射 + 参数规格
+三厂 Inline 测量事实 + Particle Size 比例规格/缺陷明细 + 产品映射 + 参数规格
                     │
                     ▼
 基础设施层：统一厂别、时间、Sheet/Glass、Lot、站点、参数和值
@@ -34,10 +34,10 @@ AOI_TT 属于“越小越好”指标，使用 USL 和 UCL 两条上限作为图
                     ├─ 按规格中的“参数类型为空”识别 TT 参数
                     ├─ 按产品、显示日期窗口过滤
                     ├─ 投影为 TT Total 明细与 TT 规格
-                    └─ ARRAY/TDSUM 按 Sheet、站点汇总 O/L 缺陷行数
+                    └─ 读取站点 S/M/L/H 比例，或汇总 ARRAY/TP 真实缺陷行数
                     │
                     ▼
-应用层：先修饰 Total，再以剩余 Total Sheet 组合 O/L 明细
+应用层：先修饰 Total，再按配置生成或组合 S/M/L/H 明细
                     │
                     ├─ Delete：删除记录
                     ├─ False：保留真实超规值
@@ -107,15 +107,15 @@ AOI_TT 使用产品参数规格作为识别依据：
 
 ### 4.5 Particle Size 明细
 
-Particle Size 仅扩展 ARRAY 厂别的 `TDSUM`：
+Particle Size 扩展 ARRAY 与 TP，OLED 暂不区分：
 
-- `Total`：继续使用 `eda.spc_tzbjx_array.param_value`，不改原口径；
-- `O`、`L`：来自 `eda.ARRAY_DEFECT_T`，只保留 `item51='AOI'`，以 `item119` 区分粒径，每条缺陷记录计 1 个点；
-- 产品通过 `glass_id/sheet_id` 关联 SPC，再由 `product_spec` 映射产品型号；
-- 关联前先把 SPC 侧压缩为唯一的 `(sheet_id, productcode)`，避免一个 Sheet 的多条 SPC 参数记录重复放大缺陷行；
-- 按产品、Sheet、站点、Particle Size 汇总缺陷点位数。
+- `Total`：继续使用三厂 SPC `param_value`，不改原口径；
+- 默认比例生成：从比例规格表取得各站点 S/M/L/H 基础比例，每片围绕基础比例做稳定扰动，再把修饰后的 Total 完整分配到四档；
+- 实表模式 ARRAY：以 `ARRAY_DEFECT_T.item119` 区分 S/M/L/H，并保留 `item51='AOI'`；
+- 实表模式 TP：以 `TSP_DEFECT_T.item2` 区分 S/M/L/H，以 `cut_id` 关联 SPC `glass_id`，不增加 ARRAY 专属的 `item51` 条件；
+- 实表关联前先把 SPC 侧压缩为唯一 Sheet/Glass 到产品映射，避免多条 SPC 参数记录重复放大缺陷行。
 
-O 或 L 没有缺陷明细时，仍为每个有效 Total Sheet 补 0。OLED、TP 以及非 `TDSUM` 参数不生成 O/L。
+比例生成以“厂别 + 产品 + 站点 + Sheet + TT 名称”为稳定业务键；业务键、比例规格和扰动幅度不变时结果不变。缺少站点比例时保持 Total-only。实表模式中某档没有缺陷时补 0。
 
 ### 4.6 规格投影
 
@@ -142,7 +142,7 @@ AOI_TT 从共享事实直接按 TT 规格中的“站点 + 参数”组合投影
 应用层接收当前产品与固定显示日期窗口，依次取得：
 
 1. TT Total 单片明细；
-2. ARRAY/TDSUM 的 O/L 缺陷汇总；
+2. 站点 S/M/L/H 比例规格，或 ARRAY/TP 的真实粒径缺陷汇总；
 3. 当前产品的 TT 规格；
 4. 当前产品的单片超规决策。
 
@@ -177,7 +177,7 @@ AOI_TT 从共享事实直接按 TT 规格中的“站点 + 参数”组合投影
 
 配置为豁免的参数保留真实值，但 `Delete` 的优先级仍然最高。当前豁免按参数名匹配；如果未来 TT 参数命中豁免词，也会遵循该规则。
 
-Total 完成三态修饰后，应用层才组合 O/L。被 `Delete` 移除的 Total Sheet 不再出现在 O/L 中；O/L 保留真实计数，不套用 Total 的超规修饰。Particle 数据源读取失败时，报表降级为只展示 Total，不影响既有报表可用性。
+Total 完成三态修饰后，应用层才生成或组合 S/M/L/H。被 `Delete` 移除的 Total Sheet 不再生成粒径明细；粒径值不再执行 Total 的超规修饰。比例规格或真实 Particle 数据源读取失败时，报表降级为只展示 Total。
 
 ### 5.4 报表指标集合
 
@@ -203,7 +203,7 @@ Total 完成三态修饰后，应用层才组合 O/L。被 `Delete` 移除的 To
 
 分母直接来自 TT 测量事实自身，不使用 AOI_RS 过货数据。原因是 TT 为每片必测项，而 RS 站点过货量与 AOI 检测片数不是同一业务口径。
 
-需要特别注意：检测片数按“厂别 + 站点”计算，与具体 TT 名称和 Particle Size 无关。同一站点下多个 TT、Total/O/L 共用该站点在相同周期的检测片数。O/L 缺失补 0，因此分母覆盖全部有效 Total Sheet。分母为 0 时不计算比值。
+需要特别注意：检测片数按“厂别 + 站点”计算，与具体 TT 名称和 Particle Size 无关。同一站点下多个 TT、Total/S/M/L/H 共用该站点在相同周期的检测片数。分母为 0 时不计算比值。
 
 趋势时间轴组合为：
 
@@ -256,7 +256,7 @@ By Sheet 以 `厂别 + 站点 + TT 名称 + Particle Size + Sheet/Glass` 分组�
 2. 站点；
 3. TT 名称（页面标签为“Code名称”）。
 
-另提供独立的 Particle Size 多选框，选项固定为 `Total`、`O`、`L`，默认全选。每个被选中的粒径均生成月周天、By Lot、By Sheet 三张图；同一站点与 TT 的所有粒径图仍放在同一个 Expander 内。
+另提供独立的 Particle Size 多选框。ARRAY/TP 的选项为 `Total/S/M/L/H` 且默认全选，OLED 仅提供 `Total`。每个被选中的粒径均生成月周天、By Lot、By Sheet 三张图；同一站点与 TT 的所有粒径图仍放在同一个 Expander 内。
 
 用户提交查询后，明细与指标集合应用相同筛选条件，再按“厂别 + 站点”分组。每个 TT 展示：
 
@@ -283,8 +283,8 @@ By Sheet 以 `厂别 + 站点 + TT 名称 + Particle Size + Sheet/Glass` 分组�
 
 | DDD 层别 | 输入 | 核心业务处理 | 输出 |
 |---|---|---|---|
-| 基础设施层 | 三厂测量事实、ARRAY 缺陷明细、产品映射、参数规格 | 投影 Total；以唯一 Sheet→产品映射汇总 O/L；统一时间与业务字段 | Total 单片明细、O/L 单片计数、TT 规格 |
-| 应用层 | Total 明细、O/L 计数、TT 规格、人工决策 | 修饰 Total；以有效 Total Sheet 补齐并组合 O/L；源失败时保留 Total | 含 Particle Size 的 TT 明细、规格、指标集合、超规决策产物 |
+| 基础设施层 | 三厂测量事实、比例规格、ARRAY/TP 缺陷明细、产品映射、参数规格 | 投影 Total；读取并校验站点比例，或按唯一 Sheet→产品映射汇总真实粒径 | Total 单片明细、S/M/L/H 比例或计数、TT 规格 |
+| 应用层 | Total 明细、粒径比例/计数、TT 规格、人工决策 | 修饰 Total；按配置稳定生成或组合 S/M/L/H；源失败时保留 Total | 含 Particle Size 的 TT 明细、规格、指标集合、超规决策产物 |
 | 领域层 | 含 Particle Size 的 TT 明细、规格 | 分粒径计算 period、Lot、Sheet；检测片数保持站点去重 Sheet 口径 | 分粒径三类图表数据口径 |
 | 表现层 | 明细、规格、指标集合、超规决策产物 | 级联筛选与 Particle Size 多选；同一 Expander 分粒径展示三图 | 用户可见报表与预警 |
 
@@ -298,9 +298,10 @@ By Sheet 以 `厂别 + 站点 + TT 名称 + Particle Size + Sheet/Glass` 分组�
 6. **只有 `False` 产生单片预警**：默认修饰的超规记录和被删除记录均不报警。
 7. **显示日期与源日期可能不同**：当前客户口径统一前推 4 天；周、月、日周期均按显示日期计算。
 8. **厂别由明细确定**：规格不含厂别，依赖站点编码在业务上唯一对应厂别。
-9. **Total 与 O/L 权威源不同**：Total 取 SPC `param_value`；O/L 对缺陷明细逐行计数，业务上不要求 `O + L = Total`。
+9. **Total 始终来自 SPC**：比例生成模式要求 S/M/L/H 合计等于修饰后的 Total；实表模式按缺陷明细独立计数，不要求四档合计等于 Total。
 10. **SPC 关联必须先去重**：缺陷事实不能直接连接 SPC 多参数明细，否则点位数会按 SPC 行数成倍放大。
-11. **Particle Size 只覆盖 ARRAY/TDSUM**：其他厂别和参数保持 Total-only。
+11. **Particle Size 厂别范围固定**：ARRAY/TP 区分 S/M/L/H，OLED 保持 Total-only。
+12. **生成结果必须稳定**：不得改用运行时普通随机数；稳定业务键或扰动算法变化需要升级缓存身份并记录决策。
 
 ### 9.1 现有资料中的口径差异
 

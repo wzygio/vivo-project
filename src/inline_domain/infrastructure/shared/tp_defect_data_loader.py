@@ -1,4 +1,4 @@
-"""Shared data access for ARRAY defect-detail facts."""
+"""Shared data access for TP defect-detail facts."""
 
 from __future__ import annotations
 
@@ -8,22 +8,15 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from sqlalchemy import text
 
+from src.inline_domain.infrastructure.shared.array_defect_data_loader import (
+    ARRAY_PARTICLE_COUNT_COLUMNS,
+)
+
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
-ARRAY_PARTICLE_COUNT_COLUMNS = [
-    "factory",
-    "prod_code",
-    "start_time",
-    "sheet_id",
-    "step_id",
-    "particle_size",
-    "particle_qty",
-]
-
-
-def load_array_aoi_particle_size_counts(
+def load_tp_particle_size_counts(
     db_manager: "DatabaseManager",
     *,
     prod_code: str,
@@ -31,48 +24,47 @@ def load_array_aoi_particle_size_counts(
     end_time: datetime,
     step_id: str | None = None,
 ) -> pd.DataFrame:
-    """读取 ARRAY AOI 的 S/M/L/H 缺陷行数，SPC 仅用于唯一 Sheet-产品映射。"""
+    """读取 TP 的 S/M/L/H 缺陷行数；Particle Size 字段为 item2。"""
     if db_manager.engine is None:
         raise ValueError("Database engine is not initialized.")
 
-    step_filter = "AND adt.step_id = :step_id" if step_id else ""
+    step_filter = "AND tdt.step_id = :step_id" if step_id else ""
     statement = text(
         f"""
         WITH sheet_products AS (
             SELECT DISTINCT
-                sta.sheet_id,
+                sta.glass_id AS sheet_id,
                 dmp.productcode
-            FROM eda.spc_tzbjx_array AS sta
+            FROM eda.spc_tzbjx_tsp AS sta
             JOIN mdw.dwr_mes_productspec AS dmp
               ON dmp.productspecname = sta.product_spec
             WHERE dmp.productcode = :prod_code
-              AND sta.sheet_start_time >= :start_time
-              AND sta.sheet_start_time < :end_time
+              AND sta.glass_start_time >= :start_time
+              AND sta.glass_start_time < :end_time
         )
         SELECT
-            'ARRAY' AS factory,
+            'TP' AS factory,
             sheet_products.productcode AS prod_code,
-            MIN(adt.glass_start_time) AS start_time,
-            adt.glass_id AS sheet_id,
-            adt.step_id,
-            UPPER(TRIM(adt.item119)) AS particle_size,
+            MIN(tdt.cut_start_time) AS start_time,
+            tdt.cut_id AS sheet_id,
+            tdt.step_id,
+            UPPER(TRIM(tdt.item2)) AS particle_size,
             COUNT(*) AS particle_qty
-        FROM eda.ARRAY_DEFECT_T AS adt
+        FROM eda.TSP_DEFECT_T AS tdt
         JOIN sheet_products
-          ON sheet_products.sheet_id = adt.glass_id
-        WHERE UPPER(TRIM(adt.item51)) = 'AOI'
-          AND UPPER(TRIM(adt.item119)) IN ('S', 'M', 'L', 'H')
-          AND adt.glass_start_time >= :start_time
-          AND adt.glass_start_time < :end_time
+          ON sheet_products.sheet_id = tdt.cut_id
+        WHERE UPPER(TRIM(tdt.item2)) IN ('S', 'M', 'L', 'H')
+          AND tdt.cut_start_time >= :start_time
+          AND tdt.cut_start_time < :end_time
           {step_filter}
         GROUP BY
             sheet_products.productcode,
-            adt.glass_id,
-            adt.step_id,
-            UPPER(TRIM(adt.item119))
+            tdt.cut_id,
+            tdt.step_id,
+            UPPER(TRIM(tdt.item2))
         ORDER BY
-            adt.glass_id,
-            adt.step_id,
+            tdt.cut_id,
+            tdt.step_id,
             particle_size
         """
     )

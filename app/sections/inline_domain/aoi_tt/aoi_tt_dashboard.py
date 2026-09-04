@@ -122,10 +122,13 @@ def render_aoi_tt_filters(
         factory_options=AOI_TT_FACTORY_OPTIONS,
         step_desc_map=step_desc_map,
     )
+    particle_size_options = (
+        ["Total"] if factory == "OLED" else list(PARTICLE_SIZE_OPTIONS)
+    )
     selected_particle_sizes = st.multiselect(
         "Particle Size",
-        options=list(PARTICLE_SIZE_OPTIONS),
-        default=list(PARTICLE_SIZE_OPTIONS),
+        options=particle_size_options,
+        default=particle_size_options,
         key="aoi_tt_particle_size_filter",
     )
     return factory, codes, steps, selected_particle_sizes, should_render

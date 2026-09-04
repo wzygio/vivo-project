@@ -16,7 +16,7 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 | 指标识别 | 明细表 rs_code 全量 | **规格表 `param_type IS NULL` 的 (step,param) 组合即 TT 参数全集**（见 §1-A） |
 | 规格表 | `mdw.dwd_imp_rs_code_xishu_fo_tzsbjx`（type_flag 区分图类型） | `mdw.dwd_imp_dv_param_spec`（粒度 prod+step+param，取 **USL/UCL** 两条上限线，适用全部图） |
 | 趋势分母 | 过货视图 distinct sheet（按站点过滤） | **测量表自身 distinct sheet**（过货视图不含 AOI 站点记录，见 §2-2） |
-| 筛选框 | 厂别、站点、Code 名称 | 厂别、站点、Code 名称 + Particle Size（Total/O/L，默认全选） |
+| 筛选框 | 厂别、站点、Code 名称 | 厂别、站点、Code 名称 + Particle Size（ARRAY/TP：Total/S/M/L/H；OLED：Total） |
 | 时间范围 | 固定：上一自然月 1 日 ~ 当前日期 | 相同 |
 
 图表清单（与 AOI_RS 一致）：
@@ -90,17 +90,19 @@ JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
 WHERE P.productcode = :prod_code
 ```
 
-### F. Particle Size（仅 ARRAY/TDSUM）✅
+### F. Particle Size（ARRAY/TP）✅
 
-| 结果 | 权威数据源 | 计数口径 |
+| 模式 | 厂别 | 数据源与口径 |
 | --- | --- | --- |
-| `Total` | `eda.spc_tzbjx_array.param_value` | 每个站点、Sheet、TDSUM 的 SPC 测量值 |
-| `O` | `eda.ARRAY_DEFECT_T` | `item51='AOI' AND UPPER(TRIM(item119))='O'` 的缺陷行数 |
-| `L` | `eda.ARRAY_DEFECT_T` | `item51='AOI' AND UPPER(TRIM(item119))='L'` 的缺陷行数 |
+| 两种模式共同 | 三厂 | `Total` 始终来自 SPC `param_value`，并先完成单片三态修饰 |
+| 比例生成（默认） | ARRAY/TP | 按“比例规格表”的站点 S/M/L/H 比例，对每片 Total 做稳定扰动后分配；同一业务键结果不变，四档合计等于 Total |
+| 实表 | ARRAY | `eda.ARRAY_DEFECT_T.item119`，保留 `item51='AOI'` 且粒径属于 S/M/L/H，每条缺陷事实计 1 |
+| 实表 | TP | `eda.TSP_DEFECT_T.item2`，粒径属于 S/M/L/H，每条缺陷事实计 1；`cut_id` 对齐 SPC `glass_id` |
+| 两种模式共同 | OLED | 暂不区分 Particle Size，仅展示 Total |
 
-缺陷表以 `glass_id` 表示 `sheet_id`，产品通过 ARRAY SPC 表的 `product_spec` 再映射 `mdw.dwr_mes_productspec`。SPC 同一 Sheet 存在多条参数记录，因此必须先取得唯一 `(sheet_id, productcode)` 映射，再连接缺陷事实；不能对连接后的缺陷事实去重，也不能直接连接完整 SPC 明细。
+实表模式下，产品通过各厂 SPC 表的 `product_spec` 再映射 `mdw.dwr_mes_productspec`。SPC 同一 Sheet 存在多条参数记录，因此必须先取得唯一的 Sheet/Glass 到产品映射，再连接缺陷事实；不能对连接后的缺陷事实去重，也不能直接连接完整 SPC 明细。
 
-O/L 按 `(product, sheet, step, particle_size)` 汇总。有效 Total Sheet 没有对应粒径缺陷时补 0，以保证趋势和 Lot 分母仍代表全部检测片。OLED、TP 和非 TDSUM 参数保持 Total-only。
+实表 S/M/L/H 按 `(product, sheet, step, particle_size)` 汇总；没有对应粒径缺陷时补 0。比例生成模式若某站点规格缺失或无效，该站点保持 Total-only，不借用其他站点比例。
 
 ## 2. 与任务文档/RS 报表的偏差记录（开发注意）
 

@@ -45,7 +45,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
                     "lot_id": "L1",
                     "step_id": "11620",
                     "tt_name": "TDSUM",
-                    "particle_size": "O",
+                    "particle_size": "S",
                     "tt_qty": 3,
                 }
             ]
@@ -105,7 +105,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         aoi_tt_dashboard,
         "render_aoi_tt_filters",
         lambda **_kwargs: events.append("filters")
-        or ("ARRAY", ["TDSUM"], ["11620"], ["O"], True),
+        or ("ARRAY", ["TDSUM"], ["11620"], ["S"], True),
     )
 
     def fake_render_sections(**kwargs):
@@ -125,10 +125,10 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     # 固定窗口：上一自然月 1 日 ~ 当前日期（含当天）
     assert loaded_queries[0].start_date == "2026-07-01"
     assert loaded_queries[0].end_date == "2026-08-10"
-    assert loaded_signatures == ["aoi_tt_report_v2_particle_size|scoped=M678"]
+    assert loaded_signatures == ["aoi_tt_report_v3_particle_size_generation|scoped=M678"]
     assert header_kwargs["product_cache_scope"] == "M678"
     assert events == ["filters", "charts"]
-    assert rendered_particle_sizes == ["O"]
+    assert rendered_particle_sizes == ["S"]
 
 
 def test_portal_navigation_points_aoi_tt_to_the_streamlit_page() -> None:

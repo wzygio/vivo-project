@@ -24,6 +24,7 @@ def _indicator_df() -> pd.DataFrame:
         [
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM"},
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11620", "tt_name": "DSUM_L"},
+            {"prod_code": "M678", "factory": "OLED", "step_id": "21320", "tt_name": "DSUM_O"},
             {"prod_code": "M678", "factory": "TP", "step_id": "43620", "tt_name": "TOTAL_O_L"},
         ]
     )
@@ -60,7 +61,7 @@ def test_default_start_date_uses_previous_month_first_day() -> None:
 def test_filter_options_cascade_factory_step_code() -> None:
     indicator_df = _indicator_df()
 
-    assert get_available_factories(indicator_df) == ["ARRAY", "TP"]
+    assert get_available_factories(indicator_df) == ["ARRAY", "OLED", "TP"]
     assert get_steps_for_factory(indicator_df, "ARRAY") == ["11620"]
     assert get_steps_for_factory(indicator_df, "TP") == ["43620"]
     assert get_codes_for_factory_steps(indicator_df, "ARRAY", ["11620"]) == ["DSUM_L", "TDSUM"]
@@ -84,7 +85,7 @@ def test_filter_report_by_particle_size() -> None:
     df = pd.DataFrame(
         [
             {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "Total", "v": 1},
-            {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "O", "v": 2},
+            {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "S", "v": 2},
             {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "L", "v": 3},
         ]
     )
@@ -94,10 +95,10 @@ def test_filter_report_by_particle_size() -> None:
         "ARRAY",
         ["TDSUM"],
         ["11620"],
-        ["O"],
+        ["S"],
     )
 
-    assert out["particle_size"].tolist() == ["O"]
+    assert out["particle_size"].tolist() == ["S"]
 
 
 def _install_fake_widgets(monkeypatch, *, button_clicked: bool) -> dict:
@@ -147,8 +148,8 @@ def test_render_filters_query_button_applies_signature_and_allows_render(monkeyp
     assert steps == ["11620"]
     # 站点确定后 Code 默认全选
     assert codes == ["DSUM_L", "TDSUM"]
-    assert particle_sizes == ["Total", "O", "L"]
-    assert captured["multiselect"]["Particle Size"]["options"] == ["Total", "O", "L"]
+    assert particle_sizes == ["Total", "S", "M", "L", "H"]
+    assert captured["multiselect"]["Particle Size"]["options"] == ["Total", "S", "M", "L", "H"]
     assert should_render is True
     # 查询签名落在 aoi_tt_ 前缀的会话键下
     assert captured["session"]["aoi_tt_applied_filter_signature"] == (
@@ -172,7 +173,7 @@ def test_render_filters_without_query_click_blocks_render(monkeypatch) -> None:
     )
 
     assert codes == ["DSUM_L", "TDSUM"]  # 查询门控不影响筛选回显
-    assert particle_sizes == ["Total", "O", "L"]
+    assert particle_sizes == ["Total", "S", "M", "L", "H"]
     assert should_render is False
 
 
@@ -198,6 +199,25 @@ def test_render_filters_factory_switch_resets_steps_and_disables_query(monkeypat
     # 未选站点：Code 下拉禁用，查询按钮禁用
     assert captured["multiselect"]["Code名称"]["disabled"] is True
     assert captured["button_kwargs"]["disabled"] is True
+
+
+def test_render_filters_oled_only_offers_total_particle_size(monkeypatch) -> None:
+    captured = _install_fake_widgets(monkeypatch, button_clicked=False)
+    captured["session"].update(
+        {
+            "aoi_tt_factory_filter": "OLED",
+            "aoi_tt_previous_factory_filter": "OLED",
+            "aoi_tt_step_filter": ["21320"],
+        }
+    )
+
+    factory, _codes, _steps, particle_sizes, _should_render = render_aoi_tt_filters(
+        indicator_df=_indicator_df()
+    )
+
+    assert factory == "OLED"
+    assert particle_sizes == ["Total"]
+    assert captured["multiselect"]["Particle Size"]["options"] == ["Total"]
 
 
 def test_trend_chart_has_bars_line_and_usl_ucl_spec_traces() -> None:
@@ -441,11 +461,13 @@ def test_render_sections_keep_particle_sizes_in_one_expander(monkeypatch) -> Non
     )
 
     assert len(expander_titles) == 1
-    assert len(rendered) == 9
+    assert len(rendered) == 15
     assert particle_labels == [
         "**Particle Size：Total**",
-        "**Particle Size：O**",
+        "**Particle Size：S**",
+        "**Particle Size：M**",
         "**Particle Size：L**",
+        "**Particle Size：H**",
     ]
 
 
@@ -463,6 +485,6 @@ def _details_with_particle_sizes() -> pd.DataFrame:
                 "particle_size": particle_size,
                 "tt_qty": quantity,
             }
-            for particle_size, quantity in (("Total", 3), ("O", 2), ("L", 1))
+            for particle_size, quantity in (("Total", 10), ("S", 6), ("M", 3), ("L", 0.7), ("H", 0.3))
         ]
     )

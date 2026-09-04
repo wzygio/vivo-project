@@ -9,6 +9,9 @@ from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepos
 from src.inline_domain.infrastructure.aoi_tt.particle_size_loader import (
     load_particle_size_counts,
 )
+from src.inline_domain.infrastructure.aoi_tt.particle_size_ratio_loader import (
+    load_particle_size_ratios,
+)
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
 from src.inline_domain.infrastructure.ctq.ctq_repository import CtqRepository
@@ -31,6 +34,7 @@ from src.inline_domain.core.shared.measurement_correction import (
 )
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.shared_kernel.config import ConfigLoader
 
 
 def build_raw_measurement_repository(
@@ -78,6 +82,10 @@ def build_aoi_tt_repository(db_manager: DatabaseManager, prod_code: str) -> AoiT
         raw_measurements=build_raw_measurement_repository(db_manager, prod_code),
         metadata=InlineMeasurementMetadataRepository(db_manager),
         particle_size_loader=partial(load_particle_size_counts, db_manager),
+        particle_size_ratio_loader=partial(
+            load_particle_size_ratios,
+            ConfigLoader.get_aoi_tt_particle_size_ratio_spec_path(),
+        ),
     )
 
 

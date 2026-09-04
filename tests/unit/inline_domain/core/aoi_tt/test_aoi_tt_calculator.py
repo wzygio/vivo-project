@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     attach_spec_values,
+    build_generated_particle_size_details,
     build_lot_point_df,
     build_particle_size_details,
     build_period_throughput_df,
@@ -22,35 +23,76 @@ def _details(rows: list[dict]) -> pd.DataFrame:
     return df
 
 
-def test_particle_size_details_keep_total_and_zero_fill_array_tdsum() -> None:
+def test_particle_size_details_keep_total_and_zero_fill_array_and_tp() -> None:
     totals = _details(
         [
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 5},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 3},
-            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-09 10:00", "sheet_id": "G1", "lot_id": "L2", "step_id": "21320", "tt_name": "DSUM_L", "tt_qty": 4},
+            {"factory": "TP", "prod_code": "M678", "start_time": "2026-08-09 10:00", "sheet_id": "G1", "lot_id": "L2", "step_id": "43620", "tt_name": "TDSUM", "tt_qty": 4},
+            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-09 11:00", "sheet_id": "G2", "lot_id": "L3", "step_id": "21320", "tt_name": "DSUM_L", "tt_qty": 6},
         ]
     )
     particles = pd.DataFrame(
         [
-            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:01"), "sheet_id": "S1", "step_id": "11620", "particle_size": "O", "particle_qty": 2},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:01"), "sheet_id": "S1", "step_id": "11620", "particle_size": "S", "particle_qty": 2},
             {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:02"), "sheet_id": "S1", "step_id": "11620", "particle_size": "L", "particle_qty": 1},
-            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 12:00"), "sheet_id": "UNMATCHED", "step_id": "11620", "particle_size": "O", "particle_qty": 99},
+            {"factory": "TP", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 10:01"), "sheet_id": "G1", "step_id": "43620", "particle_size": "M", "particle_qty": 3},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 12:00"), "sheet_id": "UNMATCHED", "step_id": "11620", "particle_size": "S", "particle_qty": 99},
         ]
     )
 
     result = build_particle_size_details(totals, particles)
 
-    assert result[result["particle_size"] == "Total"]["tt_qty"].tolist() == [5, 3, 4]
+    assert result[result["particle_size"] == "Total"]["tt_qty"].tolist() == [5, 3, 4, 6]
     array_particles = result[
-        (result["factory"] == "ARRAY") & (result["particle_size"].isin(["O", "L"]))
+        (result["factory"] == "ARRAY") & (result["particle_size"].isin(["S", "M", "L", "H"]))
     ].sort_values(["sheet_id", "particle_size"])
     assert array_particles[["sheet_id", "particle_size", "tt_qty"]].to_dict("records") == [
+        {"sheet_id": "S1", "particle_size": "H", "tt_qty": 0},
         {"sheet_id": "S1", "particle_size": "L", "tt_qty": 1},
-        {"sheet_id": "S1", "particle_size": "O", "tt_qty": 2},
+        {"sheet_id": "S1", "particle_size": "M", "tt_qty": 0},
+        {"sheet_id": "S1", "particle_size": "S", "tt_qty": 2},
+        {"sheet_id": "S2", "particle_size": "H", "tt_qty": 0},
         {"sheet_id": "S2", "particle_size": "L", "tt_qty": 0},
-        {"sheet_id": "S2", "particle_size": "O", "tt_qty": 0},
+        {"sheet_id": "S2", "particle_size": "M", "tt_qty": 0},
+        {"sheet_id": "S2", "particle_size": "S", "tt_qty": 0},
     ]
+    tp_particles = result[(result["factory"] == "TP") & (result["particle_size"] != "Total")]
+    assert tp_particles.set_index("particle_size").loc["M", "tt_qty"] == 3
     assert set(result[result["factory"] == "OLED"]["particle_size"]) == {"Total"}
+
+
+def test_generated_particle_ratios_are_stable_and_preserve_each_sheet_total() -> None:
+    totals = _details(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 100},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 100},
+            {"factory": "TP", "prod_code": "M678", "start_time": "2026-08-09 10:00", "sheet_id": "T1", "lot_id": "L2", "step_id": "43620", "tt_name": "TDSUM", "tt_qty": 80},
+            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-09 11:00", "sheet_id": "O1", "lot_id": "L3", "step_id": "21320", "tt_name": "DSUM_L", "tt_qty": 50},
+        ]
+    )
+    ratios = pd.DataFrame(
+        [
+            {"step_id": "11620", "particle_size": size, "ratio": ratio}
+            for size, ratio in (("S", 0.65), ("M", 0.30), ("L", 0.03), ("H", 0.02))
+        ]
+        + [
+            {"step_id": "43620", "particle_size": size, "ratio": ratio}
+            for size, ratio in (("S", 0.13), ("M", 0.80), ("L", 0.06), ("H", 0.01))
+        ]
+    )
+
+    first = build_generated_particle_size_details(totals, ratios, ratio_jitter=0.1)
+    second = build_generated_particle_size_details(totals, ratios, ratio_jitter=0.1)
+
+    pd.testing.assert_frame_equal(first, second)
+    generated = first[first["particle_size"] != "Total"]
+    sums = generated.groupby(["factory", "sheet_id"])["tt_qty"].sum()
+    assert sums.to_dict() == {("ARRAY", "S1"): 100, ("ARRAY", "S2"): 100, ("TP", "T1"): 80}
+    assert set(first[first["factory"] == "OLED"]["particle_size"]) == {"Total"}
+    s1_qty = first[(first["sheet_id"] == "S1") & (first["particle_size"] == "S")]["tt_qty"].iloc[0]
+    s2_qty = first[(first["sheet_id"] == "S2") & (first["particle_size"] == "S")]["tt_qty"].iloc[0]
+    assert s1_qty != s2_qty
 
 
 def test_particle_size_isolated_in_trend_lot_and_sheet_aggregates() -> None:
