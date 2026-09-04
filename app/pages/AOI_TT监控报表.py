@@ -47,7 +47,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 )
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
-AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v1"
+AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v2_particle_size"
 
 
 st.set_page_config(page_title="AOI_TT监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -111,10 +111,13 @@ if tt_details_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 AOI TT 数据。")
     st.stop()
 
-selected_factory, selected_codes, selected_steps, should_render_report = render_aoi_tt_filters(
-    indicator_df=indicator_df,
-    step_desc_map=step_desc_map,
-)
+(
+    selected_factory,
+    selected_codes,
+    selected_steps,
+    selected_particle_sizes,
+    should_render_report,
+) = render_aoi_tt_filters(indicator_df=indicator_df, step_desc_map=step_desc_map)
 
 # 单片异常预警：只读加载修饰工作簿，失败降级为提示、不阻断报表主体
 oos_decoration_df = load_aoi_tt_oos_decoration(current_product)
@@ -140,7 +143,13 @@ if not should_render_report:
     st.stop()
 
 render_aoi_tt_indicator_sections(
-    tt_details_df=filter_aoi_tt_report(tt_details_df, selected_factory, selected_codes, selected_steps),
+    tt_details_df=filter_aoi_tt_report(
+        tt_details_df,
+        selected_factory,
+        selected_codes,
+        selected_steps,
+        selected_particle_sizes,
+    ),
     spec_df=spec_df,
     indicators_df=filter_aoi_tt_report(indicator_df, selected_factory, selected_codes, selected_steps),
     end_date=default_end_dt.date(),

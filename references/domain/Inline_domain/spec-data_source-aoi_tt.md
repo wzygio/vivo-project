@@ -16,12 +16,12 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 | 指标识别 | 明细表 rs_code 全量 | **规格表 `param_type IS NULL` 的 (step,param) 组合即 TT 参数全集**（见 §1-A） |
 | 规格表 | `mdw.dwd_imp_rs_code_xishu_fo_tzsbjx`（type_flag 区分图类型） | `mdw.dwd_imp_dv_param_spec`（粒度 prod+step+param，取 **USL/UCL** 两条上限线，适用全部图） |
 | 趋势分母 | 过货视图 distinct sheet（按站点过滤） | **测量表自身 distinct sheet**（过货视图不含 AOI 站点记录，见 §2-2） |
-| 筛选框 | 厂别、站点、Code 名称 | 厂别、站点、Code 名称（交互一致，第三维为 TT 参数名） |
+| 筛选框 | 厂别、站点、Code 名称 | 厂别、站点、Code 名称 + Particle Size（Total/O/L，默认全选） |
 | 时间范围 | 固定：上一自然月 1 日 ~ 当前日期 | 相同 |
 
 图表清单（与 AOI_RS 一致）：
 1. By 月周天趋势图（两月、三周、七天，跳过空值向前补全）：值 = Σparam_value ÷ 同 period 同站点 distinct sheet/glass 数（AOI 检测片数），按 TT 参数分线，叠加 USL/UCL 规格线 + 检测片数柱状（双 Y 轴）。
-2. By Lot 别点线图：每个 Lot 的 TT 个数（Σparam_value），叠加 USL/UCL。
+2. By Lot 别点线图：每个 Lot 的平均每片 TT 个数（ΣTT ÷ distinct Sheet），叠加 USL/UCL。
 3. By Sheet 别点线图：每个 sheet/glass 的 TT 个数（每 (step,sheet,param) 恰一行，Σ 即原值），叠加 USL/UCL。
 
 颗粒度（从大到小）：产品型号 → 厂别 → 站点 → TT → TT 个数（明细）。
@@ -89,6 +89,18 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
 WHERE P.productcode = :prod_code
 ```
+
+### F. Particle Size（仅 ARRAY/TDSUM）✅
+
+| 结果 | 权威数据源 | 计数口径 |
+| --- | --- | --- |
+| `Total` | `eda.spc_tzbjx_array.param_value` | 每个站点、Sheet、TDSUM 的 SPC 测量值 |
+| `O` | `eda.ARRAY_DEFECT_T` | `item51='AOI' AND UPPER(TRIM(item119))='O'` 的缺陷行数 |
+| `L` | `eda.ARRAY_DEFECT_T` | `item51='AOI' AND UPPER(TRIM(item119))='L'` 的缺陷行数 |
+
+缺陷表以 `glass_id` 表示 `sheet_id`，产品通过 ARRAY SPC 表的 `product_spec` 再映射 `mdw.dwr_mes_productspec`。SPC 同一 Sheet 存在多条参数记录，因此必须先取得唯一 `(sheet_id, productcode)` 映射，再连接缺陷事实；不能对连接后的缺陷事实去重，也不能直接连接完整 SPC 明细。
+
+O/L 按 `(product, sheet, step, particle_size)` 汇总。有效 Total Sheet 没有对应粒径缺陷时补 0，以保证趋势和 Lot 分母仍代表全部检测片。OLED、TP 和非 TDSUM 参数保持 Total-only。
 
 ## 2. 与任务文档/RS 报表的偏差记录（开发注意）
 

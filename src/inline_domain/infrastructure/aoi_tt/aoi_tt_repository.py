@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pandas as pd
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
@@ -13,6 +15,7 @@ TT_DETAIL_COLUMNS = [
     "factory", "prod_code", "start_time", "sheet_id", "lot_id",
     "step_id", "tt_name", "tt_qty",
 ]
+ParticleSizeLoader = Callable[[AoiTtQueryConfig], pd.DataFrame]
 
 
 def _project_tt_param_set(specs: pd.DataFrame) -> pd.DataFrame:
@@ -38,9 +41,11 @@ class AoiTtRepository:
         self,
         raw_measurements: MeasurementSnapshotPort,
         metadata: MeasurementMetadataPort,
+        particle_size_loader: ParticleSizeLoader | None = None,
     ) -> None:
         self.raw_measurements = raw_measurements
         self.metadata = metadata
+        self.particle_size_loader = particle_size_loader
 
     def get_tt_details(self, query: AoiTtQueryConfig) -> pd.DataFrame:
         raw = self.raw_measurements.get_measurements(query.prod_code, query.end_date)
@@ -79,3 +84,8 @@ class AoiTtRepository:
 
     def get_tt_spec_limits(self, prod_code: str) -> pd.DataFrame:
         return _project_tt_spec_limits(self.metadata.get_parameter_specs(prod_code))
+
+    def get_particle_size_counts(self, query: AoiTtQueryConfig) -> pd.DataFrame:
+        if self.particle_size_loader is None:
+            return pd.DataFrame()
+        return self.particle_size_loader(query)

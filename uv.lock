@@ -648,6 +648,23 @@ requires-dist = [
 provides-extras = ["db", "excel", "dev"]
 
 [[package]]
+name = "fr-file-decryption"
+version = "0.1.0"
+source = { editable = "../packages/file_decryption" }
+dependencies = [
+    { name = "openpyxl" },
+    { name = "pandas" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "openpyxl", specifier = ">=3.1.0" },
+    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
+]
+
+[[package]]
 name = "gitdb"
 version = "4.0.12"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -2886,6 +2903,7 @@ dependencies = [
     { name = "altair" },
     { name = "comtypes" },
     { name = "fr-common-utils", extra = ["excel"] },
+    { name = "fr-file-decryption" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "openpyxl" },
@@ -2919,6 +2937,7 @@ requires-dist = [
     { name = "altair", specifier = ">=5.5.0" },
     { name = "comtypes" },
     { name = "fr-common-utils", extras = ["excel"], editable = "../packages/common_utils" },
+    { name = "fr-file-decryption", editable = "../packages/file_decryption" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "openpyxl" },

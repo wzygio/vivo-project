@@ -20,6 +20,16 @@ async page => {
       { timeout },
     );
 
+  const selectProduct = async product => {
+    const selector = page.getByRole("combobox", { name: "📦 当前产品型号" });
+    if ((await selector.inputValue()) === product) return;
+    await selector.click();
+    await page.getByRole("option", { name: product, exact: true }).click();
+    const loading = page.getByText("正在加载 AOI TT 数据...");
+    await loading.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+    await loading.waitFor({ state: "hidden", timeout: 600_000 });
+  };
+
   await page.goto("http://localhost:8503/AOI_TT监控报表");
   await page
     .getByText("正在加载 AOI TT 数据...")
@@ -31,6 +41,9 @@ async page => {
   });
   await title.waitFor({ timeout: 120_000 });
 
+  // 使用已知同时具备 ARRAY/TDSUM 与缺陷明细的产品，避免沿用浏览器会话中的产品。
+  await selectProduct("M678");
+
   // 空数据降级分支不视为失败加载，但本用例要求有数据
   const noData = page.getByText("当前产品暂无可展示的 AOI TT 数据。");
   if (await noData.count()) {
@@ -40,6 +53,13 @@ async page => {
   const filterHeading = page.getByRole("heading", { name: "筛选", exact: true });
   await filterHeading.waitFor({ timeout: 120_000 });
 
+  // Particle Size 多选默认必须是 Total/O/L 全选。
+  for (const size of ["Total", "O", "L"]) {
+    await page
+      .getByRole("button", { name: `${size}, close by backspace`, exact: true })
+      .waitFor({ timeout: 120_000 });
+  }
+
   // 厂别固定选 ARRAY（TT 参数 TDSUM 数据量最大）
   if ((await comboInputValue("厂别")) !== "ARRAY") {
     await page.getByRole("combobox", { name: "厂别" }).click();
@@ -48,10 +68,25 @@ async page => {
 
   // 站点多选：显式选 11620（ARRAY 首个 AOI 站点）
   const stepSelector = page.getByRole("combobox", { name: "站点" });
-  await stepSelector.click();
-  const firstStep = page.getByRole("option", { name: "11620", exact: true });
-  await firstStep.click();
-  await page.keyboard.press("Escape");
+  const firstStep = page.getByRole("option", {
+    name: "11620 PSI_FI_AOI",
+    exact: true,
+  });
+  let stepSelected = false;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    await stepSelector.click();
+    if (await firstStep.count()) {
+      await firstStep.click();
+      stepSelected = true;
+      break;
+    }
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+  }
+  if (!stepSelected) throw new Error("未找到 M678 的 11620 PSI_FI_AOI 站点");
+  await page
+    .getByRole("button", { name: /^11620.*close by backspace$/ })
+    .waitFor({ timeout: 120_000 });
   const firstStepName = "11620";
 
   // Code名称（TT 参数）随站点自动全选后查询按钮启用
@@ -77,14 +112,54 @@ async page => {
     .first()
     .waitFor({ timeout: 300_000 });
 
+  for (const size of ["Total", "O", "L"]) {
+    await page
+      .getByText(`Particle Size：${size}`, { exact: true })
+      .first()
+      .waitFor({ timeout: 300_000 });
+  }
+
+  await page.waitForFunction(
+    () => document.querySelectorAll(".js-plotly-plot").length >= 9,
+    undefined,
+    { timeout: 300_000 },
+  );
+
   const chartCount = await page.locator(".js-plotly-plot").count();
-  if (chartCount < 3) {
-    throw new Error(`图表数量不足：期望 >=3，实际 ${chartCount}`);
+  if (chartCount < 9 || chartCount % 9 !== 0) {
+    throw new Error(`全选图表数量不符合每参数 3 粒径 × 3 图：实际 ${chartCount}`);
   }
 
   await page.screenshot({
-    path: "output/screenshots/aoi_tt_e2e.png",
+    path: "output/test-results/aoi-tt-particle-size/all-particle-sizes.png",
     fullPage: false,
   });
-  return `AOI_TT E2E 通过：站点 ${firstStepName}，渲染图表 ${chartCount} 张`;
+
+  // 探索性组合筛选：只保留 Total；O/L 图和标签都必须消失。
+  const particleSelector = page.getByRole("combobox", { name: /Particle Size$/ });
+  await particleSelector.focus();
+  await page.keyboard.press("Backspace");
+  await page
+    .getByRole("button", { name: "L, close by backspace", exact: true })
+    .waitFor({ state: "hidden", timeout: 120_000 });
+  await particleSelector.focus();
+  await page.keyboard.press("Backspace");
+  await page
+    .getByRole("button", { name: "O, close by backspace", exact: true })
+    .waitFor({ state: "hidden", timeout: 120_000 });
+  await page
+    .getByText("Particle Size：O", { exact: true })
+    .waitFor({ state: "hidden", timeout: 300_000 });
+  const totalOnlyCount = await page.locator(".js-plotly-plot").count();
+  if (totalOnlyCount * 3 !== chartCount) {
+    throw new Error(
+      `单粒径图表数量未按 3:1 收敛：全选 ${chartCount}，Total-only ${totalOnlyCount}`,
+    );
+  }
+  await page.keyboard.press("Escape");
+  await page.screenshot({
+    path: "output/test-results/aoi-tt-particle-size/total-only.png",
+    fullPage: false,
+  });
+  return `AOI_TT Particle Size E2E 通过：站点 ${firstStepName}，全选 ${chartCount} 图，Total-only ${totalOnlyCount} 图`;
 }

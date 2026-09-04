@@ -64,7 +64,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
   → 排除参数过滤（LOSS 关键字）
   → 排序去重（prod/factory/sheet/step/param/site 六键 keep="last"）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤
-  → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，规则键 prod/step/param）
+  → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，参数级或整站规则）
   → 时间窗口 [start, end+1d) + factory/step_id/param_name 维度过滤
   → 主制程追溯（attach_main_process_spec → 履历查询 → apply_main_process_history）
 ```
@@ -75,7 +75,18 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 2. 异常点过滤在 data_type 过滤**之后** → monitor 传 `ALL` 时规则作用于 AOI 行。
 3. 白名单为空 → 返回空；白名单查询失败（None）→ 全量放行并标 `data_type='UNKNOWN'`。
 
-### 3.2 data_type 分类
+### 3.2 异常值过滤规则
+
+- `prod_col` 为空或 `ALL` 时适用于全部产品；填写产品编码时只作用于该产品。
+- 同时填写 `step_col + param_col` 时为参数级规则，按
+  `param_value <= lower_col` 或 `param_value >= upper_col` 剔除；至少一个边界必须是有效数值。
+- 只填写 `step_col`、将 `param_col` 留空时为整站规则：无条件剔除该步骤下的全部参数，
+  `lower_col` 与 `upper_col` 不需要填写。
+- 配置文件为企业加密格式时先通过 `fr-file-decryption` 解密，再即时读取；临时明文写入
+  `output/decrypted_files/` 并在读取后清理。文件缺失、解密失败、读取失败或必需表头缺失均
+  抛出 `OutlierFilterConfigurationError`，不得跳过过滤继续生成报表。
+
+### 3.3 data_type 分类
 
 `core/monitor/monitor_param_classifier.classify_param_type`：NULL/空白 → `AOI`，
 其余去白转大写（`SPC`/`CTQ`）。分类在制备层经白名单 merge 注入。

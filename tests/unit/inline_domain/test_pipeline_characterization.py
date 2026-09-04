@@ -300,14 +300,20 @@ def test_pipeline_missing_catalog_marks_all_rows_unknown(monkeypatch) -> None:
 def test_pipeline_outlier_filter_drops_out_of_bounds_values(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """Exercise the real _apply_outlier_filters through the CSV fallback rules."""
-    rules_dir = tmp_path / "output" / "decrypted_files"
-    rules_dir.mkdir(parents=True)
-    (rules_dir / "spc_outlier_filters.csv").write_text(
-        "prod_col,step_col,param_col,lower_col,upper_col\n"
-        "ALL,100,SPC_PARAM,1.0,100.0\n",
-        encoding="utf-8",
-    )
+    """Exercise the real outlier-filter loader through a standard workbook."""
+    rules_file = tmp_path / "resources" / "inline_domain" / "spc_outlier_filters.xlsx"
+    rules_file.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "prod_col": "ALL",
+                "step_col": "100",
+                "param_col": "SPC_PARAM",
+                "lower_col": 1.0,
+                "upper_col": 100.0,
+            }
+        ]
+    ).to_excel(rules_file, index=False)
     monkeypatch.setattr(
         ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
     )
@@ -333,6 +339,39 @@ def test_pipeline_outlier_filter_drops_out_of_bounds_values(
     # value <= lower (0.5) and value >= upper (150.0) are physically removed.
     assert result["sheet_id"].tolist() == ["S1"]
     assert result["param_value"].tolist() == [4.2]
+
+
+def test_pipeline_step_only_outlier_rule_removes_all_parameters(
+    monkeypatch, tmp_path: Path
+) -> None:
+    rules_file = tmp_path / "resources" / "inline_domain" / "spc_outlier_filters.xlsx"
+    rules_file.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "step_col": "100",
+                "param_col": "",
+                "lower_col": "",
+                "upper_col": "",
+            }
+        ]
+    ).to_excel(rules_file, index=False)
+    monkeypatch.setattr(
+        ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
+    )
+
+    repository = SpcRepository(
+        InlineMeasurementPreparationRepository(
+            raw_measurements=FakeRawMeasurements(_build_shared_raw()),
+            metadata=FakeMetadata(_build_catalog()),
+            main_process_history=FakeMainProcessHistory(),
+        )
+    )
+
+    result = repository.get_spc_measurements(_query())
+
+    assert result["step_id"].tolist() == ["200"]
+    assert result["sheet_id"].tolist() == ["S3"]
 
 
 # ---------------------------------------------------------------------------

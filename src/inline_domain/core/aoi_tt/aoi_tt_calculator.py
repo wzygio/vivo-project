@@ -18,13 +18,71 @@ import pandas as pd
 
 from src.inline_domain.core.spc.spc_calculator import build_available_period_axis
 
-_INDICATOR_KEYS = ["factory", "step_id", "tt_name"]
+_INDICATOR_KEYS = ["factory", "step_id", "tt_name", "particle_size"]
 # 规格表无 factory 列（step_id 全局唯一隐含厂别），规格匹配备用键
 _SPEC_KEYS = ["step_id", "tt_name"]
+PARTICLE_SIZE_OPTIONS = ("Total", "O", "L")
+_PARTICLE_JOIN_KEYS = ["factory", "prod_code", "step_id", "sheet_id"]
+
+
+def build_particle_size_details(
+    tt_details_df: pd.DataFrame,
+    particle_counts_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """为每个 ARRAY/TDSUM Sheet 补齐 O/L 明细，同时原样保留 Total 明细。"""
+    if tt_details_df.empty:
+        return tt_details_df.assign(particle_size=pd.Series(dtype="object"))
+
+    total_details = tt_details_df.copy()
+    total_details["particle_size"] = "Total"
+    eligible = total_details[
+        total_details["factory"].astype(str).str.upper().eq("ARRAY")
+        & total_details["tt_name"].astype(str).str.upper().eq("TDSUM")
+    ]
+    if eligible.empty:
+        return total_details
+
+    sheet_base = (
+        eligible.sort_values("start_time", kind="stable")
+        .drop_duplicates([*_PARTICLE_JOIN_KEYS, "tt_name"], keep="first")
+        .drop(columns=["tt_qty", "particle_size"])
+    )
+    particle_sizes = pd.DataFrame({"particle_size": ["O", "L"]})
+    expanded = sheet_base.merge(particle_sizes, how="cross")
+
+    if particle_counts_df.empty:
+        expanded["tt_qty"] = 0
+    else:
+        counts = particle_counts_df.copy()
+        counts["particle_size"] = (
+            counts["particle_size"].astype(str).str.strip().str.upper()
+        )
+        counts["particle_qty"] = pd.to_numeric(
+            counts["particle_qty"], errors="coerce"
+        ).fillna(0)
+        counts = (
+            counts[counts["particle_size"].isin({"O", "L"})]
+            .groupby([*_PARTICLE_JOIN_KEYS, "particle_size"], as_index=False)["particle_qty"]
+            .sum()
+            .rename(columns={"particle_qty": "tt_qty"})
+        )
+        expanded = expanded.merge(
+            counts,
+            on=[*_PARTICLE_JOIN_KEYS, "particle_size"],
+            how="left",
+        )
+        expanded["tt_qty"] = expanded["tt_qty"].fillna(0)
+
+    expanded = expanded.reindex(columns=total_details.columns)
+    return pd.concat([total_details, expanded], ignore_index=True)
 
 
 def _prepare_details(tt_details_df: pd.DataFrame) -> pd.DataFrame:
     details = tt_details_df.copy()
+    if "particle_size" not in details.columns:
+        details["particle_size"] = "Total"
+    else:
+        details["particle_size"] = details["particle_size"].fillna("Total")
     details["start_time"] = pd.to_datetime(details["start_time"], errors="coerce")
     return details.dropna(subset=["start_time"])
 
@@ -105,8 +163,9 @@ def build_lot_point_df(tt_details_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(
             columns=[*_INDICATOR_KEYS, "lot_id", "tt_qty", "sheet_qty", "value", "first_start_time"]
         )
+    details = _prepare_details(tt_details_df)
     lots = (
-        tt_details_df.groupby([*_INDICATOR_KEYS, "lot_id"], as_index=False)
+        details.groupby([*_INDICATOR_KEYS, "lot_id"], as_index=False)
         .agg(
             tt_qty=("tt_qty", "sum"),
             sheet_qty=("sheet_id", "nunique"),
@@ -129,8 +188,9 @@ def build_sheet_point_df(tt_details_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(
             columns=[*_INDICATOR_KEYS, "sheet_id", "tt_qty", "first_start_time"]
         )
+    details = _prepare_details(tt_details_df)
     sheets = (
-        tt_details_df.groupby([*_INDICATOR_KEYS, "sheet_id"], as_index=False)
+        details.groupby([*_INDICATOR_KEYS, "sheet_id"], as_index=False)
         .agg(tt_qty=("tt_qty", "sum"), first_start_time=("start_time", "min"))
         .sort_values([*_INDICATOR_KEYS, "first_start_time"], kind="stable")
         .reset_index(drop=True)

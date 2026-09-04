@@ -62,15 +62,26 @@ def _spec_df() -> pd.DataFrame:
 
 
 class FakeAoiTtPort:
-    def __init__(self, details: pd.DataFrame, spec: pd.DataFrame) -> None:
+    def __init__(
+        self,
+        details: pd.DataFrame,
+        spec: pd.DataFrame,
+        particles: pd.DataFrame | None = None,
+    ) -> None:
         self.details = details
         self.spec = spec
+        self.particles = particles
 
     def get_tt_details(self, _query) -> pd.DataFrame:
         return self.details
 
     def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
         return self.spec
+
+    def get_particle_size_counts(self, _query) -> pd.DataFrame:
+        if self.particles is None:
+            raise RuntimeError("particle source unavailable")
+        return self.particles
 
 
 def _config_json() -> str:
@@ -97,6 +108,58 @@ def test_service_builds_view_model_with_indicators(monkeypatch) -> None:
     row = indicators[indicators["tt_name"] == "TDSUM"].iloc[0]
     assert row["factory"] == "ARRAY"
     assert row["step_id"] == "11620"
+
+
+def test_service_adds_particle_size_rows_after_total_decoration() -> None:
+    particles = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": pd.Timestamp("2026-07-15 08:01:00"),
+                "sheet_id": "SHT-A01",
+                "step_id": "11620",
+                "particle_size": "O",
+                "particle_qty": 2,
+            }
+        ]
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(_details_df(), _spec_df(), particles),
+        query_config_json=_config_json(),
+        snapshot_signature="particle-test",
+    )
+
+    array_rows = view_model.tt_details_df[
+        view_model.tt_details_df["factory"] == "ARRAY"
+    ].set_index("particle_size")
+    assert array_rows.loc["Total", "tt_qty"] == 3
+    assert array_rows.loc["O", "tt_qty"] == 2
+    assert array_rows.loc["L", "tt_qty"] == 0
+    assert set(
+        view_model.tt_details_df[view_model.tt_details_df["factory"] == "TP"][
+            "particle_size"
+        ]
+    ) == {"Total"}
+
+
+def test_service_keeps_total_when_particle_source_fails() -> None:
+    class FailingParticlePort(FakeAoiTtPort):
+        def get_particle_size_counts(self, _query) -> pd.DataFrame:
+            raise RuntimeError("particle database unavailable")
+
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FailingParticlePort(_details_df(), _spec_df()),
+        query_config_json=_config_json(),
+        snapshot_signature="particle-fallback-test",
+    )
+
+    assert len(view_model.tt_details_df) == 2
+    assert set(view_model.tt_details_df["particle_size"]) == {"Total"}
 
 
 def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:

@@ -12,6 +12,7 @@ from app.sections.inline_domain.aoi_tt import aoi_tt_dashboard
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
+from src.inline_domain.application.shared import decision_signature
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.shared_kernel.infrastructure import db_handler
@@ -22,6 +23,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     loaded_queries: list[AoiTtQueryConfig] = []
     loaded_signatures: list[str] = []
     header_kwargs: dict[str, object] = {}
+    rendered_particle_sizes: list[str] = []
     report = SimpleNamespace(
         indicators_df=pd.DataFrame(
             [
@@ -43,6 +45,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
                     "lot_id": "L1",
                     "step_id": "11620",
                     "tt_name": "TDSUM",
+                    "particle_size": "O",
                     "tt_qty": 3,
                 }
             ]
@@ -72,6 +75,16 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
+        decision_signature,
+        "get_scope_decision_signature",
+        lambda *_args, **_kwargs: "test-decision",
+    )
+    monkeypatch.setattr(
+        aoi_tt_dashboard,
+        "load_aoi_tt_oos_decoration",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         page_header,
         "build_product_cache_signature",
         lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
@@ -91,12 +104,18 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     monkeypatch.setattr(
         aoi_tt_dashboard,
         "render_aoi_tt_filters",
-        lambda **_kwargs: events.append("filters") or ("ARRAY", ["TDSUM"], ["11620"], True),
+        lambda **_kwargs: events.append("filters")
+        or ("ARRAY", ["TDSUM"], ["11620"], ["O"], True),
     )
+
+    def fake_render_sections(**kwargs):
+        events.append("charts")
+        rendered_particle_sizes.extend(kwargs["tt_details_df"]["particle_size"].tolist())
+
     monkeypatch.setattr(
         aoi_tt_dashboard,
         "render_aoi_tt_indicator_sections",
-        lambda **_kwargs: events.append("charts"),
+        fake_render_sections,
     )
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "AOI_TT监控报表.py"
@@ -106,9 +125,10 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     # 固定窗口：上一自然月 1 日 ~ 当前日期（含当天）
     assert loaded_queries[0].start_date == "2026-07-01"
     assert loaded_queries[0].end_date == "2026-08-10"
-    assert loaded_signatures == ["aoi_tt_report_v1|scoped=M678"]
+    assert loaded_signatures == ["aoi_tt_report_v2_particle_size|scoped=M678"]
     assert header_kwargs["product_cache_scope"] == "M678"
     assert events == ["filters", "charts"]
+    assert rendered_particle_sizes == ["O"]
 
 
 def test_portal_navigation_points_aoi_tt_to_the_streamlit_page() -> None:

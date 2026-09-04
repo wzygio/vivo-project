@@ -88,3 +88,39 @@ def test_aoi_tt_repository_projects_only_step_parameter_pairs_from_shared_raw_da
             "tt_qty": 3,
         }
     ]
+
+
+def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
+    query = AoiTtQueryConfig(
+        prod_code="M678",
+        start_date="2026-08-01",
+        end_date="2026-08-10",
+    )
+    expected = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "sheet_id": "SHEET-1",
+                "step_id": "11620",
+                "particle_size": "O",
+                "particle_qty": 2,
+            }
+        ]
+    )
+    captured: list[AoiTtQueryConfig] = []
+
+    def load_particles(received: AoiTtQueryConfig) -> pd.DataFrame:
+        captured.append(received)
+        return expected
+
+    repository = AoiTtRepository(
+        raw_measurements=FakeRawMeasurements(),
+        metadata=FakeMetadata(),
+        particle_size_loader=load_particles,
+    )
+
+    result = repository.get_particle_size_counts(query)
+
+    assert captured == [query]
+    assert result is expected

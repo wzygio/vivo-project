@@ -604,3 +604,33 @@ def test_empty_product_selection_shows_caption() -> None:
     assert not _cell_buttons(app)
     assert len(app.info) == 0
     assert any("产品型号" in c.value for c in app.caption)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10：筛选条常驻（页面级渲染）——section 接收外部选择时不再渲染筛选条
+# ---------------------------------------------------------------------------
+def test_section_with_external_filter_selection_skips_bar_and_slices() -> None:
+    """filter_selection 由页面常驻筛选条传入：section 不重复渲染 widget（无 key
+    冲突），切片逻辑（类型切行 / 产品切列 / 厂别切单元格）照常生效。"""
+    app = _new_app("external-selection")
+    app.session_state["fixture_mode"] = "external_selection"
+    app.session_state["fixture_selection"] = ("AOI", ["M678"], ["ARRAY"])
+    app.run()
+
+    assert not app.exception
+    # 筛选条 widget 不由 section 渲染（页面常驻渲染，此处应缺席）
+    assert not any(s.key == "alert_matrix_data_type" for s in app.selectbox)
+    assert not any(m.key == "alert_matrix_products" for m in app.multiselect)
+    assert not any(m.key == "alert_matrix_factories" for m in app.multiselect)
+
+    buttons = _cell_buttons(app)
+    # AOI 两行 × M678 一列
+    assert len(buttons) == 2
+    assert all(
+        key.endswith("_M678")
+        and (
+            key.startswith("matrix_cell_aoi_rs_sheet_oos_")
+            or key.startswith("matrix_cell_aoi_tt_sheet_oos_")
+        )
+        for key in buttons
+    )

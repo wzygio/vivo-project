@@ -43,6 +43,7 @@ from app.sections.inline_domain.shared.alert_center import (
 from app.utils.step_labels import format_step_label
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
+    PARTICLE_SIZE_OPTIONS,
     attach_spec_values,
     build_lot_point_df,
     build_period_throughput_df,
@@ -110,9 +111,9 @@ def render_aoi_tt_filters(
     indicator_df: pd.DataFrame,
     *,
     step_desc_map: dict[str, str] | None = None,
-) -> tuple[str, list[str], list[str], bool]:
-    """渲染厂别/站点/Code名称筛选与查询门控，返回 (factory, codes, steps, should_render)。"""
-    return render_cascade_filters(
+) -> tuple[str, list[str], list[str], list[str], bool]:
+    """渲染厂别/站点/Code名称与 Particle Size 筛选。"""
+    factory, codes, steps, should_render = render_cascade_filters(
         indicator_df,
         key_prefix="aoi_tt",
         third_label="Code名称",
@@ -121,6 +122,13 @@ def render_aoi_tt_filters(
         factory_options=AOI_TT_FACTORY_OPTIONS,
         step_desc_map=step_desc_map,
     )
+    selected_particle_sizes = st.multiselect(
+        "Particle Size",
+        options=list(PARTICLE_SIZE_OPTIONS),
+        default=list(PARTICLE_SIZE_OPTIONS),
+        key="aoi_tt_particle_size_filter",
+    )
+    return factory, codes, steps, selected_particle_sizes, should_render
 
 
 def filter_aoi_tt_report(
@@ -128,15 +136,19 @@ def filter_aoi_tt_report(
     selected_factory: str,
     selected_codes: list[str],
     selected_steps: list[str],
+    selected_particle_sizes: list[str] | None = None,
 ) -> pd.DataFrame:
     """对含 factory/tt_name/step_id 列的数据框应用前端筛选。"""
-    return apply_report_filter(
+    filtered = apply_report_filter(
         report_df,
         selected_factory,
         selected_codes,
         selected_steps,
         third_column="tt_name",
     )
+    if selected_particle_sizes is not None and "particle_size" in filtered.columns:
+        filtered = filtered[filtered["particle_size"].isin(selected_particle_sizes)]
+    return filtered
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +241,70 @@ def _code_spec_map(
     }
 
 
+def _render_particle_size_charts(
+    *,
+    particle_size: str,
+    code: str,
+    trend_df: pd.DataFrame,
+    throughput_df: pd.DataFrame,
+    lot_df: pd.DataFrame,
+    sheet_df: pd.DataFrame,
+    usl: float | None,
+    ucl: float | None,
+) -> None:
+    """Render the three AOI TT charts for one particle-size slice."""
+    st.markdown(f"**Particle Size：{particle_size}**")
+    trend_points = trend_df[
+        (trend_df["tt_name"].astype(str) == code)
+        & (trend_df["particle_size"].astype(str) == particle_size)
+    ]
+    lot_points = lot_df[
+        (lot_df["tt_name"].astype(str) == code)
+        & (lot_df["particle_size"].astype(str) == particle_size)
+    ]
+    sheet_points = sheet_df[
+        (sheet_df["tt_name"].astype(str) == code)
+        & (sheet_df["particle_size"].astype(str) == particle_size)
+    ]
+
+    c_trend, c_lot, c_sheet = st.columns(3)
+    with c_trend:
+        st.plotly_chart(
+            create_aoi_tt_trend_chart(
+                trend_df=trend_points,
+                throughput_df=throughput_df,
+                usl=usl,
+                ucl=ucl,
+                code_name=code,
+                title="月周天趋势（平均每片 TT 个数）",
+            ),
+            width="stretch",
+        )
+    with c_lot:
+        st.plotly_chart(
+            create_aoi_tt_point_chart(
+                point_df=lot_points,
+                id_col="lot_id",
+                code_specs={code: (usl, ucl)},
+                title="By Lot（Lot 内平均每片 TT 个数）",
+                y_title="平均每片 TT 个数",
+                y_col="value",
+            ),
+            width="stretch",
+        )
+    with c_sheet:
+        st.plotly_chart(
+            create_aoi_tt_point_chart(
+                point_df=sheet_points,
+                id_col="sheet_id",
+                code_specs={code: (usl, ucl)},
+                title="By Sheet（每片的 TT 个数）",
+                y_title="TT 个数",
+            ),
+            width="stretch",
+        )
+
+
 def render_aoi_tt_indicator_sections(
     *,
     tt_details_df: pd.DataFrame,
@@ -282,41 +358,23 @@ def render_aoi_tt_indicator_sections(
             code = str(indicator.tt_name)
             usl, ucl = code_specs.get(code, (None, None))
             with st.expander(f"{code} | 站点 {format_step_label(step_id, step_desc_map)}", expanded=True):
-                c_trend, c_lot, c_sheet = st.columns(3)
-                with c_trend:
-                    st.plotly_chart(
-                        create_aoi_tt_trend_chart(
-                            trend_df=step_trend[step_trend["tt_name"].astype(str) == code],
-                            throughput_df=step_throughput,
-                            usl=usl,
-                            ucl=ucl,
-                            code_name=code,
-                            title="月周天趋势（平均每片 TT 个数）",
-                        ),
-                        width="stretch",
-                    )
-                with c_lot:
-                    st.plotly_chart(
-                        create_aoi_tt_point_chart(
-                            point_df=step_lot[step_lot["tt_name"].astype(str) == code],
-                            id_col="lot_id",
-                            code_specs={code: (usl, ucl)},
-                            title="By Lot（Lot 内平均每片 TT 个数）",
-                            y_title="平均每片 TT 个数",
-                            y_col="value",
-                        ),
-                        width="stretch",
-                    )
-                with c_sheet:
-                    st.plotly_chart(
-                        create_aoi_tt_point_chart(
-                            point_df=step_sheet[step_sheet["tt_name"].astype(str) == code],
-                            id_col="sheet_id",
-                            code_specs={code: (usl, ucl)},
-                            title="By Sheet（每片的 TT 个数）",
-                            y_title="TT 个数",
-                        ),
-                        width="stretch",
+                available_sizes = set(
+                    step_trend.loc[
+                        step_trend["tt_name"].astype(str) == code,
+                        "particle_size",
+                    ].astype(str)
+                )
+                ordered_sizes = [size for size in PARTICLE_SIZE_OPTIONS if size in available_sizes]
+                for particle_size in ordered_sizes:
+                    _render_particle_size_charts(
+                        particle_size=particle_size,
+                        code=code,
+                        trend_df=step_trend,
+                        throughput_df=step_throughput,
+                        lot_df=step_lot,
+                        sheet_df=step_sheet,
+                        usl=usl,
+                        ucl=ucl,
                     )
 
 

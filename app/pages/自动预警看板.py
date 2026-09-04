@@ -34,6 +34,7 @@ from app.sections.inline_domain.monitor.monitor_dashboard import (
     get_cached_alarm_detail_tables,
     render_alarm_detail_tables,
     render_monitor_control_panel,
+    render_monitor_query_button,
     render_monitor_query_gate,
     render_monitor_summary_chart,
     render_station_top10_section,
@@ -42,6 +43,7 @@ from app.sections.inline_domain.monitor.monitor_dashboard import (
 from app.sections.inline_domain.monitor.alert_matrix import (
     MATRIX_SELECTION_STATE_KEY,
     render_alert_matrix_board,
+    render_alert_matrix_filter_bar,
 )
 from app.sections.inline_domain.monitor.alert_matrix_cache import (
     get_alert_matrix_cached_funcs,
@@ -127,11 +129,12 @@ render_page_header(
 
 # --------------------------------------------------------------------------
 # 模块一：预警矩阵（产品 × 监控参数，按钮门控加载）
-# 矩阵为全产品视图，不参与 Header 单产品筛选（D3）；默认只渲染
+# 矩阵为全产品视图，不参与 Header 单产品筛选（D3）；筛选条（监控类型/产品
+# 型号/厂别）在 Expander 内常驻渲染，未加载时也可先选条件；默认只渲染
 # 「加载预警矩阵」按钮（无 info 文案，门控语义由按钮承担，UI 优化轮次），
-# 点击后才读取 L2 缓存 payload 并渲染（真正的全量计算仍由既有 monitor
-# 管线在缓存 miss 时完成，按钮本身只是读取缓存）。已加载状态存
-# session_state，普通 rerun 保持可见；「刷新缓存/刷新数据」由
+# 点击后才读取 L2 缓存 payload 并按当前筛选选择客户端切片展示（真正的
+# 全量计算仍由既有 monitor 管线在缓存 miss 时完成，按钮本身只是读取缓存）。
+# 已加载状态存 session_state，普通 rerun 保持可见；「刷新缓存/刷新数据」由
 # perform_hard_reset 阶段 4 / _refresh_data_callback 清除该状态。
 # --------------------------------------------------------------------------
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
@@ -146,10 +149,9 @@ def _collapse_alert_matrix() -> None:
     st.session_state.pop(MATRIX_SELECTION_STATE_KEY, None)
 
 
-st.subheader("🚦 预警矩阵")
-with st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=True):
+def _render_matrix_action_button() -> None:
+    """矩阵操作按钮（加载/收起），渲染在筛选条同行的最右列。"""
     if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
-        render_alert_matrix_board(db_manager=db_manager, step_desc_map=step_desc_map)
         st.button(
             "收起预警矩阵",
             key="btn_collapse_alert_matrix",
@@ -162,6 +164,24 @@ with st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=
             type="primary",
             key="btn_load_alert_matrix",
             on_click=_load_alert_matrix,
+        )
+
+
+st.subheader("🚦 预警矩阵")
+with st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=True):
+    # 筛选条常驻（与下方「超规片自动预警」控制台同观感）：未加载时也可先选
+    # 条件，点击加载后按当前选择客户端切片；widget key 只在此渲染一处，
+    # 已加载分支经 filter_selection 透传给矩阵，不重复渲染。
+    # 操作按钮（加载/收起）与筛选三件套同处一行最右列（参照 Q-Time 页布局）。
+    matrix_filter_selection = render_alert_matrix_filter_bar(
+        SessionManager.AVAILABLE_PRODUCTS,
+        action_renderer=_render_matrix_action_button,
+    )
+    if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
+        render_alert_matrix_board(
+            db_manager=db_manager,
+            step_desc_map=step_desc_map,
+            filter_selection=matrix_filter_selection,
         )
 
 # --------------------------------------------------------------------------
@@ -177,8 +197,18 @@ with st.expander("筛选控制台与预警结果", expanded=True):
     available_products = SessionManager.AVAILABLE_PRODUCTS
     available_factories = MONITOR_FACTORY_OPTIONS
 
-    # 4. 组装积木: 渲染控制台
-    filter_state = render_monitor_control_panel(available_products, available_factories)
+    # 4. 组装积木: 渲染控制台（「查询」按钮与筛选三件套同行最右列，
+    # 点击状态经 box 传回门控——按钮渲染先于签名计算）
+    query_click_box: dict[str, bool] = {}
+
+    def _render_query_button_in_row() -> None:
+        query_click_box["clicked"] = render_monitor_query_button()
+
+    filter_state = render_monitor_control_panel(
+        available_products,
+        available_factories,
+        action_renderer=_render_query_button_in_row,
+    )
 
     # [新增] 渲染数据修饰配置面板（仅管理员可见）
     if is_admin:
@@ -188,7 +218,9 @@ with st.expander("筛选控制台与预警结果", expanded=True):
             selected_factories=filter_state.selected_factories or ["ALL"]
         )
 
-    if render_monitor_query_gate(filter_state):
+    if render_monitor_query_gate(
+        filter_state, clicked=query_click_box.get("clicked", False)
+    ):
         # Phase 4 门控：monitor 涉及多产品/多修饰口径（spc/ctq），按产品逐个预算
         # 共享 revision 与决策签名；服务内部按产品循环取用，进入 L2 缓存键与 core 门控。
         # 决策表读取失败时显式失败（不降级为空决策）。

@@ -7,6 +7,7 @@ import pandas as pd
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     attach_spec_values,
     build_lot_point_df,
+    build_particle_size_details,
     build_period_throughput_df,
     build_period_trend_df,
     build_sheet_point_df,
@@ -19,6 +20,66 @@ def _details(rows: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["start_time"] = pd.to_datetime(df["start_time"])
     return df
+
+
+def test_particle_size_details_keep_total_and_zero_fill_array_tdsum() -> None:
+    totals = _details(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 5},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 3},
+            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-09 10:00", "sheet_id": "G1", "lot_id": "L2", "step_id": "21320", "tt_name": "DSUM_L", "tt_qty": 4},
+        ]
+    )
+    particles = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:01"), "sheet_id": "S1", "step_id": "11620", "particle_size": "O", "particle_qty": 2},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 08:02"), "sheet_id": "S1", "step_id": "11620", "particle_size": "L", "particle_qty": 1},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": pd.Timestamp("2026-08-09 12:00"), "sheet_id": "UNMATCHED", "step_id": "11620", "particle_size": "O", "particle_qty": 99},
+        ]
+    )
+
+    result = build_particle_size_details(totals, particles)
+
+    assert result[result["particle_size"] == "Total"]["tt_qty"].tolist() == [5, 3, 4]
+    array_particles = result[
+        (result["factory"] == "ARRAY") & (result["particle_size"].isin(["O", "L"]))
+    ].sort_values(["sheet_id", "particle_size"])
+    assert array_particles[["sheet_id", "particle_size", "tt_qty"]].to_dict("records") == [
+        {"sheet_id": "S1", "particle_size": "L", "tt_qty": 1},
+        {"sheet_id": "S1", "particle_size": "O", "tt_qty": 2},
+        {"sheet_id": "S2", "particle_size": "L", "tt_qty": 0},
+        {"sheet_id": "S2", "particle_size": "O", "tt_qty": 0},
+    ]
+    assert set(result[result["factory"] == "OLED"]["particle_size"]) == {"Total"}
+
+
+def test_particle_size_isolated_in_trend_lot_and_sheet_aggregates() -> None:
+    details = _details(
+        [
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "Total", "tt_qty": 5},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "O", "tt_qty": 2},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "L", "tt_qty": 1},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "Total", "tt_qty": 3},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "O", "tt_qty": 0},
+            {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-10 09:00", "sheet_id": "S2", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "L", "tt_qty": 0},
+        ]
+    )
+
+    trend = build_period_trend_df(details, END_DATE)
+    day = trend[trend["period_type"] == "day"].set_index("particle_size")
+    assert day.loc["Total", "value"] == 4
+    assert day.loc["O", "value"] == 1
+    assert day.loc["L", "value"] == 0.5
+
+    lots = build_lot_point_df(details).set_index("particle_size")
+    assert lots.loc["Total", "value"] == 4
+    assert lots.loc["O", "value"] == 1
+    assert lots.loc["L", "value"] == 0.5
+
+    sheets = build_sheet_point_df(details).set_index(["sheet_id", "particle_size"])
+    assert sheets.loc[("S1", "Total"), "tt_qty"] == 5
+    assert sheets.loc[("S1", "O"), "tt_qty"] == 2
+    assert sheets.loc[("S1", "L"), "tt_qty"] == 1
 
 
 def test_period_trend_computes_ratio_per_tt_and_period() -> None:

@@ -101,6 +101,17 @@
 - [x] 9.2 模块化结构：模块一 `st.subheader("🚦 预警矩阵")` + `st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=True)`（未加载仅按钮；已加载矩阵本体+收起按钮+详情区）；模块二 `st.subheader("⚠️ 超规片自动预警")` + `st.expander("筛选控制台与预警结果", expanded=True)`（控制台 + admin 修饰面板原位 + 查询按钮 + 门控内容）；subheader 与 expander 文案不重复；矩阵内部 `#### 🚦 预警矩阵` 标题移除（避免三层重复，周次信息由图例 caption 承担）。嵌套 expander（模块 expander 包详情/明细 expander）经 AppTest 探针确认 Streamlit 1.60 支持。【证据：`test_auto_warning_page.py::_assert_module_structure`（两模块 subheader + expanded=True expander + 文案不重复 + infos==[]）2 项通过；嵌套探针 AppTest `expanders: ['outer','inner']` 无异常】
 - [x] 9.3 测试更新与回归：fixture/断言同步（info→caption/warning、矩阵内部标题移除）；门控行为（未点击不加载、签名变更回未提交态）不变。用户在门控块内新增的 `data_forward_signature`（`ConfigLoader.get_data_forward_policy().signature` 进入两处 snapshot_signature）原样保留。【证据：聚焦套件 92 passed；全量回归见 progress.md Session 7】
 
+### Phase 10 — 矩阵筛选条常驻（需求方反馈修正，2026-09-03）
+
+- [x] 10.1 筛选条移出"已加载"分支：`_render_matrix_filter_bar` 提升为公开 `render_alert_matrix_filter_bar`，由页面在模块一 Expander 内、加载/收起按钮上方常驻渲染一次（未加载时 Expander 内 = 筛选条 + 加载按钮，无其他文案）；`render_alert_matrix_section`/`render_alert_matrix_board` 新增 `filter_selection` 参数——传入时 section 不再渲染筛选条（widget key 只渲染一处，无冲突），缺省时自行渲染（测试/独立场景兼容）。选择存 session_state（`alert_matrix_` 前缀 key 不变），加载后按当前选择客户端切片，已加载后改筛选即时生效（逻辑未动）。`data_forward_signature` 用户逻辑原样保留。【证据：`test_auto_warning_page.py` 未加载态断言筛选条三 key 各渲染一次 + 加载按钮在、收起按钮不在；已加载态断言筛选条仍只一处 + board 收到 `filter_selection` 三元组（ALL/全产品/全厂别默认值）+ 收起按钮在；`test_alert_matrix_ui.py::test_section_with_external_filter_selection_skips_bar_and_slices`（外部选择下 section 不渲染筛选条 widget、AOI 切行 + M678 切列 + 厂别切片照常）】
+- [x] 10.2 回归：聚焦套件 94 passed；全量见 progress.md Session 8。
+
+### Phase 11 — 筛选与操作按钮同行布局（2026-09-03 需求轮次）
+
+- [x] 11.1 模块一：`render_alert_matrix_filter_bar(products, *, action_renderer=None)` 新增按钮渲染回调参数——传回调时四列布局 `[1.0, 2.6, 1.6, 0.9]` + `vertical_alignment="bottom"`（产品型号最宽，按钮最右），缺省保持三列旧布局；页面把「🚦 加载预警矩阵」/「收起预警矩阵」收进 `_render_matrix_action_button` 传入，按钮从矩阵下方移入筛选行最右列，widget key 唯一性与"筛选条只渲染一处"契约不变。【证据：`test_auto_warning_page.py::_assert_row_layout`（两处 4 列布局 + bottom 对齐 + 模块一连续 widget 序列 `alert_matrix_data_type → alert_matrix_products → alert_matrix_factories → 按钮key`）】
+- [x] 11.2 模块二：`render_monitor_control_panel(..., *, action_renderer=None)` 同款四列布局 `[1.0, 2.6, 1.6, 0.8]`；门控拆为 `render_monitor_query_button()`（渲染按钮并返回点击状态，key 不变）+ `render_monitor_query_gate(filter_state, *, clicked=None)`（clicked 覆盖支持按钮先于签名渲染的行内布局；on_click 回调改为返回值式提交）；控制台两个 multiselect 补显式 key（`monitor_products`/`monitor_factories`，label 不变）。【证据：fixture `monitor_query_gate_app.py` 新增 `row_layout` 模式 + `test_monitor_query_gate.py` 新增 2 项行内布局门控用例（未点击不加载/点击加载/签名过期回未提交态）；既有 6 项独立路径用例零改动通过；模块二连续 widget 序列 `spc_data_type_filter → monitor_products → monitor_factories → btn_monitor_query_submit` 断言通过】
+- [x] 11.3 回归：聚焦套件 96 passed；全量 `pytest tests/unit tests/integration` 935 passed / 5 failed（50.47s），5 项均为基线预存在，无新增失败。`data_forward_signature` 用户逻辑原样保留（3 处引用核实）。【证据：progress.md Session 9】
+
 ## 范围守卫（Out of scope，不得纳入）
 
 - 不修改任何预警判定算法/阈值；不改 Header 筛选与 SessionManager；不新增推送/通知；不重排既有汇总图/Top10；不为 qtime 建本地快照。

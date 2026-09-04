@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 
 from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepository
+from src.inline_domain.infrastructure.aoi_tt.particle_size_loader import (
+    load_particle_size_counts,
+)
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
 from src.inline_domain.infrastructure.ctq.ctq_repository import CtqRepository
@@ -73,6 +77,7 @@ def build_aoi_tt_repository(db_manager: DatabaseManager, prod_code: str) -> AoiT
     return AoiTtRepository(
         raw_measurements=build_raw_measurement_repository(db_manager, prod_code),
         metadata=InlineMeasurementMetadataRepository(db_manager),
+        particle_size_loader=partial(load_particle_size_counts, db_manager),
     )
 
 

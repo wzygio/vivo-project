@@ -12,12 +12,30 @@ import streamlit as st
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
+from src.inline_domain.core.aoi_tt.aoi_tt_calculator import build_particle_size_details
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
 
 logger = logging.getLogger(__name__)
+
+
+def _load_particle_size_counts(
+    data_port: "AoiTtDataPort",
+    query_config: AoiTtQueryConfig,
+) -> pd.DataFrame | None:
+    loader = getattr(data_port, "get_particle_size_counts", None)
+    if loader is None:
+        return None
+    try:
+        return loader(query_config)
+    except Exception:
+        logger.exception(
+            "[AOI_TT] Particle Size data unavailable for %s; using Total only",
+            query_config.prod_code,
+        )
+        return None
 
 
 @dataclass
@@ -113,6 +131,11 @@ class AoiTtReportService:
                 product_revision=product_revision,
                 decision_signature=decision_signature,
             ).tt_details_df
+            particle_counts_df = _load_particle_size_counts(_data_port, query_config)
+            if particle_counts_df is None:
+                tt_details_df = tt_details_df.assign(particle_size="Total")
+            else:
+                tt_details_df = build_particle_size_details(tt_details_df, particle_counts_df)
             indicators_df = _build_indicators(tt_details_df)
             return {
                 "tt_details_df": tt_details_df,
