@@ -12,12 +12,56 @@ import streamlit as st
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
+from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
+    build_generated_particle_size_details,
+    build_particle_size_details,
+)
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
 
 logger = logging.getLogger(__name__)
+
+
+def _load_particle_size_counts(
+    data_port: "AoiTtDataPort",
+    query_config: AoiTtQueryConfig,
+) -> pd.DataFrame | None:
+    loader = getattr(data_port, "get_particle_size_counts", None)
+    if loader is None:
+        return None
+    try:
+        return loader(query_config)
+    except Exception:
+        logger.exception(
+            "[AOI_TT] Particle Size data unavailable for %s; using Total only",
+            query_config.prod_code,
+        )
+        return None
+
+
+def _load_particle_size_ratios(data_port: "AoiTtDataPort") -> pd.DataFrame | None:
+    loader = getattr(data_port, "get_particle_size_ratios", None)
+    if loader is None:
+        return None
+    try:
+        return loader()
+    except Exception:
+        logger.exception("[AOI_TT] Particle Size ratio specification unavailable; using Total only")
+        return None
+
+
+def _particle_size_runtime_config() -> tuple[bool, float, str]:
+    generated = ConfigLoader.get_aoi_tt_particle_size_generation_enabled()
+    jitter = ConfigLoader.get_aoi_tt_particle_size_ratio_jitter()
+    path = ConfigLoader.get_aoi_tt_particle_size_ratio_spec_path()
+    try:
+        stat = path.stat()
+        signature = f"{path.name}:{stat.st_mtime_ns}:{stat.st_size}"
+    except OSError:
+        signature = f"{path.name}:missing"
+    return generated, jitter, signature
 
 
 @dataclass
@@ -80,6 +124,9 @@ class AoiTtReportService:
         snapshot_signature: str = "",
         product_revision: str = "",
         decision_signature: str = "",
+        generate_particle_sizes: bool = True,
+        particle_ratio_jitter: float = 0.1,
+        particle_ratio_signature: str = "",
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；失败降级为空。
 
@@ -113,6 +160,22 @@ class AoiTtReportService:
                 product_revision=product_revision,
                 decision_signature=decision_signature,
             ).tt_details_df
+            if generate_particle_sizes:
+                ratio_spec_df = _load_particle_size_ratios(_data_port)
+                if ratio_spec_df is None:
+                    tt_details_df = tt_details_df.assign(particle_size="Total")
+                else:
+                    tt_details_df = build_generated_particle_size_details(
+                        tt_details_df,
+                        ratio_spec_df,
+                        ratio_jitter=particle_ratio_jitter,
+                    )
+            else:
+                particle_counts_df = _load_particle_size_counts(_data_port, query_config)
+                if particle_counts_df is None:
+                    tt_details_df = tt_details_df.assign(particle_size="Total")
+                else:
+                    tt_details_df = build_particle_size_details(tt_details_df, particle_counts_df)
             indicators_df = _build_indicators(tt_details_df)
             return {
                 "tt_details_df": tt_details_df,
@@ -132,11 +195,15 @@ class AoiTtReportService:
         decision_signature: str = "",
     ) -> AoiTtReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
+        generated, jitter, ratio_signature = _particle_size_runtime_config()
         payload = AoiTtReportService.fetch_aoi_tt_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
             product_revision=product_revision,
             decision_signature=decision_signature,
+            generate_particle_sizes=generated,
+            particle_ratio_jitter=jitter,
+            particle_ratio_signature=ratio_signature,
         )
         return AoiTtReportService._view_model_from_payload(payload)

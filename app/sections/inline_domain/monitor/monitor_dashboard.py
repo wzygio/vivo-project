@@ -41,13 +41,26 @@ class MonitorFilterState(BaseModel):
 # --------------------------------------------------------------------------
 # UI 渲染区块
 # --------------------------------------------------------------------------
-def render_monitor_control_panel(available_products: list[str], available_factories: list[str]) -> MonitorFilterState:
+def render_monitor_control_panel(
+    available_products: list[str],
+    available_factories: list[str],
+    *,
+    action_renderer=None,
+) -> MonitorFilterState:
     """
     渲染 SPC 控制面板
+
+    ``action_renderer``（2026-09-03 UI 优化轮次）：操作按钮渲染回调，渲染在
+    筛选三件套同行的最右列（参照 Q-Time 页同行布局：产品型号列最宽、按钮列
+    窄、底对齐）；缺省时保持三列旧布局。
     
     [注意] 数据修饰配置已移至主页面使用 compliance_control 模块渲染
     """
-    col1, col2, col3 = st.columns(3)
+    if action_renderer is not None:
+        columns = st.columns([1.0, 2.6, 1.6, 0.8], vertical_alignment="bottom")
+    else:
+        columns = st.columns(3)
+    col1, col2, col3 = columns[0], columns[1], columns[2]
     with col1:
         # [修改] 将基准日期替换为监控类型筛选
         data_type_options = ['ALL', 'SPC', 'CTQ', 'AOI', '报废']
@@ -59,13 +72,17 @@ def render_monitor_control_panel(available_products: list[str], available_factor
             help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), 报废(报废数据), ALL(全部)"
         )
     with col2:
-        prods = st.multiselect("产品型号", options=available_products, default=available_products)
+        prods = st.multiselect("产品型号", options=available_products, default=available_products, key="monitor_products")
     with col3:
-        facs = st.multiselect("厂别", options=available_factories, default=available_factories)
+        facs = st.multiselect("厂别", options=available_factories, default=available_factories, key="monitor_factories")
     
     # [注意] 精细化数据修饰控制面板已移至主页面统一渲染
     # 使用 app.components.compliance_control.render_compliance_control_panel()
     
+    if action_renderer is not None:
+        with columns[3]:
+            action_renderer()
+
     return MonitorFilterState(selected_products=prods, selected_factories=facs, data_type_filter=data_type)
 
 
@@ -86,27 +103,39 @@ def monitor_filter_signature(filter_state: MonitorFilterState) -> tuple:
     )
 
 
-def _submit_monitor_query(signature: tuple) -> None:
-    st.session_state[MONITOR_QUERY_SIGNATURE_KEY] = signature
+def render_monitor_query_button() -> bool:
+    """渲染「查询」主按钮并返回本次运行是否被点击。
 
-
-def render_monitor_query_gate(filter_state: MonitorFilterState) -> bool:
-    """渲染「查询」主按钮并判定当前筛选签名是否已提交。
-
-    未提交（含筛选变更后签名过期）时静默返回 False——不渲染任何说明文案，
-    门控语义由「查询」按钮本身承担（2026-09-03 UI 优化轮次：本页渲染面
-    禁用 st.info 提醒条）；调用方不得执行签名预算与数据加载，避免展示与
-    筛选不一致的旧数据（仿 Q-Time 页签名过期模式）。已提交状态普通 rerun 保持。
+    供行内布局（控制台最右列）捕获点击状态后经 ``render_monitor_query_gate``
+    的 ``clicked`` 参数传回门控；widget key 固定 ``btn_monitor_query_submit``。
     """
-    signature = monitor_filter_signature(filter_state)
-    st.button(
+    return st.button(
         "🔍 查询",
         type="primary",
         key="btn_monitor_query_submit",
-        on_click=_submit_monitor_query,
-        args=(signature,),
         help="按当前筛选条件加载超规片自动预警数据（签名预算 + 全量监控数据）。",
     )
+
+
+def render_monitor_query_gate(
+    filter_state: MonitorFilterState,
+    *,
+    clicked: bool | None = None,
+) -> bool:
+    """判定当前筛选签名是否已提交；``clicked=None`` 时自行渲染「查询」按钮。
+
+    行内布局下按钮由 ``render_monitor_query_button`` 在控制台最右列渲染
+    （先于签名计算），点击状态经 ``clicked`` 传回；未提交（含筛选变更后
+    签名过期）时静默返回 False——不渲染任何说明文案，门控语义由「查询」
+    按钮本身承担（2026-09-03 UI 优化轮次：本页渲染面禁用 st.info 提醒条）；
+    调用方不得执行签名预算与数据加载，避免展示与筛选不一致的旧数据
+    （仿 Q-Time 页签名过期模式）。已提交状态普通 rerun 保持。
+    """
+    signature = monitor_filter_signature(filter_state)
+    if clicked is None:
+        clicked = render_monitor_query_button()
+    if clicked:
+        st.session_state[MONITOR_QUERY_SIGNATURE_KEY] = signature
     stored = st.session_state.get(MONITOR_QUERY_SIGNATURE_KEY)
     return stored == signature
 

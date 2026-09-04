@@ -118,6 +118,8 @@ PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路�
 - 通过规格表（`param_type`）识别 TT 指标，趋势分母与规格口径遵循 ADR-0008。
 - service 层完成超规截断（`core/shared/auto_decoration.py`）与 TT 修饰工作簿
   （`core/aoi_tt/aoi_tt_decoration.py`，键 `[prod_code, step_id, tt_name, sheet_id]`）三态应用。
+- Particle Size 默认按站点比例规格稳定生成 S/M/L/H，也可切换为 ARRAY/TP 缺陷明细实表计数；
+  OLED 保持 Total-only，具体约束见 ADR-0025。
 
 ### 4.5 `aoi_rs/aoi_rs_service.py` — AOI RS 趋势报表
 

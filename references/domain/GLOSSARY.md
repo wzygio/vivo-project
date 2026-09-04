@@ -79,6 +79,7 @@ and factoryname = 'ARRAY'
 - **监控指标**：由“站点 + 参数”共同确定的监控对象。单独的站点或参数通常不足以唯一标识一个指标。
 - **SPC（Statistical Process Control，统计过程控制）**：针对监控指标，在一个 Sheet 的多个点位测量，并以汇总值（通常为均值）作为该 Sheet 的测量值；再依据指标上下限通过自动预警报表进行监控。
 - **AOI（Automatic Optical Inspection）**：Array/OLED前段的检测站点，主要用于检测图形、残留、颗粒
+- **Particle Size（AOI_TT）**：ARRAY AOI 缺陷点的大小分类。当前报表只区分 `O`、`L`；`Total` 不是缺陷表分类，而是 SPC `param_value` 提供的总缺陷数。
 - **RS（Review Station）**：对AOI拍出的缺陷点位进行复判，判定具体的Code，其与AOI的关系类似于MVI相较于AVI
   * 注意，这里的Code也是一种缺陷代码，但与Defect Code并不一致，一般用长度为五位的代码指代
 - **LOI（Light On Inspection）**：OLED段检测站点，点亮后的显示缺陷

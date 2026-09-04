@@ -5,9 +5,11 @@
 - 交互采用 st.button 网格（而非 dataframe 单元格选择）：按钮原生支持
   ``help`` tooltip（⬜ 悬浮查看失败原因），且 AppTest / Playwright 均可
   稳定定位点击，简单可靠；
-- 矩阵区自带筛选条（监控类型/产品型号/厂别，key 前缀 ``alert_matrix_``）：
+- 矩阵区筛选条（监控类型/产品型号/厂别，key 前缀 ``alert_matrix_``）：
   产品切列、监控类型切行、厂别切单元格状态（``alert_factories`` 交集），
   全部为客户端切片，不重算 payload；不支持厂别细分的行保持原状态并在图例注明；
+  筛选条由页面在模块 Expander 内常驻渲染（未加载也可先选条件），加载后
+  经 ``filter_selection`` 透传给 section（widget key 只渲染一处）；
 - 本模块只消费 payload dict，不参与 payload 计算（RenderGate 两阶段：
   计算集中在 ``get_cached_alert_matrix``，矩阵本体无图像、一次性渲染）；
 - 矩阵不渲染内部标题（模块标题由页面 subheader 承担）；渲染面禁用
@@ -94,15 +96,30 @@ def matrix_cell_button_key(row_key: str, prod_code: str) -> str:
     return f"{_MATRIX_BUTTON_KEY_PREFIX}_{row_key}_{prod_code}"
 
 
-def _render_matrix_filter_bar(
+def render_alert_matrix_filter_bar(
     products: Sequence[str],
+    *,
+    action_renderer=None,
 ) -> tuple[str, list[str], list[str]]:
     """矩阵筛选条：监控类型（切行）+ 产品型号（切列）+ 厂别（切单元格状态）。
 
     与 ``render_monitor_control_panel`` 相同观感；widget key 用 ``alert_matrix_``
     前缀，与下方控制台不冲突；全部为客户端切片，不重算 payload。
+
+    ``action_renderer``（2026-09-03 UI 优化轮次）：操作按钮（加载/收起矩阵）
+    渲染回调，渲染在筛选三件套同行的最右列（参照 Q-Time 页同行布局：产品
+    型号列最宽、按钮列窄、底对齐）；缺省时保持三列旧布局。
+
+    常驻渲染：由页面在模块 Expander 内调用一次（未加载时也可先选条件）；
+    选择存 session_state（widget key），加载后由
+    ``render_alert_matrix_section(filter_selection=...)`` 按同一选择切片——
+    section 此时不再渲染筛选条，避免 widget key 重复。
     """
-    type_column, product_column, factory_column = st.columns(3)
+    if action_renderer is not None:
+        columns = st.columns([1.0, 2.6, 1.6, 0.9], vertical_alignment="bottom")
+    else:
+        columns = st.columns(3)
+    type_column, product_column, factory_column = columns[0], columns[1], columns[2]
     with type_column:
         monitor_type = st.selectbox(
             "监控类型",
@@ -126,6 +143,9 @@ def _render_matrix_filter_bar(
             key="alert_matrix_factories",
             help="按预警记录涉及的厂别切片单元格状态（不重算数据）。",
         )
+    if action_renderer is not None:
+        with columns[3]:
+            action_renderer()
     return str(monitor_type), list(selected_products), list(selected_factories)
 
 
@@ -177,11 +197,19 @@ def _render_legend(rows: Sequence[Mapping[str, Any]], week: Mapping[str, str]) -
     st.caption(caption)
 
 
-def render_alert_matrix_section(payload: Mapping[str, Any]) -> None:
+def render_alert_matrix_section(
+    payload: Mapping[str, Any],
+    *,
+    filter_selection: tuple[str, list[str], list[str]] | None = None,
+) -> None:
     """渲染矩阵筛选条、图例与四态按钮网格。点击仅写 session_state，不产生计算。
 
     筛选条三个维度均为客户端切片：产品切列、监控类型切行（按 module_group）、
     厂别切单元格状态（alert_factories 交集）；payload 不重算。
+
+    ``filter_selection``：页面常驻筛选条的选择（监控类型, 产品列表, 厂别列表）。
+    传入时 section 不再渲染筛选条（widget key 只此一处）；缺省时 section
+    自行渲染（测试/独立使用场景）。
 
     矩阵不渲染内部标题（模块标题由页面 subheader 承担）；渲染面禁用 st.info
     提醒条（2026-09-03 UI 优化轮次），空态提示一律用 st.caption 灰字。
@@ -195,9 +223,9 @@ def render_alert_matrix_section(payload: Mapping[str, Any]) -> None:
         st.caption("预警矩阵暂无可展示的数据。")
         return
 
-    monitor_type, selected_products, selected_factories = _render_matrix_filter_bar(
-        products
-    )
+    if filter_selection is None:
+        filter_selection = render_alert_matrix_filter_bar(products)
+    monitor_type, selected_products, selected_factories = filter_selection
     selected_product_set = set(selected_products)
     visible_products = [prod for prod in products if prod in selected_product_set]
     allowed_groups = _MATRIX_TYPE_GROUP_MAP.get(monitor_type)
@@ -254,8 +282,12 @@ def render_alert_matrix_board(
     db_manager: Any = None,
     step_desc_map: dict[str, str] | None = None,
     detail_loaders: Mapping[str, Any] | None = None,
+    filter_selection: tuple[str, list[str], list[str]] | None = None,
 ) -> None:
     """页首矩阵区入口：payload 经 L2 缓存集中计算后一次性渲染，再按选中单元格懒加载详情。
+
+    ``filter_selection`` 为页面常驻筛选条的选择，透传给 section 做客户端切片；
+    缺省时 section 自行渲染筛选条（测试/独立使用场景）。
 
     矩阵整体失败（如签名采集异常）降级为 warning 提示（加载失败属错误类，
     必须可见），不阻断页面其余部分。
@@ -268,7 +300,7 @@ def render_alert_matrix_board(
         st.warning(f"预警矩阵暂时不可用（{exc}），下方看板功能不受影响。")
         return
 
-    render_alert_matrix_section(payload)
+    render_alert_matrix_section(payload, filter_selection=filter_selection)
 
     # 延迟导入：详情模块汇集各域渲染依赖，仅在矩阵渲染时才引入。
     from app.sections.inline_domain.monitor.alert_matrix_detail import (

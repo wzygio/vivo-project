@@ -121,6 +121,11 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   `infrastructure/aoi_tt/` 分别是共享测量事实的薄业务投影。SPC 透传制备
   投影；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
   `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
+- 异常值规则由 `resources/inline_domain/spc_outlier_filters.xlsx` 提供。参数级规则按
+  `step_col + param_col` 应用数值边界；`param_col` 留空表示无条件剔除该
+  `step_col` 下的全部参数。企业加密工作簿先经 `fr-file-decryption` 解密到
+  `output/decrypted_files/` 后立即读取并清理临时文件；解密、读取或表头校验失败时
+  抛出配置错误，不允许静默放行未过滤数据。
 - `application/shared/decorated_features.py` 是 SPC/CTQ/monitor 共享的无状态
   修饰+特征计算缓存函数 `fetch_decorated_features`（缓存 key 含产品、scope、
   起止日期、快照签名、产品 revision 与决策签名）：scope='spc'/'ctq' 分别使用
@@ -149,8 +154,11 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   Core 或组合根；其输入为离线 Excel，输出为 `output/` 下的可重建报告。
 - `CtqReportService` 固定使用 `CTQ` 数据类型，只返回 Sheet/点位分布和后端
   选定的图表类型；CTQ OOS 修饰保存在共享工作簿 `resources/ctq_sheet_oos_decoration.xlsx` 的产品 sheet 中。
-- `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT 投影，趋势分母
-  和规格口径仍遵循 ADR-0008。
+- `AoiTtReportService` 通过 AOI_TT 数据端口读取共享事实的 TT Total 投影，并为
+  ARRAY/TDSUM 组合 `eda.ARRAY_DEFECT_T` 的 O/L 缺陷计数。缺陷事实查询由
+  `infrastructure/shared/array_defect_data_loader.py` 持有；AOI_TT 适配器只负责
+  显示时间策略和用例契约。SPC Sheet→产品映射在连接前去重，防止多参数行放大
+  defect 计数；趋势分母和规格口径仍遵循 ADR-0008。
 - `AoiRsReportService` 不复用共享 measurement：RS Code 明细和过货分母来自独立
   表/视图与事实契约，由 `infrastructure/aoi_rs/` 的产品级双 Parquet 仓储负责
   三个月滚动提取、8 小时 TTL、覆盖版本、原子写入和数据库失败降级；规格保持
@@ -192,9 +200,8 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   已有快照可用时才降级读取。
 - `resources/` 存放产品规格、人工覆盖、OOS/CPK 修饰及静态资源；`data/`
   保存领域快照；`output/` 是可重建的报告、日志、下载、测试和临时产物根目录。
-- Excel 文件既可能是输入契约，也可能是用户维护状态。需要读取企业加密
-  工作簿时，项目的 Excel COM 回退逻辑仍由本仓库维护；普通 Excel-to-CSV
-  通过 `fr-common-utils[excel]` 提供。
+- Excel 文件既可能是输入契约，也可能是用户维护状态。企业加密工作簿的解密由
+  `fr-file-decryption` 提供；普通 Excel-to-CSV 通过 `fr-common-utils[excel]` 提供。
 
 缓存边界和产品级失效规则见
 `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`。

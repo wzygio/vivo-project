@@ -84,3 +84,24 @@
 - 回归：聚焦套件（monitor sections + 页面组合 + 页头）92 passed；全量 `pytest tests/unit tests/integration` 928 passed / 5 failed（66s），5 项均为基线预存在（hot_reload 页头专项资料两页、aoi_rs portal、yield_global_data_policy ×2、yield_dashboard_plotly_keys），ijp flake 本轮未出现，无新增失败。
 - 环境噪音：组合跑批时 stderr 出现一次 "Windows fatal exception: code 0x80010108"（Excel COM RPC 断连，源自既有测试 `test_qtime_loader_fetched_once_for_all_products` 读真实资源工作簿，被单元格降级捕获），exit=0 全绿，与本轮改动无关。
 - 未跑任何触及自动预警看板的 E2E（禁令）；`tests/e2e/alert_matrix_board.js` 等 E2E 断言未同步更新（已停跑，记录在案）。
+
+## 2026-09-03 — Session 8（Phase 10：矩阵筛选条常驻修正，coder subagent）
+
+- 需求方反馈：矩阵筛选条只在加载后渲染，期望与下方模块一致——常驻显示、未加载即可先选条件。
+- TDD：先写失败测试（3 failed：页面未加载态筛选条断言、已加载态透传断言、section 外部选择模式），再实现转绿。
+- 改动 1：`alert_matrix.py` `_render_matrix_filter_bar` 提升为公开 `render_alert_matrix_filter_bar`；`render_alert_matrix_section(payload, *, filter_selection=None)` 与 `render_alert_matrix_board(..., filter_selection=None)` 新增透传参数——传入时 section 跳过筛选条渲染（widget key 只一处），缺省保持原行为（fixture/独立场景兼容，既有切片测试零改动）。
+- 改动 2：`自动预警看板.py` 模块一 Expander 内常驻渲染筛选条（`SessionManager.AVAILABLE_PRODUCTS` 为产品选项，与 payload 产品同源 7 个），位于加载/收起按钮上方；已加载分支把选择三元组透传给 board。用户 `data_forward_signature` 逻辑原样保留（3 处引用 grep 核实）。
+- 测试：`test_auto_warning_page.py` 重构 `_stub_page_dependencies`（按钮/selectbox/multiselect 记录器 + `clicked_keys` 参数化点击模拟 + board 记录器），新增已加载态用例；`test_alert_matrix_ui.py` 新增外部选择用例；fixture `alert_matrix_app.py` 新增 `external_selection` 模式。
+- 回归：聚焦套件 94 passed；全量 `pytest tests/unit tests/integration` 933 passed / 5 failed（48.32s），5 项均为基线预存在，无新增失败，ijp flake 本轮未出现。
+- 未跑任何触及自动预警看板的 E2E（禁令）。
+
+## 2026-09-03 — Session 9（Phase 11：筛选与操作按钮同行布局，coder subagent）
+
+- 需求：操作按钮与筛选条件同行最右列（参照 Q-Time 页 st.columns + vertical_alignment="bottom" 布局）。
+- TDD：先写失败测试（10 failed：gate 8 项因 fixture 引用新符号收集失败 + 页面 2 项行布局断言），实现后转绿。
+- 改动 1：`alert_matrix.py::render_alert_matrix_filter_bar` 新增 `action_renderer` 参数（四列 `[1.0, 2.6, 1.6, 0.9]` + bottom 对齐，缺省三列旧布局）；页面新增 `_render_matrix_action_button`（按 loaded 状态渲染加载/收起按钮），按钮移入筛选行最右列。
+- 改动 2：`monitor_dashboard.py::render_monitor_control_panel` 新增 `action_renderer`（四列 `[1.0, 2.6, 1.6, 0.8]`）；两个 multiselect 补显式 key（`monitor_products`/`monitor_factories`）；门控拆分——新增 `render_monitor_query_button()`（返回点击状态），`render_monitor_query_gate(filter_state, *, clicked=None)` 支持 clicked 覆盖（解决按钮在行内先渲染、签名在 widget 读取后计算的顺序问题），提交方式从 on_click 回调改为返回值式（语义等价，AppTest click 兼容）；`_submit_monitor_query` 删除。
+- 改动 3：页面模块二用 `query_click_box` 捕获行内按钮点击状态传回门控；`data_forward_signature` 用户逻辑原样保留（3 处引用 grep 核实）。
+- 测试：fixture `monitor_query_gate_app.py` 新增 `row_layout` 模式；`test_monitor_query_gate.py` +2（行内布局门控）；`test_auto_warning_page.py` 结构探针新增 columns/widget_events 记录器 + `_assert_row_layout`（两处 4 列 bottom 对齐 + 两模块连续 widget 序列断言）。
+- 回归：聚焦套件 96 passed；全量 935 passed / 5 failed（50.47s），均为基线预存在，无新增失败，ijp flake 未出现。
+- 未跑任何触及自动预警看板的 E2E（禁令）。

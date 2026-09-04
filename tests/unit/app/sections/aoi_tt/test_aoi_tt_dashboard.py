@@ -24,6 +24,7 @@ def _indicator_df() -> pd.DataFrame:
         [
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM"},
             {"prod_code": "M678", "factory": "ARRAY", "step_id": "11620", "tt_name": "DSUM_L"},
+            {"prod_code": "M678", "factory": "OLED", "step_id": "21320", "tt_name": "DSUM_O"},
             {"prod_code": "M678", "factory": "TP", "step_id": "43620", "tt_name": "TOTAL_O_L"},
         ]
     )
@@ -60,7 +61,7 @@ def test_default_start_date_uses_previous_month_first_day() -> None:
 def test_filter_options_cascade_factory_step_code() -> None:
     indicator_df = _indicator_df()
 
-    assert get_available_factories(indicator_df) == ["ARRAY", "TP"]
+    assert get_available_factories(indicator_df) == ["ARRAY", "OLED", "TP"]
     assert get_steps_for_factory(indicator_df, "ARRAY") == ["11620"]
     assert get_steps_for_factory(indicator_df, "TP") == ["43620"]
     assert get_codes_for_factory_steps(indicator_df, "ARRAY", ["11620"]) == ["DSUM_L", "TDSUM"]
@@ -80,6 +81,26 @@ def test_filter_report_by_factory_codes_steps() -> None:
     assert list(out["v"]) == [1]
 
 
+def test_filter_report_by_particle_size() -> None:
+    df = pd.DataFrame(
+        [
+            {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "Total", "v": 1},
+            {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "S", "v": 2},
+            {"factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM", "particle_size": "L", "v": 3},
+        ]
+    )
+
+    out = filter_aoi_tt_report(
+        df,
+        "ARRAY",
+        ["TDSUM"],
+        ["11620"],
+        ["S"],
+    )
+
+    assert out["particle_size"].tolist() == ["S"]
+
+
 def _install_fake_widgets(monkeypatch, *, button_clicked: bool) -> dict:
     """把 render_aoi_tt_filters 依赖的 st 控件换成字典会话态的假实现。"""
     session: dict = {}
@@ -90,7 +111,7 @@ def _install_fake_widgets(monkeypatch, *, button_clicked: bool) -> dict:
 
     def fake_multiselect(label, *, options, key, **kw):
         captured["multiselect"][label] = {"options": options, "disabled": kw.get("disabled", False)}
-        return session.get(key, [])
+        return session.get(key, kw.get("default", []))
 
     def fake_button(_label, **kw):
         captured["button_kwargs"] = kw
@@ -119,12 +140,16 @@ def test_render_filters_query_button_applies_signature_and_allows_render(monkeyp
         }
     )
 
-    factory, codes, steps, should_render = render_aoi_tt_filters(indicator_df=_indicator_df())
+    factory, codes, steps, particle_sizes, should_render = render_aoi_tt_filters(
+        indicator_df=_indicator_df()
+    )
 
     assert factory == "ARRAY"
     assert steps == ["11620"]
     # 站点确定后 Code 默认全选
     assert codes == ["DSUM_L", "TDSUM"]
+    assert particle_sizes == ["Total", "S", "M", "L", "H"]
+    assert captured["multiselect"]["Particle Size"]["options"] == ["Total", "S", "M", "L", "H"]
     assert should_render is True
     # 查询签名落在 aoi_tt_ 前缀的会话键下
     assert captured["session"]["aoi_tt_applied_filter_signature"] == (
@@ -143,9 +168,12 @@ def test_render_filters_without_query_click_blocks_render(monkeypatch) -> None:
         }
     )
 
-    _factory, codes, _steps, should_render = render_aoi_tt_filters(indicator_df=_indicator_df())
+    _factory, codes, _steps, particle_sizes, should_render = render_aoi_tt_filters(
+        indicator_df=_indicator_df()
+    )
 
     assert codes == ["DSUM_L", "TDSUM"]  # 查询门控不影响筛选回显
+    assert particle_sizes == ["Total", "S", "M", "L", "H"]
     assert should_render is False
 
 
@@ -160,7 +188,9 @@ def test_render_filters_factory_switch_resets_steps_and_disables_query(monkeypat
         }
     )
 
-    factory, codes, steps, should_render = render_aoi_tt_filters(indicator_df=_indicator_df())
+    factory, codes, steps, _particle_sizes, should_render = render_aoi_tt_filters(
+        indicator_df=_indicator_df()
+    )
 
     assert factory == "ARRAY"
     assert steps == []
@@ -169,6 +199,25 @@ def test_render_filters_factory_switch_resets_steps_and_disables_query(monkeypat
     # 未选站点：Code 下拉禁用，查询按钮禁用
     assert captured["multiselect"]["Code名称"]["disabled"] is True
     assert captured["button_kwargs"]["disabled"] is True
+
+
+def test_render_filters_oled_only_offers_total_particle_size(monkeypatch) -> None:
+    captured = _install_fake_widgets(monkeypatch, button_clicked=False)
+    captured["session"].update(
+        {
+            "aoi_tt_factory_filter": "OLED",
+            "aoi_tt_previous_factory_filter": "OLED",
+            "aoi_tt_step_filter": ["21320"],
+        }
+    )
+
+    factory, _codes, _steps, particle_sizes, _should_render = render_aoi_tt_filters(
+        indicator_df=_indicator_df()
+    )
+
+    assert factory == "OLED"
+    assert particle_sizes == ["Total"]
+    assert captured["multiselect"]["Particle Size"]["options"] == ["Total"]
 
 
 def test_trend_chart_has_bars_line_and_usl_ucl_spec_traces() -> None:
@@ -361,3 +410,81 @@ def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkey
     # Expander 标题含站点与 TT 参数名
     assert any("11620" in t and "TDSUM" in t for t in expander_titles)
     assert any("43620" in t and "TOTAL_O_L" in t for t in expander_titles)
+
+
+def test_render_sections_keep_particle_sizes_in_one_expander(monkeypatch) -> None:
+    rendered: list[object] = []
+    expander_titles: list[str] = []
+    particle_labels: list[str] = []
+
+    class _FakeExpander:
+        def __init__(self, title, expanded):
+            self.title = title
+            self.expanded = expanded
+
+        def __enter__(self):
+            expander_titles.append(self.title)
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(
+        aoi_tt_dashboard.st,
+        "expander",
+        lambda title, expanded=False, **_kw: _FakeExpander(title, expanded),
+    )
+    monkeypatch.setattr(aoi_tt_dashboard.st, "plotly_chart", lambda fig, **_kw: rendered.append(fig))
+    monkeypatch.setattr(
+        aoi_tt_dashboard.st,
+        "columns",
+        lambda n, **_kw: [nullcontext() for _ in range(n if isinstance(n, int) else len(n))],
+    )
+    monkeypatch.setattr(aoi_tt_dashboard.st, "subheader", lambda *_a, **_kw: None)
+    monkeypatch.setattr(aoi_tt_dashboard.st, "info", lambda *_a, **_kw: None)
+    monkeypatch.setattr(
+        aoi_tt_dashboard.st,
+        "markdown",
+        lambda text, **_kw: particle_labels.append(text) if "Particle Size" in text else None,
+    )
+
+    details = _details_with_particle_sizes()
+    indicators = pd.DataFrame(
+        [{"prod_code": "M678", "factory": "ARRAY", "step_id": "11620", "tt_name": "TDSUM"}]
+    )
+
+    render_aoi_tt_indicator_sections(
+        tt_details_df=details,
+        spec_df=pd.DataFrame(),
+        indicators_df=indicators,
+        end_date=date(2026, 8, 10),
+    )
+
+    assert len(expander_titles) == 1
+    assert len(rendered) == 15
+    assert particle_labels == [
+        "**Particle Size：Total**",
+        "**Particle Size：S**",
+        "**Particle Size：M**",
+        "**Particle Size：L**",
+        "**Particle Size：H**",
+    ]
+
+
+def _details_with_particle_sizes() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": pd.Timestamp("2026-08-09 08:00"),
+                "sheet_id": "S1",
+                "lot_id": "L1",
+                "step_id": "11620",
+                "tt_name": "TDSUM",
+                "particle_size": particle_size,
+                "tt_qty": quantity,
+            }
+            for particle_size, quantity in (("Total", 10), ("S", 6), ("M", 3), ("L", 0.7), ("H", 0.3))
+        ]
+    )

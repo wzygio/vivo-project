@@ -16,6 +16,11 @@ from src.shared_kernel.config import ConfigLoader
 def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
     """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_aoi_tt_particle_size_generation_enabled",
+        staticmethod(lambda: False),
+    )
     (tmp_path / "resources" / "inline_domain").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
@@ -62,15 +67,33 @@ def _spec_df() -> pd.DataFrame:
 
 
 class FakeAoiTtPort:
-    def __init__(self, details: pd.DataFrame, spec: pd.DataFrame) -> None:
+    def __init__(
+        self,
+        details: pd.DataFrame,
+        spec: pd.DataFrame,
+        particles: pd.DataFrame | None = None,
+        ratios: pd.DataFrame | None = None,
+    ) -> None:
         self.details = details
         self.spec = spec
+        self.particles = particles
+        self.ratios = ratios
 
     def get_tt_details(self, _query) -> pd.DataFrame:
         return self.details
 
     def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
         return self.spec
+
+    def get_particle_size_counts(self, _query) -> pd.DataFrame:
+        if self.particles is None:
+            raise RuntimeError("particle source unavailable")
+        return self.particles
+
+    def get_particle_size_ratios(self) -> pd.DataFrame:
+        if self.ratios is None:
+            raise RuntimeError("particle ratio specification unavailable")
+        return self.ratios
 
 
 def _config_json() -> str:
@@ -97,6 +120,96 @@ def test_service_builds_view_model_with_indicators(monkeypatch) -> None:
     row = indicators[indicators["tt_name"] == "TDSUM"].iloc[0]
     assert row["factory"] == "ARRAY"
     assert row["step_id"] == "11620"
+
+
+def test_service_adds_particle_size_rows_after_total_decoration() -> None:
+    particles = pd.DataFrame(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": pd.Timestamp("2026-07-15 08:01:00"),
+                "sheet_id": "SHT-A01",
+                "step_id": "11620",
+                "particle_size": "S",
+                "particle_qty": 2,
+            }
+        ]
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(_details_df(), _spec_df(), particles),
+        query_config_json=_config_json(),
+        snapshot_signature="particle-test",
+    )
+
+    array_rows = view_model.tt_details_df[
+        view_model.tt_details_df["factory"] == "ARRAY"
+    ].set_index("particle_size")
+    assert array_rows.loc["Total", "tt_qty"] == 3
+    assert array_rows.loc["S", "tt_qty"] == 2
+    assert array_rows.loc["L", "tt_qty"] == 0
+    assert set(
+        view_model.tt_details_df[view_model.tt_details_df["factory"] == "TP"][
+            "particle_size"
+        ]
+    ) == {"Total", "S", "M", "L", "H"}
+
+
+def test_service_uses_generated_ratios_when_config_flag_is_enabled(monkeypatch) -> None:
+    ratios = pd.DataFrame(
+        [
+            {"step_id": step_id, "particle_size": size, "ratio": ratio}
+            for step_id, distribution in {
+                "11620": (("S", 0.65), ("M", 0.30), ("L", 0.03), ("H", 0.02)),
+                "43620": (("S", 0.13), ("M", 0.80), ("L", 0.06), ("H", 0.01)),
+            }.items()
+            for size, ratio in distribution
+        ]
+    )
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_aoi_tt_particle_size_generation_enabled",
+        staticmethod(lambda: True),
+    )
+    monkeypatch.setattr(
+        ConfigLoader,
+        "get_aoi_tt_particle_size_ratio_jitter",
+        staticmethod(lambda: 0.0),
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(_details_df(), _spec_df(), ratios=ratios),
+        query_config_json=_config_json(),
+        snapshot_signature="generated-particle-test",
+    )
+
+    generated = view_model.tt_details_df[view_model.tt_details_df["particle_size"] != "Total"]
+    assert generated.groupby(["factory", "sheet_id"])["tt_qty"].sum().to_dict() == {
+        ("ARRAY", "SHT-A01"): 3,
+        ("TP", "GLS-T01"): 5,
+    }
+    assert generated[(generated["factory"] == "ARRAY") & (generated["particle_size"] == "S")]["tt_qty"].iloc[0] == pytest.approx(1.95)
+    assert generated[(generated["factory"] == "TP") & (generated["particle_size"] == "M")]["tt_qty"].iloc[0] == pytest.approx(4.0)
+
+
+def test_service_keeps_total_when_particle_source_fails() -> None:
+    class FailingParticlePort(FakeAoiTtPort):
+        def get_particle_size_counts(self, _query) -> pd.DataFrame:
+            raise RuntimeError("particle database unavailable")
+
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    view_model = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FailingParticlePort(_details_df(), _spec_df()),
+        query_config_json=_config_json(),
+        snapshot_signature="particle-fallback-test",
+    )
+
+    assert len(view_model.tt_details_df) == 2
+    assert set(view_model.tt_details_df["particle_size"]) == {"Total"}
 
 
 def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:

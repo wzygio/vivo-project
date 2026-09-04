@@ -114,3 +114,44 @@ def test_factory_filter_change_returns_to_unsubmitted_state() -> None:
     assert not app.exception
     assert app.session_state["gate_load_count"] == 1
     _assert_no_info(app)
+
+
+# ---------------------------------------------------------------------------
+# Phase 11：行内布局（查询按钮在控制台行最右列，clicked 覆盖传回门控）
+# ---------------------------------------------------------------------------
+def _new_row_layout_app() -> AppTest:
+    app = AppTest.from_file(str(FIXTURE_PATH))
+    app.session_state["fixture_mode"] = "row_layout"
+    return app
+
+
+def test_row_layout_gate_blocks_until_query_clicked() -> None:
+    """行内布局路径：未点击不加载、无 st.info；点击「查询」后加载。"""
+    app = _new_row_layout_app().run()
+
+    assert not app.exception
+    assert "gate_load_count" not in app.session_state
+    _assert_no_info(app)
+    # 按钮渲染在控制台行内（同一脚本片段），key 不变
+    assert app.button(key="btn_monitor_query_submit").label == "🔍 查询"
+
+    app.button(key="btn_monitor_query_submit").click().run()
+
+    assert not app.exception
+    assert app.session_state["gate_load_count"] == 1
+    assert any("GATE_OPEN_DATA_LOADED" in m.value for m in app.markdown)
+
+
+def test_row_layout_filter_change_returns_to_unsubmitted_state() -> None:
+    """行内布局路径：筛选变更后签名过期，静默回到未提交态。"""
+    app = _new_row_layout_app().run()
+    app.button(key="btn_monitor_query_submit").click().run()
+    assert app.session_state["gate_load_count"] == 1
+
+    product_multiselect = next(m for m in app.multiselect if m.label == "产品型号")
+    product_multiselect.set_value(["M678"]).run()
+
+    assert not app.exception
+    assert app.session_state["gate_load_count"] == 1
+    _assert_no_info(app)
+    assert not any("GATE_OPEN" in m.value for m in app.markdown)

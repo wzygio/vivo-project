@@ -96,12 +96,18 @@ payload = {
 }
 
 if st.session_state.get("fixture_mode") == "board":
-    # 整板入口模式：验证 payload 加载失败时的 info 降级
+    # 整板入口模式：验证 payload 加载失败时的 warning 降级
     from app.sections.inline_domain.monitor.alert_matrix import (
         render_alert_matrix_board,
     )
 
     render_alert_matrix_board()
+elif st.session_state.get("fixture_mode") == "external_selection":
+    # 外部筛选条模式：模拟页面常驻渲染筛选条后把选择传入 section，
+    # section 自身不再渲染筛选条（避免 widget key 重复）
+    selection = st.session_state["fixture_selection"]
+    render_alert_matrix_section(payload, filter_selection=selection)
+    render_alert_matrix_detail(payload, step_desc_map=None)
 else:
     render_alert_matrix_section(payload)
     render_alert_matrix_detail(payload, step_desc_map=None)

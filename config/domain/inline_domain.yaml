@@ -20,12 +20,20 @@ auto_decoration:
   exempt_param_name_contains:
     - "PPA"
 
+# AOI_TT Particle Size：默认按站点比例稳定生成；关闭后改读 ARRAY/TP 缺陷明细表。
+aoi_tt:
+  particle_size:
+    generate_from_ratios: true
+    # 各 Sheet 相对规格比例的最大扰动幅度；0.10 表示 ±10%，随后归一化。
+    ratio_jitter: 0.10
+
 # 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）
 resources:
   dir: resources/inline_domain
   files:
     aoi_rs_sheet_oos_decoration: aoi_rs_sheet_oos_decoration.xlsx
     aoi_tt_sheet_oos_decoration: aoi_tt_sheet_oos_decoration.xlsx
+    aoi_tt_particle_size_ratio_spec: AOI_TT-比例规格表.xlsx
     compliance_config: compliance_config.xlsx
     ctq_sheet_oos_decoration: ctq_sheet_oos_decoration.xlsx
     scrap_sheets: scrap_sheets.xlsx

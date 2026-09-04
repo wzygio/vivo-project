@@ -20,12 +20,33 @@ for import_path in (project_root, project_root / "src"):
 
 from app.sections.inline_domain.monitor.monitor_dashboard import (
     render_monitor_control_panel,
+    render_monitor_query_button,
     render_monitor_query_gate,
 )
 
 st.set_page_config(page_title="monitor-query-gate-fixture", layout="wide")
 
-filter_state = render_monitor_control_panel(["M678", "Z571"], ["ARRAY", "OLED", "TP"])
-if render_monitor_query_gate(filter_state):
-    st.session_state["gate_load_count"] = st.session_state.get("gate_load_count", 0) + 1
-    st.markdown("GATE_OPEN_DATA_LOADED")
+if st.session_state.get("fixture_mode") == "row_layout":
+    # 行内布局模式（与页面一致）：查询按钮渲染在控制台行最右列，
+    # 点击状态经 clicked 覆盖传回门控
+    click_box: dict[str, bool] = {}
+
+    def _render_button_in_row() -> None:
+        click_box["clicked"] = render_monitor_query_button()
+
+    filter_state = render_monitor_control_panel(
+        ["M678", "Z571"], ["ARRAY", "OLED", "TP"],
+        action_renderer=_render_button_in_row,
+    )
+    if render_monitor_query_gate(
+        filter_state, clicked=click_box.get("clicked", False)
+    ):
+        st.session_state["gate_load_count"] = (
+            st.session_state.get("gate_load_count", 0) + 1
+        )
+        st.markdown("GATE_OPEN_DATA_LOADED")
+else:
+    filter_state = render_monitor_control_panel(["M678", "Z571"], ["ARRAY", "OLED", "TP"])
+    if render_monitor_query_gate(filter_state):
+        st.session_state["gate_load_count"] = st.session_state.get("gate_load_count", 0) + 1
+        st.markdown("GATE_OPEN_DATA_LOADED")

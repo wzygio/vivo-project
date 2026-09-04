@@ -27,6 +27,10 @@ from src.inline_domain.infrastructure.shared.main_process_trace import (
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_param_names,
 )
+from src.inline_domain.infrastructure.shared.outlier_filter_rules import (
+    apply_outlier_filter_rules,
+    load_outlier_filter_rules,
+)
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -233,175 +237,17 @@ class InlineMeasurementPreparationRepository:
         return apply_main_process_history(routed, history)
 
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
-        """
-        [物理级拦截器] 根据 CSV 预设的数字边界剔除异常点位 (site_name)。
-        逻辑：value <= lower_col 或 value >= upper_col 的数据将被物理剔除。
-
-        [核心流程] xlsx(加密) → COM 解密 → 另存为 CSV → 读取 CSV → 过滤
-        xlsx 被企业加密软件锁定，openpyxl 无法直接读取。
-        通过 Windows COM (Excel.Application) 透明解密后，立即另存为 CSV
-        覆盖旧文件，再从 CSV 加载规则进行过滤。
-        [降级] 当 COM 不可用时（如无 Excel），降级到已有 CSV（带内容校验）。
-        """
-        import io
-        from src.shared_kernel.config import ConfigLoader
-
-        # 1. 路径锁定（路径由 inline_domain 配置的 resources.files.spc_outlier_filters 决定）
-        project_root = ConfigLoader.get_project_root()
-        rule_file = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters", "spc_outlier_filters.xlsx")
-        csv_fallback = project_root / "output" / "decrypted_files" / "spc_outlier_filters.csv"
-
+        """Load mandatory rules and physically remove matching measurements."""
         if df.empty:
-            return df
-
-        df_clean = None
-        read_source = None
-
-        # ---- 策略 1 (主路径): xlsx(COM解密) → 另存 CSV → 读取 CSV ----
-        # xlsx 已被企业加密软件锁定，openpyxl 必然失败。
-        # 通过 COM (Excel.Application) 透明解密，立即另存为 CSV 覆盖旧文件。
-        if rule_file.exists():
-            try:
-                from src.shared_kernel.utils.excel_tools import _read_encrypted_xlsx_via_com
-                df_com = _read_encrypted_xlsx_via_com(rule_file)
-                if df_com is not None and not df_com.empty:
-                    # 立即另存为 CSV，覆盖可能损坏的旧文件
-                    csv_fallback.parent.mkdir(parents=True, exist_ok=True)
-                    df_com.to_csv(csv_fallback, index=False, encoding='utf-8-sig')
-                    logging.info(
-                        f"✅ [SpcRepo] COM 解密 xlsx 并另存为 CSV 成功: "
-                        f"{csv_fallback.name} (shape={df_com.shape})"
-                    )
-
-                    # 从刚保存的 CSV 读取规则（优先走文件读取以保持一致性）
-                    try:
-                        df_clean = pd.read_csv(csv_fallback, header=None, dtype=str).fillna("")
-                        read_source = "csv"
-                    except Exception:
-                        # CSV 可能刚写出就被加密软件锁定，回退到内存数据
-                        csv_buffer = io.StringIO()
-                        df_com.to_csv(csv_buffer, index=False, header=True)
-                        csv_buffer.seek(0)
-                        df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
-                        read_source = "excel_com"
-                        logging.warning(
-                            f"⚠️ [SpcRepo] 刚保存的 CSV 被加密软件锁定，"
-                            f"回退到内存数据路径 (来源: excel_com)"
-                        )
-            except Exception as com_e:
-                logging.warning(f"⚠️ [SpcRepo] COM 直读加密 xlsx 失败: {com_e}")
-
-        # ---- 策略 2 (降级): 尝试已有 CSV（带内容有效性校验） ----
-        if df_clean is None and csv_fallback.exists():
-            try:
-                df_csv = pd.read_csv(csv_fallback, dtype=str).fillna("")
-                if not df_csv.empty:
-                    csv_buffer = io.StringIO()
-                    df_csv.to_csv(csv_buffer, index=False, header=True)
-                    csv_buffer.seek(0)
-                    df_clean = pd.read_csv(csv_buffer, header=None, dtype=str).fillna("")
-
-                    # CSV 内容有效性校验：防止二进制垃圾文件被误用
-                    if df_clean is not None and len(df_clean) > 0:
-                        probe_header = df_clean.iloc[0].astype(str).str.strip().tolist()
-                        if 'step_col' not in probe_header or 'param_col' not in probe_header:
-                            logging.warning(
-                                f"⚠️ [SpcRepo] CSV 备用文件 {csv_fallback.name} 内容异常"
-                                f"（缺少 step_col/param_col，实际表头: {probe_header}），"
-                                f"跳过过滤。"
-                            )
-                            df_clean = None
-                        else:
-                            read_source = "csv"
-                            logging.info(
-                                f"✅ [SpcRepo] 从现有 CSV 加载过滤规则: {csv_fallback.name}"
-                            )
-            except Exception as e:
-                logging.warning(f"⚠️ [SpcRepo] 读取 CSV 备用文件失败: {e}")
-
-        # 无任何可用规则
-        if df_clean is None:
-            logging.warning(
-                f"🛡️ [SpcRepo] 无可用的物理过滤规则（COM 不可用且 CSV 无效），"
-                f"跳过异常值剔除。当前产品: {prod_code}"
-            )
-            return df
-
-        if len(df_clean) < 2:
-            return df
-
-        try:
-            # 3. 提取表头索引 (严格匹配您提供的列名)
-            header_row = df_clean.iloc[0].astype(str).str.strip()
-            col_indices = {col_name: idx for idx, col_name in enumerate(header_row)}
-
-            # 核心校验
-            if not all(k in col_indices for k in ['step_col', 'param_col']):
-                logging.warning(f"⚠️ [SpcRepo] 过滤规则表头缺失核心字段。提取到的表头: {header_row.tolist()}")
-                return df
-
-            # 4. 初始化掩码与数值准备
-            outlier_mask = pd.Series(False, index=df.index)
-            # 统一转为数字类型以便对比 [cite: 11]
-            df_vals = pd.to_numeric(df['param_value'], errors='coerce')
-
-            applied_count = 0
-
-            # 5. 遍历规则行
-            for curr_r in range(1, len(df_clean)):
-                rule = df_clean.iloc[curr_r]
-
-                r_prod = str(rule[col_indices['prod_col']]).strip().upper() if 'prod_col' in col_indices else 'ALL'
-                r_step = str(rule[col_indices['step_col']]).strip()
-                r_param = str(rule[col_indices['param_col']]).strip()
-
-                if not r_step or not r_param: continue
-
-                # 产品匹配
-                if r_prod and r_prod != 'ALL' and r_prod != prod_code.upper():
-                    continue
-
-                # 锁定靶向范围
-                # [类型归一化修复] CSV 中 step 值可能带有 ".0" 后缀（如 "21230.0"），
-                # 而 SPC 数据中的 step_id 可能是整数 21230 或字符串 "21230"。
-                # 将两边都转为字符串并同时尝试带/不带 ".0" 的变体，确保匹配。
-                r_step_clean = r_step.rstrip('0').rstrip('.') if '.' in r_step else r_step
-                step_variants = [r_step]
-                if r_step_clean != r_step:
-                    step_variants.append(r_step_clean)
-                target_mask = (df['step_id'].astype(str).str.strip().isin(step_variants)) & \
-                              (df['param_name'].str.upper() == r_param.upper())
-                if not target_mask.any():
-                    continue
-
-                # --- [极简逻辑实现] ---
-                # 提取下限值：如果数据 <= 该值，则标记为异常
-                if 'lower_col' in col_indices:
-                    l_val = pd.to_numeric(rule[col_indices['lower_col']], errors='coerce')
-                    if not pd.isna(l_val):
-                        outlier_mask |= (target_mask & (df_vals <= l_val))
-
-                # 提取上限值：如果数据 >= 该值，则标记为异常
-                if 'upper_col' in col_indices:
-                    u_val = pd.to_numeric(rule[col_indices['upper_col']], errors='coerce')
-                    if not pd.isna(u_val):
-                        outlier_mask |= (target_mask & (df_vals >= u_val))
-
-                applied_count += 1
-
-            # 6. 执行剔除
-            if outlier_mask.any():
-                drop_count = outlier_mask.sum()
-                df = df[~outlier_mask].copy()
-                logging.info(
-                    f"🛡️ [SpcRepo] 物理防线触发：基于数字边界剔除了 {drop_count} 个异常测量点"
-                    f" (来源: {read_source})。"
-                )
-            else:
-                logging.info(f"✅ [SpcRepo] 物理防线扫描完毕，未发现越界点 (来源: {read_source})。")
-
-            return df
-
-        except Exception as e:
-            logging.error(f"❌ [SpcRepo] 物理过滤执行失败: {e}")
-            return df
+            return df.copy()
+        project_root = ConfigLoader.get_project_root()
+        rule_file = ConfigLoader.get_domain_resource_path(
+            "inline_domain",
+            "spc_outlier_filters",
+            "spc_outlier_filters.xlsx",
+        )
+        rules = load_outlier_filter_rules(
+            rule_file,
+            project_root / "output" / "decrypted_files",
+        )
+        return apply_outlier_filter_rules(df, prod_code, rules)
