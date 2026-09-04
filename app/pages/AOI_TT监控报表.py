@@ -47,7 +47,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 )
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
-AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v3_particle_size_generation"
+AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v4_integer_particle_quantities"
 
 
 st.set_page_config(page_title="AOI_TT监控报表", layout="wide", initial_sidebar_state="collapsed")

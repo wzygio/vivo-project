@@ -13,7 +13,7 @@ Task1-1-1 将 Particle Size 范围调整为 ARRAY/TP 的 S/M/L/H，OLED 暂不�
 
 1. `Total` 继续来自 SPC `param_value`，完成既有三态修饰后再拆分 Particle Size。
 2. 默认启用“比例生成”模式。站点基础比例来自 `AOI_TT-比例规格表.xlsx` 的“比例规格表”，仅完整且合计为 1 的 S/M/L/H 分布有效。
-3. 每片以 `factory + prod_code + step_id + sheet_id + tt_name` 为稳定业务键，对四档基础比例施加可配置的确定性扰动，再归一化并分配 Total。同一业务键、规格和扰动幅度不变时结果不变，四档合计保持等于该片 Total。
+3. 每片以 `factory + prod_code + step_id + sheet_id + tt_name` 为稳定业务键，对四档基础比例施加可配置的确定性扰动，再归一化并分配 Total。同一业务键、规格和扰动幅度不变时结果不变；Total 与各档数量分别取整，不做余数补偿，因此四档合计允许与该片 Total 存在取整差异。
 4. 配置可切回“真实缺陷明细”模式：ARRAY 从 `ARRAY_DEFECT_T.item119` 取得 S/M/L/H，并保留 `item51='AOI'`；TP 从 `TSP_DEFECT_T.item2` 取得 S/M/L/H，以 `cut_id` 对齐 SPC 的 `glass_id`，不使用 ARRAY 的 `item51` 条件；OLED 始终 Total-only。
 5. 比例规格缺失、无效或不可读时，对应报表降级为 Total-only；缺少某站点比例时不得套用其他站点比例。
 6. 模式、扰动幅度和比例规格文件版本均进入报表缓存身份，配置或规格变化后必须重建结果。
@@ -28,11 +28,12 @@ Task1-1-1 将 Particle Size 范围调整为 ARRAY/TP 的 S/M/L/H，OLED 暂不�
 
 ## Consequences
 
-- 正面：默认模式不再依赖大体量缺陷明细查询；结果可重复，站点差异和 Total 守恒均明确。
+- 正面：默认模式不再依赖大体量缺陷明细查询；结果可重复，站点差异明确，所有 Sheet 的缺陷数量均为整数。
 - 正面：ARRAY 与 TP 的真实来源差异被隔离，OLED 不产生无意义的粒径选项。
 - 代价：生成的 S/M/L/H 是模拟分配值，不代表缺陷明细表中的真实分类计数。
 - 风险：比例规格表若配置不完整或合计不为 1，将触发 Total-only 降级；维护者需要先修正规格表。
 - 约束：稳定业务键或扰动算法发生变化会改变既有 Sheet 的生成结果，必须通过新 ADR 和缓存版本升级管理。
+- 约束：四档独立取整，不通过任一 Size 承接余数；展示合计与 Total 的微小差异属于预期结果。
 
 ## Verification
 

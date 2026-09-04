@@ -60,6 +60,19 @@ async page => {
       .waitFor({ timeout: 120_000 });
   }
 
+  const filterBoxes = await Promise.all(
+    ["厂别", "站点", "Code名称", "Particle Size"].map(label =>
+      page.getByRole("combobox", { name: label }).boundingBox(),
+    ),
+  );
+  if (filterBoxes.some(box => !box)) {
+    throw new Error("AOI_TT 筛选行存在不可见控件");
+  }
+  const filterCenters = filterBoxes.map(box => box.y + box.height / 2);
+  if (Math.max(...filterCenters) - Math.min(...filterCenters) > 8) {
+    throw new Error(`Particle Size 未与其他筛选框对齐：${filterCenters.join(", ")}`);
+  }
+
   // 厂别固定选 ARRAY（TT 参数 TDSUM 数据量最大）
   if ((await comboInputValue("厂别")) !== "ARRAY") {
     await page.getByRole("combobox", { name: "厂别" }).click();

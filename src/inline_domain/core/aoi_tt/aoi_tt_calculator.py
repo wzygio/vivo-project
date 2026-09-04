@@ -28,6 +28,15 @@ PARTICLE_SIZES = PARTICLE_SIZE_OPTIONS[1:]
 _PARTICLE_JOIN_KEYS = ["factory", "prod_code", "step_id", "sheet_id"]
 
 
+def _round_defect_quantities(details: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy whose per-sheet defect quantities are whole numbers."""
+    rounded = details.copy()
+    rounded["tt_qty"] = (
+        pd.to_numeric(rounded["tt_qty"], errors="coerce").fillna(0).round().astype("int64")
+    )
+    return rounded
+
+
 def build_particle_size_details(
     tt_details_df: pd.DataFrame,
     particle_counts_df: pd.DataFrame,
@@ -36,7 +45,7 @@ def build_particle_size_details(
     if tt_details_df.empty:
         return tt_details_df.assign(particle_size=pd.Series(dtype="object"))
 
-    total_details = tt_details_df.copy()
+    total_details = _round_defect_quantities(tt_details_df)
     total_details["particle_size"] = "Total"
     eligible = total_details[
         total_details["factory"].astype(str).str.upper().isin(PARTICLE_SIZE_FACTORIES)
@@ -75,7 +84,7 @@ def build_particle_size_details(
         )
         expanded["tt_qty"] = expanded["tt_qty"].fillna(0)
 
-    expanded = expanded.reindex(columns=total_details.columns)
+    expanded = _round_defect_quantities(expanded.reindex(columns=total_details.columns))
     return pd.concat([total_details, expanded], ignore_index=True)
 
 
@@ -99,7 +108,7 @@ def build_generated_particle_size_details(
     if tt_details_df.empty:
         return tt_details_df.assign(particle_size=pd.Series(dtype="object"))
 
-    total_details = tt_details_df.copy()
+    total_details = _round_defect_quantities(tt_details_df)
     total_details["particle_size"] = "Total"
     if ratio_spec_df.empty:
         return total_details
@@ -131,7 +140,7 @@ def build_generated_particle_size_details(
     for row in eligible.itertuples(index=False):
         row_data = row._asdict()
         numeric_total = pd.to_numeric(row_data["tt_qty"], errors="coerce")
-        total_qty = float(numeric_total) if pd.notna(numeric_total) else 0.0
+        total_qty = int(numeric_total) if pd.notna(numeric_total) else 0
         seed = "|".join(
             str(row_data.get(key, ""))
             for key in ("factory", "prod_code", "step_id", "sheet_id", "tt_name")
@@ -142,14 +151,8 @@ def build_generated_particle_size_details(
             for size in PARTICLE_SIZES
         }
         weight_total = sum(weights.values())
-        allocated = 0.0
-        for index, size in enumerate(PARTICLE_SIZES):
-            quantity = (
-                total_qty - allocated
-                if index == len(PARTICLE_SIZES) - 1
-                else total_qty * weights[size] / weight_total
-            )
-            allocated += quantity
+        for size in PARTICLE_SIZES:
+            quantity = round(total_qty * weights[size] / weight_total)
             generated_rows.append({**row_data, "particle_size": size, "tt_qty": quantity})
 
     generated = pd.DataFrame(generated_rows).reindex(columns=total_details.columns)
@@ -274,7 +277,7 @@ def build_sheet_point_df(tt_details_df: pd.DataFrame) -> pd.DataFrame:
         .sort_values([*_INDICATOR_KEYS, "first_start_time"], kind="stable")
         .reset_index(drop=True)
     )
-    return sheets
+    return _round_defect_quantities(sheets)
 
 
 def build_period_throughput_df(

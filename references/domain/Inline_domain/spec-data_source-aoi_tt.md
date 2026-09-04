@@ -95,14 +95,14 @@ WHERE P.productcode = :prod_code
 | 模式 | 厂别 | 数据源与口径 |
 | --- | --- | --- |
 | 两种模式共同 | 三厂 | `Total` 始终来自 SPC `param_value`，并先完成单片三态修饰 |
-| 比例生成（默认） | ARRAY/TP | 按“比例规格表”的站点 S/M/L/H 比例，对每片 Total 做稳定扰动后分配；同一业务键结果不变，四档合计等于 Total |
+| 比例生成（默认） | ARRAY/TP | 按“比例规格表”的站点 S/M/L/H 比例，对每片 Total 做稳定扰动后分配；同一业务键结果不变；Total 与四档数量分别取整，不做余数补偿 |
 | 实表 | ARRAY | `eda.ARRAY_DEFECT_T.item119`，保留 `item51='AOI'` 且粒径属于 S/M/L/H，每条缺陷事实计 1 |
 | 实表 | TP | `eda.TSP_DEFECT_T.item2`，粒径属于 S/M/L/H，每条缺陷事实计 1；`cut_id` 对齐 SPC `glass_id` |
 | 两种模式共同 | OLED | 暂不区分 Particle Size，仅展示 Total |
 
 实表模式下，产品通过各厂 SPC 表的 `product_spec` 再映射 `mdw.dwr_mes_productspec`。SPC 同一 Sheet 存在多条参数记录，因此必须先取得唯一的 Sheet/Glass 到产品映射，再连接缺陷事实；不能对连接后的缺陷事实去重，也不能直接连接完整 SPC 明细。
 
-实表 S/M/L/H 按 `(product, sheet, step, particle_size)` 汇总；没有对应粒径缺陷时补 0。比例生成模式若某站点规格缺失或无效，该站点保持 Total-only，不借用其他站点比例。
+实表 S/M/L/H 按 `(product, sheet, step, particle_size)` 汇总；没有对应粒径缺陷时补 0。所有模式的 By Sheet 缺陷数量均取整。比例生成模式若某站点规格缺失或无效，该站点保持 Total-only，不借用其他站点比例。
 
 ## 2. 与任务文档/RS 报表的偏差记录（开发注意）
 

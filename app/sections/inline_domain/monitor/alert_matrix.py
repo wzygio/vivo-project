@@ -116,7 +116,7 @@ def render_alert_matrix_filter_bar(
     section 此时不再渲染筛选条，避免 widget key 重复。
     """
     if action_renderer is not None:
-        columns = st.columns([1.0, 2.6, 1.6, 0.9], vertical_alignment="bottom")
+        columns = st.columns([1.0, 2.6, 1.6, 0.8], vertical_alignment="bottom")
     else:
         columns = st.columns(3)
     type_column, product_column, factory_column = columns[0], columns[1], columns[2]

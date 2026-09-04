@@ -62,7 +62,7 @@ def test_particle_size_details_keep_total_and_zero_fill_array_and_tp() -> None:
     assert set(result[result["factory"] == "OLED"]["particle_size"]) == {"Total"}
 
 
-def test_generated_particle_ratios_are_stable_and_preserve_each_sheet_total() -> None:
+def test_generated_particle_ratios_are_stable_and_produce_integer_quantities() -> None:
     totals = _details(
         [
             {"factory": "ARRAY", "prod_code": "M678", "start_time": "2026-08-09 08:00", "sheet_id": "S1", "lot_id": "L1", "step_id": "11620", "tt_name": "TDSUM", "tt_qty": 100},
@@ -87,12 +87,76 @@ def test_generated_particle_ratios_are_stable_and_preserve_each_sheet_total() ->
 
     pd.testing.assert_frame_equal(first, second)
     generated = first[first["particle_size"] != "Total"]
-    sums = generated.groupby(["factory", "sheet_id"])["tt_qty"].sum()
-    assert sums.to_dict() == {("ARRAY", "S1"): 100, ("ARRAY", "S2"): 100, ("TP", "T1"): 80}
+    assert all(float(quantity).is_integer() for quantity in generated["tt_qty"])
     assert set(first[first["factory"] == "OLED"]["particle_size"]) == {"Total"}
     s1_qty = first[(first["sheet_id"] == "S1") & (first["particle_size"] == "S")]["tt_qty"].iloc[0]
     s2_qty = first[(first["sheet_id"] == "S2") & (first["particle_size"] == "S")]["tt_qty"].iloc[0]
     assert s1_qty != s2_qty
+
+
+def test_generated_particle_quantities_round_each_size_without_remainder_allocation() -> None:
+    totals = _details(
+        [
+            {
+                "factory": "ARRAY",
+                "prod_code": "M678",
+                "start_time": "2026-08-09 08:00",
+                "sheet_id": "S1",
+                "lot_id": "L1",
+                "step_id": "11620",
+                "tt_name": "TDSUM",
+                "tt_qty": 9,
+            }
+        ]
+    )
+    ratios = pd.DataFrame(
+        [
+            {"step_id": "11620", "particle_size": size, "ratio": ratio}
+            for size, ratio in (("S", 0.4), ("M", 0.3), ("L", 0.2), ("H", 0.1))
+        ]
+    )
+
+    result = build_generated_particle_size_details(totals, ratios, ratio_jitter=0.0)
+
+    quantities = result.set_index("particle_size")["tt_qty"]
+    assert quantities.to_dict() == {"Total": 9, "S": 4, "M": 3, "L": 2, "H": 1}
+    assert all(float(quantity).is_integer() for quantity in quantities)
+
+
+def test_real_particle_details_round_total_and_each_size_quantity() -> None:
+    totals = _details(
+        [
+            {
+                "factory": "TP",
+                "prod_code": "M678",
+                "start_time": "2026-08-09 08:00",
+                "sheet_id": "T1",
+                "lot_id": "L1",
+                "step_id": "43620",
+                "tt_name": "TDSUM",
+                "tt_qty": 9.4,
+            }
+        ]
+    )
+    particles = pd.DataFrame(
+        [
+            {
+                "factory": "TP",
+                "prod_code": "M678",
+                "start_time": pd.Timestamp("2026-08-09 08:01"),
+                "sheet_id": "T1",
+                "step_id": "43620",
+                "particle_size": "S",
+                "particle_qty": 2.6,
+            }
+        ]
+    )
+
+    result = build_particle_size_details(totals, particles)
+
+    quantities = result.set_index("particle_size")["tt_qty"]
+    assert quantities.to_dict() == {"Total": 9, "S": 3, "M": 0, "L": 0, "H": 0}
+    assert all(float(quantity).is_integer() for quantity in quantities)
 
 
 def test_particle_size_isolated_in_trend_lot_and_sheet_aggregates() -> None:
@@ -255,6 +319,20 @@ def test_sheet_point_aggregates_qty_per_sheet() -> None:
 
     assert list(sheets["sheet_id"]) == ["G1", "G2"]
     assert list(sheets["tt_qty"]) == [3, 0]
+
+
+def test_sheet_point_rounds_aggregated_defect_quantity() -> None:
+    details = _details(
+        [
+            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-01 08:00", "sheet_id": "G1", "lot_id": "L1", "step_id": "21320", "tt_name": "DSUM_L", "particle_size": "Total", "tt_qty": 1.2},
+            {"factory": "OLED", "prod_code": "M678", "start_time": "2026-08-01 09:00", "sheet_id": "G1", "lot_id": "L1", "step_id": "21320", "tt_name": "DSUM_L", "particle_size": "Total", "tt_qty": 1.4},
+        ]
+    )
+
+    sheets = build_sheet_point_df(details)
+
+    assert sheets.loc[0, "tt_qty"] == 3
+    assert float(sheets.loc[0, "tt_qty"]).is_integer()
 
 
 def test_attach_spec_values_matches_by_step_and_tt_name() -> None:

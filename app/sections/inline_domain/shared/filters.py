@@ -12,6 +12,7 @@ session key 以 ``key_prefix`` 隔离（如 ``spc_`` / ``ctq_`` / ``aoi_rs_`` / 
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Iterable
 
 import pandas as pd
@@ -105,14 +106,22 @@ def render_cascade_filters(
     third_kind: str = "param",
     factory_options: list[str] | None = None,
     step_desc_map: dict[str, str] | None = None,
+    additional_filter_renderer: Callable[[str], None] | None = None,
 ) -> tuple[str, list[str], list[str], bool]:
     """Render the cascade filters and return (factory, third_values, steps, should_render)."""
     with st.container(border=True):
         st.markdown("#### 筛选")
-        factory_col, step_col, third_col, query_col = st.columns(
-            [1.1, 2.5, 3.4, 0.9],
-            vertical_alignment="bottom",
-        )
+        if additional_filter_renderer is None:
+            factory_col, step_col, third_col, query_col = st.columns(
+                [1.1, 2.5, 3.4, 0.9],
+                vertical_alignment="bottom",
+            )
+            additional_col = None
+        else:
+            factory_col, step_col, third_col, additional_col, query_col = st.columns(
+                [1.1, 2.3, 2.8, 2.0, 0.9],
+                vertical_alignment="bottom",
+            )
         options = factory_options or INLINE_FACTORY_OPTIONS
         available_factories = get_available_factories(indicator_df, options) or options
         factory_key = f"{key_prefix}_factory_filter"
@@ -166,6 +175,10 @@ def render_cascade_filters(
                 key=third_key,
                 disabled=not selected_steps,
             )
+
+        if additional_col is not None:
+            with additional_col:
+                additional_filter_renderer(selected_factory)
 
         current_signature = filter_signature(selected_factory, selected_steps, selected_third)
         applied_signature_key = f"{key_prefix}_applied_filter_signature"

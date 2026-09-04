@@ -191,7 +191,7 @@ def test_service_uses_generated_ratios_when_config_flag_is_enabled(monkeypatch) 
         ("ARRAY", "SHT-A01"): 3,
         ("TP", "GLS-T01"): 5,
     }
-    assert generated[(generated["factory"] == "ARRAY") & (generated["particle_size"] == "S")]["tt_qty"].iloc[0] == pytest.approx(1.95)
+    assert generated[(generated["factory"] == "ARRAY") & (generated["particle_size"] == "S")]["tt_qty"].iloc[0] == 2
     assert generated[(generated["factory"] == "TP") & (generated["particle_size"] == "M")]["tt_qty"].iloc[0] == pytest.approx(4.0)
 
 

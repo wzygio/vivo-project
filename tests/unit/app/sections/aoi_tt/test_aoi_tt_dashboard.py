@@ -104,7 +104,7 @@ def test_filter_report_by_particle_size() -> None:
 def _install_fake_widgets(monkeypatch, *, button_clicked: bool) -> dict:
     """把 render_aoi_tt_filters 依赖的 st 控件换成字典会话态的假实现。"""
     session: dict = {}
-    captured = {"multiselect": {}, "button_kwargs": None}
+    captured = {"multiselect": {}, "button_kwargs": None, "column_specs": []}
 
     def fake_selectbox(_label, *, options, key, **_kw):
         return session.get(key, options[0])
@@ -119,9 +119,11 @@ def _install_fake_widgets(monkeypatch, *, button_clicked: bool) -> dict:
 
     monkeypatch.setattr(aoi_tt_dashboard.st, "container", lambda **_kw: nullcontext())
     monkeypatch.setattr(aoi_tt_dashboard.st, "markdown", lambda *_a, **_kw: None)
-    monkeypatch.setattr(
-        aoi_tt_dashboard.st, "columns", lambda spec, **_kw: [nullcontext() for _ in spec]
-    )
+    def fake_columns(spec, **_kw):
+        captured["column_specs"].append(spec)
+        return [nullcontext() for _ in spec]
+
+    monkeypatch.setattr(aoi_tt_dashboard.st, "columns", fake_columns)
     monkeypatch.setattr(aoi_tt_dashboard.st, "selectbox", fake_selectbox)
     monkeypatch.setattr(aoi_tt_dashboard.st, "multiselect", fake_multiselect)
     monkeypatch.setattr(aoi_tt_dashboard.st, "button", fake_button)
@@ -150,6 +152,7 @@ def test_render_filters_query_button_applies_signature_and_allows_render(monkeyp
     assert codes == ["DSUM_L", "TDSUM"]
     assert particle_sizes == ["Total", "S", "M", "L", "H"]
     assert captured["multiselect"]["Particle Size"]["options"] == ["Total", "S", "M", "L", "H"]
+    assert len(captured["column_specs"][0]) == 5
     assert should_render is True
     # 查询签名落在 aoi_tt_ 前缀的会话键下
     assert captured["session"]["aoi_tt_applied_filter_signature"] == (

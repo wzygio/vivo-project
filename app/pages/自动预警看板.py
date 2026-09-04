@@ -160,15 +160,15 @@ def _render_matrix_action_button() -> None:
         )
     else:
         st.button(
-            "🚦 加载预警矩阵",
+            "查询",
             type="primary",
             key="btn_load_alert_matrix",
             on_click=_load_alert_matrix,
         )
 
 
-st.subheader("🚦 预警矩阵")
-with st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=True):
+st.subheader("🚦 Q-Time预警看板")
+with st.expander("Q-Time超规预警", expanded=True):
     # 筛选条常驻（与下方「超规片自动预警」控制台同观感）：未加载时也可先选
     # 条件，点击加载后按当前选择客户端切片；widget key 只在此渲染一处，
     # 已加载分支经 filter_selection 透传给矩阵，不重复渲染。
@@ -192,8 +192,8 @@ with st.expander("产品 × 监控参数 · 上一周期预警状态", expanded=
 # 「刷新缓存/刷新数据」由 perform_hard_reset 阶段 4 /
 # _refresh_data_callback 清除该 session key。
 # --------------------------------------------------------------------------
-st.subheader("⚠️ 超规片自动预警")
-with st.expander("筛选控制台与预警结果", expanded=True):
+st.subheader("⚠️ Inline预警看板")
+with st.expander("Inline超规预警", expanded=True):
     available_products = SessionManager.AVAILABLE_PRODUCTS
     available_factories = MONITOR_FACTORY_OPTIONS
 

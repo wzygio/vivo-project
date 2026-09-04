@@ -110,7 +110,7 @@ def render_monitor_query_button() -> bool:
     的 ``clicked`` 参数传回门控；widget key 固定 ``btn_monitor_query_submit``。
     """
     return st.button(
-        "🔍 查询",
+        "查询",
         type="primary",
         key="btn_monitor_query_submit",
         help="按当前筛选条件加载超规片自动预警数据（签名预算 + 全量监控数据）。",

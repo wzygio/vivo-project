@@ -113,6 +113,20 @@ def render_aoi_tt_filters(
     step_desc_map: dict[str, str] | None = None,
 ) -> tuple[str, list[str], list[str], list[str], bool]:
     """渲染厂别/站点/Code名称与 Particle Size 筛选。"""
+    selected_particle_sizes: list[str] = []
+
+    def render_particle_size_filter(factory: str) -> None:
+        nonlocal selected_particle_sizes
+        particle_size_options = (
+            ["Total"] if factory == "OLED" else list(PARTICLE_SIZE_OPTIONS)
+        )
+        selected_particle_sizes = st.multiselect(
+            "Particle Size",
+            options=particle_size_options,
+            default=particle_size_options,
+            key="aoi_tt_particle_size_filter",
+        )
+
     factory, codes, steps, should_render = render_cascade_filters(
         indicator_df,
         key_prefix="aoi_tt",
@@ -121,15 +135,7 @@ def render_aoi_tt_filters(
         third_kind="code",
         factory_options=AOI_TT_FACTORY_OPTIONS,
         step_desc_map=step_desc_map,
-    )
-    particle_size_options = (
-        ["Total"] if factory == "OLED" else list(PARTICLE_SIZE_OPTIONS)
-    )
-    selected_particle_sizes = st.multiselect(
-        "Particle Size",
-        options=particle_size_options,
-        default=particle_size_options,
-        key="aoi_tt_particle_size_filter",
+        additional_filter_renderer=render_particle_size_filter,
     )
     return factory, codes, steps, selected_particle_sizes, should_render
 

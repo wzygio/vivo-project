@@ -125,7 +125,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     # 固定窗口：上一自然月 1 日 ~ 当前日期（含当天）
     assert loaded_queries[0].start_date == "2026-07-01"
     assert loaded_queries[0].end_date == "2026-08-10"
-    assert loaded_signatures == ["aoi_tt_report_v3_particle_size_generation|scoped=M678"]
+    assert loaded_signatures == ["aoi_tt_report_v4_integer_particle_quantities|scoped=M678"]
     assert header_kwargs["product_cache_scope"] == "M678"
     assert events == ["filters", "charts"]
     assert rendered_particle_sizes == ["S"]
