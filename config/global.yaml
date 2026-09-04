@@ -4,7 +4,7 @@ application:
 
 # 数据快照缓存策略（各模块统一，唯一真理来源）
 data_snapshot:
-  ttl_hours: 12 # 数据快照缓存有效期（小时）
+  ttl_hours: 24 # 数据快照缓存有效期（小时）
 
 # 制造事实显示时间策略：客户报表展示源数据四天后的日期。
 data_forward:
