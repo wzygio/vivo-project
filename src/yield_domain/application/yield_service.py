@@ -10,6 +10,7 @@ import io
 
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
+from src.shared_kernel.config import ConfigLoader
 from src.yield_domain.infrastructure.repositories.yield_repository import (
     PanelRepository,
     build_yield_snapshot_path,
@@ -37,6 +38,19 @@ from yield_domain.core.mapping.mapping_processor import prepare_mapping_data
 from src.yield_domain.core.defect_modifier import (
     apply_defect_multipliers
 )
+
+
+class YieldDataModificationError(RuntimeError):
+    """Raised when configured Yield transformations cannot be applied safely."""
+
+
+class YieldDataLoadError(RuntimeError):
+    """Raised when Yield source data cannot be loaded safely."""
+
+
+class YieldWarningLinesReadError(RuntimeError):
+    """Raised when the configured Yield warning workbook is unreadable."""
+
 
 class YieldAnalysisService:
     """
@@ -69,6 +83,22 @@ class YieldAnalysisService:
         current_start = three_months_ago.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         
         return current_start, current_end
+
+    @staticmethod
+    def resolve_analysis_window(
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+    ) -> Tuple[datetime, datetime]:
+        """Resolve an explicit cache-key window or the current configured window."""
+        if not analysis_start_date and not analysis_end_date:
+            return YieldAnalysisService.get_time_window()
+        if not analysis_start_date or not analysis_end_date:
+            raise ValueError("Yield analysis window requires both start and end dates.")
+        start_dt = datetime.strptime(analysis_start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(analysis_end_date, "%Y-%m-%d")
+        if start_dt > end_dt:
+            raise ValueError("Yield analysis start date must not be after end date.")
+        return start_dt, end_dt
         
     @staticmethod
     def compute_snapshot_signature(snapshot_path: Path) -> str:
@@ -82,7 +112,37 @@ class YieldAnalysisService:
         return hashlib.md5(f"{stat.st_mtime}_{stat.st_size}".encode()).hexdigest()[:8]
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    def build_cache_context(config: AppConfig, product_dir: Path) -> Dict[str, str]:
+        """Build explicit native cache-key components for all Yield report inputs."""
+        start_dt, end_dt = YieldAnalysisService.get_time_window()
+        warning_res = config.paths.get("static_warning_lines")
+        override_res = config.paths.get("rate_override_config")
+        warning_path = product_dir.parent / warning_res.file_name if warning_res else None
+        override_path = product_dir.parent / override_res.file_name if override_res else None
+        return {
+            "analysis_start_date": start_dt.strftime("%Y-%m-%d"),
+            "analysis_end_date": end_dt.strftime("%Y-%m-%d"),
+            "modifier_signature": YieldAnalysisService.compute_snapshot_signature(
+                YieldAnalysisService.resolve_modifier_table_path(config, product_dir)
+            ),
+            "warning_signature": (
+                YieldAnalysisService.compute_snapshot_signature(warning_path)
+                if warning_path is not None
+                else "NOT_CONFIGURED"
+            ),
+            "rate_override_signature": (
+                YieldAnalysisService.compute_snapshot_signature(override_path)
+                if override_path is not None
+                else "NOT_CONFIGURED"
+            ),
+        }
+
+    @staticmethod
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=32,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_raw_panel_details(
         query_config_json: str,
         data_policy_json: str,
@@ -113,14 +173,23 @@ class YieldAnalysisService:
             db_manager=_db_manager,
         )
         
-        return repo.get_panel_details(query=query)
+        try:
+            return repo.get_panel_details(query=query)
+        except Exception as exc:
+            logging.error("Yield Panel 数据加载失败: %s", exc, exc_info=True)
+            raise YieldDataLoadError("Yield Panel 数据加载失败。") from exc
 
     @staticmethod
     def _build_panel_request(
         config: AppConfig,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
     ) -> tuple[YieldQueryConfig, YieldDataPolicy]:
         """在 Yield 数据边界一次构造动态查询与静态数据策略。"""
-        start_dt, end_dt = YieldAnalysisService.get_time_window()
+        start_dt, end_dt = YieldAnalysisService.resolve_analysis_window(
+            analysis_start_date,
+            analysis_end_date,
+        )
         query = YieldQueryConfig(
             start_date=start_dt.strftime("%Y-%m-%d"),
             end_date=end_dt.strftime("%Y-%m-%d"),
@@ -129,14 +198,28 @@ class YieldAnalysisService:
         return query, YieldDataPolicy.from_app_config(config)
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
-    def get_modified_panel_details(config: 'AppConfig', _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "") -> pd.DataFrame:
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
+    def get_modified_panel_details(
+        config: 'AppConfig',
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+    ) -> pd.DataFrame:
         """
         [L2 Cache] 获取经过修饰(分散/衰减)后的 Panel 数据
         """
         import logging
         import pandas as pd
-        query, data_policy = YieldAnalysisService._build_panel_request(config)
+        query, data_policy = YieldAnalysisService._build_panel_request(
+            config,
+            analysis_start_date,
+            analysis_end_date,
+        )
         
         # 1. 获取 L1 数据 (向下传递严格序列化后的 JSON 字符串 + 签名)
         raw_df = YieldAnalysisService.get_raw_panel_details(
@@ -158,10 +241,10 @@ class YieldAnalysisService:
         if multipliers_config:
             logging.info("应用缺陷衰减...")
             try:
-                # 假设 apply_defect_multipliers 在 core 层，按需调整引入路径
                 processed_df = apply_defect_multipliers(processed_df, multipliers_config)
-            except Exception as e:
-                logging.error(f"应用缺陷衰减失败: {e}")
+            except Exception as exc:
+                logging.error("应用缺陷衰减失败: %s", exc, exc_info=True)
+                raise YieldDataModificationError("Yield 缺陷衰减失败。") from exc
                 
         return processed_df
 
@@ -188,6 +271,8 @@ class YieldAnalysisService:
         product_dir: Path,
         panel_df: pd.DataFrame,
         read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
     ) -> Dict[str, Any]:
         """同步入库良率修饰表并产出趋势/Mapping 所需上下文。
 
@@ -198,7 +283,10 @@ class YieldAnalysisService:
         当月良损与趋势图使用同一份 panel 明细计算，保证 Mapping 口径：
         展示不良数 = 展示原始数 × (指定 / 展示原始) = 指定水准。
         """
-        start_dt, end_dt = YieldAnalysisService.get_time_window()
+        start_dt, end_dt = YieldAnalysisService.resolve_analysis_window(
+            analysis_start_date,
+            analysis_end_date,
+        )
         months = pd.period_range(start_dt, end_dt, freq="M").strftime("%Y-%m").tolist()
         current_month = end_dt.strftime("%Y-%m")
         table_path = YieldAnalysisService.resolve_modifier_table_path(config, product_dir)
@@ -220,7 +308,11 @@ class YieldAnalysisService:
         }
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_modifier_context(
         config: AppConfig,
         product_dir: Path,
@@ -228,10 +320,16 @@ class YieldAnalysisService:
         snapshot_signature: str = "",
         modifier_signature: str = "",
         read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
     ) -> Dict[str, Any]:
         """按 Panel 快照和修饰表签名共享趋势/Mapping 修饰上下文。"""
         panel_df = YieldAnalysisService.get_modified_panel_details(
-            config, _db_manager, snapshot_signature
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
         )
         if panel_df.empty:
             return {
@@ -241,11 +339,20 @@ class YieldAnalysisService:
                 "signature": "empty-empty",
             }
         return YieldAnalysisService._build_modifier_context(
-            config, product_dir, panel_df, read_only=read_only
+            config,
+            product_dir,
+            panel_df,
+            read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_mwd_trend_data(
         config: AppConfig, 
         product_dir: Path, 
@@ -253,13 +360,24 @@ class YieldAnalysisService:
         snapshot_signature: str = "",
         modifier_signature: str = "",
         read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
         ) -> Dict[str, pd.DataFrame] | None:
         """获取月/周/天趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
+        )
         if panel_df.empty: return None
         
         # [核心修复] 获取目标截止日期，用于数据补齐
-        _, target_end_dt = YieldAnalysisService.get_time_window()
+        _, target_end_dt = YieldAnalysisService.resolve_analysis_window(
+            analysis_start_date,
+            analysis_end_date,
+        )
 
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config,
@@ -268,6 +386,8 @@ class YieldAnalysisService:
             snapshot_signature,
             modifier_signature,
             read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
         )
         if not mwd_code_data:
             return None
@@ -279,6 +399,8 @@ class YieldAnalysisService:
             snapshot_signature,
             modifier_signature,
             read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
         )
 
         return MWDTrendProcessor.create_mwd_trend_data(
@@ -290,7 +412,11 @@ class YieldAnalysisService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_code_level_trend_data(
         config: AppConfig, 
         product_dir: Path,
@@ -298,15 +424,26 @@ class YieldAnalysisService:
         snapshot_signature: str = "",
         modifier_signature: str = "",
         read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
         ) -> Dict[str, pd.DataFrame] | None:
         """获取 Code 级趋势数据"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
+        )
         if panel_df.empty: 
             logging.error("获取基础Panel级数据失败，无法生成Code级趋势图。")
             return None
         
         # [核心修复] 获取目标截止日期，用于数据补齐
-        _, target_end_dt = YieldAnalysisService.get_time_window()
+        _, target_end_dt = YieldAnalysisService.resolve_analysis_window(
+            analysis_start_date,
+            analysis_end_date,
+        )
         
         # 同步入库良率修饰表（cache miss 时顺带写回）并取目标良损
         modifier_context = YieldAnalysisService.get_modifier_context(
@@ -316,6 +453,8 @@ class YieldAnalysisService:
             snapshot_signature,
             modifier_signature,
             read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
         )
 
         return MWDTrendProcessor.create_code_level_mwd_trend_data(
@@ -329,17 +468,33 @@ class YieldAnalysisService:
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
     # ==========================================================================
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_lot_defect_rates(
         config: AppConfig, 
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
-        read_only: bool = False) -> Dict[str, Any] | None:
+        read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+        modifier_signature: str = "",
+        warning_signature: str = "",
+        rate_override_signature: str = "",
+    ) -> Dict[str, Any] | None:
         """[重构] 计算 Lot 级良率 (现在它是独立的第一顺位)"""
         logging.info("--- [Cache Miss] 计算 Lot 级良率... ---")
 
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
+        )
         if panel_df.empty: return None
 
         # 1. 独立获取 Array Time (不再依赖 Sheet 结果)
@@ -353,12 +508,20 @@ class YieldAnalysisService:
 
         # 2. 依赖 MWD 数据
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config, product_dir, _db_manager, snapshot_signature, read_only=read_only
+            config,
+            product_dir,
+            _db_manager,
+            snapshot_signature,
+            modifier_signature,
+            read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
         )
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             config,
             product_dir,
             snapshot_signature,
+            warning_signature,
         )
         override_resource = config.paths.get("rate_override_config")
         override_df, _ = load_rate_overrides(
@@ -377,17 +540,33 @@ class YieldAnalysisService:
         )
 
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def get_sheet_defect_rates(
         config: AppConfig, 
         product_dir: Path,
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
-        read_only: bool = False) -> Dict[str, Any] | None:
+        read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+        modifier_signature: str = "",
+        warning_signature: str = "",
+        rate_override_signature: str = "",
+    ) -> Dict[str, Any] | None:
         """[重构] 计算 Sheet 级良率 (听命于 Lot 级数据)"""
         logging.info("--- [Cache Miss] 计算 Sheet 级良率... ---")
         
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
+        )
         if panel_df.empty: return None
 
         lot_ids = panel_df['lot_id'].unique().tolist()
@@ -400,7 +579,16 @@ class YieldAnalysisService:
         
         # [核心变动]：先拿 Lot 结果作为“发牌官”
         lot_results = YieldAnalysisService.get_lot_defect_rates(
-            config, product_dir, _db_manager, snapshot_signature, read_only=read_only
+            config,
+            product_dir,
+            _db_manager,
+            snapshot_signature,
+            read_only=read_only,
+            analysis_start_date=analysis_start_date,
+            analysis_end_date=analysis_end_date,
+            modifier_signature=modifier_signature,
+            warning_signature=warning_signature,
+            rate_override_signature=rate_override_signature,
         )
         if not lot_results: return None
 
@@ -422,10 +610,30 @@ class YieldAnalysisService:
     #  4. Mapping 业务
     # ==========================================================================
     @staticmethod
-    @st.cache_data(show_spinner=False)
-    def get_mapping_data(config: AppConfig, scaling_factor: float = 1.0, _db_manager: Optional['DatabaseManager'] = None, snapshot_signature: str = "", product_dir: Path | None = None, modifier_signature: str = "", read_only: bool = False) -> pd.DataFrame:
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
+    def get_mapping_data(
+        config: AppConfig,
+        scaling_factor: float = 1.0,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+        product_dir: Path | None = None,
+        modifier_signature: str = "",
+        read_only: bool = False,
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+    ) -> pd.DataFrame:
         """准备 Mapping 数据（不良数 = 全局倍率 × 月度缩放倍数 × 级联衰减）"""
-        panel_df = YieldAnalysisService.get_modified_panel_details(config, _db_manager, snapshot_signature)
+        panel_df = YieldAnalysisService.get_modified_panel_details(
+            config,
+            _db_manager,
+            snapshot_signature,
+            analysis_start_date,
+            analysis_end_date,
+        )
         if panel_df.empty: return pd.DataFrame()
         monthly_factors = None
         if product_dir is not None:
@@ -436,6 +644,8 @@ class YieldAnalysisService:
                 snapshot_signature,
                 modifier_signature,
                 read_only=read_only,
+                analysis_start_date=analysis_start_date,
+                analysis_end_date=analysis_end_date,
             )
             monthly_factors = modifier_context["factors"]
         return prepare_mapping_data(
@@ -451,7 +661,11 @@ class YieldAnalysisService:
     #  内部辅助方法 (依然需要缓存)
     # ==========================================================================
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=64,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def _get_array_times(
         lot_ids: Tuple[str, ...],
         config: AppConfig,
@@ -480,11 +694,16 @@ class YieldAnalysisService:
         return repo.get_array_input_times(list(lot_ids), custom_times)
     
     @staticmethod
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(
+        show_spinner=False,
+        max_entries=32,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+    )
     def load_static_warning_lines(
         config: AppConfig,
         product_dir: Path,
         snapshot_signature: str = "",
+        warning_signature: str = "",
     ) -> Dict[str, Any]:
         """
         [新功能 - 降维打击版]
@@ -545,10 +764,9 @@ class YieldAnalysisService:
 
             # 核心防呆校验
             if code_col_idx == -1 or upper_col_idx == -1:
-                error_msg = f"表头验证失败：未找到包含 'Code' 或 '预警线/Limit' 的必需列。"
+                error_msg = "表头验证失败：未找到包含 'Code' 或 '预警线/Limit' 的必需列。"
                 logging.error(error_msg)
-                st.error(error_msg) 
-                return {}
+                raise ValueError(error_msg)
 
             # =================================================================
             # 🚀 步骤 3: 遍历提取数据 (双轨结构)
@@ -583,7 +801,7 @@ class YieldAnalysisService:
 
         except Exception as e:
             logging.error(f"读取警戒线配置失败: {e}", exc_info=True)
-            return {}
+            raise YieldWarningLinesReadError("Yield 警戒线配置读取失败。") from e
         
     @staticmethod
     def safe_refresh_snapshots(

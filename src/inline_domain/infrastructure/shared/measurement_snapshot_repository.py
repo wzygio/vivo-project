@@ -46,7 +46,7 @@ class MeasurementRefreshResult:
 class InlineMeasurementSnapshotRepository:
     """Load a product's raw measurements once and reuse its fresh snapshot."""
 
-    # TTL 统一由 config/global.yaml 的 data_snapshot.ttl_hours 提供
+    # TTL 统一由 config/global.yaml 的 application.cache_ttl_hours 提供
     # v2: 快照生成前接入 SPC 数值修正（M673 PPA site[99,114] param_value-5）
     SNAPSHOT_POLICY_VERSION = "inline-measurement-raw-v2"
     _locks_guard = threading.Lock()

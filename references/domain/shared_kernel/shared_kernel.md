@@ -102,15 +102,16 @@ config.processing['defect_capping']       # 处理参数
 ### 4.1 L1: Parquet 快照
 
 - 路径：`data/{product_code}/yield_snapshot_{product_code}.parquet`
-- TTL：统一由 `config/global.yaml` 的 `data_snapshot.ttl_hours` 配置（当前 8 小时）
+- TTL：统一由 `config/global.yaml` 的 `application.cache_ttl_hours` 配置
 - 增量更新：最近 2 天缓冲窗口
 - 降级策略：三防线容灾
 
 ### 4.2 L2: `@st.cache_data`
 
 - 对 Service 层方法进行内存缓存
-- 缓存键：`snapshot_signature` = MD5(文件 mtime+size)
-- 自动失效：快照变更时自动驱逐
+- TTL 唯一来源：`config/global.yaml` 的 `application.cache_ttl_hours`
+- 缓存键：产品 revision、显式时间窗，以及会影响结果的文件 mtime/size 签名
+- 自动失效：revision、日期窗口或资源签名变化时产生 cache miss
 
 ### 4.3 代码热重载（手动模式）
 

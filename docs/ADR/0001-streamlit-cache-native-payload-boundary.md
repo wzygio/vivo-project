@@ -38,16 +38,22 @@
 6. 新增或修改此类服务时，必须有模块重载发生在缓存填充期间的回归测试，而不只测试冷态 `pickle.dumps`。
 7. 产品级页面必须把共享产品缓存版本写入 `snapshot_signature`。页头“刷新缓存”
    只推进当前产品版本，不调用无参数 `func.clear()`，从而避免清除其他产品的缓存条目；
-   `ALL` 聚合页面和无产品分区页面继续使用全量清理。
+   `ALL` 聚合页面和无产品分区页面继续使用全量清理。关键备件属于全局报表，
+   不得把当前产品写入缓存键。
+8. 所有项目自有 `st.cache_data` 的 TTL 只读取
+   `config/global.yaml: application.cache_ttl_hours`；服务级 TTL map、独立快照 TTL 和硬编码 TTL
+   不得作为例外。缓存键还必须显式覆盖影响结果的时间窗与外部资源版本。
 
 当前实现：
 
 - CPM：`fetch_cpm_report_payload()` 缓存原生载荷，`get_cpm_report_data()` 在缓存外构造 `CpmReportViewModel` 和 `SheetOosDecorationResult`。
-- 关键备件：`fetch_report_payload()` 缓存 DataFrame 与统计标量，`get_report_data()` 在缓存外构造 `PartsReportViewModel`。
+- 关键备件：`fetch_report_payload()` 缓存 DataFrame 与统计标量，`get_report_data()` 在缓存外构造 `PartsReportViewModel`；缓存为全局作用域，键含日期、基线与运行策略签名。
 - 自动预警：继续沿用既有的 dict 缓存与缓存外 ViewModel 组装模式。
 - 良率及其他页面：当前缓存返回 DataFrame、原生 dict、tuple 或标量，无需迁移。
 - SPC、CTQ 与良率产品页面：使用 `output/tmp/product_cache_revisions/`
   下的共享版本文件生成产品级缓存签名；版本提升后仅该产品产生缓存 miss。
+- Yield 另将分析起止日期、修饰表、警戒线和 rate override 文件签名写入缓存键；
+  读取或修饰失败时抛错，不缓存未修饰或伪空结果。
 
 ## Consequences
 
@@ -86,6 +92,11 @@ Rejected。`frozen`、`slots` 等选项不能解决模块重载后的类身份�
 
 ## Verification
 
+- 2026-09-07 缓存一致性契约：21 项通过，覆盖全局 TTL、Yield 时间/资源键、
+  异常不缓存和 Equipment 全局作用域。
+- 2026-09-07 三域集中回归：170 项通过；Inline smoke 370 项通过；
+  Equipment smoke 44 项通过。Yield smoke 150 项通过，另有 3 项与本次缓存改动
+  无关的既有展示默认值/数据策略断言失败。
 - CPM 模块重载竞态回归：通过。
 - 关键备件模块重载竞态回归：通过。
 - 页头缓存函数发现契约：通过。

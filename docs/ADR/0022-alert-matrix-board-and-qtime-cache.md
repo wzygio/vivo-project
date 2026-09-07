@@ -43,7 +43,7 @@ yield 良率波动、qtime 单片异常），单元格只表达"是否达标"。
    例外说明：spc CPK 行复用 `fetch_spc_report_payload`，其内部 capability 修饰
    台账写盘是 SPC 页既有行为，矩阵未新增写路径。
 5. **Q-Time 缓存层**：`cached_monitoring.py` 以 `@st.cache_data`（max_entries=32，
-   TTL 读 `service_cache.ttl_hours.qtime_monitoring: 12`）包装
+   TTL 读 `application.cache_ttl_hours`）包装
    `get_current_monitoring`；键 = (shop, step_descriptions, products, as_of,
    决策文件 mtime_ns, size)；`as_of=None` 在公开包装层归一为当天 date 再进键
    （装饰器在函数体前算键，函数体内归一无影响）；决策上传后 mtime 变化自然 miss，

@@ -60,7 +60,7 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     measurement_max_age_days = int(query.get("measurement_max_age_days", 3))
     source_table = str(query["source_table"]).strip()
     if snapshot_ttl_hours <= 0:
-        raise ValueError("global.yaml: 'data_snapshot.ttl_hours' must be positive")
+        raise ValueError("global.yaml: 'application.cache_ttl_hours' must be positive")
     if query_lookback_days <= 0:
         raise ValueError("equipment_domain.yaml: 'query.lookback_days' must be positive")
     if measurement_max_age_days <= 0:
@@ -97,6 +97,6 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
             reset_ratio_range=tuple(
                 float(value) for value in fabrication["reset_ratio_range"]
             ),
-            snapshot_ttl_hours=int(fabrication["snapshot_ttl_hours"]),
+            snapshot_ttl_hours=snapshot_ttl_hours,
         ),
     )

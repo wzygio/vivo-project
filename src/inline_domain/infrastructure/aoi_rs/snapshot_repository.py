@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 class AoiRsSnapshotRepository:
     """Persist and reuse one product's normalized AOI_RS source facts."""
 
-    # TTL 统一由 config/global.yaml 的 data_snapshot.ttl_hours 提供
+    # TTL 统一由 config/global.yaml 的 application.cache_ttl_hours 提供
     SNAPSHOT_POLICY_VERSION = "aoi-rs-raw-v1"
     _locks_guard = threading.Lock()
     _snapshot_locks: dict[str, threading.Lock] = {}

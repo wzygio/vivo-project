@@ -137,6 +137,11 @@ def test_ctq_report_remains_available_when_service_module_reloads_during_cache_f
     original_service = original_module.CtqReportService
     original_service.fetch_ctq_report_payload.clear()
     monkeypatch.setattr(
+        original_module.ConfigLoader,
+        "get_cache_ttl_seconds",
+        staticmethod(lambda: 12 * 60 * 60),
+    )
+    monkeypatch.setattr(
         decorated_data.ConfigLoader,
         "get_project_root",
         staticmethod(lambda: tmp_path),

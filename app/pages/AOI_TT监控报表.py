@@ -36,7 +36,10 @@ from app.sections.inline_domain.shared.alert_center import render_sheet_oos_aler
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
-from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
+from src.inline_domain.application.aoi_tt.aoi_tt_service import (
+    AoiTtReportBuildError,
+    AoiTtReportService,
+)
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_aoi_tt_repository, refresh_raw_measurements
@@ -94,14 +97,18 @@ except SheetOosDecorationReadError:
     )
     st.stop()
 
-with st.spinner("正在加载 AOI TT 数据..."):
-    view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _data_port=aoi_tt_data_port,
-        query_config_json=query_config.model_dump_json(),
-        snapshot_signature=product_cache_signature,
-        product_revision=product_revision,
-        decision_signature=decision_signature,
-    )
+try:
+    with st.spinner("正在加载 AOI TT 数据..."):
+        view_model = AoiTtReportService.get_aoi_tt_report_data(
+            _data_port=aoi_tt_data_port,
+            query_config_json=query_config.model_dump_json(),
+            snapshot_signature=product_cache_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
+        )
+except AoiTtReportBuildError:
+    st.error("AOI TT 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    st.stop()
 
 tt_details_df = view_model.tt_details_df
 spec_df = view_model.spec_df

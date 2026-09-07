@@ -19,7 +19,7 @@ Q-Time 的人工修饰包含两类不同职责：Excel 决策台账属于外部�
 ## Decision
 
 1. `QTimeRepository` 在生产组合根中使用 `data/indicator_domain/qtime/` 保存本地
-   Parquet；TTL 复用全局 `data_snapshot.ttl_hours=24`。
+   Parquet；TTL 复用全局 `application.cache_ttl_hours`。
 2. 每个厂别仅保存一份不含产品、路径筛选的标准化源事实快照。覆盖窗口、刷新时间、
    策略版本和行数内嵌在同一个 Parquet 中并通过临时文件原子替换。产品和路径选项从
    统一事实派生；快照尚不存在时可执行轻量 DISTINCT 查询，但不生成第二套 L1。

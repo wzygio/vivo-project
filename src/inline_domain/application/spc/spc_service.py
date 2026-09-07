@@ -42,7 +42,11 @@ logger = logging.getLogger(__name__)
 CPM_CPK_EXCLUDED_PARAMETER_TOKEN = "PPA"
 
 
-class SpcDecorationFileError(RuntimeError):
+class SpcReportBuildError(RuntimeError):
+    """Raised when an SPC report cannot be built safely."""
+
+
+class SpcDecorationFileError(SpcReportBuildError):
     """Raised when the SPC decoration workbook cannot be read safely."""
 
 
@@ -173,10 +177,8 @@ class SpcReportService:
     @staticmethod
     @st.cache_data(
         show_spinner=False,
-        max_entries=3,
-        ttl=ConfigLoader.get_service_cache_ttl_seconds(
-            "inline_spc_report_payload", default_hours=4
-        ),
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
     )
     def fetch_spc_report_payload(
         _data_port: "SpcDataPort",
@@ -188,8 +190,8 @@ class SpcReportService:
     ) -> dict[str, object]:
         """Cache only reload-stable CPM/CPK payload values.
 
-        max_entries=3：缓存为进程级共享，多标签/多产品同时使用时避免互相驱逐
-        导致每次 rerun 全量重建；TTL 由 config/global.yaml 的 service_cache 段统一配置：
+        max_entries=16：缓存为进程级共享，可覆盖已启用产品及短期 revision；
+        TTL 由 config/global.yaml 的 application.cache_ttl_hours 统一配置：
         跨日日期窗口变化与"刷新缓存"换 key 产生的孤儿条目由 TTL 兜底回收，内存有界。
         product_revision/decision_signature 进入缓存 key 并透传到共享管线门控。
         """
@@ -198,7 +200,7 @@ class SpcReportService:
             query_config.data_type_filter = "SPC"
         except Exception as e:
             logger.error("[CPM] query config parse failed: %s", e, exc_info=True)
-            return SpcReportService._empty_payload()
+            raise SpcReportBuildError("SPC query config is invalid.") from e
 
         try:
             # 共享修饰+特征管线（scope='spc'）：缓存 key 含产品/窗口/签名，
@@ -294,7 +296,7 @@ class SpcReportService:
             ) from exc
         except Exception as e:
             logger.error("[CPM] report generation failed: %s", e, exc_info=True)
-            return SpcReportService._empty_payload()
+            raise SpcReportBuildError("SPC report generation failed.") from e
 
     @staticmethod
     def get_spc_report_data(

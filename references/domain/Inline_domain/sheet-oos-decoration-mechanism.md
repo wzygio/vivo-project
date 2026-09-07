@@ -145,7 +145,7 @@ lower_oos = sheet_min < lsl
 (prod_code, scope, start_date, end_date, snapshot_signature)
 ```
 
-缓存命中时直接返回上次计算结果，不读取也不重写工作簿。SPC 共享特征缓存最多 12 个条目，其 TTL 与上层 SPC 报表缓存的 TTL 统一由 `config/global.yaml` 的 `service_cache.ttl_hours` 段配置（当前均为 4 小时）。以下情况通常会形成 miss：
+缓存命中时直接返回上次计算结果，不读取也不重写工作簿。SPC 共享特征缓存最多 32 个条目，其 TTL 与上层 SPC 报表缓存的 TTL 统一由 `config/global.yaml` 的 `application.cache_ttl_hours` 配置。以下情况通常会形成 miss：
 
 - 首次访问；
 - 产品、SPC/CTQ scope 或日期窗口变化；

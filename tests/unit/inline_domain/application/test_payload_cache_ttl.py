@@ -1,8 +1,8 @@
-"""外层 payload 缓存必须配置 ttl（不得为 None），且不超过统一配置的 12h 上限。
+"""Inline payload 缓存统一服从 application.cache_ttl_hours，并覆盖产品集合。
 
 外层 ``st.cache_data`` 若无 TTL 会永久遮挡共享层
-``fetch_decorated_features`` 的生成判定。统一机制：周期 TTL 上限 12h（随
-master 的 ``service_cache.ttl_hours`` 体系配置），手动刷新与决策上传经
+``fetch_decorated_features`` 的生成判定。统一机制：TTL 读取
+``application.cache_ttl_hours``，手动刷新与决策上传经
 缓存键中的产品 revision / 决策签名即时失效，不受周期 TTL 影响。
 通过 ``CachedFunc._info.ttl``（秒）读取 streamlit 1.60 缓存配置做结构断言。
 """
@@ -28,7 +28,7 @@ from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.spc_service import SpcReportService
 
-MAX_OUTER_CACHE_TTL_SECONDS = 12 * 60 * 60
+GLOBAL_CACHE_TTL_SECONDS = 12 * 60 * 60
 
 
 @pytest.mark.parametrize(
@@ -47,6 +47,19 @@ def test_outer_payload_cache_ttl_configured(label: str, cached_func: object) -> 
     assert info is not None, f"{label} 不是 st.cache_data 缓存函数"
     ttl = info.ttl
     assert ttl is not None, f"{label} 外层缓存未配置 ttl，会永久遮挡共享层生成判定"
-    assert ttl <= MAX_OUTER_CACHE_TTL_SECONDS, (
-        f"{label} 外层缓存 ttl={ttl}s 超过 12h（{MAX_OUTER_CACHE_TTL_SECONDS}s）上限"
+    assert ttl == GLOBAL_CACHE_TTL_SECONDS, (
+        f"{label} 外层缓存 ttl={ttl}s 未服从 application.cache_ttl_hours"
     )
+
+
+@pytest.mark.parametrize(
+    "cached_func",
+    [
+        AoiRsReportService.fetch_aoi_rs_report_payload,
+        AoiTtReportService.fetch_aoi_tt_report_payload,
+        CtqReportService.fetch_ctq_report_payload,
+        SpcReportService.fetch_spc_report_payload,
+    ],
+)
+def test_product_payload_cache_covers_enabled_product_revisions(cached_func: object) -> None:
+    assert cached_func._info.max_entries >= 16

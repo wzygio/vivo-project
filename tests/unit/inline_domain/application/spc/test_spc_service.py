@@ -145,7 +145,6 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
         "get_project_root",
         staticmethod(lambda: tmp_path),
     )
-
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
@@ -291,6 +290,11 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     original_module = spc_service
     original_service = original_module.SpcReportService
     original_service.fetch_spc_report_payload.clear()
+    monkeypatch.setattr(
+        original_module.ConfigLoader,
+        "get_cache_ttl_seconds",
+        staticmethod(lambda: 12 * 60 * 60),
+    )
     monkeypatch.setattr(
         original_module.ConfigLoader,
         "get_spc_period_sigma_source",

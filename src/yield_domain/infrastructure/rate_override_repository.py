@@ -12,6 +12,10 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+class RateOverrideReadError(RuntimeError):
+    """Raised when a configured rate-override workbook cannot be read safely."""
+
+
 def load_rate_overrides(
     path: Path | None,
     sheet_name: str,
@@ -37,8 +41,7 @@ def load_rate_overrides(
         )
         expected = ["lot_id", "sheet_id", "override_rate", "defect_desc"]
         if not set(expected).issubset(frame.columns):
-            logger.error("Rate override sheet is missing required columns: %s", expected)
-            return None, None
+            raise ValueError(f"Rate override sheet is missing required columns: {expected}")
         frame["override_rate"] = pd.to_numeric(
             frame["override_rate"].astype(str).str.rstrip("%"), errors="coerce"
         )
@@ -55,7 +58,7 @@ def load_rate_overrides(
         return frame[expected], lots[["lot_id", "defect_desc", "override_rate_avg"]]
     except Exception as exc:
         logger.error("Rate override workbook read failed: %s", exc, exc_info=True)
-        return None, None
+        raise RateOverrideReadError("Rate override workbook could not be read.") from exc
     finally:
         if workbook is not None:
             try:

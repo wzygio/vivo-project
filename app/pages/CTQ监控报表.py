@@ -36,7 +36,10 @@ from app.sections.inline_domain.shared.alert_center import render_sheet_oos_aler
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
-from src.inline_domain.application.ctq.ctq_service import CtqReportService
+from src.inline_domain.application.ctq.ctq_service import (
+    CtqReportBuildError,
+    CtqReportService,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
@@ -101,14 +104,18 @@ except SheetOosDecorationReadError:
     )
     st.stop()
 
-with st.spinner("正在加载 CTQ 分布数据..."):
-    view_model = CtqReportService.get_ctq_report_data(
-        _data_port=ctq_data_port,
-        query_config_json=query_config.model_dump_json(),
-        snapshot_signature=product_cache_signature,
-        product_revision=product_revision,
-        decision_signature=decision_signature,
-    )
+try:
+    with st.spinner("正在加载 CTQ 分布数据..."):
+        view_model = CtqReportService.get_ctq_report_data(
+            _data_port=ctq_data_port,
+            query_config_json=query_config.model_dump_json(),
+            snapshot_signature=product_cache_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
+        )
+except CtqReportBuildError:
+    st.error("CTQ 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    st.stop()
 
 sheet_features_df = view_model.sheet_features_df
 raw_measurements_df = view_model.raw_measurements_df

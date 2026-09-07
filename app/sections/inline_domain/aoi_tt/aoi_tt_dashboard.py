@@ -23,6 +23,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.shared_kernel.config import ConfigLoader
 from app.charts.inline_domain import (
     AoiSpecLine,
     create_aoi_period_trend_chart,
@@ -392,7 +393,11 @@ def render_aoi_tt_indicator_sections(
 # ---------------------------------------------------------------------------
 
 
-@st.cache_data(show_spinner=False, max_entries=3)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=3,
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
+)
 def _load_aoi_tt_oos_decoration_cached(
     prod_code: str,
     file_mtime_ns: int,

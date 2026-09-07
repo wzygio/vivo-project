@@ -70,7 +70,7 @@ MONITOR_PAGE_CACHE_SIGNATURE = "auto_warning_dashboard_manual_clear_v1"
 MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds())
 def get_cached_query_window() -> tuple[str, str]:
     """Keep this page's time window stable until the user clears cache."""
     start_dt, end_dt = MonitorAnalysisService.get_time_window()

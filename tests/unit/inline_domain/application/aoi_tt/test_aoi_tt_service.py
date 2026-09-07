@@ -8,7 +8,10 @@ import pytest
 
 from src.inline_domain.application.aoi_tt import aoi_tt_service
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
-from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
+from src.inline_domain.application.aoi_tt.aoi_tt_service import (
+    AoiTtReportBuildError,
+    AoiTtReportService,
+)
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -225,21 +228,21 @@ def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:
     assert view_model.indicators_df.empty
 
 
-def test_service_tolerates_loader_exception(monkeypatch) -> None:
+def test_service_surfaces_loader_exception_without_caching(monkeypatch) -> None:
     class FailingAoiTtPort(FakeAoiTtPort):
         def get_tt_details(self, _query) -> pd.DataFrame:
             raise RuntimeError("db down")
 
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 
-    view_model = AoiTtReportService.get_aoi_tt_report_data(
-        _data_port=FailingAoiTtPort(pd.DataFrame(), pd.DataFrame()),
-        query_config_json=_config_json(),
-        snapshot_signature="test",
-    )
-
-    assert view_model.tt_details_df.empty
-    assert view_model.indicators_df.empty
+    port = FailingAoiTtPort(pd.DataFrame(), pd.DataFrame())
+    for _ in range(2):
+        with pytest.raises(AoiTtReportBuildError, match="AOI_TT report generation failed"):
+            AoiTtReportService.get_aoi_tt_report_data(
+                _data_port=port,
+                query_config_json=_config_json(),
+                snapshot_signature="test",
+            )
 
 
 def test_service_reads_through_application_data_port() -> None:

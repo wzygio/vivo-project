@@ -6,6 +6,11 @@
 - 审计基准：`docs/ADR/0001-streamlit-cache-native-payload-boundary.md`、`ARCHITECTURE.md`、`config/global.yaml`、Streamlit 1.60 随包性能指引
 - 非目标：本报告不修改业务代码，不评价 infrastructure 层 SQL 本身是否高效，也不把所有“未加 `st.cache_data`”都视为问题
 
+> 整改状态（2026-09-07）：Yield、Inline、Equipment 三域已按本报告方案完成。
+> 项目自有 `st.cache_data` 与领域数据快照 TTL 已统一到 `application.cache_ttl_hours`；Yield 已补齐
+> 时间窗/资源签名和失败传播；Inline 已扩大产品缓存容量并取消异常空 payload；
+> Equipment 已确认为全局报表并采用全局缓存键。Q-Time 与 IJP 的其余审计项不在本次范围。
+
 ## 1. 结论摘要
 
 当前 application 缓存设计处于两代模式并存状态：

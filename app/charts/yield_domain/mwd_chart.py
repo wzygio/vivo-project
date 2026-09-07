@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from typing import Optional
 from datetime import datetime, timedelta
 
+from src.shared_kernel.config import ConfigLoader
 
 # -----------------------------------------------------------------------------
 #  绘图辅助函数
@@ -334,7 +335,7 @@ def create_single_trend_chart(df, title, y_range, warning_line_value=None):
     fig.update_xaxes(type='category', tickangle=-45 if "日度" in title else 0)
     return fig
 
-@st.cache_data(ttl="1h")
+@st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds())
 def prepare_union_data_for_filter(
     mwd_data: dict, 
     lot_data: dict, 

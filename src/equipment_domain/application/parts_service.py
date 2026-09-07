@@ -8,8 +8,12 @@
 3. 通过 @st.cache_data 实现 L2 缓存
 """
 
+import hashlib
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -32,6 +36,32 @@ if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 logger = logging.getLogger(__name__)
+
+
+def _file_signature(path: Path) -> str:
+    try:
+        stat = path.stat()
+    except OSError:
+        return "NOT_EXISTS"
+    raw = f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def build_parts_report_cache_context(baseline_path: str | Path) -> dict[str, str]:
+    """Build global cache-key components from the report's actual inputs."""
+    runtime_payload = json.dumps(
+        asdict(get_equipment_runtime_config()),
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return {
+        "as_of_date": date.today().isoformat(),
+        "baseline_signature": _file_signature(Path(baseline_path)),
+        "runtime_config_signature": hashlib.sha256(
+            runtime_payload.encode("utf-8")
+        ).hexdigest()[:16],
+    }
 
 
 # ==============================================================================
@@ -76,14 +106,16 @@ class PartsReportService:
 
     @staticmethod
     @st.cache_data(
-        ttl=ConfigLoader.get_service_cache_ttl_seconds(
-            "equipment_parts_report_payload", default_hours=1
-        )
-    )  # TTL 统一由 config/global.yaml 的 service_cache 配置，到期重入 L1，由快照自身的 TTL 决定是否更新
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
+        max_entries=8,
+    )
     def fetch_report_payload(
         _db_manager,
         baseline_path: str,
         snapshot_signature: str,
+        as_of_date: str = "",
+        baseline_signature: str = "",
+        runtime_config_signature: str = "",
     ) -> dict[str, object]:
         """
         获取可安全跨模块重载缓存的关键备件报表载荷。
@@ -101,6 +133,8 @@ class PartsReportService:
         Returns:
             仅包含 DataFrame 和原生标量的缓存载荷。
         """
+        del baseline_signature, runtime_config_signature
+
         # 1. 加载基线 CSV
         spec_df = load_spec_baseline(baseline_path)
 
@@ -109,7 +143,11 @@ class PartsReportService:
         snapshot_df, fabricated_snapshot_df = load_report_part_life_snapshots(
             _db_manager,
             spec_df,
-            as_of=pd.Timestamp.now().floor("s"),
+            as_of=(
+                pd.Timestamp(as_of_date) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+                if as_of_date
+                else pd.Timestamp.now().floor("s")
+            ),
             max_age_days=runtime_config.measurement_max_age_days,
         )
 
@@ -159,12 +197,18 @@ class PartsReportService:
         _db_manager,
         baseline_path: str,
         snapshot_signature: str,
+        as_of_date: str = "",
+        baseline_signature: str = "",
+        runtime_config_signature: str = "",
     ) -> PartsReportViewModel:
         """读取缓存载荷，并在 pickle 边界之外构造当前模块的 ViewModel。"""
         payload = PartsReportService.fetch_report_payload(
             _db_manager=_db_manager,
             baseline_path=baseline_path,
             snapshot_signature=snapshot_signature,
+            as_of_date=as_of_date,
+            baseline_signature=baseline_signature,
+            runtime_config_signature=runtime_config_signature,
         )
         report_df = payload.get("report_df")
         report_df = report_df if isinstance(report_df, pd.DataFrame) else pd.DataFrame()

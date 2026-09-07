@@ -143,7 +143,7 @@ def test_missing_workbook_uses_the_deterministic_sentinel() -> None:
 
 
 def test_ttl_is_read_from_global_config() -> None:
-    """config/global.yaml 的 service_cache.ttl_hours.qtime_monitoring = 12h。"""
+    """config/global.yaml 的 application.cache_ttl_hours = 12h。"""
     assert cached_module._cached_monitoring._info.ttl == 12 * 60 * 60
     assert cached_module._cached_monitoring._info.max_entries == 32
 

@@ -7,7 +7,10 @@ import pandas as pd
 import pytest
 
 from src.inline_domain.application.aoi_rs import aoi_rs_service
-from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
+from src.inline_domain.application.aoi_rs.aoi_rs_service import (
+    AoiRsReportBuildError,
+    AoiRsReportService,
+)
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.shared_kernel.config import ConfigLoader
 
@@ -145,7 +148,7 @@ def test_service_returns_empty_view_model_when_no_details(monkeypatch) -> None:
     assert view_model.indicators_df.empty
 
 
-def test_service_tolerates_loader_exception(monkeypatch) -> None:
+def test_service_surfaces_loader_exception_without_caching(monkeypatch) -> None:
     def _boom(*_args, **_kw):
         raise RuntimeError("db down")
 
@@ -153,14 +156,13 @@ def test_service_tolerates_loader_exception(monkeypatch) -> None:
     data_port = _data_port(pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
     data_port.get_rs_details = _boom
 
-    view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _data_port=data_port,
-        query_config_json=_config_json(),
-        snapshot_signature="test",
-    )
-
-    assert view_model.rs_details_df.empty
-    assert view_model.indicators_df.empty
+    for _ in range(2):
+        with pytest.raises(AoiRsReportBuildError, match="AOI_RS report generation failed"):
+            AoiRsReportService.get_aoi_rs_report_data(
+                _data_port=data_port,
+                query_config_json=_config_json(),
+                snapshot_signature="test",
+            )
 
 
 def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:

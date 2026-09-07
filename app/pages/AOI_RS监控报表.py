@@ -37,7 +37,10 @@ from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
-from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
+from src.inline_domain.application.aoi_rs.aoi_rs_service import (
+    AoiRsReportBuildError,
+    AoiRsReportService,
+)
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
@@ -96,14 +99,18 @@ except SheetOosDecorationReadError:
     )
     st.stop()
 
-with st.spinner("正在加载 AOI RS 数据..."):
-    view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _data_port=aoi_rs_data_port,
-        query_config_json=query_config.model_dump_json(),
-        snapshot_signature=product_cache_signature,
-        product_revision=product_revision,
-        decision_signature=decision_signature,
-    )
+try:
+    with st.spinner("正在加载 AOI RS 数据..."):
+        view_model = AoiRsReportService.get_aoi_rs_report_data(
+            _data_port=aoi_rs_data_port,
+            query_config_json=query_config.model_dump_json(),
+            snapshot_signature=product_cache_signature,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
+        )
+except AoiRsReportBuildError:
+    st.error("AOI RS 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    st.stop()
 
 rs_details_df = view_model.rs_details_df
 pass_through_df = view_model.pass_through_df

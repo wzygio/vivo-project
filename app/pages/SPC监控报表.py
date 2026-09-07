@@ -56,10 +56,17 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 SPC_PAGE_CACHE_SIGNATURE = "spc_capability_distribution_report_v1"
 SpcReportService = spc_service.SpcReportService
 _spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
+_spc_report_build_error = getattr(spc_service, "SpcReportBuildError", None)
 SPC_DECORATION_FILE_ERRORS = (
     (_spc_decoration_file_error,)
     if isinstance(_spc_decoration_file_error, type)
     and issubclass(_spc_decoration_file_error, BaseException)
+    else ()
+)
+SPC_REPORT_BUILD_ERRORS = (
+    (_spc_report_build_error,)
+    if isinstance(_spc_report_build_error, type)
+    and issubclass(_spc_report_build_error, BaseException)
     else ()
 )
 
@@ -119,6 +126,9 @@ except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):
         "SPC 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
         "然后点击页头“刷新缓存”重试。"
     )
+    st.stop()
+except SPC_REPORT_BUILD_ERRORS:
+    st.error("SPC 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
     st.stop()
 
 sheet_features_df = view_model.sheet_features_df
