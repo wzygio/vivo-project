@@ -33,7 +33,15 @@ def captured_context_calls(monkeypatch):
     """拦截 get_modifier_context，记录 read_only 透传值。"""
     calls = []
 
-    def fake_modifier_context(config, product_dir, _db_manager=None, snapshot_signature="", modifier_signature="", read_only=False):
+    def fake_modifier_context(
+        config,
+        product_dir,
+        _db_manager=None,
+        snapshot_signature="",
+        modifier_signature="",
+        read_only=False,
+        **_cache_context,
+    ):
         calls.append(read_only)
         return {"targets": {}, "group_targets": {}, "factors": {}, "signature": "s"}
 

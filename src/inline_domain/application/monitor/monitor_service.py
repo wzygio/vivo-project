@@ -274,9 +274,7 @@ class MonitorAnalysisService:
     @st.cache_data(
         show_spinner=False,
         max_entries=1,
-        ttl=ConfigLoader.get_service_cache_ttl_seconds(
-            "inline_monitor_dashboard_payload", default_hours=12
-        ),
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
     )
     def fetch_dashboard_data_dict(
         _repository_factory: MonitorSpcRepositoryFactory,

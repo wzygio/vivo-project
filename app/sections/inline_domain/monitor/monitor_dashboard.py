@@ -508,9 +508,7 @@ def _stable_cache_key_fragment(mapping: dict | None) -> str:
 @st.cache_data(
     show_spinner=False,
     max_entries=4,
-    ttl=ConfigLoader.get_service_cache_ttl_seconds(
-        "inline_monitor_alarm_details", default_hours=12
-    ),
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
 )
 def get_cached_alarm_detail_tables(
     _db_manager: DatabaseManager,
@@ -523,8 +521,8 @@ def get_cached_alarm_detail_tables(
 ) -> dict[str, pd.DataFrame]:
     """Build cached physical alarm details for the admin table.
 
-    TTL 由 config/global.yaml 的 service_cache.ttl_hours.inline_monitor_alarm_details
-    配置（默认 12h）；缓存键除查询参数外还包含 snapshot/compliance 签名、
+    TTL 由 config/global.yaml 的 application.cache_ttl_hours 统一配置；
+    缓存键除查询参数外还包含 snapshot/compliance 签名、
     产品 revision 与决策签名（``revision_signature``/``decision_signature``，
     由页面把 product_revisions/decision_signatures 序列化为稳定字符串后传入），
     用户编辑 __flags 或刷新缓存换 revision 时触发缓存 miss 与明细重建。

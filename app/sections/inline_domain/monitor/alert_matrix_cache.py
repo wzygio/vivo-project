@@ -3,7 +3,7 @@
 与纯计算层 ``alert_matrix_service.py`` 分离：
 
 - ``get_cached_alert_matrix``：``@st.cache_data`` 包装，TTL 读
-  ``config/global.yaml`` 的 ``service_cache.ttl_hours.alert_matrix_payload``；
+  ``config/global.yaml`` 的 ``application.cache_ttl_hours``；
   键 = (products, 参考周周一, 签名)，签名由
   ``alert_matrix_service.build_alert_matrix_signature`` 对
   ``build_default_signature_components`` 的分量做确定性摘要；
@@ -193,34 +193,42 @@ def build_default_matrix_context(
         snapshot_signature = build_product_cache_signature(
             YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code
         )
-        return config, product_dir, snapshot_signature
+        cache_context = YieldAnalysisService.build_cache_context(config, product_dir)
+        return config, product_dir, snapshot_signature, cache_context
 
     def yield_lot_loader(prod_code: str):
         """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature = _yield_product_resources(prod_code)
+        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code)
         lot_data = YieldAnalysisService.get_lot_defect_rates(
             config,
             product_dir,
             _db_manager=db_manager,
             snapshot_signature=snapshot_signature,
             read_only=True,
+            **cache_context,
         )
         if not lot_data:
             return None
         warning_lines = YieldAnalysisService.load_static_warning_lines(
-            config, product_dir, snapshot_signature
+            config,
+            product_dir,
+            snapshot_signature,
+            warning_signature=cache_context["warning_signature"],
         )
         return lot_data, warning_lines
 
     def yield_trend_loader(prod_code: str):
         """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature = _yield_product_resources(prod_code)
+        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code)
         mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
             config,
             product_dir,
             _db_manager=db_manager,
             snapshot_signature=snapshot_signature,
             read_only=True,
+            analysis_start_date=cache_context["analysis_start_date"],
+            analysis_end_date=cache_context["analysis_end_date"],
+            modifier_signature=cache_context["modifier_signature"],
         )
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config,
@@ -228,6 +236,9 @@ def build_default_matrix_context(
             _db_manager=db_manager,
             snapshot_signature=snapshot_signature,
             read_only=True,
+            analysis_start_date=cache_context["analysis_start_date"],
+            analysis_end_date=cache_context["analysis_end_date"],
+            modifier_signature=cache_context["modifier_signature"],
         )
         if not mwd_group_data and not mwd_code_data:
             return None
@@ -250,7 +261,7 @@ def build_default_matrix_context(
 @st.cache_data(
     show_spinner=False,
     max_entries=8,
-    ttl=ConfigLoader.get_service_cache_ttl_seconds("alert_matrix_payload", default_hours=12),
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
 )
 def _cached_alert_matrix_payload(
     products: tuple[str, ...],

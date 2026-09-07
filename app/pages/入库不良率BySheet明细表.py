@@ -5,7 +5,13 @@ import streamlit as st
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
-from yield_domain.application.yield_service import YieldAnalysisService
+from yield_domain.application.yield_service import (
+    YieldAnalysisService,
+    YieldDataLoadError,
+    YieldDataModificationError,
+    YieldWarningLinesReadError,
+)
+from src.yield_domain.infrastructure.rate_override_repository import RateOverrideReadError
 from app.components.page_header import (
     build_product_cache_signature,
     extract_cached_funcs,
@@ -33,6 +39,7 @@ product_cache_signature = build_product_cache_signature(
 )
 
 db_manager = DatabaseManager()
+yield_cache_context = YieldAnalysisService.build_cache_context(active_config, product_dir)
 
 render_page_header(
     "📈 入库不良率BySheet明细表",
@@ -49,12 +56,22 @@ render_page_header(
 
 # --- 3. 加载数据 ---
 # [核心修复] 依赖注入 db_manager + 快照签名感知缓存
-all_data = YieldAnalysisService.get_sheet_defect_rates(
-    config=active_config, 
-    product_dir=product_dir,
-    _db_manager=db_manager,
-    snapshot_signature=product_cache_signature
-)
+try:
+    all_data = YieldAnalysisService.get_sheet_defect_rates(
+        config=active_config,
+        product_dir=product_dir,
+        _db_manager=db_manager,
+        snapshot_signature=product_cache_signature,
+        **yield_cache_context,
+    )
+except (
+    YieldDataLoadError,
+    YieldDataModificationError,
+    YieldWarningLinesReadError,
+    RateOverrideReadError,
+):
+    st.error("Yield Sheet 报表配置或资源读取失败，请检查相关文件后刷新重试。")
+    st.stop()
 
 # --- 4. 页面积木式调度 ---
 if all_data:

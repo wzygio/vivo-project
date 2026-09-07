@@ -22,6 +22,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from src.shared_kernel.config import ConfigLoader
 from app.charts.inline_domain import (
     AoiSpecLine,
     CODE_PALETTE,
@@ -373,7 +374,7 @@ def _load_aoi_rs_sheet_oos_decoration(product_dir: Path, prod_code: str) -> pd.D
         return None
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds())
 def load_cached_aoi_rs_sheet_oos_decoration(
     file_mtime_ns: int,
     file_size: int,

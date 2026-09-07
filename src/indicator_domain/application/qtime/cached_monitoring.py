@@ -1,8 +1,8 @@
 """Q-Time 当前监控结果的 L2 缓存（PRD §4.3 / ADR-0001 缓存边界）。
 
 缓存键 = (shop, step_descriptions, products, as_of, 决策工作簿 file_stat)，
-TTL 读 ``config/global.yaml`` 的 ``service_cache.ttl_hours.qtime_monitoring``
-（默认 12h，与 inline 对齐）。决策签名沿用 inline ``decision_signature.py``
+TTL 读 ``config/global.yaml`` 的 ``application.cache_ttl_hours``。
+决策签名沿用 inline ``decision_signature.py``
 的 file_stat 门控思路：页面每次 rerun 廉价 stat 一次
 ``qtime_oos_decoration.xlsx``，用户上传决策 → mtime 变化 → 新缓存条目，
 无需显式 clear。
@@ -73,9 +73,7 @@ def get_cached_monitoring(
 @st.cache_data(
     show_spinner=False,
     max_entries=32,
-    ttl=ConfigLoader.get_service_cache_ttl_seconds(
-        "qtime_monitoring", default_hours=12
-    ),
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
 )
 def _cached_monitoring(
     _service: QTimeReportService,

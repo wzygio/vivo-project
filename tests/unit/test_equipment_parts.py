@@ -251,13 +251,13 @@ class TestLoadSpecBaseline:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """关键备件运行参数统一从 config/domain/equipment_domain.yaml 读取，快照 TTL 来自 global.yaml。"""
+        """关键备件运行参数来自领域配置，全部缓存 TTL 来自 global.yaml。"""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "global.yaml").write_text(
             """
-data_snapshot:
-  ttl_hours: 12
+application:
+  cache_ttl_hours: 12
 """.strip(),
             encoding="utf-8",
         )
@@ -287,7 +287,6 @@ equipment:
     initial_lookback_days: 2
     update_increment_ratio: 0.3
     reset_ratio_range: [0.0, 0.3]
-    snapshot_ttl_hours: 24
 """.strip(),
             encoding="utf-8",
         )
@@ -302,7 +301,7 @@ equipment:
 
         runtime = get_equipment_runtime_config()
         assert runtime.snapshot_ttl_hours == 12
-        assert runtime.fabrication_policy.snapshot_ttl_hours == 24
+        assert runtime.fabrication_policy.snapshot_ttl_hours == 12
         assert runtime.fabrication_policy.update_increment_ratio == 0.3
 
 

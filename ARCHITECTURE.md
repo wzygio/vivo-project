@@ -66,11 +66,15 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 3. `app/pages/Q_Time监控报表.py` 是薄组合入口；筛选、查询门控、空/错误状态由
    `app/sections/indicator_domain/qtime/` 拥有，柱线图模型由
    `app/charts/indicator_domain/qtime/` 构建。
-4. `QTimeRepository` 将产品选项、分厂路径选项和查询契约级明细保存到
-   `data/indicator_domain/qtime/`。明细 Parquet 保留源 `timekey`，加载范围从
-   截止日第三个前序自然月的 1 日开始；TTL 内复用，数据库失败时只回退到同一
-   查询契约的旧快照。没有可用快照时仍返回不含 SQL、凭据和 traceback 的稳定错误。
-5. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
+4. `QTimeRepository` 在 `data/indicator_domain/qtime/` 按厂别保存一份无产品、站点筛选的
+   统一源事实 Parquet；覆盖范围为上月 1 日至当天结束，Parquet 内嵌策略版本、覆盖窗口与
+   刷新时间。快照在全局缓存 TTL 内直接复用，过期时从已覆盖尾部前 2 日增量替换并裁剪上上月数据；
+   数据库失败时允许读取旧快照，没有旧快照时返回不含 SQL、凭据和 traceback 的稳定错误。
+   站点与产品选项从同一事实快照派生，不再生成查询级明细或选项 L1。
+5. `tools/refresh_qtime_snapshots.py` 通过 application 端口刷新 ARRAY、OLED、TP；
+   `tools/register_qtime_snapshot_task.ps1` 将其注册为 Windows 每日 07:00 任务。Q-Time 报表与
+   自动预警看板继续共享 `get_cached_shop_monitoring`，因此一次 L1 计算可供两个页面复用。
+6. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
    的“决策台账”以 `(prodcode, step_desc, lot_id, timekey)` 为键。`flag=True` 将等待时长
    确定性修饰到规格内，`flag=False` 保留真实值并进入预警中心，`flag=Delete` 删除记录。
    规则位于 `core/qtime/decoration.py`；Excel 仓储只负责决策台账持久化。上传只覆盖
@@ -176,8 +180,9 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 - 规格基线来自 `resources/critical_parts_baseline.csv`；数据库快照和仿造
   快照分别以规格签名命名，互不覆盖。
 - 报表按每条规格先匹配真实数据库快照；无真实匹配时才使用仿造快照。报表
-  载荷每小时重新进入快照层；仿造快照缺失时自动生成，超过 24 小时 TTL 时
-  自动按完整过期周期推进。
+  载荷按 `application.cache_ttl_hours` 重新进入快照层；关键备件是全局报表，
+  缓存键不按当前产品拆分，并包含计算日期、规格基线和运行策略签名。
+  仿造快照缺失时自动生成，超过其快照 TTL 时自动按完整过期周期推进。
 - 报表只允许三天新鲜度窗口内的真实测量参与优先匹配；陈旧真实记录被排除，
   再由新鲜仿造快照补缺，确保最终展示时间满足当前性约束。该语义见
   `docs/ADR/0011-equipment-measurement-freshness-fallback.md`。
@@ -205,6 +210,8 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 
 缓存边界和产品级失效规则见
 `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`。
+所有项目自有 `st.cache_data` 与领域数据快照的 TTL 统一读取
+`config/global.yaml` 的 `application.cache_ttl_hours`，不得另设服务级、快照级或硬编码 TTL。
 共享 Inline 原始快照和派生适配器边界见
 `docs/ADR/0012-shared-inline-measurement-snapshot.md`。
 AOI_RS 专属产品级快照边界见

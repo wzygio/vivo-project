@@ -202,7 +202,7 @@ def _run_page() -> None:
 def _assert_module_structure(trackers: dict) -> None:
     """模块化结构：两个模块各有 subheader 标题 + 默认展开的 expander，且无 st.info。"""
     assert trackers["infos"] == []
-    assert trackers["subheaders"] == ["🚦 预警矩阵", "⚠️ 超规片自动预警"]
+    assert trackers["subheaders"] == ["🚦 Q-Time预警看板", "⚠️ Inline预警看板"]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True
     ]

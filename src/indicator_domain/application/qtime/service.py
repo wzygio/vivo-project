@@ -21,6 +21,7 @@ from src.indicator_domain.application.qtime.dtos import (
 from src.indicator_domain.application.qtime.ports import (
     QTimeDataPort,
     QTimeDecorationPort,
+    QTimeSnapshotRefresh,
 )
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
 from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
@@ -62,6 +63,17 @@ class QTimeReportService:
 
     def get_report(self, query: QTimeQuery) -> pd.DataFrame:
         return self._data_port.fetch_details(query)
+
+    def refresh_snapshots(
+        self,
+        *,
+        as_of: date | None = None,
+    ) -> tuple[QTimeSnapshotRefresh, ...]:
+        """Refresh all shared shop snapshots through the application boundary."""
+        return tuple(
+            self._data_port.refresh_snapshot(shop, as_of=as_of)
+            for shop in ("ARRAY", "OLED", "TP")
+        )
 
     def get_current_report(
         self,

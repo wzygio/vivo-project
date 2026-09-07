@@ -133,21 +133,8 @@ class ConfigLoader:
 
     @classmethod
     def get_snapshot_ttl_hours(cls) -> int:
-        """
-        从 global.yaml 读取数据快照缓存 TTL（小时），各模块统一。
-        读取失败或配置非法时回退到默认 8 小时。
-        """
-        yaml_path = cls.get_project_root() / "config" / "global.yaml"
-        default_ttl = 8
-        try:
-            snapshot_conf = cls._load_yaml(yaml_path).get("data_snapshot", {})
-            ttl_hours = int(snapshot_conf.get("ttl_hours", default_ttl))
-            if ttl_hours <= 0:
-                raise ValueError(f"data_snapshot.ttl_hours 必须为正整数，当前值: {ttl_hours}")
-            return ttl_hours
-        except Exception as e:
-            logging.error(f"❌ 读取数据快照 TTL 配置失败: {e}，回退到默认 {default_ttl} 小时。")
-            return default_ttl
+        """兼容快照仓储调用；TTL 同样服从全局应用缓存配置。"""
+        return cls.get_cache_ttl_seconds() // 3600
 
     @classmethod
     def get_data_forward_policy(cls) -> DataForwardPolicy:
@@ -162,27 +149,34 @@ class ConfigLoader:
         )
 
     @classmethod
-    def get_service_cache_ttl_seconds(cls, cache_name: str, default_hours: int) -> int:
+    def get_cache_ttl_seconds(cls) -> int:
         """
-        从 global.yaml 的 service_cache.ttl_hours 段读取指定 Service 缓存 TTL，返回秒。
-        读取失败或配置非法时回退到 default_hours。
+        从 global.yaml 读取应用数据缓存的唯一 TTL，返回秒。
+
+        ``application.cache_ttl_hours`` 是所有项目自有 ``st.cache_data`` 的
+        单一事实源。配置缺失或非法时直接报错，避免服务在不受控的回退 TTL 下运行。
         """
         yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        application = cls._load_yaml(yaml_path).get("application", {})
+        if not isinstance(application, dict):
+            raise ValueError("global.yaml: 'application' must be a mapping")
         try:
-            cache_conf = cls._load_yaml(yaml_path).get("service_cache", {})
-            ttl_map = cache_conf.get("ttl_hours", {})
-            ttl_hours = int(ttl_map.get(cache_name, default_hours))
-            if ttl_hours <= 0:
-                raise ValueError(
-                    f"service_cache.ttl_hours.{cache_name} 必须为正整数，当前值: {ttl_hours}"
-                )
-            return ttl_hours * 3600
-        except Exception as e:
-            logging.error(
-                f"❌ 读取 Service 缓存 TTL 配置失败 ({cache_name}): {e}，"
-                f"回退到默认 {default_hours} 小时。"
+            ttl_hours = int(application["cache_ttl_hours"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "global.yaml: 'application.cache_ttl_hours' must be a positive integer"
+            ) from exc
+        if ttl_hours <= 0:
+            raise ValueError(
+                "global.yaml: 'application.cache_ttl_hours' must be a positive integer"
             )
-            return default_hours * 3600
+        return ttl_hours * 3600
+
+    @classmethod
+    def get_service_cache_ttl_seconds(cls, cache_name: str, default_hours: int) -> int:
+        """兼容旧调用；服务名和默认值不再影响 TTL。"""
+        del cache_name, default_hours
+        return cls.get_cache_ttl_seconds()
 
     @classmethod
     def get_domain_config_path(cls, domain: str) -> Path:

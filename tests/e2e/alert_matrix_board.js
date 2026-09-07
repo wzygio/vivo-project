@@ -7,7 +7,7 @@ async page => {
   const base = "http://localhost:8512/";
   await page.goto(base);
   await page
-    .getByText("🚦 预警矩阵", { exact: false })
+    .getByText(/🟢 达标（无预警）｜🔴 有预警/)
     .first()
     .waitFor({ timeout: 120_000 });
 

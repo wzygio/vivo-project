@@ -6,6 +6,7 @@ import logging
 
 import streamlit as st
 
+from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.step_description_loader import (
     build_step_description_map,
     load_step_descriptions,
@@ -22,7 +23,11 @@ def format_step_label(step_id: str, step_desc_map: dict[str, str] | None = None)
     return f"{step_id} {desc}" if desc else step_id
 
 
-@st.cache_data(show_spinner=False, max_entries=3, ttl=4 * 60 * 60)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=3,
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
+)
 def get_cached_step_description_map(_db_manager) -> dict[str, str]:
     """加载并缓存 step_id -> 站点描述映射；异常时返回 {} 并 warning（不炸页面）。"""
     try:

@@ -704,7 +704,7 @@ def test_week_start_normalizes_to_monday() -> None:
 
 
 def test_cache_ttl_is_read_from_global_config() -> None:
-    """config/global.yaml 的 service_cache.ttl_hours.alert_matrix_payload = 12h。"""
+    """config/global.yaml 的 application.cache_ttl_hours = 12h。"""
     assert cache_module._cached_alert_matrix_payload._info.ttl == 12 * 60 * 60
 
 

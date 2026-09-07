@@ -9,7 +9,13 @@ from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 
 from yield_domain.application.alert_service import AlertService
-from yield_domain.application.yield_service import YieldAnalysisService
+from yield_domain.application.yield_service import (
+    YieldAnalysisService,
+    YieldDataLoadError,
+    YieldDataModificationError,
+    YieldWarningLinesReadError,
+)
+from src.yield_domain.infrastructure.rate_override_repository import RateOverrideReadError
 from yield_domain.application.excel_service import ExcelService
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -70,47 +76,76 @@ query_params = st.query_params
 if query_params.get("admin") == "true":
     render_yield_config_uploader(active_config, product_dir)
 ExcelService.inject_mapping_config_to_config(active_config)
+yield_cache_context = YieldAnalysisService.build_cache_context(active_config, product_dir)
 
 # ==============================================================================
 #  数据加载
 # ==============================================================================
-# 配置资源不使用文件时间签名；仅由页头按钮推进的产品 revision 使缓存失效。
-with st.spinner("正在加载全维度分析数据..."):
-    mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-        active_config,
-        product_dir,
-        _db_manager=db_manager,
-        snapshot_signature=product_cache_signature,
-    )
-    mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-        active_config,
-        product_dir,
-        _db_manager=db_manager,
-        snapshot_signature=product_cache_signature,
-    )
-    lot_data = YieldAnalysisService.get_lot_defect_rates(
-        active_config,
-        product_dir,
-        _db_manager=db_manager,
-        snapshot_signature=product_cache_signature,
-    )
-    sheet_data = YieldAnalysisService.get_sheet_defect_rates(
-        active_config,
-        product_dir,
-        _db_manager=db_manager,
-        snapshot_signature=product_cache_signature,
-    )
-    mapping_data = YieldAnalysisService.get_mapping_data(
-        active_config,
-        _db_manager=db_manager,
-        snapshot_signature=product_cache_signature,
-        product_dir=product_dir,
-    )
-    warning_lines = YieldAnalysisService.load_static_warning_lines(
-        active_config,
-        product_dir,
-        product_cache_signature,
-    )
+try:
+    with st.spinner("正在加载全维度分析数据..."):
+        mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
+            active_config,
+            product_dir,
+            _db_manager=db_manager,
+            snapshot_signature=product_cache_signature,
+            analysis_start_date=yield_cache_context["analysis_start_date"],
+            analysis_end_date=yield_cache_context["analysis_end_date"],
+            modifier_signature=yield_cache_context["modifier_signature"],
+        )
+        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
+            active_config,
+            product_dir,
+            _db_manager=db_manager,
+            snapshot_signature=product_cache_signature,
+            analysis_start_date=yield_cache_context["analysis_start_date"],
+            analysis_end_date=yield_cache_context["analysis_end_date"],
+            modifier_signature=yield_cache_context["modifier_signature"],
+        )
+        lot_data = YieldAnalysisService.get_lot_defect_rates(
+            active_config,
+            product_dir,
+            _db_manager=db_manager,
+            snapshot_signature=product_cache_signature,
+            analysis_start_date=yield_cache_context["analysis_start_date"],
+            analysis_end_date=yield_cache_context["analysis_end_date"],
+            modifier_signature=yield_cache_context["modifier_signature"],
+            warning_signature=yield_cache_context["warning_signature"],
+            rate_override_signature=yield_cache_context["rate_override_signature"],
+        )
+        sheet_data = YieldAnalysisService.get_sheet_defect_rates(
+            active_config,
+            product_dir,
+            _db_manager=db_manager,
+            snapshot_signature=product_cache_signature,
+            analysis_start_date=yield_cache_context["analysis_start_date"],
+            analysis_end_date=yield_cache_context["analysis_end_date"],
+            modifier_signature=yield_cache_context["modifier_signature"],
+            warning_signature=yield_cache_context["warning_signature"],
+            rate_override_signature=yield_cache_context["rate_override_signature"],
+        )
+        mapping_data = YieldAnalysisService.get_mapping_data(
+            active_config,
+            _db_manager=db_manager,
+            snapshot_signature=product_cache_signature,
+            product_dir=product_dir,
+            analysis_start_date=yield_cache_context["analysis_start_date"],
+            analysis_end_date=yield_cache_context["analysis_end_date"],
+            modifier_signature=yield_cache_context["modifier_signature"],
+        )
+        warning_lines = YieldAnalysisService.load_static_warning_lines(
+            active_config,
+            product_dir,
+            product_cache_signature,
+            warning_signature=yield_cache_context["warning_signature"],
+        )
+except (
+    YieldDataLoadError,
+    YieldDataModificationError,
+    YieldWarningLinesReadError,
+    RateOverrideReadError,
+):
+    st.error("Yield 报表配置或资源读取失败，请检查相关文件后点击页头“刷新缓存”重试。")
+    st.stop()
 
 # 基础校验
 if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):

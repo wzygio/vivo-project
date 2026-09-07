@@ -30,7 +30,7 @@ class PanelRepository:
     [仓储层] PanelRepository
     职责：Service 层与数据库的接口。
     [能力]: 
-    1. TTL 缓存保护 (有效期内不连库，TTL 见 config/global.yaml 的 data_snapshot.ttl_hours)
+    1. TTL 缓存保护（有效期内不连库，TTL 见 global.yaml 的 application.cache_ttl_hours）
     2. 增量更新 (只查最近 3 天)
     3. 滚动窗口 (自动裁剪过期数据)
     """
@@ -52,7 +52,7 @@ class PanelRepository:
         self.snapshot_path = snapshot_path
         self.data_policy = data_policy
         self.use_snapshot = use_snapshot
-        # 缓存有效期，统一来自 config/global.yaml 的 data_snapshot.ttl_hours
+        # 缓存有效期，统一来自 global.yaml 的 application.cache_ttl_hours
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
         self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 

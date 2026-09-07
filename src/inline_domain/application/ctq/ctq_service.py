@@ -24,6 +24,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class CtqReportBuildError(RuntimeError):
+    """Raised when a CTQ report cannot be built safely."""
+
+
 @dataclass
 class CtqReportViewModel:
     """Capability-free CTQ distribution report view model."""
@@ -87,10 +91,8 @@ class CtqReportService:
     @staticmethod
     @st.cache_data(
         show_spinner=False,
-        max_entries=1,
-        ttl=ConfigLoader.get_service_cache_ttl_seconds(
-            "inline_ctq_report_payload", default_hours=4
-        ),
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
     )
     def fetch_ctq_report_payload(
         _data_port: "CtqDataPort",
@@ -108,7 +110,7 @@ class CtqReportService:
             query_config.data_type_filter = "CTQ"
         except Exception as exc:
             logger.error("[CTQ] query config parse failed: %s", exc, exc_info=True)
-            return CtqReportService._empty_payload()
+            raise CtqReportBuildError("CTQ query config is invalid.") from exc
 
         try:
             # 共享修饰+特征管线（scope='ctq'）：使用 ctq_sheet_oos_decoration.xlsx。
@@ -147,7 +149,7 @@ class CtqReportService:
             }
         except Exception as exc:
             logger.error("[CTQ] report generation failed: %s", exc, exc_info=True)
-            return CtqReportService._empty_payload()
+            raise CtqReportBuildError("CTQ report generation failed.") from exc
 
     @staticmethod
     def get_ctq_report_data(

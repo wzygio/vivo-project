@@ -24,6 +24,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class AoiRsReportBuildError(RuntimeError):
+    """Raised when an AOI_RS report cannot be built safely."""
+
+
 @dataclass
 class AoiRsReportViewModel:
     """AOI_RS 报表视图模型：明细、分母、规格、图表就绪点帧与指标元数据。"""
@@ -123,10 +127,8 @@ class AoiRsReportService:
     @staticmethod
     @st.cache_data(
         show_spinner=False,
-        max_entries=3,
-        ttl=ConfigLoader.get_service_cache_ttl_seconds(
-            "inline_aoi_rs_report_payload", default_hours=12
-        ),
+        max_entries=16,
+        ttl=ConfigLoader.get_cache_ttl_seconds(),
     )
     def fetch_aoi_rs_report_payload(
         _data_port: "AoiRsDataPort",
@@ -135,10 +137,10 @@ class AoiRsReportService:
         product_revision: str = "",
         decision_signature: str = "",
     ) -> dict[str, object]:
-        """缓存仅含 DataFrame 的原生 payload；失败降级为空。
+        """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
-        max_entries=3 避免多产品互相驱逐；TTL 由 config/global.yaml 的
-        service_cache 段统一配置（周期上限 12h）。product_revision /
+        max_entries=16 覆盖已启用产品及短期 revision；TTL 由 config/global.yaml 的
+        application.cache_ttl_hours 统一配置。product_revision /
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         """
@@ -146,7 +148,7 @@ class AoiRsReportService:
             query_config = AoiRsQueryConfig.model_validate_json(query_config_json)
         except Exception as exc:
             logger.error("[AOI_RS] query config parse failed: %s", exc, exc_info=True)
-            return AoiRsReportService._empty_payload()
+            raise AoiRsReportBuildError("AOI_RS query config is invalid.") from exc
 
         try:
             rs_details_df = _data_port.get_rs_details(query_config)
@@ -176,7 +178,7 @@ class AoiRsReportService:
             }
         except Exception as exc:
             logger.error("[AOI_RS] report generation failed: %s", exc, exc_info=True)
-            return AoiRsReportService._empty_payload()
+            raise AoiRsReportBuildError("AOI_RS report generation failed.") from exc
 
     @staticmethod
     def get_aoi_rs_report_data(

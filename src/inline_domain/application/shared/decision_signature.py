@@ -43,7 +43,11 @@ def get_decision_file_stat(workbook_path: Path) -> tuple[int, int] | None:
     return (int(stat.st_mtime_ns), int(stat.st_size))
 
 
-@st.cache_data(show_spinner=False, max_entries=64, ttl=4 * 60 * 60)
+@st.cache_data(
+    show_spinner=False,
+    max_entries=64,
+    ttl=ConfigLoader.get_cache_ttl_seconds(),
+)
 def _cached_decision_signature(
     workbook_path: str,
     sheet_name: str,
