@@ -10,18 +10,28 @@ import pandas as pd
 import streamlit as st
 
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_lot_point_df,
     build_sheet_point_df,
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
+from src.inline_domain.composition import build_oos_history_service
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_rs.ports import AoiRsDataPort
 
 logger = logging.getLogger(__name__)
+
+
+def _covers_full_product(query_config: AoiRsQueryConfig) -> bool:
+    """History replacement is safe only for an unfiltered product/date query."""
+    return all(
+        value is None
+        for value in (query_config.factory, query_config.step_id, query_config.rs_code)
+    )
 
 
 class AoiRsReportBuildError(RuntimeError):
@@ -73,6 +83,8 @@ def _build_chart_points(
     prod_code: str,
     product_revision: str = "",
     decision_signature: str = "",
+    coverage_start: pd.Timestamp | None = None,
+    coverage_end: pd.Timestamp | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
@@ -92,6 +104,19 @@ def _build_chart_points(
         product_revision=product_revision,
         decision_signature=decision_signature,
     )
+    if coverage_start is not None and coverage_end is not None and not spec_df.empty:
+        build_oos_history_service().update_history(
+            "aoi_rs",
+            prod_code,
+            getattr(result, "decoration_df", pd.DataFrame()),
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+        )
+    elif coverage_start is not None and coverage_end is not None:
+        logger.warning(
+            "[AOI_RS] Skip OOS history coverage update for %s: specifications are empty",
+            prod_code,
+        )
     return result.lot_points_df, result.sheet_points_df
 
 
@@ -153,12 +178,26 @@ class AoiRsReportService:
         try:
             rs_details_df = _data_port.get_rs_details(query_config)
             if rs_details_df.empty:
+                coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
+                    query_config.start_date, query_config.end_date
+                )
+                if _covers_full_product(query_config):
+                    build_oos_history_service().update_history(
+                        "aoi_rs",
+                        query_config.prod_code,
+                        pd.DataFrame(),
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                    )
                 return AoiRsReportService._empty_payload()
             pass_through_df = _data_port.get_pass_through(query_config)
             spec_df = _data_port.get_rs_spec_limits(query_config.prod_code)
             # 超规修饰在 service 层完成：By Lot 用 LOT_RATIO 规格、By Sheet 用
             # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）；
             # scope 门控决定是否真正落盘
+            coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
+                query_config.start_date, query_config.end_date
+            )
             lot_points_df, sheet_points_df = _build_chart_points(
                 rs_details_df,
                 pass_through_df,
@@ -166,6 +205,8 @@ class AoiRsReportService:
                 query_config.prod_code,
                 product_revision=product_revision,
                 decision_signature=decision_signature,
+                coverage_start=(coverage_start if _covers_full_product(query_config) else None),
+                coverage_end=(coverage_end if _covers_full_product(query_config) else None),
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {

@@ -21,6 +21,8 @@ from src.inline_domain.application.shared.decorated_data import (
     _preprocess_sheet_features_by_type,
     prepare_decorated_data,
 )
+from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
@@ -130,7 +132,18 @@ def fetch_decorated_features(
     )
     measurements_df = _features_source.get_spc_measurements(fetch_config)
     spec_df = _features_source.get_spc_spec_limits(prod_code)
+    coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
+        start_date, end_date
+    )
     if measurements_df.empty:
+        if normalized_scope != SCOPE_NONE:
+            build_oos_history_service().update_history(
+                normalized_scope,
+                prod_code,
+                pd.DataFrame(),
+                coverage_start=coverage_start,
+                coverage_end=coverage_end,
+            )
         return _empty_features_payload(spec_empty=spec_df.empty)
 
     if "sheet_start_time" in measurements_df.columns:
@@ -145,6 +158,14 @@ def fetch_decorated_features(
             & (measurements_df["sheet_start_time"] < end_dt)
         ].copy()
         if measurements_df.empty:
+            if normalized_scope != SCOPE_NONE:
+                build_oos_history_service().update_history(
+                    normalized_scope,
+                    prod_code,
+                    pd.DataFrame(),
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                )
             return _empty_features_payload(spec_empty=spec_df.empty)
 
     if normalized_scope == SCOPE_NONE:
@@ -167,6 +188,20 @@ def fetch_decorated_features(
         decision_signature=decision_signature,
     )
     decoration_result = decorated_data.sheet_oos_decoration_result
+    if not spec_df.empty:
+        build_oos_history_service().update_history(
+            normalized_scope,
+            prod_code,
+            decoration_result.decoration_df,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+        )
+    else:
+        logger.warning(
+            "[shared] Skip OOS history coverage update for %s/%s: specifications are empty",
+            normalized_scope,
+            prod_code,
+        )
     logger.info(
         "[shared] decorated features prepared: prod=%s scope=%s features=%s refresh_reason=%s",
         prod_code,

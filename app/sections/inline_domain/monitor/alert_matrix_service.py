@@ -35,6 +35,8 @@ from app.sections.inline_domain.spc.spc_dashboard import (
 from src.inline_domain.application.shared.decorated_data import (
     SCOPE_DECORATION_FILE_NAME,
 )
+from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_KEY_COLUMNS
 from src.inline_domain.core.aoi_tt.aoi_tt_decoration import AOI_TT_OOS_KEY_COLUMNS
 from src.inline_domain.core.shared.sheet_oos_alerts import (
@@ -82,6 +84,7 @@ class AlertMatrixContext:
     yield_lot_loader: Callable[[str], tuple[Any, Mapping[str, Any]] | None] | None = None
     yield_trend_loader: Callable[[str], tuple[Any, Any] | None] | None = None
     qtime_monitoring_loader: Callable[[], tuple[pd.DataFrame, pd.DataFrame]] | None = None
+    oos_product_loader: Callable[[str, str, Path], Any] | None = None
     _qtime_monitoring_memo: Any = field(default=_UNSET, repr=False)
 
     def get_qtime_monitoring(self) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -178,24 +181,36 @@ def _sheet_oos_evaluator(
             if context.inline_resource_dir is not None
             else ConfigLoader.get_domain_resource_dir("inline_domain")
         )
-        file_name = SCOPE_DECORATION_FILE_NAME[scope]
-        if not (resource_dir / file_name).exists():
-            return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "修饰工作簿不存在")
-        decoration_df = load_sheet_oos_decoration(
-            resource_dir,
-            file_name=file_name,
-            sheet_name=prod_code,
-            key_columns=key_columns,
-        )
+        projected_time_column = time_column
+        if context.oos_product_loader is not None:
+            result = context.oos_product_loader(scope, prod_code, resource_dir)
+            decoration_df = result.decorated_df
+            projected_time_column = "event_time"
+        else:
+            history_service = build_oos_history_service(resource_dir)
+            if history_service.has_history(scope, prod_code):
+                result = history_service.read_product(scope, prod_code)
+                decoration_df = result.decorated_df
+                projected_time_column = "event_time"
+            else:
+                file_name = SCOPE_DECORATION_FILE_NAME[scope]
+                if not (resource_dir / file_name).exists():
+                    return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "修饰工作簿不存在")
+                decoration_df = load_sheet_oos_decoration(
+                    resource_dir,
+                    file_name=file_name,
+                    sheet_name=prod_code,
+                    key_columns=key_columns,
+                )
         if decoration_df.empty or "flag" not in decoration_df.columns:
             return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无该产品修饰数据")
-        if time_column not in decoration_df.columns:
+        if projected_time_column not in decoration_df.columns:
             return _cell(
-                row_key, prod_code, CELL_STATE_NO_DATA, f"缺少时间列 {time_column}"
+                row_key, prod_code, CELL_STATE_NO_DATA, f"缺少时间列 {projected_time_column}"
             )
         alerts_df = build_sheet_oos_alerts(
             decoration_df,
-            time_column=time_column,
+            time_column=projected_time_column,
             reference_date=context.reference_date,
         )
         return _alerts_cell(

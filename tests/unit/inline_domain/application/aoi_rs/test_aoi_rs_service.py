@@ -1,5 +1,6 @@
 """AOI_RS 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -327,3 +328,23 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
     # 无规格的 T3DMR 不受影响
     t3_sheet = view_model.sheet_points_df[view_model.sheet_points_df["rs_code"] == "T3DMR"]
     assert t3_sheet["rs_qty"].iloc[0] == 5
+
+
+def test_filtered_query_does_not_replace_shared_oos_history(monkeypatch) -> None:
+    updates: list[object] = []
+    monkeypatch.setattr(
+        aoi_rs_service.OosHistoryService,
+        "update_history",
+        lambda self, *args, **kwargs: updates.append((args, kwargs)),
+    )
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    config = json.loads(_config_json())
+    config["step_id"] = "11629"
+    AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=_data_port(_details_df(), _pass_df(), _chart_spec_df()),
+        query_config_json=json.dumps(config),
+        snapshot_signature="filtered-history-gate",
+    )
+
+    assert updates == []

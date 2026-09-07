@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from functools import partial
+from functools import lru_cache, partial
 from pathlib import Path
 
 from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepository
@@ -35,6 +35,30 @@ from src.inline_domain.core.shared.measurement_correction import (
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.shared_kernel.config import ConfigLoader
+
+
+def build_oos_history_service(resource_dir: Path | None = None):
+    """Assemble the shared OOS use case at the composition boundary."""
+    project_root = ConfigLoader.get_project_root()
+    resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+    return _build_oos_history_service(
+        str(project_root / "data" / "inline_domain" / "oos_history"),
+        str(resolved_resources),
+    )
+
+
+@lru_cache(maxsize=16)
+def _build_oos_history_service(snapshot_dir: str, resource_dir: str):
+    from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+    from src.inline_domain.infrastructure.shared.oos_decision_repository import (
+        OosDecisionWorkbookRepository,
+    )
+    from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+
+    return OosHistoryService(
+        OosHistoryStore(Path(snapshot_dir)),
+        OosDecisionWorkbookRepository(Path(resource_dir)),
+    )
 
 
 def build_raw_measurement_repository(
