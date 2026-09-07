@@ -19,6 +19,19 @@ class ThroughputProductReader(Protocol):
     def read_product(self, scope: str, prod_code: str) -> pd.DataFrame: ...
 
 
+class MonitorSummaryWriter(Protocol):
+    def refresh_summary(
+        self,
+        *,
+        products: Iterable[str],
+        scopes: Iterable[str],
+        factories: Iterable[str],
+        alerts_df: pd.DataFrame,
+        throughput_df: pd.DataFrame,
+        end_date: pd.Timestamp,
+    ) -> pd.DataFrame: ...
+
+
 @dataclass(frozen=True)
 class OosMonitorViewModel:
     detail_df: pd.DataFrame
@@ -38,6 +51,7 @@ class OosMonitorService:
         *,
         ooc_reader: OosProductReader | None = None,
         throughput_reader: ThroughputProductReader | None = None,
+        summary_workbook: MonitorSummaryWriter | None = None,
     ) -> None:
         self._reader = reader
         self._readers = (("OOS", reader),) if ooc_reader is None else (
@@ -45,6 +59,7 @@ class OosMonitorService:
             ("OOC", ooc_reader),
         )
         self._throughput_reader = throughput_reader
+        self._summary_workbook = summary_workbook
 
     def build_dashboard(
         self,
@@ -57,7 +72,10 @@ class OosMonitorService:
     ) -> OosMonitorViewModel:
         selected_products = tuple(dict.fromkeys(str(value) for value in products))
         selected_scopes = tuple(dict.fromkeys(str(value).lower() for value in scopes))
-        selected_factories = {str(value).upper() for value in factories}
+        selected_factories_tuple = tuple(
+            dict.fromkeys(str(value).upper() for value in factories)
+        )
+        selected_factories = set(selected_factories_tuple)
         start, end = OosHistoryService.inclusive_date_window(start_date, end_date)
 
         frames: list[pd.DataFrame] = []
@@ -142,9 +160,20 @@ class OosMonitorService:
         status = pd.DataFrame(
             statuses, columns=["prod_code", "scope", "alarm_type", "source", "refreshed_at"]
         )
-        period_summary = build_period_summary(
-            detail,
-            throughput,
-            end_date=pd.Timestamp(end_date),
+        period_summary = (
+            self._summary_workbook.refresh_summary(
+                products=selected_products,
+                scopes=selected_scopes,
+                factories=selected_factories_tuple,
+                alerts_df=detail,
+                throughput_df=throughput,
+                end_date=pd.Timestamp(end_date),
+            )
+            if self._summary_workbook is not None
+            else build_period_summary(
+                detail,
+                throughput,
+                end_date=pd.Timestamp(end_date),
+            )
         )
         return OosMonitorViewModel(detail, summary, trend, station, status, period_summary)

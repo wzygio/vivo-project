@@ -30,6 +30,13 @@ from src.inline_domain.application.shared.throughput_history_service import (
 from src.inline_domain.infrastructure.shared.throughput_history_store import (
     ThroughputHistoryStore,
 )
+from src.inline_domain.application.monitor.summary_workbook_service import (
+    MonitorSummaryWorkbookService,
+)
+from src.inline_domain.core.monitor.period_summary import MONITOR_SUMMARY_COLUMNS
+from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
+    MonitorSummaryWorkbookStore,
+)
 import src.inline_domain.composition as composition
 import src.shared_kernel.infrastructure.db_handler as db_handler
 
@@ -116,12 +123,33 @@ throughput_store.update(
     coverage_end=pd.Timestamp("2026-09-08"),
 )
 throughput_service = ThroughputHistoryService(throughput_store)
+summary_workbook_path = fixture_root / "北极星报警率与CPK汇总.xlsx"
+with pd.ExcelWriter(summary_workbook_path) as writer:
+    pd.DataFrame(columns=MONITOR_SUMMARY_COLUMNS).to_excel(
+        writer, sheet_name="报警率", index=False
+    )
+    pd.DataFrame(
+        columns=[
+            "产品",
+            "周期类型",
+            "时间标签",
+            "显示标签",
+            "CPK总项目数",
+            "Cpk≥1.33达标率",
+        ]
+    ).to_excel(writer, sheet_name="CPK", index=False)
+summary_workbook_service = MonitorSummaryWorkbookService(
+    MonitorSummaryWorkbookStore(summary_workbook_path)
+)
 
 # Replace external bootstrapping concerns only. The production page control
 # flow and real history/application/dashboard path execute unchanged.
 composition.build_oos_history_service = lambda resource_dir=None: service
 composition.build_ooc_history_service = lambda resource_dir=None: ooc_service
 composition.build_throughput_history_service = lambda resource_dir=None: throughput_service
+composition.build_monitor_summary_workbook_service = (
+    lambda resource_dir=None: summary_workbook_service
+)
 app_setup.AppSetup.initialize_app = staticmethod(lambda: None)
 page_header.render_page_header = lambda **kwargs: None
 step_labels.get_cached_step_description_map = lambda _db: {"1100": "涂布"}

@@ -50,6 +50,7 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.composition import (
+    build_monitor_summary_workbook_service,
     build_ooc_history_service,
     build_oos_history_service,
     build_throughput_history_service,
@@ -79,12 +80,14 @@ def get_cached_oos_monitor_payload(
     start_date: str,
     end_date: str,
     source_signature: str,
+    summary_workbook_signature: str,
 ) -> dict[str, pd.DataFrame]:
-    del source_signature
+    del source_signature, summary_workbook_signature
     view = OosMonitorService(
         build_oos_history_service(),
         ooc_reader=build_ooc_history_service(),
         throughput_reader=build_throughput_history_service(),
+        summary_workbook=build_monitor_summary_workbook_service(),
     ).build_dashboard(
         products=products,
         scopes=scopes,
@@ -229,6 +232,7 @@ with st.expander("Inline超规预警", expanded=True):
             history_service = build_oos_history_service()
             ooc_history_service = build_ooc_history_service()
             throughput_history_service = build_throughput_history_service()
+            summary_workbook_service = build_monitor_summary_workbook_service()
             source_signature = "|".join(
                 [
                     history_service.source_signature(list(products), list(scopes)),
@@ -238,6 +242,7 @@ with st.expander("Inline超规预警", expanded=True):
                     ),
                 ]
             )
+            summary_workbook_signature = summary_workbook_service.source_signature()
             with st.spinner("正在读取共享超规历史..."):
                 payload = get_cached_oos_monitor_payload(
                     products,
@@ -246,6 +251,7 @@ with st.expander("Inline超规预警", expanded=True):
                     start_date_str,
                     end_date_str,
                     source_signature,
+                    summary_workbook_signature,
                 )
         except Exception:
             logging.exception("共享超规历史读取失败")

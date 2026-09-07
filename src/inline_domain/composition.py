@@ -80,6 +80,33 @@ def build_throughput_history_service(resource_dir: Path | None = None):
     return _build_throughput_history_service(str(snapshot_dir))
 
 
+def build_monitor_summary_workbook_service(resource_dir: Path | None = None):
+    """Assemble the automatic-warning Excel read model."""
+    resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir(
+        "inline_domain"
+    )
+    workbook_path = (
+        Path(resolved_resources)
+        / "monitor"
+        / "北极星报警率与CPK汇总.xlsx"
+    )
+    return _build_monitor_summary_workbook_service(str(workbook_path))
+
+
+@lru_cache(maxsize=16)
+def _build_monitor_summary_workbook_service(workbook_path: str):
+    from src.inline_domain.application.monitor.summary_workbook_service import (
+        MonitorSummaryWorkbookService,
+    )
+    from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
+        MonitorSummaryWorkbookStore,
+    )
+
+    return MonitorSummaryWorkbookService(
+        MonitorSummaryWorkbookStore(Path(workbook_path))
+    )
+
+
 @lru_cache(maxsize=16)
 def _build_throughput_history_service(snapshot_dir: str):
     from src.inline_domain.application.shared.throughput_history_service import (

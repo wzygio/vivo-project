@@ -57,6 +57,15 @@ class _ThroughputReader:
         )
 
 
+class _SummaryWorkbook:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def refresh_summary(self, **kwargs) -> pd.DataFrame:
+        self.calls.append(kwargs)
+        return pd.DataFrame({"报警类型": ["过货量"], "Y26": [999]})
+
+
 def test_build_dashboard_aggregates_shared_oos_facts() -> None:
     view = OosMonitorService(_Reader()).build_dashboard(
         products=["M626", "M678"],
@@ -96,10 +105,12 @@ def test_build_dashboard_date_and_factory_filters_do_not_hide_refresh_status() -
 
 
 def test_build_dashboard_combines_oos_and_ooc() -> None:
+    summary_workbook = _SummaryWorkbook()
     view = OosMonitorService(
         _Reader(),
         ooc_reader=_OocReader(),
         throughput_reader=_ThroughputReader(),
+        summary_workbook=summary_workbook,
     ).build_dashboard(
         products=["M626"],
         scopes=["spc"],
@@ -110,9 +121,11 @@ def test_build_dashboard_combines_oos_and_ooc() -> None:
 
     assert set(view.detail_df["alarm_type"]) == {"OOS", "OOC"}
     assert set(view.refresh_status_df["alarm_type"]) == {"OOS", "OOC"}
-    summary = view.period_summary_df.set_index("报警类型")
-    assert summary.loc["过货量", "Y26"] == 1
-    assert summary.loc["OOC报警片数", "M8"] == 1
-    assert summary.loc["SOOS报警片数", "W36"] == 0
-    assert summary.loc["OOS报警片数", "Q3"] == 1
-    assert summary.loc["Total报警片数", "Y26"] == 2
+    assert view.period_summary_df.to_dict("records") == [
+        {"报警类型": "过货量", "Y26": 999}
+    ]
+    call = summary_workbook.calls[0]
+    assert call["products"] == ("M626",)
+    assert call["scopes"] == ("spc",)
+    assert call["factories"] == ("ARRAY",)
+    assert set(call["alerts_df"]["alarm_type"]) == {"OOS", "OOC"}

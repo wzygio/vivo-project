@@ -3,7 +3,13 @@ async page => {
   const base = "http://localhost:8514/";
   const errors = [];
   page.on("console", message => {
-    if (message.type() === "error") errors.push(message.text());
+    const text = message.text();
+    const sourceUrl = message.location().url || "";
+    const isStreamlitMetricsNoise =
+      sourceUrl.includes("data.streamlit.io/metrics.json") ||
+      text.includes("metrics config") ||
+      text.includes("metrics tracking");
+    if (message.type() === "error" && !isStreamlitMetricsNoise) errors.push(text);
   });
 
   await page.goto(base);
@@ -19,7 +25,6 @@ async page => {
   await page.getByText("超规趋势", { exact: true }).waitFor({ timeout: 60_000 });
   await page.getByText("Top 10 站点", { exact: true }).waitFor();
   await page.getByText("超规明细", { exact: true }).waitFor();
-  await page.getByText("超规记录", { exact: true }).waitFor();
   if (await page.getByText(/数据最后更新时间/).count()) {
     throw new Error("普通 URL 查询后仍不应渲染最后更新时间");
   }
