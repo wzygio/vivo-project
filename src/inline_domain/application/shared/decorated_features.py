@@ -20,9 +20,15 @@ import streamlit as st
 from src.inline_domain.application.shared.decorated_data import (
     _preprocess_sheet_features_by_type,
     prepare_decorated_data,
+    resolve_product_resource_dir,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.core.shared.sheet_ooc_decoration import (
+    OOC_KEY_COLUMNS,
+    build_sheet_ooc_detail,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
@@ -144,6 +150,17 @@ def fetch_decorated_features(
                 coverage_start=coverage_start,
                 coverage_end=coverage_end,
             )
+            persist_ooc_facts(
+                scope=normalized_scope,
+                prod_code=prod_code,
+                detail_df=build_sheet_ooc_detail(pd.DataFrame()),
+                key_columns=OOC_KEY_COLUMNS,
+                product_dir=resolve_product_resource_dir(prod_code, scope=normalized_scope),
+                coverage_start=coverage_start,
+                coverage_end=coverage_end,
+                product_revision=product_revision,
+                decision_signature=decision_signature,
+            )
         return _empty_features_payload(spec_empty=spec_df.empty)
 
     if "sheet_start_time" in measurements_df.columns:
@@ -165,6 +182,17 @@ def fetch_decorated_features(
                     pd.DataFrame(),
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
+                )
+                persist_ooc_facts(
+                    scope=normalized_scope,
+                    prod_code=prod_code,
+                    detail_df=build_sheet_ooc_detail(pd.DataFrame()),
+                    key_columns=OOC_KEY_COLUMNS,
+                    product_dir=resolve_product_resource_dir(prod_code, scope=normalized_scope),
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                    product_revision=product_revision,
+                    decision_signature=decision_signature,
                 )
             return _empty_features_payload(spec_empty=spec_df.empty)
 
@@ -195,6 +223,21 @@ def fetch_decorated_features(
             decoration_result.decoration_df,
             coverage_start=coverage_start,
             coverage_end=coverage_end,
+        )
+        persist_ooc_facts(
+            scope=normalized_scope,
+            prod_code=prod_code,
+            detail_df=build_sheet_ooc_detail(
+                decorated_data.original_sheet_features_df
+                if decorated_data.original_sheet_features_df is not None
+                else pd.DataFrame()
+            ),
+            key_columns=OOC_KEY_COLUMNS,
+            product_dir=resolve_product_resource_dir(prod_code, scope=normalized_scope),
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
     else:
         logger.warning(

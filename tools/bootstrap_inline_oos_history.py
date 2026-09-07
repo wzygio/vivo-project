@@ -21,13 +21,16 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader  # noqa: E402
+from src.inline_domain.infrastructure.shared.resource_paths import (  # noqa: E402
+    scope_resource_dir,
+)
 
 
 def bootstrap(products: list[str], scopes: list[str], *, dry_run: bool) -> int:
     service = build_oos_history_service()
-    resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
     migrated = 0
     for scope in scopes:
+        resource_dir = scope_resource_dir(scope)
         contract = service.scope_contract(scope)
         for product in products:
             frame = load_sheet_oos_decoration(

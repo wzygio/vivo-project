@@ -40,6 +40,9 @@ COMMON_COLUMNS = [
     "lsl",
     "oos_type",
     "flag",
+    "upper_limit",
+    "lower_limit",
+    "limit_type",
 ]
 
 SCOPE_DECORATION_FILE_NAME = {
@@ -129,8 +132,14 @@ class OosHistoryService:
         return start, end
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
+        return self._read_product_with_file(
+            scope, prod_code, SCOPE_DECORATION_FILE_NAME[scope]
+        )
+
+    def _read_product_with_file(
+        self, scope: str, prod_code: str, file_name: str
+    ) -> OosProductRead:
         contract = self._store.contract_for(scope)
-        file_name = SCOPE_DECORATION_FILE_NAME[scope]
         snapshot = self._store.read(scope, prod_code)
         if snapshot is not None:
             decisions = self._decisions.load_decisions(
@@ -171,9 +180,14 @@ class OosHistoryService:
 
     def source_signature(self, products: list[str], scopes: list[str]) -> str:
         """Cheap cache key covering history and mutable decision workbooks."""
+        return self._source_signature_with_files(products, scopes, SCOPE_DECORATION_FILE_NAME)
+
+    def _source_signature_with_files(
+        self, products: list[str], scopes: list[str], file_names: dict[str, str]
+    ) -> str:
         parts: list[str] = []
         for scope in sorted(set(scopes)):
-            workbook = self._decisions.source_path(SCOPE_DECORATION_FILE_NAME[scope])
+            workbook = self._decisions.source_path(file_names[scope])
             parts.append(self._path_signature(workbook))
             for prod_code in sorted(set(products)):
                 parts.append(self._path_signature(self._store.snapshot_path(scope, prod_code)))
@@ -196,9 +210,10 @@ class OosHistoryService:
     @staticmethod
     def _project(scope: str, frame: pd.DataFrame) -> pd.DataFrame:
         if frame.empty:
-            return pd.DataFrame(columns=COMMON_COLUMNS)
+            return pd.DataFrame(columns=[*COMMON_COLUMNS, "alarm_type"])
         projected = frame.copy()
         projected["scope"] = scope
+        projected["alarm_type"] = "OOS"
         if scope in {"spc", "ctq"}:
             projected["metric_name"] = projected["param_name"]
             projected["item_id"] = projected["sheet_id"]
@@ -222,7 +237,10 @@ class OosHistoryService:
             projected["lsl"] = pd.NA
             projected["oos_type"] = "USL"
         projected["event_time"] = pd.to_datetime(projected["event_time"], errors="coerce")
+        projected["upper_limit"] = projected["usl"]
+        projected["lower_limit"] = projected["lsl"]
+        projected["limit_type"] = projected["oos_type"]
         for column in COMMON_COLUMNS:
             if column not in projected.columns:
                 projected[column] = pd.NA
-        return projected[COMMON_COLUMNS].copy()
+        return projected[[*COMMON_COLUMNS, "alarm_type"]].copy()

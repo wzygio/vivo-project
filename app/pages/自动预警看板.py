@@ -49,7 +49,7 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorViewModel,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.composition import build_ooc_history_service, build_oos_history_service
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -74,7 +74,9 @@ def get_cached_oos_monitor_payload(
     source_signature: str,
 ) -> dict[str, pd.DataFrame]:
     del source_signature
-    view = OosMonitorService(build_oos_history_service()).build_dashboard(
+    view = OosMonitorService(
+        build_oos_history_service(), ooc_reader=build_ooc_history_service()
+    ).build_dashboard(
         products=products,
         scopes=scopes,
         factories=factories,
@@ -215,7 +217,13 @@ with st.expander("Inline超规预警", expanded=True):
         factories = tuple(filter_state.selected_factories)
         try:
             history_service = build_oos_history_service()
-            source_signature = history_service.source_signature(list(products), list(scopes))
+            ooc_history_service = build_ooc_history_service()
+            source_signature = "|".join(
+                [
+                    history_service.source_signature(list(products), list(scopes)),
+                    ooc_history_service.source_signature(list(products), list(scopes)),
+                ]
+            )
             with st.spinner("正在读取共享超规历史..."):
                 payload = get_cached_oos_monitor_payload(
                     products,

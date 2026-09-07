@@ -18,6 +18,8 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
 from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.core.shared.sheet_ooc_decoration import build_aoi_rs_ooc_detail
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
@@ -97,7 +99,7 @@ def _build_chart_points(
         build_lot_point_df(rs_details_df, pass_through_df),
         build_sheet_point_df(rs_details_df),
         spec_df,
-        product_dir=resolve_product_resource_dir(prod_code),
+        product_dir=resolve_product_resource_dir(prod_code, scope="aoi_rs"),
         prod_code=prod_code,
         exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
         scope="aoi_rs",
@@ -116,6 +118,18 @@ def _build_chart_points(
         logger.warning(
             "[AOI_RS] Skip OOS history coverage update for %s: specifications are empty",
             prod_code,
+        )
+    if coverage_start is not None and coverage_end is not None:
+        persist_ooc_facts(
+            scope="aoi_rs",
+            prod_code=prod_code,
+            detail_df=build_aoi_rs_ooc_detail(),
+            key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+            product_dir=resolve_product_resource_dir(prod_code, scope="aoi_rs"),
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
     return result.lot_points_df, result.sheet_points_df
 
@@ -188,6 +202,17 @@ class AoiRsReportService:
                         pd.DataFrame(),
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
+                    )
+                    persist_ooc_facts(
+                        scope="aoi_rs",
+                        prod_code=query_config.prod_code,
+                        detail_df=build_aoi_rs_ooc_detail(),
+                        key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+                        product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_rs"),
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                        product_revision=product_revision,
+                        decision_signature=decision_signature,
                     )
                 return AoiRsReportService._empty_payload()
             pass_through_df = _data_port.get_pass_through(query_config)

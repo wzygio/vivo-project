@@ -14,6 +14,11 @@ from src.inline_domain.application.shared.decorated_data import resolve_product_
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
 from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.core.shared.sheet_ooc_decoration import (
+    AOI_TT_OOC_KEY_COLUMNS,
+    build_aoi_tt_ooc_detail,
+)
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     build_generated_particle_size_details,
     build_particle_size_details,
@@ -167,6 +172,17 @@ class AoiTtReportService:
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                     )
+                    persist_ooc_facts(
+                        scope="aoi_tt",
+                        prod_code=query_config.prod_code,
+                        detail_df=build_aoi_tt_ooc_detail(pd.DataFrame(), pd.DataFrame()),
+                        key_columns=AOI_TT_OOC_KEY_COLUMNS,
+                        product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                        product_revision=product_revision,
+                        decision_signature=decision_signature,
+                    )
                 return AoiTtReportService._empty_payload()
             spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
             # 超规片修饰：工作簿三态 flag（Delete 删除 / False 释放 / True 默认截断），
@@ -174,7 +190,7 @@ class AoiTtReportService:
             decoration_result = prepare_aoi_tt_decoration(
                 tt_details_df,
                 spec_df,
-                product_dir=resolve_product_resource_dir(query_config.prod_code),
+                product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
                 prod_code=query_config.prod_code,
                 exempt_param_name_contains=(
                     ConfigLoader.get_auto_decoration_param_exemptions()
@@ -193,6 +209,17 @@ class AoiTtReportService:
                     getattr(decoration_result, "decoration_df", pd.DataFrame()),
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
+                )
+                persist_ooc_facts(
+                    scope="aoi_tt",
+                    prod_code=query_config.prod_code,
+                    detail_df=build_aoi_tt_ooc_detail(tt_details_df, spec_df),
+                    key_columns=AOI_TT_OOC_KEY_COLUMNS,
+                    product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                    product_revision=product_revision,
+                    decision_signature=decision_signature,
                 )
             elif spec_df.empty:
                 logger.warning(

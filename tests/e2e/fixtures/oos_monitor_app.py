@@ -18,10 +18,12 @@ from app.manager.session_manager import SessionManager
 from app.sections.inline_domain.monitor import alert_matrix, alert_matrix_cache
 from app.utils import app_setup, step_labels
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
 from src.inline_domain.infrastructure.shared.oos_decision_repository import (
     OosDecisionWorkbookRepository,
 )
 from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+from src.inline_domain.infrastructure.shared.ooc_history_store import OocHistoryStore
 import src.inline_domain.composition as composition
 import src.shared_kernel.infrastructure.db_handler as db_handler
 
@@ -65,9 +67,32 @@ pd.DataFrame(
 )
 service = OosHistoryService(store, OosDecisionWorkbookRepository(resources))
 
+ooc_facts = facts.drop(columns=["usl", "lsl", "oos_type"]).assign(
+    ucl=2.2,
+    lcl=1.8,
+    ooc_type="UCL",
+)
+ooc_store = OocHistoryStore(fixture_root / "ooc-history")
+ooc_store.update(
+    "spc",
+    "M626",
+    ooc_facts,
+    coverage_start=pd.Timestamp("2026-09-01"),
+    coverage_end=pd.Timestamp("2026-09-08"),
+)
+pd.DataFrame(
+    [{"prod_code": "M626", "step_id": "1100", "param_name": "PPA", "sheet_id": "S1", "flag": False}]
+).to_excel(
+    resources / "spc_sheet_ooc_decoration.xlsx",
+    sheet_name="M626__flags",
+    index=False,
+)
+ooc_service = OocHistoryService(ooc_store, OosDecisionWorkbookRepository(resources))
+
 # Replace external bootstrapping concerns only. The production page control
 # flow and real history/application/dashboard path execute unchanged.
 composition.build_oos_history_service = lambda resource_dir=None: service
+composition.build_ooc_history_service = lambda resource_dir=None: ooc_service
 app_setup.AppSetup.initialize_app = staticmethod(lambda: None)
 page_header.render_page_header = lambda **kwargs: None
 step_labels.get_cached_step_description_map = lambda _db: {"1100": "涂布"}

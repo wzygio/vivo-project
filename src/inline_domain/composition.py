@@ -41,23 +41,79 @@ def build_oos_history_service(resource_dir: Path | None = None):
     """Assemble the shared OOS use case at the composition boundary."""
     project_root = ConfigLoader.get_project_root()
     resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+    snapshot_dir = (
+        project_root / "data" / "inline_domain" / "oos_history"
+        if resource_dir is None
+        else Path(resource_dir) / ".oos_history"
+    )
     return _build_oos_history_service(
-        str(project_root / "data" / "inline_domain" / "oos_history"),
+        str(snapshot_dir),
         str(resolved_resources),
+        resource_dir is None,
+    )
+
+
+def build_ooc_history_service(resource_dir: Path | None = None):
+    """Assemble the shared OOC use case at the composition boundary."""
+    project_root = ConfigLoader.get_project_root()
+    resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+    snapshot_dir = (
+        project_root / "data" / "inline_domain" / "ooc_history"
+        if resource_dir is None
+        else Path(resource_dir) / ".ooc_history"
+    )
+    return _build_ooc_history_service(
+        str(snapshot_dir),
+        str(resolved_resources),
+        resource_dir is None,
     )
 
 
 @lru_cache(maxsize=16)
-def _build_oos_history_service(snapshot_dir: str, resource_dir: str):
+def _build_ooc_history_service(
+    snapshot_dir: str, resource_dir: str, use_configured_paths: bool
+):
+    from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
+    from src.inline_domain.infrastructure.shared.ooc_history_store import OocHistoryStore
+    from src.inline_domain.infrastructure.shared.oos_decision_repository import (
+        OosDecisionWorkbookRepository,
+    )
+    from src.inline_domain.core.shared.sheet_ooc_decoration import (
+        SCOPE_OOC_DECORATION_FILE_NAME,
+    )
+    from src.inline_domain.infrastructure.shared.resource_paths import decision_workbook_paths
+
+    configured = decision_workbook_paths("ooc") if use_configured_paths else {}
+
+    return OocHistoryService(
+        OocHistoryStore(Path(snapshot_dir)),
+        OosDecisionWorkbookRepository(
+            Path(resource_dir),
+            file_paths={SCOPE_OOC_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
+        ),
+    )
+
+
+@lru_cache(maxsize=16)
+def _build_oos_history_service(
+    snapshot_dir: str, resource_dir: str, use_configured_paths: bool
+):
     from src.inline_domain.application.shared.oos_history_service import OosHistoryService
     from src.inline_domain.infrastructure.shared.oos_decision_repository import (
         OosDecisionWorkbookRepository,
     )
     from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+    from src.inline_domain.application.shared.oos_history_service import SCOPE_DECORATION_FILE_NAME
+    from src.inline_domain.infrastructure.shared.resource_paths import decision_workbook_paths
+
+    configured = decision_workbook_paths("oos") if use_configured_paths else {}
 
     return OosHistoryService(
         OosHistoryStore(Path(snapshot_dir)),
-        OosDecisionWorkbookRepository(Path(resource_dir)),
+        OosDecisionWorkbookRepository(
+            Path(resource_dir),
+            file_paths={SCOPE_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
+        ),
     )
 
 

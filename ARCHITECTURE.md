@@ -125,7 +125,7 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   `infrastructure/aoi_tt/` 分别是共享测量事实的薄业务投影。SPC 透传制备
   投影；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
   `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
-- 异常值规则由 `resources/inline_domain/spc_outlier_filters.xlsx` 提供。参数级规则按
+- 异常值规则由 `resources/inline_domain/spc/spc_outlier_filters.xlsx` 提供。参数级规则按
   `step_col + param_col` 应用数值边界；`param_col` 留空表示无条件剔除该
   `step_col` 下的全部参数。企业加密工作簿先经 `fr-file-decryption` 解密到
   `output/decrypted_files/` 后立即读取并清理临时文件；解密、读取或表头校验失败时
@@ -143,19 +143,19 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
   file_stat 不变不重读工作簿；`__flags` 读取失败上抛
   `SheetOosDecorationReadError`，不降级为空签名。
-- SPC、CTQ、AOI_TT、AOI_RS 在既有 OOS 明细生成后，以查询半开覆盖窗口增量维护
-  `data/inline_domain/oos_history/` 的 scope × 产品 Parquet；窗口内替换、窗口外长期保留，
+- SPC、CTQ、AOI_TT、AOI_RS 在既有 OOS/OOC 明细生成后，以查询半开覆盖窗口分别增量维护
+  `data/inline_domain/oos_history/` 与 `data/inline_domain/ooc_history/` 的 scope × 产品 Parquet；窗口内替换、窗口外长期保留，
   成功空结果也会清除窗口内陈旧异常并记录刷新元数据。Excel `__flags` 仍是人工决策权威。
-- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述历史，按 `flag=False` 构建超规数量、
-  趋势、Top 站点与明细；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵复用相同
-  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope 刷新状态仅管理员 URL 展示。
+- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述 OOS/OOC 历史，按 `flag=False`
+  构建分类数量、趋势、Top 站点与明细，SOOS 固定为 0；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵仍只复用 OOS
+  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope × 预警类型刷新状态仅管理员 URL 展示。
 - 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
   所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
   点位图类型统一由 `app/charts/inline/chart_type.py` 根据
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK/CPM 人工修饰文件
-  `resources/inline_domain/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
+  `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
   CPK 沿用产品名 sheet，CPM 使用 `{prod_code}_cpm` sheet，两者共存于同一工作簿；
   既有周期键的人工值/flag 原样保留，当前能力结果中新出现的周期键以
   `flag=False` 追加；刷新不会重建或覆盖既有人工决策。

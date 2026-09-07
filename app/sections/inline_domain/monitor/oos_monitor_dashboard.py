@@ -94,19 +94,25 @@ def render_oos_monitor_results(
     *,
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
-    if view.detail_df.empty:
-        st.warning("所选范围内没有已确认的真实超规（flag=False）记录。")
+    detail = view.detail_df
+    oos_count = int(detail["alarm_type"].eq("OOS").sum()) if not detail.empty else 0
+    ooc_count = int(detail["alarm_type"].eq("OOC").sum()) if not detail.empty else 0
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("OOS", f"{oos_count:,}")
+    metric_columns[1].metric("OOC", f"{ooc_count:,}")
+    metric_columns[2].metric("SOOS", "0")
+
+    if detail.empty:
+        st.warning("所选范围内没有已确认的 OOS/OOC 预警记录。")
         return
 
-    metric_columns = st.columns(3)
-    metric_columns[0].metric("超规记录", f"{len(view.detail_df):,}")
-    metric_columns[1].metric("涉及产品", view.detail_df["prod_code"].nunique())
-    metric_columns[2].metric("涉及站点", view.detail_df["step_id"].nunique())
-
     st.markdown("#### 超规趋势")
-    trend = view.trend_df.pivot(
-        index="event_date", columns="scope", values="oos_count"
-    ).fillna(0)
+    trend_data = view.trend_df.assign(
+        series=view.trend_df["scope"].str.upper() + "-" + view.trend_df["alarm_type"]
+    )
+    trend = trend_data.pivot_table(
+        index="event_date", columns="series", values="oos_count", aggfunc="sum", fill_value=0
+    )
     st.line_chart(trend, height=320)
 
     st.markdown("#### Top 10 站点")
@@ -115,14 +121,16 @@ def render_oos_monitor_results(
     station["站点"] = station["step_id"].astype(str).map(
         lambda value: f"{value} {descriptions.get(value, '')}".strip()
     )
+    station["series"] = station["scope"].str.upper() + "-" + station["alarm_type"]
     station_chart = station.pivot_table(
-        index="站点", columns="scope", values="oos_count", aggfunc="sum", fill_value=0
+        index="站点", columns="series", values="oos_count", aggfunc="sum", fill_value=0
     )
     st.bar_chart(station_chart, horizontal=True, height=360)
 
     st.markdown("#### 超规明细")
     display = view.detail_df.rename(
         columns={
+            "alarm_type": "预警类型",
             "scope": "类型",
             "factory": "厂别",
             "prod_code": "产品",
@@ -131,14 +139,14 @@ def render_oos_monitor_results(
             "item_id": "Sheet/点位",
             "event_time": "时间",
             "observed_value": "实测值",
-            "usl": "USL",
-            "lsl": "LSL",
-            "oos_type": "超规方向",
+            "upper_limit": "上限",
+            "lower_limit": "下限",
+            "limit_type": "越界方向",
         }
     )
     st.dataframe(
         display[
-            ["时间", "类型", "产品", "厂别", "站点", "参数", "Sheet/点位", "实测值", "USL", "LSL", "超规方向"]
+            ["时间", "预警类型", "类型", "产品", "厂别", "站点", "参数", "Sheet/点位", "实测值", "上限", "下限", "越界方向"]
         ],
         width="stretch",
         hide_index=True,
@@ -160,6 +168,7 @@ def render_oos_refresh_status(status_df: pd.DataFrame) -> None:
             columns={
                 "prod_code": "产品",
                 "scope": "类型",
+                "alarm_type": "预警类型",
                 "source": "来源",
                 "refreshed_at": "最后更新时间",
             }

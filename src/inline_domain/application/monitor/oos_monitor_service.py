@@ -26,8 +26,17 @@ class OosMonitorViewModel:
 class OosMonitorService:
     """Aggregate already-computed OOS facts without touching measurements/specs."""
 
-    def __init__(self, reader: OosProductReader) -> None:
+    def __init__(
+        self,
+        reader: OosProductReader,
+        *,
+        ooc_reader: OosProductReader | None = None,
+    ) -> None:
         self._reader = reader
+        self._readers = (("OOS", reader),) if ooc_reader is None else (
+            ("OOS", reader),
+            ("OOC", ooc_reader),
+        )
 
     def build_dashboard(
         self,
@@ -47,17 +56,21 @@ class OosMonitorService:
         statuses: list[dict[str, object]] = []
         for prod_code in selected_products:
             for scope in selected_scopes:
-                result = self._reader.read_product(scope, prod_code)
-                statuses.append(
-                    {
-                        "prod_code": prod_code,
-                        "scope": scope,
-                        "source": result.source,
-                        "refreshed_at": result.refreshed_at,
-                    }
-                )
-                if not result.alerts_df.empty:
-                    frames.append(result.alerts_df)
+                for alarm_type, reader in self._readers:
+                    result = reader.read_product(scope, prod_code)
+                    statuses.append(
+                        {
+                            "prod_code": prod_code,
+                            "scope": scope,
+                            "alarm_type": alarm_type,
+                            "source": result.source,
+                            "refreshed_at": result.refreshed_at,
+                        }
+                    )
+                    if not result.alerts_df.empty:
+                        alerts = result.alerts_df.copy()
+                        alerts["alarm_type"] = alarm_type
+                        frames.append(alerts)
 
         detail = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         if not detail.empty:
@@ -72,25 +85,25 @@ class OosMonitorService:
             detail = detail.sort_values("event_time", ascending=False).reset_index(drop=True)
 
         if detail.empty:
-            summary = pd.DataFrame(columns=["prod_code", "scope", "oos_count"])
-            trend = pd.DataFrame(columns=["event_date", "scope", "oos_count"])
-            station = pd.DataFrame(columns=["step_id", "scope", "oos_count"])
+            summary = pd.DataFrame(columns=["prod_code", "scope", "alarm_type", "oos_count"])
+            trend = pd.DataFrame(columns=["event_date", "scope", "alarm_type", "oos_count"])
+            station = pd.DataFrame(columns=["step_id", "scope", "alarm_type", "oos_count"])
         else:
             summary = (
-                detail.groupby(["prod_code", "scope"], dropna=False)
+                detail.groupby(["prod_code", "scope", "alarm_type"], dropna=False)
                 .size()
                 .rename("oos_count")
                 .reset_index()
             )
             trend = (
                 detail.assign(event_date=detail["event_time"].dt.date)
-                .groupby(["event_date", "scope"], dropna=False)
+                .groupby(["event_date", "scope", "alarm_type"], dropna=False)
                 .size()
                 .rename("oos_count")
                 .reset_index()
             )
             station = (
-                detail.groupby(["step_id", "scope"], dropna=False)
+                detail.groupby(["step_id", "scope", "alarm_type"], dropna=False)
                 .size()
                 .rename("oos_count")
                 .reset_index()
@@ -100,6 +113,6 @@ class OosMonitorService:
             )
 
         status = pd.DataFrame(
-            statuses, columns=["prod_code", "scope", "source", "refreshed_at"]
+            statuses, columns=["prod_code", "scope", "alarm_type", "source", "refreshed_at"]
         )
         return OosMonitorViewModel(detail, summary, trend, station, status)
