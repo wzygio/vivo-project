@@ -1,5 +1,6 @@
 """AOI_TT 应用服务测试：payload 组装、指标元数据、空数据降级。"""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -435,3 +436,23 @@ def test_service_respects_flag_false_and_delete(_tmp_project_root: Path) -> None
     # Delete 行被剔除；flag=False 行释放真实值 99.0
     assert view_model.tt_details_df["sheet_id"].tolist() == ["SHT-A01"]
     assert view_model.tt_details_df["tt_qty"].iloc[0] == 99.0
+
+
+def test_filtered_query_does_not_replace_shared_oos_history(monkeypatch) -> None:
+    updates: list[object] = []
+    monkeypatch.setattr(
+        aoi_tt_service.OosHistoryService,
+        "update_history",
+        lambda self, *args, **kwargs: updates.append((args, kwargs)),
+    )
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    config = json.loads(_config_json())
+    config["factory"] = "ARRAY"
+    AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=_over_spec_port()(),
+        query_config_json=json.dumps(config),
+        snapshot_signature="filtered-history-gate",
+    )
+
+    assert updates == []

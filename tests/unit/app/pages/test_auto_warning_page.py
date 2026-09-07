@@ -42,10 +42,16 @@ import streamlit as st
 from app.components import page_header
 from app.manager import compliance_manager
 from app.manager.session_manager import SessionManager
-from app.sections.inline_domain.monitor import alert_matrix, monitor_dashboard
+from app.sections.inline_domain.monitor import (
+    alert_matrix,
+    monitor_dashboard,
+    oos_monitor_dashboard,
+)
 from app.utils import step_labels
 from app.utils.app_setup import AppSetup
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
+from src.inline_domain.application.monitor.oos_monitor_service import OosMonitorService
+from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.shared import decision_signature
 from src.shared_kernel.infrastructure import db_handler
 
@@ -59,6 +65,7 @@ MATRIX_FILTER_KEYS = (
 
 
 def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) -> dict:
+    st.cache_data.clear()
     trackers = {
         "header_kwargs": {},
         "load_calls": [],
@@ -72,6 +79,7 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         "columns": [],
         "widget_events": [],
         "matrix_board_calls": [],
+        "refresh_status_calls": [],
     }
     active_config = SimpleNamespace(
         data_source=SimpleNamespace(product_code="M626"),
@@ -176,6 +184,23 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         MonitorAnalysisService, "get_monitor_dashboard_data", _fake_dashboard_data
     )
     monkeypatch.setattr(
+        OosHistoryService,
+        "source_signature",
+        lambda self, products, scopes: "oos-history-signature",
+    )
+
+    def _fake_oos_dashboard(self, **kwargs):
+        trackers["load_calls"].append(kwargs)
+        return SimpleNamespace(
+            detail_df=pd.DataFrame(),
+            summary_df=pd.DataFrame(),
+            trend_df=pd.DataFrame(),
+            station_df=pd.DataFrame(),
+            refresh_status_df=pd.DataFrame(),
+        )
+
+    monkeypatch.setattr(OosMonitorService, "build_dashboard", _fake_oos_dashboard)
+    monkeypatch.setattr(
         decision_signature,
         "get_scope_decision_signature",
         lambda scope, prod: trackers["decision_calls"].append((scope, prod)) or "sig",
@@ -192,6 +217,12 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
     monkeypatch.setattr(monitor_dashboard, "render_monitor_summary_chart", lambda *a, **k: None)
     monkeypatch.setattr(monitor_dashboard, "render_station_top10_section", lambda *a, **k: None)
     monkeypatch.setattr(monitor_dashboard, "render_alarm_detail_tables", lambda *a, **k: None)
+    monkeypatch.setattr(oos_monitor_dashboard, "render_oos_monitor_results", lambda *a, **k: None)
+    monkeypatch.setattr(
+        oos_monitor_dashboard,
+        "render_oos_refresh_status",
+        lambda *args, **kwargs: trackers["refresh_status_calls"].append((args, kwargs)),
+    )
     return trackers
 
 
@@ -289,10 +320,26 @@ def test_page_loads_data_after_query_submitted(monkeypatch) -> None:
 
     assert trackers["header_kwargs"]["show_product_filter"] is False
     _assert_module_structure(trackers)
-    # 点击「查询」：先签名预算（7 产品 × spc/ctq 两 scope），再全量数据加载
-    assert len(trackers["decision_calls"]) == len(SessionManager.AVAILABLE_PRODUCTS) * 2
+    # 点击「查询」：直接读取四类共享 OOS 历史，不再执行旧决策签名预算/全量计算。
+    assert trackers["decision_calls"] == []
     assert len(trackers["load_calls"]) == 1
-    assert trackers["load_calls"][0]["data_type_filter"] == "ALL"
+    assert trackers["load_calls"][0]["scopes"] == ("spc", "ctq", "aoi_tt", "aoi_rs")
+    assert trackers["refresh_status_calls"] == []
+
+
+def test_refresh_status_is_rendered_only_for_admin_query_param(monkeypatch) -> None:
+    st.query_params.clear()
+    st.query_params["admin"] = "true"
+    trackers = _stub_page_dependencies(monkeypatch, clicked_keys={QUERY_BUTTON_KEY})
+    st.session_state.pop("monitor_query_signature", None)
+
+    try:
+        _run_page()
+    finally:
+        st.query_params.clear()
+
+    assert len(trackers["load_calls"]) == 1
+    assert len(trackers["refresh_status_calls"]) == 1
 
 
 def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(

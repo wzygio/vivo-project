@@ -210,6 +210,20 @@ def test_empty_measurements_return_empty_payload(decoration_root: Path) -> None:
     assert payload["spec_empty"] is False
 
 
+def test_missing_specs_do_not_advance_oos_history_coverage(
+    decoration_root: Path,
+) -> None:
+    source = InMemoryFeaturesSource(_measurements_df(), pd.DataFrame())
+
+    payload = fetch_decorated_features(
+        source, PROD, "spc", START_DATE, END_DATE, "missing-spec-history"
+    )
+
+    assert payload["spec_empty"] is True
+    history_dir = decoration_root.parents[1] / "data" / "inline_domain" / "oos_history"
+    assert not list(history_dir.glob("*.parquet"))
+
+
 # ---------------------------------------------------------------------------
 # cache key behaviour
 # ---------------------------------------------------------------------------
@@ -220,7 +234,9 @@ class _CountingSource(InMemoryFeaturesSource):
 
     def get_spc_measurements(self, config, force_refresh: bool = False) -> pd.DataFrame:
         self.measure_calls += 1
-        return super().get_spc_measurements(config, force_refresh)
+        return super().get_spc_measurements(config, force_refresh).assign(
+            prod_code=config.prod_code
+        )
 
 
 def test_cache_key_covers_window_scope_product_and_signature(

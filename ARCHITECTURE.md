@@ -143,6 +143,12 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
   file_stat 不变不重读工作簿；`__flags` 读取失败上抛
   `SheetOosDecorationReadError`，不降级为空签名。
+- SPC、CTQ、AOI_TT、AOI_RS 在既有 OOS 明细生成后，以查询半开覆盖窗口增量维护
+  `data/inline_domain/oos_history/` 的 scope × 产品 Parquet；窗口内替换、窗口外长期保留，
+  成功空结果也会清除窗口内陈旧异常并记录刷新元数据。Excel `__flags` 仍是人工决策权威。
+- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述历史，按 `flag=False` 构建超规数量、
+  趋势、Top 站点与明细；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵复用相同
+  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope 刷新状态仅管理员 URL 展示。
 - 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
   所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。

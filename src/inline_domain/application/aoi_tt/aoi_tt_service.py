@@ -11,7 +11,9 @@ import streamlit as st
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
+from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     build_generated_particle_size_details,
     build_particle_size_details,
@@ -22,6 +24,14 @@ if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.ports import AoiTtDataPort
 
 logger = logging.getLogger(__name__)
+
+
+def _covers_full_product(query_config: AoiTtQueryConfig) -> bool:
+    """History replacement is safe only for an unfiltered product/date query."""
+    return all(
+        value is None
+        for value in (query_config.factory, query_config.step_id, query_config.tt_name)
+    )
 
 
 class AoiTtReportBuildError(RuntimeError):
@@ -146,11 +156,22 @@ class AoiTtReportService:
         try:
             tt_details_df = _data_port.get_tt_details(query_config)
             if tt_details_df.empty:
+                coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
+                    query_config.start_date, query_config.end_date
+                )
+                if _covers_full_product(query_config):
+                    build_oos_history_service().update_history(
+                        "aoi_tt",
+                        query_config.prod_code,
+                        pd.DataFrame(),
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                    )
                 return AoiTtReportService._empty_payload()
             spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
             # 超规片修饰：工作簿三态 flag（Delete 删除 / False 释放 / True 默认截断），
             # 无工作簿时与引入前的自动截断行为一致；scope 门控决定是否真正落盘
-            tt_details_df = prepare_aoi_tt_decoration(
+            decoration_result = prepare_aoi_tt_decoration(
                 tt_details_df,
                 spec_df,
                 product_dir=resolve_product_resource_dir(query_config.prod_code),
@@ -161,7 +182,24 @@ class AoiTtReportService:
                 scope="aoi_tt",
                 product_revision=product_revision,
                 decision_signature=decision_signature,
-            ).tt_details_df
+            )
+            coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
+                query_config.start_date, query_config.end_date
+            )
+            if not spec_df.empty and _covers_full_product(query_config):
+                build_oos_history_service().update_history(
+                    "aoi_tt",
+                    query_config.prod_code,
+                    getattr(decoration_result, "decoration_df", pd.DataFrame()),
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                )
+            elif spec_df.empty:
+                logger.warning(
+                    "[AOI_TT] Skip OOS history coverage update for %s: specifications are empty",
+                    query_config.prod_code,
+                )
+            tt_details_df = decoration_result.tt_details_df
             if generate_particle_sizes:
                 ratio_spec_df = _load_particle_size_ratios(_data_port)
                 if ratio_spec_df is None:
