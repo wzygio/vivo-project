@@ -8,10 +8,15 @@ from typing import Iterable, Protocol
 import pandas as pd
 
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+from src.inline_domain.core.monitor.period_summary import build_period_summary
 
 
 class OosProductReader(Protocol):
     def read_product(self, scope: str, prod_code: str): ...
+
+
+class ThroughputProductReader(Protocol):
+    def read_product(self, scope: str, prod_code: str) -> pd.DataFrame: ...
 
 
 @dataclass(frozen=True)
@@ -21,6 +26,7 @@ class OosMonitorViewModel:
     trend_df: pd.DataFrame
     station_df: pd.DataFrame
     refresh_status_df: pd.DataFrame
+    period_summary_df: pd.DataFrame
 
 
 class OosMonitorService:
@@ -31,12 +37,14 @@ class OosMonitorService:
         reader: OosProductReader,
         *,
         ooc_reader: OosProductReader | None = None,
+        throughput_reader: ThroughputProductReader | None = None,
     ) -> None:
         self._reader = reader
         self._readers = (("OOS", reader),) if ooc_reader is None else (
             ("OOS", reader),
             ("OOC", ooc_reader),
         )
+        self._throughput_reader = throughput_reader
 
     def build_dashboard(
         self,
@@ -53,9 +61,14 @@ class OosMonitorService:
         start, end = OosHistoryService.inclusive_date_window(start_date, end_date)
 
         frames: list[pd.DataFrame] = []
+        throughput_frames: list[pd.DataFrame] = []
         statuses: list[dict[str, object]] = []
         for prod_code in selected_products:
             for scope in selected_scopes:
+                if self._throughput_reader is not None:
+                    throughput = self._throughput_reader.read_product(scope, prod_code)
+                    if not throughput.empty:
+                        throughput_frames.append(throughput)
                 for alarm_type, reader in self._readers:
                     result = reader.read_product(scope, prod_code)
                     statuses.append(
@@ -73,6 +86,20 @@ class OosMonitorService:
                         frames.append(alerts)
 
         detail = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        throughput = (
+            pd.concat(throughput_frames, ignore_index=True)
+            if throughput_frames
+            else pd.DataFrame()
+        )
+        if not throughput.empty:
+            throughput_dates = pd.to_datetime(throughput["event_date"], errors="coerce")
+            throughput_mask = (throughput_dates >= start) & (throughput_dates < end)
+            if selected_factories:
+                throughput_mask &= throughput["factory"].fillna("").astype(str).str.upper().isin(
+                    selected_factories
+                )
+            throughput = throughput.loc[throughput_mask].copy()
+            throughput["event_date"] = throughput_dates.loc[throughput_mask]
         if not detail.empty:
             times = pd.to_datetime(detail["event_time"], errors="coerce")
             mask = (times >= start) & (times < end)
@@ -115,4 +142,9 @@ class OosMonitorService:
         status = pd.DataFrame(
             statuses, columns=["prod_code", "scope", "alarm_type", "source", "refreshed_at"]
         )
-        return OosMonitorViewModel(detail, summary, trend, station, status)
+        period_summary = build_period_summary(
+            detail,
+            throughput,
+            end_date=pd.Timestamp(end_date),
+        )
+        return OosMonitorViewModel(detail, summary, trend, station, status, period_summary)

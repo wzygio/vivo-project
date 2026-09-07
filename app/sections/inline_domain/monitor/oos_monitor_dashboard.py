@@ -94,6 +94,37 @@ def render_oos_monitor_results(
     *,
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
+    st.markdown("#### 报警汇总表")
+    summary = view.period_summary_df.copy()
+    summary_styler = (
+        summary.style.set_properties(
+            **{
+                "text-align": "center",
+                "color": "#0057b8",
+                "border": "1px solid #9ca3af",
+            }
+        )
+        .set_properties(
+            subset=["报警类型"],
+            **{"font-weight": "600", "color": "#111827"},
+        )
+        .set_table_styles(
+            [
+                {
+                    "selector": "th",
+                    "props": [
+                        ("text-align", "center"),
+                        ("border", "1px solid #9ca3af"),
+                        ("background-color", "#ffffff"),
+                        ("color", "#111827"),
+                    ],
+                }
+            ]
+        )
+        .format(precision=0, thousands="")
+    )
+    st.dataframe(summary_styler, width="stretch", hide_index=True)
+
     detail = view.detail_df
     oos_count = int(detail["alarm_type"].eq("OOS").sum()) if not detail.empty else 0
     ooc_count = int(detail["alarm_type"].eq("OOC").sum()) if not detail.empty else 0

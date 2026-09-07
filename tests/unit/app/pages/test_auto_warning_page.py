@@ -45,6 +45,7 @@ from app.manager.session_manager import SessionManager
 from app.sections.inline_domain.monitor import (
     alert_matrix,
     monitor_dashboard,
+    ooc_decision_admin,
     oos_monitor_dashboard,
 )
 from app.utils import step_labels
@@ -80,6 +81,7 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         "widget_events": [],
         "matrix_board_calls": [],
         "refresh_status_calls": [],
+        "ooc_admin_calls": [],
     }
     active_config = SimpleNamespace(
         data_source=SimpleNamespace(product_code="M626"),
@@ -197,6 +199,7 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
             trend_df=pd.DataFrame(),
             station_df=pd.DataFrame(),
             refresh_status_df=pd.DataFrame(),
+            period_summary_df=pd.DataFrame(),
         )
 
     monkeypatch.setattr(OosMonitorService, "build_dashboard", _fake_oos_dashboard)
@@ -222,6 +225,11 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         oos_monitor_dashboard,
         "render_oos_refresh_status",
         lambda *args, **kwargs: trackers["refresh_status_calls"].append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        ooc_decision_admin,
+        "render_ooc_decision_admin",
+        lambda *args, **kwargs: trackers["ooc_admin_calls"].append((args, kwargs)),
     )
     return trackers
 
@@ -340,6 +348,7 @@ def test_refresh_status_is_rendered_only_for_admin_query_param(monkeypatch) -> N
 
     assert len(trackers["load_calls"]) == 1
     assert len(trackers["refresh_status_calls"]) == 1
+    assert len(trackers["ooc_admin_calls"]) == 1
 
 
 def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(

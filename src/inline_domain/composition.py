@@ -69,6 +69,29 @@ def build_ooc_history_service(resource_dir: Path | None = None):
     )
 
 
+def build_throughput_history_service(resource_dir: Path | None = None):
+    """Assemble the lightweight daily-throughput history boundary."""
+    project_root = ConfigLoader.get_project_root()
+    snapshot_dir = (
+        project_root / "data" / "inline_domain" / "throughput_history"
+        if resource_dir is None
+        else Path(resource_dir) / ".throughput_history"
+    )
+    return _build_throughput_history_service(str(snapshot_dir))
+
+
+@lru_cache(maxsize=16)
+def _build_throughput_history_service(snapshot_dir: str):
+    from src.inline_domain.application.shared.throughput_history_service import (
+        ThroughputHistoryService,
+    )
+    from src.inline_domain.infrastructure.shared.throughput_history_store import (
+        ThroughputHistoryStore,
+    )
+
+    return ThroughputHistoryService(ThroughputHistoryStore(Path(snapshot_dir)))
+
+
 @lru_cache(maxsize=16)
 def _build_ooc_history_service(
     snapshot_dir: str, resource_dir: str, use_configured_paths: bool

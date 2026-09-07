@@ -37,8 +37,24 @@ class _Reader:
 class _OocReader(_Reader):
     def read_product(self, scope: str, prod_code: str):
         result = super().read_product(scope, prod_code)
+        result.alerts_df["item_id"] = f"{prod_code}-2"
         result.alerts_df["alarm_type"] = "OOC"
         return result
+
+
+class _ThroughputReader:
+    def read_product(self, scope: str, prod_code: str) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "scope": scope,
+                    "factory": "ARRAY",
+                    "prod_code": prod_code,
+                    "event_date": pd.Timestamp("2026-08-10"),
+                    "item_id": "S1",
+                }
+            ]
+        )
 
 
 def test_build_dashboard_aggregates_shared_oos_facts() -> None:
@@ -80,7 +96,11 @@ def test_build_dashboard_date_and_factory_filters_do_not_hide_refresh_status() -
 
 
 def test_build_dashboard_combines_oos_and_ooc() -> None:
-    view = OosMonitorService(_Reader(), ooc_reader=_OocReader()).build_dashboard(
+    view = OosMonitorService(
+        _Reader(),
+        ooc_reader=_OocReader(),
+        throughput_reader=_ThroughputReader(),
+    ).build_dashboard(
         products=["M626"],
         scopes=["spc"],
         factories=["ARRAY"],
@@ -90,3 +110,9 @@ def test_build_dashboard_combines_oos_and_ooc() -> None:
 
     assert set(view.detail_df["alarm_type"]) == {"OOS", "OOC"}
     assert set(view.refresh_status_df["alarm_type"]) == {"OOS", "OOC"}
+    summary = view.period_summary_df.set_index("报警类型")
+    assert summary.loc["过货量", "Y26"] == 1
+    assert summary.loc["OOC报警片数", "M8"] == 1
+    assert summary.loc["SOOS报警片数", "W36"] == 0
+    assert summary.loc["OOS报警片数", "Q3"] == 1
+    assert summary.loc["Total报警片数", "Y26"] == 2

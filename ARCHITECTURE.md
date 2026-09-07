@@ -146,9 +146,11 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 - SPC、CTQ、AOI_TT、AOI_RS 在既有 OOS/OOC 明细生成后，以查询半开覆盖窗口分别增量维护
   `data/inline_domain/oos_history/` 与 `data/inline_domain/ooc_history/` 的 scope × 产品 Parquet；窗口内替换、窗口外长期保留，
   成功空结果也会清除窗口内陈旧异常并记录刷新元数据。Excel `__flags` 仍是人工决策权威。
+- 四个 producer 同步维护 `data/inline_domain/throughput_history/` 的按日、厂别轻量汇总；
+  分母键沿用各报表既有口径，自动预警无需回读全量明细即可生成 Y/Q/M/W 过货量。
 - 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述 OOS/OOC 历史，按 `flag=False`
-  构建分类数量、趋势、Top 站点与明细，SOOS 固定为 0；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵仍只复用 OOS
-  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope × 预警类型刷新状态仅管理员 URL 展示。
+  构建 Y/Q/M/W 汇总、分类数量、趋势、Top 站点与明细，SOOS 固定为 0；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵仍只复用 OOS
+  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope × 预警类型刷新状态和 OOC 决策管理仅管理员 URL 展示。
 - 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
   所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。

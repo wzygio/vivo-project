@@ -15,6 +15,9 @@ from src.inline_domain.application.shared.oos_history_service import OosHistoryS
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
 from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.application.shared.throughput_persistence import (
+    persist_throughput_facts,
+)
 from src.inline_domain.core.shared.sheet_ooc_decoration import (
     AOI_TT_OOC_KEY_COLUMNS,
     build_aoi_tt_ooc_detail,
@@ -160,11 +163,17 @@ class AoiTtReportService:
 
         try:
             tt_details_df = _data_port.get_tt_details(query_config)
+            persist_shared_history = bool(
+                getattr(_data_port, "supports_shared_history_persistence", False)
+            )
             if tt_details_df.empty:
                 coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                     query_config.start_date, query_config.end_date
                 )
-                if _covers_full_product(query_config):
+                if persist_shared_history and _covers_full_product(query_config):
+                    product_dir = resolve_product_resource_dir(
+                        query_config.prod_code, scope="aoi_tt"
+                    )
                     build_oos_history_service().update_history(
                         "aoi_tt",
                         query_config.prod_code,
@@ -177,11 +186,21 @@ class AoiTtReportService:
                         prod_code=query_config.prod_code,
                         detail_df=build_aoi_tt_ooc_detail(pd.DataFrame(), pd.DataFrame()),
                         key_columns=AOI_TT_OOC_KEY_COLUMNS,
-                        product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
+                        product_dir=product_dir,
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                         product_revision=product_revision,
                         decision_signature=decision_signature,
+                    )
+                    persist_throughput_facts(
+                        scope="aoi_tt",
+                        prod_code=query_config.prod_code,
+                        details=pd.DataFrame(),
+                        event_time_column="start_time",
+                        item_id_column="sheet_id",
+                        product_dir=product_dir,
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
                     )
                 return AoiTtReportService._empty_payload()
             spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
@@ -202,7 +221,15 @@ class AoiTtReportService:
             coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                 query_config.start_date, query_config.end_date
             )
-            if not spec_df.empty and _covers_full_product(query_config):
+            covers_full_product = _covers_full_product(query_config)
+            product_dir = resolve_product_resource_dir(
+                query_config.prod_code, scope="aoi_tt"
+            )
+            if (
+                persist_shared_history
+                and not spec_df.empty
+                and covers_full_product
+            ):
                 build_oos_history_service().update_history(
                     "aoi_tt",
                     query_config.prod_code,
@@ -215,7 +242,7 @@ class AoiTtReportService:
                     prod_code=query_config.prod_code,
                     detail_df=build_aoi_tt_ooc_detail(tt_details_df, spec_df),
                     key_columns=AOI_TT_OOC_KEY_COLUMNS,
-                    product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
+                    product_dir=product_dir,
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
                     product_revision=product_revision,
@@ -225,6 +252,17 @@ class AoiTtReportService:
                 logger.warning(
                     "[AOI_TT] Skip OOS history coverage update for %s: specifications are empty",
                     query_config.prod_code,
+                )
+            if persist_shared_history and covers_full_product:
+                persist_throughput_facts(
+                    scope="aoi_tt",
+                    prod_code=query_config.prod_code,
+                    details=tt_details_df,
+                    event_time_column="start_time",
+                    item_id_column="sheet_id",
+                    product_dir=product_dir,
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
                 )
             tt_details_df = decoration_result.tt_details_df
             if generate_particle_sizes:

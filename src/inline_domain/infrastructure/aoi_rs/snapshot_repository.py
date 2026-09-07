@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 
 
 class AoiRsSnapshotRepository:
+    supports_shared_history_persistence = True
+
     """Persist and reuse one product's normalized AOI_RS source facts."""
 
     # TTL 统一由 config/global.yaml 的 application.cache_ttl_hours 提供

@@ -24,6 +24,12 @@ from src.inline_domain.infrastructure.shared.oos_decision_repository import (
 )
 from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
 from src.inline_domain.infrastructure.shared.ooc_history_store import OocHistoryStore
+from src.inline_domain.application.shared.throughput_history_service import (
+    ThroughputHistoryService,
+)
+from src.inline_domain.infrastructure.shared.throughput_history_store import (
+    ThroughputHistoryStore,
+)
 import src.inline_domain.composition as composition
 import src.shared_kernel.infrastructure.db_handler as db_handler
 
@@ -68,6 +74,7 @@ pd.DataFrame(
 service = OosHistoryService(store, OosDecisionWorkbookRepository(resources))
 
 ooc_facts = facts.drop(columns=["usl", "lsl", "oos_type"]).assign(
+    sheet_id="S2",
     ucl=2.2,
     lcl=1.8,
     ooc_type="UCL",
@@ -81,7 +88,7 @@ ooc_store.update(
     coverage_end=pd.Timestamp("2026-09-08"),
 )
 pd.DataFrame(
-    [{"prod_code": "M626", "step_id": "1100", "param_name": "PPA", "sheet_id": "S1", "flag": False}]
+    [{"prod_code": "M626", "step_id": "1100", "param_name": "PPA", "sheet_id": "S2", "flag": False}]
 ).to_excel(
     resources / "spc_sheet_ooc_decoration.xlsx",
     sheet_name="M626__flags",
@@ -89,10 +96,32 @@ pd.DataFrame(
 )
 ooc_service = OocHistoryService(ooc_store, OosDecisionWorkbookRepository(resources))
 
+throughput_store = ThroughputHistoryStore(fixture_root / "throughput-history-v2")
+throughput_store.update(
+    "spc",
+    "M626",
+    pd.DataFrame(
+        [
+            {
+                "scope": "spc",
+                "factory": "ARRAY",
+                "prod_code": "M626",
+                "event_date": pd.Timestamp("2026-09-05"),
+                "item_id": f"S{index:03d}",
+            }
+            for index in range(1, 129)
+        ]
+    ),
+    coverage_start=pd.Timestamp("2026-09-01"),
+    coverage_end=pd.Timestamp("2026-09-08"),
+)
+throughput_service = ThroughputHistoryService(throughput_store)
+
 # Replace external bootstrapping concerns only. The production page control
 # flow and real history/application/dashboard path execute unchanged.
 composition.build_oos_history_service = lambda resource_dir=None: service
 composition.build_ooc_history_service = lambda resource_dir=None: ooc_service
+composition.build_throughput_history_service = lambda resource_dir=None: throughput_service
 app_setup.AppSetup.initialize_app = staticmethod(lambda: None)
 page_header.render_page_header = lambda **kwargs: None
 step_labels.get_cached_step_description_map = lambda _db: {"1100": "涂布"}

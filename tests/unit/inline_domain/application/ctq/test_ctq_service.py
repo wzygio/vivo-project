@@ -12,6 +12,7 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class FakeCtqRepository:
+    supports_shared_history_persistence = True
     seen_data_type_filters: list[str] = []
 
     def __init__(self, snapshot_dir: Path, use_snapshot: bool, db_manager: object) -> None:

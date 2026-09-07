@@ -49,7 +49,14 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorViewModel,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-from src.inline_domain.composition import build_ooc_history_service, build_oos_history_service
+from src.inline_domain.composition import (
+    build_ooc_history_service,
+    build_oos_history_service,
+    build_throughput_history_service,
+)
+from app.sections.inline_domain.monitor.ooc_decision_admin import (
+    render_ooc_decision_admin,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -60,7 +67,7 @@ MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 def get_cached_query_window() -> tuple[str, str]:
     """Keep this page's time window stable until the user clears cache."""
     end_dt = pd.Timestamp.today().normalize()
-    start_dt = (end_dt - pd.DateOffset(months=2)).replace(day=1)
+    start_dt = end_dt.replace(month=1, day=1)
     return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
 
 
@@ -75,7 +82,9 @@ def get_cached_oos_monitor_payload(
 ) -> dict[str, pd.DataFrame]:
     del source_signature
     view = OosMonitorService(
-        build_oos_history_service(), ooc_reader=build_ooc_history_service()
+        build_oos_history_service(),
+        ooc_reader=build_ooc_history_service(),
+        throughput_reader=build_throughput_history_service(),
     ).build_dashboard(
         products=products,
         scopes=scopes,
@@ -89,6 +98,7 @@ def get_cached_oos_monitor_payload(
         "trend_df": view.trend_df,
         "station_df": view.station_df,
         "refresh_status_df": view.refresh_status_df,
+        "period_summary_df": view.period_summary_df,
     }
 
 
@@ -218,10 +228,14 @@ with st.expander("Inline超规预警", expanded=True):
         try:
             history_service = build_oos_history_service()
             ooc_history_service = build_ooc_history_service()
+            throughput_history_service = build_throughput_history_service()
             source_signature = "|".join(
                 [
                     history_service.source_signature(list(products), list(scopes)),
                     ooc_history_service.source_signature(list(products), list(scopes)),
+                    throughput_history_service.source_signature(
+                        list(products), list(scopes)
+                    ),
                 ]
             )
             with st.spinner("正在读取共享超规历史..."):
@@ -242,3 +256,8 @@ with st.expander("Inline超规预警", expanded=True):
         if is_admin:
             st.divider()
             render_oos_refresh_status(view_model.refresh_status_df)
+            render_ooc_decision_admin(
+                ooc_history_service,
+                products=products,
+                scopes=scopes,
+            )
