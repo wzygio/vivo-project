@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption
+from src.indicator_domain.application.qtime.ports import QTimeSnapshotRefresh
 from src.indicator_domain.application.qtime.service import QTimeReportService
 
 
@@ -28,6 +29,21 @@ class FakeQTimeDataPort:
     def fetch_details(self, query: QTimeQuery) -> pd.DataFrame:
         self.received_query = query
         return pd.DataFrame({"lot_id": ["L001"], "wait_time": [0.41]})
+
+    def refresh_snapshot(
+        self,
+        shop: str,
+        *,
+        as_of: date | None = None,
+    ) -> QTimeSnapshotRefresh:
+        return QTimeSnapshotRefresh(
+            shop=shop,  # type: ignore[arg-type]
+            row_count=10,
+            refreshed_from_database=True,
+            source_start="2026-07-28T00:00:00",
+            source_end="2026-08-30T00:00:00",
+            refreshed_at="2026-09-02T07:00:00+08:00",
+        )
 
 
 class FakeQTimeDecorationPort:
@@ -102,6 +118,15 @@ def test_service_queries_from_previous_month_start_through_the_current_day() -> 
         step_descriptions=("Half Cutting->EVA&TFE",),
         products=("M626",),
     )
+
+
+def test_service_refreshes_all_shop_snapshots_through_one_application_interface() -> None:
+    service = QTimeReportService(FakeQTimeDataPort())
+
+    results = service.refresh_snapshots(as_of=date(2026, 9, 2))
+
+    assert [result.shop for result in results] == ["ARRAY", "OLED", "TP"]
+    assert all(result.refreshed_from_database for result in results)
 
 
 def test_service_returns_decorated_details_and_confirmed_qtime_alerts() -> None:

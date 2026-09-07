@@ -1,5 +1,4 @@
-import os
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pandas as pd
@@ -9,6 +8,7 @@ from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOpt
 from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.infrastructure.qtime import repository as qtime_repository
 from src.indicator_domain.infrastructure.qtime.repository import QTimeRepository
+from src.indicator_domain.infrastructure.qtime.snapshot_store import QTimeSnapshotStore
 
 
 def test_list_products_returns_clean_sorted_unique_options(monkeypatch) -> None:
@@ -134,32 +134,21 @@ def test_database_failures_are_exposed_as_a_safe_domain_error(monkeypatch) -> No
     assert "password" not in str(caught.value)
 
 
-def test_detail_snapshot_persists_source_time_and_reuses_fresh_data(
+def test_shop_snapshot_is_shared_across_query_filters_and_keeps_source_time(
     tmp_path,
     monkeypatch,
 ) -> None:
     calls = 0
-    captured_params: dict[str, object] = {}
+    captured_params: list[dict[str, object]] = []
 
     def fake_read_sql(_statement, _engine, params):
         nonlocal calls
         calls += 1
-        captured_params.update(params)
+        captured_params.append(dict(params))
         return pd.DataFrame(
             [
-                {
-                    "step_desc": "M3_DE->M3_STR",
-                    "lot_id": "L001",
-                    "prod_qty": 1,
-                    "sub_prod_type": "P",
-                    "f_step": "15500",
-                    "t_step": "15600",
-                    "q_spec": 2.5,
-                    "wait_time": 0.41,
-                    "timekey": "20260729010000",
-                    "shop": "ARRAY",
-                    "prodcode": "M626",
-                }
+                _detail_row("A->B", "L001", "M626", "20260729010000"),
+                _detail_row("B->C", "L002", "M678", "20260730010000"),
             ]
         )
 
@@ -169,24 +158,37 @@ def test_detail_snapshot_persists_source_time_and_reuses_fresh_data(
         snapshot_dir=tmp_path,
         snapshot_ttl_hours=12,
     )
-    query = QTimeQuery(
-        start_time=datetime(2026, 8, 2, 1),
-        end_time=datetime(2026, 9, 1, 1),
-        shop="ARRAY",
-        step_descriptions=("M3_DE->M3_STR",),
-        products=("M626",),
+    base_query = _current_query(date(2026, 9, 2))
+    first_query = base_query.model_copy(
+        update={"step_descriptions": ("A->B",), "products": ("M626",)}
+    )
+    second_query = base_query.model_copy(
+        update={"step_descriptions": ("B->C",), "products": ("M678",)}
     )
 
-    first = repository.fetch_details(query)
-    second = repository.fetch_details(query)
+    first = repository.fetch_details(first_query)
+    second = repository.fetch_details(second_query)
 
     assert calls == 1
-    assert captured_params["start_time"] == "20260601000000"
-    assert captured_params["end_time"] == "20260901010000"
+    assert captured_params[0] == {
+        "start_time": "20260728000000",
+        "end_time": "20260830000000",
+        "shop": "ARRAY",
+    }
     assert first.loc[0, "timekey"] == "20260802010000"
-    pd.testing.assert_frame_equal(second, first)
-    snapshot_path = next(tmp_path.glob("qtime_details_*.parquet"))
+    assert second.loc[0, "timekey"] == "20260803010000"
+    snapshot_path = tmp_path / "qtime_source_array.parquet"
     assert pd.read_parquet(snapshot_path).loc[0, "timekey"] == "20260729010000"
+    assert not list(tmp_path.glob("qtime_details_*.parquet"))
+    assert not list(tmp_path.glob("qtime_*_qtime-source-v1.parquet"))
+
+    snapshot = QTimeSnapshotStore(tmp_path, ttl_hours=12).read(
+        "ARRAY", fresh_only=False, normalizer=lambda frame: frame
+    )
+    assert snapshot is not None
+    assert snapshot.metadata.source_start == "2026-07-28T00:00:00"
+    assert snapshot.metadata.source_end == "2026-08-30T00:00:00"
+    assert not list(tmp_path.glob("qtime_source_*.meta.json"))
 
 
 def test_detail_snapshot_falls_back_after_database_failure(
@@ -194,21 +196,7 @@ def test_detail_snapshot_falls_back_after_database_failure(
     monkeypatch,
 ) -> None:
     source = pd.DataFrame(
-        [
-            {
-                "step_desc": "M3_DE->M3_STR",
-                "lot_id": "L001",
-                "prod_qty": 1,
-                "sub_prod_type": "P",
-                "f_step": "15500",
-                "t_step": "15600",
-                "q_spec": 2.5,
-                "wait_time": 0.41,
-                "timekey": "20260729010000",
-                "shop": "ARRAY",
-                "prodcode": "M626",
-            }
-        ]
+        [_detail_row("M3_DE->M3_STR", "L001", "M626", "20260729010000")]
     )
     monkeypatch.setattr(
         qtime_repository.pd,
@@ -228,8 +216,7 @@ def test_detail_snapshot_falls_back_after_database_failure(
         products=("M626",),
     )
     repository.fetch_details(query)
-    snapshot_path = next(tmp_path.glob("qtime_details_*.parquet"))
-    os.utime(snapshot_path, (0, 0))
+    monkeypatch.setattr(QTimeSnapshotStore, "_is_fresh", lambda *_args: False)
     monkeypatch.setattr(
         qtime_repository.pd,
         "read_sql",
@@ -241,35 +228,158 @@ def test_detail_snapshot_falls_back_after_database_failure(
     assert result.loc[0, "timekey"] == "20260802010000"
 
 
-def test_step_option_snapshot_keeps_filter_entry_available_when_database_fails(
+def test_expired_snapshot_refresh_replaces_overlap_and_prunes_old_month(
     tmp_path,
     monkeypatch,
 ) -> None:
+    responses = iter(
+        [
+            pd.DataFrame(
+                [
+                    _detail_row("A->B", "OLD", "M626", "20260729010000"),
+                    _detail_row("A->B", "REPLACE", "M626", "20260829010000", 1.0),
+                ]
+            ),
+            pd.DataFrame(
+                [
+                    _detail_row("A->B", "REPLACE", "M626", "20260829010000", 9.0),
+                    _detail_row("A->B", "NEW", "M626", "20260928010000", 2.0),
+                ]
+            ),
+        ]
+    )
+    captured_params: list[dict[str, object]] = []
+
+    def fake_read_sql(_statement, _engine, params):
+        captured_params.append(dict(params))
+        return next(responses)
+
+    monkeypatch.setattr(qtime_repository.pd, "read_sql", fake_read_sql)
+    repository = QTimeRepository(
+        SimpleNamespace(engine=object()),
+        snapshot_dir=tmp_path,
+        snapshot_ttl_hours=12,
+    )
+    september_query = _current_query(date(2026, 9, 2))
+    october_query = _current_query(date(2026, 10, 2))
+
+    repository.fetch_details(september_query)
+    snapshot_path = tmp_path / "qtime_source_array.parquet"
+    monkeypatch.setattr(QTimeSnapshotStore, "_is_fresh", lambda *_args: False)
+
+    result = repository.fetch_details(october_query)
+
+    assert captured_params[1] == {
+        "start_time": "20260828000000",
+        "end_time": "20260929000000",
+        "shop": "ARRAY",
+    }
+    assert result["lot_id"].tolist() == ["NEW", "REPLACE"]
+    stored = pd.read_parquet(snapshot_path)
+    assert stored["lot_id"].tolist() == ["NEW", "REPLACE"]
+    assert stored.loc[stored["lot_id"] == "REPLACE", "wait_time"].item() == 9.0
+    assert "OLD" not in stored["lot_id"].tolist()
+
+
+def test_legacy_l1_is_removed_only_after_all_shop_snapshots_exist(tmp_path) -> None:
+    legacy_detail = tmp_path / "qtime_details_deadbeef.parquet"
+    legacy_options = tmp_path / "qtime_step_options_array_qtime-source-v1.parquet"
+    legacy_detail.write_bytes(b"legacy")
+    legacy_options.write_bytes(b"legacy")
+    store = QTimeSnapshotStore(tmp_path, ttl_hours=12)
     source = pd.DataFrame(
-        {
-            "step_desc": ["A->B"],
-            "f_step": ["15500"],
-            "t_step": ["15600"],
-        }
+        [_detail_row("A->B", "L001", "M626", "20260829010000")]
+    )
+    refreshed_at = datetime.now().astimezone()
+
+    for shop in ("ARRAY", "OLED"):
+        store.write(
+            shop,
+            source,
+            source_start=pd.Timestamp("2026-07-28"),
+            source_end=pd.Timestamp("2026-08-30"),
+            refreshed_at=refreshed_at,
+        )
+        assert legacy_detail.exists()
+        assert legacy_options.exists()
+
+    store.write(
+        "TP",
+        source,
+        source_start=pd.Timestamp("2026-07-28"),
+        source_end=pd.Timestamp("2026-08-30"),
+        refreshed_at=refreshed_at,
+    )
+
+    assert not legacy_detail.exists()
+    assert not legacy_options.exists()
+
+
+def test_step_options_use_unified_snapshot_without_creating_option_snapshot(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    detail_source = pd.DataFrame(
+        [
+            _detail_row("B->C", "L002", "M626", "20260829010000"),
+            _detail_row("A->B", "L001", "M626", "20260829020000"),
+        ]
     )
     monkeypatch.setattr(
         qtime_repository.pd,
         "read_sql",
-        lambda *_args, **_kwargs: source.copy(),
+        lambda *_args, **_kwargs: detail_source.copy(),
     )
     repository = QTimeRepository(
         SimpleNamespace(engine=object()),
         snapshot_dir=tmp_path,
         snapshot_ttl_hours=12,
     )
-    expected = (QTimeStepOption(step_desc="A->B", f_step="15500", t_step="15600"),)
-    assert repository.list_step_options("ARRAY") == expected
-    snapshot_path = next(tmp_path.glob("qtime_step_options_*.parquet"))
-    os.utime(snapshot_path, (0, 0))
+    repository.fetch_details(_current_query(date(2026, 9, 2)))
     monkeypatch.setattr(
         qtime_repository.pd,
         "read_sql",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("offline")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("fresh unified snapshot should satisfy options")
+        ),
     )
 
-    assert repository.list_step_options("ARRAY") == expected
+    assert repository.list_step_options("ARRAY") == (
+        QTimeStepOption(step_desc="A->B", f_step="15500", t_step="15600"),
+        QTimeStepOption(step_desc="B->C", f_step="15500", t_step="15600"),
+    )
+    assert not list(tmp_path.glob("qtime_step_options_*.parquet"))
+
+
+def _detail_row(
+    step_desc: str,
+    lot_id: str,
+    prodcode: str,
+    timekey: str,
+    wait_time: float = 0.41,
+) -> dict[str, object]:
+    return {
+        "step_desc": step_desc,
+        "lot_id": lot_id,
+        "prod_qty": 1,
+        "sub_prod_type": "P",
+        "f_step": "15500",
+        "t_step": "15600",
+        "q_spec": 2.5,
+        "wait_time": wait_time,
+        "timekey": timekey,
+        "shop": "ARRAY",
+        "prodcode": prodcode,
+    }
+
+
+def _current_query(as_of: date) -> QTimeQuery:
+    current_month_start = as_of.replace(day=1)
+    previous_month_start = pd.Timestamp(current_month_start) - pd.DateOffset(months=1)
+    return QTimeQuery(
+        start_time=previous_month_start.to_pydatetime(),
+        end_time=datetime.combine(as_of + pd.Timedelta(days=1), datetime.min.time()),
+        shop="ARRAY",
+        step_descriptions=("A->B", "B->C"),
+        products=(),
+    )

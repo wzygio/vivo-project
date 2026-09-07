@@ -51,7 +51,7 @@ def test_gate_blocks_data_loading_until_query_clicked() -> None:
     _assert_no_info(app)
     assert not any("GATE_OPEN" in m.value for m in app.markdown)
     # 门控语义由按钮本身承担
-    assert app.button(key="btn_monitor_query_submit").label == "🔍 查询"
+    assert app.button(key="btn_monitor_query_submit").label == "查询"
 
 
 def test_query_click_opens_gate_and_loads_data() -> None:
@@ -133,7 +133,7 @@ def test_row_layout_gate_blocks_until_query_clicked() -> None:
     assert "gate_load_count" not in app.session_state
     _assert_no_info(app)
     # 按钮渲染在控制台行内（同一脚本片段），key 不变
-    assert app.button(key="btn_monitor_query_submit").label == "🔍 查询"
+    assert app.button(key="btn_monitor_query_submit").label == "查询"
 
     app.button(key="btn_monitor_query_submit").click().run()
 

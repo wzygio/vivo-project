@@ -66,11 +66,15 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 3. `app/pages/Q_Time监控报表.py` 是薄组合入口；筛选、查询门控、空/错误状态由
    `app/sections/indicator_domain/qtime/` 拥有，柱线图模型由
    `app/charts/indicator_domain/qtime/` 构建。
-4. `QTimeRepository` 将产品选项、分厂路径选项和查询契约级明细保存到
-   `data/indicator_domain/qtime/`。明细 Parquet 保留源 `timekey`，加载范围从
-   截止日第三个前序自然月的 1 日开始；TTL 内复用，数据库失败时只回退到同一
-   查询契约的旧快照。没有可用快照时仍返回不含 SQL、凭据和 traceback 的稳定错误。
-5. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
+4. `QTimeRepository` 在 `data/indicator_domain/qtime/` 按厂别保存一份无产品、站点筛选的
+   统一源事实 Parquet；覆盖范围为上月 1 日至当天结束，Parquet 内嵌策略版本、覆盖窗口与
+   刷新时间。快照 24 小时内直接复用，过期时从已覆盖尾部前 2 日增量替换并裁剪上上月数据；
+   数据库失败时允许读取旧快照，没有旧快照时返回不含 SQL、凭据和 traceback 的稳定错误。
+   站点与产品选项从同一事实快照派生，不再生成查询级明细或选项 L1。
+5. `tools/refresh_qtime_snapshots.py` 通过 application 端口刷新 ARRAY、OLED、TP；
+   `tools/register_qtime_snapshot_task.ps1` 将其注册为 Windows 每日 07:00 任务。Q-Time 报表与
+   自动预警看板继续共享 `get_cached_shop_monitoring`，因此一次 L1 计算可供两个页面复用。
+6. `wait_time > q_spec` 生成 Q-Time 超规明细；`resources/indicator_domain/qtime/qtime_oos_decoration.xlsx`
    的“决策台账”以 `(prodcode, step_desc, lot_id, timekey)` 为键。`flag=True` 将等待时长
    确定性修饰到规格内，`flag=False` 保留真实值并进入预警中心，`flag=Delete` 删除记录。
    规则位于 `core/qtime/decoration.py`；Excel 仓储只负责决策台账持久化。上传只覆盖

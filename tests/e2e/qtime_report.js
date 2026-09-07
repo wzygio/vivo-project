@@ -12,8 +12,19 @@ async page => {
     .getByText(/请选择筛选条件并点击/)
     .waitFor({ timeout: 60_000 });
 
+  // Streamlit may restore an empty keyed multiselect from session state. Make
+  // the precondition explicit instead of assuming the first station default.
+  const queryButton = page.getByRole("button", { name: "查询" });
+  const ensureStationSelected = async () => {
+    if (await queryButton.isDisabled()) {
+      await page.locator('div[data-testid="stMultiSelect"]').nth(1).click();
+      await page.getByRole("option").first().click();
+    }
+  };
+  await ensureStationSelected();
+
   // 查询（默认 ARRAY + 首个站点）→ 预警中心 + 图表
-  await page.getByRole("button", { name: "查询" }).click();
+  await queryButton.click();
   await page
     .getByText(/检测到 \d+ 条已确认真实超规/)
     .waitFor({ timeout: 180_000 });
@@ -23,7 +34,7 @@ async page => {
     .waitFor({ timeout: 180_000 });
 
   // 再点一次查询：走缓存层，页面保持稳定渲染、无异常
-  await page.getByRole("button", { name: "查询" }).click();
+  await queryButton.click();
   await page
     .getByText(/检测到 \d+ 条已确认真实超规/)
     .waitFor({ timeout: 180_000 });
@@ -37,7 +48,8 @@ async page => {
   await page
     .getByRole("option", { name: "TP" })
     .click();
-  await page.getByRole("button", { name: "查询" }).click();
+  await ensureStationSelected();
+  await queryButton.click();
   await page
     .getByText(/Q-Time 数据读取失败，请联系系统管理员确认数据库权限。/)
     .waitFor({ timeout: 120_000 });
