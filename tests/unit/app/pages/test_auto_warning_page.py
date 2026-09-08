@@ -4,7 +4,7 @@
 - 「超规片自动预警」区查询门控：未点击「查询」不执行签名预算与数据加载，
   点击后才执行（monkeypatch 计数）；
 - 模块化结构：每个模块 = st.subheader 标题 + st.expander（默认展开）；
-- 渲染面无 st.info 提醒条（UI 优化轮次禁令）；
+- CPK 独立查询门控提示保留；未查询时不读取 Excel 或数据库；
 - 矩阵筛选条常驻模块 Expander（未加载也渲染，且只渲染一处），加载后
   由 render_alert_matrix_board 按同一选择切片（filter_selection 透传）。
 
@@ -54,6 +54,7 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 from src.inline_domain.application.monitor.oos_monitor_service import OosMonitorService
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.shared import decision_signature
+from src.inline_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 PAGE_PATH = Path(__file__).parents[4] / "app" / "pages" / "自动预警看板.py"
@@ -82,6 +83,8 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         "matrix_board_calls": [],
         "refresh_status_calls": [],
         "ooc_admin_calls": [],
+        "db_calls": [],
+        "source_signature_calls": [],
     }
     active_config = SimpleNamespace(
         data_source=SimpleNamespace(product_code="M626"),
@@ -161,7 +164,7 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         "get_active_config",
         staticmethod(lambda: active_config),
     )
-    monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
+    monkeypatch.setattr(db_handler, "DatabaseManager", lambda: trackers["db_calls"].append(True) or object())
     monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda db: {})
     monkeypatch.setattr(
         MonitorAnalysisService,
@@ -190,6 +193,21 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
         "source_signature",
         lambda self, products, scopes: "oos-history-signature",
     )
+
+    def _signature(products, scopes):
+        trackers["source_signature_calls"].append((products, scopes))
+        return "excel-signature"
+
+    reader = SimpleNamespace(source_signature=_signature)
+    monkeypatch.setattr(composition, "build_oos_history_service", lambda: reader)
+    monkeypatch.setattr(composition, "build_ooc_history_service", lambda: reader)
+    monkeypatch.setattr(composition, "build_monitor_summary_workbook_service", lambda: SimpleNamespace(source_signature=lambda: "summary-excel"))
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("The warning page must not construct a live raw-data source")
+
+    monkeypatch.setattr(composition, "build_live_monitor_source", _forbidden)
+    monkeypatch.setattr(composition, "build_live_throughput_reader", _forbidden)
 
     def _fake_oos_dashboard(self, **kwargs):
         trackers["load_calls"].append(kwargs)
@@ -239,13 +257,13 @@ def _run_page() -> None:
 
 
 def _assert_module_structure(trackers: dict) -> None:
-    """模块化结构：两个模块各有 subheader 标题 + 默认展开的 expander，且无 st.info。"""
-    assert trackers["infos"] == []
-    assert trackers["subheaders"] == ["🚦 Q-Time预警看板", "⚠️ Inline预警看板"]
+    """三个独立查询模块；CPK 的查询门控保留提示。"""
+    assert trackers["infos"] == ["选择产品和厂别后，点击查询生成 CPK 预警看板。"]
+    assert trackers["subheaders"] == ["🚦 Q-Time预警看板", "⚠️ Inline预警看板", "📊 CPK预警看板"]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True
     ]
-    assert len(module_expanders) == 2
+    assert len(module_expanders) == 3
     # subheader 与 expander 文案不重复堆砌
     for item, title in zip(module_expanders, trackers["subheaders"]):
         assert item["label"] != title
@@ -309,6 +327,8 @@ def test_page_hides_header_product_filter_and_gates_data_loading(monkeypatch) ->
     _assert_module_structure(trackers)
     # 未点击「查询」：签名预算与数据加载都不执行
     assert trackers["load_calls"] == []
+    assert trackers["db_calls"] == []
+    assert trackers["source_signature_calls"] == []
     assert trackers["decision_calls"] == []
     # 筛选条常驻：未加载时也渲染（且只渲染一处），与加载按钮同处一行
     assert _matrix_filter_keys(trackers) == list(MATRIX_FILTER_KEYS)
@@ -317,6 +337,28 @@ def test_page_hides_header_product_filter_and_gates_data_loading(monkeypatch) ->
     assert "btn_load_alert_matrix" in button_keys
     assert "btn_collapse_alert_matrix" not in button_keys
     _assert_row_layout(trackers, "btn_load_alert_matrix")
+
+
+def test_query_window_retains_the_previous_year_part_of_current_week(monkeypatch) -> None:
+    _stub_page_dependencies(monkeypatch)
+    st.session_state.pop("monitor_query_signature", None)
+    st.session_state.pop("alert_matrix_board_loaded", None)
+    page = runpy.run_path(str(PAGE_PATH), run_name="__main__")
+
+    assert page["get_cached_query_window"]("2027-01-01") == (
+        "2026-12-28", "2027-01-01"
+    )
+
+
+def test_query_window_advances_at_midnight_without_clearing_cache(monkeypatch) -> None:
+    _stub_page_dependencies(monkeypatch)
+    st.session_state.pop("monitor_query_signature", None)
+    st.session_state.pop("alert_matrix_board_loaded", None)
+    page = runpy.run_path(str(PAGE_PATH), run_name="__main__")
+    window = page["get_cached_query_window"]
+
+    assert window("2027-01-03") == ("2026-12-28", "2027-01-03")
+    assert window("2027-01-04") == ("2027-01-01", "2027-01-04")
 
 
 def test_page_loads_data_after_query_submitted(monkeypatch) -> None:
@@ -331,6 +373,8 @@ def test_page_loads_data_after_query_submitted(monkeypatch) -> None:
     # 点击「查询」：直接读取四类共享 OOS 历史，不再执行旧决策签名预算/全量计算。
     assert trackers["decision_calls"] == []
     assert len(trackers["load_calls"]) == 1
+    assert trackers["db_calls"] == []
+    assert len(trackers["source_signature_calls"]) == 2
     assert trackers["load_calls"][0]["scopes"] == ("spc", "ctq", "aoi_tt", "aoi_rs")
     assert trackers["refresh_status_calls"] == []
 
@@ -348,7 +392,8 @@ def test_refresh_status_is_rendered_only_for_admin_query_param(monkeypatch) -> N
 
     assert len(trackers["load_calls"]) == 1
     assert len(trackers["refresh_status_calls"]) == 1
-    assert len(trackers["ooc_admin_calls"]) == 1
+    # The old ledger editor cannot modify the now-authoritative product Flag sheet.
+    assert trackers["ooc_admin_calls"] == []
 
 
 def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
@@ -367,6 +412,7 @@ def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
     assert _matrix_filter_keys(trackers) == list(MATRIX_FILTER_KEYS)
     # 矩阵本体被调用，且拿到当前筛选选择（监控类型/产品/厂别三元组）
     assert len(trackers["matrix_board_calls"]) == 1
+    assert len(trackers["db_calls"]) == 1
     selection = trackers["matrix_board_calls"][0]["filter_selection"]
     assert selection is not None
     monitor_type, selected_products, selected_factories = selection

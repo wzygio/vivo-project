@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from contextlib import contextmanager
+from collections.abc import Iterator
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 import shutil
+import tempfile
+import time
 from uuid import uuid4
 
 import pandas as pd
@@ -15,6 +20,53 @@ from .snapshot_window import inline_snapshot_window_start
 
 OVERLAP_DAYS = 2
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def snapshot_process_lock(identity: Path, timeout_seconds: float = 300.0) -> Iterator[None]:
+    """Serialize an entire generation transaction, including readers, across processes.
+
+    Stable lock files live outside data and must not be unlinked on release: another
+    process may already have the same inode open. OS locks release on process exit.
+    """
+    canonical = os.path.normcase(str(identity.resolve()))
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    lock_path = Path(tempfile.gettempdir()) / f"vivo-inline-raw-{digest}.lock"
+    handle = lock_path.open("a+b")
+    locked = False
+    try:
+        if handle.tell() == 0:
+            handle.write(b"0")
+            handle.flush()
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except OSError as exc:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("等待 Inline 原始快照事务锁超时") from exc
+                time.sleep(0.05)
+        yield
+    finally:
+        try:
+            if locked:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        finally:
+            handle.close()
 
 
 def read_metadata(path: Path, policy: str, *, policy_file: bool = False) -> dict | None:

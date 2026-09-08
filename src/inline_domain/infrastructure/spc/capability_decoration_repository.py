@@ -16,6 +16,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     _ordered_existing_columns,
     _validate_metric,
     capability_decoration_columns,
+    ensure_capability_replacements,
     merge_capability_detail_with_decoration_flags,
 )
 from src.shared_kernel.utils.excel_tools import (
@@ -34,6 +35,15 @@ class CapabilityDecorationReadError(RuntimeError):
 
 def get_cpk_decoration_path(product_dir: Path) -> Path:
     return product_dir / CPK_DECORATION_FILE_NAME
+
+
+def get_capability_decoration_signature(product_dir: Path) -> tuple[int, int]:
+    """Cheap cache invalidation when Excel saves flags or replacement values."""
+    try:
+        stat = get_cpk_decoration_path(product_dir).stat()
+    except FileNotFoundError:
+        return (0, 0)
+    return (stat.st_mtime_ns, stat.st_size)
 
 
 def load_capability_decoration(
@@ -106,13 +116,15 @@ def persist_capability_decoration(
     if sheet_exists and existing.empty:
         should_write = not current.empty
     if sheet_exists and not existing.empty:
-        persisted = _append_missing_detail_rows(existing, current, metric)
-        should_write = len(persisted) > len(existing)
+        persisted = ensure_capability_replacements(
+            _append_missing_detail_rows(existing, current, metric), metric,
+        )
+        should_write = not persisted.equals(existing)
     if should_write:
         result = replace_workbook_sheets(path, {target_sheet: persisted})
         if not result.written:
             logger.warning("SPC %s decoration write failed: %s", metric.upper(), result.error)
-    return current
+    return persisted
 
 
 load_cpk_decoration = load_capability_decoration

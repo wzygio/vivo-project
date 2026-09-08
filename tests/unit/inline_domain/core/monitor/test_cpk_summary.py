@@ -8,6 +8,14 @@ from src.inline_domain.core.monitor.cpk_summary import (
 from src.inline_domain.core.spc.spc_calculator import calculate_cpk
 
 
+@pytest.mark.parametrize("total", [10.5, float("inf"), float("-inf")])
+def test_invalid_fractional_or_infinite_project_count_has_explicit_error(total):
+    frame = pd.DataFrame([{"产品": "M626", "周期类型": "月度", "时间标签": "2026-09",
+                           "显示标签": "M9", "CPK总项目数": total, "Cpk≥1.33达标率": .8}])
+    with pytest.raises(ValueError, match="必须为有限整数"):
+        normalize_cpk_records(frame)
+
+
 def test_year_cpk_uses_all_sheet_means_not_monthly_cpk_average():
     features = pd.DataFrame([
         {"prod_code": "M626", "factory": "ARRAY", "step_id": "1",

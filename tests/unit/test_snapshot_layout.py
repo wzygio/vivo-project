@@ -102,6 +102,19 @@ def test_mismatched_throughput_identity_rejected(tmp_path):
         build_manifest(tmp_path)
 
 
+def test_nested_and_hashed_throughput_collision_preserves_both(tmp_path):
+    digest = hashlib.sha256(b"M626").hexdigest()[:16]
+    old = tmp_path / f"inline_domain/throughput_history/spc__{digest}.parquet"
+    old.parent.mkdir(parents=True)
+    pd.DataFrame({"scope": ["spc"], "prod_code": ["M626"]}).to_parquet(old)
+    nested = _create(tmp_path, "inline_domain/throughput_history/spc/throughput_M626.parquet", b"new")
+    moves, _ = build_manifest(tmp_path, preserve_conflicts=True)
+    apply_manifest(tmp_path, moves)
+    assert (tmp_path / "inline_domain/spc/throughput_M626.parquet").read_bytes() == b"new"
+    assert len(list((tmp_path / "inline_domain/spc").glob("legacy_*.parquet"))) == 1
+    assert not old.exists() and not nested.exists()
+
+
 def test_empty_throughput_uses_known_product_hash_and_preserves_unknown(tmp_path):
     (tmp_path / "M626").mkdir()
     legacy = tmp_path / "inline_domain/throughput_history"

@@ -16,6 +16,8 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 
 
 def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch) -> None:
+    signature_module = importlib.import_module("src.inline_domain.application.shared.decision_signature")
+    monkeypatch.setattr(signature_module, "get_scope_decision_signature", lambda *_args: "test-decisions")
     current_spc_service = importlib.import_module(
         "src.inline_domain.application.spc.spc_service"
     )
@@ -137,7 +139,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
 
     assert load_count == 1
     assert loaded_signatures == [
-        "spc_capability_distribution_report_v1|scoped=M673"
+        "spc_capability_previous_week_anomalies_v2|scoped=M673"
     ]
     assert header_kwargs["product_cache_scope"] == "M673"
     assert rendered_alerts[0].to_dict("records") == [

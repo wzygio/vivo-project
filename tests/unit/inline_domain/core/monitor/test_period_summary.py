@@ -3,10 +3,19 @@ from __future__ import annotations
 import pandas as pd
 
 from src.inline_domain.core.monitor.period_summary import (
+    MONITOR_SUMMARY_COLUMNS,
     build_current_period_records,
     build_period_summary,
     build_period_summary_from_records,
 )
+
+
+def test_fixed_periods_cross_year_keep_four_iso_weeks_and_unknown_history():
+    result = build_period_summary_from_records(
+        pd.DataFrame(columns=MONITOR_SUMMARY_COLUMNS), end_date=pd.Timestamp("2026-01-01")
+    )
+    assert result.columns.tolist() == ["报警类型", "Y26", "Q1", "M11", "M12", "M1", "W50", "W51", "W52", "W1"]
+    assert result.drop(columns="报警类型").eq("—").all(axis=None)
 
 
 def test_period_summary_builds_overlapping_year_quarter_month_week_columns() -> None:
@@ -42,9 +51,9 @@ def test_period_summary_builds_overlapping_year_quarter_month_week_columns() -> 
     ).set_index("报警类型")
 
     assert result.columns.tolist() == [
-        "Y26", "Q1", "Q2", "Q3", "M7", "M8", "M9", "W37"
+        "Y26", "Q1", "Q2", "Q3", "M7", "M8", "M9", "W34", "W35", "W36", "W37"
     ]
-    assert result.loc["过货量"].tolist() == [3, 1, 1, 1, 0, 0, 1, 1]
+    assert result.loc["过货量"].tolist() == [3, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1]
     assert result.loc["OOC报警片数", ["Y26", "Q2", "W37"]].tolist() == [1, 1, 0]
     assert result.loc["SOOS报警片数"].sum() == 0
     assert result.loc["OOS报警片数", ["Y26", "Q1", "Q3", "W37"]].tolist() == [2, 1, 1, 1]
@@ -111,7 +120,7 @@ def test_period_summary_from_records_uses_full_time_labels_and_aggregates_produc
         records, end_date=pd.Timestamp("2026-09-07")
     ).set_index("报警类型")
 
-    assert result.columns.tolist() == ["Y26", "Q1", "Q2", "Q3", "M7", "M8", "M9", "W37"]
+    assert result.columns.tolist() == ["Y26", "Q1", "Q2", "Q3", "M7", "M8", "M9", "W34", "W35", "W36", "W37"]
     assert result.loc["过货量", "Y26"] == 30
     assert result.loc["OOC报警片数", "Y26"] == 3
     assert result.loc["OOS报警片数", "Q2"] == 1

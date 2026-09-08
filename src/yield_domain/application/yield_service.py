@@ -277,7 +277,7 @@ class YieldAnalysisService:
         """同步入库良率修饰表并产出趋势/Mapping 所需上下文。
 
         在 cached 方法内部（cache miss 时）调用：
-        - 回写当月良损（仅当月行）与缩放倍数（指定签名变化时）；
+        - 刷新当月良损、补齐历史月份缺失行，并更新缩放倍数；
         - 返回 targets（Code 级）、group_targets（Group 级）、factors（Code 级缩放
           倍数）和 signature（两级指定签名，供缓存 key 使用）。
         当月良损与趋势图使用同一份 panel 明细计算，保证 Mapping 口径：
@@ -299,7 +299,9 @@ class YieldAnalysisService:
         )
         return {
             "targets": resolve_monthly_targets(table["code"], months),
-            "group_targets": resolve_monthly_targets(table["group"], months),
+            "group_targets": resolve_monthly_targets(
+                table["group"], months, fallback_to_raw=False
+            ),
             "factors": compute_scale_factors(table["code"]),
             "signature": (
                 f"{specified_signature(table['code'])}"

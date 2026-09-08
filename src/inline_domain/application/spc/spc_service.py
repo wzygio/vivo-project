@@ -34,6 +34,9 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.infrastructure.spc.capability_decoration_repository import (
+    get_capability_decoration_signature,
+)
 
 if TYPE_CHECKING:
     from src.inline_domain.application.spc.ports import SpcDataPort
@@ -191,6 +194,7 @@ class SpcReportService:
         product_revision: str = "",
         decision_signature: str = "",
         capability_exempt_param_name_contains: tuple[str, ...] = (),
+        capability_decoration_signature: tuple[int, int] = (0, 0),
     ) -> dict[str, object]:
         """Cache only reload-stable CPM/CPK payload values.
 
@@ -262,6 +266,7 @@ class SpcReportService:
                 product_dir=product_resource_dir,
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpk"),
                 metric="cpk",
+                reference_date=pd.Timestamp(query_config.end_date).date(),
             )
             period_capability_df = cpk_decoration_result.period_capability_df
             cpm_decoration_result = prepare_capability_decoration(
@@ -269,6 +274,7 @@ class SpcReportService:
                 product_dir=product_resource_dir,
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpm"),
                 metric="cpm",
+                reference_date=pd.Timestamp(query_config.end_date).date(),
             )
             period_capability_df = cpm_decoration_result.period_capability_df
             indicators_df = (
@@ -325,6 +331,13 @@ class SpcReportService:
             if capability_exempt_param_name_contains is None
             else tuple(capability_exempt_param_name_contains)
         )
+        try:
+            query = SpcQueryConfig.model_validate_json(query_config_json)
+        except Exception as exc:
+            raise SpcReportBuildError("SPC query config is invalid.") from exc
+        capability_signature = get_capability_decoration_signature(
+            resolve_product_resource_dir(query.prod_code),
+        )
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
@@ -333,5 +346,6 @@ class SpcReportService:
             product_revision=product_revision,
             decision_signature=decision_signature,
             capability_exempt_param_name_contains=resolved_capability_exemptions,
+            capability_decoration_signature=capability_signature,
         )
         return SpcReportService._view_model_from_payload(payload)

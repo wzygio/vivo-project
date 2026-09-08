@@ -15,6 +15,7 @@ from src.inline_domain.infrastructure.aoi_rs.data_loader import (
 )
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
+    snapshot_process_lock,
 )
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError, inline_snapshot_window_start, metadata_covers_start,
@@ -66,7 +67,8 @@ class AoiRsSnapshotRepository:
         columns: list[str], loader: DetailsLoader,
     ) -> pd.DataFrame:
         path = self.snapshot_dir / f"{prefix}_{query.prod_code}.parquet"
-        with self._lock_for(path):
+        identity = self.snapshot_dir / f"aoi_rs_{query.prod_code}"
+        with self._lock_for(identity), snapshot_process_lock(identity):
             metadata, old = self._existing(path, columns)
             if not force_refresh and is_fresh(metadata, query.end_date, self.SNAPSHOT_TTL_HOURS):
                 return self._filter_window(old, query)
@@ -78,9 +80,7 @@ class AoiRsSnapshotRepository:
                     if self._requires_coverage(query) and not metadata_covers_start(metadata, query.start_date):
                         raise IncompleteMonitorSnapshotError(f"AOI_RS 原始快照未覆盖 {query.start_date}")
                     return self._filter_window(old, query)
-                if self._requires_coverage(query):
-                    raise IncompleteMonitorSnapshotError(f"AOI_RS 原始快照未覆盖 {query.start_date} 或已损坏")
-                return pd.DataFrame(columns=columns)
+                raise IncompleteMonitorSnapshotError(f"AOI_RS 原始数据不可用：快照未覆盖 {query.start_date}、缺失或损坏，且刷新失败（{query.prod_code}）")
             self._write_snapshot(path, frame, columns, query.end_date)
             return self._filter_window(frame, query)
 
@@ -112,7 +112,8 @@ class AoiRsSnapshotRepository:
         """Load both tails before publishing either; empty successful loads are valid."""
         details_path = self.snapshot_dir / f"aoi_rs_details_{query.prod_code}.parquet"
         pass_path = self.snapshot_dir / f"aoi_rs_pass_through_{query.prod_code}.parquet"
-        with self._lock_for(details_path), self._lock_for(pass_path):
+        identity = self.snapshot_dir / f"aoi_rs_{query.prod_code}"
+        with self._lock_for(identity), snapshot_process_lock(identity):
             try:
                 details_meta, details_old = self._existing(details_path, RS_DETAIL_COLUMNS)
                 pass_meta, pass_old = self._existing(pass_path, PASS_THROUGH_COLUMNS)

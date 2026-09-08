@@ -35,6 +35,9 @@ from src.inline_domain.core.shared.measurement_correction import (
 from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_paths import (
+    inline_measurement_directory, aoi_rs_snapshot_directory,
+)
 
 
 def build_oos_history_service(resource_dir: Path | None = None):
@@ -59,7 +62,7 @@ def build_throughput_history_service(resource_dir: Path | None = None):
     """Assemble the lightweight daily-throughput history boundary."""
     project_root = ConfigLoader.get_project_root()
     snapshot_dir = (
-        project_root / "data" / "inline_domain" / "throughput_history"
+        project_root / "data" / "inline_domain"
         if resource_dir is None
         else Path(resource_dir) / ".throughput_history"
     )
@@ -109,11 +112,8 @@ def _build_throughput_history_service(snapshot_dir: str):
 def _build_ooc_history_service(
     resource_dir: str, use_configured_paths: bool
 ):
-    from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
-    from src.inline_domain.application.monitor.live_history import LiveHistoryStore
-    from src.inline_domain.infrastructure.shared.oos_decision_repository import (
-        OosDecisionWorkbookRepository,
-    )
+    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
+    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
     from src.inline_domain.core.shared.sheet_ooc_decoration import (
         SCOPE_OOC_DECORATION_FILE_NAME,
     )
@@ -121,36 +121,29 @@ def _build_ooc_history_service(
 
     configured = decision_workbook_paths("ooc") if use_configured_paths else {}
 
-    return OocHistoryService(
-        LiveHistoryStore(build_live_monitor_source(None if use_configured_paths else Path(resource_dir)), "ooc"),
-        OosDecisionWorkbookRepository(
-            Path(resource_dir),
-            file_paths={SCOPE_OOC_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
-        ),
-    )
+    paths = configured or {
+        scope: Path(resource_dir) / scope / name
+        for scope, name in SCOPE_OOC_DECORATION_FILE_NAME.items()
+    }
+    return ExcelAlarmReader(ExcelAlarmStore(paths), "ooc")
 
 
 @lru_cache(maxsize=16)
 def _build_oos_history_service(
     resource_dir: str, use_configured_paths: bool
 ):
-    from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-    from src.inline_domain.infrastructure.shared.oos_decision_repository import (
-        OosDecisionWorkbookRepository,
-    )
-    from src.inline_domain.application.monitor.live_history import LiveHistoryStore
+    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
+    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
     from src.inline_domain.application.shared.oos_history_service import SCOPE_DECORATION_FILE_NAME
     from src.inline_domain.infrastructure.shared.resource_paths import decision_workbook_paths
 
     configured = decision_workbook_paths("oos") if use_configured_paths else {}
 
-    return OosHistoryService(
-        LiveHistoryStore(build_live_monitor_source(None if use_configured_paths else Path(resource_dir)), "oos"),
-        OosDecisionWorkbookRepository(
-            Path(resource_dir),
-            file_paths={SCOPE_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
-        ),
-    )
+    paths = configured or {
+        scope: Path(resource_dir) / scope / name
+        for scope, name in SCOPE_DECORATION_FILE_NAME.items()
+    }
+    return ExcelAlarmReader(ExcelAlarmStore(paths), "oos")
 
 
 def build_live_monitor_source(resource_dir: Path | None = None):
@@ -186,15 +179,14 @@ def build_live_throughput_reader():
 
 
 def build_cpk_monitor_service(resource_dir: Path | None = None):
-    from src.inline_domain.application.monitor.cpk_monitor_service import CpkMonitorService
+    from src.inline_domain.application.monitor.cpk_workbook_service import CpkWorkbookMonitorService
     from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
-    from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+    from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
 
     resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
-    return CpkMonitorService(
-        build_live_monitor_source(resource_dir),
+    return CpkWorkbookMonitorService(
         CpkSummaryWorkbookStore(Path(resources) / "monitor" / "北极星报警率与CPK汇总.xlsx"),
-        product_resource_root=Path(resource_dir) if resource_dir else scope_resource_dir("spc"),
+        latest_reader=CpkLatestExcelStore(Path(resources) / "spc" / "spc_cpk_cpm_decoration.xlsx"),
     )
 
 
@@ -203,7 +195,7 @@ def build_raw_measurement_repository(
     prod_code: str,
 ) -> InlineMeasurementSnapshotRepository:
     return InlineMeasurementSnapshotRepository(
-        snapshot_dir=Path("data") / prod_code,
+        snapshot_dir=inline_measurement_directory(ConfigLoader.get_project_root() / "data"),
         db_manager=db_manager,
         measurement_corrector=apply_spc_value_corrections,
     )
@@ -257,7 +249,7 @@ def build_aoi_rs_repository(
     require_complete_coverage: bool = False,
 ) -> AoiRsSnapshotRepository:
     return AoiRsSnapshotRepository(
-        snapshot_dir=Path("data") / prod_code,
+        snapshot_dir=aoi_rs_snapshot_directory(ConfigLoader.get_project_root() / "data"),
         db_manager=db_manager,
         require_complete_coverage=require_complete_coverage,
     )

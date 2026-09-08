@@ -34,19 +34,42 @@ def sync_modifier_table(
     signature_path: Path | None = None,
     read_only: bool = False,
 ) -> dict[str, pd.DataFrame]:
-    """Synchronize monthly losses, optionally without persisting ledger state."""
+    """Refresh current losses and backfill missing historical ledger rows."""
     path = Path(xlsx_path)
     signature_path = Path(signature_path or path.with_suffix(".sig.json"))
     stored = load_modifier_signatures(signature_path)
     committed = stored.copy()
     table = read_modifier_table(path, product_code)
     losses = compute_current_month_losses(panel_details_df, current_month)
+    historical_losses = {}
+    if not panel_details_df.empty:
+        dates = pd.to_datetime(
+            panel_details_df["warehousing_time"], format="%Y%m%d", errors="coerce"
+        )
+        months = dates.dropna().dt.to_period("M").astype(str).unique()
+        historical_losses = {
+            month: compute_current_month_losses(panel_details_df, month)
+            for month in sorted(months)
+            if month < current_month
+        }
     for level in ("group", "code"):
         suffix = "Group级" if level == "group" else "Code级"
         sheet_name = f"{product_code}_{suffix}"
         updated, loss_changed = _apply_current_month_loss(
             table[level], losses[level], current_month
         )
+        # Historical snapshots may be partial: only append missing rows, never
+        # recalculate existing historical references or copy specified values.
+        for month, monthly_losses in historical_losses.items():
+            existing = set(
+                updated.loc[
+                    updated[COL_MONTH].astype(str).str.strip().eq(month), COL_DEFECT
+                ].astype(str).str.strip()
+            )
+            missing = monthly_losses[level]
+            missing = missing[~missing.index.isin(existing)]
+            updated, appended = _apply_current_month_loss(updated, missing, month)
+            loss_changed = loss_changed or appended
         signature = specified_signature(updated)
         signature_key = f"{product_code}:{level}"
         factors = compute_scale_factors(updated)

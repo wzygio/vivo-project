@@ -83,9 +83,7 @@ class TestBuildModifierContext:
         assert row["当月良损"] == pytest.approx(1 / 20)
         # 未指定 → 目标回落原始良损，倍数 1.0
         assert context["targets"]["CodeA"]["2026-07"] == pytest.approx(1 / 20)
-        assert context["group_targets"]["Array_Pixel"]["2026-07"] == pytest.approx(
-            1 / 20
-        )
+        assert context["group_targets"]["Array_Pixel"] == {}
         assert context["factors"][("CodeA", "2026-07")] == 1.0
 
     def test_specified_rate_flows_into_targets_and_factors(
@@ -114,6 +112,55 @@ class TestBuildModifierContext:
         assert context["targets"]["CodeA"]["2026-07"] == pytest.approx(0.10)
         # 倍数 = 0.10 / 0.05 = 2.0
         assert context["factors"][("CodeA", "2026-07")] == pytest.approx(2.0)
+
+    @pytest.mark.parametrize(
+        ("specified_month", "specified_rate", "expected_rate"),
+        [
+            ("2026-07", None, 0.10),
+            ("2026-07", 0.20, 0.20),
+            ("2026-06", 0.20, 0.20),
+            ("2026-07", 0.0, 0.0),
+            ("2026-08", 0.20, 0.10),
+        ],
+    )
+    def test_group_monthly_uses_specified_or_code_aggregate(
+        self, tmp_path, locked_window, specified_month, specified_rate, expected_rate
+    ):
+        table_path = tmp_path / "入库良率修饰表.xlsx"
+        code_table = pd.DataFrame([{
+            "不良类型": "CodeA", "周期类型": "月度", "时间标签": "2026-07",
+            "当月良损": 0.05, "指定良损": 0.10, "缩放倍数": None,
+        }])
+        group_table = pd.DataFrame([{
+            "不良类型": "Array_Pixel", "周期类型": "月度",
+            "时间标签": specified_month, "当月良损": 0.05,
+            "指定良损": specified_rate, "缩放倍数": None,
+        }])
+        with pd.ExcelWriter(table_path, engine="openpyxl") as writer:
+            code_table.to_excel(writer, index=False, sheet_name="M999_Code级")
+            group_table.to_excel(writer, index=False, sheet_name="M999_Group级")
+
+        config = _config()
+        panels = _panel_details()
+        context = YieldAnalysisService._build_modifier_context(
+            config, tmp_path / "M999", panels
+        )
+        processor = yield_service_module.MWDTrendProcessor
+        code = processor.create_code_level_mwd_trend_data(
+            panels, config, context["targets"], target_end_date=datetime(2026, 7, 31)
+        )
+        group = processor.create_mwd_trend_data(
+            panels, config, code, context["group_targets"],
+            target_end_date=datetime(2026, 7, 31),
+        )
+
+        assert group is not None
+        monthly = group["monthly"]
+        pixel = monthly[monthly["defect_group"] == "Array_Pixel"]
+        assert pixel["defect_rate"].iloc[0] == pytest.approx(expected_rate)
+        # Group 指定仅覆盖月度，完整日度仍保留 Code 的两个不良 Panel。
+        daily = group["daily_full"]
+        assert (daily["defect_rate"] * daily["total_panels"]).sum() == pytest.approx(2)
 
     def test_missing_table_file_yields_empty_context(self, tmp_path, locked_window):
         # 不创建文件且不给 panel 数据缺陷 → 空表语义

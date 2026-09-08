@@ -43,7 +43,7 @@ class PeriodWindow:
     end: pd.Timestamp
 
 
-def _period_windows(end_date: pd.Timestamp) -> list[PeriodWindow]:
+def _period_windows(end_date: pd.Timestamp, *, week_count: int = 1) -> list[PeriodWindow]:
     end = pd.Timestamp(end_date).normalize()
     exclusive_end = end + pd.Timedelta(days=1)
     windows = [
@@ -79,17 +79,19 @@ def _period_windows(end_date: pd.Timestamp) -> list[PeriodWindow]:
                 min(start + pd.DateOffset(months=1), exclusive_end),
             )
         )
-    iso = end.isocalendar()
     week_start = end - pd.Timedelta(days=end.weekday())
-    windows.append(
-        PeriodWindow(
-            "周度",
-            f"{iso.year}-W{iso.week:02d}",
-            f"W{iso.week}",
-            week_start,
-            exclusive_end,
+    for offset in reversed(range(week_count)):
+        start = week_start - pd.Timedelta(weeks=offset)
+        iso = start.isocalendar()
+        windows.append(
+            PeriodWindow(
+                "周度",
+                f"{iso.year}-W{iso.week:02d}",
+                f"W{iso.week}",
+                start,
+                min(start + pd.Timedelta(weeks=1), exclusive_end),
+            )
         )
-    )
     return windows
 
 
@@ -171,7 +173,7 @@ def build_period_summary(
     """Build an in-memory summary; retained as a test/fallback seam."""
     alerts, throughput = _normalize_facts(alerts_df, throughput_df)
     result: dict[str, list[int | str]] = {"报警类型": SUMMARY_ROW_ORDER.copy()}
-    for window in _period_windows(pd.Timestamp(end_date)):
+    for window in _period_windows(pd.Timestamp(end_date), week_count=4):
         result[window.display_label] = list(_window_counts(alerts, throughput, window))
     return pd.DataFrame(result)
 
@@ -242,7 +244,7 @@ def build_period_summary_from_records(
     )
     expected = {str(value) for value in expected_products or ()}
     result: dict[str, list[object]] = {"报警类型": SUMMARY_ROW_ORDER.copy()}
-    for window in _period_windows(end_date):
+    for window in _period_windows(end_date, week_count=4):
         rows = (
             records[records["时间标签"].astype(str).eq(window.time_label)]
             if not records.empty

@@ -397,6 +397,52 @@ def test_spc_service_threads_gate_params_to_shared_pipeline(monkeypatch) -> None
     assert recorded["decision_signature"] == "sig-spc"
 
 
+def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Path) -> None:
+    import os
+    from src.inline_domain.core.spc.cpk_decoration import (
+        build_capability_detail, merge_capability_detail_with_decoration_flags,
+    )
+
+    SpcReportService.fetch_spc_report_payload.clear()
+    monkeypatch.setattr(spc_service, "resolve_product_resource_dir", lambda _product: tmp_path)
+    monkeypatch.setattr(decorated_data.ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+    capability = pd.DataFrame([{
+        "prod_code": "M626", "factory": "ARRAY", "step_id": "10140", "param_name": "SE_L1T",
+        "period_type": "week", "period_label": "2026-W30", "cpk": 1.084, "cpm": 1.133,
+    }])
+    monkeypatch.setattr(spc_service, "build_period_capability_report", lambda **kwargs: capability.copy())
+    ledger_path = tmp_path / "spc_cpk_cpm_decoration.xlsx"
+    ledgers = {
+        metric: merge_capability_detail_with_decoration_flags(
+            build_capability_detail(capability, metric), pd.DataFrame(), metric,
+        ) for metric in ("cpk", "cpm")
+    }
+
+    def save(enabled: bool) -> None:
+        with pd.ExcelWriter(ledger_path) as writer:
+            for metric, frame in ledgers.items():
+                frame.assign(flag=enabled).to_excel(
+                    writer, sheet_name="M626" if metric == "cpk" else "M626_cpm", index=False,
+                )
+
+    save(False)
+    kwargs = dict(
+        _data_port=FakeSpcRepository(Path("data"), True, object()),
+        query_config_json=SpcQueryConfig(prod_code="M626", start_date="2026-06-01", end_date="2026-07-27").model_dump_json(),
+        snapshot_signature="excel-save-cache-test",
+    )
+    first = SpcReportService.get_spc_report_data(**kwargs)
+    assert first.period_capability_df["cpk"].tolist() == [1.084]
+    old_mtime = ledger_path.stat().st_mtime_ns
+    save(True)
+    os.utime(ledger_path, ns=(old_mtime + 1_000_000_000, old_mtime + 1_000_000_000))
+    second = SpcReportService.get_spc_report_data(**kwargs)
+    assert second.period_capability_df["cpk"].tolist() == ledgers["cpk"]["cpk_replacement"].tolist()
+    assert 1.33 < second.period_capability_df["cpk"].iloc[0] < 1.4
+    assert second.period_capability_df["cpm"].tolist() == ledgers["cpm"]["cpm_replacement"].tolist()
+    assert 1.33 < second.period_capability_df["cpm"].iloc[0] < 1.4
+
+
 def _decoration_payload_with_decisions() -> dict:
     return {
         "decoration_df": pd.DataFrame(),

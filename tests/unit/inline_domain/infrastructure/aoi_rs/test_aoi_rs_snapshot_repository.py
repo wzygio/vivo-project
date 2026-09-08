@@ -282,7 +282,7 @@ def test_database_failure_falls_back_to_existing_snapshot(tmp_path: Path) -> Non
     pd.testing.assert_frame_equal(actual, expected)
 
 
-def test_database_failure_without_snapshot_returns_contract_empty_frames(tmp_path: Path) -> None:
+def test_database_failure_without_snapshot_reports_unavailable(tmp_path: Path) -> None:
     def fail(*_args: object) -> pd.DataFrame:
         raise RuntimeError("database unavailable")
 
@@ -293,17 +293,10 @@ def test_database_failure_without_snapshot_returns_contract_empty_frames(tmp_pat
         pass_through_loader=fail,
     )
 
-    details = repository.get_rs_details(_query())
-    pass_through = repository.get_pass_through(_query())
-
-    assert list(details.columns) == [
-        "factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id",
-        "rs_code", "code_qty",
-    ]
-    assert list(pass_through.columns) == [
-        "factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id",
-    ]
-    assert details.empty and pass_through.empty
+    for method in (repository.get_rs_details, repository.get_pass_through):
+        with pytest.raises(IncompleteMonitorSnapshotError, match="原始数据不可用"):
+            method(_query())
+    assert not list(tmp_path.glob("*.parquet"))
 
 
 def test_snapshot_filters_rolling_data_to_requested_page_window(tmp_path: Path) -> None:
@@ -459,7 +452,7 @@ def test_explicit_monitor_coverage_is_required_in_early_year(
         getattr(repository, method)(query)
 
 
-def test_ordinary_report_keeps_early_year_empty_fallback(tmp_path):
+def test_ordinary_report_does_not_turn_failure_into_empty_result(tmp_path):
     def fail(*args):
         raise RuntimeError("database unavailable")
 
@@ -468,5 +461,6 @@ def test_ordinary_report_keeps_early_year_empty_fallback(tmp_path):
         require_complete_coverage=False,
     )
     query = AoiRsQueryConfig(prod_code="M678", start_date="2027-01-01", end_date="2027-02-07")
-    assert repository.get_rs_details(query).empty
-    assert repository.get_pass_through(query).empty
+    for method in (repository.get_rs_details, repository.get_pass_through):
+        with pytest.raises(IncompleteMonitorSnapshotError, match="原始数据不可用"):
+            method(query)

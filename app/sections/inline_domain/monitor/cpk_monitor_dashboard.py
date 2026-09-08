@@ -4,45 +4,51 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from typing import Protocol
 
 import streamlit as st
 
 from src.inline_domain.application.monitor.cpk_monitor_service import (
-    CpkMonitorService, CpkMonitorViewModel,
+    CpkMonitorViewModel,
 )
 
 logger = logging.getLogger(__name__)
 
 
+class CpkDashboardService(Protocol):
+    def build_dashboard(
+        self, *, products: Sequence[str], factories: Sequence[str],
+    ) -> CpkMonitorViewModel: ...
+
+
 def render_cpk_monitor_results(view: CpkMonitorViewModel) -> None:
+    from app.sections.inline_domain.monitor.oos_monitor_dashboard import build_period_trend_chart
+
     st.markdown("#### CPK 汇总表")
     st.dataframe(view.summary_df.astype(str), hide_index=True, width="stretch")
-    st.caption("达标条件：CPK ≥ 1.33。项目按产品、厂别、站点、参数统计；无法计算的项目不计入达标率。")
-    current = view.detail_df[view.detail_df["period_type"].eq("month")]
-    with st.container(horizontal=True):
-        st.metric("当月有效项目", int(current["cpk"].notna().sum()), border=True)
-        st.metric("当月达标项目", int(current["status"].eq("达标").sum()), border=True)
-        st.metric("当月预警项目", int(current["status"].eq("预警").sum()), border=True)
-    warnings = view.detail_df[view.detail_df["status"].ne("达标")]
-    st.markdown("#### CPK 预警指标明细")
-    if warnings.empty:
-        st.info("当前年、季、月、周没有 CPK 预警或无法计算的指标。")
+    st.markdown("#### CPK 预警趋势")
+    st.altair_chart(build_period_trend_chart(
+        view.summary_df, label_column="指标", metric_rows=("预警项目数",),
+    ), width="stretch")
+    st.caption("上一完整周及当月：从 CPK 修饰表统计未修饰且 CPK＜1.33 的项目；总项目数取汇总 Excel。年、季和其他历史保持维护值。图表缺失值仅按0占位，不回写历史。")
+    if st.query_params.get("admin") == "true" and not view.refresh_status_df.empty:
+        st.markdown("#### CPK 数据更新状态（管理员）")
+        st.dataframe(view.refresh_status_df, hide_index=True, width="stretch")
+    if view.detail_df.empty:
+        st.info("暂无所选最新周期的 CPK 项目明细。")
         return
-    display = warnings.rename(columns={
+    st.markdown("#### CPK 最新项目明细")
+    display = view.detail_df.rename(columns={
         "prod_code": "产品", "factory": "厂别", "step_id": "站点",
-        "param_name": "参数", "period_label": "周期", "sample_count": "Sheet数",
-        "cpk": "CPK", "status": "状态", "mean_value": "均值",
-        "std_value": "标准差", "usl": "规格上限", "lsl": "规格下限",
+        "param_name": "参数", "period_label": "周期", "period_type": "周期类型",
+        "cpk_corrected": "CPK", "flag": "已修饰", "status": "判定状态",
     })
-    st.dataframe(
-        display[["周期", "产品", "厂别", "站点", "参数", "Sheet数", "CPK", "状态",
-                 "均值", "标准差", "规格上限", "规格下限"]],
-        hide_index=True, width="stretch",
-    )
+    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", "CPK", "已修饰", "判定状态") if column in display]
+    st.dataframe(display[columns], hide_index=True, width="stretch")
 
 
 def render_cpk_monitor_section(
-    service: CpkMonitorService, available_products: Sequence[str],
+    service: CpkDashboardService, available_products: Sequence[str],
     available_factories: Sequence[str],
 ) -> None:
     columns = st.columns([2.6, 1.6, 0.8], vertical_alignment="bottom")

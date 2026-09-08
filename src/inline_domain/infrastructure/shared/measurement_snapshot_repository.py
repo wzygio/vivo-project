@@ -17,6 +17,7 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
+    snapshot_process_lock,
 )
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError,
@@ -110,11 +111,7 @@ class InlineMeasurementSnapshotRepository:
         start_date = inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
-        cached = None if force_refresh else self._try_read_fresh(snapshot_path, end_timestamp)
-        if cached is not None:
-            return MeasurementRefreshResult(cached, False)
-
-        with self._lock_for(snapshot_path):
+        with self._lock_for(snapshot_path), snapshot_process_lock(snapshot_path):
             cached = None if force_refresh else self._try_read_fresh(snapshot_path, end_timestamp)
             if cached is not None:
                 return MeasurementRefreshResult(cached, False)

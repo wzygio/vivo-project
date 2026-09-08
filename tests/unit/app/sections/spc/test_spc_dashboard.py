@@ -1548,6 +1548,10 @@ def test_render_cpk_alert_section_reuses_memoized_charts(monkeypatch) -> None:
     render_cpk_alert_section(**kwargs)
     assert len(build_calls) == 1  # 第二次：memo 命中，不再构建
 
+    kwargs["period_capability_df"] = report_df.assign(cpk=1.5, cpm=1.6)
+    render_cpk_alert_section(**kwargs)
+    assert len(build_calls) == 2  # 修饰值变化后，指标与表格必须重建。
+
 
 def _sample_sheet_oos_decoration_result(
     tmp_path: Path,

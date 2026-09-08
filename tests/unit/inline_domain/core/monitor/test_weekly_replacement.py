@@ -49,6 +49,24 @@ def test_missing_baseline_does_not_invent_zero_or_write_partial_product():
     assert "基线不完整" in problems[0]
 
 
+def test_sheet_count_excludes_aoi_rs_lot_points():
+    facts = pd.DataFrame([
+        dict(prod_code="M626", factory="ARRAY", item_id="LOT1", alarm_type="OOS", event_time="2026-09-08", scope="aoi_rs", chart_kind="lot"),
+        dict(prod_code="M626", factory="ARRAY", item_id="S1", alarm_type="OOS", event_time="2026-09-08", scope="aoi_rs", chart_kind="sheet"),
+    ])
+    updates, _ = plan_weekly_replacement(baseline(), facts, products=["M626"], scope_key="ALL", factory_key="ALL", as_of=pd.Timestamp("2026-09-08"), available_types={"M626": {"OOS"}})
+    assert updates["OOS报警片数"].tolist() == [291, 191, 91, 1]
+
+
+def test_invalid_old_contribution_is_not_masked_by_new_large_count():
+    current = baseline()
+    current.loc[0, "OOS报警片数"] = 5
+    facts = pd.DataFrame([dict(prod_code="M626", factory="ARRAY", item_id=str(i), alarm_type="OOS", event_time="2026-09-08") for i in range(20)])
+    updates, warnings = plan_weekly_replacement(current, facts, products=["M626"], scope_key="ALL", factory_key="ALL", as_of=pd.Timestamp("2026-09-08"), available_types={"M626": {"OOS"}})
+    assert updates["OOS报警片数"].tolist() == [5, 200, 100, 10]
+    assert any("超出汇总" in warning for warning in warnings)
+
+
 def test_cross_month_week_requires_explicit_period_contribution_and_never_edits_closed_month():
     from src.inline_domain.core.monitor.weekly_replacement import WEEK_MARKER, CONTRIBUTION_COLUMNS
     current = baseline()

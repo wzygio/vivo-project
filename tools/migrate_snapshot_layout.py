@@ -82,6 +82,10 @@ def _destination(path: Path, root: Path) -> str | None:
             return f"yield_domain/yield/{filename}"
     if parts[:2] == ("inline_domain", "throughput_history") and len(parts) == 3:
         return _throughput_destination(path, root)
+    if parts[:2] == ("inline_domain", "throughput_history") and len(parts) == 4:
+        scope, filename = parts[2:]
+        if scope in {"spc", "ctq", "aoi_tt", "aoi_rs"} and re.fullmatch(r"throughput_[A-Za-z0-9][A-Za-z0-9_.-]*\.parquet", filename):
+            return f"inline_domain/{scope}/{filename}"
     return None
 
 
@@ -97,6 +101,15 @@ def _preserve_conflicting_families(root: Path, moves: list[SnapshotMove]) -> lis
         _snapshot_family(move.source)[0]
         for move in moves if (root / move.destination).exists()
     }
+    destinations: dict[str, list[SnapshotMove]] = {}
+    for move in moves:
+        destinations.setdefault(move.destination.casefold(), []).append(move)
+    for candidates in destinations.values():
+        if len(candidates) > 1:
+            # Prefer the already product-named generation over hashed legacy
+            # throughput when both map to the same new directory.
+            preferred = max(candidates, key=lambda item: (Path(item.source).name == Path(item.destination).name, item.mtime_ns))
+            conflicts.update(_snapshot_family(item.source)[0] for item in candidates if item != preferred)
     replacements: dict[str, str] = {}
     for family in sorted(conflicts):
         primary = root / f"{family}.parquet"

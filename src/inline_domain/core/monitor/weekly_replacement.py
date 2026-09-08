@@ -20,6 +20,8 @@ def _count(frame: pd.DataFrame, kind: str, start: pd.Timestamp, end: pd.Timestam
         return 0
     times = pd.to_datetime(frame["event_time"], errors="raise")
     selected = frame[times.ge(start) & times.lt(end)]
+    if "chart_kind" in selected and "scope" in selected:
+        selected = selected.loc[~selected["scope"].eq("aoi_rs") | selected["chart_kind"].eq("sheet")]
     if kind != "Total":
         selected = selected[selected["alarm_type"].eq(kind)]
     return len(selected.drop_duplicates(["factory", "prod_code", "item_id"]))
@@ -84,6 +86,9 @@ def plan_weekly_replacement(
                             old_contribution = old_week
                     if pd.isna(old_contribution):
                         problems.append(f"{product}/{window.display_label}：跨月/季/年周缺少{tracking}基线")
+                        break
+                    if int(old_contribution) < 0 or int(old_contribution) > int(old_total):
+                        problems.append(f"{product}/{window.display_label}：已计入本周数量超出汇总基线，请核对Excel")
                         break
                     new_total = int(old_total) - int(old_contribution) + new_contribution
                     if new_total < 0:

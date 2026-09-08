@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -10,7 +11,7 @@ import pandas as pd
 from src.inline_domain.core.spc.cpk_decoration import (
     CAPABILITY_METRIC_CPK,
     apply_capability_decoration,
-    build_capability_detail,
+    build_capability_anomaly_detail,
     merge_capability_detail_with_decoration_flags,
 )
 from src.inline_domain.infrastructure.spc.capability_decoration_repository import (
@@ -34,8 +35,11 @@ def prepare_capability_decoration(
     persist_files: bool = True,
     sheet_name: str | None = None,
     metric: str = CAPABILITY_METRIC_CPK,
+    reference_date: date | None = None,
 ) -> CpkDecorationResult:
-    detail = build_capability_detail(period_capability_df, metric)
+    detail = build_capability_anomaly_detail(
+        period_capability_df, metric, reference_date or date.today(),
+    )
     decoration = (
         persist_capability_decoration(product_dir, detail, sheet_name, metric)
         if persist_files

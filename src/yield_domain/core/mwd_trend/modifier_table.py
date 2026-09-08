@@ -172,12 +172,16 @@ def _parse_table_rates(table_df: pd.DataFrame) -> pd.DataFrame:
 def resolve_monthly_targets(
     table_df: pd.DataFrame,
     months: list[str],
+    *,
+    fallback_to_raw: bool = True,
 ) -> dict[str, dict[str, float]]:
     """解析每个不良类型在目标月份的目标良损。
 
     回退链：当月 `指定良损` → 最近一个有 `指定良损` 的上个月 → 当月 `当月良损`
     → 不给修饰目标。表中无该月行且从未指定时，Code 日度生成阶段使用从 Panel 明细
     按月汇总的原始月度良损，不回落原始日度不良数。
+    Group 调用时设置 fallback_to_raw=False：仅返回当前或历史指定良损，
+    无指定值时保留 Code 聚合结果；Group 的当月良损仅供参考。
     """
     months = sorted(str(m) for m in months)
     targets: dict[str, dict[str, float]] = {}
@@ -206,7 +210,7 @@ def resolve_monthly_targets(
             if earlier:
                 defect_targets[month] = specified_by_month[max(earlier)]
                 continue
-            if month in raw_by_month:
+            if fallback_to_raw and month in raw_by_month:
                 defect_targets[month] = raw_by_month[month]
             # 从未指定且表中无该月行：不给修饰目标，日度生成器回退原始月度良损。
         targets[defect] = defect_targets

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -44,6 +44,7 @@ class CpkWorkbookStore(Protocol):
 class CpkMonitorViewModel:
     summary_df: pd.DataFrame
     detail_df: pd.DataFrame
+    refresh_status_df: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=32, show_spinner=False)

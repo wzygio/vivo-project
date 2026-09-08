@@ -160,6 +160,9 @@ class OosMonitorService:
         status = pd.DataFrame(
             statuses, columns=["prod_code", "scope", "alarm_type", "source", "refreshed_at"]
         )
+        summary_options = {}
+        if getattr(self._summary_workbook, "supports_weekly_replacement", False):
+            summary_options["source_status_df"] = status
         period_summary = (
             self._summary_workbook.refresh_summary(
                 products=selected_products,
@@ -168,6 +171,7 @@ class OosMonitorService:
                 alerts_df=detail,
                 throughput_df=throughput,
                 end_date=pd.Timestamp(end_date),
+                **summary_options,
             )
             if self._summary_workbook is not None
             else build_period_summary(
@@ -176,4 +180,11 @@ class OosMonitorService:
                 end_date=pd.Timestamp(end_date),
             )
         )
+        warnings = getattr(self._summary_workbook, "last_warnings", ())
+        if warnings:
+            status = pd.concat([
+                status,
+                pd.DataFrame([{"source": "summary_warning", "message": message}
+                              for message in warnings]),
+            ], ignore_index=True)
         return OosMonitorViewModel(detail, summary, trend, station, status, period_summary)

@@ -59,7 +59,7 @@ def test_correction_passes_through_empty_frame() -> None:
 
 
 def test_snapshot_repository_applies_corrector_before_writing_snapshot(tmp_path) -> None:
-    raw = _measurements()
+    raw = _measurements().assign(start_time=pd.Timestamp("2026-08-13"))
 
     def loader(_db, _start_date: str, _end_date: str, _prod_code: str) -> pd.DataFrame:
         return raw.copy()
