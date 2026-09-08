@@ -19,6 +19,8 @@ const LINKS = {
     CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",
     AOI_RS_REPORT: "http://10.72.26.31:8503/AOI_RS监控报表",
     AOI_TT_REPORT: "http://10.72.26.31:8503/AOI_TT监控报表",
+    IQC_INSPECTION_REPORT: "http://10.72.26.31:8503/IQC来料检验特性数据明细报表",
+    IQC_LIFETIME_REPORT: "http://10.72.26.31:8503/IQC寿命测试报表",
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
@@ -95,6 +97,14 @@ const APP_CONFIG = {
             ]
         },
         {
+            name: "IQC",
+            children: [
+                { name: "IQC", url: LINKS.IQC },
+                { name: "蒸镀材料", url: LINKS.IQC_INSPECTION_REPORT },
+                { name: "寿命测试", url: LINKS.IQC_LIFETIME_REPORT },
+            ]
+        },
+        {
             name: "关键备件",
             children: [
                 { name: "关键备件报表", url: LINKS.CRITICAL_PARTS },
@@ -157,7 +167,9 @@ const APP_CONFIG = {
             label: 'IQC', 
             icon: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>', 
             subs: [ 
-                {l:'', v:'IQC', url: LINKS.IQC }          
+                {l:'', v:'IQC', url: LINKS.IQC },
+                {l:'', v:'蒸镀材料', url: LINKS.IQC_INSPECTION_REPORT },
+                {l:'', v:'寿命测试', url: LINKS.IQC_LIFETIME_REPORT },
             ]
         },
         {

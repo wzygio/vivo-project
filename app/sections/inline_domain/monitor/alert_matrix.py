@@ -1,6 +1,6 @@
 """自动预警看板"产品 × 监控参数"矩阵 UI（PRD §4.2，Phase 4）。
 
-- 矩阵本体只渲染四态指示灯（PRD D1：不自动渲染图像）；点击单元格仅把
+- 后台四态保留，矩阵展示三态指示灯（no_data 显示为达标）；点击单元格仅把
   ``detail_key`` 写入 session_state，详情由 ``alert_matrix_detail`` 懒加载；
 - 交互采用 st.button 网格（而非 dataframe 单元格选择）：按钮原生支持
   ``help`` tooltip（⬜ 悬浮查看失败原因），且 AppTest / Playwright 均可
@@ -20,7 +20,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping, Sequence
+from itertools import groupby
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 import streamlit as st
@@ -41,14 +42,14 @@ MATRIX_SELECTION_STATE_KEY = "alert_matrix_selected_cell"
 CELL_STATE_ICONS = {
     CELL_STATE_OK: "🟢",
     CELL_STATE_ALERT: "🔴",
-    CELL_STATE_NO_DATA: "⚪",
+    CELL_STATE_NO_DATA: "🟢",
     CELL_STATE_ERROR: "⬜",
 }
 
 _STATE_HELP = {
     CELL_STATE_OK: "达标：上一周期无预警",
     CELL_STATE_ALERT: "有预警：点击查看预警明细与图像",
-    CELL_STATE_NO_DATA: "无数据",
+    CELL_STATE_NO_DATA: "达标：上一周期无预警",
     CELL_STATE_ERROR: "加载失败",
 }
 
@@ -86,6 +87,8 @@ def _select_cell(detail_key: str) -> None:
 def _cell_help(cell: Mapping[str, str]) -> str:
     """单元格 tooltip：状态说明 +（如有）降级原因，⬜ 的 message 在此可见。"""
     state = cell.get("state", CELL_STATE_ERROR)
+    if state == CELL_STATE_NO_DATA:
+        return _STATE_HELP[CELL_STATE_OK]
     message = (cell.get("message") or "").strip()
     base = _STATE_HELP.get(state, str(state))
     return f"{base}：{message}" if message else base
@@ -160,6 +163,9 @@ def _effective_cell_state(
     单元格（旧缓存 payload / 记录缺列）保持原状态。
     """
     state = str(cell.get("state", CELL_STATE_ERROR))
+    # 展示口径：后台 no_data 原值保留，前端统一视作达标。
+    if state == CELL_STATE_NO_DATA:
+        return CELL_STATE_OK
     if state != CELL_STATE_ALERT or not row.get("factory_filter_supported", True):
         return state
     alert_factories = {
@@ -172,7 +178,7 @@ def _effective_cell_state(
 
 def _render_legend(rows: Sequence[Mapping[str, Any]], week: Mapping[str, str]) -> None:
     st.caption(
-        "🟢 达标（无预警）｜🔴 有预警（点击查看详情）｜⚪ 无数据｜⬜ 加载失败（悬停查看原因）"
+        "🟢 达标（无预警）｜🔴 有预警（点击查看详情）｜⬜ 加载失败（悬停查看原因）"
     )
     iso_scope_note = (
         f"上一 ISO 周（{week.get('start', '?')} ~ {week.get('end', '?')}，不含本周）"
@@ -202,7 +208,7 @@ def render_alert_matrix_section(
     *,
     filter_selection: tuple[str, list[str], list[str]] | None = None,
 ) -> None:
-    """渲染矩阵筛选条、图例与四态按钮网格。点击仅写 session_state，不产生计算。
+    """渲染矩阵筛选条、图例与三态按钮网格。点击仅写 session_state，不产生计算。
 
     筛选条三个维度均为客户端切片：产品切列、监控类型切行（按 module_group）、
     厂别切单元格状态（alert_factories 交集）；payload 不重算。
@@ -248,29 +254,37 @@ def render_alert_matrix_section(
     _render_legend(visible_rows, week)
 
     column_widths = [_ROW_LABEL_WIDTH] + [1.0] * len(visible_products)
-    header_columns = st.columns(column_widths)
+    header_columns = st.columns(column_widths, gap="small", vertical_alignment="center")
     header_columns[0].markdown("**监控参数**")
     for column, prod_code in zip(header_columns[1:], visible_products):
-        column.markdown(f"**{prod_code}**")
+        column.markdown(f"**{prod_code}**", text_alignment="center")
 
-    previous_group: str | None = None
-    for row in visible_rows:
-        group = str(row.get("module_group", ""))
-        if group != previous_group:
-            # 同模块行相邻（注册表顺序保证），以模块名小标题做可视分组。
+    for group, group_rows in groupby(visible_rows, key=lambda row: str(row.get("module_group", ""))):
+        with st.container(border=True, gap="small", key=f"matrix_group_{group}"):
             st.caption(MODULE_GROUP_LABELS.get(group, group))
-            previous_group = group
-        line_columns = st.columns(column_widths)
+            _render_matrix_rows(group_rows, visible_products, column_widths, cells, selected_factory_set)
+
+
+def _render_matrix_rows(
+    rows: Iterable[Mapping[str, Any]],
+    products: Sequence[str],
+    column_widths: Sequence[float],
+    cells: Mapping[tuple[str, str], Mapping[str, Any]],
+    selected_factories: set[str],
+) -> None:
+    """Compact native button rows; keep stable keys and lazy detail callbacks."""
+    for row in rows:
+        line_columns = st.columns(column_widths, gap="small", vertical_alignment="center")
         line_columns[0].markdown(str(row.get("display_name") or row.get("row_key", "")))
         row_key = str(row.get("row_key", ""))
-        for column, prod_code in zip(line_columns[1:], visible_products):
+        for column, prod_code in zip(line_columns[1:], products):
             cell = cells.get((row_key, prod_code)) or {}
-            state = _effective_cell_state(row, cell, selected_factory_set)
+            state = _effective_cell_state(row, cell, selected_factories)
             detail_key = cell.get("detail_key") or f"{row_key}|{prod_code}"
             column.button(
                 CELL_STATE_ICONS.get(state, CELL_STATE_ICONS[CELL_STATE_ERROR]),
                 key=matrix_cell_button_key(row_key, prod_code),
-                help=_cell_help(cell),
+                help=_cell_help(cell if state == cell.get("state") else {"state": state}),
                 on_click=_select_cell,
                 args=(detail_key,),
                 width="stretch",
@@ -299,6 +313,18 @@ def render_alert_matrix_board(
         logger.exception("[alert-matrix] 矩阵 payload 加载失败: %s", exc)
         st.warning(f"预警矩阵暂时不可用（{exc}），下方看板功能不受影响。")
         return
+
+    from app.manager.compliance_manager import apply_matrix_compliance, load_matrix_config
+
+    st.button(
+        "更新显示", key="matrix_refresh_display",
+        help="保存 compliance_config.xlsx 后点击；只更新显示修饰，不清理指标计算缓存。",
+    )
+    try:
+        payload = apply_matrix_compliance(payload, load_matrix_config())
+    except Exception as exc:
+        logger.exception("[alert-matrix] 显示修饰配置读取失败")
+        st.warning(f"显示修饰配置未生效，保留原始状态：{exc}")
 
     render_alert_matrix_section(payload, filter_selection=filter_selection)
 

@@ -86,12 +86,7 @@ def test_config_loader_reads_the_shared_resources_workbook(
 
     config = ConfigLoader.get_compliance_config()
 
-    assert config["rules"][1] == {
-        "factory": "ARRAY",
-        "prod_code": "M673",
-        "data_type": "SPC",
-        "month": "M07",
-    }
+    assert config == {"rules": []}  # Legacy rules no longer enter backend calculations.
 
 
 def test_load_encrypted_workbook_uses_com_fallback(

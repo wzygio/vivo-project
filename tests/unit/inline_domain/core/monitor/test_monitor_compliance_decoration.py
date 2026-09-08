@@ -4,7 +4,7 @@ from src.inline_domain.core.monitor.monitor_calculator import sanitize_to_compli
 from src.shared_kernel.config import ConfigLoader
 
 
-def test_sanitize_to_compliant_matches_factory_product_type_and_month(monkeypatch) -> None:
+def test_retired_backend_hook_preserves_values_even_with_legacy_rules(monkeypatch) -> None:
     monkeypatch.setattr(
         ConfigLoader,
         "get_compliance_config",
@@ -62,8 +62,8 @@ def test_sanitize_to_compliant_matches_factory_product_type_and_month(monkeypatc
 
     result = sanitize_to_compliant(status_df, add_tag=True)
 
-    assert result["spc_status"].tolist() == ["OK", "OOC", "OK"]
-    assert result["is_compliant_modified"].tolist() == [True, False, True]
+    pd.testing.assert_frame_equal(result, status_df)
+    assert result is not status_df
 
 
 def test_sanitize_to_compliant_has_no_legacy_default_or_priority(monkeypatch) -> None:
@@ -89,4 +89,3 @@ def test_sanitize_to_compliant_has_no_legacy_default_or_priority(monkeypatch) ->
 
     assert result["spc_status"].tolist() == ["OOC"]
     assert "is_compliant_modified" not in result.columns
-

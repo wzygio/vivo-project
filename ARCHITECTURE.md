@@ -246,6 +246,14 @@ Inline/Yield 页面级自动预警（单片异常 flag=FALSE 口径、上一 ISO
 MWD 指定良损、Group/Code Sheet 优先级与 Mapping 边界见
 `docs/ADR/0018-yield-modifier-specified-rate-driven.md`。
 
+### IQC 示例报表
+
+`app/pages/IQC来料检验特性数据明细报表.py` 与 `IQC寿命测试报表.py` 通过
+`app/sections/iqc_domain/` 展示工作表格式。`src/iqc_domain/application/demo_reports.py`
+提供静态数据读取入口和筛选，`infrastructure/demo_repository.py` 读取
+`resources/iqc_domain/demo/` 中提取的示例值。当前不连接数据库，不执行质量判定或日期前推；
+主页 IQC 节点和侧边栏入口由 `app/static/config.js` 配置。资源来源见该 demo 目录的 README。
+
 ## 目录地图
 
 | 路径 | 内容 |

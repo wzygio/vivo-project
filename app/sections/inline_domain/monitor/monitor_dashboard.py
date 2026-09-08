@@ -16,7 +16,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.composition import build_monitor_repository
-from src.inline_domain.core.monitor.monitor_calculator import sanitize_to_compliant
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -466,17 +465,11 @@ def show_drilldown_modal(prod: str, factory: str, defect_type: str, available_ti
 # 管理员报警明细表 (Cached Alarm Details)
 # =========================================================================
 def _apply_compliance_visibility_filter(detail_df: pd.DataFrame) -> pd.DataFrame:
-    """Hide rows that the shared compliance engine marks as modified."""
+    """Retired legacy hook: matrix display switches never filter alarm details."""
     if detail_df is None or detail_df.empty:
         return pd.DataFrame()
 
-    original_columns = detail_df.columns.tolist()
-    compliant_df = sanitize_to_compliant(detail_df, add_tag=True)
-    if "is_compliant_modified" not in compliant_df.columns:
-        return compliant_df[original_columns].copy()
-
-    visible_df = compliant_df[~compliant_df["is_compliant_modified"].fillna(False).astype(bool)].copy()
-    return visible_df[[col for col in original_columns if col in visible_df.columns]].copy()
+    return detail_df.copy()
 
 
 def _normalise_alarm_detail_frame(df: pd.DataFrame, monitor_type: str, alarm_type: str) -> pd.DataFrame:

@@ -180,8 +180,8 @@ def _render_matrix_action_button() -> None:
         )
 
 
-st.subheader("🚦 Q-Time预警看板")
-with st.expander("Q-Time超规预警", expanded=True):
+st.subheader("🚦 全指标预警看板")
+with st.expander("全指标状态总览", expanded=True):
     # 筛选条常驻（与下方「超规片自动预警」控制台同观感）：未加载时也可先选
     # 条件，点击加载后按当前选择客户端切片；widget key 只在此渲染一处，
     # 已加载分支经 filter_selection 透传给矩阵，不重复渲染。

@@ -908,11 +908,8 @@ def render_alert_matrix_detail(
         )
 
         state = cell.get("state")
-        if state == CELL_STATE_OK:
+        if state in (CELL_STATE_OK, CELL_STATE_NO_DATA):
             st.success("该产品该项上一周期无预警（达标）。")
-            return
-        if state == CELL_STATE_NO_DATA:
-            st.caption(cell.get("message") or "无数据。")
             return
         if state == CELL_STATE_ERROR:
             st.warning(f"加载失败：{cell.get('message') or '未知原因'}")

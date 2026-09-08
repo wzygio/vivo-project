@@ -187,7 +187,8 @@ def test_matrix_renders_title_legend_groups_and_four_states() -> None:
     assert len(app.info) == 0
 
     captions = [c.value for c in app.caption]
-    assert any("🟢" in c and "🔴" in c and "⚪" in c and "⬜" in c for c in captions)
+    assert any("🟢" in c and "🔴" in c and "⬜" in c for c in captions)
+    assert all("无数据" not in c and "⚪" not in c for c in captions)
     # 时间口径图例：上一 ISO 周 + yield 良率波动 period 制注明
     assert any("上一 ISO 周" in c and "2026-08-24" in c for c in captions)
     assert any("period 制" in c and "Yield 趋势波动" in c for c in captions)
@@ -202,7 +203,7 @@ def test_matrix_renders_title_legend_groups_and_four_states() -> None:
 
     by_key = {b.key: b for b in cell_buttons}
     assert by_key[matrix_cell_button_key("qtime_sheet_oos", "M678")].label == "🔴"
-    assert by_key[matrix_cell_button_key("ctq_sheet_oos", "M678")].label == "⚪"
+    assert by_key[matrix_cell_button_key("ctq_sheet_oos", "M678")].label == "🟢"
     assert by_key[matrix_cell_button_key("yield_lot_oos", "Z571")].label == "⬜"
     assert by_key[matrix_cell_button_key("aoi_rs_sheet_oos", "M678")].label == "🟢"
 
@@ -214,7 +215,7 @@ def test_error_cell_tooltip_carries_message() -> None:
     assert "加载失败" in error_button.help
     assert "修饰工作簿读取失败" in error_button.help
     no_data_button = app.button(key=matrix_cell_button_key("ctq_sheet_oos", "M678"))
-    assert "修饰工作簿不存在" in no_data_button.help
+    assert no_data_button.help == "达标：上一周期无预警"
 
 
 def test_board_degrades_to_warning_when_payload_fails(
@@ -314,6 +315,71 @@ def test_click_ok_cell_shows_explanation_without_loading(
     assert app.session_state[MATRIX_SELECTION_STATE_KEY] == "aoi_rs_sheet_oos|M678"
     assert any("达标" in s.value for s in app.success)
     assert factory_calls == []
+
+
+def test_no_data_display_and_detail_are_ok_without_mutating_backend(monkeypatch):
+    from copy import deepcopy
+    from app.sections.inline_domain.monitor.alert_matrix import _cell_help, _effective_cell_state
+    from app.sections.inline_domain.monitor.alert_matrix_service import CELL_STATE_NO_DATA, CELL_STATE_OK
+
+    cell = {"state": CELL_STATE_NO_DATA, "message": "修饰工作簿不存在"}
+    original = deepcopy(cell)
+    assert _effective_cell_state({}, cell, {"ARRAY"}) == CELL_STATE_OK
+    assert _cell_help(cell) == "达标：上一周期无预警"
+    assert cell == original
+    monkeypatch.setattr(alert_matrix_detail, "build_default_detail_loaders",
+                        lambda **kwargs: pytest.fail("no-data must not load detail"))
+    app = _new_app("no-data-as-ok").run()
+    app.button(key=matrix_cell_button_key("ctq_sheet_oos", "M678")).click().run()
+    assert not app.exception
+    assert any("达标" in entry.value for entry in app.success)
+    assert not any("修饰工作簿不存在" in entry.value for entry in app.caption)
+
+
+def test_excel_override_updates_board_and_selected_detail_without_recomputation(tmp_path, monkeypatch):
+    from app.manager import compliance_manager as manager
+    import streamlit as st
+
+    path = tmp_path / "compliance.xlsx"
+    rows = [{"row_key": "qtime_sheet_oos", "display_name": "Q-Time 单片异常",
+             "module_group": "qtime", "time_scope": "上一 ISO 周"}]
+    manager.write_matrix_template(rows, ["M678"], path)
+    monkeypatch.setattr(manager, "CONFIG_PATH", path)
+    calls = []
+
+    @st.cache_data(show_spinner=False)
+    def cached_raw(nonce):
+        calls.append(1)
+        return {"products": ["M678"], "rows": rows,
+                "cells": {("qtime_sheet_oos", "M678"): {
+                    "state": "alert", "detail_key": "qtime_sheet_oos|M678"}},
+                "reference_week": {"start": "2026-08-24", "end": "2026-08-31"}}
+
+    nonce = str(uuid.uuid4())
+    monkeypatch.setattr(alert_matrix, "get_cached_alert_matrix", lambda: cached_raw(nonce))
+    monkeypatch.setattr(alert_matrix_detail, "build_default_detail_loaders",
+                        lambda **kwargs: pytest.fail("decorated cell must not load details"))
+    app = _new_app("excel-overlay")
+    app.session_state["fixture_mode"] = "board"
+    app.run()
+    key = matrix_cell_button_key("qtime_sheet_oos", "M678")
+    assert app.button(key=key).label == "🔴"
+    pd.DataFrame({"监控参数": ["Q-Time 单片异常"], "M678": [True]}).to_excel(
+        path, sheet_name=manager.SHEET_NAME, index=False)
+    app.button(key="matrix_refresh_display").click().run()
+    assert app.button(key=key).label == "🟢"
+    app.button(key=key).click().run()
+    assert not app.exception
+    assert any("达标" in entry.value for entry in app.success)
+    assert calls == [1]
+    assert cached_raw(nonce)["cells"][("qtime_sheet_oos", "M678")]["state"] == "alert"
+    app.button(key="matrix_detail_close").click().run()
+    pd.DataFrame({"监控参数": ["Q-Time 单片异常"], "M678": [False]}).to_excel(
+        path, sheet_name=manager.SHEET_NAME, index=False)
+    app.button(key="matrix_refresh_display").click().run()
+    assert app.button(key=key).label == "🔴"
+    assert calls == [1]
+    cached_raw.clear()
 
 
 def test_click_error_cell_shows_message_without_loading(

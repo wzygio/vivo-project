@@ -96,7 +96,7 @@ def test_filter_and_rollup_uses_all_data_for_type_switching() -> None:
     assert int(all_station.loc[0, "抽检数"]) == 17
 
 
-def test_alarm_detail_visibility_filter_hides_compliance_rows(monkeypatch) -> None:
+def test_alarm_detail_visibility_filter_ignores_retired_compliance_rules(monkeypatch) -> None:
     monkeypatch.setattr(
         ConfigLoader,
         "get_compliance_config",
@@ -151,6 +151,6 @@ def test_alarm_detail_visibility_filter_hides_compliance_rows(monkeypatch) -> No
 
     visible_df = _apply_compliance_visibility_filter(detail_df)
 
-    assert visible_df["sheet_id"].tolist() == ["S2", "S3"]
+    assert visible_df["sheet_id"].tolist() == ["S1", "S2", "S3"]
     assert "is_compliant_modified" not in visible_df.columns
     assert visible_df.columns.tolist() == detail_df.columns.tolist()
