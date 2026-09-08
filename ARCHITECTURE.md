@@ -125,7 +125,7 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   `infrastructure/aoi_tt/` 分别是共享测量事实的薄业务投影。SPC 透传制备
   投影；CTQ 固定选择 CTQ 分类；AOI_TT 按规格表中的
   `(step_id, param_name)` 识别 TT 并映射 lot/sheet 字段。派生规则不会写回共享快照。
-- 异常值规则由 `resources/inline_domain/spc_outlier_filters.xlsx` 提供。参数级规则按
+- 异常值规则由 `resources/inline_domain/spc/spc_outlier_filters.xlsx` 提供。参数级规则按
   `step_col + param_col` 应用数值边界；`param_col` 留空表示无条件剔除该
   `step_col` 下的全部参数。企业加密工作簿先经 `fr-file-decryption` 解密到
   `output/decrypted_files/` 后立即读取并清理临时文件；解密、读取或表头校验失败时
@@ -143,19 +143,30 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
   file_stat 不变不重读工作簿；`__flags` 读取失败上抛
   `SheetOosDecorationReadError`，不降级为空签名。
-- SPC、CTQ、AOI_TT、AOI_RS 在既有 OOS 明细生成后，以查询半开覆盖窗口增量维护
-  `data/inline_domain/oos_history/` 的 scope × 产品 Parquet；窗口内替换、窗口外长期保留，
-  成功空结果也会清除窗口内陈旧异常并记录刷新元数据。Excel `__flags` 仍是人工决策权威。
-- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述历史，按 `flag=False` 构建超规数量、
-  趋势、Top 站点与明细；它不再调用旧 monitor 全量量测/规格/规则计算。预警矩阵复用相同
-  历史读模型，历史缺失时只读回退当前工作簿。产品 × scope 刷新状态仅管理员 URL 展示。
+- SPC、CTQ、AOI_TT、AOI_RS 不再持久化 OOS/OOC 判定明细。
+  `LiveMonitorSource` 在原始快照之上重新应用配置，使用 `st.cache_data` 共用
+  OOS/OOC/过货事实；Excel `__flags` 仍是人工决策权威。旧 history reader 名称作为兼容入口保留，
+  生产组合根装配无写入接口的 `LiveHistoryStore`，不使用旧 history Parquet。
+  原始 Inline 快照窗口扩至原三月窗口、当年1月1日和当前 ISO 周起点中的最早值；
+  覆盖元数据不足时补载，失败不得以短窗口覆盖年度汇总。
+- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述缓存事实，按 `flag=False`
+  构建分类数量、趋势、Top 站点与明细；Y/Q/M/W 汇总先按当前开放周期增量写入
+  `resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx`，再从工作簿回读渲染。
+  工作簿以产品、scope 筛选、厂别筛选和完整时间标签隔离口径，闭合周期保持不变，
+  旧表无法还原的精确历史片数显示为 `—`；企业加密文件只经 Excel 修改临时副本的
+  目标 Sheet，校验后原子提交。SOOS 固定为 0。预警矩阵复用同一 OOS 缓存读模型。
+  产品 × scope × 预警类型刷新状态和 OOC 决策管理仅管理员 URL 展示。
+- `CpkMonitorService` 共用 SPC 原始输入，以 Sheet 均值/样本标准差直接计算当前年季月周能力，
+  中间结果只做缓存；CPK ≥ 1.33 为达标。结果写入同一工作簿的 CPK sheet 后回读，
+  与报警率 sheet 共用文件锁、原子写入与闭合周期保护。页头“刷新缓存”清除两类中间缓存
+  和查询状态，不需要删除派生快照。详细口径见 `docs/dev_docs/generated/Inline_domain/warning-dashboard-generation.md`。
 - 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
   所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
   匹配，补充主制程设备/腔室字段。
 - `SpcReportService` 固定使用 `SPC` 数据类型并提供 CPM/CPK 能力结果；SPC/CTQ Sheet
   点位图类型统一由 `app/charts/inline/chart_type.py` 根据
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK/CPM 人工修饰文件
-  `resources/inline_domain/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
+  `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
   CPK 沿用产品名 sheet，CPM 使用 `{prod_code}_cpm` sheet，两者共存于同一工作簿；
   既有周期键的人工值/flag 原样保留，当前能力结果中新出现的周期键以
   `flag=False` 追加；刷新不会重建或覆盖既有人工决策。
@@ -171,7 +182,7 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   defect 计数；趋势分母和规格口径仍遵循 ADR-0008。
 - `AoiRsReportService` 不复用共享 measurement：RS Code 明细和过货分母来自独立
   表/视图与事实契约，由 `infrastructure/aoi_rs/` 的产品级双 Parquet 仓储负责
-  三个月滚动提取、8 小时 TTL、覆盖版本、原子写入和数据库失败降级；规格保持
+  覆盖当前年度的滚动提取、全局 TTL、覆盖版本、原子写入和数据库失败降级；规格保持
   独立元数据查询。页面通过 `composition.py` 注入端口，并分别提供底层快照刷新
   与产品级 Streamlit 缓存失效。边界见 ADR-0015。
 - `MonitorAnalysisService` 基于同一 SPC 数据源完成时间桶映射、规则判定和
@@ -202,7 +213,8 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
 - 全局 `data_forward` 策略定义源时间到显示时间的映射。原始 Parquet 始终保存
   源时间；快照仓储在读取输出边界前推时间，直接查询仓储先把页面显示窗口反向
   换算为源时间窗口，再将结果映射回显示时间。关闭策略时保留真实时间；快照加载
-  窗口独立于该策略，始终从截止日第三个前序自然月的月初开始。
+  窗口独立于该策略，通常从截止日第三个前序自然月的月初开始；Inline 原始快照
+  为年度预警额外保留当前年度与跨年 ISO 周覆盖。
 - 所有承载前推后数据的页面缓存签名都包含策略启停状态和偏移天数，避免启停或
   调整天数后复用旧时间轴缓存。
 - 页面可缓存的应用服务只返回 DataFrame、标量或原生容器；缓存外再构造

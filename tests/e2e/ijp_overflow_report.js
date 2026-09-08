@@ -11,15 +11,17 @@ async page => {
 
   // 2. 默认筛选直接查询：图表 + 明细表出现
   await page.getByRole("button", { name: "查询" }).click();
-  await page.locator(".js-plotly-plot").waitFor({ timeout: 120_000 });
+  await page.getByText("产品：M626", { exact: true }).click();
+  await page.getByText("线体：3CEE01", { exact: true }).click();
+  await page.getByText("线体：3CEE02", { exact: true }).click();
+  await page.getByText("产品：M678", { exact: true }).click();
+  await page.getByText("线体：3CEE04", { exact: true }).click();
+  await page.locator(".js-plotly-plot").first().waitFor({ timeout: 120_000 });
   await page.locator('[data-testid="stDataFrame"]').waitFor({ timeout: 60_000 });
 
-  const traces = await page.evaluate(() =>
-    (document.querySelector(".js-plotly-plot")?.data || []).map(t => t.type),
-  );
-  const barTraces = traces.filter(t => t === "bar").length;
-  if (barTraces < 3) {
-    throw new Error(`By天 堆叠图 traces 不足：期望 >=3 条 bar，实际 ${traces}`);
+  const chartCount = await page.locator(".js-plotly-plot").count();
+  if (chartCount !== 4) {
+    throw new Error(`Printer 图表数量错误：期望 4，实际 ${chartCount}`);
   }
 
   // 3. viewport-fit：1365×768 下不允许页面级横向滚动
@@ -64,5 +66,5 @@ async page => {
     .waitFor({ timeout: 60_000 });
   await page.screenshot({ path: "output/test-results/ijp/ijp_report_error.png" });
 
-  return `IJP E2E 通过：bar traces=${barTraces}，viewport 无横向滚动`;
+  return `IJP E2E 通过：Printer 图表=${chartCount}，viewport 无横向滚动`;
 }

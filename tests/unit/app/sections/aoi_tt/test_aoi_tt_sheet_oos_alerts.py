@@ -118,7 +118,7 @@ def test_load_decoration_returns_none_on_read_error(monkeypatch, tmp_path) -> No
     workbook = tmp_path / "aoi_tt_sheet_oos_decoration.xlsx"
     workbook.write_bytes(b"not-a-real-xlsx")
 
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
 
     def _raise(*_args, **_kwargs):
         raise SheetOosDecorationReadError("unreadable decoration file")
@@ -132,7 +132,7 @@ def test_load_decoration_returns_dataframe_on_success(monkeypatch, tmp_path) -> 
     workbook = tmp_path / "aoi_tt_sheet_oos_decoration.xlsx"
     workbook.write_bytes(b"fake-bytes")
 
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
     expected = pd.DataFrame([_decoration_row()])
     monkeypatch.setattr(
         aoi_tt_dashboard, "load_sheet_oos_decoration", lambda *_a, **_kw: expected
@@ -145,7 +145,7 @@ def test_load_decoration_returns_dataframe_on_success(monkeypatch, tmp_path) -> 
 
 
 def test_load_decoration_missing_file_returns_none(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
     called = {"count": 0}
 
     def _counting_loader(*_args, **_kwargs):

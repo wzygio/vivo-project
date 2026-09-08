@@ -9,6 +9,8 @@ from src.inline_domain.application.spc.ports import SpcDataPort
 class CtqRepository:
     """Expose CTQ-specific preprocessing over the shared measurement source."""
 
+    supports_shared_history_persistence = True
+
     def __init__(self, measurement_repository: SpcDataPort) -> None:
         self.measurement_repository = measurement_repository
 

@@ -20,9 +20,17 @@ import streamlit as st
 from src.inline_domain.application.shared.decorated_data import (
     _preprocess_sheet_features_by_type,
     prepare_decorated_data,
+    resolve_product_resource_dir,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.application.shared.throughput_persistence import (
+    persist_throughput_facts,
+)
+from src.inline_domain.core.shared.sheet_ooc_decoration import (
+    OOC_KEY_COLUMNS,
+    build_sheet_ooc_detail,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
@@ -123,6 +131,9 @@ def fetch_decorated_features(
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in _DATA_TYPE_FILTER_BY_SCOPE:
         raise ValueError(f"unknown decoration scope: {scope!r}")
+    persist_shared_history = bool(
+        getattr(_features_source, "supports_shared_history_persistence", False)
+    )
 
     fetch_config = SpcQueryConfig(
         prod_code=prod_code,
@@ -136,11 +147,30 @@ def fetch_decorated_features(
         start_date, end_date
     )
     if measurements_df.empty:
-        if normalized_scope != SCOPE_NONE:
-            build_oos_history_service().update_history(
-                normalized_scope,
-                prod_code,
-                pd.DataFrame(),
+        if (
+            persist_shared_history
+            and normalized_scope != SCOPE_NONE
+            and prod_code in ConfigLoader.get_enabled_products()
+        ):
+            product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
+            persist_ooc_facts(
+                scope=normalized_scope,
+                prod_code=prod_code,
+                detail_df=build_sheet_ooc_detail(pd.DataFrame()),
+                key_columns=OOC_KEY_COLUMNS,
+                product_dir=product_dir,
+                coverage_start=coverage_start,
+                coverage_end=coverage_end,
+                product_revision=product_revision,
+                decision_signature=decision_signature,
+            )
+            persist_throughput_facts(
+                scope=normalized_scope,
+                prod_code=prod_code,
+                details=pd.DataFrame(),
+                event_time_column="sheet_start_time",
+                item_id_column="sheet_id",
+                product_dir=product_dir,
                 coverage_start=coverage_start,
                 coverage_end=coverage_end,
             )
@@ -158,11 +188,30 @@ def fetch_decorated_features(
             & (measurements_df["sheet_start_time"] < end_dt)
         ].copy()
         if measurements_df.empty:
-            if normalized_scope != SCOPE_NONE:
-                build_oos_history_service().update_history(
-                    normalized_scope,
-                    prod_code,
-                    pd.DataFrame(),
+            if (
+                persist_shared_history
+                and normalized_scope != SCOPE_NONE
+                and prod_code in ConfigLoader.get_enabled_products()
+            ):
+                product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
+                persist_ooc_facts(
+                    scope=normalized_scope,
+                    prod_code=prod_code,
+                    detail_df=build_sheet_ooc_detail(pd.DataFrame()),
+                    key_columns=OOC_KEY_COLUMNS,
+                    product_dir=product_dir,
+                    coverage_start=coverage_start,
+                    coverage_end=coverage_end,
+                    product_revision=product_revision,
+                    decision_signature=decision_signature,
+                )
+                persist_throughput_facts(
+                    scope=normalized_scope,
+                    prod_code=prod_code,
+                    details=pd.DataFrame(),
+                    event_time_column="sheet_start_time",
+                    item_id_column="sheet_id",
+                    product_dir=product_dir,
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
                 )
@@ -188,19 +237,43 @@ def fetch_decorated_features(
         decision_signature=decision_signature,
     )
     decoration_result = decorated_data.sheet_oos_decoration_result
-    if not spec_df.empty:
-        build_oos_history_service().update_history(
-            normalized_scope,
-            prod_code,
-            decoration_result.decoration_df,
+    product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
+    if not spec_df.empty and persist_shared_history:
+        persist_ooc_facts(
+            scope=normalized_scope,
+            prod_code=prod_code,
+            detail_df=build_sheet_ooc_detail(
+                decorated_data.original_sheet_features_df
+                if decorated_data.original_sheet_features_df is not None
+                else pd.DataFrame()
+            ),
+            key_columns=OOC_KEY_COLUMNS,
+            product_dir=product_dir,
             coverage_start=coverage_start,
             coverage_end=coverage_end,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
-    else:
+    elif spec_df.empty:
         logger.warning(
-            "[shared] Skip OOS history coverage update for %s/%s: specifications are empty",
+            "[shared] Skip OOC ledger update for %s/%s: specifications are empty",
             normalized_scope,
             prod_code,
+        )
+    if persist_shared_history:
+        persist_throughput_facts(
+            scope=normalized_scope,
+            prod_code=prod_code,
+            details=(
+                decorated_data.original_sheet_features_df
+                if decorated_data.original_sheet_features_df is not None
+                else pd.DataFrame()
+            ),
+            event_time_column="sheet_start_time",
+            item_id_column="sheet_id",
+            product_dir=product_dir,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
         )
     logger.info(
         "[shared] decorated features prepared: prod=%s scope=%s features=%s refresh_reason=%s",

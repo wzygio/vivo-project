@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -39,8 +40,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CPM_CPK_EXCLUDED_PARAMETER_TOKEN = "PPA"
-
 
 class SpcReportBuildError(RuntimeError):
     """Raised when an SPC report cannot be built safely."""
@@ -50,16 +49,20 @@ class SpcDecorationFileError(SpcReportBuildError):
     """Raised when the SPC decoration workbook cannot be read safely."""
 
 
-def exclude_cpm_cpk_parameters(dataframe: pd.DataFrame) -> pd.DataFrame:
+def exclude_cpm_cpk_parameters(
+    dataframe: pd.DataFrame,
+    exempt_param_name_contains: Iterable[str],
+) -> pd.DataFrame:
     """Exclude business-rule parameters from CPM/CPK inputs without affecting chart data."""
     if dataframe.empty or "param_name" not in dataframe.columns:
         return dataframe.copy()
 
-    is_excluded_parameter = dataframe["param_name"].astype(str).str.contains(
-        CPM_CPK_EXCLUDED_PARAMETER_TOKEN,
-        case=False,
-        regex=False,
-    )
+    parameter_names = dataframe["param_name"].astype(str)
+    is_excluded_parameter = pd.Series(False, index=dataframe.index)
+    for configured_value in exempt_param_name_contains:
+        token = str(configured_value).strip()
+        if token:
+            is_excluded_parameter |= parameter_names.str.contains(token, case=False, regex=False)
     return dataframe.loc[~is_excluded_parameter].copy()
 
 
@@ -187,13 +190,15 @@ class SpcReportService:
         period_sigma_source: str = "",
         product_revision: str = "",
         decision_signature: str = "",
+        capability_exempt_param_name_contains: tuple[str, ...] = (),
     ) -> dict[str, object]:
         """Cache only reload-stable CPM/CPK payload values.
 
         max_entries=16：缓存为进程级共享，可覆盖已启用产品及短期 revision；
         TTL 由 config/global.yaml 的 application.cache_ttl_hours 统一配置：
         跨日日期窗口变化与"刷新缓存"换 key 产生的孤儿条目由 TTL 兜底回收，内存有界。
-        product_revision/decision_signature 进入缓存 key 并透传到共享管线门控。
+        product_revision/decision_signature 进入缓存 key 并透传到共享管线门控；
+        capability_exempt_param_name_contains 同样进入缓存 key，避免配置变更复用旧结果。
         """
         try:
             query_config = SpcQueryConfig.model_validate_json(query_config_json)
@@ -223,8 +228,14 @@ class SpcReportService:
             if sheet_features_df.empty:
                 return SpcReportService._empty_payload()
 
-            capability_sheet_features_df = exclude_cpm_cpk_parameters(sheet_features_df)
-            capability_measurements_df = exclude_cpm_cpk_parameters(measurements_df)
+            capability_sheet_features_df = exclude_cpm_cpk_parameters(
+                sheet_features_df,
+                capability_exempt_param_name_contains,
+            )
+            capability_measurements_df = exclude_cpm_cpk_parameters(
+                measurements_df,
+                capability_exempt_param_name_contains,
+            )
             capability_end_date = resolve_period_capability_end_date(
                 capability_sheet_features_df,
                 query_config.end_date,
@@ -306,8 +317,14 @@ class SpcReportService:
         period_sigma_source: str = "",
         product_revision: str = "",
         decision_signature: str = "",
+        capability_exempt_param_name_contains: tuple[str, ...] | None = None,
     ) -> SpcReportViewModel:
         """Load cached CPM data and construct project ViewModels outside the pickle boundary."""
+        resolved_capability_exemptions = (
+            tuple(ConfigLoader.get_spc_capability_param_exemptions())
+            if capability_exempt_param_name_contains is None
+            else tuple(capability_exempt_param_name_contains)
+        )
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
@@ -315,5 +332,6 @@ class SpcReportService:
             period_sigma_source=period_sigma_source,
             product_revision=product_revision,
             decision_signature=decision_signature,
+            capability_exempt_param_name_contains=resolved_capability_exemptions,
         )
         return SpcReportService._view_model_from_payload(payload)

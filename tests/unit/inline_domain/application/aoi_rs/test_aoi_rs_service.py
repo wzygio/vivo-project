@@ -330,11 +330,11 @@ def test_service_respects_aoi_rs_flag_false_and_delete(
     assert t3_sheet["rs_qty"].iloc[0] == 5
 
 
-def test_filtered_query_does_not_replace_shared_oos_history(monkeypatch) -> None:
+def test_filtered_query_does_not_write_derived_parquet(monkeypatch) -> None:
     updates: list[object] = []
     monkeypatch.setattr(
-        aoi_rs_service.OosHistoryService,
-        "update_history",
+        pd.DataFrame,
+        "to_parquet",
         lambda self, *args, **kwargs: updates.append((args, kwargs)),
     )
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()

@@ -408,7 +408,7 @@ def _load_aoi_tt_oos_decoration_cached(
     读取失败（含企业加密文件 COM 回退失败）降级返回 None，绝不阻断页面、
     也绝不触发工作簿写入。
     """
-    product_dir = resolve_product_resource_dir(prod_code)
+    product_dir = resolve_product_resource_dir(prod_code, scope="aoi_tt")
     try:
         return load_sheet_oos_decoration(
             product_dir,
@@ -431,7 +431,7 @@ def load_aoi_tt_oos_decoration(prod_code: str) -> pd.DataFrame | None:
     普通 rerun 不会重复读取工作簿。
     """
     decoration_path = (
-        resolve_product_resource_dir(prod_code) / AOI_TT_OOS_DECORATION_FILE_NAME
+        resolve_product_resource_dir(prod_code, scope="aoi_tt") / AOI_TT_OOS_DECORATION_FILE_NAME
     )
     try:
         stat = decoration_path.stat()

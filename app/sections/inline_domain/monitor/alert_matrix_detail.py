@@ -64,6 +64,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,7 @@ def _load_sheet_oos_alerts_display(
     }
     time_column, key_columns, column_map, output_columns = scope_config[scope]
 
-    resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
+    resource_dir = scope_resource_dir(scope)
     decoration_df = load_sheet_oos_decoration(
         resource_dir,
         file_name=SCOPE_DECORATION_FILE_NAME[scope],

@@ -10,7 +10,11 @@ import pytest
 from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
-from src.inline_domain.application.spc.spc_service import SpcReportService, resolve_period_capability_end_date
+from src.inline_domain.application.spc.spc_service import (
+    SpcReportService,
+    exclude_cpm_cpk_parameters,
+    resolve_period_capability_end_date,
+)
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
@@ -98,6 +102,14 @@ class FakeSpcRepository:
                 }
             ]
         )
+
+
+def test_capability_parameter_exclusions_use_only_configured_tokens() -> None:
+    dataframe = pd.DataFrame({"param_name": ["PPA_THK", "PROFILE_THK", "CD"]})
+
+    result = exclude_cpm_cpk_parameters(dataframe, ["PROFILE"])
+
+    assert result["param_name"].tolist() == ["PPA_THK", "CD"]
 
 
 def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
@@ -210,28 +222,33 @@ def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypat
     assert report.period_capability_df["point_count"].dropna().max() >= 2
 
 
-def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
+def test_spc_service_excludes_configured_parameters_from_cpm_and_cpk_calculation(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    class PpaOnlySpcRepository(FakeSpcRepository):
+    class ExemptOnlySpcRepository(FakeSpcRepository):
         def get_spc_measurements(
             self,
             config: SpcQueryConfig,
             force_refresh: bool = False,
         ) -> pd.DataFrame:
             measurements_df = super().get_spc_measurements(config, force_refresh)
-            return measurements_df.assign(param_name="PPA_THK")
+            return measurements_df.assign(param_name="PROFILE_THK")
 
         def get_spc_spec_limits(self, prod_code: str) -> pd.DataFrame:
             spec_df = super().get_spc_spec_limits(prod_code)
-            return spec_df.assign(param_name="PPA_THK")
+            return spec_df.assign(param_name="PROFILE_THK")
 
     SpcReportService.fetch_spc_report_payload.clear()
     monkeypatch.setattr(
         spc_service.ConfigLoader,
         "get_spc_period_sigma_source",
         staticmethod(lambda: "sheet_mean"),
+    )
+    monkeypatch.setattr(
+        spc_service.ConfigLoader,
+        "get_spc_capability_param_exemptions",
+        staticmethod(lambda: ["PROFILE"]),
     )
     monkeypatch.setattr(
         decorated_data.ConfigLoader,
@@ -246,14 +263,14 @@ def test_spc_service_excludes_ppa_parameters_from_cpm_and_cpk_calculation(
     )
 
     report = SpcReportService.get_spc_report_data(
-        _data_port=PpaOnlySpcRepository(Path("data"), True, object()),
+        _data_port=ExemptOnlySpcRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
-        snapshot_signature="ppa-excluded-from-capability",
+        snapshot_signature="configured-exclusion-from-capability",
     )
 
     assert not report.raw_measurements_df.empty
     assert not report.sheet_features_df.empty
-    assert set(report.indicators_df["param_name"]) == {"PPA_THK"}
+    assert set(report.indicators_df["param_name"]) == {"PROFILE_THK"}
     assert report.period_capability_df.empty
     assert report.cpk_decoration_result is not None
     assert report.cpm_decoration_result is not None

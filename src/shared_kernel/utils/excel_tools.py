@@ -622,7 +622,9 @@ def batch_export_spc_rules_to_csv(
         生成的 csv 文件路径列表
     """
     if resource_dir is None:
-        resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
+        resource_dir = ConfigLoader.get_domain_resource_path(
+            "inline_domain", "spc_outlier_filters", "spc_outlier_filters.xlsx"
+        ).parent
 
     target_files = ["spc_outlier_filters.xlsx"]
     csv_dir = resource_dir / csv_subdir

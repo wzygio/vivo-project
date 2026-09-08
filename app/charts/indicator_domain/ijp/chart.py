@@ -8,14 +8,13 @@ from plotly.colors import qualitative
 
 from src.indicator_domain.core.ijp.overflow import IJP_RS_CODES
 
-TARGET_COLOR = "#ef4444"
-
 
 def build_ijp_daily_figure(
     ratios: pd.DataFrame,
-    target: float | None = None,
+    *,
+    title: str = "OLED RS Overflow By天",
 ) -> go.Figure:
-    """Build the day × RS_CODE 100% stacked ratio bars with an optional target line."""
+    """Build the day × RS_CODE 100% stacked ratio bars."""
     figure = go.Figure()
     frame = ratios.copy()
     days: list[str] = []
@@ -40,26 +39,22 @@ def build_ijp_daily_figure(
                 hovertemplate="%{x}<br>" + code + " %{y:.1f}%<extra></extra>",
             )
 
-    if target is not None and days:
-        figure.add_scatter(
-            x=days,
-            y=[float(target)] * len(days),
-            name="Target",
-            mode="lines",
-            line={"color": TARGET_COLOR, "width": 2, "dash": "dash"},
-            hovertemplate=f"Target {float(target):.1f}%<extra></extra>",
-        )
-
     figure.update_layout(
-        title={"text": "OLED RS Overflow By天", "x": 0.5, "xanchor": "center"},
+        title={"text": title, "x": 0.5, "xanchor": "center"},
         height=430,
-        margin={"l": 50, "r": 24, "t": 72, "b": 60},
+        margin={"l": 50, "r": 24, "t": 108, "b": 60},
         barmode="stack",
         bargap=0.35,
-        legend={"orientation": "h", "x": 0.5, "xanchor": "center", "y": 1.02},
+        legend={
+            "orientation": "h",
+            "x": 0.5,
+            "xanchor": "center",
+            "y": 1.02,
+            "yanchor": "bottom",
+        },
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
-        xaxis={"title": "日期", "showgrid": False},
+        xaxis={"title": "日期", "showgrid": False, "type": "category"},
         yaxis={
             "title": "CODE 占比（%）",
             "range": [0, 100],

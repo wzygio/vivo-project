@@ -16,6 +16,14 @@ class RateOverrideReadError(RuntimeError):
     """Raised when a configured rate-override workbook cannot be read safely."""
 
 
+def _workbook_sheet_names(workbook: object) -> set[str]:
+    sheets = workbook.Sheets
+    return {
+        str(sheets(index).Name).strip().casefold()
+        for index in range(1, sheets.Count + 1)
+    }
+
+
 def load_rate_overrides(
     path: Path | None,
     sheet_name: str,
@@ -32,6 +40,13 @@ def load_rate_overrides(
         excel.Visible = False
         excel.DisplayAlerts = False
         workbook = excel.Workbooks.Open(str(path.resolve()))
+        if sheet_name.strip().casefold() not in _workbook_sheet_names(workbook):
+            logger.info(
+                "Rate override workbook has no sheet for product %s; "
+                "continuing without overrides.",
+                sheet_name,
+            )
+            return None, None
         raw_data = workbook.Sheets(sheet_name).UsedRange.Value()
         if not raw_data or len(raw_data) < 2:
             return None, None

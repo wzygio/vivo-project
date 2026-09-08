@@ -132,6 +132,15 @@ def test_scope_decision_signature_uses_scope_workbook(
         "get_domain_resource_dir",
         classmethod(lambda _cls, _domain: tmp_path / "resources" / "inline_domain"),
     )
+    monkeypatch.setattr(
+        decision_signature_module.ConfigLoader,
+        "get_domain_resource_path",
+        classmethod(
+            lambda _cls, _domain, _key, default_name=None: (
+                tmp_path / "resources" / "inline_domain" / str(default_name)
+            )
+        ),
+    )
     resources = tmp_path / "resources" / "inline_domain"
     workbook = _write_workbook_with_flags(resources / "spc_sheet_oos_decoration.xlsx")
 

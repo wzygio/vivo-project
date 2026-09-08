@@ -11,6 +11,8 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class SpcRepository:
+    supports_shared_history_persistence = True
+
     """Expose the SPC data contract while delegating preparation to measurement."""
 
     def __init__(self, preparation: MeasurementPreparationPort) -> None:

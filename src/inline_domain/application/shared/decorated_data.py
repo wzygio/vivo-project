@@ -27,6 +27,7 @@ from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     prepare_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,15 @@ class DecoratedData:
     raw_measurements_df: pd.DataFrame
     sheet_features_df: pd.DataFrame
     sheet_oos_decoration_result: SheetOosDecorationResult
+    original_sheet_features_df: pd.DataFrame | None = None
 
 
-def resolve_product_resource_dir(prod_code: str, product_dir: Path | None = None) -> Path:
+def resolve_product_resource_dir(
+    prod_code: str,
+    product_dir: Path | None = None,
+    *,
+    scope: str | None = "spc",
+) -> Path:
     """Resolve the shared resources directory used by the per-sheet decoration workbooks.
 
     Decoration workbooks live in the inline domain resources directory (routed via
@@ -59,6 +66,8 @@ def resolve_product_resource_dir(prod_code: str, product_dir: Path | None = None
     """
     if product_dir is not None:
         return product_dir
+    if scope is not None:
+        return scope_resource_dir(scope)
     return ConfigLoader.get_domain_resource_dir("inline_domain")
 
 
@@ -112,7 +121,9 @@ def prepare_decorated_data(
     decoration_result = prepare_sheet_oos_decoration(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
-        product_dir=resolve_product_resource_dir(prod_code, product_dir),
+        product_dir=resolve_product_resource_dir(
+            prod_code, product_dir, scope=normalized_scope
+        ),
         persist_files=persist,
         decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
         decoration_sheet_name=prod_code,
@@ -135,4 +146,5 @@ def prepare_decorated_data(
         raw_measurements_df=decoration_result.raw_measurements_df,
         sheet_features_df=decorated_features_df,
         sheet_oos_decoration_result=decoration_result,
+        original_sheet_features_df=original_features_df,
     )

@@ -9,7 +9,7 @@ PANEL_ID/PANEL_LOCATION 派生与 BOTTOM0~9 展开在 core 纯 Python 完成
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -42,7 +42,8 @@ DETAIL_COLUMNS = [
     "rs_code",
     "code_ratio",
 ]
-DAILY_COLUMNS = ["day", "rs_code", "code_num", "ratio"]
+DAILY_DIMENSIONS = ["productcode", "line", "printer", "day"]
+DAILY_COLUMNS = [*DAILY_DIMENSIONS, "rs_code", "code_num", "ratio"]
 RAW_DETAIL_COLUMNS = [
     "print_time",
     "productcode",
@@ -52,7 +53,6 @@ RAW_DETAIL_COLUMNS = [
     "image_name",
 ]
 SAFE_DATA_ERROR = "IJP 溢流数据读取失败，请联系系统管理员确认数据库权限。"
-DAILY_LOOKBACK_DAYS = 7
 logger = logging.getLogger(__name__)
 
 _JOINED_FROM = """
@@ -75,15 +75,11 @@ _JOINED_FROM = """
 
 # (IjpQuery 字段, SQL 片段) —— 空集合 = 不过滤，与 FineReport IF(LEN()=0) 语义一致。
 _OPTIONAL_FILTERS = (
-    ("product_names", "AND P.productspecname IN :product_names"),
     ("product_codes", "AND P.productcode IN :product_codes"),
     ("lines", "AND SUBSTR(H.sub_equip_id, 1, 6) IN :lines"),
-    ("equipments", "AND H.sub_equip_id IN :equipments"),
-    ("glass_ids", "AND D.GLASS_ID IN :glass_ids"),
-    ("sub_prod_types", "AND V.sub_prod_type IN :sub_prod_types"),
+    ("work_order_types", "AND V.sub_prod_type IN :work_order_types"),
     ("codes", "AND D.RS_CODE IN :codes"),
     ("picis", "AND T.PICI IN :picis"),
-    ("cycles", "AND T.CYCLE_ID IN :cycles"),
 )
 
 
@@ -102,33 +98,6 @@ class IjpRepository:
             ),
         )
         return self._options(frame, "product_code")
-
-    def list_product_names(self, product_codes: tuple[str, ...]) -> tuple[str, ...]:
-        sql = (
-            "SELECT DISTINCT PROD_ID FROM DWR_MES_PRODUCTSPEC_V "
-            "WHERE FACTORY = 'OLED'"
-        )
-        params: dict[str, object] = {}
-        expanding: list[str] = []
-        if product_codes:
-            sql += " AND product_code IN :product_codes"
-            params["product_codes"] = product_codes
-            expanding.append("product_codes")
-        frame = self._read_frame(
-            self._statement(f"{sql} ORDER BY PROD_ID", expanding),
-            params=params,
-        )
-        return self._options(frame, "prod_id")
-
-    def list_sub_prod_types(self) -> tuple[str, ...]:
-        frame = self._read_frame(
-            text(
-                "SELECT DISTINCT SUB_PROD_TYPE FROM DWR_MES_PRODUCTREQUEST_V "
-                "WHERE FACTORY = 'OLED' AND SUB_PROD_TYPE IS NOT NULL "
-                "ORDER BY SUB_PROD_TYPE"
-            ),
-        )
-        return self._options(frame, "sub_prod_type")
 
     def list_picis(
         self,
@@ -152,48 +121,25 @@ class IjpRepository:
         )
         return self._options(frame, "pici")
 
-    def list_cycles(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        product_codes: tuple[str, ...],
-        picis: tuple[str, ...],
-    ) -> tuple[str, ...]:
-        sql = (
-            "SELECT CYCLE_ID FROM EDA.DWD_GLASS_OLED_CYCLE_V3 WHERE "
-            + self._event_time_filter()
-        )
-        params = self._window_params(start_time, end_time)
-        expanding: list[str] = []
-        if product_codes:
-            sql += " AND PROD_CODE IN :product_codes"
-            params["product_codes"] = product_codes
-            expanding.append("product_codes")
-        if picis:
-            sql += " AND PICI IN :picis"
-            params["picis"] = picis
-            expanding.append("picis")
-        frame = self._read_frame(
-            self._statement(f"{sql} GROUP BY CYCLE_ID ORDER BY CYCLE_ID", expanding),
-            params=params,
-        )
-        return self._options(frame, "cycle_id")
-
     def fetch_daily_ratios(self, query: IjpQuery) -> pd.DataFrame:
-        window_start = query.start_time - timedelta(days=DAILY_LOOKBACK_DAYS)
         select = (
-            "SELECT SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10) AS day, "
+            "SELECT P.PRODUCTCODE AS productcode, "
+            "SUBSTR(H.SUB_EQUIP_ID, 1, 6) AS line, "
+            "H.SUB_EQUIP_ID AS printer, "
+            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10) AS day, "
             "D.RS_CODE AS rs_code, COUNT(*) AS code_num"
         )
         group_by = (
-            " GROUP BY SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10), D.RS_CODE"
-            " ORDER BY day, rs_code"
+            " GROUP BY P.PRODUCTCODE, SUBSTR(H.SUB_EQUIP_ID, 1, 6), "
+            "H.SUB_EQUIP_ID, "
+            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10), D.RS_CODE"
+            " ORDER BY productcode, line, printer, day, rs_code"
         )
         statement, params = self._filtered_statement(
-            query, select, group_by, window_start
+            query, select, group_by, query.start_time
         )
         frame = self._read_frame(statement, params=params)
-        frame = self._normalize(frame, ["day", "rs_code", "code_num"])
+        frame = self._normalize(frame, [*DAILY_DIMENSIONS, "rs_code", "code_num"])
         if frame.empty:
             return frame.reindex(columns=DAILY_COLUMNS)
         frame["code_num"] = pd.to_numeric(frame["code_num"], errors="coerce").fillna(0)
@@ -201,7 +147,7 @@ class IjpRepository:
             days=self._data_forward_policy.effective_days
         )
         frame["day"] = shifted_day.dt.strftime("%Y-%m-%d")
-        totals = frame.groupby("day")["code_num"].transform("sum")
+        totals = frame.groupby(DAILY_DIMENSIONS)["code_num"].transform("sum")
         frame["ratio"] = (frame["code_num"] / totals.where(totals > 0)).round(3)
         return frame.reindex(columns=DAILY_COLUMNS)
 
@@ -329,14 +275,6 @@ class IjpRepository:
         extra = shaped[breakout.notna()].copy()
         extra["panel_location"] = breakout[breakout.notna()]
         shaped = pd.concat([shaped, extra], ignore_index=True)
-
-        if query.panel_locations:
-            wanted = set(query.panel_locations)
-            normalized_location = shaped["panel_location"].where(
-                ~shaped["panel_location"].fillna("").str.startswith("BOTTOM"),
-                "BOTTOM",
-            )
-            shaped = shaped[normalized_location.isin(wanted)]
 
         shaped = shaped.sort_values(
             ["productcode", "print_time", "rs_code", "glass_id", "printer"],

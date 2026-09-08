@@ -17,7 +17,11 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_sheet_point_df,
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
-from src.inline_domain.composition import build_oos_history_service
+from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
+from src.inline_domain.application.shared.throughput_persistence import (
+    persist_throughput_facts,
+)
+from src.inline_domain.core.shared.sheet_ooc_decoration import build_aoi_rs_ooc_detail
 from src.shared_kernel.config import ConfigLoader
 
 if TYPE_CHECKING:
@@ -85,6 +89,7 @@ def _build_chart_points(
     decision_signature: str = "",
     coverage_start: pd.Timestamp | None = None,
     coverage_end: pd.Timestamp | None = None,
+    persist_shared_history: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
@@ -97,25 +102,39 @@ def _build_chart_points(
         build_lot_point_df(rs_details_df, pass_through_df),
         build_sheet_point_df(rs_details_df),
         spec_df,
-        product_dir=resolve_product_resource_dir(prod_code),
+        product_dir=resolve_product_resource_dir(prod_code, scope="aoi_rs"),
         prod_code=prod_code,
         exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
         scope="aoi_rs",
         product_revision=product_revision,
         decision_signature=decision_signature,
     )
-    if coverage_start is not None and coverage_end is not None and not spec_df.empty:
-        build_oos_history_service().update_history(
-            "aoi_rs",
-            prod_code,
-            getattr(result, "decoration_df", pd.DataFrame()),
+    if (
+        persist_shared_history
+        and coverage_start is not None
+        and coverage_end is not None
+    ):
+        product_dir = resolve_product_resource_dir(prod_code, scope="aoi_rs")
+        persist_ooc_facts(
+            scope="aoi_rs",
+            prod_code=prod_code,
+            detail_df=build_aoi_rs_ooc_detail(),
+            key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+            product_dir=product_dir,
             coverage_start=coverage_start,
             coverage_end=coverage_end,
+            product_revision=product_revision,
+            decision_signature=decision_signature,
         )
-    elif coverage_start is not None and coverage_end is not None:
-        logger.warning(
-            "[AOI_RS] Skip OOS history coverage update for %s: specifications are empty",
-            prod_code,
+        persist_throughput_facts(
+            scope="aoi_rs",
+            prod_code=prod_code,
+            details=pass_through_df,
+            event_time_column="start_time",
+            item_id_column="sheet_id",
+            product_dir=product_dir,
+            coverage_start=coverage_start,
+            coverage_end=coverage_end,
         )
     return result.lot_points_df, result.sheet_points_df
 
@@ -177,15 +196,35 @@ class AoiRsReportService:
 
         try:
             rs_details_df = _data_port.get_rs_details(query_config)
+            persist_shared_history = bool(
+                getattr(_data_port, "supports_shared_history_persistence", False)
+            )
             if rs_details_df.empty:
                 coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                     query_config.start_date, query_config.end_date
                 )
-                if _covers_full_product(query_config):
-                    build_oos_history_service().update_history(
-                        "aoi_rs",
-                        query_config.prod_code,
-                        pd.DataFrame(),
+                if persist_shared_history and _covers_full_product(query_config):
+                    product_dir = resolve_product_resource_dir(
+                        query_config.prod_code, scope="aoi_rs"
+                    )
+                    persist_ooc_facts(
+                        scope="aoi_rs",
+                        prod_code=query_config.prod_code,
+                        detail_df=build_aoi_rs_ooc_detail(),
+                        key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+                        product_dir=product_dir,
+                        coverage_start=coverage_start,
+                        coverage_end=coverage_end,
+                        product_revision=product_revision,
+                        decision_signature=decision_signature,
+                    )
+                    persist_throughput_facts(
+                        scope="aoi_rs",
+                        prod_code=query_config.prod_code,
+                        details=pd.DataFrame(),
+                        event_time_column="start_time",
+                        item_id_column="sheet_id",
+                        product_dir=product_dir,
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                     )
@@ -207,6 +246,7 @@ class AoiRsReportService:
                 decision_signature=decision_signature,
                 coverage_start=(coverage_start if _covers_full_product(query_config) else None),
                 coverage_end=(coverage_end if _covers_full_product(query_config) else None),
+                persist_shared_history=persist_shared_history,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {

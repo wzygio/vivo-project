@@ -25,22 +25,22 @@ def test_ijp_figure_stacks_daily_code_ratios_as_percentages() -> None:
     assert figure.layout.barmode == "stack"
     assert figure.layout.title.text == "OLED RS Overflow By天"
     assert figure.layout.yaxis.range == (0, 100)
+    assert figure.layout.xaxis.type == "category"
+    assert figure.layout.legend.yanchor == "bottom"
+    assert figure.layout.legend.y > 1
+    assert figure.layout.margin.t >= 100
 
 
-def test_ijp_figure_draws_the_target_reference_line_when_given() -> None:
-    figure = build_ijp_daily_figure(_ratios(), target=5.0)
-
-    target = figure.data[-1]
-    assert target.type == "scatter"
-    assert target.name == "Target"
-    assert set(target.y) == {5.0}
-    assert target.line.dash == "dash"
-
-
-def test_ijp_figure_omits_target_line_when_not_given() -> None:
+def test_ijp_figure_contains_only_code_ratio_bars() -> None:
     figure = build_ijp_daily_figure(_ratios())
 
     assert all(trace.type == "bar" for trace in figure.data)
+
+
+def test_ijp_figure_accepts_a_printer_title() -> None:
+    figure = build_ijp_daily_figure(_ratios(), title="3CEE01-IK2-PR1")
+
+    assert figure.layout.title.text == "3CEE01-IK2-PR1"
 
 
 def test_ijp_figure_handles_empty_and_malformed_frames() -> None:

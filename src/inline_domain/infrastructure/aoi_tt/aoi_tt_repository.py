@@ -36,6 +36,8 @@ def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
 
 
 class AoiTtRepository:
+    supports_shared_history_persistence = True
+
     """Apply AOI TT parameter and field contracts to shared measurements."""
 
     def __init__(

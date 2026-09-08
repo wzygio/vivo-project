@@ -20,8 +20,14 @@ from src.shared_kernel.utils.excel_tools import _read_all_sheets_via_com
 
 
 class OosDecisionWorkbookRepository:
-    def __init__(self, resource_dir: Path) -> None:
+    def __init__(
+        self,
+        resource_dir: Path,
+        *,
+        file_paths: dict[str, Path] | None = None,
+    ) -> None:
         self._resource_dir = resource_dir
+        self._file_paths = file_paths or {}
         self._cache: dict[str, tuple[tuple[int, int] | None, dict[str, pd.DataFrame]]] = {}
 
     def _all_sheets(self, file_name: str) -> dict[str, pd.DataFrame]:
@@ -93,4 +99,7 @@ class OosDecisionWorkbookRepository:
         return pd.Timestamp(path.stat().st_mtime, unit="s") if path.exists() else None
 
     def source_path(self, file_name: str) -> Path:
+        configured = self._file_paths.get(file_name)
+        if configured is not None:
+            return configured
         return get_sheet_oos_decoration_path(self._resource_dir, file_name)

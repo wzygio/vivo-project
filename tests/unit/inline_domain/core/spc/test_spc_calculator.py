@@ -49,6 +49,26 @@ def test_calculate_cpk_uses_nearest_spec_distance() -> None:
     assert drifted_cpk == 1.0 / 3.0
 
 
+def test_calculate_cpk_returns_nan_for_single_sided_specs() -> None:
+    cpk = calculate_cpk(mean_value=50.0, std_value=1.0, usl=55.0, lsl=np.nan)
+
+    assert math.isnan(cpk)
+
+
+def test_calculate_cpk_returns_nan_when_zero_lsl_marks_an_upper_only_spec() -> None:
+    cpk = calculate_cpk(mean_value=3.0, std_value=0.5, usl=8.0, lsl=0.0)
+
+    assert math.isnan(cpk)
+
+
+def test_cpk_and_cpm_share_the_same_invalid_input_gate() -> None:
+    cpk = calculate_cpk(mean_value=3.0, std_value=-0.5, usl=8.0, lsl=1.0)
+    cpm = calculate_cpm(mean_value=3.0, std_value=-0.5, usl=8.0, lsl=1.0, target=4.0)
+
+    assert math.isnan(cpk)
+    assert math.isnan(cpm)
+
+
 def test_derive_lot_id_uses_first_nine_chars() -> None:
     assert derive_lot_id("ABCDEFGHIJK") == "ABCDEFGHI"
     assert derive_lot_id("SHORT") == ""

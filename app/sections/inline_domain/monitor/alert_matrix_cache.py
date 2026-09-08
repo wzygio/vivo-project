@@ -181,6 +181,9 @@ def build_default_matrix_context(
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
             product_revision=get_product_cache_revision(prod_code),
             decision_signature=get_scope_decision_signature("spc", prod_code),
+            capability_exempt_param_name_contains=tuple(
+                ConfigLoader.get_spc_capability_param_exemptions()
+            ),
         )
         capability_df = payload.get("period_capability_df")
         if not isinstance(capability_df, pd.DataFrame) or capability_df.empty:

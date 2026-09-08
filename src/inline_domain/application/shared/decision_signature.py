@@ -30,6 +30,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decisions,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,7 @@ def get_scope_decision_signature(
     base_dir = (
         Path(product_dir)
         if product_dir is not None
-        else ConfigLoader.get_domain_resource_dir("inline_domain")
+        else scope_resource_dir(normalized_scope)
     )
     workbook_path = base_dir / SCOPE_DECORATION_FILE_NAME[normalized_scope]
     return get_decision_signature(workbook_path, prod_code)

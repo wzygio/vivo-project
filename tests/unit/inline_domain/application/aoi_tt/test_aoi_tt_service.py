@@ -438,11 +438,11 @@ def test_service_respects_flag_false_and_delete(_tmp_project_root: Path) -> None
     assert view_model.tt_details_df["tt_qty"].iloc[0] == 99.0
 
 
-def test_filtered_query_does_not_replace_shared_oos_history(monkeypatch) -> None:
+def test_filtered_query_does_not_write_derived_parquet(monkeypatch) -> None:
     updates: list[object] = []
     monkeypatch.setattr(
-        aoi_tt_service.OosHistoryService,
-        "update_history",
+        pd.DataFrame,
+        "to_parquet",
         lambda self, *args, **kwargs: updates.append((args, kwargs)),
     )
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()

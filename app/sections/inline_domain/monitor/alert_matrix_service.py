@@ -48,6 +48,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 from yield_domain.application.alert_service import AlertService
 
 logger = logging.getLogger(__name__)
@@ -176,10 +177,15 @@ def _sheet_oos_evaluator(
     key_columns: Iterable[str] | None = None,
 ) -> Callable[[str, AlertMatrixContext], dict[str, str]]:
     def evaluate(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
+        configured_root = ConfigLoader.get_domain_resource_dir("inline_domain")
+        explicit_override = (
+            context.inline_resource_dir is not None
+            and Path(context.inline_resource_dir).resolve() != configured_root.resolve()
+        )
         resource_dir = (
             Path(context.inline_resource_dir)
-            if context.inline_resource_dir is not None
-            else ConfigLoader.get_domain_resource_dir("inline_domain")
+            if explicit_override
+            else scope_resource_dir(scope)
         )
         projected_time_column = time_column
         if context.oos_product_loader is not None:
@@ -187,7 +193,9 @@ def _sheet_oos_evaluator(
             decoration_df = result.decorated_df
             projected_time_column = "event_time"
         else:
-            history_service = build_oos_history_service(resource_dir)
+            history_service = build_oos_history_service(
+                resource_dir if explicit_override else None
+            )
             if history_service.has_history(scope, prod_code):
                 result = history_service.read_product(scope, prod_code)
                 decoration_df = result.decorated_df

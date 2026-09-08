@@ -127,7 +127,7 @@ selected_factory, selected_codes, selected_steps, should_render_report = render_
 )
 
 # 单片异常预警：只读加载工作簿（企业加密读取失败降级为 None，不阻断报表）
-product_resource_dir = resolve_product_resource_dir(current_product)
+product_resource_dir = resolve_product_resource_dir(current_product, scope="aoi_rs")
 decoration_path = product_resource_dir / AOI_RS_OOS_DECORATION_FILE_NAME
 if decoration_path.exists():
     decoration_stat = decoration_path.stat()
