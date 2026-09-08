@@ -64,14 +64,17 @@ def test_qtime_dashboard_labels_station_paths_with_original_codes() -> None:
     ]
 
 
-def test_qtime_dashboard_renders_the_alert_center_and_decoration_admin() -> None:
+@pytest.mark.parametrize("admin", [None, "false", "true"])
+def test_qtime_dashboard_renders_the_alert_center_and_decoration_admin(admin) -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
+    if admin is not None:
+        app.query_params["admin"] = admin
     app.button(key="qtime_search").click().run()
 
     expander_labels = [expander.label for expander in app.expander]
     assert "Q-Time 超规预警中心" in expander_labels
-    assert "开发者后台：Q-Time 超规数据修饰" in expander_labels
+    assert ("开发者后台：Q-Time 超规数据修饰" in expander_labels) is (admin == "true")
     assert any("2 条已确认真实超规" in message.value for message in app.error)
 
 
@@ -87,6 +90,32 @@ def test_qtime_dashboard_supports_multiple_paths() -> None:
     assert not app.exception
     assert len(app.dataframe) == 1
     assert len(app.get("plotly_chart")) == 4
+
+
+def test_station_expander_wraps_four_products_into_two_rows():
+    from src.indicator_domain.application.qtime.cached_monitoring import get_qtime_cached_funcs
+    for cached in get_qtime_cached_funcs():
+        cached.clear()
+    fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
+    script = fixture_path.read_text(encoding="utf-8").replace(
+        'FIXTURE_PRODUCTS = ("M626", "M678")',
+        'FIXTURE_PRODUCTS = ("M626", "M678", "Z517", "Z553")',
+    )
+    # The inline test already runs with the repository on sys.path.
+    script = script[script.index("from app.sections.indicator_domain.qtime.dashboard"):]
+    app = AppTest.from_string(
+        "from pathlib import Path\nimport pandas as pd\nimport streamlit as st\n" + script
+    ).run()
+    app.button(key="qtime_search").click().run()
+    assert not app.exception
+    station = next(expander for expander in app.expander if expander.label == M3_DE_TO_M3_STR.label)
+    assert station.proto.expanded
+    assert len(station.get("plotly_chart")) == 4
+    columns = station.get("column")
+    assert len(columns) == 6
+    assert [len(column.get("plotly_chart")) for column in columns] == [1, 1, 1, 1, 0, 0]
+    for cached in get_qtime_cached_funcs():
+        cached.clear()
 
 
 def test_qtime_dashboard_invalidates_stale_results_when_filters_change() -> None:

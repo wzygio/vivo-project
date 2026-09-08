@@ -23,9 +23,8 @@ async page => {
   const axes = await page.locator(".js-plotly-plot").evaluateAll(charts =>
     charts.map(chart => [...chart.querySelectorAll('.xtick text')].map(node => node.textContent)),
   );
-  const expectedCodes = ['C3DM0', 'C3DM1', 'C3DM2', 'C3DM3', 'C3DM4', 'C3DM5'];
-  if (axes.some(axis => JSON.stringify(axis) !== JSON.stringify(expectedCodes))) {
-    throw new Error('机台图必须保留六个 CODE 横轴位置');
+  if (axes.some(axis => axis.length !== 5 || !axis[0].includes('月') || !axis[4].includes('周'))) {
+    throw new Error('机台图必须保留两月三周五个横轴位置');
   }
 
   // 3. viewport-fit：1365×768 下不允许页面级横向滚动
@@ -46,7 +45,7 @@ async page => {
   const codeCombo = page.locator('[role="combobox"][aria-label*="CODE"]');
   await codeCombo.click();
   await codeCombo.pressSequentially("C3DM5");
-  await page.getByRole("option", { name: "C3DM5", exact: true }).click();
+  await page.getByRole("option", { name: /C3DM5/ }).click();
   await page.keyboard.press("Escape");
   await page.getByText("请选择筛选条件并点击“查询”。").waitFor({ timeout: 60_000 });
 

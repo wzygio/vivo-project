@@ -108,7 +108,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         st.info("当前筛选条件下暂无 Q-Time 数据。")
         return
 
-    if render_qtime_decoration_admin(service, monitoring):
+    if st.query_params.get("admin") == "true" and render_qtime_decoration_admin(service, monitoring):
         _run_query(
             service,
             shop=shop,
@@ -130,19 +130,22 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
 
     for index, step_option in enumerate(step_options):
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
-        with st.container(border=True):
+        with st.expander(step_option.label, expanded=True):
             if step_details.empty:
                 st.info(f"{step_option.label} 当前筛选条件下暂无 Q-Time 数据。")
                 continue
-            for product, product_details in step_details.groupby("prodcode", sort=True):
-                st.plotly_chart(
-                    build_qtime_figure(
-                        product_details,
-                        title=f"北极星QTime监控｜{product}｜{step_option.label}",
-                    ),
-                    width="stretch",
-                    key=f"qtime_lot_chart_{index}_{product}",
-                )
+            groups = list(step_details.groupby("prodcode", sort=True))
+            for row_start in range(0, len(groups), 3):
+                columns = st.columns(3)
+                for column, (product, product_details) in zip(
+                    columns, groups[row_start:row_start + 3],
+                ):
+                    with column:
+                        st.plotly_chart(
+                            build_qtime_figure(product_details, title=str(product)),
+                            width="stretch",
+                            key=f"qtime_lot_chart_{index}_{product}",
+                        )
 
 
 def refresh_qtime_data(service: QTimeReportService) -> bool:

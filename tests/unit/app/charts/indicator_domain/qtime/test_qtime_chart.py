@@ -3,6 +3,16 @@ import pandas as pd
 from app.charts.indicator_domain.qtime.chart import build_qtime_figure
 
 
+def test_single_low_lot_has_visible_full_width_spec_and_axis_headroom():
+    figure = build_qtime_figure(pd.DataFrame({
+        "lot_id": ["L001"], "wait_time": [0.1], "q_spec": [370.0],
+    }))
+    assert figure.layout.yaxis.range[1] > 370
+    line = figure.layout.shapes[0]
+    assert line.y0 == line.y1 == 370
+    assert line.x0 == 0 and line.x1 == 1 and line.xref == "x domain"
+
+
 def test_qtime_figure_renders_wait_time_bars_and_the_matching_specification() -> None:
     details = pd.DataFrame(
         {

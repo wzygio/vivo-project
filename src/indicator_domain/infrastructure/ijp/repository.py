@@ -147,6 +147,28 @@ class IjpRepository:
         frame["ratio"] = (frame["code_num"] / totals.where(totals > 0)).round(3)
         return frame.reindex(columns=GLASS_COLUMNS)
 
+    def fetch_daily_counts(self, query: IjpQuery) -> pd.DataFrame:
+        """Untruncated raw counts by display day, for monthly/weekly aggregation."""
+        select = (
+            "SELECT P.PRODUCTCODE AS productcode, "
+            "SUBSTR(H.SUB_EQUIP_ID, 1, 6) AS line, H.SUB_EQUIP_ID AS printer, "
+            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10) AS day, "
+            "D.RS_CODE AS rs_code, COUNT(*) AS code_num"
+        )
+        tail = (
+            " GROUP BY P.PRODUCTCODE, H.SUB_EQUIP_ID, "
+            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10), D.RS_CODE"
+            " ORDER BY productcode, printer, day, rs_code"
+        )
+        statement, params = self._filtered_statement(query, select, tail, query.start_time)
+        columns = ["productcode", "line", "printer", "day", "rs_code", "code_num"]
+        frame = self._normalize(self._read_frame(statement, params=params), columns)
+        if not frame.empty:
+            frame["day"] = (pd.to_datetime(frame["day"]) + pd.Timedelta(
+                days=self._data_forward_policy.effective_days,
+            )).dt.strftime("%Y-%m-%d")
+        return frame
+
     def fetch_details(self, query: IjpQuery) -> pd.DataFrame:
         select = (
             "SELECT D.GLASS_START_TIME AS print_time, P.PRODUCTCODE AS productcode, "

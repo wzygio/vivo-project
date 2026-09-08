@@ -19,6 +19,7 @@ from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.settings import IjpSettings
 from src.indicator_domain.core.ijp.printer_summary import summarize_printers
+from src.indicator_domain.core.ijp.period_summary import summarize_periods
 from src.indicator_domain.core.ijp.overflow import (
     IJP_LINES,
     IJP_RS_CODES,
@@ -145,6 +146,16 @@ class FixtureIjpService:
         frame = _ratios().replace({"C3RA1": "C3DM2", "C3BH1": "C3DM4"})
         frame = frame[frame.rs_code.isin(query.codes or self.settings.codes)]
         return summarize_printers(frame, decorate=not query.codes or "C3DM1" in query.codes)
+
+    def get_period_ratios(self, query) -> pd.DataFrame:
+        self._guard(query)
+        if query.codes == ("C3DM5",):
+            return pd.DataFrame()
+        frame = _ratios().replace({"C3RA1": "C3DM2", "C3BH1": "C3DM4"})
+        frame["day"] = ["2026-08-25", "2026-08-25", "2026-08-31",
+                        "2026-09-01", "2026-09-07", "2026-09-07"]
+        frame = frame[frame.rs_code.isin(query.codes or self.settings.codes)]
+        return summarize_periods(frame, query.end_time.date())
 
     def get_details(self, query) -> pd.DataFrame:
         raise AssertionError("当前页面不应查询明细")

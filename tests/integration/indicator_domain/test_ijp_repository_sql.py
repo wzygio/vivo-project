@@ -275,6 +275,15 @@ def test_filter_option_queries_follow_the_finereport_datasets() -> None:
     assert repository.list_picis(START, END, ("M678",)) == ("LOT2",)
 
 
+def test_daily_counts_keep_raw_weights_and_shift_to_display_day():
+    repository = _repository(_build_engine())
+    counts = repository.fetch_daily_counts(_query(detail_limit=1))
+    assert set(counts.day) == {"2026-08-31", "2026-09-01"}
+    assert counts.code_num.sum() == 6
+    first = counts[(counts.printer == "3CEE01-IK2-PR1") & (counts.rs_code == "C3DM1")]
+    assert first.code_num.tolist() == [2]
+
+
 def test_database_failures_are_exposed_as_a_safe_domain_error() -> None:
     repository = _repository(SimpleNamespace(engine=None))
 

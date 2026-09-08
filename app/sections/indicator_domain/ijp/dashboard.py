@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime
 
 import pandas as pd
 from pydantic import ValidationError
@@ -10,6 +10,8 @@ import streamlit as st
 
 from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
+from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
+from src.indicator_domain.core.ijp.period_summary import CODE_DESCRIPTIONS
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
@@ -24,7 +26,7 @@ TABLE_COLUMN_MAP = {
     "panel_location": "Panel Location",
     "code_ratio": "CODE_RATIO",
 }
-RESULT_STATE_KEY = "ijp_printer_random_report_result"
+RESULT_STATE_KEY = "ijp_period_report_result"
 DETAIL_LIMIT = 5000
 CHARTS_PER_ROW = 3
 
@@ -54,22 +56,8 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
     start_time, end_time = service.get_reporting_window()
 
     with st.container(border=True):
-        start_column, end_column = st.columns(2)
-        with start_column:
-            start_date = st.date_input(
-                "开始日期", value=start_time.date(), key="ijp_start_date",
-                format="YYYY/MM/DD",
-            )
-        with end_column:
-            end_date = st.date_input(
-                "结束日期", value=end_time.date(), key="ijp_end_date",
-                format="YYYY/MM/DD",
-            )
-        if end_date < start_date:
-            st.error("结束日期不能早于开始日期")
-            return
-        start_time = datetime.combine(start_date, time.min)
-        end_time = datetime.combine(end_date, time.max)
+        st.caption(f"数据范围：{start_time:%Y/%m/%d} 至 {end_time:%Y/%m/%d}（上月 1 日至今天）")
+        st.caption("两月三周：上月、本月及最近三周（含本周，周一开始）；月与周分别汇总，跨边界仅统计范围内数据。")
 
         try:
             options = service.get_filter_options(
@@ -93,7 +81,10 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             lines = st.multiselect("线体", options=options["lines"], key="ijp_lines")
         with code_column:
             _retain_available_multiselect_values("ijp_codes", options["codes"])
-            codes = st.multiselect("CODE", options=options["codes"], key="ijp_codes")
+            codes = st.multiselect(
+                "CODE", options=options["codes"], key="ijp_codes",
+                format_func=lambda code: f"{code}：{CODE_DESCRIPTIONS.get(code, '')}",
+            )
 
         with pici_column:
             _retain_available_multiselect_values("ijp_picis", options["picis"])
@@ -142,7 +133,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             " 的稳定随机目标值，低于目标时修饰，其它 CODE 同比例缩放。"
             "仅对所选 CODE 包含 C3DM1 的查询生效；悬停可查看实际占比和记录数。"
         )
-        _render_grouped_glass_charts(ratios, printer_summary=True)
+        _render_grouped_glass_charts(ratios, period_summary=True)
 
     # 暂停查询和展示明细；保留 _render_details_table / build_ijp_table 供恢复。
 
@@ -187,7 +178,7 @@ def _run_query(
             picis=tuple(picis),
             detail_limit=DETAIL_LIMIT,
         )
-        ratios = service.get_printer_ratios(query)
+        ratios = service.get_period_ratios(query)
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))
@@ -210,9 +201,11 @@ def _filter_signature(*values: object) -> tuple[object, ...]:
 
 
 def _render_grouped_glass_charts(
-    ratios: pd.DataFrame, *, printer_summary: bool = False,
+    ratios: pd.DataFrame, *, printer_summary: bool = False, period_summary: bool = False,
 ) -> None:
     build_figure = build_ijp_printer_figure if printer_summary else build_ijp_glass_figure
+    if period_summary:
+        build_figure = build_ijp_period_figure
     required = {"productcode", "line", "printer"}
     grouped = ratios.dropna(subset=list(required))
     for product_index, (product, product_frame) in enumerate(

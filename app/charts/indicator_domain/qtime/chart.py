@@ -47,6 +47,13 @@ def build_qtime_figure(
         specs = _numeric_column(group, "q_spec")
         if not specs.notna().any():
             continue
+        if len(step_groups) == 1 and specs.dropna().nunique() == 1:
+            # A one-point scatter in lines mode has no visible segment.
+            figure.add_hline(
+                y=float(specs.dropna().iloc[0]),
+                line_color=SPEC_COLOR,
+                line_width=2,
+            )
         figure.add_scatter(
             x=_lot_ids(group),
             y=specs,
@@ -78,6 +85,12 @@ def build_qtime_figure(
         },
         hovermode="x unified",
     )
+    values = pd.concat([
+        _numeric_column(frame, "wait_time"), _numeric_column(frame, "q_spec"),
+    ]).replace([float("inf"), -float("inf")], float("nan"))
+    upper = values.max()
+    if pd.notna(upper) and upper > 0:
+        figure.update_yaxes(range=[0, float(upper) * 1.1])
     return figure
 
 

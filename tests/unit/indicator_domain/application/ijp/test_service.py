@@ -113,8 +113,8 @@ def test_service_scopes_options_and_queries_to_enabled_products() -> None:
     assert port.received_query is not None
     assert port.received_query.product_codes == ("M678", "Z571")
     assert port.received_query.work_order_types == ("P", "LCFG")
-    assert port.received_query.start_time == START
-    assert port.received_query.end_time == END
+    assert port.received_query.start_time == REPORT_START
+    assert port.received_query.end_time == REPORT_END
 
 
 def test_composition_builds_ijp_service_with_global_enabled_products(
@@ -184,8 +184,8 @@ def test_service_delegates_report_reads_to_the_port() -> None:
     ]
     assert details.to_dict("records") == [{"glass_id": "G1", "code_ratio": 0.667}]
     assert port.received_query is not query
-    assert port.received_query.start_time == START
-    assert port.received_query.end_time == END
+    assert port.received_query.start_time == REPORT_START
+    assert port.received_query.end_time == REPORT_END
 
 
 def test_service_propagates_the_stable_data_access_error() -> None:
@@ -199,19 +199,19 @@ def test_service_propagates_the_stable_data_access_error() -> None:
 
 def test_config_allowlist_applies_to_empty_selection_and_rejects_bypass():
     port = FakeIjpDataPort()
-    service = IjpReportService(port, settings=IjpSettings(codes=("C3DM1", "C3DM2")))
+    service = IjpReportService(port, today_provider=lambda: TODAY, settings=IjpSettings(codes=("C3DM1", "C3DM2")))
     service.get_printer_ratios(_query())
     assert port.received_query.codes == ("C3DM1", "C3DM2")
-    assert port.received_query.start_time == START
-    assert port.received_query.end_time == END
+    assert port.received_query.start_time == REPORT_START
+    assert port.received_query.end_time == REPORT_END
     with pytest.raises(ValueError, match="配置允许范围"):
         service.get_details(_query(codes=("C3RA1",)))
 
 
-def test_selected_dates_are_used_for_batch_options():
+def test_fixed_window_overrides_dates_for_batch_options():
     class WindowPort(FakeIjpDataPort):
         def list_picis(self, start_time, end_time, product_codes):
-            assert (start_time, end_time) == (START, END)
+            assert (start_time, end_time) == (REPORT_START, REPORT_END)
             return ("CUSTOM",)
     assert _service(WindowPort()).get_filter_options(
         start_time=START, end_time=END,
