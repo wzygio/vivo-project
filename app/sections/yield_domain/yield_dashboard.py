@@ -1135,6 +1135,35 @@ def render_code_compact_expanders(
 # ==============================================================================
 #  7. 自动预警缺陷图像 (Alert-driven Code Charts)
 # ==============================================================================
+def _positive_monthly_code_pairs(
+    mwd_code_data: dict,
+) -> Optional[set[tuple[str, str]]]:
+    """返回至少一个月度不良率大于零的 Code；无月度口径时不限制。"""
+    monthly = mwd_code_data.get("monthly") if mwd_code_data else None
+    required_columns = {"defect_group", "defect_desc", "defect_rate"}
+    if (
+        monthly is None
+        or monthly.empty
+        or not required_columns.issubset(monthly.columns)
+    ):
+        return None
+
+    rates = monthly[["defect_group", "defect_desc", "defect_rate"]].dropna(
+        subset=["defect_group", "defect_desc"]
+    ).copy()
+    rates["defect_rate"] = pd.to_numeric(
+        rates["defect_rate"], errors="coerce"
+    ).fillna(0.0)
+    maximums = rates.groupby(
+        ["defect_group", "defect_desc"], observed=True
+    )["defect_rate"].max()
+    return {
+        (str(group), str(code))
+        for (group, code), rate in maximums.items()
+        if float(rate) > 0.0
+    }
+
+
 def collect_alert_hit_codes(
     trend_records: Optional[List[dict]],
     lot_oos_records: Optional[List[dict]],
@@ -1148,7 +1177,9 @@ def collect_alert_hit_codes(
     - Lot 超规记录：取 "异常 Code" 字段并按同一映射补齐 group。
 
     group↔code 映射取自 mwd_code_data['monthly']，monthly 缺失时回退 weekly。
-    无法映射到 group 的 code 直接跳过；结果去重并按 (group, code) 稳定排序。
+    有月度口径时，仅至少一个月不良率大于零的 Code 生成图像；无月度记录或
+    全周期不良率均不大于零的 Code 均隐藏。无法映射到 group 的 code 直接跳过。
+    结果去重并按 (group, code) 稳定排序。
     """
     pair_df = None
     for scope in ("monthly", "weekly"):
@@ -1191,7 +1222,13 @@ def collect_alert_hit_codes(
         if group:
             hits.add((group, code))
 
-    return sorted(hits)
+    positive_monthly_pairs = _positive_monthly_code_pairs(mwd_code_data)
+    visible_hits = (
+        hits
+        if positive_monthly_pairs is None
+        else hits & positive_monthly_pairs
+    )
+    return sorted(visible_hits)
 
 
 def _alert_charts_signature(

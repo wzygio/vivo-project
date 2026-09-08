@@ -8,7 +8,7 @@ import pandas as pd
 from pydantic import ValidationError
 import streamlit as st
 
-from app.charts.indicator_domain.ijp.chart import build_ijp_daily_figure
+from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
@@ -23,7 +23,7 @@ TABLE_COLUMN_MAP = {
     "panel_location": "Panel Location",
     "code_ratio": "CODE_RATIO",
 }
-RESULT_STATE_KEY = "ijp_report_result"
+RESULT_STATE_KEY = "ijp_glass_report_result"
 DETAIL_LIMIT = 5000
 CHARTS_PER_ROW = 3
 
@@ -120,7 +120,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
 
     ratios = stored["ratios"]
     if not ratios.empty:
-        _render_grouped_daily_charts(ratios)
+        _render_grouped_glass_charts(ratios)
 
     if len(details) >= stored["limit"]:
         st.caption(f"明细仅展示前 {stored['limit']} 行（已截断），请缩小筛选范围。")
@@ -160,7 +160,7 @@ def _run_query(
             picis=tuple(picis),
             detail_limit=DETAIL_LIMIT,
         )
-        ratios = service.get_daily_ratios(query)
+        ratios = service.get_glass_ratios(query)
         details = service.get_details(query)
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
@@ -182,7 +182,7 @@ def _filter_signature(*values: object) -> tuple[object, ...]:
     return tuple(tuple(value) if isinstance(value, list) else value for value in values)
 
 
-def _render_grouped_daily_charts(ratios: pd.DataFrame) -> None:
+def _render_grouped_glass_charts(ratios: pd.DataFrame) -> None:
     required = {"productcode", "line", "printer"}
     grouped = ratios.dropna(subset=list(required))
     for product_index, (product, product_frame) in enumerate(
@@ -209,13 +209,13 @@ def _render_grouped_daily_charts(ratios: pd.DataFrame) -> None:
                             ]
                             with column:
                                 st.plotly_chart(
-                                    build_ijp_daily_figure(
+                                    build_ijp_glass_figure(
                                         printer_frame,
                                         title=str(printer),
                                     ),
                                     width="stretch",
                                     key=(
-                                        "ijp_daily_chart_"
+                                        "ijp_glass_chart_"
                                         f"{product_index}_{line_index}_"
                                         f"{row_index}_{printer_index}"
                                     ),

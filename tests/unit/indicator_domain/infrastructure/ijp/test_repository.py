@@ -101,7 +101,7 @@ def test_fetch_details_omits_optional_clauses_when_filters_are_empty(monkeypatch
     assert result.loc[0, "print_time"] == pd.Timestamp("2026-08-31 08:00:00")
 
 
-def test_fetch_daily_ratios_uses_the_query_window_without_lookback(monkeypatch) -> None:
+def test_fetch_glass_ratios_uses_the_query_window_without_lookback(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     def fake_read_sql(statement, engine, params):
@@ -115,7 +115,7 @@ def test_fetch_daily_ratios_uses_the_query_window_without_lookback(monkeypatch) 
                     "3CEE01-IK2-PR1",
                     "3CEE01-IK2-PR2",
                 ],
-                "day": ["2026-08-27", "2026-08-27", "2026-08-27"],
+                "glass_id": ["G1", "G1", "G2"],
                 "rs_code": ["C3DM1", "C3RA1", "C3DM1"],
                 "code_num": [3, 1, 2],
             }
@@ -124,11 +124,12 @@ def test_fetch_daily_ratios_uses_the_query_window_without_lookback(monkeypatch) 
     monkeypatch.setattr(ijp_repository.pd, "read_sql", fake_read_sql)
     repository = _repository(object())
 
-    ratios = repository.fetch_daily_ratios(_query())
+    ratios = repository.fetch_glass_ratios(_query())
 
     assert captured["params"]["start_time"] == "2026-08-27 07:00:00"
     assert captured["params"]["end_time"] == "2026-08-28 07:00:00"
-    assert ratios["day"].tolist() == ["2026-08-31"] * 3
+    assert ratios["glass_id"].tolist() == ["G1", "G1", "G2"]
+    assert "D.GLASS_ID AS glass_id" in captured["statement"]
     assert ratios["ratio"].tolist() == [0.75, 0.25, 1.0]
 
 

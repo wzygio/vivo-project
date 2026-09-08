@@ -37,11 +37,12 @@ class AlertService:
         # 调用检测器
         system_alerts = AbnormalDetector.detect_system_trend_alerts(
             valid_group_monthly, 
-            valid_code_monthly
+            valid_code_monthly,
+            period_scope="monthly",
         )
         all_alerts.extend(system_alerts)
         
-        # --- 2. [新增] 周度趋势预警 ---
+        # 2. 周度趋势预警
         group_weekly = mwd_group_data.get('weekly')
         code_weekly = mwd_code_data.get('weekly')
 
@@ -52,12 +53,11 @@ class AlertService:
             code_weekly if code_weekly is not None else pd.DataFrame()
         )
 
-        # C. 调用检测器 (复用 detect_system_trend_alerts 逻辑，它也适用于周度数据的结构)
-        # 注意：检测器内部生成的文案可能不包含“周度”字样，取决于 time_period 格式(如 2026-W05)
-        # 如果需要区分，用户可以通过时间格式辨别，或者您可以扩展 detect_system_trend_alerts 的参数
+        # 复用同一判定规则，并显式传入周度范围以生成正确的比较标签。
         system_alerts_weekly = AbnormalDetector.detect_system_trend_alerts(
             valid_group_weekly,
-            valid_code_weekly
+            valid_code_weekly,
+            period_scope="weekly",
         )
         all_alerts.extend(system_alerts_weekly)
 

@@ -20,6 +20,7 @@ from src.equipment_domain.core.parts_calculator import (
     RAW_VALUE_COLUMN,
     STATUS_NORMAL,
     STATUS_OVER,
+    STATUS_REPLACED,
     STATUS_WARNING,
     apply_over_spec_alert_and_decoration,
     batch_calculate_progress_and_status,
@@ -498,16 +499,16 @@ class TestPartsCalculator:
         assert decorated == pytest.approx(policy.decoration_max_ratio * 100.0)
         assert policy.decoration_min_ratio * 100.0 <= decorated <= policy.decoration_max_ratio * 100.0
 
-    def test_frontend_status_uses_decorated_measurement_source(self) -> None:
-        """前端状态、进度、测量值必须来自同一份修饰后数据。"""
+    def test_progress_above_95_percent_is_reset_and_marked_replaced(self) -> None:
+        """超过 95% 时测量值和进度归零，并在预警状态标记已更换。"""
         df = pd.DataFrame({
-            "厂别": ["Array", "Array"],
-            "备件类型": ["Target", "Target"],
-            "设备类型": ["PVD", "PVD"],
-            "膜层": ["MO", "MO"],
-            "制程": ["Mo DEPO", "Mo DEPO"],
-            "寿命规格": [100.0, 100.0],
-            "测量值": [95.0, 105.0],
+            "厂别": ["Array", "Array", "Array"],
+            "备件类型": ["Target", "Target", "Target"],
+            "设备类型": ["PVD", "PVD", "PVD"],
+            "膜层": ["MO", "MO", "MO"],
+            "制程": ["Mo DEPO", "Mo DEPO", "Mo DEPO"],
+            "寿命规格": [100.0, 100.0, 100.0],
+            "测量值": [95.0, 95.01, 105.0],
         })
 
         decorated = apply_over_spec_alert_and_decoration(
@@ -517,16 +518,18 @@ class TestPartsCalculator:
         )
         calculated = batch_calculate_progress_and_status(decorated, policy=_alert_policy())
 
-        assert decorated[OVER_SPEC_COLUMN].tolist() == [False, True]
-        assert decorated.loc[1, RAW_VALUE_COLUMN] == 105.0
-        assert decorated.loc[1, "测量值"] == pytest.approx(
-            95.0 * _alert_policy().decoration_growth_ratio
-        )
-        assert calculated.loc[1, "使用进度"] == pytest.approx(95.95)
-        assert calculated.loc[1, "预警状态"] == STATUS_WARNING
+        assert decorated[OVER_SPEC_COLUMN].tolist() == [False, False, True]
+        assert decorated[RAW_VALUE_COLUMN].tolist() == [95.0, 95.01, 105.0]
+        assert decorated["测量值"].tolist() == [95.0, 0.0, 0.0]
+        assert calculated["使用进度"].tolist() == [95.0, 0.0, 0.0]
+        assert calculated["预警状态"].tolist() == [
+            STATUS_WARNING,
+            STATUS_REPLACED,
+            STATUS_REPLACED,
+        ]
 
-    def test_frontend_high_progress_uses_stable_low_biased_caps(self) -> None:
-        """超过展示上限的进度应稳定分散，且高截断值少于低截断值。"""
+    def test_frontend_high_progress_is_reset_for_every_part(self) -> None:
+        """高于 95% 的所有备件都应归零并标记已更换。"""
         row_count = 400
         df = pd.DataFrame({
             "厂别": ["Array"] * row_count,
@@ -541,38 +544,28 @@ class TestPartsCalculator:
         })
         group_cols = ["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"]
 
-        first = apply_over_spec_alert_and_decoration(
+        replaced = apply_over_spec_alert_and_decoration(
             df,
             group_cols=group_cols,
             policy=_alert_policy(),
         )
-        second = apply_over_spec_alert_and_decoration(
-            df,
-            group_cols=group_cols,
+        calculated = batch_calculate_progress_and_status(
+            replaced,
             policy=_alert_policy(),
         )
-        progress = batch_calculate_progress_and_status(
-            first,
-            policy=_alert_policy(),
-        )["使用进度"]
 
-        assert _alert_policy().display_progress_max_ratio == 0.98
-        pd.testing.assert_series_equal(first["测量值"], second["测量值"])
-        assert progress.min() >= _alert_policy().decoration_min_ratio * 100.0
-        assert progress.max() < _alert_policy().display_progress_max_ratio * 100.0
-        assert progress.nunique() > row_count * 0.9
-        assert progress.lt(92.0).sum() > progress.ge(96.0).sum()
-        assert set(first["数据修饰"]) == {"进度上限修饰"}
+        assert replaced["测量值"].eq(0.0).all()
+        assert calculated["使用进度"].eq(0.0).all()
+        assert set(calculated["预警状态"]) == {STATUS_REPLACED}
 
-    def test_frontend_progress_at_or_below_cap_is_not_modified(self) -> None:
-        """未超过 98% 展示上限的测量值必须保留原值。"""
+    def test_frontend_progress_at_or_below_replacement_threshold_is_not_modified(self) -> None:
+        """未超过 95% 更换阈值的测量值必须保留原值。"""
         policy = _alert_policy()
-        upper_progress = policy.display_progress_max_ratio * 100.0
         df = pd.DataFrame({
             "寿命规格": [100.0, 100.0],
-            "测量值": [95.0, upper_progress],
+            "测量值": [94.99, 95.0],
         })
 
         decorated = apply_over_spec_alert_and_decoration(df, policy=policy)
 
-        assert decorated["测量值"].tolist() == [95.0, upper_progress]
+        assert decorated["测量值"].tolist() == [94.99, 95.0]

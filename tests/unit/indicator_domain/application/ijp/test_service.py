@@ -32,14 +32,14 @@ class FakeIjpDataPort:
         self.received_product_codes = product_codes
         return ("LOT1",)
 
-    def fetch_daily_ratios(self, query: IjpQuery) -> pd.DataFrame:
+    def fetch_glass_ratios(self, query: IjpQuery) -> pd.DataFrame:
         self.received_query = query
         return pd.DataFrame(
             {
                 "productcode": ["M626"],
                 "line": ["3CEE01"],
                 "printer": ["3CEE01-IK2-PR1"],
-                "day": ["2026-08-31"],
+                "glass_id": ["2026-08-31"],
                 "rs_code": ["C3DM1"],
                 "code_num": [3],
                 "ratio": [1.0],
@@ -138,6 +138,7 @@ def test_composition_builds_ijp_service_with_global_enabled_products(
     )
 
     service = composition.build_ijp_service(database)
+    service._today_provider = lambda: TODAY
     options = service.get_filter_options()
     service.get_details(_query())
 
@@ -166,7 +167,7 @@ def test_service_delegates_report_reads_to_the_port() -> None:
     service = _service(port)
     query = _query()
 
-    ratios = service.get_daily_ratios(query)
+    ratios = service.get_glass_ratios(query)
     details = service.get_details(query)
 
     assert ratios.to_dict("records") == [
@@ -174,7 +175,7 @@ def test_service_delegates_report_reads_to_the_port() -> None:
             "productcode": "M626",
             "line": "3CEE01",
             "printer": "3CEE01-IK2-PR1",
-            "day": "2026-08-31",
+            "glass_id": "2026-08-31",
             "rs_code": "C3DM1",
             "code_num": 3,
             "ratio": 1.0,

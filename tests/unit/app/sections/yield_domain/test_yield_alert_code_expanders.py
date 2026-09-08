@@ -1,7 +1,7 @@
 """自动预警缺陷图像（render_alert_code_expanders）单元测试。
 
 覆盖：
-- collect_alert_hit_codes 命中集合汇总（code 级 / group 级展开 / Lot 超规 / 去重排序 / 空输入）；
+- collect_alert_hit_codes 命中集合汇总（code 级 / group 级展开 / Lot 超规 / 月度全零过滤 / 去重排序 / 空输入）；
 - 无命中不渲染任何内容；
 - 有命中时外层 expander 标题数量正确，payload 构建走独立 chart key 前缀；
 - RenderGate.collect_memoized 命中时不重复构建图表。
@@ -109,6 +109,28 @@ class TestCollectAlertHitCodes:
         assert yield_dashboard.collect_alert_hit_codes(
             records, [], _mapping_code_data()
         ) == [("G1", "CODE-A"), ("G1", "CODE-B")]
+
+    def test_group_alert_keeps_only_codes_with_a_positive_monthly_rate(self):
+        code_data = {
+            "monthly": pd.DataFrame(
+                {
+                    "defect_group": ["G1", "G1", "G1", "G1"],
+                    "defect_desc": ["ZERO", "ZERO", "ACTIVE", "ACTIVE"],
+                    "defect_rate": [0.0, 0.0, 0.0, 0.002],
+                    "time_period": ["2026-08", "2026-09"] * 2,
+                }
+            )
+        }
+        records = [
+            {"level": "group", "defect_group": "G1", "defect_desc": None},
+            {"level": "code", "defect_group": "G1", "defect_desc": "ZERO"},
+            {"level": "code", "defect_group": "G1", "defect_desc": "MISSING"},
+        ]
+        lot_records = [{"异常 Code": "ZERO", "超规 Lot ID": "LOT-1"}]
+
+        assert yield_dashboard.collect_alert_hit_codes(
+            records, lot_records, code_data
+        ) == [("G1", "ACTIVE")]
 
     def test_lot_oos_record_resolved_via_mapping(self):
         lot_records = [{"异常 Code": "CODE-C", "超规 Lot ID": "LOT-1"}]

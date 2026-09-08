@@ -11,6 +11,38 @@ def test_alert_service_consumes_pre_filtered_data_without_app_config(tmp_path) -
     assert alerts == []
 
 
+def test_alert_service_labels_monthly_and_weekly_comparisons_correctly(tmp_path) -> None:
+    import pandas as pd
+
+    group_monthly = pd.DataFrame(
+        {
+            "defect_group": ["MonthlyGroup", "MonthlyGroup"],
+            "time_period": ["2026-08", "2026-09"],
+            "defect_rate": [0.001, 0.004],
+        }
+    )
+    group_weekly = pd.DataFrame(
+        {
+            "defect_group": ["WeeklyGroup", "WeeklyGroup"],
+            "time_period": ["2026-W36", "2026-W37"],
+            "defect_rate": [0.010, 0.013],
+        }
+    )
+
+    alerts = AlertService.get_dashboard_alerts(
+        mwd_group_data={"monthly": group_monthly, "weekly": group_weekly},
+        mwd_code_data={},
+        product_dir=tmp_path,
+    )
+
+    assert len(alerts) == 2
+    monthly_alert = next(alert for alert in alerts if "2026-09" in alert)
+    weekly_alert = next(alert for alert in alerts if "2026-W37" in alert)
+    assert "上月 0.10%" in monthly_alert
+    assert "上周 1.00%" in weekly_alert
+    assert "上月" not in weekly_alert
+
+
 def test_alert_service_returns_structured_records_with_period_scope(tmp_path) -> None:
     import pandas as pd
 

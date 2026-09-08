@@ -20,6 +20,8 @@ import pandas as pd
 STATUS_OVER = "超规"
 STATUS_WARNING = "预警"
 STATUS_NORMAL = "正常"
+STATUS_REPLACED = "已更换"
+REPLACEMENT_PROGRESS_THRESHOLD = 95.0
 DISPLAY_CAP_POWER = 2.0
 
 
@@ -52,6 +54,7 @@ DECORATION_COLUMN = "数据修饰"
 DECORATION_STATUS_ORIGINAL = "原始"
 DECORATION_STATUS_DECORATED = "超规修饰"
 DECORATION_STATUS_DISPLAY_CAPPED = "进度上限修饰"
+DECORATION_STATUS_REPLACED = "寿命到期更换"
 
 
 def _coerce_float(value: object) -> Optional[float]:
@@ -241,8 +244,8 @@ def apply_over_spec_alert_and_decoration(
     policy: Optional[PartsAlertPolicy] = None,
 ) -> pd.DataFrame:
     """
-    先记录原始超规状态，再对超过规格线的数据进行修饰。
-    原始超规标记只用于触发修饰与审计，前端状态统一由修饰后的展示值计算。
+    先记录原始超规状态；原始进度超过 95% 时归零并标记已更换，
+    其余超过规格线的数据沿用修饰逻辑。
 
     Args:
         report_df: 备件报表或趋势 DataFrame
@@ -292,7 +295,18 @@ def apply_over_spec_alert_and_decoration(
             actual_value = _coerce_float(row[value_col])
             spec_limit = _coerce_float(row[spec_col])
             seed_value = _build_seed(row, row_index)
-            if bool(row[over_spec_col]):
+            replacement_due = (
+                actual_value is not None
+                and spec_limit is not None
+                and spec_limit > 0
+                and calculate_usage_progress(actual_value, spec_limit)
+                > REPLACEMENT_PROGRESS_THRESHOLD
+            )
+            if replacement_due:
+                result.at[row_index, value_col] = 0.0
+                result.at[row_index, decoration_col] = DECORATION_STATUS_REPLACED
+                previous_value = 0.0
+            elif bool(row[over_spec_col]):
                 ratio = _stable_spec_ratio(seed_value, policy)
                 decorated_value = calculate_decorated_over_spec_value(
                     actual_value=actual_value,
@@ -369,18 +383,25 @@ def batch_calculate_progress_and_status(
         report_df: 包含备件数据的 DataFrame
 
     Returns:
-        pd.DataFrame: 添加了计算列的原 DataFrame（原地修改）
+        pd.DataFrame: 添加了计算列的新 DataFrame
     """
-    report_df["使用进度"] = (
-        report_df["测量值"] / report_df["寿命规格"] * 100
+    result = report_df.copy()
+    result["使用进度"] = (
+        result["测量值"] / result["寿命规格"] * 100
     )
-    report_df["使用进度"] = report_df["使用进度"].fillna(0.0)
+    result["使用进度"] = result["使用进度"].fillna(0.0)
 
+    is_replaced = (
+        result[DECORATION_COLUMN].eq(DECORATION_STATUS_REPLACED)
+        if DECORATION_COLUMN in result.columns
+        else pd.Series(False, index=result.index)
+    )
     conditions = [
-        report_df["使用进度"] > policy.over_threshold,
-        report_df["使用进度"] > policy.warning_threshold,
+        is_replaced,
+        result["使用进度"] > policy.over_threshold,
+        result["使用进度"] > policy.warning_threshold,
     ]
-    choices = [STATUS_OVER, STATUS_WARNING]
-    report_df["预警状态"] = np.select(conditions, choices, default=STATUS_NORMAL)
+    choices = [STATUS_REPLACED, STATUS_OVER, STATUS_WARNING]
+    result["预警状态"] = np.select(conditions, choices, default=STATUS_NORMAL)
 
-    return report_df
+    return result

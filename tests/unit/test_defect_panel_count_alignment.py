@@ -6,6 +6,13 @@ import pytest
 from src.shared_kernel.config_model import AppConfig
 from yield_domain.core.mwd_trend import mwd_trend_processor as trend_module
 from yield_domain.core.mwd_trend.mwd_trend_processor import MWDTrendProcessor
+from yield_domain.core.mwd_trend.modifier_table import (
+    COL_DEFECT,
+    COL_MONTH,
+    COL_RAW_LOSS,
+    COL_SPECIFIED_LOSS,
+    resolve_monthly_targets,
+)
 
 
 def _config() -> AppConfig:
@@ -88,6 +95,50 @@ def test_specified_rate_drives_code_monthly_total() -> None:
     assert monthly["defect_panel_count"].sum() == 6
     weekly = result["weekly_full"][result["weekly_full"]["defect_desc"] == "CodeA"]
     assert weekly["defect_panel_count"].sum() == 6
+
+
+def test_previous_month_specified_fallback_drives_current_daily_and_weekly() -> None:
+    days = ["20260801", "20260802", "20260907", "20260908"]
+    panel_details = _panel_details(
+        days,
+        {
+            "20260801": [(f"P{number:02d}", "Array_Pixel", "CodeA") for number in range(8)],
+            "20260907": [(f"P{number:02d}", "Array_Pixel", "CodeA") for number in range(8)],
+        },
+    )
+    modifier_table = pd.DataFrame(
+        {
+            COL_DEFECT: ["CodeA", "CodeA", "CodeA"],
+            COL_MONTH: ["2026-07", "2026-08", "2026-09"],
+            COL_RAW_LOSS: [0.8, 0.8, 0.8],
+            COL_SPECIFIED_LOSS: [0.2, None, None],
+        }
+    )
+    targets = resolve_monthly_targets(modifier_table, ["2026-08", "2026-09"])
+
+    result = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panel_details_df=panel_details,
+        config=_config(),
+        modifier_targets=targets,
+        target_end_date=pd.Timestamp("2026-09-08"),
+    )
+
+    assert result is not None
+    daily = result["daily_full"]
+    code_daily = daily[daily["defect_desc"] == "CodeA"].copy()
+    code_daily["month"] = code_daily["time_period"].astype(str).str[:7]
+    assert code_daily.groupby("month")["defect_panel_count"].sum().to_dict() == {
+        "2026-08": 4,
+        "2026-09": 4,
+    }
+
+    monthly = result["monthly"][result["monthly"]["defect_desc"] == "CodeA"]
+    assert monthly.set_index(monthly["time_period"].astype(str))["defect_panel_count"].to_dict() == {
+        "2026-08月": 4,
+        "2026-09月": 4,
+    }
+    weekly = result["weekly_full"][result["weekly_full"]["defect_desc"] == "CodeA"]
+    assert weekly["defect_panel_count"].sum() == code_daily["defect_panel_count"].sum()
 
 
 def test_unspecified_code_uses_raw_monthly_rate() -> None:

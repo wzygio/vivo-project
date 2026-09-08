@@ -42,8 +42,8 @@ DETAIL_COLUMNS = [
     "rs_code",
     "code_ratio",
 ]
-DAILY_DIMENSIONS = ["productcode", "line", "printer", "day"]
-DAILY_COLUMNS = [*DAILY_DIMENSIONS, "rs_code", "code_num", "ratio"]
+GLASS_DIMENSIONS = ["productcode", "line", "printer", "glass_id"]
+GLASS_COLUMNS = [*GLASS_DIMENSIONS, "rs_code", "code_num", "ratio"]
 RAW_DETAIL_COLUMNS = [
     "print_time",
     "productcode",
@@ -84,7 +84,7 @@ _OPTIONAL_FILTERS = (
 
 
 class IjpRepository:
-    """Read IJP overflow options, daily ratios and details from the report database."""
+    """Read IJP overflow options, glass ratios and details from the report database."""
 
     def __init__(self, db_manager: "DatabaseManager") -> None:
         self._engine = db_manager.engine
@@ -121,35 +121,31 @@ class IjpRepository:
         )
         return self._options(frame, "pici")
 
-    def fetch_daily_ratios(self, query: IjpQuery) -> pd.DataFrame:
+    def fetch_glass_ratios(self, query: IjpQuery) -> pd.DataFrame:
         select = (
             "SELECT P.PRODUCTCODE AS productcode, "
             "SUBSTR(H.SUB_EQUIP_ID, 1, 6) AS line, "
             "H.SUB_EQUIP_ID AS printer, "
-            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10) AS day, "
+            "D.GLASS_ID AS glass_id, "
             "D.RS_CODE AS rs_code, COUNT(*) AS code_num"
         )
         group_by = (
             " GROUP BY P.PRODUCTCODE, SUBSTR(H.SUB_EQUIP_ID, 1, 6), "
             "H.SUB_EQUIP_ID, "
-            "SUBSTR(CAST(D.GLASS_START_TIME AS TEXT), 1, 10), D.RS_CODE"
-            " ORDER BY productcode, line, printer, day, rs_code"
+            "D.GLASS_ID, D.RS_CODE"
+            " ORDER BY productcode, line, printer, glass_id, rs_code"
         )
         statement, params = self._filtered_statement(
             query, select, group_by, query.start_time
         )
         frame = self._read_frame(statement, params=params)
-        frame = self._normalize(frame, [*DAILY_DIMENSIONS, "rs_code", "code_num"])
+        frame = self._normalize(frame, [*GLASS_DIMENSIONS, "rs_code", "code_num"])
         if frame.empty:
-            return frame.reindex(columns=DAILY_COLUMNS)
+            return frame.reindex(columns=GLASS_COLUMNS)
         frame["code_num"] = pd.to_numeric(frame["code_num"], errors="coerce").fillna(0)
-        shifted_day = pd.to_datetime(frame["day"], errors="coerce") + pd.Timedelta(
-            days=self._data_forward_policy.effective_days
-        )
-        frame["day"] = shifted_day.dt.strftime("%Y-%m-%d")
-        totals = frame.groupby(DAILY_DIMENSIONS)["code_num"].transform("sum")
+        totals = frame.groupby(GLASS_DIMENSIONS)["code_num"].transform("sum")
         frame["ratio"] = (frame["code_num"] / totals.where(totals > 0)).round(3)
-        return frame.reindex(columns=DAILY_COLUMNS)
+        return frame.reindex(columns=GLASS_COLUMNS)
 
     def fetch_details(self, query: IjpQuery) -> pd.DataFrame:
         select = (

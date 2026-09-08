@@ -1,4 +1,4 @@
-"""Deterministic Plotly model for the IJP overflow By-day stacked ratio chart."""
+"""Deterministic Plotly model for the IJP overflow By-Glass-ID ratio chart."""
 
 from __future__ import annotations
 
@@ -9,30 +9,31 @@ from plotly.colors import qualitative
 from src.indicator_domain.core.ijp.overflow import IJP_RS_CODES
 
 
-def build_ijp_daily_figure(
+def build_ijp_glass_figure(
     ratios: pd.DataFrame,
     *,
-    title: str = "OLED RS Overflow By天",
+    title: str = "OLED RS Overflow By Glass ID",
 ) -> go.Figure:
-    """Build the day × RS_CODE 100% stacked ratio bars."""
+    """Build one RS_CODE percentage stack per Glass ID within a Printer."""
     figure = go.Figure()
     frame = ratios.copy()
-    days: list[str] = []
-    if not frame.empty and {"day", "rs_code", "ratio"} <= set(frame.columns):
+    glass_ids: list[str] = []
+    if not frame.empty and {"glass_id", "rs_code", "ratio"} <= set(frame.columns):
         frame["ratio"] = pd.to_numeric(frame["ratio"], errors="coerce")
-        frame = frame.dropna(subset=["day", "rs_code"])
-        days = sorted(frame["day"].astype(str).unique())
+        frame = frame.dropna(subset=["glass_id", "rs_code"])
+        glass_ids = sorted(frame["glass_id"].astype(str).unique())
         codes = [code for code in IJP_RS_CODES if code in set(frame["rs_code"])]
         codes += sorted(set(frame["rs_code"]) - set(codes))
         for index, code in enumerate(codes):
             code_rows = frame[frame["rs_code"] == code].set_index(
-                frame.loc[frame["rs_code"] == code, "day"].astype(str)
+                frame.loc[frame["rs_code"] == code, "glass_id"].astype(str)
             )
             y_values = [
-                float(code_rows["ratio"].get(day, 0.0)) * 100 for day in days
+                float(code_rows["ratio"].get(glass_id, 0.0)) * 100
+                for glass_id in glass_ids
             ]
             figure.add_bar(
-                x=days,
+                x=glass_ids,
                 y=y_values,
                 name=code,
                 marker_color=qualitative.Plotly[index % len(qualitative.Plotly)],
@@ -42,7 +43,7 @@ def build_ijp_daily_figure(
     figure.update_layout(
         title={"text": title, "x": 0.5, "xanchor": "center"},
         height=430,
-        margin={"l": 50, "r": 24, "t": 108, "b": 60},
+        margin={"l": 50, "r": 24, "t": 108, "b": 110},
         barmode="stack",
         bargap=0.35,
         legend={
@@ -54,7 +55,10 @@ def build_ijp_daily_figure(
         },
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
-        xaxis={"title": "日期", "showgrid": False, "type": "category"},
+        xaxis={
+            "title": "Glass ID", "showgrid": False, "type": "category",
+            "tickangle": -45, "automargin": True,
+        },
         yaxis={
             "title": "CODE 占比（%）",
             "range": [0, 100],

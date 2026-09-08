@@ -21,7 +21,7 @@ equipment:
     random_seed: 20260715
     initial_value_ratio_range: [0.0, 1.0]
     initial_lookback_days: 2
-    update_increment_ratio: 0.30
+    update_increment_ratio: 0.15
     reset_ratio_range: [0.0, 0.30]
 
 # 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）

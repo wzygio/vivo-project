@@ -26,7 +26,7 @@ def _policy() -> FabricationPolicy:
         random_seed=20260715,
         initial_value_ratio_range=(0.0, 1.0),
         initial_lookback_days=2,
-        update_increment_ratio=0.30,
+        update_increment_ratio=0.15,
         reset_ratio_range=(0.0, 0.30),
         snapshot_ttl_hours=24,
     )
@@ -43,6 +43,13 @@ def _specs() -> pd.DataFrame:
             "厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格",
             "站点", "机台号-腔室", "参数名称",
         ],
+    )
+
+
+def test_runtime_fabrication_uses_near_15_percent_increment() -> None:
+    assert (
+        get_equipment_runtime_config().fabrication_policy.update_increment_ratio
+        == pytest.approx(0.15)
     )
 
 
@@ -76,9 +83,9 @@ def test_update_advances_with_a_deterministic_near_arithmetic_sequence() -> None
         result.snapshot_df["value"].to_numpy()
         - original["value"].to_numpy()
     ) % 100.0
-    assert all(28.5 <= increment <= 31.5 for increment in increments)
+    assert all(14.25 <= increment <= 15.75 for increment in increments)
     assert len({round(increment, 6) for increment in increments}) > 1
-    assert 25.5 <= result.snapshot_df.loc[2, "value"] <= 28.5
+    assert 11.25 <= result.snapshot_df.loc[2, "value"] <= 12.75
     pd.testing.assert_frame_equal(result.snapshot_df, repeated.snapshot_df)
     assert result.summary["updated_rows"] == 3
     assert result.summary["reset_rows"] == 1

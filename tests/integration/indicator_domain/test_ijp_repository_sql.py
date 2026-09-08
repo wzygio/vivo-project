@@ -192,33 +192,33 @@ def test_fetch_details_limits_the_result_and_reports_truncation_size() -> None:
     assert len(details) <= 6
 
 
-def test_fetch_daily_ratios_uses_the_query_window_without_lookback() -> None:
+def test_fetch_glass_ratios_uses_the_query_window_without_lookback() -> None:
     repository = _repository(_build_engine())
 
-    ratios = repository.fetch_daily_ratios(_query(codes=("C3DM1",)))
+    ratios = repository.fetch_glass_ratios(_query(codes=("C3DM1",)))
 
     assert list(ratios.columns) == [
         "productcode",
         "line",
         "printer",
-        "day",
+        "glass_id",
         "rs_code",
         "code_num",
         "ratio",
     ]
     # G5（显示日 2026-08-29）早于查询起点，不再额外向前扩窗。
-    assert set(ratios["day"]) == {"2026-08-31"}
-    by_day = ratios.set_index("day")
-    assert by_day.loc["2026-08-31", "code_num"] == 2
-    assert by_day.loc["2026-08-31", "ratio"] == 1.0
+    assert set(ratios["glass_id"]) == {"G1"}
+    by_glass = ratios.set_index("glass_id")
+    assert by_glass.loc["G1", "code_num"] == 2
+    assert by_glass.loc["G1", "ratio"] == 1.0
 
 
-def test_fetch_daily_ratios_are_normalized_per_product_line_and_printer() -> None:
+def test_fetch_glass_ratios_are_normalized_per_product_line_and_printer() -> None:
     repository = _repository(_build_engine())
 
-    ratios = repository.fetch_daily_ratios(_query())
+    ratios = repository.fetch_glass_ratios(_query())
 
-    totals = ratios.groupby(["productcode", "line", "printer", "day"])[
+    totals = ratios.groupby(["productcode", "line", "printer", "glass_id"])[
         "ratio"
     ].sum()
     assert all(total == pytest.approx(1.0, abs=0.001) for total in totals)
@@ -227,6 +227,26 @@ def test_fetch_daily_ratios_are_normalized_per_product_line_and_printer() -> Non
         "3CEE02-IK2-PR2",
         "3CEE04-IKT-PRT",
     }
+
+
+def test_same_day_glasses_in_one_printer_have_independent_ratios() -> None:
+    engine = _build_engine()
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO eda.spot_eda_oled_view_dft_v VALUES "
+            "('2026-08-27 12:00:00','G10','SPEC1','C3DM2','test.jpg')"
+        ))
+        connection.execute(text(
+            "INSERT INTO eda.oled_chamber_hst_t VALUES "
+            "('G10','2026-08-27 11:30:00','3CEE01-IK2-PR1','REQ1')"
+        ))
+    ratios = _repository(engine).fetch_glass_ratios(_query(detail_limit=1))
+    printer = ratios[ratios["printer"] == "3CEE01-IK2-PR1"]
+    assert set(printer["glass_id"]) == {"G1", "G10"}
+    values = printer.set_index(["glass_id", "rs_code"])
+    assert values.loc[("G1", "C3DM1"), "ratio"] == pytest.approx(0.667)
+    assert values.loc[("G1", "C3RA1"), "ratio"] == pytest.approx(0.333)
+    assert values.loc[("G10", "C3DM2"), "ratio"] == 1.0
 
 
 def test_filter_option_queries_follow_the_finereport_datasets() -> None:

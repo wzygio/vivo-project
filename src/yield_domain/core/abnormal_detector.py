@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 class AbnormalDetector:
     """
@@ -36,28 +36,42 @@ class AbnormalDetector:
     @staticmethod
     def detect_system_trend_alerts(
         group_monthly: pd.DataFrame, 
-        code_monthly: pd.DataFrame
+        code_monthly: pd.DataFrame,
+        period_scope: Literal["monthly", "weekly"] = "monthly",
     ) -> List[str]:
         alerts = []
+        previous_period_label = "上周" if period_scope == "weekly" else "上月"
         
         # 1. Group 级
         if group_monthly is not None and not group_monthly.empty:
             df_g = group_monthly.sort_values('time_period')
             for grp, sub_df in df_g.groupby('defect_group'):
-                msg = AbnormalDetector._check_single_series_trend(sub_df, f"Group 预警 [{grp}]")
+                msg = AbnormalDetector._check_single_series_trend(
+                    sub_df,
+                    f"Group 预警 [{grp}]",
+                    previous_period_label,
+                )
                 if msg: alerts.append(msg)
 
         # 2. Code 级
         if code_monthly is not None and not code_monthly.empty:
             df_c = code_monthly.sort_values('time_period')
             for desc, sub_df in df_c.groupby('defect_desc'):
-                msg = AbnormalDetector._check_single_series_trend(sub_df, f"Code 预警 [{desc}]")
+                msg = AbnormalDetector._check_single_series_trend(
+                    sub_df,
+                    f"Code 预警 [{desc}]",
+                    previous_period_label,
+                )
                 if msg: alerts.append(msg)
                 
         return alerts
 
     @staticmethod
-    def _check_single_series_trend(sub_df: pd.DataFrame, title_prefix: str) -> str | None:
+    def _check_single_series_trend(
+        sub_df: pd.DataFrame,
+        title_prefix: str,
+        previous_period_label: str,
+    ) -> str | None:
         """内部辅助函数：检查单条时间序列的最后两个点"""
         if len(sub_df) < 2: return None
         
@@ -77,7 +91,7 @@ class AbnormalDetector:
             if is_surged: reasons.append("增幅>0.2%")
             
             return (f"📊 **{title_prefix}** (系统): {curr_row['time_period']} "
-                    f"良损 {r_curr:.2%} vs 上月 {r_prev:.2%} -> {' & '.join(reasons)}")
+                    f"良损 {r_curr:.2%} vs {previous_period_label} {r_prev:.2%} -> {' & '.join(reasons)}")
         return None
 
     # ==========================================================================

@@ -62,8 +62,8 @@ class IjpReportService:
             "codes": IJP_RS_CODES,
         }
 
-    def get_daily_ratios(self, query: IjpQuery) -> pd.DataFrame:
-        return self._data_port.fetch_daily_ratios(self._scope_query(query))
+    def get_glass_ratios(self, query: IjpQuery) -> pd.DataFrame:
+        return self._data_port.fetch_glass_ratios(self._scope_query(query))
 
     def get_details(self, query: IjpQuery) -> pd.DataFrame:
         return self._data_port.fetch_details(self._scope_query(query))

@@ -11,11 +11,6 @@ async page => {
 
   // 2. 默认筛选直接查询：图表 + 明细表出现
   await page.getByRole("button", { name: "查询" }).click();
-  await page.getByText("产品：M626", { exact: true }).click();
-  await page.getByText("线体：3CEE01", { exact: true }).click();
-  await page.getByText("线体：3CEE02", { exact: true }).click();
-  await page.getByText("产品：M678", { exact: true }).click();
-  await page.getByText("线体：3CEE04", { exact: true }).click();
   await page.locator(".js-plotly-plot").first().waitFor({ timeout: 120_000 });
   await page.locator('[data-testid="stDataFrame"]').waitFor({ timeout: 60_000 });
 

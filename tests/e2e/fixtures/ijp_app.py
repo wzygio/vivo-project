@@ -85,10 +85,10 @@ def _ratios() -> pd.DataFrame:
                 "3CEE02-IK2-PR1",
                 "3CEE04-IKT-PRT",
             ],
-            "day": [
-                "2026-08-30", "2026-08-30",
-                "2026-08-31", "2026-08-31", "2026-08-31",
-                "2026-09-01",
+            "glass_id": [
+                "L3N464E03181", "L3N464E03181",
+                "L3N464E03182", "L3N464E03182", "L3N464E03183",
+                "L3N464E03184",
             ],
             "rs_code": ["C3DM1", "C3RA1", "C3DM1", "C3RA1", "C3BH1", "C3DM3"],
             "code_num": [2, 1, 2, 1, 1, 1],
@@ -117,7 +117,7 @@ class FixtureIjpService:
             "codes": IJP_RS_CODES,
         }
 
-    def get_daily_ratios(self, query) -> pd.DataFrame:
+    def get_glass_ratios(self, query) -> pd.DataFrame:
         self._guard(query)
         if query.codes == ("C3BH2",):
             return pd.DataFrame(
@@ -125,7 +125,7 @@ class FixtureIjpService:
                     "productcode",
                     "line",
                     "printer",
-                    "day",
+                    "glass_id",
                     "rs_code",
                     "code_num",
                     "ratio",
