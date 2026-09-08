@@ -17,6 +17,8 @@ for import_path in (project_root, project_root / "src"):
 
 from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
+from src.indicator_domain.application.ijp.settings import IjpSettings
+from src.indicator_domain.core.ijp.printer_summary import summarize_printers
 from src.indicator_domain.core.ijp.overflow import (
     IJP_LINES,
     IJP_RS_CODES,
@@ -100,6 +102,8 @@ def _ratios() -> pd.DataFrame:
 class FixtureIjpService:
     """正常/空/错误三分支：M678 触发错误，CODE=C3BH2 触发空结果。"""
 
+    settings = IjpSettings()
+
     def get_reporting_window(self) -> tuple[datetime, datetime]:
         return (
             datetime(2026, 8, 1),
@@ -109,12 +113,13 @@ class FixtureIjpService:
     def get_filter_options(
         self,
         product_codes=(),
+        *, start_time=None, end_time=None,
     ) -> dict[str, tuple[str, ...]]:
         return {
             "product_codes": ("M626", "M678"),
             "picis": ("LOT1", "LOT2"),
             "lines": IJP_LINES,
-            "codes": IJP_RS_CODES,
+            "codes": self.settings.codes,
         }
 
     def get_glass_ratios(self, query) -> pd.DataFrame:
@@ -133,9 +138,17 @@ class FixtureIjpService:
             )
         return _ratios()
 
+    def get_printer_ratios(self, query) -> pd.DataFrame:
+        self._guard(query)
+        if query.codes == ("C3DM5",):
+            return pd.DataFrame()
+        frame = _ratios().replace({"C3RA1": "C3DM2", "C3BH1": "C3DM4"})
+        frame = frame[frame.rs_code.isin(query.codes or self.settings.codes)]
+        return summarize_printers(frame, decorate=not query.codes or "C3DM1" in query.codes)
+
     def get_details(self, query) -> pd.DataFrame:
         self._guard(query)
-        if query.codes == ("C3BH2",):
+        if query.codes == ("C3DM5",):
             return pd.DataFrame()
         details = _details()
         if query.product_codes:

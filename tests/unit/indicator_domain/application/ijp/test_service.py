@@ -11,6 +11,7 @@ from src.indicator_domain.application.ijp.service import (
     build_reporting_window,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.indicator_domain.application.ijp.settings import IjpSettings
 
 START = datetime(2026, 8, 31, 7, 0)
 END = datetime(2026, 9, 1, 7, 0)
@@ -90,7 +91,7 @@ def test_service_exposes_filter_options_with_cascading_inputs() -> None:
     assert options["product_codes"] == ("M626", "M678")
     assert options["picis"] == ("LOT1",)
     assert options["lines"] == ("3CEE01", "3CEE02", "3CEE04")
-    assert len(options["codes"]) == 12
+    assert options["codes"] == tuple(f"C3DM{i}" for i in range(6))
     assert "equipments" not in options
     assert "panel_locations" not in options
     assert port.received_product_codes == ("M678",)
@@ -112,8 +113,8 @@ def test_service_scopes_options_and_queries_to_enabled_products() -> None:
     assert port.received_query is not None
     assert port.received_query.product_codes == ("M678", "Z571")
     assert port.received_query.work_order_types == ("P", "LCFG")
-    assert port.received_query.start_time == REPORT_START
-    assert port.received_query.end_time == REPORT_END
+    assert port.received_query.start_time == START
+    assert port.received_query.end_time == END
 
 
 def test_composition_builds_ijp_service_with_global_enabled_products(
@@ -183,8 +184,8 @@ def test_service_delegates_report_reads_to_the_port() -> None:
     ]
     assert details.to_dict("records") == [{"glass_id": "G1", "code_ratio": 0.667}]
     assert port.received_query is not query
-    assert port.received_query.start_time == REPORT_START
-    assert port.received_query.end_time == REPORT_END
+    assert port.received_query.start_time == START
+    assert port.received_query.end_time == END
 
 
 def test_service_propagates_the_stable_data_access_error() -> None:
@@ -194,3 +195,24 @@ def test_service_propagates_the_stable_data_access_error() -> None:
         service.get_details(_query())
 
     assert str(caught.value) == "IJP 溢流数据读取失败，请联系系统管理员确认数据库权限。"
+
+
+def test_config_allowlist_applies_to_empty_selection_and_rejects_bypass():
+    port = FakeIjpDataPort()
+    service = IjpReportService(port, settings=IjpSettings(codes=("C3DM1", "C3DM2")))
+    service.get_printer_ratios(_query())
+    assert port.received_query.codes == ("C3DM1", "C3DM2")
+    assert port.received_query.start_time == START
+    assert port.received_query.end_time == END
+    with pytest.raises(ValueError, match="配置允许范围"):
+        service.get_details(_query(codes=("C3RA1",)))
+
+
+def test_selected_dates_are_used_for_batch_options():
+    class WindowPort(FakeIjpDataPort):
+        def list_picis(self, start_time, end_time, product_codes):
+            assert (start_time, end_time) == (START, END)
+            return ("CUSTOM",)
+    assert _service(WindowPort()).get_filter_options(
+        start_time=START, end_time=END,
+    )["picis"] == ("CUSTOM",)

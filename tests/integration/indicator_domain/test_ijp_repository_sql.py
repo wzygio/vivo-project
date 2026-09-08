@@ -249,6 +249,24 @@ def test_same_day_glasses_in_one_printer_have_independent_ratios() -> None:
     assert values.loc[("G10", "C3DM2"), "ratio"] == 1.0
 
 
+def test_end_date_includes_fractional_last_second():
+    engine = _build_engine()
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO eda.spot_eda_oled_view_dft_v VALUES "
+            "('2026-08-27 23:59:59.500000','GLAST','SPEC1','C3DM1','test.jpg')"
+        ))
+        connection.execute(text(
+            "INSERT INTO eda.oled_chamber_hst_t VALUES "
+            "('GLAST','2026-08-27 23:59:59.500000','3CEE01-IK2-PR1','REQ1')"
+        ))
+    query = IjpQuery(start_time=datetime(2026, 8, 31),
+                     end_time=datetime(2026, 8, 31, 23, 59, 59, 999999))
+    repository = _repository(engine)
+    assert "GLAST" in set(repository.fetch_glass_ratios(query).glass_id)
+    assert "GLAST" in set(repository.fetch_details(query).glass_id)
+
+
 def test_filter_option_queries_follow_the_finereport_datasets() -> None:
     repository = _repository(_build_engine())
 

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 
 import pandas as pd
 from pydantic import ValidationError
 import streamlit as st
 
 from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
+from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
@@ -23,7 +24,7 @@ TABLE_COLUMN_MAP = {
     "panel_location": "Panel Location",
     "code_ratio": "CODE_RATIO",
 }
-RESULT_STATE_KEY = "ijp_glass_report_result"
+RESULT_STATE_KEY = "ijp_printer_report_result"
 DETAIL_LIMIT = 5000
 CHARTS_PER_ROW = 3
 
@@ -53,14 +54,27 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
     start_time, end_time = service.get_reporting_window()
 
     with st.container(border=True):
-        st.caption(
-            f"数据范围：{start_time:%Y/%m/%d} 至 {end_time:%Y/%m/%d}"
-            "（固定为上月 1 日至今天）"
-        )
+        start_column, end_column = st.columns(2)
+        with start_column:
+            start_date = st.date_input(
+                "开始日期", value=start_time.date(), key="ijp_start_date",
+                format="YYYY/MM/DD",
+            )
+        with end_column:
+            end_date = st.date_input(
+                "结束日期", value=end_time.date(), key="ijp_end_date",
+                format="YYYY/MM/DD",
+            )
+        if end_date < start_date:
+            st.error("结束日期不能早于开始日期")
+            return
+        start_time = datetime.combine(start_date, time.min)
+        end_time = datetime.combine(end_date, time.max)
 
         try:
             options = service.get_filter_options(
                 tuple(st.session_state.get("ijp_product_codes", [])),
+                start_time=start_time, end_time=end_time,
             )
         except IjpDataAccessError as exc:
             st.error(str(exc))
@@ -78,9 +92,11 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
         with line_column:
             lines = st.multiselect("线体", options=options["lines"], key="ijp_lines")
         with code_column:
+            _retain_available_multiselect_values("ijp_codes", options["codes"])
             codes = st.multiselect("CODE", options=options["codes"], key="ijp_codes")
 
         with pici_column:
+            _retain_available_multiselect_values("ijp_picis", options["picis"])
             picis = st.multiselect("批次", options=options["picis"], key="ijp_picis")
         should_query = st.button(
             "查询",
@@ -96,6 +112,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
         lines,
         codes,
         picis,
+        service.settings.model_dump_json(),
     )
     if should_query:
         _run_query(
@@ -120,7 +137,12 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
 
     ratios = stored["ratios"]
     if not ratios.empty:
-        _render_grouped_glass_charts(ratios)
+        st.caption(
+            "显示修饰：所选 CODE 包含 C3DM1 时，其占比至少为 "
+            f"{service.settings.c3dm1_minimum:.0%}，其它 CODE 同比例压缩。"
+            "悬停可查看实际占比和记录数；明细保留实际值。"
+        )
+        _render_grouped_glass_charts(ratios, printer_summary=True)
 
     if len(details) >= stored["limit"]:
         st.caption(f"明细仅展示前 {stored['limit']} 行（已截断），请缩小筛选范围。")
@@ -151,6 +173,7 @@ def _run_query(
     signature: tuple[object, ...],
 ) -> None:
     try:
+        st.session_state.pop(RESULT_STATE_KEY, None)
         query = IjpQuery(
             start_time=start_time,
             end_time=end_time,
@@ -160,13 +183,16 @@ def _run_query(
             picis=tuple(picis),
             detail_limit=DETAIL_LIMIT,
         )
-        ratios = service.get_glass_ratios(query)
+        ratios = service.get_printer_ratios(query)
         details = service.get_details(query)
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))
         return
     except IjpDataAccessError as exc:
+        st.error(str(exc))
+        return
+    except ValueError as exc:
         st.error(str(exc))
         return
 
@@ -182,7 +208,10 @@ def _filter_signature(*values: object) -> tuple[object, ...]:
     return tuple(tuple(value) if isinstance(value, list) else value for value in values)
 
 
-def _render_grouped_glass_charts(ratios: pd.DataFrame) -> None:
+def _render_grouped_glass_charts(
+    ratios: pd.DataFrame, *, printer_summary: bool = False,
+) -> None:
+    build_figure = build_ijp_printer_figure if printer_summary else build_ijp_glass_figure
     required = {"productcode", "line", "printer"}
     grouped = ratios.dropna(subset=list(required))
     for product_index, (product, product_frame) in enumerate(
@@ -209,7 +238,7 @@ def _render_grouped_glass_charts(ratios: pd.DataFrame) -> None:
                             ]
                             with column:
                                 st.plotly_chart(
-                                    build_ijp_glass_figure(
+                                    build_figure(
                                         printer_frame,
                                         title=str(printer),
                                     ),

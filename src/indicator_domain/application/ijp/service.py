@@ -10,9 +10,10 @@ import pandas as pd
 
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.ports import IjpDataPort
+from src.indicator_domain.application.ijp.settings import IjpSettings
+from src.indicator_domain.core.ijp.printer_summary import summarize_printers
 from src.indicator_domain.core.ijp.overflow import (
     IJP_LINES,
-    IJP_RS_CODES,
 )
 
 
@@ -30,11 +31,13 @@ class IjpReportService:
         enabled_product_codes: tuple[str, ...] = (),
         work_order_types: tuple[str, ...] = (),
         today_provider: Callable[[], date] | None = None,
+        settings: IjpSettings | None = None,
     ) -> None:
         self._data_port = data_port
         self._enabled_product_codes = tuple(dict.fromkeys(enabled_product_codes))
         self._work_order_types = tuple(dict.fromkeys(work_order_types))
         self._today_provider = today_provider or date.today
+        self.settings = settings or IjpSettings()
 
     def get_reporting_window(self) -> tuple[datetime, datetime]:
         return build_reporting_window(self._today_provider())
@@ -42,8 +45,13 @@ class IjpReportService:
     def get_filter_options(
         self,
         product_codes: tuple[str, ...] = (),
+        *,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
     ) -> IjpFilterOptions:
-        start_time, end_time = self.get_reporting_window()
+        default_start, default_end = self.get_reporting_window()
+        start_time = start_time if start_time is not None else default_start
+        end_time = end_time if end_time is not None else default_end
         available_product_codes = self._data_port.list_product_codes()
         if self._enabled_product_codes:
             enabled = set(self._enabled_product_codes)
@@ -59,7 +67,7 @@ class IjpReportService:
                 scoped_product_codes,
             ),
             "lines": IJP_LINES,
-            "codes": IJP_RS_CODES,
+            "codes": self.settings.codes,
         }
 
     def get_glass_ratios(self, query: IjpQuery) -> pd.DataFrame:
@@ -67,6 +75,14 @@ class IjpReportService:
 
     def get_details(self, query: IjpQuery) -> pd.DataFrame:
         return self._data_port.fetch_details(self._scope_query(query))
+
+    def get_printer_ratios(self, query: IjpQuery) -> pd.DataFrame:
+        scoped = self._scope_query(query)
+        return summarize_printers(
+            self._data_port.fetch_glass_ratios(scoped),
+            decorate="C3DM1" in scoped.codes,
+            minimum=self.settings.c3dm1_minimum,
+        )
 
     def _scope_product_codes(
         self,
@@ -80,11 +96,11 @@ class IjpReportService:
         return tuple(code for code in product_codes if code in enabled)
 
     def _scope_query(self, query: IjpQuery) -> IjpQuery:
-        start_time, end_time = self.get_reporting_window()
+        if set(query.codes) - set(self.settings.codes):
+            raise ValueError("所选 CODE 不在 IJP 配置允许范围内")
         return query.model_copy(
             update={
-                "start_time": start_time,
-                "end_time": end_time,
+                "codes": query.codes or self.settings.codes,
                 "product_codes": self._scope_product_codes(query.product_codes),
                 "work_order_types": self._work_order_types,
             }

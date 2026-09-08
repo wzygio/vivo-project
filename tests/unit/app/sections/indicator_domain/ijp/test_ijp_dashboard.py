@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
@@ -75,10 +76,9 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
     assert app.subheader[0].value == "OLED IJP 溢流监控"
-    assert not app.date_input
+    assert len(app.date_input) == 2
     assert not app.datetime_input
     assert not app.number_input
-    assert any("数据范围：2026/08/01 至 2026/09/07" in item.value for item in app.caption)
     labels = {widget.label for widget in app.multiselect}
     assert "产品型号" in labels
     assert "设备" not in labels
@@ -87,7 +87,7 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert "工单类型" not in labels
     assert not app.text_input
     assert "Cycle" not in labels
-    filter_columns = app.get("column")
+    filter_columns = app.get("column")[2:]
     assert len(filter_columns) == 4
     assert all(column.weight == 0.25 for column in filter_columns)
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
@@ -99,7 +99,7 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.info
     assert len(app.dataframe) == 1
     assert len(app.get("plotly_chart")) == 4
-    chart_columns = app.get("column")[4:]
+    chart_columns = app.get("column")[6:]
     assert [column.weight for column in chart_columns] == [0.5, 0.5, 1.0, 1.0]
     assert [expander.label for expander in app.expander] == [
         "产品：M626",
@@ -131,7 +131,7 @@ def test_ijp_dashboard_shows_a_safe_database_error() -> None:
 def test_ijp_dashboard_explains_an_empty_result() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
-    app.multiselect(key="ijp_codes").set_value(["C3BH2"])
+    app.multiselect(key="ijp_codes").set_value(["C3DM5"])
     app.button(key="ijp_search").click().run()
 
     assert app.info[0].value == "当前筛选条件下暂无 IJP 溢流数据。"
@@ -147,3 +147,14 @@ def test_ijp_dashboard_invalidates_stale_results_when_filters_change() -> None:
 
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
+
+
+def test_changed_dates_invalidate_results_and_reversed_dates_show_error():
+    app = AppTest.from_file(str(FIXTURE_PATH)).run()
+    app.button(key="ijp_search").click().run()
+    app.date_input(key="ijp_start_date").set_value(date(2026, 9, 1)).run()
+    assert not app.dataframe
+    assert app.info
+    app.date_input(key="ijp_start_date").set_value(date(2026, 9, 8)).run()
+    assert app.error[0].value == "结束日期不能早于开始日期"
+    assert not app.get("plotly_chart")

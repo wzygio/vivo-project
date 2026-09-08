@@ -18,6 +18,13 @@ async page => {
   if (chartCount !== 4) {
     throw new Error(`Printer 图表数量错误：期望 4，实际 ${chartCount}`);
   }
+  const axes = await page.locator(".js-plotly-plot").evaluateAll(charts =>
+    charts.map(chart => [...chart.querySelectorAll('.xtick text')].map(node => node.textContent)),
+  );
+  const expectedCodes = ['C3DM0', 'C3DM1', 'C3DM2', 'C3DM3', 'C3DM4', 'C3DM5'];
+  if (axes.some(axis => JSON.stringify(axis) !== JSON.stringify(expectedCodes))) {
+    throw new Error('机台图必须保留六个 CODE 横轴位置');
+  }
 
   // 3. viewport-fit：1365×768 下不允许页面级横向滚动
   const overflowX = await page.evaluate(
@@ -31,13 +38,13 @@ async page => {
     fullPage: true,
   });
 
-  // 4. 修改筛选（CODE=C3BH2）后结果失效，回到门控提示
+  // 4. 修改筛选（CODE=C3DM5）后结果失效，回到门控提示
   // Streamlit 1.60 多选下拉为虚拟列表，仅渲染前 10 项：键入过滤后再点选；
   // 选中后 aria-label 变为 "Selected X. CODE"，故用属性包含匹配
   const codeCombo = page.locator('[role="combobox"][aria-label*="CODE"]');
   await codeCombo.click();
-  await codeCombo.pressSequentially("C3BH2");
-  await page.getByRole("option", { name: "C3BH2", exact: true }).click();
+  await codeCombo.pressSequentially("C3DM5");
+  await page.getByRole("option", { name: "C3DM5", exact: true }).click();
   await page.keyboard.press("Escape");
   await page.getByText("请选择筛选条件并点击“查询”。").waitFor({ timeout: 60_000 });
 

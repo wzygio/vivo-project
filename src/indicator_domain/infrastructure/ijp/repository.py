@@ -281,4 +281,4 @@ class IjpRepository:
 
 
 def _format_timestamp(value: datetime) -> str:
-    return value.strftime("%Y-%m-%d %H:%M:%S")
+    return value.isoformat(sep=" ", timespec="microseconds" if value.microsecond else "seconds")
