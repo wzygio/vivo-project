@@ -91,9 +91,35 @@ def test_update_advances_with_a_deterministic_near_arithmetic_sequence() -> None
     assert result.summary["reset_rows"] == 1
 
 
+def test_twelve_hour_ttl_advances_measurement_time_by_twelve_hours() -> None:
+    policy = replace(_policy(), snapshot_ttl_hours=12)
+    original = generate_fabricated_snapshot(
+        _specs(), policy, as_of=pd.Timestamp("2026-09-08 08:00:00")
+    ).snapshot_df
+    result = update_fabricated_snapshot(original, _specs(), policy)
+    assert result.snapshot_df["glass_start_time"].equals(
+        original["glass_start_time"] + pd.Timedelta(hours=12)
+    )
+
+
+def test_fresh_future_snapshot_is_repaired_without_changing_values(tmp_path) -> None:
+    now = pd.Timestamp.now().floor("s")
+    original = generate_fabricated_snapshot(
+        _specs(), _policy(), as_of=now + pd.Timedelta(days=5)
+    ).snapshot_df
+    path = write_fabricated_snapshot(original, _specs(), output_dir=tmp_path)
+    ensure_fabricated_snapshot_file(_specs(), _policy(), output_dir=tmp_path, now=now)
+    repaired = pd.read_parquet(path)
+    assert repaired["glass_start_time"].max() <= now
+    pd.testing.assert_series_equal(repaired["value"], original["value"])
+    assert repaired["glass_start_time"].diff().equals(original["glass_start_time"].diff())
+
+
 def test_file_update_skips_fresh_snapshot_updates_at_ttl_and_allows_force(tmp_path) -> None:
     now = pd.Timestamp("2026-07-21 12:00:00")
-    generated = generate_fabricated_snapshot(_specs(), _policy(), as_of=now)
+    generated = generate_fabricated_snapshot(
+        _specs(), _policy(), as_of=now - pd.Timedelta(days=2)
+    )
     snapshot_path = write_fabricated_snapshot(
         generated.snapshot_df,
         _specs(),
@@ -169,12 +195,19 @@ def test_ensure_bootstraps_missing_snapshot_and_loader_maintains_it_automaticall
         now=now,
     )
 
-    assert (loaded["glass_start_time"] == before["glass_start_time"] + pd.Timedelta(days=1)).all()
+    assert loaded["glass_start_time"].max() <= now
+    assert loaded["glass_start_time"].diff().equals(before["glass_start_time"].diff())
 
 
 def test_report_snapshot_boundary_filters_source_time_before_display_shift(
     monkeypatch,
 ) -> None:
+    from src.shared_kernel.data_forward import DataForwardPolicy
+
+    monkeypatch.setattr(
+        data_loader.ConfigLoader, "get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
     as_of = pd.Timestamp("2026-08-10 12:00:00")
     source_real = pd.DataFrame(
         {

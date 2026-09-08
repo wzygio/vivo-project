@@ -21,6 +21,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.shared_kernel.snapshot_paths import inline_measurement_directory, snapshot_component
+
 DEFAULT_INPUT_PATH = PROJECT_ROOT / "resources" / "inline_domain" / "spc_sheet_oos_decoration.xlsx"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "output" / "ppa_oos_weekly_summary.xlsx"
 DEFAULT_SNAPSHOT_DIR = PROJECT_ROOT / "data"
@@ -129,7 +131,7 @@ def load_measurement_snapshots(
     """Load the L1 measurement snapshot required for each product denominator."""
     snapshots: dict[str, pd.DataFrame] = {}
     for product in product_order:
-        snapshot_path = snapshot_dir / product / f"inline_measurements_{product}.parquet"
+        snapshot_path = inline_measurement_directory(snapshot_dir) / f"inline_measurements_{snapshot_component(product)}.parquet"
         if not snapshot_path.is_file():
             raise FileNotFoundError(f"底层测量快照不存在: {snapshot_path}")
         frame = pd.read_parquet(snapshot_path)

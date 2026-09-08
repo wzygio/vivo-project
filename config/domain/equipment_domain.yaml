@@ -5,7 +5,7 @@ equipment:
       - Array规格表1
     csv_encoding: utf-8-sig
   snapshot:
-    directory: data/equipment
+    directory: data/equipment_domain/parts
   query:
     lookback_days: 90
     measurement_max_age_days: 3

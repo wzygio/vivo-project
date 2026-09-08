@@ -4,6 +4,9 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_forward import DataForwardPolicy
+
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.infrastructure import data_loader
 from src.yield_domain.infrastructure.repositories.yield_repository import (
@@ -37,13 +40,20 @@ def test_work_order_policy_participates_in_snapshot_identity(tmp_path) -> None:
     second_path = build_yield_snapshot_path(tmp_path, "M678", second_policy)
 
     assert first_path != second_path
+    assert first_path.parent == tmp_path / "yield_domain" / "yield"
     assert first_policy.signature in first_path.name
     assert second_policy.signature in second_path.name
 
 
 def test_repository_applies_injected_defect_group_policy_to_snapshot_data(
-    tmp_path,
+    tmp_path, monkeypatch,
 ) -> None:
+    # This fixture deliberately models a four-day display shift; do not depend
+    # on the user's mutable production configuration.
+    monkeypatch.setattr(
+        ConfigLoader, "get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
     snapshot_path = tmp_path / "yield_snapshot.parquet"
     pd.DataFrame(
         [

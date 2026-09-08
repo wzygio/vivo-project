@@ -8,7 +8,6 @@
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
 4. 渲染卡片：总备件数、超规、预警、正常、最后更新
 5. 中部渲染明细表，支持厂别、设备类型、备件类型多选筛选
-6. 点击联动：仅在勾选表格备件行后，底部展开该备件趋势曲线
 """
 
 import sys
@@ -47,12 +46,11 @@ from app.components.page_header import (
 from app.manager.session_manager import SessionManager
 from app.sections.equipment_domain.parts_filters import (
     apply_parts_filters,
-    get_selected_parts_row,
     render_parts_filters,
 )
 from app.sections.equipment_domain.parts_dashboard import (
     render_parts_metrics,
-    render_parts_table_selectable,
+    render_parts_table,
 )
 
 # ==============================================================================
@@ -80,6 +78,7 @@ parts_report_cache_context = build_parts_report_cache_context(BASELINE_PATH)
 render_page_header(
     "📋 关键备件报表",
     active_config,
+    show_product_filter=False,
     cached_funcs=extract_cached_funcs(PartsReportService),
     refresh_handlers=[
         lambda: PartsReportService.safe_refresh_snapshots(
@@ -154,42 +153,4 @@ render_parts_metrics(
 # ==============================================================================
 
 st.markdown("### 📋 备件寿命明细列表")
-selected_rows_dict = render_parts_table_selectable(filtered_df)
-
-
-# ==============================================================================
-#  [点击联动] 表格与趋势图点击联动
-# ==============================================================================
-
-selected_row_data = get_selected_parts_row(filtered_df, selected_rows_dict)
-
-if selected_row_data is not None:
-    trend_factory = selected_row_data["厂别"]
-    trend_layer = selected_row_data["膜层"]
-    trend_part_type = selected_row_data["备件类型"]
-
-    st.markdown("---")
-    with st.expander(
-        f"📈 备件寿命趋势分析 — {trend_factory} | {trend_layer} | {trend_part_type}",
-        expanded=True,
-    ):
-        from app.charts.equipment_domain.parts_chart import generate_trend_data, create_parts_trend_chart
-
-        df_selected_trend = generate_trend_data(
-            factory=trend_factory,
-            layer=trend_layer,
-            part_type=trend_part_type,
-            spec_df=spec_df,
-            station=selected_row_data.get("站点", ""),
-            machine=selected_row_data.get("机台号-腔室", ""),
-            days=90,
-        )
-
-        fig = create_parts_trend_chart(
-            df_trend=df_selected_trend,
-            factory=trend_factory,
-            layer=trend_layer,
-            part_type=trend_part_type,
-        )
-
-        st.plotly_chart(fig, width="stretch")
+render_parts_table(filtered_df)

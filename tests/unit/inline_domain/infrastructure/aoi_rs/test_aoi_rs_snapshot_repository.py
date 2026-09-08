@@ -84,7 +84,7 @@ def test_rs_details_reuse_fresh_product_snapshot_without_reloading_database(
     second = repository.get_rs_details(_query())
 
     assert loader_calls == [loader_calls[0]]
-    assert loader_calls[0].start_date == "2026-01-01"
+    assert loader_calls[0].start_date == "2026-05-01"
     assert loader_calls[0].end_date == "2026-08-10"
     pd.testing.assert_frame_equal(first, second)
     assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-10 08:00:00")
@@ -247,9 +247,10 @@ def test_snapshot_older_than_ttl_is_reloaded(tmp_path: Path) -> None:
         details_loader=load_details,
     )
     repository.get_rs_details(_query())
-    snapshot_path = tmp_path / "aoi_rs_details_M678.parquet"
-    expired = snapshot_path.stat().st_mtime - (repository.SNAPSHOT_TTL_HOURS + 1) * 3600
-    os.utime(snapshot_path, (expired, expired))
+    metadata_path = tmp_path / "aoi_rs_details_M678.snapshot.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["refreshed_at"] = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=repository.SNAPSHOT_TTL_HOURS + 1)).isoformat()
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
     repository.get_rs_details(_query())
 
@@ -271,7 +272,9 @@ def test_database_failure_falls_back_to_existing_snapshot(tmp_path: Path) -> Non
     )
     expected = repository.get_rs_details(_query())
     metadata_path = tmp_path / "aoi_rs_details_M678.snapshot.json"
-    metadata_path.write_text("{}", encoding="utf-8")
+    metadata = json.loads(metadata_path.read_text())
+    metadata["refreshed_at"] = "2020-01-01T00:00:00+00:00"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
     should_fail = True
 
     actual = repository.get_rs_details(_query())
@@ -401,7 +404,7 @@ def test_annual_snapshot_metadata_covers_no_fact_months(tmp_path):
     )
     repository.get_rs_details(_query())
     metadata = json.loads((tmp_path / "aoi_rs_details_M678.snapshot.json").read_text())
-    assert metadata["covered_from"] == "2026-01-01"
+    assert metadata["covered_from"] == "2026-05-01"
 
 
 @pytest.mark.parametrize("method,prefix", [

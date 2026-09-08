@@ -28,6 +28,10 @@ from src.shared_kernel.utils.excel_tools import (
 logger = logging.getLogger(__name__)
 
 
+class CapabilityDecorationReadError(RuntimeError):
+    """The ledger could not be read and must not be replaced with computed rows."""
+
+
 def get_cpk_decoration_path(product_dir: Path) -> Path:
     return product_dir / CPK_DECORATION_FILE_NAME
 
@@ -36,6 +40,8 @@ def load_capability_decoration(
     product_dir: Path,
     sheet_name: str | None = None,
     metric: str = CAPABILITY_METRIC_CPK,
+    *,
+    raise_on_error: bool = False,
 ) -> pd.DataFrame:
     _validate_metric(metric)
     path = get_cpk_decoration_path(product_dir)
@@ -56,6 +62,10 @@ def load_capability_decoration(
                 excel_exc,
                 com_exc,
             )
+            if raise_on_error:
+                raise CapabilityDecorationReadError(
+                    f"Cannot read capability decoration sheet {sheet_name!r}"
+                ) from com_exc
             return _empty_decoration_frame(metric)
     if frame.empty:
         return _empty_decoration_frame(metric)
@@ -75,14 +85,26 @@ def persist_capability_decoration(
     product_dir.mkdir(parents=True, exist_ok=True)
     path = get_cpk_decoration_path(product_dir)
     target_sheet = sheet_name or "Sheet1"
-    existing = load_capability_decoration(product_dir, sheet_name, metric)
+    try:
+        existing = load_capability_decoration(
+            product_dir, sheet_name, metric, raise_on_error=True,
+        )
+    except CapabilityDecorationReadError:
+        # A read failure is not a successfully read empty sheet. Preserve the file.
+        return merge_capability_detail_with_decoration_flags(
+            detail_df, _empty_decoration_frame(metric), metric,
+        )
     current = merge_capability_detail_with_decoration_flags(detail_df, existing, metric)
     sheet_names = list_workbook_sheet_names(path)
+    if sheet_names is None:
+        return current
     sheet_exists = path.exists() and (
         sheet_name is None or sheet_names is None or sheet_name in sheet_names
     )
     persisted = current
     should_write = not sheet_exists
+    if sheet_exists and existing.empty:
+        should_write = not current.empty
     if sheet_exists and not existing.empty:
         persisted = _append_missing_detail_rows(existing, current, metric)
         should_write = len(persisted) > len(existing)

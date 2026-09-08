@@ -126,6 +126,7 @@ def build_capability_detail(
         return _empty_detail_frame(metric)
 
     capability_df = _normalize_key_columns(period_capability_df)
+    capability_df = capability_df.loc[capability_df["period_type"].isin(["month", "week"])]
     detail = _ordered_existing_columns(
         capability_df,
         [*CPK_KEY_COLUMNS, "period_sort", "period_start", "period_end", metric],

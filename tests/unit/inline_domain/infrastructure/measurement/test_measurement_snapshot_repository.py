@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
 import json
+from datetime import datetime, timezone
 
 import pandas as pd
 import pytest
@@ -31,7 +32,11 @@ def _write_coverage(snapshot_path):
         InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION, encoding="utf-8",
     )
     snapshot_path.with_suffix(".snapshot.json").write_text(
-        json.dumps({"covered_from": "2026-01-01", "covered_through": "2026-08-13"}),
+        json.dumps({"covered_from": "2026-05-01", "covered_through": "2026-08-13",
+                    "policy_version": InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION,
+                    "refreshed_at": datetime.now(timezone.utc).isoformat(),
+                    "snapshot_size_bytes": snapshot_path.stat().st_size,
+                    "snapshot_mtime_ns": snapshot_path.stat().st_mtime_ns}),
         encoding="utf-8",
     )
 
@@ -71,7 +76,7 @@ def test_repository_reuses_one_product_snapshot_for_repeated_reads(tmp_path) -> 
     first = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
     second = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
 
-    assert calls == [("2026-01-01", "2026-08-13", "M678")]
+    assert calls == [("2026-05-01", "2026-08-13", "M678")]
     assert first.equals(second)
     assert first.loc[0, "lot_id"] == "LOT-1"
     assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-17 08:00:00")
@@ -253,5 +258,5 @@ def test_refresh_metadata_records_query_coverage_not_first_fact_time(tmp_path):
     )
     repository.get_measurements("M678", "2026-08-13")
     metadata = json.loads((tmp_path / "inline_measurements_M678.snapshot.json").read_text())
-    assert metadata["covered_from"] == "2026-01-01"
+    assert metadata["covered_from"] == "2026-05-01"
     assert metadata["covered_through"] == "2026-08-13"

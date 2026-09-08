@@ -2,6 +2,7 @@ from pathlib import Path
 from zipfile import BadZipFile
 
 import pandas as pd
+import pytest
 
 from src.inline_domain.infrastructure.spc import (
     capability_decoration_repository as cpk_decoration,
@@ -28,8 +29,8 @@ def _capability_frame(cpk: float) -> pd.DataFrame:
                 "factory": "ARRAY",
                 "step_id": "12140",
                 "param_name": "SE_L1T_UNI",
-                "period_type": "day",
-                "period_label": "2026-07-20",
+                "period_type": "week",
+                "period_label": "2026-W30",
                 "period_sort": 320,
                 "period_start": "2026-07-20",
                 "period_end": "2026-07-20",
@@ -230,7 +231,7 @@ def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
     )
 
     persisted_df = pd.read_excel(decoration_path, sheet_name="M678")
-    assert persisted_df["period_label"].tolist() == ["2026-07-20", "2026-W35"]
+    assert persisted_df["period_label"].tolist() == ["2026-W30", "2026-W35"]
     assert persisted_df["cpk_corrected"].tolist() == [1.72, 0.919]
     assert persisted_df["flag"].tolist() == [True, False]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True, False]
@@ -265,3 +266,65 @@ def test_prepare_cpk_decoration_preserves_an_unreadable_existing_user_file(
     assert decoration_path.read_bytes() == encrypted_bytes
     assert result.period_capability_df["cpk"].tolist() == [0.82]
     assert result.period_capability_df["cpk_decorated"].tolist() == [False]
+
+
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
+def test_prepare_capability_populates_existing_header_only_sheet(tmp_path: Path, metric: str) -> None:
+    computed = _capability_frame(1.084).rename(columns={"cpk": metric}).assign(
+        prod_code="Z517", period_type="week", period_label="2026-W36",
+    )
+    sheet = resolve_capability_decoration_sheet("Z517", metric)
+    path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
+    empty = prepare_capability_decoration(
+        computed.iloc[:0], tmp_path, persist_files=False, metric=metric,
+    ).decoration_df
+    other = pd.DataFrame([{"note": "keep user decision", "flag": True}])
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        empty.to_excel(writer, sheet_name=sheet, index=False)
+        other.to_excel(writer, sheet_name="OTHER", index=False)
+
+    prepare_capability_decoration(computed, tmp_path, sheet_name=sheet, metric=metric)
+
+    stored = pd.read_excel(path, sheet_name=sheet)
+    assert stored["prod_code"].tolist() == ["Z517"]
+    assert stored["period_label"].tolist() == ["2026-W36"]
+    assert stored[f"{metric}_corrected"].tolist() == [1.084]
+    assert stored["flag"].tolist() == [False]
+    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="OTHER"), other)
+    original_bytes = path.read_bytes()
+    prepare_capability_decoration(computed, tmp_path, sheet_name=sheet, metric=metric)
+    assert path.read_bytes() == original_bytes
+
+
+def test_failed_sheet_read_is_not_treated_as_header_only(monkeypatch, tmp_path: Path) -> None:
+    path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
+    pd.DataFrame([{"flag": True, "cpk_corrected": 1.72}]).to_excel(
+        path, sheet_name="Z517", index=False,
+    )
+    original_bytes = path.read_bytes()
+
+    def fail_read(*args, **kwargs):
+        raise OSError("Sheet read unavailable")
+
+    monkeypatch.setattr(cpk_decoration.pd, "read_excel", fail_read)
+    monkeypatch.setattr(cpk_decoration, "_read_encrypted_xlsx_via_com", fail_read)
+    monkeypatch.setattr(cpk_decoration, "list_workbook_sheet_names", lambda path: ["Z517"])
+    prepare_capability_decoration(
+        _capability_frame(1.084).assign(prod_code="Z517"), tmp_path, sheet_name="Z517",
+    )
+    assert path.read_bytes() == original_bytes
+
+
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
+def test_daily_capability_is_not_written_or_manually_enabled(tmp_path: Path, metric: str) -> None:
+    daily = _capability_frame(0.8).rename(columns={"cpk": metric}).assign(
+        period_type="day", period_label="2026-07-20",
+    )
+    weekly = daily.assign(period_type="week", period_label="2026-W30")
+    computed = pd.concat([daily, weekly], ignore_index=True)
+    result = prepare_capability_decoration(computed, tmp_path, metric=metric)
+    stored = pd.read_excel(result.decoration_path)
+    assert stored["period_type"].tolist() == ["week"]
+    enabled = result.decoration_df.assign(period_type="day", period_label="2026-07-20", flag=True)
+    applied = apply_capability_decoration(computed, enabled, metric)
+    assert not applied.loc[applied["period_type"].eq("day"), f"{metric}_decorated"].any()

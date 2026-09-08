@@ -212,7 +212,14 @@ def test_build_lot_cpm_report_groups_by_lot_and_indicator() -> None:
     assert row["cpk"] == 5.0 / 3.0
 
 
-def test_build_period_capability_report_groups_month_week_day() -> None:
+def test_build_period_capability_report_groups_month_week_day(monkeypatch) -> None:
+    from unittest.mock import Mock
+    from src.inline_domain.core.spc import spc_calculator
+
+    cpk_spy = Mock(wraps=calculate_cpk)
+    cpm_spy = Mock(wraps=calculate_cpm)
+    monkeypatch.setattr(spc_calculator, "calculate_cpk", cpk_spy)
+    monkeypatch.setattr(spc_calculator, "calculate_cpm", cpm_spy)
     sheet_features = pd.DataFrame(
         [
             {
@@ -317,6 +324,9 @@ def test_build_period_capability_report_groups_month_week_day() -> None:
     day_rows = report[report["period_type"] == "day"]
     assert not day_rows.empty
     assert day_rows[["cpm", "cpk"]].isna().all().all()
+    capability_count = report["period_type"].isin(["month", "week"]).sum()
+    assert cpk_spy.call_count == capability_count
+    assert cpm_spy.call_count == capability_count
 
 
 def test_build_period_capability_report_uses_sheet_mean_for_mu_and_point_values_for_sigma() -> None:
