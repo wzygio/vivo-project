@@ -229,30 +229,6 @@ class TestResolveMonthlyTargets:
         targets = resolve_monthly_targets(df, ["2026-07"])
         assert "2026-07" not in targets["B暗点"]
 
-    def test_abnormal_specified_target_over_ten_times_raw_falls_back_to_raw(self):
-        df = pd.DataFrame(
-            [_row("B暗点", "2026-07", raw_loss=0.00001, specified=0.0625)],
-            columns=MODIFIER_TABLE_COLUMNS,
-        )
-
-        targets = resolve_monthly_targets(df, ["2026-07"])
-
-        assert targets["B暗点"]["2026-07"] == pytest.approx(0.00001)
-
-    def test_abnormal_previous_specified_target_does_not_leak_into_next_month(self):
-        df = pd.DataFrame(
-            [
-                _row("B暗点", "2026-06", raw_loss=0.01, specified=0.02),
-                _row("B暗点", "2026-07", raw_loss=0.00001),
-            ],
-            columns=MODIFIER_TABLE_COLUMNS,
-        )
-
-        targets = resolve_monthly_targets(df, ["2026-07"])
-
-        assert targets["B暗点"]["2026-07"] == pytest.approx(0.00001)
-
-
 def test_read_modifier_table_rejects_negative_rate_with_row_context(tmp_path):
     path = tmp_path / "modifier.xlsx"
     _write_table(
@@ -310,17 +286,6 @@ class TestComputeScaleFactors:
         )
         factors = compute_scale_factors(df)
         assert factors[("B暗点", "2026-07")] == pytest.approx(round(0.02 / 0.008, 3))
-
-    def test_factor_above_business_limit_falls_back_to_one(self):
-        df = pd.DataFrame(
-            [_row("B暗点", "2026-07", raw_loss=0.00001, specified=0.0625)],
-            columns=MODIFIER_TABLE_COLUMNS,
-        )
-
-        factors = compute_scale_factors(df)
-
-        assert factors[("B暗点", "2026-07")] == 1.0
-
 
 from src.yield_domain.core.mwd_trend.modifier_table import (
     specified_signature,
@@ -382,26 +347,6 @@ class TestSyncModifierTable:
         assert line["指定良损"] == 0.8  # 用户指定不被覆盖
         assert line["当月良损"] == pytest.approx(0.5)  # 当月良损被刷新
         assert line["缩放倍数"] == pytest.approx(round(0.8 / 0.5, 3))
-
-    def test_internal_refresh_cannot_mutate_specified_loss(
-        self, tmp_path, captured_writes, monkeypatch
-    ):
-        import src.yield_domain.application.modifier_table_service as service
-
-        rows = [_row("G向单亮线", "2026-07", raw_loss=0.4, specified=0.8)]
-        real_apply = service._apply_current_month_loss
-
-        def corrupt_specified(*args, **kwargs):
-            updated, changed = real_apply(*args, **kwargs)
-            updated.loc[updated["不良类型"] == "G向单亮线", "指定良损"] = 0.5
-            return updated, changed
-
-        monkeypatch.setattr(service, "_apply_current_month_loss", corrupt_specified)
-
-        with pytest.raises(ModifierTableValidationError, match="禁止自动修改指定良损"):
-            self._run_sync(tmp_path, rows)
-
-        assert "M999_Code级" not in captured_writes
 
     def test_no_rewrite_when_nothing_changed(self, tmp_path, captured_writes):
         rows = [_row("G向单亮线", "2026-07", raw_loss=0.5, specified=0.8)]

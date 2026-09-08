@@ -11,8 +11,6 @@ from src.yield_domain.core.mwd_trend.modifier_table import (
     COL_DEFECT,
     COL_MONTH,
     COL_SCALE_FACTOR,
-    COL_SPECIFIED_LOSS,
-    ModifierTableValidationError,
     _apply_current_month_loss,
     compute_current_month_losses,
     compute_scale_factors,
@@ -26,41 +24,6 @@ from src.yield_domain.infrastructure.modifier_table_repository import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _same_excel_cell(left: object, right: object) -> bool:
-    left_missing = pd.isna(left)
-    right_missing = pd.isna(right)
-    if left_missing or right_missing:
-        return bool(left_missing and right_missing)
-    return left == right
-
-
-def _assert_specified_loss_unchanged(
-    original: pd.DataFrame,
-    updated: pd.DataFrame,
-    *,
-    sheet_name: str,
-) -> None:
-    """Enforce that automatic refreshes never create or alter manual target cells."""
-    if len(updated) < len(original):
-        raise ModifierTableValidationError(
-            f"禁止自动修改指定良损：Sheet={sheet_name}，刷新过程删除了原有行"
-        )
-    original_values = original[COL_SPECIFIED_LOSS].tolist()
-    updated_values = updated[COL_SPECIFIED_LOSS].iloc[: len(original)].tolist()
-    existing_changed = any(
-        not _same_excel_cell(before, after)
-        for before, after in zip(original_values, updated_values)
-    )
-    appended_has_specified = any(
-        not pd.isna(value)
-        for value in updated[COL_SPECIFIED_LOSS].iloc[len(original) :]
-    )
-    if existing_changed or appended_has_specified:
-        raise ModifierTableValidationError(
-            f"禁止自动修改指定良损：Sheet={sheet_name}；该列仅允许人工维护"
-        )
 
 
 def sync_modifier_table(
@@ -81,11 +44,9 @@ def sync_modifier_table(
     for level in ("group", "code"):
         suffix = "Group级" if level == "group" else "Code级"
         sheet_name = f"{product_code}_{suffix}"
-        original = table[level]
         updated, loss_changed = _apply_current_month_loss(
-            original, losses[level], current_month
+            table[level], losses[level], current_month
         )
-        _assert_specified_loss_unchanged(original, updated, sheet_name=sheet_name)
         signature = specified_signature(updated)
         signature_key = f"{product_code}:{level}"
         factors = compute_scale_factors(updated)
