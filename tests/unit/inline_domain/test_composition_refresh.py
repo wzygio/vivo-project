@@ -51,7 +51,9 @@ def test_refresh_raw_measurements_fails_when_db_refresh_falls_back(
 ) -> None:
     """DB 失败 + 降级返回旧快照：handler 必须返回 False（PRD 11.1）。"""
     stale = _raw_measurements().assign(lot_id="FALLBACK")
-    stale.to_parquet(tmp_path / "inline_measurements_M678.parquet", index=False)
+    _repository(tmp_path, lambda *_: stale)._write_snapshot(
+        tmp_path / "inline_measurements_M678.parquet", stale, pd.Timestamp("2026-08-13")
+    )
 
     def failing_loader(*_args) -> pd.DataFrame:
         raise RuntimeError("database unavailable")

@@ -73,13 +73,21 @@ def render_parts_metrics(
 
 def render_parts_table(df: pd.DataFrame):
     """
-    渲染备件数据表（静态，备用）。
+    渲染备件明细，站点编码按文本展示。
     """
     if df.empty:
         st.info("当前筛选条件下没有数据。")
         return
 
+    df = df.copy()
+    if "站点" in df.columns:
+        df["站点"] = (
+            df["站点"].astype("string").str.strip()
+            .str.replace(r"(?<!\S)(\d+)\.0+(?!\S)", r"\1", regex=True)
+        )
+
     column_config = {
+        "站点": st.column_config.TextColumn("站点"),
         "使用进度": st.column_config.ProgressColumn(
             "使用进度 (%)",
             help="测量值 / 寿命规格 x 100%",

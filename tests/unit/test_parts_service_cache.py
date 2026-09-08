@@ -8,6 +8,26 @@ import pandas as pd
 from src.equipment_domain.application import parts_service
 
 
+def test_today_cache_key_does_not_pass_end_of_day_as_current_time(monkeypatch) -> None:
+    import pytest
+
+    observed = []
+
+    def capture_clock(*args, as_of, **kwargs):
+        observed.append(as_of)
+        raise RuntimeError("clock captured")
+
+    monkeypatch.setattr(parts_service, "load_spec_baseline", lambda _: pd.DataFrame())
+    monkeypatch.setattr(parts_service, "load_report_part_life_snapshots", capture_clock)
+    parts_service.PartsReportService.fetch_report_payload.clear()
+    with pytest.raises(RuntimeError, match="clock captured"):
+        parts_service.PartsReportService.fetch_report_payload(
+            object(), "clock-test.csv", "clock-regression",
+            as_of_date=pd.Timestamp.now().date().isoformat(),
+        )
+    assert observed[0] <= pd.Timestamp.now()
+
+
 def test_parts_report_remains_available_when_service_module_reloads_during_cache_fill(
     monkeypatch,
     tmp_path: Path,

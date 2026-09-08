@@ -455,23 +455,23 @@ def build_period_capability_report(
         float(target) if pd.notna(target) else (usl + lsl) / 2.0
         for target, usl, lsl in result[["target", "usl", "lsl"]].itertuples(index=False, name=None)
     ]
-    result["cpm"] = [
+    capability_mask = result["period_type"].isin(["month", "week"])
+    capability_rows = result.loc[capability_mask]
+    result["cpm"] = np.nan
+    result["cpk"] = np.nan
+    result.loc[capability_mask, "cpm"] = [
         calculate_cpm(mean_value, std_value, usl, lsl, target)
-        for mean_value, std_value, usl, lsl, target in result[
+        for mean_value, std_value, usl, lsl, target in capability_rows[
             ["mean_value", "std_value", "usl", "lsl", "target"]
         ].itertuples(index=False, name=None)
     ]
-    result["cpk"] = [
+    result.loc[capability_mask, "cpk"] = [
         calculate_cpk(mean_value, std_value, usl, lsl)
-        for mean_value, std_value, usl, lsl in result[
+        for mean_value, std_value, usl, lsl in capability_rows[
             ["mean_value", "std_value", "usl", "lsl"]
         ].itertuples(index=False, name=None)
     ]
-    # CPM/CPK are only meaningful at month/week granularity; day rows keep
-    # mean/std for charting but no longer carry capability metrics.
-    day_mask = result["period_type"].astype(str).eq("day")
-    if day_mask.any():
-        result.loc[day_mask, ["cpm", "cpk"]] = np.nan
+    # Daily mean/std remain available for charts; daily capability is never computed.
     result = result.drop(columns=["sheet_std_value"])
     result = result[
         [

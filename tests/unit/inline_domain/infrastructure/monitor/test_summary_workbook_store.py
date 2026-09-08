@@ -67,7 +67,7 @@ def test_upsert_updates_only_open_periods_and_preserves_other_sheet(tmp_path) ->
 
     q2 = result[result["时间标签"].eq("2026-Q2")].iloc[0]
     assert q2["过货量"] == 100
-    assert pd.isna(q2["OOC报警片数"])
+    assert q2["OOC报警片数"] == 1
     assert pd.isna(q2["Total报警片数"])
     q3 = result[result["时间标签"].eq("2026-Q3")].iloc[0]
     assert q3["过货量"] == 40
@@ -87,6 +87,30 @@ def test_upsert_rejects_closed_period_update(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="current year/quarter/month/week"):
         store.upsert_current_periods(closed, as_of=pd.Timestamp("2026-09-07"))
+
+
+def test_week_replacement_persists_contributions_and_is_idempotent(tmp_path) -> None:
+    path = tmp_path / "summary.xlsx"
+    rows = _current_rows()
+    rows["OOS报警片数"] = [100, 80, 50, 2]
+    rows.to_excel(path, sheet_name="报警率", index=False)
+    store = MonitorSummaryWorkbookStore(path)
+    alerts = pd.DataFrame([
+        {"prod_code": "M626", "factory": "ARRAY", "item_id": str(i),
+         "event_time": pd.Timestamp("2026-09-07"), "alarm_type": "OOS"}
+        for i in range(4)
+    ])
+    kwargs = dict(products=["M626"], scope_key="ALL", factory_key="ALL",
+                  as_of=pd.Timestamp("2026-09-07"), available_types={"M626": {"OOS"}})
+    result, warnings = store.refresh_current_week(alerts, **kwargs)
+    assert result["OOS报警片数"].tolist() == [102, 82, 52, 4]
+    assert result["OOC报警片数"].tolist() == [1, 1, 1, 1]
+    assert result["本周OOS已计入片数"].tolist() == [4, 4, 4, 4]
+    assert any("OOC" in warning for warning in warnings)
+    signature = store.source_signature()
+    repeated, _ = store.refresh_current_week(alerts, **kwargs)
+    pd.testing.assert_frame_equal(result, repeated)
+    assert store.source_signature() == signature
 
 
 def test_identical_upsert_does_not_rewrite_or_change_signature(
@@ -109,6 +133,18 @@ def test_identical_upsert_does_not_rewrite_or_change_signature(
     store.upsert_current_periods(_current_rows(), as_of=pd.Timestamp("2026-09-07"))
 
     assert store.source_signature() == signature
+
+
+def test_legacy_initialization_rounds_half_up_but_preserves_missing_history(tmp_path):
+    path = tmp_path / "summary.xlsx"
+    _write_legacy_workbook(path)
+    rows = pd.read_excel(path, sheet_name="报警率")
+    rows.loc[0, "OOS报警率"] = 0.025
+    rows.loc[1, "OOS报警率"] = None
+    rows.to_excel(path, sheet_name="报警率", index=False)
+    result = MonitorSummaryWorkbookStore(path).read()
+    assert result.iloc[0]["OOS报警片数"] == 3
+    assert pd.isna(result.iloc[1]["OOS报警片数"])
 
 
 def test_non_openpyxl_workbook_uses_preserving_com_writer(tmp_path, monkeypatch) -> None:

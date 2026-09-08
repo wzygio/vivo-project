@@ -48,20 +48,13 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorService,
     OosMonitorViewModel,
 )
-from src.inline_domain.application.monitor.live_source import (
-    get_monitor_computation_caches,
-    monitor_date_window,
-)
+from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
     build_ooc_history_service,
     build_oos_history_service,
-    build_live_throughput_reader,
     build_cpk_monitor_service,
-)
-from app.sections.inline_domain.monitor.ooc_decision_admin import (
-    render_ooc_decision_admin,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -70,9 +63,12 @@ MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 
 
 @st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds())
-def get_cached_query_window() -> tuple[str, str]:
-    """Keep this page's time window stable until the user clears cache."""
-    return monitor_date_window()
+def get_cached_query_window(current_date: str) -> tuple[str, str]:
+    """Include the whole current ISO week; the date key advances after midnight."""
+    today = pd.Timestamp(current_date).normalize()
+    week_start = today - pd.Timedelta(days=today.weekday())
+    start = min(today.replace(month=1, day=1), week_start)
+    return start.date().isoformat(), today.date().isoformat()
 
 
 @st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=16)
@@ -84,12 +80,12 @@ def get_cached_oos_monitor_payload(
     end_date: str,
     source_signature: str,
     summary_workbook_signature: str,
+    period_layout_version: str = "year-quarter-3month-4week-v1",
 ) -> dict[str, pd.DataFrame]:
-    del source_signature, summary_workbook_signature
+    del source_signature, summary_workbook_signature, period_layout_version
     view = OosMonitorService(
         build_oos_history_service(),
         ooc_reader=build_ooc_history_service(),
-        throughput_reader=build_live_throughput_reader(),
         summary_workbook=build_monitor_summary_workbook_service(),
     ).build_dashboard(
         products=products,
@@ -119,9 +115,10 @@ is_admin = query_params.get("admin") == "true"
 #  数据加载
 # ==============================================================================
 try:
-    db_manager = DatabaseManager()
-    step_desc_map = get_cached_step_description_map(db_manager)
-    start_date_str, end_date_str = get_cached_query_window()
+    step_desc_map = {}
+    start_date_str, end_date_str = get_cached_query_window(
+        pd.Timestamp.today().date().isoformat()
+    )
     active_config = SessionManager.get_active_config()
 except Exception:
     logging.exception("自动预警看板初始化失败")
@@ -132,7 +129,8 @@ funcs_to_clear = [
     get_cached_query_window,
     get_cached_oos_monitor_payload,
     get_cached_step_description_map,
-] + get_alert_matrix_cached_funcs() + get_monitor_computation_caches()
+    read_cached_alarm_workbook,
+] + get_alert_matrix_cached_funcs()
 render_page_header(
     title="自动预警看板",
     config=active_config,
@@ -193,9 +191,10 @@ with st.expander("Q-Time超规预警", expanded=True):
         action_renderer=_render_matrix_action_button,
     )
     if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
+        db_manager = DatabaseManager()
         render_alert_matrix_board(
             db_manager=db_manager,
-            step_desc_map=step_desc_map,
+            step_desc_map=get_cached_step_description_map(db_manager),
             filter_selection=matrix_filter_selection,
         )
 
@@ -234,19 +233,15 @@ with st.expander("Inline超规预警", expanded=True):
         try:
             history_service = build_oos_history_service()
             ooc_history_service = build_ooc_history_service()
-            throughput_history_service = build_live_throughput_reader()
             summary_workbook_service = build_monitor_summary_workbook_service()
             source_signature = "|".join(
                 [
                     history_service.source_signature(list(products), list(scopes)),
                     ooc_history_service.source_signature(list(products), list(scopes)),
-                    throughput_history_service.source_signature(
-                        list(products), list(scopes)
-                    ),
                 ]
             )
             summary_workbook_signature = summary_workbook_service.source_signature()
-            with st.spinner("正在读取共享超规历史..."):
+            with st.spinner("正在读取 Excel 超规明细与汇总表..."):
                 payload = get_cached_oos_monitor_payload(
                     products,
                     scopes,
@@ -265,11 +260,7 @@ with st.expander("Inline超规预警", expanded=True):
             if is_admin:
                 st.divider()
                 render_oos_refresh_status(view_model.refresh_status_df)
-                render_ooc_decision_admin(
-                    ooc_history_service,
-                    products=products,
-                    scopes=scopes,
-                )
+                st.caption("请在各模块超规明细 Excel 的产品 sheet 中维护 Flag，随后点击刷新缓存。看板不再合并旧决策台账。")
 
 st.subheader("📊 CPK预警看板")
 with st.expander("SPC CPK超规预警", expanded=True):

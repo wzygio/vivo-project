@@ -434,7 +434,8 @@ def render_capability_decoration_admin(
     with container:
         st.caption(
             f"默认 flag=False，{metric_label} 显示基于修饰后点位的计算值；"
-            f"启用后显示修饰表中的 {corrected_column}。"
+            f"启用后显示 {metric}_replacement（随机生成并保存，介于 1.33 与 1.40 之间）；"
+            f"{corrected_column} 保留原记录值。"
         )
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_decoration, c_upload = st.columns([1, 1.2])
@@ -447,7 +448,7 @@ def render_capability_decoration_admin(
                 file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_download",
-                use_container_width=True,
+                width="stretch",
             )
 
         with c_upload:
@@ -463,7 +464,7 @@ def render_capability_decoration_admin(
                     "确认覆盖并刷新",
                     type="primary",
                     key=f"{key_prefix}_upload_btn",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     try:
                         uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
@@ -750,6 +751,7 @@ def render_spc_indicator_sections(
         else (
             f"{memo_signature}|chart-config="
             f"{hashlib.sha256('|'.join(line_param_name_contains).encode('utf-8')).hexdigest()[:16]}"
+            f"|capability={hashlib.sha256(period_capability_df.to_csv(index=False).encode('utf-8')).hexdigest()[:16]}"
         )
     )
     payloads = (

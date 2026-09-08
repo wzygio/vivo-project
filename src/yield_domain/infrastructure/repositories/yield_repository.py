@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Sequence
 from datetime import datetime, timedelta
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_paths import snapshot_directory, snapshot_component
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
@@ -19,9 +20,8 @@ def build_yield_snapshot_path(
 ) -> Path:
     """构造包含静态数据策略签名的 Yield 快照路径。"""
     return (
-        data_dir
-        / product_code
-        / f"yield_snapshot_{product_code}_{data_policy.signature}.parquet"
+        snapshot_directory(data_dir, "yield_domain", "yield")
+        / f"yield_snapshot_{snapshot_component(product_code)}_{data_policy.signature}.parquet"
     )
 
 

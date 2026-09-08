@@ -84,7 +84,7 @@ def test_rs_details_reuse_fresh_product_snapshot_without_reloading_database(
     second = repository.get_rs_details(_query())
 
     assert loader_calls == [loader_calls[0]]
-    assert loader_calls[0].start_date == "2026-01-01"
+    assert loader_calls[0].start_date == "2026-05-01"
     assert loader_calls[0].end_date == "2026-08-10"
     pd.testing.assert_frame_equal(first, second)
     assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-10 08:00:00")
@@ -247,9 +247,10 @@ def test_snapshot_older_than_ttl_is_reloaded(tmp_path: Path) -> None:
         details_loader=load_details,
     )
     repository.get_rs_details(_query())
-    snapshot_path = tmp_path / "aoi_rs_details_M678.parquet"
-    expired = snapshot_path.stat().st_mtime - (repository.SNAPSHOT_TTL_HOURS + 1) * 3600
-    os.utime(snapshot_path, (expired, expired))
+    metadata_path = tmp_path / "aoi_rs_details_M678.snapshot.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["refreshed_at"] = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=repository.SNAPSHOT_TTL_HOURS + 1)).isoformat()
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
     repository.get_rs_details(_query())
 
@@ -271,7 +272,9 @@ def test_database_failure_falls_back_to_existing_snapshot(tmp_path: Path) -> Non
     )
     expected = repository.get_rs_details(_query())
     metadata_path = tmp_path / "aoi_rs_details_M678.snapshot.json"
-    metadata_path.write_text("{}", encoding="utf-8")
+    metadata = json.loads(metadata_path.read_text())
+    metadata["refreshed_at"] = "2020-01-01T00:00:00+00:00"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
     should_fail = True
 
     actual = repository.get_rs_details(_query())
@@ -279,7 +282,7 @@ def test_database_failure_falls_back_to_existing_snapshot(tmp_path: Path) -> Non
     pd.testing.assert_frame_equal(actual, expected)
 
 
-def test_database_failure_without_snapshot_returns_contract_empty_frames(tmp_path: Path) -> None:
+def test_database_failure_without_snapshot_reports_unavailable(tmp_path: Path) -> None:
     def fail(*_args: object) -> pd.DataFrame:
         raise RuntimeError("database unavailable")
 
@@ -290,17 +293,10 @@ def test_database_failure_without_snapshot_returns_contract_empty_frames(tmp_pat
         pass_through_loader=fail,
     )
 
-    details = repository.get_rs_details(_query())
-    pass_through = repository.get_pass_through(_query())
-
-    assert list(details.columns) == [
-        "factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id",
-        "rs_code", "code_qty",
-    ]
-    assert list(pass_through.columns) == [
-        "factory", "prod_code", "start_time", "sheet_id", "lot_id", "step_id",
-    ]
-    assert details.empty and pass_through.empty
+    for method in (repository.get_rs_details, repository.get_pass_through):
+        with pytest.raises(IncompleteMonitorSnapshotError, match="原始数据不可用"):
+            method(_query())
+    assert not list(tmp_path.glob("*.parquet"))
 
 
 def test_snapshot_filters_rolling_data_to_requested_page_window(tmp_path: Path) -> None:
@@ -401,7 +397,7 @@ def test_annual_snapshot_metadata_covers_no_fact_months(tmp_path):
     )
     repository.get_rs_details(_query())
     metadata = json.loads((tmp_path / "aoi_rs_details_M678.snapshot.json").read_text())
-    assert metadata["covered_from"] == "2026-01-01"
+    assert metadata["covered_from"] == "2026-05-01"
 
 
 @pytest.mark.parametrize("method,prefix", [
@@ -456,7 +452,7 @@ def test_explicit_monitor_coverage_is_required_in_early_year(
         getattr(repository, method)(query)
 
 
-def test_ordinary_report_keeps_early_year_empty_fallback(tmp_path):
+def test_ordinary_report_does_not_turn_failure_into_empty_result(tmp_path):
     def fail(*args):
         raise RuntimeError("database unavailable")
 
@@ -465,5 +461,6 @@ def test_ordinary_report_keeps_early_year_empty_fallback(tmp_path):
         require_complete_coverage=False,
     )
     query = AoiRsQueryConfig(prod_code="M678", start_date="2027-01-01", end_date="2027-02-07")
-    assert repository.get_rs_details(query).empty
-    assert repository.get_pass_through(query).empty
+    for method in (repository.get_rs_details, repository.get_pass_through):
+        with pytest.raises(IncompleteMonitorSnapshotError, match="原始数据不可用"):
+            method(query)

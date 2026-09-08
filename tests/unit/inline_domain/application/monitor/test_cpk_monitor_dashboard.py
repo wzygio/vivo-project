@@ -22,7 +22,7 @@ render_cpk_monitor_section(Service(), ["M626", "M673"], ["ARRAY", "OLED"])
     app.button(key="cpk_monitor_query_submit").click().run()
     assert not app.exception
     assert app.session_state["calls"] == 1
-    assert len(app.dataframe) == 1
+    assert len(app.dataframe) == 2  # Summary and latest project details.
     app.multiselect(key="cpk_monitor_products").set_value(["M626"]).run()
     assert not app.exception
     assert app.session_state["calls"] == 1

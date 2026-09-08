@@ -10,6 +10,7 @@ Responsibilities:
 import csv
 import hashlib
 import logging
+import os
 import re
 import tempfile
 from datetime import datetime, timedelta
@@ -32,6 +33,37 @@ if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 logger = logging.getLogger(__name__)
+
+
+def latest_part_measurements(frame: pd.DataFrame) -> pd.DataFrame:
+    """Keep the newest measurement per station, chamber and parameter."""
+    if frame.empty:
+        return frame.copy()
+    result = frame.copy()
+    result["glass_start_time"] = pd.to_datetime(result["glass_start_time"], errors="coerce")
+    return (
+        result.sort_values("glass_start_time", ascending=False, kind="mergesort", na_position="last")
+        .drop_duplicates(["step_id", "sub_equip_id", "param_name"], keep="first")
+        .reset_index(drop=True)
+    )
+
+
+def compact_part_snapshot(path: Path) -> pd.DataFrame:
+    """Migrate historical snapshots without extending their cache lifetime."""
+    original = pd.read_parquet(path)
+    latest = latest_part_measurements(original)
+    if len(latest) < len(original):
+        stat = path.stat()
+        with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".parquet", delete=False) as handle:
+            temporary = Path(handle.name)
+        try:
+            latest.to_parquet(temporary, index=False)
+            os.utime(temporary, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        logger.info("Compacted parts snapshot %s: %s -> %s rows", path, len(original), len(latest))
+    return latest
 
 REQUIRED_BASELINE_COLUMNS: list[str] = [
     "厂别", "备件类型", "设备类型",
@@ -165,12 +197,12 @@ def load_part_life_snapshot(
         mtime = datetime.fromtimestamp(snapshot_path.stat().st_mtime)
         if (datetime.now() - mtime).total_seconds() < runtime_config.snapshot_ttl_hours * 3600:
             logger.info(f"Loading from Parquet snapshot: {snapshot_path}")
-            df = pd.read_parquet(snapshot_path)
+            df = compact_part_snapshot(snapshot_path)
             logger.info(f"Loaded {len(df)} records from snapshot")
             return df
         else:
             logger.info(f"Snapshot expired, re-querying...")
-    df = _query_part_life_from_db(db_manager, spec_df)
+    df = latest_part_measurements(_query_part_life_from_db(db_manager, spec_df))
     if df.empty:
         logger.warning("No part life data found in database.")
         return df
@@ -515,12 +547,12 @@ class PartsRepository:
         """
         if not force_refresh and self._snapshot_valid():
             logger.info(f"Loading from snapshot: {self._snapshot_path}")
-            df = pd.read_parquet(self._snapshot_path)
+            df = compact_part_snapshot(self._snapshot_path)
             logger.info(f"Loaded {len(df)} records")
             return df
 
         logger.info("Refreshing snapshot from database...")
-        df = _query_part_life_from_db(self._db, self._spec_df)
+        df = latest_part_measurements(_query_part_life_from_db(self._db, self._spec_df))
 
         if not df.empty:
             self._snapshot_path.parent.mkdir(parents=True, exist_ok=True)

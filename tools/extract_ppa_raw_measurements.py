@@ -1,6 +1,6 @@
 """Extract PPA-related raw measurements from per-product Parquet snapshots.
 
-Filters each product's snapshot (data/<PROD>/inline_measurements_<PROD>.parquet)
+Filters data/inline_domain/shared/inline_measurements_<PROD>.parquet
 by ``param_name LIKE '%PPA%'`` and a half-open ``start_time`` window, then writes
 one Excel workbook with one sheet per product.
 """
@@ -17,6 +17,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.shared_kernel.snapshot_paths import inline_measurement_directory, snapshot_component
 
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "output" / "ppa_raw_measurements_202607.xlsx"
@@ -91,7 +93,8 @@ def main() -> int:
     with pd.ExcelWriter(args.output, engine="openpyxl") as writer:
         for prod_code in args.products:
             snapshot_path = (
-                args.data_dir / prod_code / f"inline_measurements_{prod_code}.parquet"
+                inline_measurement_directory(args.data_dir)
+                / f"inline_measurements_{snapshot_component(prod_code)}.parquet"
             )
             if not snapshot_path.is_file():
                 logger.warning("快照不存在，跳过 %s: %s", prod_code, snapshot_path)

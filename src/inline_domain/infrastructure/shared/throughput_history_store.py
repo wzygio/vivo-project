@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import threading
 import time
@@ -14,6 +13,7 @@ from uuid import uuid4
 import pandas as pd
 
 from src.inline_domain.core.shared.throughput_facts import THROUGHPUT_COLUMNS
+from src.shared_kernel.snapshot_paths import snapshot_component
 
 THROUGHPUT_SCOPES = {"spc", "ctq", "aoi_tt", "aoi_rs"}
 
@@ -23,7 +23,7 @@ class ThroughputHistoryStore:
     _snapshot_locks: ClassVar[dict[str, threading.Lock]] = {}
 
     def __init__(
-        self, snapshot_dir: Path | str = Path("data/inline_domain/throughput_history")
+        self, snapshot_dir: Path | str = Path("data/inline_domain")
     ) -> None:
         self._snapshot_dir = Path(snapshot_dir)
 
@@ -34,8 +34,7 @@ class ThroughputHistoryStore:
             raise ValueError(f"unsupported throughput scope: {scope!r}")
         if not product:
             raise ValueError("scope and prod_code must not be empty")
-        digest = hashlib.sha256(product.encode("utf-8")).hexdigest()[:16]
-        return self._snapshot_dir / f"{normalized_scope}__{digest}.parquet"
+        return self._snapshot_dir / normalized_scope / f"throughput_{snapshot_component(product)}.parquet"
 
     def read(self, scope: str, prod_code: str) -> pd.DataFrame:
         path = self.snapshot_path(scope, prod_code)

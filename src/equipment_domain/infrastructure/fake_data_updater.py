@@ -110,7 +110,7 @@ def update_fabricated_snapshot(
     current_values = values.astype(float).to_numpy(copy=True)
     current_times = pd.Series(times, index=updated.index)
     for _ in range(periods):
-        next_times = current_times + pd.Timedelta(days=1)
+        next_times = current_times + pd.Timedelta(hours=policy.snapshot_ttl_hours)
         next_values: list[float] = []
         for key, current_value, next_time in zip(
             keys,
@@ -195,21 +195,29 @@ def update_fabricated_snapshot_file(
     age_hours = (
         current_time.to_pydatetime() - modified_time
     ).total_seconds() / 3600
+    existing = pd.read_parquet(snapshot_path)
+    measurement_times = pd.to_datetime(existing["glass_start_time"], errors="raise")
+    future_offset = measurement_times.max() - current_time
+    repaired = future_offset > pd.Timedelta(0)
+    if repaired:
+        existing = existing.copy()
+        existing["glass_start_time"] = measurement_times - future_offset
     if not force and age_hours < policy.snapshot_ttl_hours:
+        if repaired:
+            _write_snapshot_atomically(existing, snapshot_path)
         return FabricatedFileUpdateOutcome(
             path=snapshot_path,
-            updated=False,
+            updated=bool(repaired),
             summary={
                 "updated_rows": 0,
                 "reset_rows": 0,
                 "age_hours": float(age_hours),
                 "ttl_hours": int(policy.snapshot_ttl_hours),
-                "reason": "snapshot-valid",
+                "reason": "future-time-repaired" if repaired else "snapshot-valid",
                 "update_periods": 0,
             },
         )
 
-    existing = pd.read_parquet(snapshot_path)
     update_periods = (
         1
         if force
@@ -221,6 +229,11 @@ def update_fabricated_snapshot_file(
         policy,
         periods=update_periods,
     )
+    # Forced updates and legacy snapshots must never move timestamps past now.
+    updated_times = result.snapshot_df["glass_start_time"]
+    future_offset = updated_times.max() - current_time
+    if future_offset > pd.Timedelta(0):
+        result.snapshot_df["glass_start_time"] = updated_times - future_offset
     _write_snapshot_atomically(result.snapshot_df, snapshot_path)
     return FabricatedFileUpdateOutcome(
         path=snapshot_path,

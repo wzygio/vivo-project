@@ -143,22 +143,20 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   (mtime_ns, size) 廉价探针命中 st.cache_data 缓存的 `__flags` 内容 hash，
   file_stat 不变不重读工作簿；`__flags` 读取失败上抛
   `SheetOosDecorationReadError`，不降级为空签名。
-- SPC、CTQ、AOI_TT、AOI_RS 不再持久化 OOS/OOC 判定明细。
-  `LiveMonitorSource` 在原始快照之上重新应用配置，使用 `st.cache_data` 共用
-  OOS/OOC/过货事实；Excel `__flags` 仍是人工决策权威。旧 history reader 名称作为兼容入口保留，
-  生产组合根装配无写入接口的 `LiveHistoryStore`，不使用旧 history Parquet。
-  原始 Inline 快照窗口扩至原三月窗口、当年1月1日和当前 ISO 周起点中的最早值；
-  覆盖元数据不足时补载，失败不得以短窗口覆盖年度汇总。
-- 自动预警页的 Inline 看板由 `OosMonitorService` 读取上述缓存事实，按 `flag=False`
-  构建分类数量、趋势、Top 站点与明细；Y/Q/M/W 汇总先按当前开放周期增量写入
-  `resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx`，再从工作簿回读渲染。
-  工作簿以产品、scope 筛选、厂别筛选和完整时间标签隔离口径，闭合周期保持不变，
-  旧表无法还原的精确历史片数显示为 `—`；企业加密文件只经 Excel 修改临时副本的
-  目标 Sheet，校验后原子提交。SOOS 固定为 0。预警矩阵复用同一 OOS 缓存读模型。
-  产品 × scope × 预警类型刷新状态和 OOC 决策管理仅管理员 URL 展示。
-- `CpkMonitorService` 共用 SPC 原始输入，以 Sheet 均值/样本标准差直接计算当前年季月周能力，
-  中间结果只做缓存；CPK ≥ 1.33 为达标。结果写入同一工作簿的 CPK sheet 后回读，
-  与报警率 sheet 共用文件锁、原子写入与闭合周期保护。页头“刷新缓存”清除两类中间缓存
+- Inline 原始量测统一保存于 `data/inline_domain/shared/`，AOI_RS 原始事实保存于
+  `data/inline_domain/aoi_rs/`，产品进入文件名。覆盖窗口为当前月月初往前3个月至截止日，
+  尾部2日重叠增量替换并按月裁剪，TTL依据成功覆盖元数据；不为看板补载全年量测。
+  OOS/OOC 判定不再写入 history Parquet，明细 Excel 仍由各报表生成。
+- 自动预警 Inline 看板只通过 `ExcelAlarmReader` 消费产品 sheet 的 `flag=False` 明细，
+  不调用 `LiveMonitorSource` 或数据库，不合并 `__flags`。`OosMonitorService` 生成趋势与明细；
+  `weekly_replacement` 仅替换当前周，并按记录的周贡献差额更新当前月／季／年。
+  `北极星报警率与CPK汇总.xlsx` 提供历史基线及过货量，锁内更新后回读展示；
+  闭合历史与 SOOS 保持用户维护值。历史片数允许以过货量乘报警率四舍五入初始化，
+  缺失基线或明细提示用户补充，不推算缺失历史。刷新时间仅管理员 URL 展示。
+- `CpkWorkbookMonitorService` 读取同一工作簿 CPK sheet 的历史维护值，并通过
+  `CpkLatestExcelStore` 读取 SPC 产品修饰 sheet，仅替换上一完整周及当月的预警项目数和达标率。
+  分母由汇总表维护，缺少有效基线或明细时保留原值；年／季不由周数据累加或平均。
+  CPK 与 Inline 更新共用工作簿锁，保护其他 sheet 和闭合历史。页头“刷新缓存”清除 Excel 解析与展示缓存
   和查询状态，不需要删除派生快照。详细口径见 `docs/dev_docs/generated/Inline_domain/warning-dashboard-generation.md`。
 - 主制程 OUT 履历查询归 `infrastructure/shared/main_process_history_repository.py`
   所有；`infrastructure/shared/main_process_trace.py` 仅执行规格路由和 DataFrame
@@ -168,8 +166,11 @@ IJP 的查询 DTO、端口和服务位于 `application/ijp/`，溢流规则位�
   `config/inline_config.yaml` 的前端样式配置决定，不进入应用服务 payload。CPK/CPM 人工修饰文件
   `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx` 的产品 sheet 是用户维护状态：
   CPK 沿用产品名 sheet，CPM 使用 `{prod_code}_cpm` sheet，两者共存于同一工作簿；
-  既有周期键的人工值/flag 原样保留，当前能力结果中新出现的周期键以
+  既有周期键的人工值/flag 原样保留，仅查询截止日的上一完整 ISO 周中 CPK/CPM < 1.33 的新异常键以
   `flag=False` 追加；刷新不会重建或覆盖既有人工决策。
+  `cpk_replacement` / `cpm_replacement` 保存启用后实际展示的替换值，必须有限且严格介于 1.33 与 1.40；
+  缺失或超出范围时随机生成三位小数（1.331–1.399）并持久化，后续刷新复用。`*_corrected` 原记录值不被改写。
+  能力缓存包含该工作簿的 mtime/size；图表 memo 包含能力结果指纹，Excel 保存后的 rerun 会更新数值。
 - PNL 指标规格的版本/产品收严分析是独立离线工具，归
   `tools/indicator_improvement/` 所有，不进入 `src/inline_domain` 的应用服务、
   Core 或组合根；其输入为离线 Excel，输出为 `output/` 下的可重建报告。

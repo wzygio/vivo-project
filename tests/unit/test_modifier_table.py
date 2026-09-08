@@ -296,6 +296,36 @@ from src.yield_domain.application.modifier_table_service import sync_modifier_ta
 class TestSyncModifierTable:
     """写回 orchestration：更新当月良损，并仅在持久化成功后推进签名。"""
 
+    @pytest.mark.parametrize("read_only", [False, True])
+    def test_backfills_history_without_overwriting_existing_values(self, tmp_path, read_only):
+        path = tmp_path / "modifier.xlsx"
+        _write_table(path, "Z576_Code级", [
+            _row("Existing", "2026-08", raw_loss=0.123, specified=0.2),
+        ])
+        panels = pd.DataFrame({
+            "warehousing_time": ["20260801", "20260801", "20260901"],
+            "panel_id": ["P1", "P2", "P3"],
+            "defect_group": ["G", "G", "G"],
+            "defect_desc": ["Existing", "New", "New"],
+        })
+        before = path.read_bytes()
+        table = sync_modifier_table(path, "Z576", panels, "2026-09", read_only=read_only)
+        august = table["code"].query('时间标签 == "2026-08"').set_index("不良类型")
+        assert august.loc["Existing", "当月良损"] == pytest.approx(0.123)
+        assert august.loc["Existing", "指定良损"] == pytest.approx(0.2)
+        assert august.loc["New", "当月良损"] == pytest.approx(0.5)
+        assert pd.isna(august.loc["New", "指定良损"])
+        assert "2026-08" in set(table["group"]["时间标签"])
+        if read_only:
+            assert path.read_bytes() == before
+        else:
+            persisted = read_modifier_table(path, "Z576")
+            pd.testing.assert_frame_equal(
+                persisted["code"], table["code"], check_dtype=False
+            )
+            repeated = sync_modifier_table(path, "Z576", panels, "2026-09")
+            assert len(repeated["code"]) == len(table["code"])
+
     @pytest.fixture
     def captured_writes(self, monkeypatch):
         writes = {}

@@ -134,3 +134,20 @@ def test_parts_tables_never_expose_parameter_columns(monkeypatch) -> None:
         assert "参数名称" not in column_order
         assert "匹配参数名" not in column_order
         assert all(not column.startswith("__FABRICATED_PART__") for column in column_order)
+
+
+def test_station_display_preserves_codes_and_removes_excel_decimal_suffix(monkeypatch) -> None:
+    captured = []
+    monkeypatch.setattr(
+        parts_dashboard.st, "dataframe", lambda frame, **kwargs: captured.append(frame)
+    )
+    source = pd.DataFrame({"站点": [12200.0, "18200.0", "00120.00", "1K500", "13500.0 43500.0", None]})
+    original = source.copy(deep=True)
+
+    parts_dashboard.render_parts_table(source)
+
+    assert captured[0]["站点"].iloc[:5].tolist() == [
+        "12200", "18200", "00120", "1K500", "13500 43500",
+    ]
+    assert pd.isna(captured[0]["站点"].iloc[5])
+    pd.testing.assert_frame_equal(source, original)

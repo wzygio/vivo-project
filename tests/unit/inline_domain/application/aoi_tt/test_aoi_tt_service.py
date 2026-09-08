@@ -267,7 +267,7 @@ def test_service_reads_through_application_data_port() -> None:
 
 
 def test_service_auto_clips_over_spec_tt_qty() -> None:
-    """超规 tt_qty 被截断到 USL 以下（确定性伪随机），规格内行不变。"""
+    """超管控线 tt_qty 被截断到 UCL 以下（确定性伪随机），线内行不变。"""
 
     class OverSpecPort:
         def get_tt_details(self, _query) -> pd.DataFrame:
@@ -283,7 +283,7 @@ def test_service_auto_clips_over_spec_tt_qty() -> None:
             )
 
         def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
-            return _spec_df()  # TDSUM usl=5.0
+            return _spec_df()  # TDSUM usl=5.0, ucl=3.0
 
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 
@@ -294,7 +294,7 @@ def test_service_auto_clips_over_spec_tt_qty() -> None:
     )
 
     clipped = view_model.tt_details_df["tt_qty"].iloc[0]
-    assert 5.0 * 0.85 <= clipped < 5.0
+    assert 3.0 * 0.85 <= clipped <= 3.0 * 0.95
 
 
 def test_service_releases_configured_exempt_parameter(monkeypatch) -> None:
@@ -319,6 +319,7 @@ def test_service_releases_configured_exempt_parameter(monkeypatch) -> None:
                 "step_id": "11620",
                 "tt_name": "PPA_B_X",
                 "usl": 5.0,
+                "ucl": 3.0,
             }
         ]
     )
@@ -359,7 +360,7 @@ def _over_spec_port() -> type:
             )
 
         def get_tt_spec_limits(self, _prod_code: str) -> pd.DataFrame:
-            return _spec_df()  # TDSUM usl=5.0
+            return _spec_df()  # TDSUM usl=5.0, ucl=3.0
 
     return OverSpecPort
 
@@ -406,7 +407,7 @@ def test_service_persists_aoi_tt_decoration_workbook(_tmp_project_root: Path) ->
         snapshot_signature="wb-default",
     )
 
-    assert (view_model.tt_details_df["tt_qty"] < 5.0).all()
+    assert (view_model.tt_details_df["tt_qty"] < 3.0).all()
     workbook = _tmp_project_root / "resources" / "inline_domain" / "aoi_tt_sheet_oos_decoration.xlsx"
     assert workbook.exists()
     persisted = pd.read_excel(workbook, sheet_name="M678")

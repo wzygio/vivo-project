@@ -4,14 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
-import json
 import logging
-import os
 from pathlib import Path
 import threading
 from typing import Optional, TYPE_CHECKING
-from uuid import uuid4
 
 import pandas as pd
 
@@ -19,6 +15,10 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     load_raw_measurements,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.rolling_snapshot import (
+    read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
+    snapshot_process_lock,
+)
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError,
     inline_snapshot_window_start,
@@ -52,7 +52,7 @@ class InlineMeasurementSnapshotRepository:
 
     # TTL 统一由 config/global.yaml 的 application.cache_ttl_hours 提供
     # v2: 快照生成前接入 SPC 数值修正（M673 PPA site[99,114] param_value-5）
-    SNAPSHOT_POLICY_VERSION = "inline-measurement-raw-v3-calendar"
+    SNAPSHOT_POLICY_VERSION = "inline-measurement-raw-v4-rolling"
     _locks_guard = threading.Lock()
     _snapshot_locks: dict[str, threading.Lock] = {}
 
@@ -111,16 +111,23 @@ class InlineMeasurementSnapshotRepository:
         start_date = inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
-        if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):
-            return MeasurementRefreshResult(self._read_snapshot(snapshot_path), False)
-
-        with self._lock_for(snapshot_path):
-            if not force_refresh and self._is_fresh(snapshot_path, end_timestamp):
-                return MeasurementRefreshResult(self._read_snapshot(snapshot_path), False)
+        with self._lock_for(snapshot_path), snapshot_process_lock(snapshot_path):
+            cached = None if force_refresh else self._try_read_fresh(snapshot_path, end_timestamp)
+            if cached is not None:
+                return MeasurementRefreshResult(cached, False)
+            metadata = read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True)
+            previous = None
+            if metadata is not None:
+                try:
+                    previous = self._read_snapshot(snapshot_path)
+                except Exception:
+                    logger.exception("Unreadable Inline snapshot; rebuilding %s", snapshot_path)
+                    metadata = None
+            load_start = incremental_start(metadata, end_timestamp)
             try:
                 measurements = self.measurement_loader(
                     self.db_manager,
-                    start_date,
+                    load_start.strftime("%Y-%m-%d"),
                     end_date,
                     prod_code,
                 )
@@ -129,38 +136,26 @@ class InlineMeasurementSnapshotRepository:
                 return MeasurementRefreshResult(
                     self._fallback(snapshot_path, required_start=start_date), False
                 )
-            if measurements.empty:
-                if snapshot_path.exists():
-                    return MeasurementRefreshResult(
-                        self._fallback(snapshot_path, required_start=start_date), True
-                    )
-                return MeasurementRefreshResult(measurements.copy(), True)
-
-            if self.measurement_corrector is not None:
+            if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
-
+            measurements = replace_tail(previous, measurements, load_start, end_timestamp)
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
             self._write_snapshot(snapshot_path, measurements, end_timestamp)
             return MeasurementRefreshResult(measurements.copy(), True)
 
     def _is_fresh(self, snapshot_path: Path, end_timestamp: pd.Timestamp) -> bool:
-        if not snapshot_path.exists():
-            return False
+        return is_fresh(read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True), end_timestamp, self.SNAPSHOT_TTL_HOURS)
+
+    def _try_read_fresh(
+        self, snapshot_path: Path, end_timestamp: pd.Timestamp,
+    ) -> pd.DataFrame | None:
+        if not self._is_fresh(snapshot_path, end_timestamp):
+            return None
         try:
-            current_policy = self._policy_path(snapshot_path).read_text(encoding="utf-8").strip()
-        except OSError:
-            return False
-        if current_policy != self.SNAPSHOT_POLICY_VERSION:
-            return False
-        if not self._covers_start(snapshot_path, inline_snapshot_window_start(end_timestamp)):
-            return False
-        age_hours = (
-            datetime.now() - datetime.fromtimestamp(snapshot_path.stat().st_mtime)
-        ).total_seconds() / 3600
-        if age_hours >= self.SNAPSHOT_TTL_HOURS:
-            return False
-        snapshot = self._read_snapshot(snapshot_path)
-        return not snapshot.empty and snapshot["start_time"].max() >= end_timestamp
+            return self._read_snapshot(snapshot_path)
+        except Exception:
+            logger.exception("Invalid fresh Inline snapshot %s; rebuilding", snapshot_path)
+            return None
 
     @staticmethod
     def _read_snapshot(snapshot_path: Path) -> pd.DataFrame:
@@ -173,7 +168,7 @@ class InlineMeasurementSnapshotRepository:
     ) -> pd.DataFrame:
         if not self._covers_start(snapshot_path, required_start):
             raise IncompleteMonitorSnapshotError(
-                f"Inline 原始快照未覆盖 {required_start}，需成功刷新后生成年度汇总"
+                f"Inline 原始快照未覆盖 {required_start}，需成功刷新滚动窗口"
             )
         try:
             return self._read_snapshot(snapshot_path)
@@ -184,40 +179,12 @@ class InlineMeasurementSnapshotRepository:
     def _write_snapshot(
         self, snapshot_path: Path, measurements: pd.DataFrame, end_timestamp: pd.Timestamp
     ) -> None:
-        snapshot_temp = snapshot_path.with_name(f"{snapshot_path.name}.{uuid4().hex}.tmp")
-        policy_path = self._policy_path(snapshot_path)
-        policy_temp = policy_path.with_name(f"{policy_path.name}.{uuid4().hex}.tmp")
-        metadata_path = snapshot_path.with_suffix(".snapshot.json")
-        metadata_temp = metadata_path.with_name(f"{metadata_path.name}.{uuid4().hex}.tmp")
-        try:
-            measurements.to_parquet(snapshot_temp, index=False)
-            policy_temp.write_text(self.SNAPSHOT_POLICY_VERSION, encoding="utf-8")
-            metadata_temp.write_text(json.dumps({
-                "covered_from": inline_snapshot_window_start(end_timestamp).date().isoformat(),
-                "covered_through": end_timestamp.date().isoformat(),
-            }), encoding="utf-8")
-            os.replace(snapshot_temp, snapshot_path)
-            os.replace(policy_temp, policy_path)
-            os.replace(metadata_temp, metadata_path)
-        finally:
-            snapshot_temp.unlink(missing_ok=True)
-            policy_temp.unlink(missing_ok=True)
-            metadata_temp.unlink(missing_ok=True)
+        publish_snapshots([(snapshot_path, measurements, self.SNAPSHOT_POLICY_VERSION, end_timestamp, True)])
 
     @classmethod
     def _covers_start(cls, snapshot_path: Path, required_start: object) -> bool:
-        if not snapshot_path.exists():
-            return False
-        try:
-            policy = cls._policy_path(snapshot_path).read_text(encoding="utf-8").strip()
-            metadata = json.loads(snapshot_path.with_suffix(".snapshot.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError, TypeError):
-            return False
-        return (
-            policy == cls.SNAPSHOT_POLICY_VERSION
-            and isinstance(metadata, dict)
-            and metadata_covers_start(metadata, required_start)
-        )
+        metadata = read_metadata(snapshot_path, cls.SNAPSHOT_POLICY_VERSION, policy_file=True)
+        return metadata is not None and metadata_covers_start(metadata, required_start)
 
     @classmethod
     def _lock_for(cls, snapshot_path: Path) -> threading.Lock:

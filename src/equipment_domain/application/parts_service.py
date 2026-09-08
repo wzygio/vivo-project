@@ -144,7 +144,10 @@ class PartsReportService:
             _db_manager,
             spec_df,
             as_of=(
-                pd.Timestamp(as_of_date) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+                min(
+                    pd.Timestamp(as_of_date) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1),
+                    pd.Timestamp.now().floor("s"),
+                )
                 if as_of_date
                 else pd.Timestamp.now().floor("s")
             ),

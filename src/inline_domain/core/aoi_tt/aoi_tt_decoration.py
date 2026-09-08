@@ -4,8 +4,8 @@
 
 - 工作簿 `resources/inline_domain/aoi_tt_sheet_oos_decoration.xlsx`，每产品一个 sheet，
   复用共享引擎的三态语义：flag=Delete 删除该行、False 释放真实值、True（默认）自动截断；
-- 无工作簿 / 缺产品 sheet 时按空修饰语义处理 —— 全部超规行默认截断，
-  与引入工作簿前的 auto_clip_over_spec 行为完全一致（向后兼容）；
+- 无工作簿 / 缺产品 sheet 时按空修饰语义处理，超过 UCL 的行默认截断到 UCL 内；
+- OOS 工作簿明细仍按 USL 判定；自动截断使用 UCL，缺失时不回退到 USL；
 - 配置命中的参数豁免自动截断并保留真实值，Delete 仍优先；
 - 截断算法与 flag 机制均来自 core/shared（单一算法来源）。
 """
@@ -33,19 +33,19 @@ AOI_TT_OOS_DETAIL_COLUMNS = [
 ]
 
 
-def _oos_spec_map(spec_df: pd.DataFrame) -> pd.DataFrame:
-    if spec_df.empty or "usl" not in spec_df.columns:
-        return pd.DataFrame(columns=["step_id", "tt_name", "usl"])
-    specs = spec_df[["step_id", "tt_name", "usl"]].copy()
-    specs["usl"] = pd.to_numeric(specs["usl"], errors="coerce")
-    return specs.dropna(subset=["usl"]).drop_duplicates(["step_id", "tt_name"], keep="first")
+def _spec_map(spec_df: pd.DataFrame, upper_col: str) -> pd.DataFrame:
+    if spec_df.empty or upper_col not in spec_df.columns:
+        return pd.DataFrame(columns=["step_id", "tt_name", upper_col])
+    specs = spec_df[["step_id", "tt_name", upper_col]].copy()
+    specs[upper_col] = pd.to_numeric(specs[upper_col], errors="coerce")
+    return specs.dropna(subset=[upper_col]).drop_duplicates(["step_id", "tt_name"], keep="first")
 
 
 def build_aoi_tt_oos_detail(tt_details_df: pd.DataFrame, spec_df: pd.DataFrame) -> pd.DataFrame:
     """列出 tt_qty 超过 USL 的超规片行（工作簿明细）。"""
     if tt_details_df.empty:
         return pd.DataFrame(columns=AOI_TT_OOS_DETAIL_COLUMNS)
-    specs = _oos_spec_map(spec_df)
+    specs = _spec_map(spec_df, "usl")
     if specs.empty:
         return pd.DataFrame(columns=AOI_TT_OOS_DETAIL_COLUMNS)
 
@@ -66,13 +66,13 @@ def apply_aoi_tt_decoration(
     decoration_df: pd.DataFrame,
     exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
-    """Apply the already-loaded tri-state decisions to AOI-TT details."""
+    """Apply tri-state decisions, clipping AOI-TT quantities against UCL."""
     decorated_df = tt_details_df.copy()
     if not decorated_df.empty:
-        specs = _oos_spec_map(spec_df)
+        specs = _spec_map(spec_df, "ucl")
         if not specs.empty:
             attached = decorated_df.merge(
-                specs.rename(columns={"usl": "_oos_usl"}),
+                specs.rename(columns={"ucl": "_ooc_ucl"}),
                 on=["step_id", "tt_name"],
                 how="left",
             )
@@ -81,9 +81,9 @@ def apply_aoi_tt_decoration(
                 decoration_df,
                 key_columns=AOI_TT_OOS_KEY_COLUMNS,
                 value_col="tt_qty",
-                spec_col="_oos_usl",
+                spec_col="_ooc_ucl",
                 parameter_col="tt_name",
                 exempt_param_name_contains=exempt_param_name_contains,
-            ).drop(columns=["_oos_usl"])
+            ).drop(columns=["_ooc_ucl"])
 
     return decorated_df

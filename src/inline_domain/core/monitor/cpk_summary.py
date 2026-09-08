@@ -49,7 +49,12 @@ def normalize_cpk_records(frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("CPK 汇总存在重复业务键")
     for column in CPK_SUMMARY_COLUMNS[6:]:
         dtype = "Float64" if column == "Cpk≥1.33达标率" else "Int64"
-        result[column] = pd.to_numeric(result[column], errors="coerce").astype(dtype)
+        numeric = pd.to_numeric(result[column], errors="coerce")
+        if dtype == "Int64":
+            present = numeric.dropna()
+            if (present.isin([float("inf"), float("-inf")]) | present.mod(1).ne(0)).any():
+                raise ValueError(f"CPK 汇总 {column} 必须为有限整数")
+        result[column] = numeric.astype(dtype)
     return result[CPK_SUMMARY_COLUMNS].reset_index(drop=True)
 
 
@@ -114,11 +119,12 @@ def build_current_cpk_records(
 def build_cpk_summary_from_records(
     records: pd.DataFrame, *, end_date: pd.Timestamp,
     expected_products: Iterable[str] = (),
+    week_count: int = 1,
 ) -> pd.DataFrame:
     rows_order = ["CPK总项目数", "达标项目数", "预警项目数", "Cpk≥1.33达标率"]
     result: dict[str, list[object]] = {"指标": rows_order}
     expected = set(expected_products)
-    for window in _period_windows(end_date):
+    for window in _period_windows(end_date, week_count=week_count):
         rows = records[records["时间标签"].eq(window.time_label)]
         complete = not rows.empty and (not expected or set(rows["产品"]) == expected)
         values: list[object] = []

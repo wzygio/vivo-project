@@ -105,6 +105,11 @@ class OosHistoryService:
             raise ValueError("start_date must not be after end_date")
         return start, end
 
+    @classmethod
+    def project_detail(cls, scope: str, frame: pd.DataFrame) -> pd.DataFrame:
+        """Project already-decided detail without merging flags or computing facts."""
+        return cls._project(scope, frame)
+
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
         return self._read_product_with_file(
             scope, prod_code, SCOPE_DECORATION_FILE_NAME[scope]

@@ -8,11 +8,17 @@ import shutil
 import tempfile
 import threading
 import time
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterator
 
 import pandas as pd
+import numpy as np
+
+from src.inline_domain.core.monitor.weekly_replacement import (
+    WEEK_MARKER, WEEK_TRACKING_COLUMNS, CONTRIBUTION_COLUMNS, plan_weekly_replacement,
+)
 
 from src.inline_domain.core.monitor.period_summary import (
     MONITOR_SUMMARY_COLUMNS,
@@ -52,7 +58,7 @@ class MonitorSummaryWorkbookStore:
 
     _update_lock = threading.Lock()
     sheet_name = SUMMARY_SHEET
-    columns = MONITOR_SUMMARY_COLUMNS
+    columns = MONITOR_SUMMARY_COLUMNS + WEEK_TRACKING_COLUMNS
 
     def __init__(self, workbook_path: Path | str) -> None:
         self._workbook_path = Path(workbook_path)
@@ -109,6 +115,28 @@ class MonitorSummaryWorkbookStore:
                 )
             return self.read()
 
+    def refresh_current_week(
+        self, alerts: pd.DataFrame, *, products: Iterable[str], scope_key: str,
+        factory_key: str, as_of: pd.Timestamp,
+        available_types: Mapping[str, set[str]],
+    ) -> tuple[pd.DataFrame, list[str]]:
+        """Replace the open week's contribution using the locked persisted baseline."""
+        with self._update_lock, _interprocess_lock(self._workbook_path):
+            current = self.read()
+            incoming, warnings = plan_weekly_replacement(
+                current, alerts, products=products, scope_key=scope_key,
+                factory_key=factory_key, as_of=as_of, available_types=available_types,
+            )
+            if incoming.empty:
+                return current, warnings
+            merged = self._merge(current, self._normalize(incoming))
+            if current.reset_index(drop=True).equals(merged.reset_index(drop=True)):
+                return current, warnings
+            result = self._write(merged)
+            if not result.written:
+                raise MonitorSummaryWorkbookError(result.error or "报警率汇总工作簿写入失败")
+            return self.read(), warnings
+
     def _write(self, frame: pd.DataFrame) -> WorkbookWriteResult:
         return _replace_summary_sheet(self._workbook_path, frame)
 
@@ -129,7 +157,7 @@ class MonitorSummaryWorkbookStore:
     def _normalize(source: pd.DataFrame) -> pd.DataFrame:
         frame = source.copy() if isinstance(source, pd.DataFrame) else pd.DataFrame()
         if frame.empty:
-            return pd.DataFrame(columns=MONITOR_SUMMARY_COLUMNS)
+            return pd.DataFrame(columns=MonitorSummaryWorkbookStore.columns)
         missing_legacy = set(LEGACY_COLUMNS).difference(frame.columns)
         if missing_legacy:
             raise MonitorSummaryWorkbookError(
@@ -145,22 +173,20 @@ class MonitorSummaryWorkbookStore:
         if frame[SUMMARY_KEY_COLUMNS].eq("").any(axis=None):
             raise MonitorSummaryWorkbookError("报警率 sheet 包含空业务键")
         frame["过货量"] = (
-            pd.to_numeric(frame["过货量"], errors="coerce").fillna(0).astype(int)
+            pd.to_numeric(frame["过货量"], errors="coerce").astype("Int64")
         )
         for count_column, rate_column in COUNT_RATE_PAIRS:
             rate = (
                 pd.to_numeric(frame[rate_column], errors="coerce")
-                .fillna(0.0)
                 .astype("Float64")
             )
             frame[rate_column] = rate
             if count_column not in frame.columns:
-                # Rates in the legacy workbook may be rounded and do not carry
-                # the physical-Sheet identity needed for exact counts.
                 frame[count_column] = pd.Series(pd.NA, index=frame.index, dtype="Int64")
-            else:
-                count = pd.to_numeric(frame[count_column], errors="coerce")
-                frame[count_column] = count.astype("Int64")
+            count = pd.to_numeric(frame[count_column], errors="coerce")
+            # User-approved initialization of historical counts from maintained rates.
+            initialized = np.floor(frame["过货量"] * rate + 0.5)
+            frame[count_column] = count.fillna(initialized).astype("Int64")
         if "Total报警片数" not in frame.columns:
             frame["Total报警片数"] = pd.Series(
                 pd.NA, index=frame.index, dtype="Int64"
@@ -173,9 +199,19 @@ class MonitorSummaryWorkbookStore:
         else:
             total_rate = pd.to_numeric(frame["Total报警率"], errors="coerce")
             frame["Total报警率"] = total_rate.astype("Float64")
+        total_initialized = np.floor(frame["过货量"] * pd.to_numeric(
+            frame["Total报警率"], errors="coerce"
+        ) + 0.5)
+        frame["Total报警片数"] = frame["Total报警片数"].fillna(total_initialized).astype("Int64")
+        for column in WEEK_TRACKING_COLUMNS:
+            if column not in frame:
+                frame[column] = pd.NA
+        frame[WEEK_MARKER] = frame[WEEK_MARKER].astype("string")
+        for column in CONTRIBUTION_COLUMNS.values():
+            frame[column] = pd.to_numeric(frame[column], errors="coerce").astype("Int64")
         if frame.duplicated(SUMMARY_KEY_COLUMNS).any():
             raise MonitorSummaryWorkbookError("报警率 sheet 存在重复业务键")
-        return frame[MONITOR_SUMMARY_COLUMNS].copy()
+        return frame[MonitorSummaryWorkbookStore.columns].copy()
 
     @staticmethod
     def _sort(frame: pd.DataFrame) -> pd.DataFrame:

@@ -1,4 +1,4 @@
-"""Inline source coverage required by open calendar-period monitor summaries."""
+"""Rolling raw-source coverage, independent of dashboard calendar summaries."""
 
 from __future__ import annotations
 
@@ -12,12 +12,7 @@ class IncompleteMonitorSnapshotError(RuntimeError):
 
 
 def inline_snapshot_window_start(end_date: object) -> pd.Timestamp:
-    end = pd.Timestamp(end_date).normalize()
-    return min(
-        snapshot_window_start(end),
-        end.replace(month=1, day=1),
-        end - pd.Timedelta(days=end.weekday()),
-    )
+    return snapshot_window_start(end_date)
 
 
 def metadata_covers_start(metadata: dict, required_start: object) -> bool:

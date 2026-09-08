@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
+from math import isfinite
 from numbers import Integral, Real
+from random import randint
 from typing import Iterable
 
 import pandas as pd
+
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 CPK_DECORATION_FILE_NAME = "spc_cpk_cpm_decoration.xlsx"
 CPK_KEY_COLUMNS = [
@@ -19,6 +24,8 @@ CAPABILITY_METRIC_CPK = "cpk"
 CAPABILITY_METRIC_CPM = "cpm"
 SUPPORTED_CAPABILITY_METRICS = (CAPABILITY_METRIC_CPK, CAPABILITY_METRIC_CPM)
 CPM_DECORATION_SHEET_SUFFIX = "_cpm"
+CAPABILITY_ALERT_THRESHOLD = 1.33
+CAPABILITY_REPLACEMENT_UPPER_BOUND = 1.4
 
 
 def _validate_metric(metric: str) -> str:
@@ -35,6 +42,10 @@ def capability_decorated_column(metric: str) -> str:
     return f"{_validate_metric(metric)}_decorated"
 
 
+def capability_replacement_column(metric: str) -> str:
+    return f"{_validate_metric(metric)}_replacement"
+
+
 def capability_detail_columns(metric: str) -> list[str]:
     return [
         *CPK_KEY_COLUMNS,
@@ -46,7 +57,7 @@ def capability_detail_columns(metric: str) -> list[str]:
 
 
 def capability_decoration_columns(metric: str) -> list[str]:
-    return [*capability_detail_columns(metric), "flag"]
+    return [*capability_detail_columns(metric), "flag", capability_replacement_column(metric)]
 
 
 CPK_DETAIL_COLUMNS = capability_detail_columns(CAPABILITY_METRIC_CPK)
@@ -115,6 +126,25 @@ def _parse_flag(value: object) -> bool:
     }
 
 
+def ensure_capability_replacements(decoration_df: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Keep saved targets; generate missing/out-of-range values in 1.331..1.399."""
+    result = _ordered_existing_columns(decoration_df, capability_decoration_columns(metric))
+    replacement_column = capability_replacement_column(metric)
+    replacements = pd.to_numeric(result[replacement_column], errors="coerce")
+
+    def valid(value: float) -> bool:
+        return (
+            pd.notna(value) and isfinite(value)
+            and CAPABILITY_ALERT_THRESHOLD < value < CAPABILITY_REPLACEMENT_UPPER_BOUND
+        )
+
+    result[replacement_column] = [
+        target if valid(target) else randint(1331, 1399) / 1000
+        for target in replacements
+    ]
+    return result
+
+
 def build_capability_detail(
     period_capability_df: pd.DataFrame,
     metric: str = CAPABILITY_METRIC_CPK,
@@ -126,6 +156,7 @@ def build_capability_detail(
         return _empty_detail_frame(metric)
 
     capability_df = _normalize_key_columns(period_capability_df)
+    capability_df = capability_df.loc[capability_df["period_type"].isin(["month", "week"])]
     detail = _ordered_existing_columns(
         capability_df,
         [*CPK_KEY_COLUMNS, "period_sort", "period_start", "period_end", metric],
@@ -134,6 +165,24 @@ def build_capability_detail(
         ["factory", "step_id", "param_name", "period_sort"],
         kind="stable",
     ).reset_index(drop=True)
+
+
+def build_capability_anomaly_detail(
+    period_capability_df: pd.DataFrame,
+    metric: str,
+    reference_date: date,
+) -> pd.DataFrame:
+    """New ledger candidates are only failures from the previous complete ISO week."""
+    detail = build_capability_detail(period_capability_df, metric)
+    start, _ = previous_iso_week_range(reference_date)
+    iso = start.isocalendar()
+    label = f"{iso.year}-W{iso.week:02d}"
+    values = pd.to_numeric(detail[capability_corrected_column(metric)], errors="coerce")
+    return detail.loc[
+        detail["period_type"].eq("week")
+        & detail["period_label"].eq(label)
+        & values.lt(CAPABILITY_ALERT_THRESHOLD)
+    ].reset_index(drop=True)
 
 
 def merge_capability_detail_with_decoration_flags(
@@ -146,6 +195,7 @@ def merge_capability_detail_with_decoration_flags(
     detail_columns = capability_detail_columns(metric)
     decoration_columns = capability_decoration_columns(metric)
     corrected_column = capability_corrected_column(metric)
+    replacement_column = capability_replacement_column(metric)
     if detail_df.empty:
         return _empty_decoration_frame(metric)
 
@@ -153,11 +203,11 @@ def merge_capability_detail_with_decoration_flags(
     if existing_decoration_df.empty or "flag" not in existing_decoration_df.columns:
         result = detail_df.copy()
         result["flag"] = False
-        return result[decoration_columns]
+        return ensure_capability_replacements(result, metric)
 
     user_values_df = _normalize_key_columns(
         _ordered_existing_columns(existing_decoration_df, decoration_columns)
-    )[[*CPK_KEY_COLUMNS, corrected_column, "flag"]].copy()
+    )[[*CPK_KEY_COLUMNS, corrected_column, "flag", replacement_column]].copy()
     user_values_df = user_values_df.rename(
         columns={corrected_column: "_user_corrected_value"}
     )
@@ -169,7 +219,7 @@ def merge_capability_detail_with_decoration_flags(
         user_corrected_values.notna()
     ]
     result["flag"] = result["flag"].apply(_parse_flag)
-    return result.drop(columns=["_user_corrected_value"])[decoration_columns]
+    return ensure_capability_replacements(result.drop(columns=["_user_corrected_value"]), metric)
 
 
 def _append_missing_detail_rows(
@@ -206,7 +256,7 @@ def apply_capability_decoration(
 ) -> pd.DataFrame:
     """Keep the computed metric value by default and apply only admin-enabled user corrections."""
     _validate_metric(metric)
-    corrected_column = capability_corrected_column(metric)
+    corrected_column = capability_replacement_column(metric)
     decorated_column = capability_decorated_column(metric)
     result = period_capability_df.copy()
     if result.empty:

@@ -129,3 +129,15 @@ def test_build_dashboard_combines_oos_and_ooc() -> None:
     assert call["scopes"] == ("spc",)
     assert call["factories"] == ("ARRAY",)
     assert set(call["alerts_df"]["alarm_type"]) == {"OOS", "OOC"}
+
+
+def test_excel_summary_receives_source_completeness_and_publishes_warnings() -> None:
+    summary = _SummaryWorkbook()
+    summary.supports_weekly_replacement = True
+    summary.last_warnings = ("请补充历史基线",)
+    view = OosMonitorService(_Reader(), summary_workbook=summary).build_dashboard(
+        products=["M626"], scopes=["spc"], factories=["ARRAY"],
+        start_date="2026-08-01", end_date="2026-08-31",
+    )
+    assert summary.calls[0]["source_status_df"].iloc[0]["source"] == "history"
+    assert "请补充历史基线" in view.refresh_status_df["message"].tolist()

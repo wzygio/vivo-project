@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 
 import pandas as pd
+import altair as alt
 import streamlit as st
 from pydantic import BaseModel, Field
 
@@ -12,6 +13,30 @@ from src.inline_domain.application.monitor.oos_monitor_service import OosMonitor
 
 SCOPE_OPTIONS = ("ALL", "SPC", "CTQ", "AOI_TT", "AOI_RS")
 MONITOR_QUERY_SIGNATURE_KEY = "monitor_query_signature"
+
+
+def build_period_trend_chart(
+    summary: pd.DataFrame, *, label_column: str = "报警类型",
+    metric_rows: Sequence[str] = ("OOS报警片数", "OOC报警片数", "SOOS报警片数"),
+) -> alt.Chart:
+    """Keep every summary period, color by granularity, retain alarm tooltips."""
+    trend = summary.set_index(label_column).reindex(
+        list(metric_rows)
+    ).T.apply(pd.to_numeric, errors="coerce").fillna(0)
+    trend.index.name = "周期"
+    periods = trend.index.tolist()
+    data = trend.reset_index().melt(id_vars="周期", var_name=label_column, value_name="数量")
+    data["周期层级"] = data["周期"].str[0].map({"Y": "年", "Q": "季", "M": "月", "W": "周"})
+    return alt.Chart(data).mark_bar().encode(
+        x=alt.X("周期:N", sort=periods, scale=alt.Scale(domain=periods), axis=alt.Axis(labelAngle=0)),
+        y=alt.Y("数量:Q", stack="zero"),
+        color=alt.Color("周期层级:N", scale=alt.Scale(
+            domain=["年", "季", "月", "周"],
+            range=["#2563EB", "#F59E0B", "#10B981", "#8B5CF6"],
+        ), title="时间周期"),
+        detail=f"{label_column}:N",
+        tooltip=["周期:N", "周期层级:N", f"{label_column}:N", "数量:Q"],
+    ).properties(height=320)
 
 
 class MonitorFilterState(BaseModel):
@@ -133,18 +158,12 @@ def render_oos_monitor_results(
     metric_columns[1].metric("OOC", f"{ooc_count:,}")
     metric_columns[2].metric("SOOS", "0")
 
-    if detail.empty:
-        st.warning("所选范围内没有已确认的 OOS/OOC 预警记录。")
-        return
-
     st.markdown("#### 超规趋势")
-    trend_data = view.trend_df.assign(
-        series=view.trend_df["scope"].str.upper() + "-" + view.trend_df["alarm_type"]
-    )
-    trend = trend_data.pivot_table(
-        index="event_date", columns="series", values="oos_count", aggfunc="sum", fill_value=0
-    )
-    st.line_chart(trend, height=320)
+    st.altair_chart(build_period_trend_chart(summary), width="stretch")
+
+    if detail.empty:
+        st.info("所选范围内没有已确认的 OOS/OOC 预警记录。")
+        return
 
     st.markdown("#### Top 10 站点")
     station = view.station_df.copy()
@@ -156,7 +175,13 @@ def render_oos_monitor_results(
     station_chart = station.pivot_table(
         index="站点", columns="series", values="oos_count", aggfunc="sum", fill_value=0
     )
-    st.bar_chart(station_chart, horizontal=True, height=360)
+    # Rank stations by their combined count, then reserve ten categorical slots.
+    # Whitespace-only labels keep unused positions visually empty, without
+    # changing any of the source frames or the displayed detail table.
+    ordered = station_chart.sum(axis=1).sort_values(ascending=False, kind="stable").head(10).index.tolist()
+    slots = ordered + [" " * index for index in range(1, 11 - len(ordered))]
+    station_chart = station_chart.reindex(slots, fill_value=0)
+    st.bar_chart(station_chart, horizontal=False, sort=False, height=360)
 
     st.markdown("#### 超规明细")
     display = view.detail_df.rename(
