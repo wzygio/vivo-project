@@ -13,7 +13,6 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
-from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
 from src.inline_domain.application.shared.throughput_persistence import (
     persist_throughput_facts,
@@ -174,13 +173,6 @@ class AoiTtReportService:
                     product_dir = resolve_product_resource_dir(
                         query_config.prod_code, scope="aoi_tt"
                     )
-                    build_oos_history_service().update_history(
-                        "aoi_tt",
-                        query_config.prod_code,
-                        pd.DataFrame(),
-                        coverage_start=coverage_start,
-                        coverage_end=coverage_end,
-                    )
                     persist_ooc_facts(
                         scope="aoi_tt",
                         prod_code=query_config.prod_code,
@@ -230,13 +222,6 @@ class AoiTtReportService:
                 and not spec_df.empty
                 and covers_full_product
             ):
-                build_oos_history_service().update_history(
-                    "aoi_tt",
-                    query_config.prod_code,
-                    getattr(decoration_result, "decoration_df", pd.DataFrame()),
-                    coverage_start=coverage_start,
-                    coverage_end=coverage_end,
-                )
                 persist_ooc_facts(
                     scope="aoi_tt",
                     prod_code=query_config.prod_code,
@@ -250,7 +235,7 @@ class AoiTtReportService:
                 )
             elif spec_df.empty:
                 logger.warning(
-                    "[AOI_TT] Skip OOS history coverage update for %s: specifications are empty",
+                    "[AOI_TT] Skip OOC ledger update for %s: specifications are empty",
                     query_config.prod_code,
                 )
             if persist_shared_history and covers_full_product:

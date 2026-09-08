@@ -1,14 +1,9 @@
-from datetime import date, datetime, time
 from pathlib import Path
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
-from app.sections.indicator_domain.ijp.dashboard import (
-    TARGET_HELP,
-    build_ijp_table,
-    date_range_to_datetimes,
-)
+from app.sections.indicator_domain.ijp.dashboard import _chunked, build_ijp_table
 
 FIXTURE_PATH = (
     Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "ijp_app.py"
@@ -80,9 +75,21 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
     assert app.subheader[0].value == "OLED IJP 溢流监控"
-    assert len(app.date_input) == 2
+    assert not app.date_input
     assert not app.datetime_input
-    assert app.number_input(key="ijp_target").help == TARGET_HELP
+    assert not app.number_input
+    assert any("数据范围：2026/08/01 至 2026/09/07" in item.value for item in app.caption)
+    labels = {widget.label for widget in app.multiselect}
+    assert "产品型号" in labels
+    assert "设备" not in labels
+    assert "边框" not in labels
+    assert "产品名称" not in labels
+    assert "工单类型" not in labels
+    assert not app.text_input
+    assert "Cycle" not in labels
+    filter_columns = app.get("column")
+    assert len(filter_columns) == 4
+    assert all(column.weight == 0.25 for column in filter_columns)
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
 
@@ -91,18 +98,24 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.exception
     assert not app.info
     assert len(app.dataframe) == 1
-    assert len(app.get("plotly_chart")) == 1
+    assert len(app.get("plotly_chart")) == 4
+    chart_columns = app.get("column")[4:]
+    assert [column.weight for column in chart_columns] == [0.5, 0.5, 1.0, 1.0]
+    assert [expander.label for expander in app.expander] == [
+        "产品：M626",
+        "线体：3CEE01",
+        "线体：3CEE02",
+        "产品：M678",
+        "线体：3CEE04",
+    ]
+    assert all(expander.proto.expanded for expander in app.expander)
 
 
-def test_ijp_dashboard_rejects_an_inverted_time_window() -> None:
-    app = AppTest.from_file(str(FIXTURE_PATH)).run()
-
-    app.date_input(key="ijp_start_time").set_value(date(2026, 9, 2))
-    app.date_input(key="ijp_end_time").set_value(date(2026, 9, 1))
-    app.button(key="ijp_search").click().run()
-
-    assert app.error[0].value == "结束日期不能早于开始日期"
-    assert not app.dataframe
+def test_chunked_limits_each_chart_row_to_three_items() -> None:
+    assert _chunked(("P1", "P2", "P3", "P4"), 3) == (
+        ("P1", "P2", "P3"),
+        ("P4",),
+    )
 
 
 def test_ijp_dashboard_shows_a_safe_database_error() -> None:
@@ -134,13 +147,3 @@ def test_ijp_dashboard_invalidates_stale_results_when_filters_change() -> None:
 
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
-
-
-def test_date_range_to_datetimes_covers_whole_calendar_days() -> None:
-    start_time, end_time = date_range_to_datetimes(
-        date(2026, 9, 2),
-        date(2026, 9, 3),
-    )
-
-    assert start_time == datetime.combine(date(2026, 9, 2), time.min)
-    assert end_time == datetime.combine(date(2026, 9, 3), time.max)

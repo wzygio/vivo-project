@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -23,6 +24,19 @@ from app.sections.inline_domain.monitor.alert_matrix_service import (
 )
 
 REFERENCE_DATE = date(2026, 9, 2)  # 周三：上一 ISO 周 = 2026-08-24 ~ 2026-08-30
+
+
+@pytest.fixture(autouse=True)
+def _isolate_legacy_workbook_fixtures(monkeypatch, tmp_path):
+    """These fixtures exercise legacy workbook reads, never production ports."""
+    monkeypatch.setattr(
+        "app.sections.inline_domain.monitor.alert_matrix_service.build_oos_history_service",
+        lambda resource_dir=None: SimpleNamespace(has_history=lambda scope, product: False),
+    )
+    monkeypatch.setattr(
+        "app.sections.inline_domain.monitor.alert_matrix_service.scope_resource_dir",
+        lambda scope: tmp_path,
+    )
 
 
 def _make_context(**overrides) -> AlertMatrixContext:
@@ -281,6 +295,40 @@ def test_ctq_sheet_oos_flag_false_in_previous_week_is_alert(tmp_path: Path) -> N
     cell = _evaluate("ctq_sheet_oos", _make_context(inline_resource_dir=tmp_path))
 
     assert cell["state"] == CELL_STATE_ALERT
+
+
+def test_sheet_oos_uses_computed_reader_without_workbook_or_database(
+    tmp_path: Path, monkeypatch
+) -> None:
+    calls = []
+    alerts = pd.DataFrame([{
+        **_spc_row("CACHED-SHEET", False, LAST_WEEK), "event_time": LAST_WEEK,
+    }])
+
+    def read_product(scope, product):
+        calls.append((scope, product))
+        return SimpleNamespace(decorated_df=alerts, alerts_df=alerts, source="computed_cache")
+
+    monkeypatch.setattr(
+        "app.sections.inline_domain.monitor.alert_matrix_service.build_oos_history_service",
+        lambda resource_dir=None: SimpleNamespace(
+            has_history=lambda scope, product: True, read_product=read_product,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.sections.inline_domain.monitor.alert_matrix_service.load_sheet_oos_decoration",
+        lambda *args, **kwargs: pytest.fail("computed reader must bypass workbook fallback"),
+    )
+    monkeypatch.setattr(
+        "src.shared_kernel.infrastructure.db_handler.DatabaseManager.__init__",
+        lambda *args, **kwargs: pytest.fail("matrix cached-reader test must not connect to DB"),
+    )
+
+    cell = _evaluate("spc_sheet_oos", _make_context(inline_resource_dir=tmp_path))
+
+    assert cell["state"] == CELL_STATE_ALERT
+    assert cell["alert_factories"] == ["OLED"]
+    assert calls == [("spc", PROD)]
 
 
 # ---------------------------------------------------------------------------

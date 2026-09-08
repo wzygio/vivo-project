@@ -10,7 +10,7 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 import pandas as pd
 
@@ -48,7 +48,11 @@ class MonitorSummaryWorkbookError(RuntimeError):
 
 
 class MonitorSummaryWorkbookStore:
+    """Shared period-sheet persistence; subclasses supply their sheet contract."""
+
     _update_lock = threading.Lock()
+    sheet_name = SUMMARY_SHEET
+    columns = MONITOR_SUMMARY_COLUMNS
 
     def __init__(self, workbook_path: Path | str) -> None:
         self._workbook_path = Path(workbook_path)
@@ -67,10 +71,10 @@ class MonitorSummaryWorkbookStore:
 
     def read(self) -> pd.DataFrame:
         try:
-            source = read_workbook_sheet(self._workbook_path, SUMMARY_SHEET)
+            source = read_workbook_sheet(self._workbook_path, self.sheet_name)
         except Exception as exc:
             raise MonitorSummaryWorkbookError(
-                f"无法读取报警汇总工作簿：{exc}"
+                f"无法读取 {self.sheet_name} 汇总工作簿：{exc}"
             ) from exc
         return self._normalize(source)
 
@@ -93,18 +97,23 @@ class MonitorSummaryWorkbookStore:
 
         with self._update_lock, _interprocess_lock(self._workbook_path):
             current = self.read()
+            if incoming.empty:
+                return current
             merged = self._merge(current, incoming)
             if current.reset_index(drop=True).equals(merged.reset_index(drop=True)):
                 return current
-            result = _replace_summary_sheet(self._workbook_path, merged)
+            result = self._write(merged)
             if not result.written:
                 raise MonitorSummaryWorkbookError(
-                    result.error or "报警汇总工作簿写入失败"
+                    result.error or f"{self.sheet_name} 汇总工作簿写入失败"
                 )
             return self.read()
 
-    @staticmethod
-    def _merge(current: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
+    def _write(self, frame: pd.DataFrame) -> WorkbookWriteResult:
+        return _replace_summary_sheet(self._workbook_path, frame)
+
+    @classmethod
+    def _merge(cls, current: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
         incoming_keys = pd.MultiIndex.from_frame(incoming[SUMMARY_KEY_COLUMNS])
         current_keys = pd.MultiIndex.from_frame(current[SUMMARY_KEY_COLUMNS])
         preserved = current.loc[~current_keys.isin(incoming_keys)].copy()
@@ -112,11 +121,9 @@ class MonitorSummaryWorkbookStore:
         combined = (
             pd.concat([frame.astype(object) for frame in frames], ignore_index=True)
             if frames
-            else pd.DataFrame(columns=MONITOR_SUMMARY_COLUMNS)
+            else pd.DataFrame(columns=cls.columns)
         )
-        return MonitorSummaryWorkbookStore._normalize(
-            MonitorSummaryWorkbookStore._sort(combined)
-        )
+        return cls._normalize(cls._sort(combined))
 
     @staticmethod
     def _normalize(source: pd.DataFrame) -> pd.DataFrame:
@@ -189,7 +196,8 @@ class MonitorSummaryWorkbookStore:
 @contextmanager
 def _interprocess_lock(workbook_path: Path, timeout_seconds: float = 30.0) -> Iterator[None]:
     """Serialize read/merge/write across Streamlit and scheduler processes."""
-    digest = hashlib.sha256(str(workbook_path.resolve()).encode("utf-8")).hexdigest()[:16]
+    canonical_path = os.path.normcase(str(workbook_path.resolve()))
+    digest = hashlib.sha256(canonical_path.encode("utf-8")).hexdigest()[:16]
     lock_path = Path(tempfile.gettempdir()) / f"vivo-monitor-summary-{digest}.lock"
     handle = lock_path.open("a+b")
     if handle.tell() == 0:
@@ -234,21 +242,37 @@ def _interprocess_lock(workbook_path: Path, timeout_seconds: float = 30.0) -> It
 
 def _replace_summary_sheet(path: Path, frame: pd.DataFrame) -> WorkbookWriteResult:
     """Update only 报警率, preserving encrypted workbooks and every other object."""
+    return replace_period_sheet(
+        path, frame, sheet_name=SUMMARY_SHEET,
+        normalizer=MonitorSummaryWorkbookStore._normalize,
+    )
+
+
+def replace_period_sheet(
+    path: Path, frame: pd.DataFrame, *, sheet_name: str,
+    normalizer: Callable[[pd.DataFrame], pd.DataFrame],
+) -> WorkbookWriteResult:
+    """Write one summary sheet while retaining the workbook's other sheets."""
     writable = frame.astype(object).where(frame.notna(), None)
     if not path.exists():
-        return replace_workbook_sheets(path, {SUMMARY_SHEET: writable})
+        return replace_workbook_sheets(path, {sheet_name: writable})
     try:
         import openpyxl
 
         workbook = openpyxl.load_workbook(path, read_only=True)
         workbook.close()
     except Exception:
-        return _replace_encrypted_summary_sheet_via_com(path, writable)
-    return replace_workbook_sheets(path, {SUMMARY_SHEET: writable})
+        if sheet_name == SUMMARY_SHEET:
+            return _replace_encrypted_summary_sheet_via_com(path, writable)
+        return _replace_encrypted_summary_sheet_via_com(
+            path, writable, sheet_name=sheet_name, normalizer=normalizer
+        )
+    return replace_workbook_sheets(path, {sheet_name: writable})
 
 
 def _replace_encrypted_summary_sheet_via_com(
-    path: Path, frame: pd.DataFrame
+    path: Path, frame: pd.DataFrame, *, sheet_name: str = SUMMARY_SHEET,
+    normalizer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
 ) -> WorkbookWriteResult:
     """Atomically edit a protected workbook without rebuilding its other sheets."""
     try:
@@ -284,7 +308,7 @@ def _replace_encrypted_summary_sheet_via_com(
         excel.Visible = False
         excel.DisplayAlerts = False
         workbook = excel.Workbooks.Open(str(temp_path.resolve()), ReadOnly=False)
-        worksheet = workbook.Worksheets(SUMMARY_SHEET)
+        worksheet = workbook.Worksheets(sheet_name)
         worksheet.UsedRange.ClearContents()
         data_rows = frame.astype(object).where(frame.notna(), None).values.tolist()
         values = [list(frame.columns)] + data_rows
@@ -313,24 +337,25 @@ def _replace_encrypted_summary_sheet_via_com(
     if write_error is not None:
         temp_path.unlink(missing_ok=True)
         return WorkbookWriteResult(
-            False, path, (), f"Excel COM 更新报警率失败: {write_error}"
+            False, path, (), f"Excel COM 更新 {sheet_name} 失败: {write_error}"
         )
 
     try:
         if source_was_protected and not _wait_for_protected_bytes(temp_path):
             raise ValueError("企业加密保护未能保留，正式文件未变更")
-        persisted = read_workbook_sheet(temp_path, SUMMARY_SHEET)
-        normalized_actual = MonitorSummaryWorkbookStore._normalize(persisted)
-        normalized_expected = MonitorSummaryWorkbookStore._normalize(frame)
+        normalize = normalizer or MonitorSummaryWorkbookStore._normalize
+        persisted = read_workbook_sheet(temp_path, sheet_name)
+        normalized_actual = normalize(persisted)
+        normalized_expected = normalize(frame)
         if not normalized_actual.reset_index(drop=True).equals(
             normalized_expected.reset_index(drop=True)
         ):
-            raise ValueError("写回后的报警率数据与预期不一致")
+            raise ValueError(f"写回后的 {sheet_name} 数据与预期不一致")
         os.replace(temp_path, path)
     except Exception as exc:
         temp_path.unlink(missing_ok=True)
-        return WorkbookWriteResult(False, path, (), f"报警率写回校验失败: {exc}")
-    return WorkbookWriteResult(True, path, (SUMMARY_SHEET,))
+        return WorkbookWriteResult(False, path, (), f"{sheet_name} 写回校验失败: {exc}")
+    return WorkbookWriteResult(True, path, (sheet_name,))
 
 
 def _copy_bytes(source: Path, destination: Path) -> None:

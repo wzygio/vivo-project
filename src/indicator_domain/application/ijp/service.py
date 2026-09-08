@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable
+from datetime import date, datetime, time, timedelta
 from typing import TypedDict
 
 import pandas as pd
@@ -10,23 +11,16 @@ import pandas as pd
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.ports import IjpDataPort
 from src.indicator_domain.core.ijp.overflow import (
-    IJP_EQUIPMENTS,
     IJP_LINES,
     IJP_RS_CODES,
-    PANEL_LOCATIONS,
 )
 
 
 class IjpFilterOptions(TypedDict):
     product_codes: tuple[str, ...]
-    product_names: tuple[str, ...]
-    sub_prod_types: tuple[str, ...]
     picis: tuple[str, ...]
-    cycles: tuple[str, ...]
     lines: tuple[str, ...]
-    equipments: tuple[str, ...]
     codes: tuple[str, ...]
-    panel_locations: tuple[str, ...]
 
 
 class IjpReportService:
@@ -34,17 +28,22 @@ class IjpReportService:
         self,
         data_port: IjpDataPort,
         enabled_product_codes: tuple[str, ...] = (),
+        work_order_types: tuple[str, ...] = (),
+        today_provider: Callable[[], date] | None = None,
     ) -> None:
         self._data_port = data_port
         self._enabled_product_codes = tuple(dict.fromkeys(enabled_product_codes))
+        self._work_order_types = tuple(dict.fromkeys(work_order_types))
+        self._today_provider = today_provider or date.today
+
+    def get_reporting_window(self) -> tuple[datetime, datetime]:
+        return build_reporting_window(self._today_provider())
 
     def get_filter_options(
         self,
-        start_time: datetime,
-        end_time: datetime,
         product_codes: tuple[str, ...] = (),
-        picis: tuple[str, ...] = (),
     ) -> IjpFilterOptions:
+        start_time, end_time = self.get_reporting_window()
         available_product_codes = self._data_port.list_product_codes()
         if self._enabled_product_codes:
             enabled = set(self._enabled_product_codes)
@@ -54,25 +53,13 @@ class IjpReportService:
         scoped_product_codes = self._scope_product_codes(product_codes)
         return {
             "product_codes": available_product_codes,
-            "product_names": self._data_port.list_product_names(
-                scoped_product_codes
-            ),
-            "sub_prod_types": self._data_port.list_sub_prod_types(),
             "picis": self._data_port.list_picis(
                 start_time,
                 end_time,
                 scoped_product_codes,
             ),
-            "cycles": self._data_port.list_cycles(
-                start_time,
-                end_time,
-                scoped_product_codes,
-                picis,
-            ),
             "lines": IJP_LINES,
-            "equipments": IJP_EQUIPMENTS,
             "codes": IJP_RS_CODES,
-            "panel_locations": PANEL_LOCATIONS,
         }
 
     def get_daily_ratios(self, query: IjpQuery) -> pd.DataFrame:
@@ -93,8 +80,23 @@ class IjpReportService:
         return tuple(code for code in product_codes if code in enabled)
 
     def _scope_query(self, query: IjpQuery) -> IjpQuery:
-        if not self._enabled_product_codes:
-            return query
+        start_time, end_time = self.get_reporting_window()
         return query.model_copy(
-            update={"product_codes": self._scope_product_codes(query.product_codes)}
+            update={
+                "start_time": start_time,
+                "end_time": end_time,
+                "product_codes": self._scope_product_codes(query.product_codes),
+                "work_order_types": self._work_order_types,
+            }
         )
+
+
+def build_reporting_window(today: date) -> tuple[datetime, datetime]:
+    """Return the inclusive window from last month's first day through today."""
+    current_month_start = today.replace(day=1)
+    previous_month_last = current_month_start - timedelta(days=1)
+    previous_month_start = previous_month_last.replace(day=1)
+    return (
+        datetime.combine(previous_month_start, time.min),
+        datetime.combine(today, time.max),
+    )

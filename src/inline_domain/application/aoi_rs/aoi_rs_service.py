@@ -17,7 +17,6 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_sheet_point_df,
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
-from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
 from src.inline_domain.application.shared.throughput_persistence import (
     persist_throughput_facts,
@@ -110,28 +109,6 @@ def _build_chart_points(
         product_revision=product_revision,
         decision_signature=decision_signature,
     )
-    if (
-        persist_shared_history
-        and coverage_start is not None
-        and coverage_end is not None
-        and not spec_df.empty
-    ):
-        build_oos_history_service().update_history(
-            "aoi_rs",
-            prod_code,
-            getattr(result, "decoration_df", pd.DataFrame()),
-            coverage_start=coverage_start,
-            coverage_end=coverage_end,
-        )
-    elif (
-        persist_shared_history
-        and coverage_start is not None
-        and coverage_end is not None
-    ):
-        logger.warning(
-            "[AOI_RS] Skip OOS history coverage update for %s: specifications are empty",
-            prod_code,
-        )
     if (
         persist_shared_history
         and coverage_start is not None
@@ -229,13 +206,6 @@ class AoiRsReportService:
                 if persist_shared_history and _covers_full_product(query_config):
                     product_dir = resolve_product_resource_dir(
                         query_config.prod_code, scope="aoi_rs"
-                    )
-                    build_oos_history_service().update_history(
-                        "aoi_rs",
-                        query_config.prod_code,
-                        pd.DataFrame(),
-                        coverage_start=coverage_start,
-                        coverage_end=coverage_end,
                     )
                     persist_ooc_facts(
                         scope="aoi_rs",

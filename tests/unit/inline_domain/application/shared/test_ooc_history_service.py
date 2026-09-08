@@ -23,7 +23,7 @@ def test_ooc_history_is_durable_and_false_decision_releases_alert(tmp_path) -> N
         }]
     )
     service = OocHistoryService(store, OosDecisionWorkbookRepository(resources))
-    service.update_history(
+    store.update(
         "spc", "M626", facts,
         coverage_start=pd.Timestamp("2026-09-01"),
         coverage_end=pd.Timestamp("2026-09-03"),
@@ -61,7 +61,7 @@ def test_ooc_admin_prefills_new_facts_with_default_true_decision(tmp_path) -> No
         ]
     )
     service = OocHistoryService(store, OosDecisionWorkbookRepository(resources))
-    service.update_history(
+    store.update(
         "spc", "M626", facts,
         coverage_start=pd.Timestamp("2026-09-01"),
         coverage_end=pd.Timestamp("2026-09-02"),

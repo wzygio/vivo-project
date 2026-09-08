@@ -23,7 +23,6 @@ from src.inline_domain.application.shared.decorated_data import (
     resolve_product_resource_dir,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
 from src.inline_domain.application.shared.throughput_persistence import (
     persist_throughput_facts,
@@ -154,13 +153,6 @@ def fetch_decorated_features(
             and prod_code in ConfigLoader.get_enabled_products()
         ):
             product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
-            build_oos_history_service().update_history(
-                normalized_scope,
-                prod_code,
-                pd.DataFrame(),
-                coverage_start=coverage_start,
-                coverage_end=coverage_end,
-            )
             persist_ooc_facts(
                 scope=normalized_scope,
                 prod_code=prod_code,
@@ -202,13 +194,6 @@ def fetch_decorated_features(
                 and prod_code in ConfigLoader.get_enabled_products()
             ):
                 product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
-                build_oos_history_service().update_history(
-                    normalized_scope,
-                    prod_code,
-                    pd.DataFrame(),
-                    coverage_start=coverage_start,
-                    coverage_end=coverage_end,
-                )
                 persist_ooc_facts(
                     scope=normalized_scope,
                     prod_code=prod_code,
@@ -254,13 +239,6 @@ def fetch_decorated_features(
     decoration_result = decorated_data.sheet_oos_decoration_result
     product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)
     if not spec_df.empty and persist_shared_history:
-        build_oos_history_service().update_history(
-            normalized_scope,
-            prod_code,
-            decoration_result.decoration_df,
-            coverage_start=coverage_start,
-            coverage_end=coverage_end,
-        )
         persist_ooc_facts(
             scope=normalized_scope,
             prod_code=prod_code,
@@ -278,7 +256,7 @@ def fetch_decorated_features(
         )
     elif spec_df.empty:
         logger.warning(
-            "[shared] Skip OOS history coverage update for %s/%s: specifications are empty",
+            "[shared] Skip OOC ledger update for %s/%s: specifications are empty",
             normalized_scope,
             prod_code,
         )

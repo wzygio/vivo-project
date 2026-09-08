@@ -33,8 +33,8 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    回退链：当月指定 → 最近上月指定 → 当月原始。若修饰表没有该月原始值，Code
    使用本次 Panel 明细按月汇总得到的原始月度良损；不再回落原始日度不良数。
    Group 无目标时不执行月度覆写。
-   存量"指定良损"由 `tools/backfill_modifier_table_specified.py` 一次性补全：
-   趋势图人工修正.xlsx（仅月度，left join）→ codebaseline.xlsx（baseline_month）。
+   历史存量迁移曾由 `tools/backfill_modifier_table_specified.py` 一次性完成；迁移结束后
+   该入口已停用，避免旧趋势/基线再次自动写入仅允许业务人工维护的“指定良损”。
 3. **日度生成器**（`mwd_trend/daily_generator.py`）：月中（15 日）锚点线性插值
    基线（跨月平滑无阶梯）+ blake2b 哈希白噪声（无周期、跨进程确定）+ 月内
    权重整数分配（同模块 `allocate_integer_counts`，单日 ≤ 当日投入，月合计精确
@@ -48,8 +48,9 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    `monthly_factors`，在位置修饰之后、级联衰减之前按 `(defect_desc, 批次月份)`
    确定性抽样/复制（`_SIM_M` 后缀）。级联代码零改动。Mapping 不良数 =
    defect_modifier（全局）× 缩放倍数（月度）× 级联衰减。为避免异常配置造成
-   行爆炸，非有限、负值或超过 10 倍的倍率记录错误并按 1.0 回退；正常业务倍率
-   通常小于 1。
+   行爆炸，非有限、负值或超过 10 倍的倍率记录错误并按 1.0 回退；趋势目标同样对
+   超过 10 倍的异常上调回退到当月原始良损，避免污染值绕过 Mapping 防线；正常
+   业务倍率通常小于 1。
 6. **当月良损口径 = 趋势图同款 panel 明细**（D5）：即 `defect_multipliers`
    修饰后的展示数据，使 Mapping 数学严格成立（展示原始 × 指定/展示原始 = 指定）。
 7. **缓存失效由产品 revision 统一控制**：页面不再以修饰表修改时间生成独立缓存键；

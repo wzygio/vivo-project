@@ -1,4 +1,4 @@
-"""Read-only OOS fact aggregation for the automatic-warning dashboard."""
+"""Aggregate cached alarm facts and publish the current workbook summary."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class OosMonitorViewModel:
 
 
 class OosMonitorService:
-    """Aggregate already-computed OOS facts without touching measurements/specs."""
+    """Aggregate facts via readers and render the persisted summary read model."""
 
     def __init__(
         self,

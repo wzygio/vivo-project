@@ -4,13 +4,36 @@ from types import SimpleNamespace
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
+import json
 
 import pandas as pd
+import pytest
+
+from src.shared_kernel.data_forward import DataForwardPolicy
+from src.inline_domain.infrastructure.shared.snapshot_window import IncompleteMonitorSnapshotError
 
 from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
     InlineMeasurementSnapshotRepository,
     MeasurementRefreshResult,
 )
+
+
+@pytest.fixture(autouse=True)
+def fixed_display_policy(monkeypatch):
+    monkeypatch.setattr(
+        "src.shared_kernel.config.ConfigLoader.get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
+
+
+def _write_coverage(snapshot_path):
+    snapshot_path.with_suffix(".policy").write_text(
+        InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION, encoding="utf-8",
+    )
+    snapshot_path.with_suffix(".snapshot.json").write_text(
+        json.dumps({"covered_from": "2026-01-01", "covered_through": "2026-08-13"}),
+        encoding="utf-8",
+    )
 
 
 def _raw_measurements() -> pd.DataFrame:
@@ -48,7 +71,7 @@ def test_repository_reuses_one_product_snapshot_for_repeated_reads(tmp_path) -> 
     first = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
     second = repository.get_measurements(prod_code="M678", end_date="2026-08-13")
 
-    assert calls == [("2026-05-01", "2026-08-13", "M678")]
+    assert calls == [("2026-01-01", "2026-08-13", "M678")]
     assert first.equals(second)
     assert first.loc[0, "lot_id"] == "LOT-1"
     assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-17 08:00:00")
@@ -87,6 +110,7 @@ def test_repository_falls_back_to_existing_snapshot_when_refresh_fails(tmp_path)
     snapshot_path = tmp_path / "inline_measurements_M678.parquet"
     stale = _raw_measurements().assign(lot_id="FALLBACK")
     stale.to_parquet(snapshot_path, index=False)
+    _write_coverage(snapshot_path)
     snapshot_path.with_suffix(".policy").write_text(
         InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION,
         encoding="utf-8",
@@ -115,6 +139,7 @@ def test_refresh_measurements_reports_fallback_as_not_refreshed(tmp_path) -> Non
     snapshot_path = tmp_path / "inline_measurements_M678.parquet"
     stale = _raw_measurements().assign(lot_id="FALLBACK")
     stale.to_parquet(snapshot_path, index=False)
+    _write_coverage(snapshot_path)
 
     def failing_loader(*_args) -> pd.DataFrame:
         raise RuntimeError("database unavailable")
@@ -197,3 +222,36 @@ def test_repository_coalesces_concurrent_first_reads(tmp_path) -> None:
     assert calls == 1
     assert all(result.loc[0, "lot_id"] == "LOT-1" for result in results)
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_old_short_snapshot_cannot_be_fallback_for_year_summary(tmp_path):
+    snapshot_path = tmp_path / "inline_measurements_M678.parquet"
+    _raw_measurements().to_parquet(snapshot_path, index=False)
+    snapshot_path.with_suffix(".policy").write_text("inline-measurement-raw-v2", encoding="utf-8")
+
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = InlineMeasurementSnapshotRepository(tmp_path, object(), measurement_loader=fail)
+    with pytest.raises(IncompleteMonitorSnapshotError, match="未覆盖"):
+        repository.get_measurements("M678", "2026-09-07")
+    assert snapshot_path.exists()
+
+
+def test_missing_snapshot_and_database_failure_is_not_zero_year_data(tmp_path):
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = InlineMeasurementSnapshotRepository(tmp_path, object(), measurement_loader=fail)
+    with pytest.raises(IncompleteMonitorSnapshotError):
+        repository.get_measurements("M678", "2026-09-07")
+
+
+def test_refresh_metadata_records_query_coverage_not_first_fact_time(tmp_path):
+    repository = InlineMeasurementSnapshotRepository(
+        tmp_path, object(), measurement_loader=lambda *args: _raw_measurements(),
+    )
+    repository.get_measurements("M678", "2026-08-13")
+    metadata = json.loads((tmp_path / "inline_measurements_M678.snapshot.json").read_text())
+    assert metadata["covered_from"] == "2026-01-01"
+    assert metadata["covered_through"] == "2026-08-13"

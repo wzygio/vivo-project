@@ -1,4 +1,4 @@
-"""Persist OOC decisions and update the shared durable fact history."""
+"""Persist the editable OOC decision ledger for subsequent live calculations."""
 
 from __future__ import annotations
 
@@ -6,14 +6,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.inline_domain.composition import build_ooc_history_service
 from src.inline_domain.core.shared.sheet_ooc_decoration import (
     SCOPE_OOC_DECORATION_FILE_NAME,
 )
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     persist_sheet_oos_decoration_outcome,
 )
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
 
 def persist_ooc_facts(
@@ -28,7 +26,7 @@ def persist_ooc_facts(
     product_revision: str = "",
     decision_signature: str = "",
 ) -> pd.DataFrame:
-    """Write the mutable ledger, then save flag-free facts to Parquet."""
+    """Write the mutable ledger; intermediate alarm results stay in cache."""
     outcome = persist_sheet_oos_decoration_outcome(
         product_dir,
         detail_df,
@@ -41,16 +39,5 @@ def persist_ooc_facts(
         # OOC decisions are independent from the OOS ledger/cache signature.
         # The repository computes the signature from this OOC workbook.
         decision_signature=None,
-    )
-    configured_dir = scope_resource_dir(scope)
-    history_service = build_ooc_history_service(
-        None if product_dir.resolve() == configured_dir.resolve() else product_dir
-    )
-    history_service.update_history(
-        scope,
-        prod_code,
-        outcome.decoration_df,
-        coverage_start=coverage_start,
-        coverage_end=coverage_end,
     )
     return outcome.decoration_df

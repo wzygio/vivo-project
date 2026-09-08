@@ -8,9 +8,21 @@ import os
 import threading
 
 import pandas as pd
+import pytest
+
+from src.shared_kernel.data_forward import DataForwardPolicy
+from src.inline_domain.infrastructure.shared.snapshot_window import IncompleteMonitorSnapshotError
 
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.infrastructure.aoi_rs.snapshot_repository import AoiRsSnapshotRepository
+
+
+@pytest.fixture(autouse=True)
+def fixed_display_policy(monkeypatch):
+    monkeypatch.setattr(
+        "src.shared_kernel.config.ConfigLoader.get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
 
 
 def _query() -> AoiRsQueryConfig:
@@ -72,7 +84,7 @@ def test_rs_details_reuse_fresh_product_snapshot_without_reloading_database(
     second = repository.get_rs_details(_query())
 
     assert loader_calls == [loader_calls[0]]
-    assert loader_calls[0].start_date == "2026-05-01"
+    assert loader_calls[0].start_date == "2026-01-01"
     assert loader_calls[0].end_date == "2026-08-10"
     pd.testing.assert_frame_equal(first, second)
     assert first.loc[0, "start_time"] == pd.Timestamp("2026-08-10 08:00:00")
@@ -357,3 +369,101 @@ def test_snapshot_missing_contract_columns_is_reloaded(tmp_path: Path) -> None:
 
     assert loader_calls == 2
     assert list(recovered.columns) == list(_details().columns)
+
+
+@pytest.mark.parametrize("method,prefix,frame", [
+    ("get_rs_details", "aoi_rs_details", _details),
+    ("get_pass_through", "aoi_rs_pass_through", _pass_through),
+])
+def test_annual_read_rejects_old_short_fallback(tmp_path, method, prefix, frame):
+    snapshot = tmp_path / f"{prefix}_M678.parquet"
+    frame().to_parquet(snapshot, index=False)
+    snapshot.with_suffix(".snapshot.json").write_text(
+        json.dumps({"policy_version": "old-policy", "covered_through": "2026-08-10"}),
+        encoding="utf-8",
+    )
+
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=fail, pass_through_loader=fail,
+    )
+    query = _query().model_copy(update={"start_date": "2026-01-01"})
+    with pytest.raises(IncompleteMonitorSnapshotError, match="未覆盖"):
+        getattr(repository, method)(query)
+    assert snapshot.exists()
+
+
+def test_annual_snapshot_metadata_covers_no_fact_months(tmp_path):
+    repository = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=lambda *args: _details(),
+    )
+    repository.get_rs_details(_query())
+    metadata = json.loads((tmp_path / "aoi_rs_details_M678.snapshot.json").read_text())
+    assert metadata["covered_from"] == "2026-01-01"
+
+
+@pytest.mark.parametrize("method,prefix", [
+    ("get_rs_details", "aoi_rs_details"),
+    ("get_pass_through", "aoi_rs_pass_through"),
+])
+def test_covered_but_corrupt_annual_snapshot_cannot_be_zero_fallback(tmp_path, method, prefix):
+    snapshot = tmp_path / f"{prefix}_M678.parquet"
+    snapshot.write_bytes(b"not parquet")
+    snapshot.with_suffix(".snapshot.json").write_text(json.dumps({
+        "policy_version": AoiRsSnapshotRepository.SNAPSHOT_POLICY_VERSION,
+        "covered_from": "2026-01-01", "covered_through": "2026-08-10",
+    }), encoding="utf-8")
+
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=fail, pass_through_loader=fail,
+    )
+    query = _query().model_copy(update={"start_date": "2026-01-01"})
+    with pytest.raises(IncompleteMonitorSnapshotError, match="损坏"):
+        getattr(repository, method)(query)
+
+
+@pytest.mark.parametrize("end_date", ["2027-01-07", "2027-02-07"])
+@pytest.mark.parametrize("corrupt", [False, True])
+@pytest.mark.parametrize("method,prefix", [
+    ("get_rs_details", "aoi_rs_details"),
+    ("get_pass_through", "aoi_rs_pass_through"),
+])
+def test_explicit_monitor_coverage_is_required_in_early_year(
+    tmp_path, end_date, corrupt, method, prefix,
+):
+    if corrupt:
+        snapshot = tmp_path / f"{prefix}_M678.parquet"
+        snapshot.write_bytes(b"corrupt parquet")
+        snapshot.with_suffix(".snapshot.json").write_text(json.dumps({
+            "policy_version": AoiRsSnapshotRepository.SNAPSHOT_POLICY_VERSION,
+            "covered_from": "2026-10-01", "covered_through": end_date,
+        }), encoding="utf-8")
+
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=fail, pass_through_loader=fail,
+        require_complete_coverage=True,
+    )
+    query = AoiRsQueryConfig(prod_code="M678", start_date="2027-01-01", end_date=end_date)
+    with pytest.raises(IncompleteMonitorSnapshotError):
+        getattr(repository, method)(query)
+
+
+def test_ordinary_report_keeps_early_year_empty_fallback(tmp_path):
+    def fail(*args):
+        raise RuntimeError("database unavailable")
+
+    repository = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=fail, pass_through_loader=fail,
+        require_complete_coverage=False,
+    )
+    query = AoiRsQueryConfig(prod_code="M678", start_date="2027-01-01", end_date="2027-02-07")
+    assert repository.get_rs_details(query).empty
+    assert repository.get_pass_through(query).empty

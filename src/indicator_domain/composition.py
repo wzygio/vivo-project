@@ -41,4 +41,5 @@ def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
     return IjpReportService(
         build_ijp_repository(db_manager),
         enabled_product_codes=tuple(ConfigLoader.get_enabled_products()),
+        work_order_types=tuple(ConfigLoader.get_work_order_types()),
     )

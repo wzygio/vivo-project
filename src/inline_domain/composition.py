@@ -39,15 +39,8 @@ from src.shared_kernel.config import ConfigLoader
 
 def build_oos_history_service(resource_dir: Path | None = None):
     """Assemble the shared OOS use case at the composition boundary."""
-    project_root = ConfigLoader.get_project_root()
     resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
-    snapshot_dir = (
-        project_root / "data" / "inline_domain" / "oos_history"
-        if resource_dir is None
-        else Path(resource_dir) / ".oos_history"
-    )
     return _build_oos_history_service(
-        str(snapshot_dir),
         str(resolved_resources),
         resource_dir is None,
     )
@@ -55,15 +48,8 @@ def build_oos_history_service(resource_dir: Path | None = None):
 
 def build_ooc_history_service(resource_dir: Path | None = None):
     """Assemble the shared OOC use case at the composition boundary."""
-    project_root = ConfigLoader.get_project_root()
     resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
-    snapshot_dir = (
-        project_root / "data" / "inline_domain" / "ooc_history"
-        if resource_dir is None
-        else Path(resource_dir) / ".ooc_history"
-    )
     return _build_ooc_history_service(
-        str(snapshot_dir),
         str(resolved_resources),
         resource_dir is None,
     )
@@ -121,10 +107,10 @@ def _build_throughput_history_service(snapshot_dir: str):
 
 @lru_cache(maxsize=16)
 def _build_ooc_history_service(
-    snapshot_dir: str, resource_dir: str, use_configured_paths: bool
+    resource_dir: str, use_configured_paths: bool
 ):
     from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
-    from src.inline_domain.infrastructure.shared.ooc_history_store import OocHistoryStore
+    from src.inline_domain.application.monitor.live_history import LiveHistoryStore
     from src.inline_domain.infrastructure.shared.oos_decision_repository import (
         OosDecisionWorkbookRepository,
     )
@@ -136,7 +122,7 @@ def _build_ooc_history_service(
     configured = decision_workbook_paths("ooc") if use_configured_paths else {}
 
     return OocHistoryService(
-        OocHistoryStore(Path(snapshot_dir)),
+        LiveHistoryStore(build_live_monitor_source(None if use_configured_paths else Path(resource_dir)), "ooc"),
         OosDecisionWorkbookRepository(
             Path(resource_dir),
             file_paths={SCOPE_OOC_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
@@ -146,24 +132,69 @@ def _build_ooc_history_service(
 
 @lru_cache(maxsize=16)
 def _build_oos_history_service(
-    snapshot_dir: str, resource_dir: str, use_configured_paths: bool
+    resource_dir: str, use_configured_paths: bool
 ):
     from src.inline_domain.application.shared.oos_history_service import OosHistoryService
     from src.inline_domain.infrastructure.shared.oos_decision_repository import (
         OosDecisionWorkbookRepository,
     )
-    from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+    from src.inline_domain.application.monitor.live_history import LiveHistoryStore
     from src.inline_domain.application.shared.oos_history_service import SCOPE_DECORATION_FILE_NAME
     from src.inline_domain.infrastructure.shared.resource_paths import decision_workbook_paths
 
     configured = decision_workbook_paths("oos") if use_configured_paths else {}
 
     return OosHistoryService(
-        OosHistoryStore(Path(snapshot_dir)),
+        LiveHistoryStore(build_live_monitor_source(None if use_configured_paths else Path(resource_dir)), "oos"),
         OosDecisionWorkbookRepository(
             Path(resource_dir),
             file_paths={SCOPE_DECORATION_FILE_NAME[scope]: path for scope, path in configured.items()},
         ),
+    )
+
+
+def build_live_monitor_source(resource_dir: Path | None = None):
+    from src.inline_domain.application.monitor.live_source import LiveMonitorSource
+    from src.inline_domain.infrastructure.monitor.input_signature import monitor_input_signature
+    from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+
+    resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+
+    def port_factory(scope: str, product: str):
+        db = DatabaseManager()
+        if scope in {"spc", "ctq"}:
+            return build_spc_repository(db, product)
+        if scope == "aoi_tt":
+            return build_aoi_tt_repository(db, product)
+        if scope == "aoi_rs":
+            return build_aoi_rs_repository(db, product, require_complete_coverage=True)
+        raise ValueError(f"Unsupported Inline scope: {scope}")
+
+    return LiveMonitorSource(
+        port_factory=port_factory,
+        signature_provider=lambda products: monitor_input_signature(
+            ConfigLoader.get_project_root(), Path(resources), products,
+        ),
+        resource_dir_provider=(lambda scope: Path(resource_dir)) if resource_dir else scope_resource_dir,
+    )
+
+
+def build_live_throughput_reader():
+    from src.inline_domain.application.monitor.live_source import LiveThroughputReader
+
+    return LiveThroughputReader(build_live_monitor_source())
+
+
+def build_cpk_monitor_service(resource_dir: Path | None = None):
+    from src.inline_domain.application.monitor.cpk_monitor_service import CpkMonitorService
+    from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
+    from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+
+    resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+    return CpkMonitorService(
+        build_live_monitor_source(resource_dir),
+        CpkSummaryWorkbookStore(Path(resources) / "monitor" / "北极星报警率与CPK汇总.xlsx"),
+        product_resource_root=Path(resource_dir) if resource_dir else scope_resource_dir("spc"),
     )
 
 
@@ -222,10 +253,13 @@ def build_aoi_tt_repository(db_manager: DatabaseManager, prod_code: str) -> AoiT
 def build_aoi_rs_repository(
     db_manager: DatabaseManager,
     prod_code: str,
+    *,
+    require_complete_coverage: bool = False,
 ) -> AoiRsSnapshotRepository:
     return AoiRsSnapshotRepository(
         snapshot_dir=Path("data") / prod_code,
         db_manager=db_manager,
+        require_complete_coverage=require_complete_coverage,
     )
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 import hashlib
 from pathlib import Path
 from typing import Iterable, Protocol
@@ -66,16 +65,6 @@ class OosHistoryStorePort(Protocol):
     def contract_for(self, scope: str) -> OosScopeContract: ...
     def snapshot_path(self, scope: str, prod_code: str) -> Path: ...
     def read(self, scope: str, prod_code: str) -> OosHistorySnapshot | None: ...
-    def update(
-        self,
-        scope: str,
-        prod_code: str,
-        facts: pd.DataFrame,
-        *,
-        coverage_start: pd.Timestamp,
-        coverage_end: pd.Timestamp,
-        refreshed_at: datetime | None = None,
-    ) -> OosHistorySnapshot: ...
 
 
 class OosDecisionLedgerPort(Protocol):
@@ -92,7 +81,11 @@ class OosDecisionLedgerPort(Protocol):
 
 
 class OosHistoryService:
-    """Coordinate durable facts with the mutable Excel decision ledger."""
+    """Join cache-computed facts with the mutable Excel decision ledger.
+
+    The historical class name remains for existing report consumers. Production
+    composition uses LiveHistoryStore and never persists OOS/OOC decisions.
+    """
 
     def __init__(
         self,
@@ -101,25 +94,6 @@ class OosHistoryService:
     ) -> None:
         self._store = store
         self._decisions = decisions
-
-    def update_history(
-        self,
-        scope: str,
-        prod_code: str,
-        detail_df: pd.DataFrame,
-        *,
-        coverage_start: pd.Timestamp,
-        coverage_end: pd.Timestamp,
-        refreshed_at: datetime | None = None,
-    ) -> None:
-        self._store.update(
-            scope,
-            prod_code,
-            detail_df.drop(columns=["flag"], errors="ignore"),
-            coverage_start=coverage_start,
-            coverage_end=coverage_end,
-            refreshed_at=refreshed_at,
-        )
 
     @staticmethod
     def inclusive_date_window(
@@ -148,7 +122,7 @@ class OosHistoryService:
             decorated = merge_detail_with_decoration_flags(
                 snapshot.frame, decisions, contract.key_columns
             )
-            source = "history"
+            source = "computed_cache" if getattr(self._store, "is_computed_cache", False) else "history"
             refreshed_at = pd.to_datetime(snapshot.metadata.refreshed_at, errors="coerce")
             refreshed_at = None if pd.isna(refreshed_at) else refreshed_at
             metadata = snapshot.metadata
@@ -172,6 +146,8 @@ class OosHistoryService:
         )
 
     def has_history(self, scope: str, prod_code: str) -> bool:
+        if getattr(self._store, "is_computed_cache", False):
+            return True
         return self._store.snapshot_path(scope, prod_code).exists()
 
     def scope_contract(self, scope: str):
@@ -185,6 +161,8 @@ class OosHistoryService:
     def _source_signature_with_files(
         self, products: list[str], scopes: list[str], file_names: dict[str, str]
     ) -> str:
+        if getattr(self._store, "is_computed_cache", False):
+            return self._store.source_signature(products, scopes)
         parts: list[str] = []
         for scope in sorted(set(scopes)):
             workbook = self._decisions.source_path(file_names[scope])

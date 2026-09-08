@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
+from src.shared_kernel.data_forward import DataForwardPolicy
 
 START = datetime(2026, 8, 31, 7, 0)
 END = datetime(2026, 9, 1, 7, 0)
@@ -125,7 +126,12 @@ def _build_engine():
 
 
 def _repository(engine) -> IjpRepository:
-    return IjpRepository(SimpleNamespace(engine=engine))
+    repository = IjpRepository(SimpleNamespace(engine=engine))
+    repository._data_forward_policy = DataForwardPolicy(  # noqa: SLF001
+        enabled=True,
+        offset_days=4,
+    )
+    return repository
 
 
 def _query(**overrides) -> IjpQuery:
@@ -167,24 +173,14 @@ def test_fetch_details_applies_whitelists_closed_interval_and_ratio_contract() -
     assert g2["code_ratio"].tolist() == [1.0]
 
 
-def test_fetch_details_honours_every_optional_filter() -> None:
+def test_fetch_details_honours_supported_optional_filters() -> None:
     repository = _repository(_build_engine())
 
     assert set(repository.fetch_details(_query(lines=("3CEE02",)))["glass_id"]) == {"G2"}
-    assert set(repository.fetch_details(_query(equipments=("3CEE04-IKT-PRT",)))["glass_id"]) == {"G6", "G7"}
     assert set(repository.fetch_details(_query(codes=("C3RA1",)))["rs_code"]) == {"C3RA1"}
-    assert set(repository.fetch_details(_query(glass_ids=("G2",)))["glass_id"]) == {"G2"}
-    assert set(repository.fetch_details(_query(product_names=("SPEC2",)))["glass_id"]) == {"G2"}
     assert set(repository.fetch_details(_query(product_codes=("M678",)))["glass_id"]) == {"G2"}
-    assert set(repository.fetch_details(_query(sub_prod_types=("E",)))["glass_id"]) == {"G2"}
+    assert set(repository.fetch_details(_query(work_order_types=("E",)))["glass_id"]) == {"G2"}
     assert set(repository.fetch_details(_query(picis=("LOT2",)))["glass_id"]) == {"G2"}
-    assert set(repository.fetch_details(_query(cycles=("CYC2",)))["glass_id"]) == {"G2"}
-
-    bottom = repository.fetch_details(_query(panel_locations=("BOTTOM",)))
-    assert sorted(bottom["panel_location"].unique()) == ["BOTTOM", "BOTTOM0"]
-    assert set(bottom["glass_id"]) == {"G1"}
-    kong = repository.fetch_details(_query(panel_locations=("LEFTTOP",)))
-    assert set(kong["glass_id"]) == {"G2"}
 
 
 def test_fetch_details_limits_the_result_and_reports_truncation_size() -> None:
@@ -196,32 +192,49 @@ def test_fetch_details_limits_the_result_and_reports_truncation_size() -> None:
     assert len(details) <= 6
 
 
-def test_fetch_daily_ratios_expands_the_start_by_seven_days() -> None:
+def test_fetch_daily_ratios_uses_the_query_window_without_lookback() -> None:
     repository = _repository(_build_engine())
 
     ratios = repository.fetch_daily_ratios(_query(codes=("C3DM1",)))
 
-    assert list(ratios.columns) == ["day", "rs_code", "code_num", "ratio"]
-    # G5（2026-08-29）落在扩窗 7 天内 → 出现在 By天 聚合但不在明细中
-    assert set(ratios["day"]) == {"2026-08-29", "2026-08-31"}
+    assert list(ratios.columns) == [
+        "productcode",
+        "line",
+        "printer",
+        "day",
+        "rs_code",
+        "code_num",
+        "ratio",
+    ]
+    # G5（显示日 2026-08-29）早于查询起点，不再额外向前扩窗。
+    assert set(ratios["day"]) == {"2026-08-31"}
     by_day = ratios.set_index("day")
-    assert by_day.loc["2026-08-29", "code_num"] == 1
-    assert by_day.loc["2026-08-29", "ratio"] == 1.0
     assert by_day.loc["2026-08-31", "code_num"] == 2
     assert by_day.loc["2026-08-31", "ratio"] == 1.0
+
+
+def test_fetch_daily_ratios_are_normalized_per_product_line_and_printer() -> None:
+    repository = _repository(_build_engine())
+
+    ratios = repository.fetch_daily_ratios(_query())
+
+    totals = ratios.groupby(["productcode", "line", "printer", "day"])[
+        "ratio"
+    ].sum()
+    assert all(total == pytest.approx(1.0, abs=0.001) for total in totals)
+    assert set(ratios["printer"]) == {
+        "3CEE01-IK2-PR1",
+        "3CEE02-IK2-PR2",
+        "3CEE04-IKT-PRT",
+    }
 
 
 def test_filter_option_queries_follow_the_finereport_datasets() -> None:
     repository = _repository(_build_engine())
 
     assert repository.list_product_codes() == ("M626", "M678")
-    assert repository.list_product_names(()) == ("PROD-A", "PROD-B")
-    assert repository.list_product_names(("M678",)) == ("PROD-B",)
-    assert repository.list_sub_prod_types() == ("E", "P")
     assert repository.list_picis(START, END, ()) == ("LOT1", "LOT2")
     assert repository.list_picis(START, END, ("M678",)) == ("LOT2",)
-    assert repository.list_cycles(START, END, (), ()) == ("CYC1", "CYC2")
-    assert repository.list_cycles(START, END, (), ("LOT1",)) == ("CYC1",)
 
 
 def test_database_failures_are_exposed_as_a_safe_domain_error() -> None:

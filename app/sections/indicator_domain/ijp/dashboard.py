@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import datetime
 
 import pandas as pd
 from pydantic import ValidationError
@@ -25,21 +25,7 @@ TABLE_COLUMN_MAP = {
 }
 RESULT_STATE_KEY = "ijp_report_result"
 DETAIL_LIMIT = 5000
-TARGET_HELP = (
-    "在“OLED RS Overflow By天”图中绘制一条水平参考线。"
-    "它只用于目视对照，不筛选数据，也不会触发告警。"
-)
-
-
-def date_range_to_datetimes(
-    start_date: date,
-    end_date: date,
-) -> tuple[datetime, datetime]:
-    """Convert inclusive calendar dates to their complete datetime bounds."""
-    return (
-        datetime.combine(start_date, time.min),
-        datetime.combine(end_date, time.max),
-    )
+CHARTS_PER_ROW = 3
 
 
 def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
@@ -64,68 +50,24 @@ def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
 def render_ijp_dashboard(service: IjpReportService) -> None:
     """Render filters, gated query results, and explicit operational states."""
     st.subheader("OLED IJP 溢流监控", anchor=False, text_alignment="center")
-    default_end = date.today()
-    default_start = default_end - timedelta(days=1)
+    start_time, end_time = service.get_reporting_window()
 
     with st.container(border=True):
-        start_column, end_column, target_column, search_column = st.columns(
-            [1.2, 1.2, 0.8, 0.6]
+        st.caption(
+            f"数据范围：{start_time:%Y/%m/%d} 至 {end_time:%Y/%m/%d}"
+            "（固定为上月 1 日至今天）"
         )
-        with start_column:
-            start_date = st.date_input(
-                "开始日期",
-                value=default_start,
-                key="ijp_start_time",
-                format="YYYY/MM/DD",
-                width="stretch",
-            )
-        with end_column:
-            end_date = st.date_input(
-                "结束日期",
-                value=default_end,
-                key="ijp_end_time",
-                format="YYYY/MM/DD",
-                width="stretch",
-            )
-        with target_column:
-            target = st.number_input(
-                "Target值（%）",
-                value=None,
-                min_value=0.0,
-                max_value=100.0,
-                placeholder="不填不画",
-                help=TARGET_HELP,
-                key="ijp_target",
-                width="stretch",
-            )
-        with search_column:
-            st.write("")
-            st.write("")
-            should_query = st.button(
-                "查询",
-                type="primary",
-                width="stretch",
-                key="ijp_search",
-            )
-
-        start_time, end_time = date_range_to_datetimes(start_date, end_date)
-        if end_date < start_date:
-            st.error("结束日期不能早于开始日期")
-            return
 
         try:
             options = service.get_filter_options(
-                start_time,
-                end_time,
                 tuple(st.session_state.get("ijp_product_codes", [])),
-                tuple(st.session_state.get("ijp_picis", [])),
             )
         except IjpDataAccessError as exc:
             st.error(str(exc))
             return
 
-        code_column, name_column, type_column, glass_column = st.columns(4)
-        with code_column:
+        product_column, line_column, code_column, pici_column = st.columns(4)
+        with product_column:
             _retain_available_multiselect_values(
                 "ijp_product_codes",
                 options["product_codes"],
@@ -133,55 +75,27 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             product_codes = st.multiselect(
                 "产品型号", options=options["product_codes"], key="ijp_product_codes"
             )
-        with name_column:
-            product_names = st.multiselect(
-                "产品名称", options=options["product_names"], key="ijp_product_names"
-            )
-        with type_column:
-            sub_prod_types = st.multiselect(
-                "工单类型", options=options["sub_prod_types"], key="ijp_sub_prod_types"
-            )
-        with glass_column:
-            glass_ids = st.text_input(
-                "GlassID（多个用逗号分隔）", key="ijp_glass_ids"
-            )
-
-        line_column, equip_column, rs_column, border_column = st.columns(4)
         with line_column:
             lines = st.multiselect("线体", options=options["lines"], key="ijp_lines")
-        with equip_column:
-            equipments = st.multiselect(
-                "设备", options=options["equipments"], key="ijp_equipments"
-            )
-        with rs_column:
+        with code_column:
             codes = st.multiselect("CODE", options=options["codes"], key="ijp_codes")
-        with border_column:
-            panel_locations = st.multiselect(
-                "边框", options=options["panel_locations"], key="ijp_panel_locations"
-            )
 
-        pici_column, cycle_column, _pad = st.columns([1, 1, 2])
         with pici_column:
             picis = st.multiselect("批次", options=options["picis"], key="ijp_picis")
-        with cycle_column:
-            cycles = st.multiselect(
-                "Cycle", options=options["cycles"], key="ijp_cycles"
-            )
+        should_query = st.button(
+            "查询",
+            type="primary",
+            width="stretch",
+            key="ijp_search",
+        )
 
     signature = _filter_signature(
         start_time,
         end_time,
         product_codes,
-        product_names,
-        sub_prod_types,
-        glass_ids,
         lines,
-        equipments,
         codes,
-        panel_locations,
         picis,
-        cycles,
-        target,
     )
     if should_query:
         _run_query(
@@ -189,16 +103,9 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             start_time=start_time,
             end_time=end_time,
             product_codes=product_codes,
-            product_names=product_names,
-            sub_prod_types=sub_prod_types,
-            glass_ids=glass_ids,
             lines=lines,
-            equipments=equipments,
             codes=codes,
-            panel_locations=panel_locations,
             picis=picis,
-            cycles=cycles,
-            target=target,
             signature=signature,
         )
 
@@ -213,12 +120,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
 
     ratios = stored["ratios"]
     if not ratios.empty:
-        with st.container(border=True):
-            st.plotly_chart(
-                build_ijp_daily_figure(ratios, stored["target"]),
-                width="stretch",
-                key="ijp_daily_chart",
-            )
+        _render_grouped_daily_charts(ratios)
 
     if len(details) >= stored["limit"]:
         st.caption(f"明细仅展示前 {stored['limit']} 行（已截断），请缩小筛选范围。")
@@ -243,16 +145,9 @@ def _run_query(
     start_time: datetime,
     end_time: datetime,
     product_codes: list[str],
-    product_names: list[str],
-    sub_prod_types: list[str],
-    glass_ids: str,
     lines: list[str],
-    equipments: list[str],
     codes: list[str],
-    panel_locations: list[str],
     picis: list[str],
-    cycles: list[str],
-    target: float | None,
     signature: tuple[object, ...],
 ) -> None:
     try:
@@ -260,16 +155,9 @@ def _run_query(
             start_time=start_time,
             end_time=end_time,
             product_codes=tuple(product_codes),
-            product_names=tuple(product_names),
-            sub_prod_types=tuple(sub_prod_types),
-            glass_ids=glass_ids,
             lines=tuple(lines),
-            equipments=tuple(equipments),
             codes=tuple(codes),
-            panel_locations=tuple(panel_locations),
             picis=tuple(picis),
-            cycles=tuple(cycles),
-            target=target,
             detail_limit=DETAIL_LIMIT,
         )
         ratios = service.get_daily_ratios(query)
@@ -286,13 +174,58 @@ def _run_query(
         "signature": signature,
         "details": details,
         "ratios": ratios,
-        "target": target,
         "limit": query.detail_limit,
     }
 
 
 def _filter_signature(*values: object) -> tuple[object, ...]:
     return tuple(tuple(value) if isinstance(value, list) else value for value in values)
+
+
+def _render_grouped_daily_charts(ratios: pd.DataFrame) -> None:
+    required = {"productcode", "line", "printer"}
+    grouped = ratios.dropna(subset=list(required))
+    for product_index, (product, product_frame) in enumerate(
+        grouped.groupby("productcode", sort=True)
+    ):
+        with st.expander(f"产品：{product}", expanded=True):
+            for line_index, (line, line_frame) in enumerate(
+                product_frame.groupby("line", sort=True)
+            ):
+                with st.expander(f"线体：{line}", expanded=True):
+                    printers = tuple(sorted(line_frame["printer"].unique()))
+                    for row_index, printer_row in enumerate(
+                        _chunked(printers, CHARTS_PER_ROW)
+                    ):
+                        columns = st.columns(len(printer_row))
+                        for column, printer_index, printer in zip(
+                            columns,
+                            range(len(printer_row)),
+                            printer_row,
+                            strict=False,
+                        ):
+                            printer_frame = line_frame[
+                                line_frame["printer"] == printer
+                            ]
+                            with column:
+                                st.plotly_chart(
+                                    build_ijp_daily_figure(
+                                        printer_frame,
+                                        title=str(printer),
+                                    ),
+                                    width="stretch",
+                                    key=(
+                                        "ijp_daily_chart_"
+                                        f"{product_index}_{line_index}_"
+                                        f"{row_index}_{printer_index}"
+                                    ),
+                                )
+
+
+def _chunked(values: tuple[str, ...], size: int) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        values[index : index + size] for index in range(0, len(values), size)
+    )
 
 
 def _retain_available_multiselect_values(

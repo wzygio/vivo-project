@@ -41,6 +41,32 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 读取全局产品列表失败: {e}")
             return ["M678"] # 最后的防线
+
+    @classmethod
+    def get_work_order_types(cls) -> List[str]:
+        """Return the global work-order allowlist used by report queries."""
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        global_conf = cls._load_yaml(yaml_path)
+        data_source = global_conf.get("data_source", {})
+        if not isinstance(data_source, dict):
+            raise ValueError("global.yaml: 'data_source' must be a mapping")
+        configured = data_source.get("work_order_types", [])
+        if not isinstance(configured, list):
+            raise ValueError(
+                "global.yaml: 'data_source.work_order_types' must be a list"
+            )
+        normalized = tuple(
+            dict.fromkeys(
+                str(value).strip()
+                for value in configured
+                if value is not None and str(value).strip()
+            )
+        )
+        if not normalized:
+            raise ValueError(
+                "global.yaml: 'data_source.work_order_types' must not be empty"
+            )
+        return list(normalized)
         
     @staticmethod
     def get_project_root() -> Path:
@@ -275,6 +301,24 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 读取 SPC 周期箱线图数据源配置失败: {e}")
             return "point_value"
+
+    @classmethod
+    def get_spc_capability_param_exemptions(cls) -> list[str]:
+        """Read parameter-name tokens excluded from both SPC capability metrics."""
+        try:
+            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            capability_conf = spc_conf.get("spc_cpk", {})
+            configured_values = capability_conf.get("exempt_param_name_contains", [])
+            if not isinstance(configured_values, list):
+                return []
+            return [
+                str(value).strip()
+                for value in configured_values
+                if value is not None and str(value).strip()
+            ]
+        except Exception as exc:
+            logging.error("❌ 读取 SPC 能力指标参数豁免配置失败: %s", exc)
+            return []
 
     @classmethod
     def get_spc_line_chart_param_name_contains(cls) -> list[str]:

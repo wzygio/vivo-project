@@ -7,21 +7,21 @@ import pandas as pd
 from src.inline_domain.application.shared import ooc_decoration_service as module
 
 
-def test_explicit_resource_override_isolates_ooc_history(monkeypatch, tmp_path) -> None:
+def test_ooc_persistence_only_updates_editable_ledger(monkeypatch, tmp_path) -> None:
     captured: list[object] = []
-    fake_history = SimpleNamespace(update_history=lambda *_args, **_kwargs: None)
+    expected = pd.DataFrame([{"prod_code": "M626", "flag": "False"}])
+
+    def persist(product_dir, detail_df, **kwargs):
+        captured.append((product_dir, kwargs["file_name"]))
+        return SimpleNamespace(decoration_df=expected)
+
     monkeypatch.setattr(
         module,
-        "build_ooc_history_service",
-        lambda resource_dir=None: captured.append(resource_dir) or fake_history,
-    )
-    monkeypatch.setattr(
-        module,
-        "scope_resource_dir",
-        lambda _scope: tmp_path / "production-resources",
+        "persist_sheet_oos_decoration_outcome",
+        persist,
     )
 
-    module.persist_ooc_facts(
+    result = module.persist_ooc_facts(
         scope="spc",
         prod_code="M626",
         detail_df=pd.DataFrame(),
@@ -31,4 +31,8 @@ def test_explicit_resource_override_isolates_ooc_history(monkeypatch, tmp_path) 
         coverage_end=pd.Timestamp("2026-09-02"),
     )
 
-    assert captured == [tmp_path / "isolated-resources"]
+    assert captured == [
+        (tmp_path / "isolated-resources", module.SCOPE_OOC_DECORATION_FILE_NAME["spc"])
+    ]
+    pd.testing.assert_frame_equal(result, expected)
+    assert not list(tmp_path.rglob("*.parquet"))

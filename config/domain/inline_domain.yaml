@@ -3,19 +3,17 @@ spc:
     # sheet_mean: original mode, sigma uses period Sheet Mean std.
     # point_value: hidden comparison mode, sigma uses period point-level param_value std.
     period_sigma_source: "point_value"
-    # sheet_mean: one Sheet Mean per Sheet
-    # point_value: every valid measurement point.
     period_box_source: "point_value"
+    # 参数名包含任一普通文本时，不计算 CPK/CPM；匹配不区分大小写。
+    exempt_param_name_contains:
+      - "PPA"
 
-
-  # Sheet 点位图样式由前端按参数名决定；匹配不区分大小写，按普通文本处理。
+  # Sheet 点位图样式：使用折线图而非箱线图；匹配不区分大小写，按普通文本处理
   chart:
     line_param_name_contains:
       - "UNI"
 
-# Inline 共享自动修饰参数豁免：AOI_TT 与 AOI_RS 均消费该规则。
-# 参数名包含任一配置值时保留真实值；Delete 仍优先。
-# 匹配不区分大小写，按普通文本而非正则表达式处理。
+# Inline 共享自动修饰参数豁免：AOI_TT 与 AOI_RS 均消费该规则。匹配不区分大小写。
 auto_decoration:
   exempt_param_name_contains:
     - "PPA"

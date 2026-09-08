@@ -192,7 +192,7 @@ def render_oos_refresh_status(status_df: pd.DataFrame) -> None:
     status["refreshed_at"] = status["refreshed_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     status["refreshed_at"] = status["refreshed_at"].fillna("从未刷新")
     status["source"] = status["source"].map(
-        {"history": "长期历史", "workbook_fallback": "当前工作簿", "missing": "无数据"}
+        {"computed_cache": "计算缓存", "history": "长期历史", "workbook_fallback": "当前工作簿", "missing": "无数据"}
     ).fillna(status["source"])
     st.dataframe(
         status.rename(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -17,10 +18,8 @@ for import_path in (project_root, project_root / "src"):
 from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.core.ijp.overflow import (
-    IJP_EQUIPMENTS,
     IJP_LINES,
     IJP_RS_CODES,
-    PANEL_LOCATIONS,
 )
 
 _SAFE_ERROR = "IJP 溢流数据读取失败，请联系系统管理员确认数据库权限。"
@@ -76,6 +75,16 @@ def _fixture_location(rs_code: str, suffix: str) -> str:
 def _ratios() -> pd.DataFrame:
     return pd.DataFrame(
         {
+            "productcode": ["M626", "M626", "M626", "M626", "M626", "M678"],
+            "line": ["3CEE01", "3CEE01", "3CEE01", "3CEE01", "3CEE02", "3CEE04"],
+            "printer": [
+                "3CEE01-IK2-PR1",
+                "3CEE01-IK2-PR1",
+                "3CEE01-IK2-PR1",
+                "3CEE01-IK2-PR2",
+                "3CEE02-IK2-PR1",
+                "3CEE04-IKT-PRT",
+            ],
             "day": [
                 "2026-08-30", "2026-08-30",
                 "2026-08-31", "2026-08-31", "2026-08-31",
@@ -83,7 +92,7 @@ def _ratios() -> pd.DataFrame:
             ],
             "rs_code": ["C3DM1", "C3RA1", "C3DM1", "C3RA1", "C3BH1", "C3DM3"],
             "code_num": [2, 1, 2, 1, 1, 1],
-            "ratio": [0.667, 0.333, 0.5, 0.25, 0.25, 1.0],
+            "ratio": [0.667, 0.333, 1.0, 1.0, 1.0, 1.0],
         }
     )
 
@@ -91,29 +100,37 @@ def _ratios() -> pd.DataFrame:
 class FixtureIjpService:
     """正常/空/错误三分支：M678 触发错误，CODE=C3BH2 触发空结果。"""
 
+    def get_reporting_window(self) -> tuple[datetime, datetime]:
+        return (
+            datetime(2026, 8, 1),
+            datetime(2026, 9, 7, 23, 59, 59, 999999),
+        )
+
     def get_filter_options(
         self,
-        start_time,
-        end_time,
         product_codes=(),
-        picis=(),
     ) -> dict[str, tuple[str, ...]]:
         return {
             "product_codes": ("M626", "M678"),
-            "product_names": ("PROD-B",) if product_codes == ("M678",) else ("PROD-A", "PROD-B"),
-            "sub_prod_types": ("E", "P"),
             "picis": ("LOT1", "LOT2"),
-            "cycles": ("CYC1", "CYC2"),
             "lines": IJP_LINES,
-            "equipments": IJP_EQUIPMENTS,
             "codes": IJP_RS_CODES,
-            "panel_locations": PANEL_LOCATIONS,
         }
 
     def get_daily_ratios(self, query) -> pd.DataFrame:
         self._guard(query)
         if query.codes == ("C3BH2",):
-            return pd.DataFrame(columns=["day", "rs_code", "code_num", "ratio"])
+            return pd.DataFrame(
+                columns=[
+                    "productcode",
+                    "line",
+                    "printer",
+                    "day",
+                    "rs_code",
+                    "code_num",
+                    "ratio",
+                ]
+            )
         return _ratios()
 
     def get_details(self, query) -> pd.DataFrame:
@@ -123,12 +140,6 @@ class FixtureIjpService:
         details = _details()
         if query.product_codes:
             details = details[details["productcode"].isin(query.product_codes)]
-        if query.panel_locations:
-            wanted = set(query.panel_locations)
-            normalized = details["panel_location"].where(
-                ~details["panel_location"].str.startswith("BOTTOM"), "BOTTOM"
-            )
-            details = details[normalized.isin(wanted)]
         return details.reset_index(drop=True)
 
     @staticmethod

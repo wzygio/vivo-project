@@ -1,5 +1,8 @@
 import pandas as pd
 
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_forward import DataForwardPolicy
+
 from src.inline_domain.infrastructure.shared.main_process_trace import (
     apply_main_process_history,
     attach_main_process_spec,
@@ -165,6 +168,11 @@ def test_attach_main_process_spec_uses_three_key_route_and_defaults_missing_spec
 
 
 def test_load_main_process_history_routes_array_eqp_to_sheet_out_history(monkeypatch) -> None:
+    # This case verifies a four-day display shift, not the editable deployment default.
+    monkeypatch.setattr(
+        ConfigLoader, "get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
     captured: dict[str, object] = {}
     routed_measurements = pd.DataFrame(
         [

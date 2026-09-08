@@ -48,12 +48,17 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorService,
     OosMonitorViewModel,
 )
-from src.inline_domain.application.shared.oos_history_service import OosHistoryService
+from src.inline_domain.application.monitor.live_source import (
+    get_monitor_computation_caches,
+    monitor_date_window,
+)
+from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
     build_ooc_history_service,
     build_oos_history_service,
-    build_throughput_history_service,
+    build_live_throughput_reader,
+    build_cpk_monitor_service,
 )
 from app.sections.inline_domain.monitor.ooc_decision_admin import (
     render_ooc_decision_admin,
@@ -67,9 +72,7 @@ MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 @st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds())
 def get_cached_query_window() -> tuple[str, str]:
     """Keep this page's time window stable until the user clears cache."""
-    end_dt = pd.Timestamp.today().normalize()
-    start_dt = end_dt.replace(month=1, day=1)
-    return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+    return monitor_date_window()
 
 
 @st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=16)
@@ -86,7 +89,7 @@ def get_cached_oos_monitor_payload(
     view = OosMonitorService(
         build_oos_history_service(),
         ooc_reader=build_ooc_history_service(),
-        throughput_reader=build_throughput_history_service(),
+        throughput_reader=build_live_throughput_reader(),
         summary_workbook=build_monitor_summary_workbook_service(),
     ).build_dashboard(
         products=products,
@@ -129,7 +132,7 @@ funcs_to_clear = [
     get_cached_query_window,
     get_cached_oos_monitor_payload,
     get_cached_step_description_map,
-] + get_alert_matrix_cached_funcs()
+] + get_alert_matrix_cached_funcs() + get_monitor_computation_caches()
 render_page_header(
     title="自动预警看板",
     config=active_config,
@@ -231,7 +234,7 @@ with st.expander("Inline超规预警", expanded=True):
         try:
             history_service = build_oos_history_service()
             ooc_history_service = build_ooc_history_service()
-            throughput_history_service = build_throughput_history_service()
+            throughput_history_service = build_live_throughput_reader()
             summary_workbook_service = build_monitor_summary_workbook_service()
             source_signature = "|".join(
                 [
@@ -256,14 +259,22 @@ with st.expander("Inline超规预警", expanded=True):
         except Exception:
             logging.exception("共享超规历史读取失败")
             st.error("超规历史读取失败，请确认数据文件可用且未被占用后重试。")
-            st.stop()
-        view_model = OosMonitorViewModel(**payload)
-        render_oos_monitor_results(view_model, step_desc_map=step_desc_map)
-        if is_admin:
-            st.divider()
-            render_oos_refresh_status(view_model.refresh_status_df)
-            render_ooc_decision_admin(
-                ooc_history_service,
-                products=products,
-                scopes=scopes,
-            )
+        else:
+            view_model = OosMonitorViewModel(**payload)
+            render_oos_monitor_results(view_model, step_desc_map=step_desc_map)
+            if is_admin:
+                st.divider()
+                render_oos_refresh_status(view_model.refresh_status_df)
+                render_ooc_decision_admin(
+                    ooc_history_service,
+                    products=products,
+                    scopes=scopes,
+                )
+
+st.subheader("📊 CPK预警看板")
+with st.expander("SPC CPK超规预警", expanded=True):
+    render_cpk_monitor_section(
+        build_cpk_monitor_service(),
+        SessionManager.AVAILABLE_PRODUCTS,
+        MONITOR_FACTORY_OPTIONS,
+    )

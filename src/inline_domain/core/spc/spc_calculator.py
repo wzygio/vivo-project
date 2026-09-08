@@ -24,6 +24,22 @@ def derive_lot_id(sheet_id: object) -> str:
     return sheet_id_str[:9]
 
 
+def has_valid_capability_inputs(
+    mean_value: float,
+    std_value: float,
+    usl: float,
+    lsl: float,
+) -> bool:
+    """Return whether the shared CPK/CPM gate allows capability calculation."""
+    if any(pd.isna(value) for value in (mean_value, std_value, usl, lsl)):
+        return False
+    return (
+        float(std_value) >= 0.0
+        and float(lsl) != 0.0
+        and float(usl) > float(lsl)
+    )
+
+
 def calculate_cpm(
     mean_value: float,
     std_value: float,
@@ -32,16 +48,7 @@ def calculate_cpm(
     target: Optional[float] = None,
 ) -> float:
     """Calculate Taguchi CPM for a two-sided specification."""
-    values = [mean_value, std_value, usl, lsl]
-    if any(pd.isna(value) for value in values):
-        return float("nan")
-
-    # An LSL of zero is the source-system marker for an upper-only specification.
-    # Taguchi CPM requires a two-sided specification.
-    if float(lsl) == 0.0:
-        return float("nan")
-
-    if usl <= lsl:
+    if not has_valid_capability_inputs(mean_value, std_value, usl, lsl):
         return float("nan")
 
     resolved_target = target
@@ -56,11 +63,7 @@ def calculate_cpm(
 
 def calculate_cpk(mean_value: float, std_value: float, usl: float, lsl: float) -> float:
     """Calculate CPK from the nearest specification distance."""
-    values = [mean_value, std_value, usl, lsl]
-    if any(pd.isna(value) for value in values):
-        return float("nan")
-
-    if usl <= lsl or std_value < 0:
+    if not has_valid_capability_inputs(mean_value, std_value, usl, lsl):
         return float("nan")
 
     nearest_distance = min(float(usl) - float(mean_value), float(mean_value) - float(lsl))

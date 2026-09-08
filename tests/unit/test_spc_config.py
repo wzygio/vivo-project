@@ -26,6 +26,29 @@ spc:
     assert ConfigLoader.get_spc_line_chart_param_name_contains() == ["UNI", "PROFILE"]
 
 
+def test_get_spc_capability_param_exemptions_normalizes_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_dir = tmp_path / "config" / "domain"
+    config_dir.mkdir(parents=True)
+    (config_dir / "inline_domain.yaml").write_text(
+        """
+spc:
+  spc_cpk:
+    exempt_param_name_contains:
+      - PPA
+      - "  PROFILE  "
+      - ""
+      - null
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+
+    assert ConfigLoader.get_spc_capability_param_exemptions() == ["PPA", "PROFILE"]
+
+
 def test_get_auto_decoration_param_exemptions_normalizes_config(
     tmp_path: Path,
     monkeypatch,

@@ -25,6 +25,11 @@ from src.inline_domain.infrastructure.aoi_rs.data_loader import (
 
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.snapshot_window import snapshot_window_start
+from src.inline_domain.infrastructure.shared.snapshot_window import (
+    IncompleteMonitorSnapshotError,
+    inline_snapshot_window_start,
+    metadata_covers_start,
+)
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -42,7 +47,7 @@ class AoiRsSnapshotRepository:
     """Persist and reuse one product's normalized AOI_RS source facts."""
 
     # TTL 统一由 config/global.yaml 的 application.cache_ttl_hours 提供
-    SNAPSHOT_POLICY_VERSION = "aoi-rs-raw-v1"
+    SNAPSHOT_POLICY_VERSION = "aoi-rs-raw-v2-calendar"
     _locks_guard = threading.Lock()
     _snapshot_locks: dict[str, threading.Lock] = {}
 
@@ -53,12 +58,14 @@ class AoiRsSnapshotRepository:
         details_loader: DetailsLoader = load_rs_details,
         pass_through_loader: PassThroughLoader = load_pass_through,
         spec_loader: SpecLoader = load_rs_spec_limits,
+        require_complete_coverage: bool = False,
     ) -> None:
         self.snapshot_dir = snapshot_dir
         self.db_manager = db_manager
         self.details_loader = details_loader
         self.pass_through_loader = pass_through_loader
         self.spec_loader = spec_loader
+        self.require_complete_coverage = require_complete_coverage
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
         self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
@@ -85,7 +92,7 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
+                    "start_date": inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -123,7 +130,7 @@ class AoiRsSnapshotRepository:
             end_timestamp = pd.Timestamp(query.end_date)
             loader_query = query.model_copy(
                 update={
-                    "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
+                    "start_date": inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
                 }
             )
             try:
@@ -154,7 +161,7 @@ class AoiRsSnapshotRepository:
         end_timestamp = pd.Timestamp(query.end_date)
         loader_query = query.model_copy(
             update={
-                "start_date": snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
+                "start_date": inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d"),
             }
         )
         try:
@@ -194,7 +201,9 @@ class AoiRsSnapshotRepository:
             metadata = json.loads(self._metadata_path(snapshot_path).read_text(encoding="utf-8"))
         except (OSError, ValueError, TypeError):
             return False
-        if metadata.get("policy_version") != self.SNAPSHOT_POLICY_VERSION:
+        if not isinstance(metadata, dict) or metadata.get("policy_version") != self.SNAPSHOT_POLICY_VERSION:
+            return False
+        if not metadata_covers_start(metadata, inline_snapshot_window_start(requested_end_date)):
             return False
         covered_through = metadata.get("covered_through")
         if not isinstance(covered_through, str) or not covered_through.strip():
@@ -256,12 +265,15 @@ class AoiRsSnapshotRepository:
         snapshot_path: Path,
         query: AoiRsQueryConfig,
     ) -> pd.DataFrame:
+        self._require_monitor_coverage(snapshot_path, query)
         if not snapshot_path.exists():
             return pd.DataFrame(columns=RS_DETAIL_COLUMNS)
         try:
             return self._filter_window(self._read_details(snapshot_path), query)
-        except Exception:
+        except Exception as exc:
             logger.exception("Failed to read fallback AOI_RS details snapshot %s", snapshot_path)
+            if self._requires_coverage(query):
+                raise IncompleteMonitorSnapshotError("AOI_RS 原始快照损坏，无法生成年度汇总") from exc
             return pd.DataFrame(columns=RS_DETAIL_COLUMNS)
 
     def _fallback_pass_through(
@@ -269,14 +281,17 @@ class AoiRsSnapshotRepository:
         snapshot_path: Path,
         query: AoiRsQueryConfig,
     ) -> pd.DataFrame:
+        self._require_monitor_coverage(snapshot_path, query)
         if not snapshot_path.exists():
             return pd.DataFrame(columns=PASS_THROUGH_COLUMNS)
         try:
             return self._filter_window(self._read_pass_through(snapshot_path), query)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "Failed to read fallback AOI_RS pass-through snapshot %s", snapshot_path
             )
+            if self._requires_coverage(query):
+                raise IncompleteMonitorSnapshotError("AOI_RS 过货快照损坏，无法生成年度汇总") from exc
             return pd.DataFrame(columns=PASS_THROUGH_COLUMNS)
 
     def _write_details(
@@ -300,6 +315,7 @@ class AoiRsSnapshotRepository:
         metadata = {
             "policy_version": self.SNAPSHOT_POLICY_VERSION,
             "covered_through": covered_through,
+            "covered_from": inline_snapshot_window_start(covered_through).date().isoformat(),
         }
         try:
             data.reindex(columns=columns).to_parquet(snapshot_temp, index=False)
@@ -309,6 +325,26 @@ class AoiRsSnapshotRepository:
         finally:
             snapshot_temp.unlink(missing_ok=True)
             metadata_temp.unlink(missing_ok=True)
+
+    def _require_monitor_coverage(self, snapshot_path: Path, query: AoiRsQueryConfig) -> None:
+        required_start = pd.Timestamp(query.start_date)
+        if not self._requires_coverage(query):
+            return  # Preserve the existing short-window page fallback behavior.
+        try:
+            metadata = json.loads(self._metadata_path(snapshot_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            metadata = {}
+        if (not snapshot_path.exists() or not isinstance(metadata, dict)
+                or metadata.get("policy_version") != self.SNAPSHOT_POLICY_VERSION
+                or not metadata_covers_start(metadata, required_start)):
+            raise IncompleteMonitorSnapshotError(
+                f"AOI_RS 原始快照未覆盖 {query.start_date}，需成功刷新后生成年度汇总"
+            )
+
+    def _requires_coverage(self, query: AoiRsQueryConfig) -> bool:
+        return self.require_complete_coverage or (
+            pd.Timestamp(query.start_date) < snapshot_window_start(query.end_date)
+        )
 
     def _filter_window(
         self,

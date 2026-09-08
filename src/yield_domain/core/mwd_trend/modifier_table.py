@@ -33,6 +33,7 @@ COL_SCALE_FACTOR = "缩放倍数"
 # 与历史 codebaseline `np.round(rate, 5)` 约定一致；缩放倍数为比值，保留 3 位小数。
 RATE_DECIMALS = 5
 FACTOR_DECIMALS = 3
+MAX_SCALE_FACTOR = 10.0
 
 
 class ModifierTableValidationError(ValueError):
@@ -169,6 +170,18 @@ def _parse_table_rates(table_df: pd.DataFrame) -> pd.DataFrame:
     return parsed
 
 
+def _guard_abnormal_upscale(
+    resolved_target: float | None,
+    raw_loss: float | None,
+) -> float | None:
+    """Ignore a target that would amplify a non-zero raw loss above the safety limit."""
+    if resolved_target is None or raw_loss is None or pd.isna(raw_loss) or not raw_loss:
+        return resolved_target
+    if resolved_target / raw_loss > MAX_SCALE_FACTOR:
+        return raw_loss
+    return resolved_target
+
+
 def resolve_monthly_targets(
     table_df: pd.DataFrame,
     months: list[str],
@@ -199,15 +212,18 @@ def resolve_monthly_targets(
         }
         defect_targets: dict[str, float] = {}
         for month in months:
+            resolved = None
             if month in specified_by_month:
-                defect_targets[month] = specified_by_month[month]
-                continue
-            earlier = [m for m in specified_by_month if m < month]
-            if earlier:
-                defect_targets[month] = specified_by_month[max(earlier)]
-                continue
-            if month in raw_by_month:
-                defect_targets[month] = raw_by_month[month]
+                resolved = specified_by_month[month]
+            else:
+                earlier = [m for m in specified_by_month if m < month]
+                if earlier:
+                    resolved = specified_by_month[max(earlier)]
+                elif month in raw_by_month:
+                    resolved = raw_by_month[month]
+            resolved = _guard_abnormal_upscale(resolved, raw_by_month.get(month))
+            if resolved is not None:
+                defect_targets[month] = resolved
             # 从未指定且表中无该月行：不给修饰目标，日度生成器回退原始月度良损。
         targets[defect] = defect_targets
     return targets
@@ -239,6 +255,7 @@ def compute_scale_factors(table_df: pd.DataFrame) -> dict[tuple[str, str], float
                 earlier = [m for m in specified_by_month if m < month]
                 if earlier:
                     resolved = specified_by_month[max(earlier)]
+            resolved = _guard_abnormal_upscale(resolved, raw)
             if resolved is None or pd.isna(raw) or not raw:
                 factors[(defect, month)] = 1.0
             else:

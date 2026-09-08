@@ -93,10 +93,18 @@ PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路�
 - 调度 SPC 规则引擎
 - 应用合规修饰（`compliance_config.yaml`）
 
+新自动预警页面不再调用这条旧全量链，而由 `monitor/oos_monitor_service.py` 读取
+OOS/OOC 长期事实和按日过货历史。汇总表以查询截止日构建当年、截至当前季度、
+最近三个月和当前 ISO 周的重叠列，行固定为过货量、OOC、SOOS=0、OOS 和 Total；
+OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示。
+
 ### 4.2 `spc/spc_service.py` — SPC 能力报表
 
 - 在服务边界强制 `data_type_filter = "SPC"`。
 - 生成 Sheet/点位分布、月/周/日 CPM/CPK、CPK 预警及 OOS/CPK 修饰结果。
+- CPK/CPM 共用同一条能力计算准入规则：仅双边有效规格参与计算；`LSL` 为空或为 `0`
+  均视为仅上限规格。参数名豁免列表由 `inline_domain.yaml` 的
+  `spc.spc_cpk.exempt_param_name_contains` 配置，被豁免参数仍保留分布图数据。
 - 应用服务不返回图表样式；SPC/CTQ Sheet 点位图由前端 `app/charts/inline/chart_type.py`
   按 `inline_config.yaml` 的 `spc.chart.line_param_name_contains` 统一选择折线或箱线（ADR-0016）。
 - Sheet OOS 修饰表的 `flag` 为三态：`True` 修饰超规点、`False` 保留真实值、`Delete` 按产品/站点/参数/Sheet 四键从图表点位中排除；修改表内 `sheet_min/max/mean` 不改变计算结果。
@@ -313,4 +321,4 @@ shared/measurement_preparation.py               ← 筛选在此层消费
 ---
 
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`spc-data-flow.md`](./spc-data-flow.md) · [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
