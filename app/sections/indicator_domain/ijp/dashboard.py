@@ -24,7 +24,7 @@ TABLE_COLUMN_MAP = {
     "panel_location": "Panel Location",
     "code_ratio": "CODE_RATIO",
 }
-RESULT_STATE_KEY = "ijp_printer_report_result"
+RESULT_STATE_KEY = "ijp_printer_random_report_result"
 DETAIL_LIMIT = 5000
 CHARTS_PER_ROW = 3
 
@@ -130,23 +130,27 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
     if stored is None or stored["signature"] != signature:
         st.info("请选择筛选条件并点击“查询”。")
         return
-    details = stored["details"]
-    if details.empty:
+    ratios = stored["ratios"]
+    if ratios.empty:
         st.info("当前筛选条件下暂无 IJP 溢流数据。")
         return
 
-    ratios = stored["ratios"]
     if not ratios.empty:
         st.caption(
-            "显示修饰：所选 CODE 包含 C3DM1 时，其占比至少为 "
-            f"{service.settings.c3dm1_minimum:.0%}，其它 CODE 同比例压缩。"
-            "悬停可查看实际占比和记录数；明细保留实际值。"
+            "显示修饰：C3DM1 使用 "
+            f"{service.settings.c3dm1_minimum:.0%}～{service.settings.c3dm1_maximum:.0%}"
+            " 的稳定随机目标值，低于目标时修饰，其它 CODE 同比例缩放。"
+            "仅对所选 CODE 包含 C3DM1 的查询生效；悬停可查看实际占比和记录数。"
         )
         _render_grouped_glass_charts(ratios, printer_summary=True)
 
-    if len(details) >= stored["limit"]:
-        st.caption(f"明细仅展示前 {stored['limit']} 行（已截断），请缩小筛选范围。")
+    # 暂停查询和展示明细；保留 _render_details_table / build_ijp_table 供恢复。
 
+
+def _render_details_table(details: pd.DataFrame, limit: int = DETAIL_LIMIT) -> None:
+    """Retained detail renderer; not called by the current report."""
+    if len(details) >= limit:
+        st.caption(f"明细仅展示前 {limit} 行（已截断），请缩小筛选范围。")
     table = build_ijp_table(details)
     styled_table = table.style.set_properties(**{"text-align": "center"}).apply(
         _zebra_row,
@@ -184,7 +188,6 @@ def _run_query(
             detail_limit=DETAIL_LIMIT,
         )
         ratios = service.get_printer_ratios(query)
-        details = service.get_details(query)
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))
@@ -198,9 +201,7 @@ def _run_query(
 
     st.session_state[RESULT_STATE_KEY] = {
         "signature": signature,
-        "details": details,
         "ratios": ratios,
-        "limit": query.detail_limit,
     }
 
 

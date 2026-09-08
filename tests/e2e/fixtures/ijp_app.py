@@ -147,13 +147,7 @@ class FixtureIjpService:
         return summarize_printers(frame, decorate=not query.codes or "C3DM1" in query.codes)
 
     def get_details(self, query) -> pd.DataFrame:
-        self._guard(query)
-        if query.codes == ("C3DM5",):
-            return pd.DataFrame()
-        details = _details()
-        if query.product_codes:
-            details = details[details["productcode"].isin(query.product_codes)]
-        return details.reset_index(drop=True)
+        raise AssertionError("当前页面不应查询明细")
 
     @staticmethod
     def _guard(query) -> None:

@@ -42,11 +42,14 @@ def main(
         type=date.fromisoformat,
         help="Report date in YYYY-MM-DD format; defaults to today.",
     )
+    parser.add_argument("--full", action="store_true", help="Reload the full rolling window, including historical specification changes.")
     args = parser.parse_args(argv)
 
     try:
         service = (service_factory or _build_service)()
-        results = service.refresh_snapshots(as_of=args.as_of)
+        results = service.refresh_snapshots(
+            as_of=args.as_of, **({"full_refresh": True} if args.full else {}),
+        )
     except Exception:
         logger.exception("Q-Time snapshot refresh failed")
         print(

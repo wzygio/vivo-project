@@ -94,6 +94,27 @@ def test_same_key_hits_the_cache() -> None:
     assert port.fetch_calls == 1
 
 
+def test_processing_version_change_recomputes(monkeypatch) -> None:
+    port = CountingQTimeDataPort()
+    service = _service(port)
+    _call(service)
+    monkeypatch.setattr(
+        cached_module, "MONITORING_CACHE_VERSION", cached_module.MONITORING_CACHE_VERSION + 1
+    )
+    _call(service)
+    assert port.fetch_calls == 2
+
+
+def test_external_snapshot_refresh_recomputes(monkeypatch) -> None:
+    port = CountingQTimeDataPort()
+    service = _service(port)
+    monkeypatch.setattr(port, "cache_signature", lambda shop: (1,), raising=False)
+    _call(service)
+    monkeypatch.setattr(port, "cache_signature", lambda shop: (2,))
+    _call(service)
+    assert port.fetch_calls == 2
+
+
 def test_decision_file_stat_change_recomputes() -> None:
     port = CountingQTimeDataPort()
     service = _service(port)

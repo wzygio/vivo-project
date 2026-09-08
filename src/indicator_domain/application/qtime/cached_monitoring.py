@@ -1,6 +1,6 @@
 """Q-Time 当前监控结果的 L2 缓存（PRD §4.3 / ADR-0001 缓存边界）。
 
-缓存键 = (shop, step_descriptions, products, as_of, 决策工作簿 file_stat)，
+缓存键 = (shop, step_descriptions, products, as_of, 决策工作簿 file_stat, 计算版本)，
 TTL 读 ``config/global.yaml`` 的 ``application.cache_ttl_hours``。
 决策签名沿用 inline ``decision_signature.py``
 的 file_stat 门控思路：页面每次 rerun 廉价 stat 一次
@@ -28,6 +28,8 @@ from src.shared_kernel.config import ConfigLoader
 
 # 决策工作簿不存在（按需创建，用户从未上传过决策）时的确定性哨兵。
 MISSING_DECISION_FILE_STAT: tuple[int, int] = (-1, -1)
+# Invalidate results computed before support for microsecond source timekeys.
+MONITORING_CACHE_VERSION = 4
 
 
 def get_qtime_decision_file_stat(
@@ -67,6 +69,8 @@ def get_cached_monitoring(
         as_of=normalized_as_of,
         decision_mtime_ns=int(decision_mtime_ns),
         decision_size=int(decision_size),
+        cache_version=MONITORING_CACHE_VERSION,
+        source_signature=getattr(_service, "cache_signature", lambda _shop: ())(shop),
     )
 
 
@@ -84,6 +88,8 @@ def _cached_monitoring(
     as_of: date,
     decision_mtime_ns: int,
     decision_size: int,
+    cache_version: int,
+    source_signature: tuple[object, ...],
 ) -> QTimeMonitoringResult:
     """实际缓存层：仅转发，不做任何判定逻辑修改。"""
     return _service.get_current_monitoring(

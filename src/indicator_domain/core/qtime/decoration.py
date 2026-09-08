@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import pandas as pd
@@ -103,7 +105,42 @@ def _decorated_wait_time(row: pd.Series) -> float:
     seed = "|".join(str(row[column]) for column in QTIME_KEY_COLUMNS)
     fraction = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12], 16)
     ratio = 0.85 + (fraction / float(0xFFFFFFFFFFFF)) * 0.1
-    return round(float(row["q_spec"]) * ratio, 6)
+    spec = float(row["q_spec"])
+    return min(round(spec * ratio, 6), math.nextafter(spec, 0.0))
+
+
+def apply_qtime_spec_overrides(
+    details: pd.DataFrame, overrides: Mapping[str, float],
+) -> pd.DataFrame:
+    """Apply approved shop/from/to limits while retaining source values."""
+    result = details.copy()
+    if result.empty:
+        return result
+    result["q_spec_raw"] = result["q_spec"]
+    result["wait_time_raw"] = result["wait_time"]
+    routes = result[["shop", "f_step", "t_step"]].astype(str).agg("/".join, axis=1)
+    for route, limit in overrides.items():
+        limit = float(limit)
+        if not math.isfinite(limit) or limit <= 0:
+            raise ValueError("Q-Time specification override must be finite and positive")
+        result.loc[routes.eq(route), "q_spec"] = limit
+    return result
+
+
+def constrain_qtime_display(details: pd.DataFrame) -> pd.DataFrame:
+    """Keep displayed values below valid limits, without altering alert evidence."""
+    result = details.copy()
+    if result.empty:
+        return result
+    waits = pd.to_numeric(result["wait_time"], errors="coerce")
+    specs = pd.to_numeric(result["q_spec"], errors="coerce")
+    mask = specs.gt(0) & specs.lt(float("inf")) & waits.ge(specs)
+    if mask.any():
+        result["wait_time"] = waits.astype(float)
+        result.loc[mask, "wait_time"] = result.loc[mask].apply(
+            _decorated_wait_time, axis=1,
+        )
+    return result
 
 
 def apply_qtime_decoration(

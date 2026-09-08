@@ -1,4 +1,7 @@
 from pathlib import Path
+import json
+from types import SimpleNamespace
+import pytest
 
 from streamlit.testing.v1 import AppTest
 
@@ -30,7 +33,25 @@ def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.exception
     assert not app.info
     assert len(app.dataframe) == 1
-    assert len(app.get("plotly_chart")) == 1
+    assert len(app.get("plotly_chart")) == 2
+    figures = [json.loads(chart.proto.spec) for chart in app.get("plotly_chart")]
+    assert "M626" in figures[0]["layout"]["title"]["text"]
+    assert "M678" in figures[1]["layout"]["title"]["text"]
+    assert all(len(figure["data"][0]["x"]) == 12 for figure in figures)
+
+
+@pytest.mark.parametrize("success", [True, False])
+def test_refresh_reloads_full_window_and_clears_results_only_on_success(monkeypatch, success):
+    from app.sections.indicator_domain.qtime import dashboard
+    state = {dashboard.RESULT_STATE_KEY: "old", dashboard.SIGNATURE_STATE_KEY: "old"}
+    monkeypatch.setattr(dashboard.st, "session_state", state)
+    calls = []
+    service = SimpleNamespace(refresh_snapshots=lambda **kwargs: (
+        calls.append(kwargs) or [SimpleNamespace(refreshed_from_database=success)]
+    ))
+    assert dashboard.refresh_qtime_data(service) is success
+    assert calls == [{"full_refresh": True}]
+    assert bool(state) is not success
 
 
 def test_qtime_dashboard_labels_station_paths_with_original_codes() -> None:
@@ -65,14 +86,14 @@ def test_qtime_dashboard_supports_multiple_paths() -> None:
 
     assert not app.exception
     assert len(app.dataframe) == 1
-    assert len(app.get("plotly_chart")) == 2
+    assert len(app.get("plotly_chart")) == 4
 
 
 def test_qtime_dashboard_invalidates_stale_results_when_filters_change() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
     app.button(key="qtime_search").click().run()
-    assert len(app.get("plotly_chart")) == 1
+    assert len(app.get("plotly_chart")) == 2
 
     app.multiselect(key="qtime_step_descriptions").set_value(
         [PSI_ELA_TO_PSI_PHT]

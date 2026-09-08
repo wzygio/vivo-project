@@ -9,6 +9,42 @@ from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.infrastructure.qtime import repository as qtime_repository
 from src.indicator_domain.infrastructure.qtime.repository import QTimeRepository
 from src.indicator_domain.infrastructure.qtime.snapshot_store import QTimeSnapshotStore
+from src.shared_kernel.data_forward import DataForwardPolicy
+
+
+@pytest.fixture(autouse=True)
+def explicit_forward_policy(monkeypatch):
+    monkeypatch.setattr(
+        qtime_repository.ConfigLoader,
+        "get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
+
+
+def test_v2_empty_snapshot_is_refetched_in_full(tmp_path, monkeypatch):
+    store = QTimeSnapshotStore(tmp_path, ttl_hours=12)
+    with monkeypatch.context() as old:
+        old.setattr(QTimeSnapshotStore, "POLICY_VERSION", "qtime-source-v2")
+        store.write(
+            "ARRAY", pd.DataFrame(columns=qtime_repository.DETAIL_COLUMNS),
+            source_start=pd.Timestamp("2026-07-28"),
+            source_end=pd.Timestamp("2026-08-30"),
+            refreshed_at=datetime.now().astimezone(),
+        )
+    calls = []
+
+    def read_sql(_statement, _engine, params):
+        calls.append(params)
+        return pd.DataFrame([
+            _detail_row("A->B", "L001", "M626", "20260729010000519922")
+        ])
+
+    monkeypatch.setattr(qtime_repository.pd, "read_sql", read_sql)
+    repository = QTimeRepository(SimpleNamespace(engine=object()), snapshot_dir=tmp_path)
+    result = repository.fetch_details(_current_query(date(2026, 9, 2)))
+    assert result["lot_id"].tolist() == ["L001"]
+    assert calls[0]["start_time"] == "20260728000000"
+    assert store.read("ARRAY", fresh_only=True, normalizer=lambda frame: frame) is not None
 
 
 def test_list_products_returns_clean_sorted_unique_options(monkeypatch) -> None:

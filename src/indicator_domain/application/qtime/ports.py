@@ -27,6 +27,8 @@ class QTimeSnapshotRefresh:
 
 
 class QTimeDataPort(Protocol):
+    def cache_signature(self, shop: Shop) -> tuple[object, ...]: ...
+
     def list_step_options(self, shop: Shop) -> tuple[QTimeStepOption, ...]: ...
 
     def fetch_details(self, query: QTimeQuery) -> pd.DataFrame: ...
@@ -36,6 +38,7 @@ class QTimeDataPort(Protocol):
         shop: Shop,
         *,
         as_of: date | None = None,
+        full_refresh: bool = False,
     ) -> QTimeSnapshotRefresh: ...
 
 

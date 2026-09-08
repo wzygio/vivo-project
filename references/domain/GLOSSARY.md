@@ -50,6 +50,8 @@ and factoryname = 'ARRAY'
 
 ## 制造工艺
 
+- **Q-Time 报表规格与展示修饰**：当前规格来自 `eda.imp_qtime_tzbjx`，按 `productspecname + f_step_id + t_step_id` 与明细的 `prodcode + f_step + t_step` 关联；无匹配配置时回退明细规格。`mdw.qtime_tzbjx.q_spec` 可能残留历史规格，不代表当前配置。已核实 EVA&TFE→Aging 的 7 个产品当前规格全部为 370 小时。先关联当前规格再判定超规；启用 `constrain_display` 时，达到或超过规格的展示值稳定修饰到规格的 85%–95%，真实预警及原始等待时长保留。按产品与路径分别绘图。页面“刷新数据”全窗口重取并清除旧结果；CLI `--full` 同样全窗口更新，默认定时刷新保留增量策略。
+- **Q-Time 时间键**：`mdw.qtime_tzbjx.timekey` 为紧凑字符串，真实源表包含 20 位 `YYYYMMDDHHMMSSffffff`（末 6 位为微秒）；仓储兼容 14 位秒级时间键，并统一输出为 14 位。不能直接用仅支持 14 位的格式解析源表，否则有效记录会被时间窗口过滤掉。
 - **Q-Time（过货时间）**：同一生产载体从 From 站点离开到进入 To 站点之间的等待时长。`wait_time > q_spec` 表示该环节可能发生滞留，可能增加 OLED 材料暴露时间并影响质量。Q-Time 报表采用 `[start_time, end_time)` 时间窗口，并按 Lot 展示等待时长与规格；人工修饰中 `flag=True` 表示修饰到规格内，`False` 表示保留真实超规并预警，`Delete` 表示删除记录。
 - **四大工艺**：`ARRAY`、`OLED`、`TP`、`CELL`。
   - **ARRAY（阵列）**：制作 TFT 背板。

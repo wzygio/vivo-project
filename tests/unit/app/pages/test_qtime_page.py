@@ -51,10 +51,14 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     page_path = Path(__file__).parents[4] / "app" / "pages" / "Q_Time监控报表.py"
     runpy.run_path(str(page_path), run_name="__main__")
 
+    handlers = events[4][1].pop("refresh_handlers")
+    assert len(handlers) == 1 and callable(handlers[0])
+
     assert events == [
         {"page_title": "Q-Time监控报表", "layout": "wide", "initial_sidebar_state": "collapsed"},
         "init",
         "config",
+        ("service", database),
         (
             "header",
             {
@@ -64,7 +68,6 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
                 "show_product_filter": False,
             },
         ),
-        ("service", database),
         ("dashboard", service),
     ]
 

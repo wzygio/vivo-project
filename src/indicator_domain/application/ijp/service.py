@@ -82,6 +82,7 @@ class IjpReportService:
             self._data_port.fetch_glass_ratios(scoped),
             decorate="C3DM1" in scoped.codes,
             minimum=self.settings.c3dm1_minimum,
+            maximum=self.settings.c3dm1_maximum,
         )
 
     def _scope_product_codes(

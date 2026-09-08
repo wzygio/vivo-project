@@ -45,7 +45,8 @@ class QTimeSnapshot:
 class QTimeSnapshotStore:
     """Persist one TTL-aware, query-independent Q-Time fact snapshot per shop."""
 
-    POLICY_VERSION = "qtime-source-v2"
+    # v2 could publish empty coverage after rejecting microsecond source timekeys.
+    POLICY_VERSION = "qtime-source-v4"
     METADATA_KEY = b"qtime_snapshot"
     REQUIRED_SHOPS: ClassVar[tuple[Shop, ...]] = ("ARRAY", "OLED", "TP")
     LEGACY_PATTERNS = (

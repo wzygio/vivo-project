@@ -1,6 +1,6 @@
 """Validated IJP report configuration."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.indicator_domain.core.ijp.printer_summary import PRINTER_CODES
 
@@ -10,6 +10,13 @@ class IjpSettings(BaseModel):
 
     codes: tuple[str, ...] = PRINTER_CODES
     c3dm1_minimum: float = Field(default=0.9, ge=0.9, le=1.0)
+    c3dm1_maximum: float = Field(default=0.92, ge=0.9, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_random_range(self) -> "IjpSettings":
+        if self.c3dm1_maximum <= self.c3dm1_minimum:
+            raise ValueError("IJP 随机修饰上限必须大于下限")
+        return self
 
     @field_validator("codes")
     @classmethod

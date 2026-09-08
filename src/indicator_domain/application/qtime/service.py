@@ -24,7 +24,9 @@ from src.indicator_domain.application.qtime.ports import (
     QTimeSnapshotRefresh,
 )
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
-from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
+from src.indicator_domain.core.qtime.decoration import (
+    apply_qtime_decoration, apply_qtime_spec_overrides, constrain_qtime_display,
+)
 
 
 class QTimeFilterOptions(TypedDict):
@@ -45,9 +47,14 @@ class QTimeReportService:
         self,
         data_port: QTimeDataPort,
         decoration_port: QTimeDecorationPort | None = None,
+        *,
+        spec_overrides: dict[str, float] | None = None,
+        constrain_display: bool = False,
     ) -> None:
         self._data_port = data_port
         self._decoration_port = decoration_port
+        self._spec_overrides = dict(spec_overrides or {})
+        self._constrain_display = constrain_display
 
     @property
     def decoration_path(self) -> Path | None:
@@ -61,6 +68,10 @@ class QTimeReportService:
             "step_options": self._data_port.list_step_options(shop),
         }
 
+    def cache_signature(self, shop: Shop) -> tuple[object, ...]:
+        signature = getattr(self._data_port, "cache_signature", lambda _shop: ())
+        return (signature(shop), self._constrain_display, tuple(sorted(self._spec_overrides.items())))
+
     def get_report(self, query: QTimeQuery) -> pd.DataFrame:
         return self._data_port.fetch_details(query)
 
@@ -68,10 +79,13 @@ class QTimeReportService:
         self,
         *,
         as_of: date | None = None,
+        full_refresh: bool = False,
     ) -> tuple[QTimeSnapshotRefresh, ...]:
         """Refresh all shared shop snapshots through the application boundary."""
         return tuple(
-            self._data_port.refresh_snapshot(shop, as_of=as_of)
+            self._data_port.refresh_snapshot(
+                shop, as_of=as_of, **({"full_refresh": True} if full_refresh else {}),
+            )
             for shop in ("ARRAY", "OLED", "TP")
         )
 
@@ -115,9 +129,11 @@ class QTimeReportService:
             if self._decoration_port is not None
             else pd.DataFrame()
         )
-        decorated = apply_qtime_decoration(raw_details, decisions)
+        prepared = apply_qtime_spec_overrides(raw_details, self._spec_overrides)
+        decorated = apply_qtime_decoration(prepared, decisions)
         return QTimeMonitoringResult(
-            details=decorated.details,
+            details=(constrain_qtime_display(decorated.details)
+                     if self._constrain_display else decorated.details),
             alerts=build_qtime_alerts(decorated.decoration),
             decoration=decorated.decoration,
             decisions=decisions,

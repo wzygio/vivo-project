@@ -3,6 +3,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption
 from src.indicator_domain.application.qtime.ports import QTimeSnapshotRefresh
@@ -129,7 +130,10 @@ def test_service_refreshes_all_shop_snapshots_through_one_application_interface(
     assert all(result.refreshed_from_database for result in results)
 
 
-def test_service_returns_decorated_details_and_confirmed_qtime_alerts() -> None:
+@pytest.mark.parametrize("constrain_display", [False, True])
+def test_service_returns_decorated_details_and_confirmed_qtime_alerts(
+    constrain_display: bool,
+) -> None:
     port = FakeQTimeDataPort()
     port.fetch_details = lambda query: pd.DataFrame(
         [
@@ -146,7 +150,9 @@ def test_service_returns_decorated_details_and_confirmed_qtime_alerts() -> None:
             }
         ]
     )
-    service = QTimeReportService(port, FakeQTimeDecorationPort())
+    service = QTimeReportService(
+        port, FakeQTimeDecorationPort(), constrain_display=constrain_display,
+    )
 
     result = service.get_current_monitoring(
         shop="OLED",
@@ -155,7 +161,12 @@ def test_service_returns_decorated_details_and_confirmed_qtime_alerts() -> None:
         as_of=date(2026, 9, 2),
     )
 
-    assert result.details.loc[0, "wait_time"] == 25.0
+    if constrain_display:
+        assert result.details.loc[0, "wait_time"] < 24.0
+    else:
+        assert result.details.loc[0, "wait_time"] == 25.0
+    assert result.details.loc[0, "wait_time_raw"] == 25.0
+    assert result.alerts.loc[0, "wait_time"] == 25.0
     assert result.alerts["lot_id"].tolist() == ["L001"]
     assert result.decoration.loc[0, "flag"] == False  # noqa: E712
 

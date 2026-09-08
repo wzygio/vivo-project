@@ -116,11 +116,22 @@ class QTimeRepository:
             ).frame
         return self._to_display_details(source, query)
 
+    def cache_signature(self, shop: Shop) -> tuple[object, ...]:
+        signature = (QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature)
+        if self._snapshot_store is None:
+            return signature
+        try:
+            stat = self._snapshot_store.source_path(shop).stat()
+        except FileNotFoundError:
+            return (*signature, None)
+        return (*signature, stat.st_mtime_ns, stat.st_size)
+
     def refresh_snapshot(
         self,
         shop: Shop,
         *,
         as_of: date | None = None,
+        full_refresh: bool = False,
     ) -> QTimeSnapshotRefresh:
         """Force one incremental shop refresh for the rolling report window."""
         if self._snapshot_store is None:
@@ -133,6 +144,7 @@ class QTimeRepository:
             source_start=source_start,
             source_end=source_end,
             force_refresh=True,
+            full_refresh=full_refresh,
         )
         return QTimeSnapshotRefresh(
             shop=shop,
@@ -174,6 +186,7 @@ class QTimeRepository:
         source_start: pd.Timestamp,
         source_end: pd.Timestamp,
         force_refresh: bool,
+        full_refresh: bool = False,
     ) -> "_LoadedShopSource":
         if self._snapshot_store is None:
             raise RuntimeError("Q-Time snapshot store is not configured")
@@ -194,18 +207,25 @@ class QTimeRepository:
                 and self._snapshot_store.covers(fresh, source_start, source_end)
             ):
                 return _LoadedShopSource(fresh.frame, fresh, False)
-            return self._refresh_shop_source(shop, source_start, source_end)
+            return self._refresh_shop_source(
+                shop, source_start, source_end, full_refresh=full_refresh,
+            )
 
     def _refresh_shop_source(
         self,
         shop: Shop,
         source_start: pd.Timestamp,
         source_end: pd.Timestamp,
+        *,
+        full_refresh: bool = False,
     ) -> "_LoadedShopSource":
         if self._snapshot_store is None:
             raise RuntimeError("Q-Time snapshot store is not configured")
         stale = self._read_snapshot(shop, fresh_only=False)
-        refresh_start = self._refresh_start(stale, source_start, source_end)
+        refresh_start = (
+            source_start if full_refresh
+            else self._refresh_start(stale, source_start, source_end)
+        )
         params: dict[str, object] = {
             "start_time": refresh_start.strftime("%Y%m%d%H%M%S"),
             "end_time": source_end.strftime("%Y%m%d%H%M%S"),
@@ -319,7 +339,17 @@ class QTimeRepository:
                     ELSE 'TP'
                 END AS shop,
                 prodcode
-            FROM mdw.qtime_tzbjx
+            FROM (
+                SELECT facts.step_desc, facts.lot_id, facts.prod_qty,
+                       facts.sub_prod_type, facts.f_step, facts.t_step,
+                       COALESCE(CAST(spec.q_spec AS NUMERIC), facts.q_spec) AS q_spec,
+                       facts.wait_time, facts.timekey, facts.prodcode
+                FROM mdw.qtime_tzbjx AS facts
+                LEFT JOIN eda.imp_qtime_tzbjx AS spec
+                  ON spec.productspecname = facts.prodcode
+                 AND spec.f_step_id = facts.f_step
+                 AND spec.t_step_id = facts.t_step
+            ) AS qtime
             WHERE timekey >= :start_time
               AND timekey < :end_time
               AND CASE
@@ -352,8 +382,13 @@ class QTimeRepository:
         normalized = normalized.reindex(columns=DETAIL_COLUMNS)
         for column in ("prod_qty", "q_spec", "wait_time"):
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+        # The source uses YYYYMMDDHHMMSSffffff; snapshots/report keys use seconds.
+        # Accept both contracts without treating the microsecond suffix as invalid.
+        timekeys = normalized["timekey"].astype("string").str.replace(
+            r"^(\d{14})\d{6}$", r"\1", regex=True
+        )
         source_time = pd.to_datetime(
-            normalized["timekey"],
+            timekeys,
             format="%Y%m%d%H%M%S",
             errors="coerce",
         )

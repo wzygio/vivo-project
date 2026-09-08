@@ -12,7 +12,9 @@ async page => {
   // 2. 默认筛选直接查询：图表 + 明细表出现
   await page.getByRole("button", { name: "查询" }).click();
   await page.locator(".js-plotly-plot").first().waitFor({ timeout: 120_000 });
-  await page.locator('[data-testid="stDataFrame"]').waitFor({ timeout: 60_000 });
+  if (await page.locator('[data-testid="stDataFrame"]').count()) {
+    throw new Error('当前报表不应渲染明细表');
+  }
 
   const chartCount = await page.locator(".js-plotly-plot").count();
   if (chartCount !== 4) {

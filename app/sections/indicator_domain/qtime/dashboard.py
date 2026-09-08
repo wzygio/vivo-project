@@ -122,6 +122,11 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         monitoring.alerts,
         total_lots=details["lot_id"].nunique(),
     )
+    if "wait_time_raw" in details and (
+        details["wait_time"].ne(details["wait_time_raw"]).any()
+        or details["q_spec"].ne(details["q_spec_raw"]).any()
+    ):
+        st.caption("图表已应用报表规格及等待时长修饰；悬停可查看原始值，真实超规预警保留。")
 
     for index, step_option in enumerate(step_options):
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
@@ -129,14 +134,25 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             if step_details.empty:
                 st.info(f"{step_option.label} 当前筛选条件下暂无 Q-Time 数据。")
                 continue
-            st.plotly_chart(
-                build_qtime_figure(
-                    step_details,
-                    title=f"北极星QTime监控｜{step_option.label}",
-                ),
-                width="stretch",
-                key=f"qtime_lot_chart_{index}",
-            )
+            for product, product_details in step_details.groupby("prodcode", sort=True):
+                st.plotly_chart(
+                    build_qtime_figure(
+                        product_details,
+                        title=f"北极星QTime监控｜{product}｜{step_option.label}",
+                    ),
+                    width="stretch",
+                    key=f"qtime_lot_chart_{index}_{product}",
+                )
+
+
+def refresh_qtime_data(service: QTimeReportService) -> bool:
+    """Reload historical facts/specs; discard submitted results only on success."""
+    results = service.refresh_snapshots(full_refresh=True)
+    if not results or not all(result.refreshed_from_database for result in results):
+        return False
+    st.session_state.pop(RESULT_STATE_KEY, None)
+    st.session_state.pop(SIGNATURE_STATE_KEY, None)
+    return True
 
 
 def _filter_monitoring_result(

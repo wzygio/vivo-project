@@ -23,6 +23,7 @@ def build_qtime_repository(db_manager: DatabaseManager) -> QTimeRepository:
 
 
 def build_qtime_service(db_manager: DatabaseManager) -> QTimeReportService:
+    settings = ConfigLoader.load_domain_config("indicator_domain").get("qtime", {})
     decoration_path = ConfigLoader.get_domain_resource_path(
         "indicator_domain",
         "qtime_oos_decoration",
@@ -31,6 +32,8 @@ def build_qtime_service(db_manager: DatabaseManager) -> QTimeReportService:
     return QTimeReportService(
         build_qtime_repository(db_manager),
         QTimeDecorationRepository(decoration_path),
+        spec_overrides=settings.get("spec_overrides", {}),
+        constrain_display=settings.get("constrain_display", False),
     )
 
 

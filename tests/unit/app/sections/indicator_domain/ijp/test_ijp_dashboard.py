@@ -97,7 +97,7 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
 
     assert not app.exception
     assert not app.info
-    assert len(app.dataframe) == 1
+    assert not app.dataframe
     assert len(app.get("plotly_chart")) == 4
     chart_columns = app.get("column")[6:]
     assert [column.weight for column in chart_columns] == [0.5, 0.5, 1.0, 1.0]
@@ -141,7 +141,8 @@ def test_ijp_dashboard_explains_an_empty_result() -> None:
 def test_ijp_dashboard_invalidates_stale_results_when_filters_change() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
     app.button(key="ijp_search").click().run()
-    assert len(app.dataframe) == 1
+    assert app.get("plotly_chart")
+    assert not app.dataframe
 
     app.multiselect(key="ijp_codes").set_value(["C3DM1"]).run()
 

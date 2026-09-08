@@ -58,6 +58,11 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
 
 #### Q-Time
 
+报表规格覆盖与展示修饰由 `QTimeReportService` 编排，组合根注入
+`config/domain/indicator_domain.yaml` 的 `qtime` 配置；仓储按产品及 From/To
+关联 `eda.imp_qtime_tzbjx` 当前规格后再判定超规，最终展示约束独立于真实预警。规格、原始等待时长随明细保留，
+数据库与源快照不改写。具体口径见 `references/domain/GLOSSARY.md`。
+
 1. `QTimeRepository` 从 `eda.imp_qtime_tzbjx` 获取产品选项，从
    `mdw.qtime_tzbjx` 获取厂别限定路径和 Lot 级明细；所有筛选使用绑定参数，
    时间窗口为 `[start_time, end_time)`。

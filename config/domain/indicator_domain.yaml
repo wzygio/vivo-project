@@ -3,7 +3,11 @@ resources:
   files:
     qtime_oos_decoration: qtime_oos_decoration.xlsx
 
+qtime:
+  constrain_display: true
+
 ijp:
   codes: [C3DM0, C3DM1, C3DM2, C3DM3, C3DM4, C3DM5]
-  # 显示修饰下限；实际统计值保留，不改写数据库或明细。
+  # 稳定随机显示修饰范围；实际统计值保留，不改写数据库。
   c3dm1_minimum: 0.90
+  c3dm1_maximum: 0.92

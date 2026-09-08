@@ -1,19 +1,29 @@
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import create_engine, text
 
 from src.indicator_domain.application.qtime.dtos import QTimeQuery, QTimeStepOption
 from src.indicator_domain.infrastructure.qtime.repository import QTimeRepository
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_forward import DataForwardPolicy
 
 
-def test_qtime_repository_executes_the_full_filter_contract() -> None:
+@pytest.mark.parametrize("microseconds", ["", "519922"])
+@pytest.mark.parametrize("use_snapshot", [False, True])
+def test_qtime_repository_executes_the_full_filter_contract(
+    tmp_path, monkeypatch, microseconds: str, use_snapshot: bool,
+) -> None:
+    monkeypatch.setattr(
+        ConfigLoader, "get_data_forward_policy", lambda: DataForwardPolicy(enabled=False)
+    )
     engine = create_engine("sqlite+pysqlite:///:memory:")
     with engine.begin() as connection:
         connection.execute(text("ATTACH DATABASE ':memory:' AS eda"))
         connection.execute(text("ATTACH DATABASE ':memory:' AS mdw"))
         connection.execute(
-            text("CREATE TABLE eda.imp_qtime_tzbjx (productspecname TEXT)")
+            text("CREATE TABLE eda.imp_qtime_tzbjx (productspecname TEXT, f_step_id TEXT, t_step_id TEXT, q_spec TEXT)")
         )
         connection.execute(
             text(
@@ -25,7 +35,7 @@ def test_qtime_repository_executes_the_full_filter_contract() -> None:
         )
         connection.execute(
             text(
-                "INSERT INTO eda.imp_qtime_tzbjx VALUES ('M626'), ('M678')"
+                "INSERT INTO eda.imp_qtime_tzbjx VALUES ('M626','15500','15600','370'), ('M678','15500','15600','200')"
             )
         )
         connection.execute(
@@ -40,7 +50,16 @@ def test_qtime_repository_executes_the_full_filter_contract() -> None:
             )
         )
 
-    repository = QTimeRepository(SimpleNamespace(engine=engine))
+        if microseconds:
+            connection.execute(
+                text("UPDATE mdw.qtime_tzbjx SET timekey = timekey || :suffix"),
+                {"suffix": microseconds},
+            )
+
+    repository = QTimeRepository(
+        SimpleNamespace(engine=engine),
+        snapshot_dir=tmp_path if use_snapshot else None,
+    )
     query = QTimeQuery(
         start_time=datetime(2026, 8, 2),
         end_time=datetime(2026, 9, 1),
@@ -55,3 +74,12 @@ def test_qtime_repository_executes_the_full_filter_contract() -> None:
         QTimeStepOption(step_desc="B->C", f_step="15500", t_step="15700"),
     )
     assert repository.fetch_details(query)["lot_id"].tolist() == ["L1", "L2", "L6"]
+    assert repository.fetch_details(query)["q_spec"].tolist() == [370, 370, 3]
+    if use_snapshot:
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE eda.imp_qtime_tzbjx SET q_spec='371' WHERE productspecname='M626'"))
+        refreshed = repository.refresh_snapshot(
+            "ARRAY", as_of=date(2026, 8, 31), full_refresh=True,
+        )
+        assert refreshed.refreshed_from_database
+        assert repository.fetch_details(query)["q_spec"].tolist() == [371, 371, 3]
