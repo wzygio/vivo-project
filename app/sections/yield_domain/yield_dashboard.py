@@ -7,7 +7,7 @@ from inspect import signature
 from typing import Any, Dict, List, Optional, Sequence
 import plotly.graph_objects as go
 
-from app.components.page_header import build_product_cache_signature
+from app.components.indicator_cache import build_indicator_product_cache_signature
 from app.manager.render_gate import RenderGate
 
 # 引入现有的绘图函数
@@ -1236,13 +1236,16 @@ def _alert_charts_signature(
     warning_lines: Optional[dict],
     product_code: Optional[str],
 ) -> str:
-    """自动预警缺陷图像的构建签名：产品缓存 revision + 命中 Code 集合指纹。
+    """图像由趋势、Lot、Sheet 三种输入组成，跟踪各自的当前产品版本。
 
-    点"刷新缓存"会 bump 产品 revision，签名必变、图表必重建；
+    任一输入指标刷新后即重建图表；其他产品或无关指标刷新不影响此 memo。
     同一版数据重复 rerun 时签名稳定，命中 memo 直接复用构建结果。
     """
     if product_code:
-        base = build_product_cache_signature("yield_alert_charts", product_code)
+        base = build_indicator_product_cache_signature(
+            "yield_alert_charts", product_code,
+            ("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos"),
+        )
     else:
         base = "yield_alert_charts|product=unknown"
     warning_lines = warning_lines or {}

@@ -10,7 +10,9 @@ YIELD_DASHBOARD_PATH = (
 def test_yield_dashboard_keys_cache_by_window_and_external_resources() -> None:
     source = YIELD_DASHBOARD_PATH.read_text(encoding="utf-8")
 
-    assert "build_product_cache_signature(" in source
+    assert "build_indicator_product_cache_signature(" in source
+    assert "snapshot_signature=lot_cache_signature" in source
+    assert "snapshot_signature=sheet_cache_signature" in source
     assert "analysis_start_date=" in source
     assert "analysis_end_date=" in source
     assert "modifier_signature=" in source

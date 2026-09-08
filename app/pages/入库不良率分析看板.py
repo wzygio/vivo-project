@@ -21,10 +21,10 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
 from app.components.page_header import (
-    build_product_cache_signature,
     extract_cached_funcs,
     render_page_header,
 )
+from app.components.indicator_cache import build_indicator_product_cache_signature
 from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
 from app.components.file_uploader import render_yield_config_uploader
@@ -46,9 +46,18 @@ YIELD_DASHBOARD_CACHE_SIGNATURE = "yield_dashboard_manual_refresh_v1"
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
 product_dir = SessionManager.get_product_dir()
-product_cache_signature = build_product_cache_signature(
+product_cache_signature = build_indicator_product_cache_signature(
     YIELD_DASHBOARD_CACHE_SIGNATURE,
     active_config.data_source.product_code,
+    ("yield_trend_fluctuation",),
+)
+lot_cache_signature = build_indicator_product_cache_signature(
+    YIELD_DASHBOARD_CACHE_SIGNATURE, active_config.data_source.product_code,
+    ("yield_lot_oos",),
+)
+sheet_cache_signature = build_indicator_product_cache_signature(
+    YIELD_DASHBOARD_CACHE_SIGNATURE, active_config.data_source.product_code,
+    ("yield_sheet_oos",),
 )
 
 # 依赖注入：初始化数据库连接
@@ -69,6 +78,7 @@ render_page_header(
     cached_funcs=funcs_to_clear,
     refresh_handlers=refresh_handlers,
     product_cache_scope=active_config.data_source.product_code,
+    product_cache_indicators=("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos"),
 )
 
 # [Refactor] 4. 渲染 Yield 配置文件上传组件
@@ -105,7 +115,7 @@ try:
             active_config,
             product_dir,
             _db_manager=db_manager,
-            snapshot_signature=product_cache_signature,
+            snapshot_signature=lot_cache_signature,
             analysis_start_date=yield_cache_context["analysis_start_date"],
             analysis_end_date=yield_cache_context["analysis_end_date"],
             modifier_signature=yield_cache_context["modifier_signature"],
@@ -116,7 +126,7 @@ try:
             active_config,
             product_dir,
             _db_manager=db_manager,
-            snapshot_signature=product_cache_signature,
+            snapshot_signature=sheet_cache_signature,
             analysis_start_date=yield_cache_context["analysis_start_date"],
             analysis_end_date=yield_cache_context["analysis_end_date"],
             modifier_signature=yield_cache_context["modifier_signature"],
@@ -135,7 +145,7 @@ try:
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             active_config,
             product_dir,
-            product_cache_signature,
+            lot_cache_signature,
             warning_signature=yield_cache_context["warning_signature"],
         )
 except (

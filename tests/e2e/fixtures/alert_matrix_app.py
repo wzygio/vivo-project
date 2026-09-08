@@ -5,10 +5,8 @@
 - 默认（矩阵交互）：直接构造含四态的假 payload（2 产品 × 8 行），详情 loader
   经 ``render_alert_matrix_detail(loaders=...)`` 注入假实现，避免触库；
   覆盖四态渲染、点击 🔴 懒加载详情、点击非 🔴 说明文案。
-- ``?mode=cache``（缓存重建）：走真实的 ``_cached_alert_matrix_payload``
-  （st.cache_data）+ 假 context 工厂，页面展示 ``generated_at`` 作为构建令牌，
-  并提供「刷新缓存并重建矩阵」按钮 clear 缓存；E2E 据此验证
-  "普通 rerun 命中缓存 / 刷新后矩阵重建"。
+- ``?mode=cache``：真实单元格缓存 + 假 context，展示首个单元格的计算令牌；
+  刷新按钮仅推进该单元格测试 revision，普通 rerun 保持令牌不变。
 """
 
 from __future__ import annotations
@@ -130,7 +128,7 @@ def _qtime_detail_loader(prod_code: str, reference_date: date) -> dict:
 if st.query_params.get("mode") == "cache":
     # 缓存重建模式：真实 st.cache_data 包装 + 假 context（全部单元格 no_data）
     from app.sections.inline_domain.monitor.alert_matrix_cache import (
-        _cached_alert_matrix_payload,
+        get_cached_alert_matrix,
     )
 
     def _context_factory() -> AlertMatrixContext:
@@ -139,17 +137,18 @@ if st.query_params.get("mode") == "cache":
             inline_resource_dir=Path("output/tmp/alert-matrix-e2e-nonexistent"),
         )
 
-    payload = _cached_alert_matrix_payload(
-        tuple(PRODUCTS),
-        "2026-08-31",
-        "fixture-e2e-cache-sig",
-        _context_factory,
+    payload = get_cached_alert_matrix(
+        products=PRODUCTS, reference_date=date(2026, 9, 2),
+        _context_factory=_context_factory,
+        _signature_provider=lambda *args: "fixture-e2e-cache-sig",
+        _revision_provider=lambda row, product: str(st.session_state.get("fixture_revision", 0))
+        if (row, product) == ("aoi_rs_sheet_oos", "M678") else "0",
     )
-    st.caption(f"matrix-build-token: {payload['generated_at']}")
+    st.caption(f"matrix-build-token: {payload['cells'][('aoi_rs_sheet_oos', 'M678')]['computed_at']}")
     render_alert_matrix_section(payload)
 
     def _clear_matrix_cache() -> None:
-        _cached_alert_matrix_payload.clear()
+        st.session_state["fixture_revision"] = st.session_state.get("fixture_revision", 0) + 1
 
     st.button(
         "刷新缓存并重建矩阵",

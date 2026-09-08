@@ -548,8 +548,7 @@ def test_alert_matrix_cached_funcs_registered_for_page_refresh() -> None:
     )
 
     funcs = get_alert_matrix_cached_funcs()
-    assert alert_matrix_detail._cached_matrix_detail_bundle in funcs
-    assert all(hasattr(func, "clear") for func in funcs)
+    assert funcs == []  # targeted revisions replace aggregate/global clear
 
 
 def test_detail_bundle_cache_key_semantics() -> None:

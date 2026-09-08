@@ -38,8 +38,12 @@ src/shared_kernel/               配置、数据库单例、输出与 Excel 工�
   数据策略由全局配置拥有，产品配置只声明产品差异和资源路径。
 - `DatabaseManager` 是共享 PostgreSQL 引擎单例。领域基础设施负责查询、
   快照、刷新和降级；页面不应自行实现数据读取或业务计算。
-- 页面通过共享页头提供缓存刷新和热重载。产品页将产品级 revision 写入
-  缓存签名，因此刷新一个产品不会清空其他产品的缓存。
+- 单产品页通过共享页头推进指标 × 产品 revision，且同步进入 application
+  与图像 memo 签名；不通过全局清缓存或模块卸载实现定向刷新。
+- 全指标预警矩阵按指标 × 产品缓存状态，无整板计算缓存；CPK 灯及默认
+  详情直读最新结果 Excel，Yield／Q-Time 复用既有 application。定向刷新
+  控件和标识仅在 `?admin=true` 显示。细节见
+  `docs/dev_docs/generated/indicator_domain/all-indicator-warning-dashboard-architecture.md`。
 
 ## 领域边界
 

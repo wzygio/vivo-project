@@ -138,6 +138,7 @@ render_page_header(
     refresh_handlers=[],
     # 本页为全产品视图（矩阵与超规片预警均跨产品），页头产品框无意义
     show_product_filter=False,
+    show_cache_refresh=False,
 )
 
 # --------------------------------------------------------------------------

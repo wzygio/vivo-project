@@ -12,8 +12,13 @@ from yield_domain.application.yield_service import (
     YieldWarningLinesReadError,
 )
 from src.yield_domain.infrastructure.rate_override_repository import RateOverrideReadError
+from app.components.indicator_cache import (
+    build_indicator_product_cache_signature,
+)
+
+PRODUCT_CACHE_INDICATORS = ("yield_sheet_oos",)
+
 from app.components.page_header import (
-    build_product_cache_signature,
     extract_cached_funcs,
     render_page_header,
 )
@@ -33,9 +38,10 @@ active_config = SessionManager.get_active_config()
 product_dir = SessionManager.get_product_dir()
 
 YIELD_SHEET_DETAIL_CACHE_SIGNATURE = "yield_sheet_detail_manual_refresh_v1"
-product_cache_signature = build_product_cache_signature(
+product_cache_signature = build_indicator_product_cache_signature(
     YIELD_SHEET_DETAIL_CACHE_SIGNATURE,
     active_config.data_source.product_code,
+    PRODUCT_CACHE_INDICATORS,
 )
 
 db_manager = DatabaseManager()
@@ -46,6 +52,7 @@ render_page_header(
     active_config,
     cached_funcs=extract_cached_funcs(YieldAnalysisService),
     product_cache_scope=active_config.data_source.product_code,
+    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
     refresh_handlers=[
         lambda: YieldAnalysisService.safe_refresh_snapshots(
             db_manager,

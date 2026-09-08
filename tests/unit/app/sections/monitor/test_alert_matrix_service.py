@@ -30,7 +30,7 @@ REFERENCE_DATE = date(2026, 9, 2)  # 周三：上一 ISO 周 = 2026-08-24 ~ 2026
 def _isolate_legacy_workbook_fixtures(monkeypatch, tmp_path):
     """These fixtures exercise legacy workbook reads, never production ports."""
     monkeypatch.setattr(
-        "app.sections.inline_domain.monitor.alert_matrix_service.build_oos_history_service",
+        "src.inline_domain.composition.build_oos_history_service",
         lambda resource_dir=None: SimpleNamespace(has_history=lambda scope, product: False),
     )
     monkeypatch.setattr(
@@ -310,7 +310,7 @@ def test_sheet_oos_uses_computed_reader_without_workbook_or_database(
         return SimpleNamespace(decorated_df=alerts, alerts_df=alerts, source="computed_cache")
 
     monkeypatch.setattr(
-        "app.sections.inline_domain.monitor.alert_matrix_service.build_oos_history_service",
+        "src.inline_domain.composition.build_oos_history_service",
         lambda resource_dir=None: SimpleNamespace(
             has_history=lambda scope, product: True, read_product=read_product,
         ),
@@ -326,9 +326,9 @@ def test_sheet_oos_uses_computed_reader_without_workbook_or_database(
 
     cell = _evaluate("spc_sheet_oos", _make_context(inline_resource_dir=tmp_path))
 
-    assert cell["state"] == CELL_STATE_ALERT
-    assert cell["alert_factories"] == ["OLED"]
-    assert calls == [("spc", PROD)]
+    # Production matrix now reads only the local result workbook, never old history.
+    assert cell["state"] == CELL_STATE_NO_DATA
+    assert calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -395,11 +395,12 @@ def _cpk_row(period_label: str, cpk: float, decorated: bool = False) -> dict:
     return {
         "factory": "OLED",
         "step_id": "21200",
-        "param_name": "CD_X",
+        "prod_code": PROD,
+        "param_name": f"CD_X_{cpk}_{decorated}",
         "period_type": "week",
         "period_label": period_label,
-        "cpk": cpk,
-        "cpk_decorated": decorated,
+        "cpk_corrected": cpk,
+        "flag": decorated,
     }
 
 
@@ -671,9 +672,9 @@ from app.sections.inline_domain.monitor.alert_matrix_cache import (
 
 @pytest.fixture(autouse=True)
 def _clear_matrix_cache():
-    cache_module._cached_alert_matrix_payload.clear()
+    cache_module._cached_alert_matrix_cell.clear()
     yield
-    cache_module._cached_alert_matrix_payload.clear()
+    cache_module._cached_alert_matrix_cell.clear()
 
 
 def _counting_context_factory(calls: list, context: AlertMatrixContext):
@@ -700,7 +701,7 @@ def test_get_cached_alert_matrix_hits_within_same_week(tmp_path: Path) -> None:
             reference_date=date(2026, 9, 6), products=["M678"], _context_factory=factory
         )
 
-    assert len(calls) == 1
+    assert len(calls) == 2  # cheap context assembly is intentionally uncached
 
 
 def test_get_cached_alert_matrix_rebuilds_on_signature_change(tmp_path: Path) -> None:
@@ -753,28 +754,15 @@ def test_week_start_normalizes_to_monday() -> None:
 
 def test_cache_ttl_is_read_from_global_config() -> None:
     """config/global.yaml 的 application.cache_ttl_hours = 12h。"""
-    assert cache_module._cached_alert_matrix_payload._info.ttl == 12 * 60 * 60
+    assert cache_module._cached_alert_matrix_cell._info.ttl == 12 * 60 * 60
 
 
 def test_default_signature_components_cover_all_dimensions(monkeypatch) -> None:
-    monkeypatch.setattr(
-        cache_module, "get_product_cache_revision", lambda prod: f"rev-{prod}"
-    )
-    monkeypatch.setattr(
-        cache_module,
-        "get_scope_decision_signature",
-        lambda scope, prod: f"sig-{scope}-{prod}",
-    )
-    monkeypatch.setattr(
-        cache_module, "get_qtime_decision_file_stat", lambda path: (111, 222)
-    )
+    monkeypatch.setattr(cache_module, "build_cell_source_signature", lambda row, prod: f"{row}-{prod}")
 
     components = cache_module.build_default_signature_components(["M678"])
 
-    assert components["product_revisions"] == {"M678": "rev-M678"}
-    for scope in ("spc", "ctq", "aoi_tt", "aoi_rs"):
-        assert components["scope_decision_signatures"][f"{scope}|M678"] == f"sig-{scope}-M678"
-    assert components["qtime_decision_file_stat"] == [111, 222]
+    assert set(components) == {f"{row.row_key}|M678" for row in MATRIX_ROWS}
 
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ from typing import Any
 import streamlit as st
 
 from app.sections.inline_domain.monitor.alert_matrix_cache import get_cached_alert_matrix
+from app.components.indicator_cache import bump_indicator_product_revision
 from app.sections.inline_domain.monitor.alert_matrix_service import (
     CELL_STATE_ALERT,
     CELL_STATE_ERROR,
@@ -298,7 +299,7 @@ def render_alert_matrix_board(
     detail_loaders: Mapping[str, Any] | None = None,
     filter_selection: tuple[str, list[str], list[str]] | None = None,
 ) -> None:
-    """页首矩阵区入口：payload 经 L2 缓存集中计算后一次性渲染，再按选中单元格懒加载详情。
+    """页首矩阵区入口：拼装独立单元格缓存，再按选中单元格懒加载详情。
 
     ``filter_selection`` 为页面常驻筛选条的选择，透传给 section 做客户端切片；
     缺省时 section 自行渲染筛选条（测试/独立使用场景）。
@@ -306,6 +307,7 @@ def render_alert_matrix_board(
     矩阵整体失败（如签名采集异常）降级为 warning 提示（加载失败属错误类，
     必须可见），不阻断页面其余部分。
     """
+    render_matrix_refresh_controls()
     try:
         with st.spinner("正在加载预警矩阵..."):
             payload = get_cached_alert_matrix()
@@ -328,6 +330,13 @@ def render_alert_matrix_board(
 
     render_alert_matrix_section(payload, filter_selection=filter_selection)
 
+    if str(st.query_params.get("admin", "")).lower() == "true":
+        st.dataframe([
+            {"指标": row, "产品": product, "刷新标识": cell.get("cache_revision", ""),
+             "状态计算时间": cell.get("computed_at", "")}
+            for (row, product), cell in payload.get("cells", {}).items()
+        ], hide_index=True, width="stretch")
+
     # 延迟导入：详情模块汇集各域渲染依赖，仅在矩阵渲染时才引入。
     from app.sections.inline_domain.monitor.alert_matrix_detail import (
         render_alert_matrix_detail,
@@ -339,3 +348,19 @@ def render_alert_matrix_board(
         step_desc_map=step_desc_map,
         loaders=detail_loaders,
     )
+
+
+def render_matrix_refresh_controls() -> None:
+    """Manual refresh is explicitly targeted and visible only in admin mode."""
+    if str(st.query_params.get("admin", "")).lower() != "true":
+        return
+    from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROWS
+    from src.shared_kernel.config import ConfigLoader
+
+    with st.expander("指标缓存管理（管理员）", expanded=False):
+        names = {row.row_key: row.display_name for row in MATRIX_ROWS}
+        indicator = st.selectbox("刷新指标", list(names), format_func=names.get, key="matrix_refresh_indicator")
+        product = st.selectbox("刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product")
+        if st.button("刷新所选指标缓存", key="matrix_refresh_cell"):
+            bump_indicator_product_revision(indicator, product)
+        st.caption("仅刷新所选指标 × 产品；其他单元格及底层共享原始快照保持复用。")

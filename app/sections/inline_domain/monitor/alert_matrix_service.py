@@ -28,15 +28,10 @@ from typing import Any
 import pandas as pd
 
 from app.components.alert_center import compute_lot_oos_records
-from app.sections.inline_domain.spc.spc_dashboard import (
-    CPK_ALERT_THRESHOLD,
-    build_weekly_cpk_alerts,
-)
+from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
 from src.inline_domain.application.shared.decorated_data import (
     SCOPE_DECORATION_FILE_NAME,
 )
-from src.inline_domain.application.shared.oos_history_service import OosHistoryService
-from src.inline_domain.composition import build_oos_history_service
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_KEY_COLUMNS
 from src.inline_domain.core.aoi_tt.aoi_tt_decoration import AOI_TT_OOS_KEY_COLUMNS
 from src.inline_domain.core.shared.sheet_oos_alerts import (
@@ -193,23 +188,15 @@ def _sheet_oos_evaluator(
             decoration_df = result.decorated_df
             projected_time_column = "event_time"
         else:
-            history_service = build_oos_history_service(
-                resource_dir if explicit_override else None
+            file_name = SCOPE_DECORATION_FILE_NAME[scope]
+            if not (resource_dir / file_name).exists():
+                return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "修饰工作簿不存在")
+            decoration_df = load_sheet_oos_decoration(
+                resource_dir,
+                file_name=file_name,
+                sheet_name=prod_code,
+                key_columns=key_columns,
             )
-            if history_service.has_history(scope, prod_code):
-                result = history_service.read_product(scope, prod_code)
-                decoration_df = result.decorated_df
-                projected_time_column = "event_time"
-            else:
-                file_name = SCOPE_DECORATION_FILE_NAME[scope]
-                if not (resource_dir / file_name).exists():
-                    return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "修饰工作簿不存在")
-                decoration_df = load_sheet_oos_decoration(
-                    resource_dir,
-                    file_name=file_name,
-                    sheet_name=prod_code,
-                    key_columns=key_columns,
-                )
         if decoration_df.empty or "flag" not in decoration_df.columns:
             return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无该产品修饰数据")
         if projected_time_column not in decoration_df.columns:
@@ -241,15 +228,31 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
     capability_df = context.spc_cpk_loader(prod_code)
     if capability_df is None or capability_df.empty:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无周期能力数据")
-    alerts_df = build_weekly_cpk_alerts(
-        capability_df,
-        threshold=CPK_ALERT_THRESHOLD,
-        reference_date=context.reference_date,
-    )
+    normalized = normalize_latest_cpk(capability_df, prod_code)
+    week_start, _ = previous_iso_week_range(context.reference_date)
+    iso = week_start.isocalendar()
+    weekly = normalized.loc[normalized["period_type"].eq("week") & normalized["period_label"].eq(f"{iso.year}-W{iso.week:02d}")]
+    if weekly.empty:
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无上一完整周 CPK 明细")
+    alerts_df = build_latest_cpk_alerts(normalized, context.reference_date)
+    if alerts_df.empty and weekly["status"].eq("无法判定").any():
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "上一完整周存在无法判定的 CPK")
     # CPK 预警记录为中文列（厂别/站点/参数名称/超规周次/CPK值）
     return _alerts_cell(
         row_key, prod_code, not alerts_df.empty, _extract_factories(alerts_df, "厂别")
     )
+
+
+def build_latest_cpk_alerts(frame: pd.DataFrame, reference_date: date) -> pd.DataFrame:
+    """Read normalized local ledger records; never recalculate raw SPC capability."""
+    start, _ = previous_iso_week_range(reference_date)
+    iso = start.isocalendar()
+    mask = (frame["period_type"].eq("week")
+            & frame["period_label"].eq(f"{iso.year}-W{iso.week:02d}")
+            & frame["status"].eq("预警"))
+    return frame.loc[mask, ["factory", "step_id", "param_name", "period_label", "cpk"]].rename(
+        columns={"factory": "厂别", "step_id": "站点", "param_name": "参数名称", "period_label": "超规周次", "cpk": "CPK值"}
+    ).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
@@ -491,6 +494,7 @@ def build_alert_matrix_payload(
     products: Sequence[str] | None = None,
     context: AlertMatrixContext | None = None,
     signature: str = "",
+    cell_loader: Callable[[AlertMatrixRow, str, AlertMatrixContext], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """构建矩阵 payload（PRD §4.1 schema）。纯计算，无 st.* 调用。
 
@@ -510,7 +514,7 @@ def build_alert_matrix_payload(
     cells: dict[tuple[str, str], dict[str, Any]] = {}
     for row in MATRIX_ROWS:
         for prod_code in product_list:
-            cells[(row.row_key, prod_code)] = _evaluate_cell(row, prod_code, context)
+            cells[(row.row_key, prod_code)] = (cell_loader or _evaluate_cell)(row, prod_code, context)
 
     return {
         "products": product_list,
@@ -526,6 +530,7 @@ def build_alert_matrix_payload(
         ],
         "cells": cells,
         "signature": signature,
+        "reference_date": reference.isoformat(),
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "reference_week": {
             "label": f"{iso.year}-W{iso.week:02d}",
