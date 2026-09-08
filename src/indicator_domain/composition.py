@@ -1,6 +1,7 @@
 """Composition root for indicator-domain outbound adapters."""
 
 from src.indicator_domain.application.ijp.service import IjpReportService
+from src.indicator_domain.application.ijp.settings import IjpSettings
 from src.indicator_domain.application.qtime.service import QTimeReportService
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
 from src.indicator_domain.infrastructure.qtime.decoration_repository import (
@@ -42,4 +43,7 @@ def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
         build_ijp_repository(db_manager),
         enabled_product_codes=tuple(ConfigLoader.get_enabled_products()),
         work_order_types=tuple(ConfigLoader.get_work_order_types()),
+        settings=IjpSettings.model_validate(
+            ConfigLoader.load_domain_config("indicator_domain").get("ijp", {})
+        ),
     )

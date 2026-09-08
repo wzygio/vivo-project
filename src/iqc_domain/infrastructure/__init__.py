@@ -1,0 +1,1 @@
+"""Static IQC demonstration resources."""

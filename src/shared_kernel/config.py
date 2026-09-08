@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 
 # 引入我们定义的 Pydantic 模型
 from src.shared_kernel.config_model import AppConfig
-from src.shared_kernel.compliance_config_excel import load_compliance_config_from_xlsx
 from src.shared_kernel.data_forward import DataForwardPolicy
 
 class ConfigLoader:
@@ -267,16 +266,7 @@ class ConfigLoader:
 
     @classmethod
     def get_compliance_config(cls) -> dict:
-        """
-        获取厂别-产品型号-监控类型-月份四维修饰配置。
-        """
-        xlsx_path = cls.get_compliance_config_path()
-        try:
-            if xlsx_path.exists():
-                return load_compliance_config_from_xlsx(xlsx_path)
-        except Exception as e:
-            logging.error(f"❌ 读取 compliance 配置失败: {e}")
-
+        """旧后台四维修饰已停用；新矩阵配置只由前端管理器读取。"""
         return {"rules": []}
 
     @classmethod
