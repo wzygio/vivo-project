@@ -39,7 +39,7 @@ def render_qtime_alert_center(alerts: pd.DataFrame, *, total_lots: int) -> None:
     with st.expander("Q-Time 超规预警中心", expanded=has_alerts):
         if has_alerts:
             alert_lots = alerts["lot_id"].nunique()
-            st.error(f"检测到 {len(alerts)} 条已确认真实超规，涉及 {alert_lots} 个 Lot，请关注。")
+            st.error(f"检测到 {len(alerts)} 条已确认超规，涉及 {alert_lots} 个 Lot，请关注。")
             with st.container(horizontal=True):
                 st.metric("当前过货 Lot", total_lots, border=True)
                 st.metric("超规预警 Lot", alert_lots, border=True)
