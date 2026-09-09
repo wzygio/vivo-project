@@ -25,3 +25,17 @@ def test_raw_snapshot_builders_share_domain_module_paths(monkeypatch, tmp_path):
     assert composition.build_raw_measurement_repository(None, "M626")["snapshot_dir"] == tmp_path / "data/inline_domain/shared"
     assert composition.build_raw_measurement_repository(None, "M678")["snapshot_dir"] == tmp_path / "data/inline_domain/shared"
     assert composition.build_aoi_rs_repository(None, "M626")["snapshot_dir"] == tmp_path / "data/inline_domain/aoi_rs"
+
+
+def test_warning_builders_share_configured_summary_workbook(monkeypatch, tmp_path):
+    configured = tmp_path / "configured" / "summary.xlsx"
+    monkeypatch.setattr(
+        composition, "monitor_summary_workbook_path", lambda resource_dir=None: configured
+    )
+    composition._build_monitor_summary_workbook_service.cache_clear()
+
+    alarm = composition.build_monitor_summary_workbook_service()
+    cpk = composition.build_cpk_monitor_service()
+
+    assert alarm._store.workbook_path == configured
+    assert cpk._store.workbook_path == configured

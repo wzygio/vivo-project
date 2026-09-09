@@ -35,6 +35,7 @@ resources:
     aoi_tt_sheet_ooc_decoration: resources/inline_domain/aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx
     aoi_tt_particle_size_ratio_spec: resources/inline_domain/aoi_tt/AOI_TT-比例规格表.xlsx
     compliance_config: resources/inline_domain/monitor/compliance_config.xlsx
+    monitor_summary_workbook: resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx
     ctq_sheet_oos_decoration: resources/inline_domain/ctq/ctq_sheet_oos_decoration.xlsx
     ctq_sheet_ooc_decoration: resources/inline_domain/ctq/ctq_sheet_ooc_decoration.xlsx
     scrap_sheets: resources/inline_domain/monitor/scrap_sheets.xlsx

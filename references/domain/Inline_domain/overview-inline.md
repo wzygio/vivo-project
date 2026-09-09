@@ -2,7 +2,7 @@
 
 > **领域代码**: `inline_domain`  
 > **对应目录**: [`src/inline_domain/`](../../src/inline_domain/)  
-> **最后更新**: 2026-08-20
+> **最后更新**: 2026-09-09
 
 ---
 
@@ -97,6 +97,9 @@ PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路�
 OOS/OOC 长期事实和按日过货历史。汇总表以查询截止日构建当年、截至当前季度、
 最近三个月和当前 ISO 周的重叠列，行固定为过货量、OOC、SOOS=0、OOS 和 Total；
 OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示。
+报警率与 CPK 共用的持久化工作簿路径由 `inline_domain.yaml` 的
+`resources.files.monitor_summary_workbook` 注入；工作簿使用 `<产品>报警率` 与
+`<产品> CPK` 分页，基础设施读取器聚合各产品页后再交给应用服务筛选。
 
 ### 4.2 `spc/spc_service.py` — SPC 能力报表
 

@@ -36,8 +36,8 @@ def test_transaction_preserves_historical_rows_other_sheets_and_is_idempotent(tm
     ])
     other = pd.DataFrame({"preserve": [123]})
     with pd.ExcelWriter(path) as writer:
-        baseline.to_excel(writer, sheet_name="CPK", index=False)
-        other.to_excel(writer, sheet_name="报警率", index=False)
+        baseline.to_excel(writer, sheet_name="M626 CPK", index=False)
+        other.to_excel(writer, sheet_name="M626报警率", index=False)
     store = CpkSummaryWorkbookStore(path)
     old = store.read()
     frame = normalize_latest_cpk(source(), "M626")
@@ -46,7 +46,7 @@ def test_transaction_preserves_historical_rows_other_sheets_and_is_idempotent(tm
     preserved = old[old["时间标签"].ne("2026-W36")]
     actual = updated[updated["时间标签"].ne("2026-W36")]
     pd.testing.assert_frame_equal(store._sort(preserved), store._sort(actual))
-    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="报警率"), other)
+    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="M626报警率"), other)
     assert updated.loc[updated["时间标签"].eq("2026-W36"), "Cpk≥1.33达标率"].iloc[0] == .9
     before = path.read_bytes()
     store.refresh_latest(frame, **kwargs)

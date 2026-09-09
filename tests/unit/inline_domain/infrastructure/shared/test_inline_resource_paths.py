@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+from src.inline_domain.infrastructure.shared.resource_paths import (
+    monitor_summary_workbook_path,
+    scope_decoration_path,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared import resource_paths
 
@@ -21,6 +24,7 @@ def test_non_alarm_inline_resources_resolve_to_owned_subdirectories() -> None:
         "aoi_tt_particle_size_ratio_spec": "aoi_tt",
         "compliance_config": "monitor",
         "scrap_sheets": "monitor",
+        "monitor_summary_workbook": "monitor",
     }
     for key, folder in expected.items():
         path = ConfigLoader.get_domain_resource_path("inline_domain", key)
@@ -38,3 +42,16 @@ def test_custom_resources_configuration_is_not_forced_back_to_flat_layout(
     )
 
     assert scope_decoration_path("spc", "oos") == configured
+
+
+def test_monitor_summary_workbook_uses_configured_resource_path(
+    monkeypatch, tmp_path
+) -> None:
+    configured = tmp_path / "custom" / "warning-summary.xlsx"
+    monkeypatch.setattr(
+        resource_paths.ConfigLoader,
+        "get_domain_resource_path",
+        classmethod(lambda _cls, domain, key, default_name=None: configured),
+    )
+
+    assert monitor_summary_workbook_path() == configured

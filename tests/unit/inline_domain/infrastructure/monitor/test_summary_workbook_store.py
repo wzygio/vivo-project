@@ -37,6 +37,35 @@ def _write_legacy_workbook(path: Path) -> None:
         pd.DataFrame([{"marker": "keep-cpk"}]).to_excel(writer, sheet_name="CPK", index=False)
 
 
+def _write_product_workbook(path: Path) -> None:
+    m626 = pd.concat(
+        [
+            _current_rows(),
+            _current_rows().iloc[[0]].assign(
+                周期类型="季度", 时间标签="2026-Q2", 显示标签="Q2"
+            ),
+            _current_rows().iloc[[0]].assign(
+                周期类型="月度", 时间标签="2026-08", 显示标签="M8"
+            ),
+        ],
+        ignore_index=True,
+    )
+    alarm = pd.concat(
+        [m626, _current_rows().assign(产品="M678", 过货量=80)],
+        ignore_index=True,
+    )
+    with pd.ExcelWriter(path) as writer:
+        alarm.loc[alarm["产品"].eq("M626")].to_excel(
+            writer, sheet_name="M626报警率", index=False
+        )
+        alarm.loc[alarm["产品"].eq("M678")].to_excel(
+            writer, sheet_name="M678报警率", index=False
+        )
+        pd.DataFrame([{"marker": "keep-cpk"}]).to_excel(
+            writer, sheet_name="M626 CPK", index=False
+        )
+
+
 def _current_rows() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -73,6 +102,42 @@ def test_upsert_updates_only_open_periods_and_preserves_other_sheet(tmp_path) ->
     assert q3["过货量"] == 40
     assert set(result["监控类型"]) == {"ALL"}
     assert pd.read_excel(path, sheet_name="CPK").to_dict("records") == [
+        {"marker": "keep-cpk"}
+    ]
+    assert pd.read_excel(path, sheet_name="M626报警率")["产品"].unique().tolist() == [
+        "M626"
+    ]
+
+
+def test_read_aggregates_product_alarm_sheets(tmp_path) -> None:
+    path = tmp_path / "summary.xlsx"
+    _write_product_workbook(path)
+
+    result = MonitorSummaryWorkbookStore(path).read()
+
+    assert set(result["产品"]) == {"M626", "M678"}
+    assert len(result) == 10
+
+
+def test_upsert_writes_each_product_to_its_own_alarm_sheet(tmp_path) -> None:
+    path = tmp_path / "summary.xlsx"
+    _write_product_workbook(path)
+    incoming = pd.concat(
+        [_current_rows(), _current_rows().assign(产品="M678")],
+        ignore_index=True,
+    )
+
+    MonitorSummaryWorkbookStore(path).upsert_current_periods(
+        incoming, as_of=pd.Timestamp("2026-09-07")
+    )
+
+    assert pd.read_excel(path, sheet_name="M626报警率")["产品"].unique().tolist() == [
+        "M626"
+    ]
+    assert pd.read_excel(path, sheet_name="M678报警率")["产品"].unique().tolist() == [
+        "M678"
+    ]
+    assert pd.read_excel(path, sheet_name="M626 CPK").to_dict("records") == [
         {"marker": "keep-cpk"}
     ]
 
@@ -118,15 +183,15 @@ def test_identical_upsert_does_not_rewrite_or_change_signature(
 ) -> None:
     path = tmp_path / "summary.xlsx"
     with pd.ExcelWriter(path) as writer:
-        _current_rows().to_excel(writer, sheet_name="报警率", index=False)
+        _current_rows().to_excel(writer, sheet_name="M626报警率", index=False)
         pd.DataFrame([{"marker": "keep-cpk"}]).to_excel(
-            writer, sheet_name="CPK", index=False
+            writer, sheet_name="M626 CPK", index=False
         )
     store = MonitorSummaryWorkbookStore(path)
     signature = store.source_signature()
     monkeypatch.setattr(
         store_module,
-        "_replace_summary_sheet",
+        "replace_product_period_sheets",
         lambda *args, **kwargs: pytest.fail("identical rows must not be rewritten"),
     )
 
@@ -150,17 +215,22 @@ def test_legacy_initialization_rounds_half_up_but_preserves_missing_history(tmp_
 def test_non_openpyxl_workbook_uses_preserving_com_writer(tmp_path, monkeypatch) -> None:
     path = tmp_path / "protected.xlsx"
     path.write_bytes(b"protected")
-    expected = WorkbookWriteResult(True, path, ("报警率",))
+    expected = WorkbookWriteResult(True, path, ("M626报警率",))
     monkeypatch.setattr(
         "openpyxl.load_workbook",
         lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("protected")),
     )
     monkeypatch.setattr(
         store_module,
-        "_replace_encrypted_summary_sheet_via_com",
-        lambda candidate, frame: expected,
+        "_replace_encrypted_period_sheets_via_com",
+        lambda candidate, sheets, *, normalizer: expected,
     )
 
-    result = store_module._replace_summary_sheet(path, _current_rows())
+    result = store_module.replace_product_period_sheets(
+        path,
+        _current_rows(),
+        sheet_suffix="报警率",
+        normalizer=MonitorSummaryWorkbookStore._normalize,
+    )
 
     assert result == expected

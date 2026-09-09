@@ -259,7 +259,7 @@ def _run_page() -> None:
 def _assert_module_structure(trackers: dict) -> None:
     """三个独立查询模块；CPK 的查询门控保留提示。"""
     assert trackers["infos"] == ["选择产品和厂别后，点击查询生成 CPK 预警看板。"]
-    assert trackers["subheaders"] == ["🚦 全指标预警看板", "⚠️ Inline预警看板", "📊 CPK预警看板"]
+    assert trackers["subheaders"] == ["🚦 全指标预警看板", "⚠️ 超规片预警看板", "📊 CPK预警看板"]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True
     ]

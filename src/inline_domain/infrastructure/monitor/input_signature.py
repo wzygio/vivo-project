@@ -8,9 +8,17 @@ from pathlib import Path
 
 
 def monitor_input_signature(
-    project_root: Path, resource_root: Path, products: Iterable[str]
+    project_root: Path,
+    resource_root: Path,
+    products: Iterable[str],
+    *,
+    excluded_paths: Iterable[Path] = (),
 ) -> str:
     """Track source snapshots and editable inputs, excluding generated summaries."""
+    excluded = {
+        Path(path).resolve()
+        for path in excluded_paths
+    }
     paths: set[Path] = set()
     for root in (resource_root, project_root / "config"):
         if root.exists():
@@ -19,7 +27,7 @@ def monitor_input_signature(
                 if path.is_file()
                 and path.suffix.lower() in {".xlsx", ".yaml", ".yml", ".csv", ".json"}
                 and not path.name.startswith(("~$", "."))
-                and path.name != "北极星报警率与CPK汇总.xlsx"
+                and path.resolve() not in excluded
             )
     for product in sorted(set(products)):
         root = project_root / "data" / product

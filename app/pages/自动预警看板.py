@@ -207,7 +207,7 @@ with st.expander("全指标状态总览", expanded=True):
 # 「刷新缓存/刷新数据」由 perform_hard_reset 阶段 4 /
 # _refresh_data_callback 清除该 session key。
 # --------------------------------------------------------------------------
-st.subheader("⚠️ Inline预警看板")
+st.subheader("⚠️ 超规片预警看板")
 with st.expander("Inline超规预警", expanded=True):
     available_products = SessionManager.AVAILABLE_PRODUCTS
     available_factories = MONITOR_FACTORY_OPTIONS

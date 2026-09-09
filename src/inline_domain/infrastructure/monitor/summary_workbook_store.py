@@ -26,11 +26,13 @@ from src.inline_domain.core.monitor.period_summary import (
 )
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
+    list_workbook_sheet_names,
     read_workbook_sheet,
     replace_workbook_sheets,
 )
 
 SUMMARY_SHEET = "报警率"
+ALARM_SHEET_SUFFIX = "报警率"
 SUMMARY_KEY_COLUMNS = ["产品", "监控类型", "厂别", "周期类型", "时间标签"]
 LEGACY_COLUMNS = [
     "产品",
@@ -58,6 +60,8 @@ class MonitorSummaryWorkbookStore:
 
     _update_lock = threading.Lock()
     sheet_name = SUMMARY_SHEET
+    legacy_sheet_name = SUMMARY_SHEET
+    sheet_suffix = ALARM_SHEET_SUFFIX
     columns = MONITOR_SUMMARY_COLUMNS + WEEK_TRACKING_COLUMNS
 
     def __init__(self, workbook_path: Path | str) -> None:
@@ -77,12 +81,40 @@ class MonitorSummaryWorkbookStore:
 
     def read(self) -> pd.DataFrame:
         try:
-            source = read_workbook_sheet(self._workbook_path, self.sheet_name)
+            sheet_names = list_workbook_sheet_names(self._workbook_path)
+            if sheet_names is None:
+                raise MonitorSummaryWorkbookError("无法枚举汇总工作簿的 sheet")
+            product_sheets = sorted(
+                name
+                for name in sheet_names
+                if name != self.legacy_sheet_name and name.endswith(self.sheet_suffix)
+            )
+            if not product_sheets:
+                source = read_workbook_sheet(
+                    self._workbook_path, self.legacy_sheet_name
+                )
+                return self._normalize(source)
+            frames = [self._read_product_sheet(name) for name in product_sheets]
+            source = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         except Exception as exc:
+            if isinstance(exc, MonitorSummaryWorkbookError):
+                raise
             raise MonitorSummaryWorkbookError(
-                f"无法读取 {self.sheet_name} 汇总工作簿：{exc}"
+                f"无法读取 {self.sheet_suffix} 汇总工作簿：{exc}"
             ) from exc
         return self._normalize(source)
+
+    def _read_product_sheet(self, sheet_name: str) -> pd.DataFrame:
+        product = sheet_name[: -len(self.sheet_suffix)].strip()
+        if not product:
+            raise MonitorSummaryWorkbookError(f"无效的产品 sheet 名：{sheet_name}")
+        frame = self._normalize(read_workbook_sheet(self._workbook_path, sheet_name))
+        products = set(frame["产品"].astype(str)) if not frame.empty else set()
+        if products and products != {product}:
+            raise MonitorSummaryWorkbookError(
+                f"{sheet_name} 只能包含产品 {product}，实际为 {sorted(products)}"
+            )
+        return frame
 
     def upsert_current_periods(
         self, rows: pd.DataFrame, *, as_of: pd.Timestamp
@@ -138,7 +170,12 @@ class MonitorSummaryWorkbookStore:
             return self.read(), warnings
 
     def _write(self, frame: pd.DataFrame) -> WorkbookWriteResult:
-        return _replace_summary_sheet(self._workbook_path, frame)
+        return replace_product_period_sheets(
+            self._workbook_path,
+            frame,
+            sheet_suffix=self.sheet_suffix,
+            normalizer=self._normalize,
+        )
 
     @classmethod
     def _merge(cls, current: pd.DataFrame, incoming: pd.DataFrame) -> pd.DataFrame:
@@ -277,11 +314,54 @@ def _interprocess_lock(workbook_path: Path, timeout_seconds: float = 30.0) -> It
 
 
 def _replace_summary_sheet(path: Path, frame: pd.DataFrame) -> WorkbookWriteResult:
-    """Update only 报警率, preserving encrypted workbooks and every other object."""
-    return replace_period_sheet(
-        path, frame, sheet_name=SUMMARY_SHEET,
+    """Update product alarm sheets, preserving every unrelated workbook object."""
+    return replace_product_period_sheets(
+        path,
+        frame,
+        sheet_suffix=ALARM_SHEET_SUFFIX,
         normalizer=MonitorSummaryWorkbookStore._normalize,
     )
+
+
+def replace_product_period_sheets(
+    path: Path,
+    frame: pd.DataFrame,
+    *,
+    sheet_suffix: str,
+    normalizer: Callable[[pd.DataFrame], pd.DataFrame],
+) -> WorkbookWriteResult:
+    """Atomically write one sheet per product for a summary data type."""
+    normalized = normalizer(frame)
+    sheets = {
+        _product_sheet_name(product, sheet_suffix): rows.reset_index(drop=True)
+        for product, rows in normalized.groupby("产品", sort=True)
+    }
+    if not sheets:
+        return WorkbookWriteResult(False, path, (), "没有可写入的产品汇总数据")
+    writable = {
+        name: rows.astype(object).where(rows.notna(), None)
+        for name, rows in sheets.items()
+    }
+    if not path.exists():
+        return replace_workbook_sheets(path, writable)
+    try:
+        import openpyxl
+
+        workbook = openpyxl.load_workbook(path, read_only=True)
+        workbook.close()
+    except Exception:
+        return _replace_encrypted_period_sheets_via_com(
+            path, writable, normalizer=normalizer
+        )
+    return replace_workbook_sheets(path, writable)
+
+
+def _product_sheet_name(product: object, sheet_suffix: str) -> str:
+    normalized = str(product).strip()
+    name = f"{normalized}{sheet_suffix}"
+    if not normalized or len(name) > 31 or any(char in name for char in "[]:*?/\\"):
+        raise MonitorSummaryWorkbookError(f"产品名无法生成合法 Excel sheet：{product!r}")
+    return name
 
 
 def replace_period_sheet(
@@ -310,13 +390,27 @@ def _replace_encrypted_summary_sheet_via_com(
     path: Path, frame: pd.DataFrame, *, sheet_name: str = SUMMARY_SHEET,
     normalizer: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
 ) -> WorkbookWriteResult:
-    """Atomically edit a protected workbook without rebuilding its other sheets."""
+    """Compatibility wrapper for one protected summary sheet."""
+    normalize = normalizer or MonitorSummaryWorkbookStore._normalize
+    return _replace_encrypted_period_sheets_via_com(
+        path, {sheet_name: frame}, normalizer=normalize
+    )
+
+
+def _replace_encrypted_period_sheets_via_com(
+    path: Path,
+    sheets: Mapping[str, pd.DataFrame],
+    *,
+    normalizer: Callable[[pd.DataFrame], pd.DataFrame],
+) -> WorkbookWriteResult:
+    """Atomically edit protected product sheets without rebuilding the workbook."""
     try:
         import pythoncom
         import win32com.client
     except ImportError as exc:
         return WorkbookWriteResult(False, path, (), f"缺少 Excel COM 支持: {exc}")
 
+    target_sheets = tuple(sheets)
     source_was_protected = not _has_zip_signature(path)
     backup_path = path.with_suffix(f"{path.suffix}.bak")
     temp_handle = tempfile.NamedTemporaryFile(
@@ -334,7 +428,7 @@ def _replace_encrypted_summary_sheet_via_com(
         temp_path.unlink(missing_ok=True)
         return WorkbookWriteResult(False, path, (), f"创建加密工作簿备份失败: {exc}")
 
-    excel = workbook = worksheet = None
+    excel = workbook = None
     com_initialized = False
     write_error: Exception | None = None
     try:
@@ -344,19 +438,26 @@ def _replace_encrypted_summary_sheet_via_com(
         excel.Visible = False
         excel.DisplayAlerts = False
         workbook = excel.Workbooks.Open(str(temp_path.resolve()), ReadOnly=False)
-        worksheet = workbook.Worksheets(sheet_name)
-        worksheet.UsedRange.ClearContents()
-        data_rows = frame.astype(object).where(frame.notna(), None).values.tolist()
-        values = [list(frame.columns)] + data_rows
-        target = worksheet.Range("A1").Resize(len(values), len(frame.columns))
-        target.Value = tuple(tuple(value for value in row) for row in values)
+        for sheet_name, frame in sheets.items():
+            try:
+                worksheet = workbook.Worksheets(sheet_name)
+            except Exception:
+                worksheet = workbook.Worksheets.Add(
+                    After=workbook.Worksheets(workbook.Worksheets.Count)
+                )
+                worksheet.Name = sheet_name
+            worksheet.UsedRange.ClearContents()
+            data_rows = frame.astype(object).where(frame.notna(), None).values.tolist()
+            values = [list(frame.columns)] + data_rows
+            target = worksheet.Range("A1").Resize(len(values), len(frame.columns))
+            target.Value = tuple(tuple(value for value in row) for row in values)
+            worksheet = None
         workbook.Save()
         workbook.Close(SaveChanges=False)
         workbook = None
     except Exception as exc:
         write_error = exc
     finally:
-        worksheet = None
         if workbook is not None:
             try:
                 workbook.Close(SaveChanges=False)
@@ -373,25 +474,28 @@ def _replace_encrypted_summary_sheet_via_com(
     if write_error is not None:
         temp_path.unlink(missing_ok=True)
         return WorkbookWriteResult(
-            False, path, (), f"Excel COM 更新 {sheet_name} 失败: {write_error}"
+            False,
+            path,
+            (),
+            f"Excel COM 更新 {', '.join(target_sheets)} 失败: {write_error}",
         )
 
     try:
         if source_was_protected and not _wait_for_protected_bytes(temp_path):
             raise ValueError("企业加密保护未能保留，正式文件未变更")
-        normalize = normalizer or MonitorSummaryWorkbookStore._normalize
-        persisted = read_workbook_sheet(temp_path, sheet_name)
-        normalized_actual = normalize(persisted)
-        normalized_expected = normalize(frame)
-        if not normalized_actual.reset_index(drop=True).equals(
-            normalized_expected.reset_index(drop=True)
-        ):
-            raise ValueError(f"写回后的 {sheet_name} 数据与预期不一致")
+        for sheet_name, frame in sheets.items():
+            persisted = read_workbook_sheet(temp_path, sheet_name)
+            normalized_actual = normalizer(persisted)
+            normalized_expected = normalizer(frame)
+            if not normalized_actual.reset_index(drop=True).equals(
+                normalized_expected.reset_index(drop=True)
+            ):
+                raise ValueError(f"写回后的 {sheet_name} 数据与预期不一致")
         os.replace(temp_path, path)
     except Exception as exc:
         temp_path.unlink(missing_ok=True)
-        return WorkbookWriteResult(False, path, (), f"{sheet_name} 写回校验失败: {exc}")
-    return WorkbookWriteResult(True, path, (sheet_name,))
+        return WorkbookWriteResult(False, path, (), f"产品 sheet 写回校验失败: {exc}")
+    return WorkbookWriteResult(True, path, target_sheets)
 
 
 def _copy_bytes(source: Path, destination: Path) -> None:
@@ -422,4 +526,5 @@ __all__ = [
     "MonitorSummaryWorkbookStore",
     "SUMMARY_KEY_COLUMNS",
     "SUMMARY_SHEET",
+    "replace_product_period_sheets",
 ]

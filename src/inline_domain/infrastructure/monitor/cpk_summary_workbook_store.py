@@ -14,16 +14,16 @@ from src.inline_domain.core.monitor.cpk_summary import (
 from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
     MonitorSummaryWorkbookError,
     MonitorSummaryWorkbookStore,
-    replace_period_sheet,
     _interprocess_lock,
 )
-from src.shared_kernel.utils.excel_tools import WorkbookWriteResult
 
 
 class CpkSummaryWorkbookStore(MonitorSummaryWorkbookStore):
     """Update CPK under the same file lock as the alarm-rate sheet."""
 
     sheet_name = "CPK"
+    legacy_sheet_name = "CPK"
+    sheet_suffix = " CPK"
     columns = CPK_SUMMARY_COLUMNS
 
     def refresh_latest(
@@ -53,12 +53,5 @@ class CpkSummaryWorkbookStore(MonitorSummaryWorkbookStore):
             return normalize_cpk_records(source)
         except (ValueError, TypeError) as exc:
             raise MonitorSummaryWorkbookError(f"CPK 汇总格式错误：{exc}") from exc
-
-    def _write(self, frame: pd.DataFrame) -> WorkbookWriteResult:
-        return replace_period_sheet(
-            self.workbook_path, frame, sheet_name=self.sheet_name,
-            normalizer=self._normalize,
-        )
-
 
 __all__ = ["CpkSummaryWorkbookStore"]

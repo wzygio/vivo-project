@@ -12,6 +12,7 @@ SCOPE_RESOURCE_KEYS = {
     "aoi_tt": {"oos": "aoi_tt_sheet_oos_decoration", "ooc": "aoi_tt_sheet_ooc_decoration"},
     "aoi_rs": {"oos": "aoi_rs_sheet_oos_decoration", "ooc": "aoi_rs_sheet_ooc_decoration"},
 }
+MONITOR_SUMMARY_FILE_NAME = "北极星报警率与CPK汇总.xlsx"
 
 
 def scope_decoration_path(scope: str, alarm_type: str = "oos") -> Path:
@@ -28,3 +29,14 @@ def scope_resource_dir(scope: str, alarm_type: str = "oos") -> Path:
 
 def decision_workbook_paths(alarm_type: str = "oos") -> dict[str, Path]:
     return {scope: scope_decoration_path(scope, alarm_type) for scope in SCOPE_RESOURCE_KEYS}
+
+
+def monitor_summary_workbook_path(resource_dir: Path | None = None) -> Path:
+    """Resolve the shared warning read model from Inline resource config."""
+    if resource_dir is not None:
+        return Path(resource_dir) / "monitor" / MONITOR_SUMMARY_FILE_NAME
+    return ConfigLoader.get_domain_resource_path(
+        "inline_domain",
+        "monitor_summary_workbook",
+        f"monitor/{MONITOR_SUMMARY_FILE_NAME}",
+    )

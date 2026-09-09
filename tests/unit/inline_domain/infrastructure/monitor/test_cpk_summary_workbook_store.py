@@ -17,7 +17,7 @@ from src.inline_domain.infrastructure.monitor import summary_workbook_store as s
 from src.shared_kernel.utils.excel_tools import WorkbookWriteResult
 from tests.unit.inline_domain.infrastructure.monitor.test_summary_workbook_store import (
     _current_rows,
-    _write_legacy_workbook,
+    _write_product_workbook,
 )
 
 
@@ -33,9 +33,9 @@ def test_shared_workbook_updates_preserve_closed_rows_and_other_sheet(
     tmp_path, cpk_first
 ) -> None:
     path = tmp_path / "summary.xlsx"
-    _write_legacy_workbook(path)
+    _write_product_workbook(path)
     with pd.ExcelWriter(path, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
-        _cpk_row("2026-Q2", "Q2").to_excel(writer, sheet_name="CPK", index=False)
+        _cpk_row("2026-Q2", "Q2").to_excel(writer, sheet_name="M626 CPK", index=False)
     workbook = load_workbook(path)
     notes = workbook.create_sheet("notes")
     notes["A1"] = "=1+2"
@@ -58,7 +58,10 @@ def test_shared_workbook_updates_preserve_closed_rows_and_other_sheet(
         result.loc[result["时间标签"].eq("2026-Q2")].iloc[0], original,
     )
     assert set(result["时间标签"]) == {"2026-Q2", "2026-Q3"}
-    assert alarm.read().loc[lambda frame: frame["时间标签"].eq("2026-Q3"), "过货量"].item() == 40
+    assert alarm.read().loc[
+        lambda frame: frame["产品"].eq("M626") & frame["时间标签"].eq("2026-Q3"),
+        "过货量",
+    ].item() == 40
     workbook = load_workbook(path)
     assert workbook["notes"]["A1"].value == "=1+2"
     assert workbook["notes"]["A1"].font.bold
@@ -75,9 +78,9 @@ def test_cpk_closed_period_cannot_be_overwritten(tmp_path) -> None:
 
 def test_simultaneous_alarm_and_cpk_updates_share_workbook_transaction(tmp_path) -> None:
     path = tmp_path / "summary.xlsx"
-    _write_legacy_workbook(path)
+    _write_product_workbook(path)
     with pd.ExcelWriter(path, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
-        _cpk_row("2026-Q2", "Q2").to_excel(writer, sheet_name="CPK", index=False)
+        _cpk_row("2026-Q2", "Q2").to_excel(writer, sheet_name="M626 CPK", index=False)
     alarm = MonitorSummaryWorkbookStore(path)
     cpk = CpkSummaryWorkbookStore(path)
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -101,14 +104,15 @@ def test_protected_cpk_write_uses_shared_com_writer_and_cpk_contract(
     store = CpkSummaryWorkbookStore(path)
     calls = []
 
-    def write(candidate, frame, *, sheet_name, normalizer):
-        calls.append((candidate, sheet_name, normalizer(frame)))
-        return WorkbookWriteResult(True, candidate, (sheet_name,))
+    def write(candidate, sheets, *, normalizer):
+        for sheet_name, frame in sheets.items():
+            calls.append((candidate, sheet_name, normalizer(frame)))
+        return WorkbookWriteResult(True, candidate, tuple(sheets))
 
-    monkeypatch.setattr(store_module, "_replace_encrypted_summary_sheet_via_com", write)
+    monkeypatch.setattr(store_module, "_replace_encrypted_period_sheets_via_com", write)
     result = store._write(_cpk_row())
 
     assert result.written
-    assert calls[0][:2] == (path, "CPK")
+    assert calls[0][:2] == (path, "M626 CPK")
     assert calls[0][2]["CPK总项目数"].item() == 7
     assert pd.isna(calls[0][2]["达标项目数"].item())

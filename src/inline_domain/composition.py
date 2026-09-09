@@ -39,6 +39,9 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.snapshot_paths import (
     inline_measurement_directory, aoi_rs_snapshot_directory,
 )
+from src.inline_domain.infrastructure.shared.resource_paths import (
+    monitor_summary_workbook_path,
+)
 
 if TYPE_CHECKING:
     from src.inline_domain.application.shared.decoration_ports import DecorationPort
@@ -83,14 +86,7 @@ def build_throughput_history_service(resource_dir: Path | None = None):
 
 def build_monitor_summary_workbook_service(resource_dir: Path | None = None):
     """Assemble the automatic-warning Excel read model."""
-    resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir(
-        "inline_domain"
-    )
-    workbook_path = (
-        Path(resolved_resources)
-        / "monitor"
-        / "北极星报警率与CPK汇总.xlsx"
-    )
+    workbook_path = monitor_summary_workbook_path(resource_dir)
     return _build_monitor_summary_workbook_service(str(workbook_path))
 
 
@@ -164,6 +160,7 @@ def build_live_monitor_source(resource_dir: Path | None = None):
     from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
     resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
+    summary_path = monitor_summary_workbook_path(resource_dir)
 
     def port_factory(scope: str, product: str):
         db = DatabaseManager()
@@ -178,7 +175,10 @@ def build_live_monitor_source(resource_dir: Path | None = None):
     return LiveMonitorSource(
         port_factory=port_factory,
         signature_provider=lambda products: monitor_input_signature(
-            ConfigLoader.get_project_root(), Path(resources), products,
+            ConfigLoader.get_project_root(),
+            Path(resources),
+            products,
+            excluded_paths=(summary_path,),
         ),
         resource_dir_provider=(lambda scope: Path(resource_dir)) if resource_dir else scope_resource_dir,
     )
@@ -197,7 +197,7 @@ def build_cpk_monitor_service(resource_dir: Path | None = None):
 
     resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
     return CpkWorkbookMonitorService(
-        CpkSummaryWorkbookStore(Path(resources) / "monitor" / "北极星报警率与CPK汇总.xlsx"),
+        CpkSummaryWorkbookStore(monitor_summary_workbook_path(resource_dir)),
         latest_reader=CpkLatestExcelStore(Path(resources) / "spc" / "spc_cpk_cpm_decoration.xlsx"),
     )
 
