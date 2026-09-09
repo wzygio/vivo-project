@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 
 import pandas as pd
 from pydantic import ValidationError
@@ -28,6 +29,7 @@ from src.indicator_domain.application.qtime.service import (
     QTimeMonitoringResult,
     QTimeReportService,
 )
+from src.shared_kernel.data_health import attach_data_health
 
 
 RESULT_STATE_KEY = "qtime_report_result"
@@ -104,8 +106,22 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         st.info("请选择筛选条件并点击“查询”。")
         return
     details = monitoring.details
+    health = monitoring.data_health
+    is_current = health["status"] == "fresh"
+    if not is_current:
+        message = (
+            "数据库刷新失败，当前显示旧快照，不能据此确认当前无异常。"
+            if health["status"] == "stale"
+            else "数据完整性或新鲜度尚未确认，当前预警状态未知。"
+        )
+        st.warning(message)
+        if health["refreshed_at"]:
+            st.caption(f"最后成功刷新：{health['refreshed_at']}")
+        if health["source_start"] and health["source_end"]:
+            st.caption(f"源数据覆盖：{health['source_start']} 至 {health['source_end']}")
     if details.empty:
-        st.info("当前筛选条件下暂无 Q-Time 数据。")
+        if is_current:
+            st.info("当前筛选条件下暂无 Q-Time 数据。")
         return
 
     if st.query_params.get("admin") == "true" and render_qtime_decoration_admin(service, monitoring):
@@ -118,10 +134,11 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         )
         st.rerun()
 
-    render_qtime_alert_center(
-        monitoring.alerts,
-        total_lots=details["lot_id"].nunique(),
-    )
+    if is_current or not monitoring.alerts.empty:
+        render_qtime_alert_center(
+            monitoring.alerts,
+            total_lots=details["lot_id"].nunique(),
+        )
     if "wait_time_raw" in details and (
         details["wait_time"].ne(details["wait_time_raw"]).any()
         or details["q_spec"].ne(details["q_spec_raw"]).any()
@@ -150,12 +167,29 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
 
 def refresh_qtime_data(service: QTimeReportService) -> bool:
     """Reload historical facts/specs; discard submitted results only on success."""
-    results = service.refresh_snapshots(full_refresh=True)
+    try:
+        results = service.refresh_snapshots(full_refresh=True)
+    except QTimeDataAccessError:
+        _mark_displayed_result_stale()
+        raise
     if not results or not all(result.refreshed_from_database for result in results):
+        _mark_displayed_result_stale()
         return False
     st.session_state.pop(RESULT_STATE_KEY, None)
     st.session_state.pop(SIGNATURE_STATE_KEY, None)
     return True
+
+
+def _mark_displayed_result_stale() -> None:
+    previous = st.session_state.get(RESULT_STATE_KEY)
+    if previous is None or not hasattr(previous, "data_health"):
+        return
+    health = {**previous.data_health, "status": "stale", "error_code": "QTIME_SOURCE_READ_FAILED"}
+    st.session_state[RESULT_STATE_KEY] = replace(
+        previous, data_health=health,
+        details=attach_data_health(previous.details.copy(), health),
+        alerts=attach_data_health(previous.alerts.copy(), health),
+    )
 
 
 def _filter_monitoring_result(
@@ -195,6 +229,9 @@ def _run_query(
     selected_products: list[str],
     signature: tuple[object, ...],
 ) -> None:
+    # A failed resubmission must not keep a prior success under the same filters.
+    st.session_state.pop(RESULT_STATE_KEY, None)
+    st.session_state.pop(SIGNATURE_STATE_KEY, None)
     try:
         file_stat = get_qtime_decision_file_stat(service.decoration_path)
         decision_mtime_ns, decision_size = (
@@ -228,4 +265,4 @@ def _filter_signature(
     step_options: list[QTimeStepOption],
     selected_products: list[str],
 ) -> tuple[object, ...]:
-    return (shop, tuple(step_options), tuple(selected_products))
+    return (shop, tuple(step_options), tuple(selected_products), date.today().isoformat())

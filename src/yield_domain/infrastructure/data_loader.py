@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence
+from src.yield_domain.application.errors import YieldSourceReadError
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -84,9 +85,9 @@ def load_panel_details(
         logging.info(f"成功提取 {len(panel_df)} 行原始数据。")
         return panel_df
         
-    except Exception as e:
-        logging.error(f"提取Panel明细数据时发生错误: {e}")
-        return pd.DataFrame()
+    except Exception:
+        logging.error("YIELD_SOURCE_UNAVAILABLE: Panel query failed")
+        raise YieldSourceReadError() from None
 
 
 def load_array_input_times(
@@ -132,9 +133,9 @@ def load_array_input_times(
         logging.info(f"成功提取 {len(times_df)} 条Sheet的阵列投入时间记录。")
         return times_df
 
-    except Exception as e:
-        logging.error(f"提取阵列投入时间时发生错误: {e}")
-        return pd.DataFrame()
+    except Exception:
+        logging.error("YIELD_ARRAY_TIMES_UNAVAILABLE: array times query failed")
+        raise RuntimeError("YIELD_ARRAY_TIMES_UNAVAILABLE") from None
 
 
 def _update_sheet_array_times(

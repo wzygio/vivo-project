@@ -21,6 +21,32 @@ def explicit_forward_policy(monkeypatch):
     )
 
 
+@pytest.mark.parametrize("use_snapshot", [False, True])
+def test_successful_empty_query_keeps_fresh_health(tmp_path, monkeypatch, use_snapshot):
+    calls = []
+
+    def read_sql(*_args, **_kwargs):
+        calls.append(True)
+        return pd.DataFrame(columns=qtime_repository.DETAIL_COLUMNS)
+
+    monkeypatch.setattr(qtime_repository.pd, "read_sql", read_sql)
+    repository = QTimeRepository(
+        SimpleNamespace(engine=object()),
+        snapshot_dir=tmp_path if use_snapshot else None,
+    )
+    query = _current_query(date(2026, 9, 2))
+    first = repository.fetch_details(query)
+    second = repository.fetch_details(query)
+    assert first.empty and second.empty
+    for result in (first, second):
+        health = result.attrs["data_health"]
+        assert health["status"] == "fresh"
+        assert health["refreshed_at"]
+        assert health["source_start"] and health["source_end"]
+        assert health["error_code"] == ""
+    assert len(calls) == (1 if use_snapshot else 2)
+
+
 def test_v2_empty_snapshot_is_refetched_in_full(tmp_path, monkeypatch):
     store = QTimeSnapshotStore(tmp_path, ttl_hours=12)
     with monkeypatch.context() as old:
@@ -224,6 +250,8 @@ def test_shop_snapshot_is_shared_across_query_filters_and_keeps_source_time(
     assert snapshot is not None
     assert snapshot.metadata.source_start == "2026-07-28T00:00:00"
     assert snapshot.metadata.source_end == "2026-08-30T00:00:00"
+    assert first.attrs["data_health"]["source_start"] == "2026-07-28T00:00:00"
+    assert second.attrs["data_health"]["source_end"] == "2026-08-30T00:00:00"
     assert not list(tmp_path.glob("qtime_source_*.meta.json"))
 
 
@@ -251,7 +279,9 @@ def test_detail_snapshot_falls_back_after_database_failure(
         step_descriptions=("M3_DE->M3_STR",),
         products=("M626",),
     )
-    repository.fetch_details(query)
+    first = repository.fetch_details(query)
+    assert first.attrs["data_health"]["status"] == "fresh"
+    refreshed_at = first.attrs["data_health"]["refreshed_at"]
     monkeypatch.setattr(QTimeSnapshotStore, "_is_fresh", lambda *_args: False)
     monkeypatch.setattr(
         qtime_repository.pd,
@@ -262,6 +292,9 @@ def test_detail_snapshot_falls_back_after_database_failure(
     result = repository.fetch_details(query)
 
     assert result.loc[0, "timekey"] == "20260802010000"
+    assert result.attrs["data_health"]["status"] == "stale"
+    assert result.attrs["data_health"]["refreshed_at"] == refreshed_at
+    assert result.attrs["data_health"]["error_code"] == "QTIME_SOURCE_READ_FAILED"
 
 
 def test_expired_snapshot_refresh_replaces_overlap_and_prunes_old_month(

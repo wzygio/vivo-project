@@ -1,3 +1,4 @@
+from app.sections.yield_domain.data_health import render_yield_data_health
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -91,6 +92,21 @@ yield_cache_context = YieldAnalysisService.build_cache_context(active_config, pr
 # ==============================================================================
 #  数据加载
 # ==============================================================================
+displayed_health = []
+for health_signature in dict.fromkeys(
+    (product_cache_signature, lot_cache_signature, sheet_cache_signature)
+):
+    health = YieldAnalysisService.get_data_health(
+        active_config,
+        _db_manager=db_manager,
+        snapshot_signature=health_signature,
+        analysis_start_date=yield_cache_context["analysis_start_date"],
+        analysis_end_date=yield_cache_context["analysis_end_date"],
+    )
+    if health not in displayed_health:
+        render_yield_data_health(health)
+        displayed_health.append(health)
+
 try:
     with st.spinner("正在加载全维度分析数据..."):
         mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
@@ -196,7 +212,10 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         trend_context=trend_context,
         oos_records=oos_records,
         total_recent_lots=total_recent_lots,
-        time_period=30
+        time_period=30,
+        source_current=bool(displayed_health) and all(
+            item.get("status") == "fresh" for item in displayed_health
+        ),
     )
 
     # 5. 自动预警缺陷图像：对趋势波动与 Lot 超规命中的 Defect Code 自动出图

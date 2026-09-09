@@ -13,16 +13,25 @@ from src.yield_domain.application.yield_service import (
     YieldDataModificationError,
     YieldWarningLinesReadError,
 )
+from src.shared_kernel.data_health import attach_data_health, make_data_health
+
+
+def test_empty_health_survives_modified_cache_and_facade(monkeypatch, mock_config):
+    health = make_data_health("fresh", source_start="2026-06-01", source_end="2026-09-01")
+    monkeypatch.setattr(YieldAnalysisService, "get_raw_panel_details", staticmethod(lambda *args: attach_data_health(pd.DataFrame(), health)))
+    YieldAnalysisService.get_modified_panel_details.clear()
+    for _ in range(2):
+        result = YieldAnalysisService.get_modified_panel_details(mock_config, snapshot_signature="empty-health")
+        assert result.empty
+        assert result.attrs["data_health"] == health
+    assert YieldAnalysisService.get_data_health(mock_config, snapshot_signature="empty-health") == health
 
 
 def test_source_failure_is_not_cached(monkeypatch, mock_config, tmp_path: Path) -> None:
     attempts = 0
 
-    class FailingPanelRepository:
-        def __init__(self, **_kwargs):
-            pass
-
-        def get_panel_details(self, *, query):
+    class FailingDataPort:
+        def read_panel(self, query, policy):
             nonlocal attempts
             attempts += 1
             raise ConnectionError("database unavailable")
@@ -32,12 +41,7 @@ def test_source_failure_is_not_cached(monkeypatch, mock_config, tmp_path: Path) 
         "2026-06-01",
         "2026-09-01",
     )
-    monkeypatch.setattr(yield_service, "PanelRepository", FailingPanelRepository)
-    monkeypatch.setattr(
-        yield_service,
-        "build_yield_snapshot_path",
-        lambda *_args, **_kwargs: tmp_path / "yield.parquet",
-    )
+    monkeypatch.setattr(yield_service, "_resolve_data_port", lambda *args: FailingDataPort())
     YieldAnalysisService.get_raw_panel_details.clear()
 
     for _ in range(2):

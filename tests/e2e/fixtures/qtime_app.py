@@ -20,12 +20,17 @@ from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
 from src.indicator_domain.core.qtime.decoration import apply_qtime_decoration
+from src.shared_kernel.data_health import make_data_health
 
 # fixture 假数据覆盖的产品集合；products=()（全产品）时返回全部
 FIXTURE_PRODUCTS = ("M626", "M678")
 
 
 class FixtureQTimeService:
+    def cache_signature(self, shop):
+        return ("isolated-qtime-fixture", st.query_params.get("fixture_health", "fresh"),
+                st.query_params.get("fixture_empty", "false"))
+
     @property
     def decoration_path(self) -> Path:
         return Path("resources/indicator_domain/qtime/qtime_oos_decoration.xlsx")
@@ -114,6 +119,8 @@ class FixtureQTimeService:
                 for prodcode in requested
             ]
         )
+        if st.query_params.get("fixture_empty") == "true":
+            raw_details = raw_details.iloc[0:0].copy()
         decorated = apply_qtime_decoration(raw_details, decisions)
         return QTimeMonitoringResult(
             details=decorated.details,
@@ -121,6 +128,11 @@ class FixtureQTimeService:
             decoration=decorated.decoration,
             decisions=decisions,
             decoration_path=Path("resources/indicator_domain/qtime/qtime_oos_decoration.xlsx"),
+            data_health=make_data_health(
+                st.query_params.get("fixture_health", "fresh"),
+                source_start="2026-08-01", source_end="2026-09-01",
+                refreshed_at="2026-09-01T07:00:00+08:00",
+            ),
         )
 
     def update_decisions(self, file_bytes: bytes):

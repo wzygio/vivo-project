@@ -27,7 +27,8 @@ from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     prepare_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+from src.inline_domain.application.shared.decoration_defaults import scope_resource_dir
+from src.inline_domain.application.shared.decoration_ports import DecorationResourcePort, SheetDecorationPort
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def resolve_product_resource_dir(
     product_dir: Path | None = None,
     *,
     scope: str | None = "spc",
+    resource_port: DecorationResourcePort | None = None,
 ) -> Path:
     """Resolve the shared resources directory used by the per-sheet decoration workbooks.
 
@@ -67,7 +69,7 @@ def resolve_product_resource_dir(
     if product_dir is not None:
         return product_dir
     if scope is not None:
-        return scope_resource_dir(scope)
+        return (resource_port.scope_resource_dir(scope) if resource_port is not None else scope_resource_dir(scope))
     return ConfigLoader.get_domain_resource_dir("inline_domain")
 
 
@@ -100,6 +102,8 @@ def prepare_decorated_data(
     *,
     product_revision: str = "",
     decision_signature: str = "",
+    decoration_port: SheetDecorationPort | None = None,
+    resource_port: DecorationResourcePort | None = None,
 ) -> DecoratedData:
     """Apply the scope's tri-state Sheet actions and recompute Sheet features.
 
@@ -122,7 +126,7 @@ def prepare_decorated_data(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
         product_dir=resolve_product_resource_dir(
-            prod_code, product_dir, scope=normalized_scope
+            prod_code, product_dir, scope=normalized_scope, resource_port=resource_port,
         ),
         persist_files=persist,
         decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
@@ -131,6 +135,7 @@ def prepare_decorated_data(
         prod_code=prod_code,
         product_revision=product_revision,
         decision_signature=decision_signature,
+        decoration_port=decoration_port,
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
         decoration_result.raw_measurements_df,

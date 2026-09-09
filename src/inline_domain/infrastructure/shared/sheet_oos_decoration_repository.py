@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
@@ -35,22 +34,13 @@ from src.shared_kernel.utils.excel_tools import (
     replace_workbook_sheets,
 )
 
+from src.inline_domain.application.shared.decoration_ports import (
+    SheetOosDecorationReadError,
+    SheetOosDecorationWriteError,
+    SheetOosPersistOutcome,
+)
+
 logger = logging.getLogger(__name__)
-
-
-class SheetOosDecorationReadError(RuntimeError):
-    """Raised when an existing user-maintained workbook cannot be read safely."""
-
-
-class SheetOosDecorationWriteError(RuntimeError):
-    """Raised when an Inline decoration workbook cannot be written safely."""
-
-
-@dataclass(frozen=True)
-class SheetOosPersistOutcome:
-    decoration_df: pd.DataFrame
-    decisions_df: pd.DataFrame
-    refresh_decision: RefreshDecision
 
 
 def get_sheet_oos_decoration_path(

@@ -23,13 +23,23 @@ Streamlit
                                    规格线、月周天分布、Sheet 点位图、AOI 趋势/点线图
             ↓
 src/<domain>/application/        用例编排、缓存 payload、ViewModel
-            ↓
-src/<domain>/core/               领域计算与规则
-            ↓
+       ├── core/                领域计算与规则
+       └── application/ports    消费方数据与修饰契约
+                 ↑ 实现（composition 负责装配）
 src/<domain>/infrastructure/     PostgreSQL、Parquet 快照、Excel 资源
-            ↓
 src/shared_kernel/               配置、数据库单例、输出与 Excel 工具
 ```
+
+Core 不依赖基础设施；运行时调用适配器不等于 Core 导入仓储。
+Yield、Equipment 数据读取及 Inline 修饰/签名读取通过应用端口接入；静态入口的
+默认组合解析为明确兼容边界，存量例外由 `tests/architecture/test_backend_dependencies.py`
+逐项登记。显式注入内存端口时绕过默认共享缓存，生产默认路径保留缓存。
+
+Yield 与 Q-Time 查询携带原生 `data_health`（源窗口、最后成功时间、状态和安全错误码）。
+失败不能作为成功空表，Yield 分片未完整成功时不发布新窗口；旧快照仍可展示，
+但页面/预警矩阵不得由陈旧或未知来源给出当前正常结论。健康信息跨越缓存、修饰与筛选；
+Q-Time 缓存内保存原生 payload，缓存外构造结果，跨日会话须重新查询。
+详细契约见 `references/design/feat_design/architecture-data-health-and-outbound-ports.md`。
 
 - `app/Home.py` 将项目根目录和 `src/` 加入模块搜索路径，初始化日志与
   Streamlit 门户资源；各页面使用 `SessionManager` 获取当前产品配置。

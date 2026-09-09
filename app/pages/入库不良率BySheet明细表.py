@@ -1,3 +1,4 @@
+from app.sections.yield_domain.data_health import render_yield_data_health
 # src/vivo_project/app/pages/入库不良率BySheet明细表.py
 import streamlit as st
 
@@ -63,6 +64,15 @@ render_page_header(
 
 # --- 3. 加载数据 ---
 # [核心修复] 依赖注入 db_manager + 快照签名感知缓存
+health = YieldAnalysisService.get_data_health(
+    active_config,
+    _db_manager=db_manager,
+    snapshot_signature=product_cache_signature,
+    analysis_start_date=yield_cache_context["analysis_start_date"],
+    analysis_end_date=yield_cache_context["analysis_end_date"],
+)
+render_yield_data_health(health)
+
 try:
     all_data = YieldAnalysisService.get_sheet_defect_rates(
         config=active_config,
@@ -92,4 +102,4 @@ if all_data:
         # 模块 3：选择 Code，反查 Top 20 严重 Sheet
         render_sheet_top20_section(all_data, valid_sheet_ids)
 else:
-    st.error("未能从后台加载Sheet数据，请检查后台日志或刷新重试。")
+    st.info("当前查询窗口没有可供展示的 Sheet 数据。")

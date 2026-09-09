@@ -16,7 +16,7 @@ from src.inline_domain.core.spc.spc_calculator import (
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
-from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+from src.inline_domain.application.shared.decoration_ports import (
     SheetOosDecorationReadError,
 )
 from src.inline_domain.application.spc.capability_decoration_service import (
@@ -34,7 +34,7 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
-from src.inline_domain.infrastructure.spc.capability_decoration_repository import (
+from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
 )
 

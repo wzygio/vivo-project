@@ -29,6 +29,7 @@
 | 问题 / 关键词 | 首选文件 |
 |---|---|
 | 数据修饰统一语义、原始事实 / 决策台账 / 报表投影、分层职责 | [数据修饰架构范式](design/feat_design/architecture-data-decoration.md) |
+| 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/feat_design/architecture-data-health-and-outbound-ports.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/feat_design/interaction-inline-report-scroll.md) |
 
 共享工程标准按任务使用 `$ecc-production-rules`；Harness 演进记录见 [retrospective.md](retrospective.md)。

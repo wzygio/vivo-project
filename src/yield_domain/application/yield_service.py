@@ -11,10 +11,9 @@ import io
 # [Refactor] 移除 CONFIG, RESOURCE_DIR, PROJECT_ROOT 全局引用
 from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.config import ConfigLoader
-from src.yield_domain.infrastructure.repositories.yield_repository import (
-    PanelRepository,
-    build_yield_snapshot_path,
-)
+from src.shared_kernel.cache_ports import cache_default_port
+from src.shared_kernel.data_health import attach_data_health, get_data_health, make_data_health
+from src.yield_domain.application.ports import YieldDataPort
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 
 from typing import TYPE_CHECKING
@@ -29,7 +28,6 @@ from yield_domain.core.mwd_trend.modifier_table import (
     resolve_monthly_targets,
     specified_signature,
 )
-from src.yield_domain.infrastructure.rate_override_repository import load_rate_overrides
 from yield_domain.core.sheet_lot.sheet_lot_processor import (
     calculate_lot_defect_rates, 
     calculate_sheet_defect_rates
@@ -38,6 +36,14 @@ from yield_domain.core.mapping.mapping_processor import prepare_mapping_data
 from src.yield_domain.core.defect_modifier import (
     apply_defect_multipliers
 )
+
+
+def _resolve_data_port(db_manager=None, data_port: YieldDataPort | None = None) -> YieldDataPort:
+    """Legacy static entrypoints use one default assembly seam; tests inject ports."""
+    if data_port is not None:
+        return data_port
+    from src.yield_domain.composition import create_yield_data_port
+    return create_yield_data_port(db_manager)
 
 
 class YieldDataModificationError(RuntimeError):
@@ -138,6 +144,7 @@ class YieldAnalysisService:
         }
 
     @staticmethod
+    @cache_default_port
     @st.cache_data(
         show_spinner=False,
         max_entries=32,
@@ -148,6 +155,7 @@ class YieldAnalysisService:
         data_policy_json: str,
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
+        _data_port: YieldDataPort | None = None,
     ) -> pd.DataFrame:
         """
         [L1 Cache] 从数据库加载原始 Panel 数据。
@@ -159,25 +167,35 @@ class YieldAnalysisService:
         query = YieldQueryConfig.model_validate_json(query_config_json)
         data_policy = YieldDataPolicy.model_validate_json(data_policy_json)
         
-        # 2. 动态路由隔离路径 (Service 层自己决定存哪，不再依赖 AppConfig)
-        snapshot_path = build_yield_snapshot_path(
-            Path("data"), query.product_code, data_policy
-        )
-        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 3. 实例化 Repo 并透传 DTO 与 db_manager（依赖注入）
-        repo = PanelRepository(
-            snapshot_path=snapshot_path,
-            data_policy=data_policy,
-            use_snapshot=True,
-            db_manager=_db_manager,
-        )
-        
         try:
-            return repo.get_panel_details(query=query)
-        except Exception as exc:
-            logging.error("Yield Panel 数据加载失败: %s", exc, exc_info=True)
-            raise YieldDataLoadError("Yield Panel 数据加载失败。") from exc
+            frame = _resolve_data_port(_db_manager, _data_port).read_panel(query, data_policy)
+            if get_data_health(frame)["status"] == "unavailable":
+                raise YieldDataLoadError("YIELD_SOURCE_UNAVAILABLE")
+            return frame
+        except Exception:
+            logging.error("YIELD_SOURCE_UNAVAILABLE")
+            raise YieldDataLoadError("YIELD_SOURCE_UNAVAILABLE") from None
+
+    @staticmethod
+    def get_data_health(
+        config: AppConfig,
+        _db_manager: Optional['DatabaseManager'] = None,
+        snapshot_signature: str = "",
+        analysis_start_date: str = "",
+        analysis_end_date: str = "",
+    ) -> dict:
+        """Read the same native L1 health metadata used by the report caches."""
+        query, policy = YieldAnalysisService._build_panel_request(
+            config, analysis_start_date, analysis_end_date,
+        )
+        try:
+            frame = YieldAnalysisService.get_raw_panel_details(
+                query.model_dump_json(), policy.model_dump_json(),
+                _db_manager, snapshot_signature,
+            )
+        except YieldDataLoadError:
+            return make_data_health("unavailable", error_code="YIELD_SOURCE_UNAVAILABLE")
+        return get_data_health(frame)
 
     @staticmethod
     def _build_panel_request(
@@ -229,8 +247,8 @@ class YieldAnalysisService:
             snapshot_signature,
         )
         
-        if raw_df.empty: 
-            return pd.DataFrame()
+        if raw_df.empty:
+            return raw_df.copy()
         
         # 2. 应用修饰
         processed_df = raw_df.copy()
@@ -246,7 +264,7 @@ class YieldAnalysisService:
                 logging.error("应用缺陷衰减失败: %s", exc, exc_info=True)
                 raise YieldDataModificationError("Yield 缺陷衰减失败。") from exc
                 
-        return processed_df
+        return attach_data_health(processed_df, get_data_health(raw_df))
 
     # ==========================================================================
     #  2. 趋势图业务 (Trend Analysis)
@@ -526,7 +544,7 @@ class YieldAnalysisService:
             warning_signature,
         )
         override_resource = config.paths.get("rate_override_config")
-        override_df, _ = load_rate_overrides(
+        override_df, _ = _resolve_data_port(_db_manager).read_rate_overrides(
             product_dir.parent / override_resource.file_name if override_resource else None,
             override_resource.sheet_name or "" if override_resource else "",
         )
@@ -595,7 +613,7 @@ class YieldAnalysisService:
         if not lot_results: return None
 
         override_resource = config.paths.get("rate_override_config")
-        override_df, _ = load_rate_overrides(
+        override_df, _ = _resolve_data_port(_db_manager).read_rate_overrides(
             product_dir.parent / override_resource.file_name if override_resource else None,
             override_resource.sheet_name or "" if override_resource else "",
         )
@@ -663,6 +681,7 @@ class YieldAnalysisService:
     #  内部辅助方法 (依然需要缓存)
     # ==========================================================================
     @staticmethod
+    @cache_default_port
     @st.cache_data(
         show_spinner=False,
         max_entries=64,
@@ -673,27 +692,20 @@ class YieldAnalysisService:
         config: AppConfig,
         _db_manager: Optional['DatabaseManager'] = None,
         snapshot_signature: str = "",
+        _data_port: YieldDataPort | None = None,
     ) -> pd.DataFrame:
         """独立的 Array Time 查询缓存"""
         if not lot_ids: return pd.DataFrame()
         
-        # 为了实例化 Repo，我们需要 snapshot_path，但 get_array_input_times 其实不依赖 snapshot。
-        # 这里我们仅为了满足 __init__ 签名传入 dummy path，或者从 config 获取。
         processing_conf = config.processing
-        snapshot_path = Path(processing_conf.get('snapshot_path', 'dummy.parquet'))
-        
-        repo = PanelRepository(
-            snapshot_path=snapshot_path,
-            data_policy=YieldDataPolicy(),
-            use_snapshot=False,
-            db_manager=_db_manager,
-        )
-        
-        # 从 config 获取自定义时间
         input_time_conf = processing_conf.get('array_input_time', {})
         custom_times = input_time_conf.get('custom_times', {})
         
-        return repo.get_array_input_times(list(lot_ids), custom_times)
+        try:
+            return _resolve_data_port(_db_manager, _data_port).read_array_times(lot_ids, custom_times)
+        except Exception:
+            logging.error("YIELD_ARRAY_TIMES_UNAVAILABLE")
+            raise YieldDataLoadError("YIELD_ARRAY_TIMES_UNAVAILABLE") from None
     
     @staticmethod
     @st.cache_data(
@@ -809,6 +821,7 @@ class YieldAnalysisService:
     def safe_refresh_snapshots(
         _db_manager: Optional['DatabaseManager'],
         config: AppConfig,
+        _data_port: YieldDataPort | None = None,
     ) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写。
@@ -819,25 +832,13 @@ class YieldAnalysisService:
         try:
             query, data_policy = YieldAnalysisService._build_panel_request(config)
             
-            snapshot_path = build_yield_snapshot_path(
-                Path("data"), query.product_code, data_policy
-            )
-            snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            repo = PanelRepository(
-                snapshot_path=snapshot_path,
-                data_policy=data_policy,
-                use_snapshot=True,
-                db_manager=_db_manager,
-            )
-            
             logging.info(f"🔄 [YieldService] 向底层下发 {query.product_code} 强刷指令 (Force Refresh)...")
             
             # 穿透强刷指令
-            df = repo.get_panel_details(query=query, force_refresh=True)
+            df = _resolve_data_port(_db_manager, _data_port).read_panel(query, data_policy, force_refresh=True)
             
-            return not df.empty
+            return get_data_health(df)["status"] == "fresh"
             
-        except Exception as e:
-            logging.error(f"❌ Yield 快照安全覆写代理调度失败: {e}")
+        except Exception:
+            logging.error("YIELD_SNAPSHOT_REFRESH_FAILED")
             return False

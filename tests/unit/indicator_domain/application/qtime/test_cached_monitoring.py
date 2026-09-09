@@ -94,6 +94,40 @@ def test_same_key_hits_the_cache() -> None:
     assert port.fetch_calls == 1
 
 
+def test_health_survives_application_and_cache_even_for_empty_stale_data(monkeypatch):
+    from src.shared_kernel.data_health import attach_data_health, make_data_health
+
+    port = CountingQTimeDataPort()
+    health = make_data_health("stale", source_end="2026-08-31", error_code="SOURCE_READ_FAILED")
+    monkeypatch.setattr(port, "fetch_details", lambda query: attach_data_health(pd.DataFrame(), health))
+    service = _service(port)
+    first = _call(service)
+    second = _call(service)
+    assert first.data_health == health
+    assert second.data_health == health
+    assert second.details.empty
+
+
+def test_cache_fill_survives_result_class_replacement(monkeypatch):
+    from src.indicator_domain.application.qtime import service as service_module
+
+    service = _service(CountingQTimeDataPort())
+    original_get = service.get_current_monitoring
+    old_class = service_module.QTimeMonitoringResult
+    new_class = type("QTimeMonitoringResult", (old_class,), {"__module__": service_module.__name__})
+
+    def replace_during_fill(**kwargs):
+        old_result = original_get(**kwargs)
+        monkeypatch.setattr(service_module, "QTimeMonitoringResult", new_class)
+        return old_result
+
+    monkeypatch.setattr(service, "get_current_monitoring", replace_during_fill)
+    first = _call(service)
+    second = _call(service)
+    assert type(first) is new_class
+    assert type(second) is new_class
+
+
 def test_processing_version_change_recomputes(monkeypatch) -> None:
     port = CountingQTimeDataPort()
     service = _service(port)

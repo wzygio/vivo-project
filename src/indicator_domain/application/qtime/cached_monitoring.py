@@ -29,7 +29,7 @@ from src.shared_kernel.config import ConfigLoader
 # 决策工作簿不存在（按需创建，用户从未上传过决策）时的确定性哨兵。
 MISSING_DECISION_FILE_STAT: tuple[int, int] = (-1, -1)
 # Invalidate results computed before support for microsecond source timekeys.
-MONITORING_CACHE_VERSION = 4
+MONITORING_CACHE_VERSION = 5
 
 
 def get_qtime_decision_file_stat(
@@ -61,7 +61,7 @@ def get_cached_monitoring(
     可哈希类型；``as_of=None`` 在此归一为当天 date 后再进键。
     """
     normalized_as_of = as_of if as_of is not None else date.today()
-    return _cached_monitoring(
+    payload = _cached_monitoring(
         _service,
         shop=shop,
         step_descriptions=tuple(step_descriptions),
@@ -71,6 +71,15 @@ def get_cached_monitoring(
         decision_size=int(decision_size),
         cache_version=MONITORING_CACHE_VERSION,
         source_signature=getattr(_service, "cache_signature", lambda _shop: ())(shop),
+    )
+    # Resolve after the cache call: the service module can reload during a miss.
+    from src.indicator_domain.application.qtime.service import QTimeMonitoringResult as CurrentResult
+
+    return CurrentResult(
+        details=payload["details"], alerts=payload["alerts"],
+        decoration=payload["decoration"], decisions=payload["decisions"],
+        decoration_path=Path(payload["decoration_path"]) if payload["decoration_path"] else None,
+        data_health=dict(payload["data_health"]),
     )
 
 
@@ -90,14 +99,20 @@ def _cached_monitoring(
     decision_size: int,
     cache_version: int,
     source_signature: tuple[object, ...],
-) -> QTimeMonitoringResult:
-    """实际缓存层：仅转发，不做任何判定逻辑修改。"""
-    return _service.get_current_monitoring(
+) -> dict:
+    """Cache only primitive payloads; reconstruct the current ViewModel outside."""
+    result = _service.get_current_monitoring(
         shop=shop,
         step_descriptions=step_descriptions,
         products=products,
         as_of=as_of,
     )
+    return {
+        "details": result.details, "alerts": result.alerts,
+        "decoration": result.decoration, "decisions": result.decisions,
+        "decoration_path": str(result.decoration_path) if result.decoration_path else None,
+        "data_health": dict(result.data_health),
+    }
 
 
 def get_cached_shop_monitoring(

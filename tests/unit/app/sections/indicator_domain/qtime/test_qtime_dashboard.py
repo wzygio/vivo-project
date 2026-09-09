@@ -14,6 +14,38 @@ PSI_ELA_TO_PSI_PHT = QTimeStepOption("PSI_ELA->PSI_PHT", "11300", "11400")
 SHIPPING_TO_CUTTING = QTimeStepOption("Shipping->Cutting", "2X999", "31000")
 
 
+def test_empty_stale_result_warns_instead_of_claiming_no_current_data():
+    fixture = Path(__file__).parents[6] / "tests/e2e/fixtures/qtime_app.py"
+    app = AppTest.from_file(str(fixture)).run()
+    app.query_params["fixture_health"] = "stale"
+    app.multiselect(key="qtime_step_descriptions").set_value([SHIPPING_TO_CUTTING]).run()
+    app.button(key="qtime_search").click().run()
+    assert not app.exception
+    assert any("旧快照" in item.value for item in app.warning)
+    assert not app.success
+    assert not any("当前筛选条件下暂无" in item.value for item in app.info)
+
+
+def test_previous_day_session_result_requires_query_again(monkeypatch):
+    from datetime import date, timedelta
+    from app.sections.indicator_domain.qtime import dashboard
+
+    fixture = Path(__file__).parents[6] / "tests/e2e/fixtures/qtime_app.py"
+    app = AppTest.from_file(str(fixture)).run()
+    app.button(key="qtime_search").click().run()
+    assert app.get("plotly_chart")
+
+    class Tomorrow(date):
+        @classmethod
+        def today(cls):
+            return date.today() + timedelta(days=1)
+
+    monkeypatch.setattr(dashboard, "date", Tomorrow, raising=False)
+    app.run()
+    assert not app.get("plotly_chart")
+    assert any("点击“查询”" in item.value for item in app.info)
+
+
 def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
@@ -52,6 +84,25 @@ def test_refresh_reloads_full_window_and_clears_results_only_on_success(monkeypa
     assert dashboard.refresh_qtime_data(service) is success
     assert calls == [{"full_refresh": True}]
     assert bool(state) is not success
+
+
+def test_failed_manual_refresh_marks_previously_fresh_session_result_stale(monkeypatch):
+    import pandas as pd
+    from app.sections.indicator_domain.qtime import dashboard
+    from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
+    from src.shared_kernel.data_health import make_data_health
+
+    old = QTimeMonitoringResult(
+        pd.DataFrame({"lot_id": ["L1"]}), pd.DataFrame(), pd.DataFrame(),
+        pd.DataFrame(), None, make_data_health("fresh", refreshed_at="2026-09-01"),
+    )
+    state = {dashboard.RESULT_STATE_KEY: old, dashboard.SIGNATURE_STATE_KEY: "same"}
+    monkeypatch.setattr(dashboard.st, "session_state", state)
+    service = SimpleNamespace(refresh_snapshots=lambda **kwargs: [SimpleNamespace(refreshed_from_database=False)])
+    assert dashboard.refresh_qtime_data(service) is False
+    assert state[dashboard.RESULT_STATE_KEY].data_health["status"] == "stale"
+    assert state[dashboard.RESULT_STATE_KEY].data_health["refreshed_at"] == "2026-09-01"
+    assert state[dashboard.RESULT_STATE_KEY].details["lot_id"].tolist() == ["L1"]
 
 
 def test_qtime_dashboard_labels_station_paths_with_original_codes() -> None:

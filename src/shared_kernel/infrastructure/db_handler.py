@@ -5,6 +5,7 @@ import os
 import logging
 from pathlib import Path
 from urllib.parse import quote_plus
+from uuid import uuid4
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 
@@ -79,5 +80,10 @@ class DatabaseManager:
             return engine
         
         except Exception as e:
-            logging.error(f"数据库引擎创建失败：{e}")
+            logging.error(
+                "数据库引擎创建失败 code=DATABASE_ENGINE_UNAVAILABLE "
+                "exception_type=%s correlation_id=%s",
+                type(e).__name__,
+                uuid4().hex,
+            )
             return None

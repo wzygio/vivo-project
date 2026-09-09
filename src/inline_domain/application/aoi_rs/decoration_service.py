@@ -18,10 +18,11 @@ from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
 )
-from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
     persist_sheet_oos_decoration_outcome,
 )
+from src.inline_domain.application.shared.decoration_ports import SheetDecorationPort
 
 
 @dataclass(frozen=True)
@@ -46,10 +47,16 @@ def prepare_aoi_rs_decoration(
     product_revision: str = "",
     decision_signature: str = "",
     now: datetime | None = None,
+    decoration_port: SheetDecorationPort | None = None,
 ) -> AoiRsDecorationResult:
     detail = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
     if persist:
-        outcome = persist_sheet_oos_decoration_outcome(
+        persist_outcome = (
+            decoration_port.persist_sheet_oos_decoration_outcome
+            if decoration_port is not None
+            else persist_sheet_oos_decoration_outcome
+        )
+        outcome = persist_outcome(
             product_dir,
             detail,
             AOI_RS_OOS_DECORATION_FILE_NAME,
@@ -63,7 +70,12 @@ def prepare_aoi_rs_decoration(
         )
         decoration = outcome.decoration_df
     else:
-        decisions = load_sheet_oos_decisions(
+        load_decisions = (
+            decoration_port.load_sheet_oos_decisions
+            if decoration_port is not None
+            else load_sheet_oos_decisions
+        )
+        decisions = load_decisions(
             product_dir,
             AOI_RS_OOS_DECORATION_FILE_NAME,
             prod_code,

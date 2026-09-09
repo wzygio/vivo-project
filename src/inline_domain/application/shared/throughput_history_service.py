@@ -8,13 +8,13 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.core.shared.throughput_facts import build_daily_throughput_facts
-from src.inline_domain.infrastructure.shared.throughput_history_store import (
-    ThroughputHistoryStore,
+from src.inline_domain.application.shared.throughput_ports import (
+    ThroughputHistoryPort,
 )
 
 
 class ThroughputHistoryService:
-    def __init__(self, store: ThroughputHistoryStore) -> None:
+    def __init__(self, store: ThroughputHistoryPort) -> None:
         self._store = store
 
     def update_from_details(

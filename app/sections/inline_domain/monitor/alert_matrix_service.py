@@ -43,6 +43,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_health import get_data_health
 from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 from yield_domain.application.alert_service import AlertService
 
@@ -79,6 +80,7 @@ class AlertMatrixContext:
     spc_cpk_loader: Callable[[str], pd.DataFrame | None] | None = None
     yield_lot_loader: Callable[[str], tuple[Any, Mapping[str, Any]] | None] | None = None
     yield_trend_loader: Callable[[str], tuple[Any, Any] | None] | None = None
+    yield_health_loader: Callable[[str, str], Mapping[str, str]] | None = None
     qtime_monitoring_loader: Callable[[], tuple[pd.DataFrame, pd.DataFrame]] | None = None
     oos_product_loader: Callable[[str, str, Path], Any] | None = None
     _qtime_monitoring_memo: Any = field(default=_UNSET, repr=False)
@@ -266,6 +268,10 @@ def _evaluate_yield_lot_oos(prod_code: str, context: AlertMatrixContext) -> dict
     row_key = "yield_lot_oos"
     if context.yield_lot_loader is None:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "未配置 Yield 数据源")
+    if context.yield_health_loader is not None:
+        health = context.yield_health_loader(prod_code, row_key)
+        if health["status"] != "fresh":
+            return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "Yield 数据陈旧或不可用，当前状态未知")
     bundle = context.yield_lot_loader(prod_code)
     if not bundle:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无 Lot 良率数据")
@@ -287,6 +293,10 @@ def _evaluate_yield_trend(prod_code: str, context: AlertMatrixContext) -> dict[s
     row_key = "yield_trend_fluctuation"
     if context.yield_trend_loader is None:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "未配置 Yield 数据源")
+    if context.yield_health_loader is not None:
+        health = context.yield_health_loader(prod_code, row_key)
+        if health["status"] != "fresh":
+            return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "Yield 数据陈旧或不可用，当前状态未知")
     bundle = context.yield_trend_loader(prod_code)
     if not bundle:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无趋势数据")
@@ -319,6 +329,8 @@ def _evaluate_qtime_sheet_oos(prod_code: str, context: AlertMatrixContext) -> di
     if monitoring is None:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无 Q-Time 数据")
     details_df, alerts_df = monitoring
+    if get_data_health(details_df)["status"] != "fresh":
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "Q-Time 数据陈旧或未确认，当前状态未知")
 
     def _has_product(frame: pd.DataFrame) -> bool:
         return (

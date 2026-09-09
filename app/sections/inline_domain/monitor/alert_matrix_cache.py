@@ -46,6 +46,7 @@ from src.inline_domain.application.shared.decorated_data import SCOPE_DECORATION
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
 from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_health import attach_data_health, make_data_health
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ MATRIX_INLINE_SCOPES: tuple[str, ...] = ("spc", "ctq", "aoi_tt", "aoi_rs")
 QTIME_SHOPS: tuple[str, ...] = ("ARRAY", "OLED", "TP")
 # 与 yield 看板共享同一缓存基签名，复用其 L2 条目（revision 变化同步失效）
 YIELD_SNAPSHOT_SIGNATURE_BASE = "yield_dashboard_manual_refresh_v1"
-MATRIX_CACHE_BASE_SIGNATURE = "alert_matrix_board_v1"
+MATRIX_CACHE_BASE_SIGNATURE = "alert_matrix_board_v2_health"
 
 
 def get_alert_matrix_week_start(reference_date: date | None = None) -> date:
@@ -132,6 +133,7 @@ def load_all_product_qtime_monitoring(
     mtime_ns, size = stat if stat is not None else MISSING_DECISION_FILE_STAT
     details_frames: list[pd.DataFrame] = []
     alerts_frames: list[pd.DataFrame] = []
+    health_by_shop: dict[str, dict] = {}
     for shop in QTIME_SHOPS:
         try:
             result = get_cached_shop_monitoring(
@@ -142,7 +144,9 @@ def load_all_product_qtime_monitoring(
                 decision_size=size,
             )
         except ValidationError:
+            health_by_shop[shop] = make_data_health("unknown")
             continue  # 厂别无站点：与既有 skip 行为一致
+        health_by_shop[shop] = dict(result.data_health)
         details_frames.append(result.details)
         alerts_frames.append(result.alerts.assign(shop=shop))
     details_df = (
@@ -151,6 +155,14 @@ def load_all_product_qtime_monitoring(
     alerts_df = (
         pd.concat(alerts_frames, ignore_index=True) if alerts_frames else pd.DataFrame()
     )
+    # A missing/stale shop must not disappear during concat and produce green cells.
+    states = [item["status"] for item in health_by_shop.values()]
+    status = "fresh" if states and all(item == "fresh" for item in states) else "unknown"
+    if "stale" in states:
+        status = "stale"
+    for frame in (details_df, alerts_df):
+        attach_data_health(frame, make_data_health(status))
+        frame.attrs["data_health_by_shop"] = health_by_shop
     return details_df, alerts_df
 
 
@@ -197,6 +209,14 @@ def build_default_matrix_context(
         )
         return lot_data, warning_lines
 
+    def yield_health_loader(prod_code: str, indicator_key: str):
+        config, _, snapshot_signature, cache_context = _yield_product_resources(prod_code, indicator_key)
+        return YieldAnalysisService.get_data_health(
+            config, _db_manager=DatabaseManager(), snapshot_signature=snapshot_signature,
+            analysis_start_date=cache_context["analysis_start_date"],
+            analysis_end_date=cache_context["analysis_end_date"],
+        )
+
     def yield_trend_loader(prod_code: str):
         """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
         config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code, "yield_trend_fluctuation")
@@ -234,6 +254,7 @@ def build_default_matrix_context(
         spc_cpk_loader=spc_cpk_loader,
         yield_lot_loader=yield_lot_loader,
         yield_trend_loader=yield_trend_loader,
+        yield_health_loader=yield_health_loader,
         qtime_monitoring_loader=qtime_monitoring_loader,
     )
 

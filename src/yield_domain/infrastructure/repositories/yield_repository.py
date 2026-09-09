@@ -7,9 +7,11 @@ from typing import Dict, List, Optional, Sequence
 from datetime import datetime, timedelta
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_health import attach_data_health, get_data_health, make_data_health
 from src.shared_kernel.snapshot_paths import snapshot_directory, snapshot_component
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
+from src.yield_domain.application.errors import YieldSourceReadError
 from src.yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
 
 
@@ -57,157 +59,89 @@ class PanelRepository:
         self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
     def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
-        """
-        获取 Panel 数据 (TTL 保护 + 增量更新)。
-        包含基于业务的安全去重逻辑、强刷指令拦截与数据库容灾降级。
-        """
-        req_start_dt = datetime.strptime(query.start_date, "%Y-%m-%d")
-        req_end_dt = datetime.strptime(query.end_date, "%Y-%m-%d")
-
-        # --- Phase 0: 初始化flag ---
-        df_cache = pd.DataFrame()
-        cache_exists, is_cache_fresh = False, False
-        time_col = 'warehousing_time'
-
-        # --- Phase 1: 缓存检查 ---
+        """Publish only complete source windows; preserve old snapshots on failure."""
+        req_start = pd.Timestamp(query.start_date)
+        req_end = pd.Timestamp(query.end_date)
+        source_start, source_end = self.data_forward_policy.to_source_window(req_start, req_end)
+        time_col = "warehousing_time"
+        cache = None
+        cache_health = make_data_health("unknown")
+        fresh = False
         if self.use_snapshot and self.snapshot_path.exists():
             try:
-                stat = self.snapshot_path.stat()
-                mtime = datetime.fromtimestamp(stat.st_mtime)
-                age_hours = (datetime.now() - mtime).total_seconds() / 3600
-
-                df_cache = pd.read_parquet(self.snapshot_path)
-                
-
-                if not df_cache.empty and time_col in df_cache.columns:
-                    df_cache[time_col] = pd.to_datetime(df_cache[time_col])
-                    cache_exists = True
-
-                    if force_refresh:
-                        logging.info("⚡ [YieldRepo] 收到强刷指令，忽略缓存，执行全量刷新！")
-                        cache_exists = False  # [核心修复] 强制视为无缓存，走全量刷新而非增量更新
-                        is_cache_fresh = False
-                    else:
-                        max_cached_date = df_cache[time_col].max()
-                        source_target, _ = self.data_forward_policy.to_source_window(
-                            pd.Timestamp(req_end_dt),
-                            pd.Timestamp(req_end_dt),
-                        )
-                        real_target_dt = min(source_target.to_pydatetime(), datetime.now())
-
-                        if age_hours < self.SNAPSHOT_TTL_HOURS:
-                            if max_cached_date.date() >= real_target_dt.date():
-                                is_cache_fresh = True
-                                logging.info(f"⏱️ [YieldRepo] 缓存有效 (年龄 {age_hours:.1f}h < {self.SNAPSHOT_TTL_HOURS}h, 最新数据日期: {max_cached_date.date()} >= 请求截止日期: {req_end_dt.date()})。")
-                            else:
-                                logging.info(f"⏰ [YieldRepo] 缓存虽未过{self.SNAPSHOT_TTL_HOURS}h，但缺少目标尾部数据 (缓存最新: {max_cached_date.date()}, 请求截止: {req_end_dt.date()})，触发增量拉取！")
-                        else:
-                            logging.info(f"⏰ [YieldRepo] 缓存已过期 (年龄 {age_hours:.1f}h)，准备执行增量更新。")
-            except Exception as e:
-                logging.warning(f"⚠️ 缓存读取失败: {e}")
-                cache_exists = False
-
-        # --- Phase 2: 数据刷新 ---
-        df_final = pd.DataFrame()
-        need_save = False
-
-        if cache_exists and is_cache_fresh:
-            logging.info("🚀 [YieldRepo] 命中有效缓存，跳过数据库查询。")
-            df_final = df_cache
-        elif cache_exists and not df_cache.empty:
-            # === 增量更新模式 ===
-            logging.info("🔄 [YieldRepo] 执行增量更新 (Safe Overwrite)...")
-            max_cached_date = df_cache[time_col].max()
-            delta_start_dt = max_cached_date - timedelta(days=self.INCREMENTAL_BUFFER_DAYS)
-            
-            # [核心修复] 使用日期部分比较，确保当天数据也能被增量拉取
-            if delta_start_dt.date() <= req_end_dt.date():
-                delta_s_str = delta_start_dt.strftime("%Y-%m-%d")
-                # 增量查询的结束日期需要包含请求的结束日期（即当天）；使用原始 query.end_date，因为它已经格式化为 YYYY-MM-DD
-                try:
-                    df_delta = self._fetch_from_db_in_chunks(
-                        delta_s_str, query.end_date, 
-                        query.product_code,
-                        self.data_policy.work_order_types,
-                    )
-                    
-                    if not df_delta.empty:
-                        df_delta[time_col] = pd.to_datetime(df_delta[time_col])
-                        logging.info(f"   >> 合并: 缓存({len(df_cache)}) + 增量({len(df_delta)})")
-                        df_combined = pd.concat([df_cache, df_delta], ignore_index=True)
-                        
-                        if 'defect_desc' in df_combined.columns:
-                            df_combined.drop_duplicates(subset=['panel_id', 'defect_desc'], keep='last', inplace=True)
-                        else:
-                            df_combined.drop_duplicates(subset=['panel_id'], keep='last', inplace=True)
-                            
-                        df_final = df_combined
-                        need_save = True
-                    else:
-                        logging.info("   >> 增量查询为空，沿用旧缓存。")
-                        df_final = df_cache
-                except Exception as e:
-                    # [容灾防线 1] 增量拉取挂掉，无损回退旧快照
-                    logging.warning(f"🚨 数据库增量拉取失败 ({e})，安全回退至陈旧快照！")
-                    df_final = df_cache
-            else:
-                df_final = df_cache
-        else:
-            # === 全量刷新模式 ===
-            logging.info("🆕 [YieldRepo] 执行全量刷新 (Full Refresh)...")
-            try:
-                df_final = self._fetch_from_db_in_chunks(
-                    query.start_date, query.end_date, 
-                    query.product_code,
-                    self.data_policy.work_order_types,
+                cache = pd.read_parquet(self.snapshot_path)
+                cache_health = get_data_health(cache)
+                if not cache.empty:
+                    cache[time_col] = pd.to_datetime(cache[time_col])
+                modified = datetime.fromtimestamp(self.snapshot_path.stat().st_mtime)
+                age = (datetime.now() - modified).total_seconds() / 3600
+                # New snapshots carry coverage, including successful zero-row windows.
+                covered = bool(
+                    cache_health["source_start"] and cache_health["source_end"]
+                    and pd.Timestamp(cache_health["source_start"]) <= source_start
+                    and pd.Timestamp(cache_health["source_end"]) >= source_end
                 )
-                if not df_final.empty:
-                    df_final[time_col] = pd.to_datetime(df_final[time_col])
-                    need_save = True
-                elif cache_exists and not df_cache.empty:
-                    # [容灾防线 2] 数据库假死返回空，无损回退
-                    logging.warning("🚨 数据库全量拉取返回空数据，安全回退至陈旧快照！")
-                    df_final = df_cache
-            except Exception as e:
-                # [容灾防线 3] 彻底断连，无损回退
-                logging.error(f"❌ 数据库全量拉取崩溃 ({e})")
-                if cache_exists and not df_cache.empty:
-                    logging.warning("🚨 触发极端容灾降级，强行启用本地历史快照续命！")
-                    df_final = df_cache
+                # Legacy snapshots keep their established TTL behavior, but unknown health.
+                legacy_covered = (
+                    cache_health["status"] == "unknown" and not cache.empty
+                    and cache[time_col].max().date() >= min(source_end, pd.Timestamp.now()).date()
+                )
+                fresh = age < self.SNAPSHOT_TTL_HOURS and (covered or legacy_covered)
+            except Exception:
+                logging.warning("YIELD_SNAPSHOT_READ_FAILED")
+                cache = None
 
-        # --- Phase 3: 全局安全去重、滚动裁剪 & 持久化 ---
-        if not df_final.empty:
-            # 1. 按照入库时间升序排列，确保同一 panel_id 的最新状态在 DataFrame 末尾
-            df_final = df_final.sort_values(by=time_col, ascending=True)
-            
-            # 2. 安全去重 (保留最新状态，并且绝不吞掉同一片玻璃上的多个不良)
-            if 'defect_desc' in df_final.columns:
-                df_final = df_final.drop_duplicates(subset=['panel_id', 'defect_desc'], keep='last')
-            else:
-                df_final = df_final.drop_duplicates(subset=['panel_id'], keep='last')
-            
-            # 持久化逻辑：仅当发生了数据库查询(need_save)时才写入磁盘
-            if need_save and self.use_snapshot:
-                df_to_save = df_final[df_final[time_col] >= req_start_dt]
-                
-                try:
-                    self.snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-                    df_to_save.to_parquet(self.snapshot_path, index=False)
-                    logging.info(f"💾 [Repo] 快照已更新 (Rolling Window)。")
-                except Exception as e:
-                    logging.error(f"❌ 快照保存失败: {e}")
-                
-                df_final = df_to_save
-
-            # 最后的防御性过滤按显示时间执行；原始快照仍保留源时间。
-            displayed = self.data_forward_policy.shift_frame(df_final, (time_col,))
-            mask = (displayed[time_col] >= req_start_dt) & \
-                   (displayed[time_col] <= req_end_dt)
-            df_final = displayed[mask].copy()
-            
-            return self._apply_data_policy(df_final).reset_index(drop=True)
-
-        return df_final
+        if cache is not None and fresh and not force_refresh:
+            result = cache
+            health = cache_health
+        else:
+            try:
+                fetch_start = source_start
+                incremental = (
+                    cache is not None and not cache.empty and not force_refresh
+                    and bool(cache_health["source_start"])
+                    and pd.Timestamp(cache_health["source_start"]) <= source_start
+                )
+                if incremental:
+                    fetch_start = max(source_start, cache[time_col].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS))
+                delta = self._fetch_from_db_in_chunks(
+                    fetch_start.strftime("%Y-%m-%d"), source_end.strftime("%Y-%m-%d"),
+                    query.product_code, self.data_policy.work_order_types,
+                )
+                if not delta.empty:
+                    delta[time_col] = pd.to_datetime(delta[time_col])
+                # Successful empty chunks are facts, not connection failures.
+                result = pd.concat([cache, delta], ignore_index=True) if incremental else delta
+                if not result.empty:
+                    result = result.sort_values(time_col)
+                    keys = ["panel_id", "defect_desc"] if "defect_desc" in result else ["panel_id"]
+                    result = result.drop_duplicates(subset=keys, keep="last")
+                    result = result[result[time_col] >= source_start].copy()
+                health = make_data_health(
+                    "fresh", source_start=source_start.strftime("%Y-%m-%d"),
+                    source_end=source_end.strftime("%Y-%m-%d"),
+                    refreshed_at=datetime.now().isoformat(timespec="seconds"),
+                )
+                attach_data_health(result, health)
+                if self.use_snapshot:
+                    try:
+                        self.snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+                        result.to_parquet(self.snapshot_path, index=False)
+                    except Exception:
+                        logging.error("YIELD_SNAPSHOT_WRITE_FAILED")
+            except Exception:
+                logging.warning("YIELD_SOURCE_UNAVAILABLE: retaining previous snapshot when available")
+                result = cache if cache is not None else pd.DataFrame()
+                health = make_data_health(
+                    "stale" if cache is not None else "unavailable",
+                    source_start=cache_health["source_start"], source_end=cache_health["source_end"],
+                    refreshed_at=cache_health["refreshed_at"], error_code="YIELD_SOURCE_UNAVAILABLE",
+                )
+        if not result.empty:
+            result = self.data_forward_policy.shift_frame(result, (time_col,))
+            result = result[(result[time_col] >= req_start) & (result[time_col] <= req_end)].copy()
+            result = self._apply_data_policy(result).reset_index(drop=True)
+        return attach_data_health(result, health)
 
     def _fetch_from_db_in_chunks(
         self,
@@ -245,9 +179,9 @@ class PanelRepository:
                 return pd.concat(all_chunks, ignore_index=True)
             return pd.DataFrame()
             
-        except Exception as e:
-            logging.error(f"❌ 数据库查询失败: {e}")
-            return pd.DataFrame()
+        except Exception:
+            logging.error("YIELD_SOURCE_UNAVAILABLE: complete window query aborted")
+            raise YieldSourceReadError() from None
 
     def _apply_data_policy(self, panel_df: pd.DataFrame) -> pd.DataFrame:
         """在向上层返回前统一应用注入的 Defect Group 策略。"""

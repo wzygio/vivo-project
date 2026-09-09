@@ -15,11 +15,11 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     get_decision_sheet_name,
     merge_detail_with_decoration_flags,
 )
-from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
-    get_sheet_oos_decoration_path,
+from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
     persist_sheet_oos_decoration_outcome,
 )
+from src.inline_domain.application.shared.decoration_ports import SheetDecorationPort
 
 
 @dataclass(frozen=True)
@@ -47,12 +47,18 @@ def prepare_sheet_oos_decoration(
     decision_signature: str | None = None,
     now: datetime | None = None,
     force: bool = False,
+    decoration_port: SheetDecorationPort | None = None,
 ) -> SheetOosDecorationResult:
     """Load decisions, invoke pure rules, and persist generated audit detail."""
     detail = build_sheet_oos_detail(sheet_features_df)
     sheet = decoration_sheet_name or "Sheet1"
     if persist_files:
-        outcome = persist_sheet_oos_decoration_outcome(
+        persist_outcome = (
+            decoration_port.persist_sheet_oos_decoration_outcome
+            if decoration_port is not None
+            else persist_sheet_oos_decoration_outcome
+        )
+        outcome = persist_outcome(
             product_dir,
             detail,
             decoration_file_name,
@@ -68,7 +74,12 @@ def prepare_sheet_oos_decoration(
         decisions = outcome.decisions_df
         refresh_reason = outcome.refresh_decision.reason
     else:
-        decisions = load_sheet_oos_decisions(
+        load_decisions = (
+            decoration_port.load_sheet_oos_decisions
+            if decoration_port is not None
+            else load_sheet_oos_decisions
+        )
+        decisions = load_decisions(
             product_dir,
             decoration_file_name,
             decoration_sheet_name,
@@ -82,7 +93,7 @@ def prepare_sheet_oos_decoration(
             decoration,
         ),
         decoration_df=decoration,
-        decoration_path=get_sheet_oos_decoration_path(product_dir, decoration_file_name),
+        decoration_path=product_dir / decoration_file_name,
         decoration_sheet=sheet,
         decision_sheet=get_decision_sheet_name(sheet),
         decision_df=decisions,

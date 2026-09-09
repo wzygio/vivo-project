@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TypedDict
@@ -27,6 +27,9 @@ from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
 from src.indicator_domain.core.qtime.decoration import (
     apply_qtime_decoration, apply_qtime_spec_overrides, constrain_qtime_display,
 )
+from src.shared_kernel.data_health import (
+    DataHealth, attach_data_health, get_data_health, make_data_health,
+)
 
 
 class QTimeFilterOptions(TypedDict):
@@ -40,6 +43,7 @@ class QTimeMonitoringResult:
     decoration: pd.DataFrame
     decisions: pd.DataFrame
     decoration_path: Path | None
+    data_health: DataHealth = field(default_factory=lambda: make_data_health("unknown"))
 
 
 class QTimeReportService:
@@ -131,10 +135,13 @@ class QTimeReportService:
         )
         prepared = apply_qtime_spec_overrides(raw_details, self._spec_overrides)
         decorated = apply_qtime_decoration(prepared, decisions)
+        health = get_data_health(raw_details)
         return QTimeMonitoringResult(
-            details=(constrain_qtime_display(decorated.details)
-                     if self._constrain_display else decorated.details),
-            alerts=build_qtime_alerts(decorated.decoration),
+            details=attach_data_health(
+                constrain_qtime_display(decorated.details)
+                if self._constrain_display else decorated.details, health,
+            ),
+            alerts=attach_data_health(build_qtime_alerts(decorated.decoration), health),
             decoration=decorated.decoration,
             decisions=decisions,
             decoration_path=(
@@ -142,6 +149,7 @@ class QTimeReportService:
                 if self._decoration_port is not None
                 else None
             ),
+            data_health=health,
         )
 
     def update_decisions(self, file_bytes: bytes) -> QTimeDecisionUploadResult:

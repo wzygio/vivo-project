@@ -1,0 +1,11 @@
+# Findings
+- Baseline working tree clean; current target master, development branch created.
+- Existing assessment identifies Yield swallowed exceptions and Q-Time metadata loss at `.frame`.
+- Existing ADR-0001 requires cached payloads contain no project-defined instances.
+- H4 can use Q-Time port pattern. Existing Inline applications have direct decoration adapter imports.
+- Test files already include acceptance-like business scenarios; H5 must explain behavioral gaps rather than demand a new test bureaucracy.
+- Added H4 consumer ports for Inline, Yield and Equipment; exact import legacy edges remain visible in architecture guard.
+- Review exposed explicit-port cache collision and first-import cycle; both fixed with regression tests.
+- UI review exposed stale Yield green conclusions, failed Q-Time refresh retaining fresh state, and cross-day sessions; fixed and covered.
+- Whole offline copy: 1343 passed / 8 failed. Four failures reproduced on master, three match independent title change, one matrix fixture updated for new health contract and passed focused follow-up.
+- Concurrent workbook/backup/signature/title changes preserved and excluded; no inferred ownership of their origin.

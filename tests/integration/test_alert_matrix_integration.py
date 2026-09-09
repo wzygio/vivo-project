@@ -29,6 +29,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from yield_domain.application.alert_service import AlertService
+from shared_kernel.data_health import attach_data_health, make_data_health
 
 REFERENCE_DATE = date(2026, 9, 2)  # 上一 ISO 周 = [2026-08-24, 2026-08-31)
 PRODUCTS = ["M678", "Z571"]
@@ -152,6 +153,8 @@ def _build_simulated_context(resource_dir: Path) -> AlertMatrixContext:
             ]
         ),
     )
+    for frame in qtime_frames:
+        attach_data_health(frame, make_data_health("fresh"))
     return AlertMatrixContext(
         reference_date=REFERENCE_DATE,
         inline_resource_dir=resource_dir,

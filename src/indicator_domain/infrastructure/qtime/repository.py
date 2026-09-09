@@ -23,6 +23,7 @@ from src.indicator_domain.infrastructure.qtime.snapshot_store import (
     QTimeSnapshotStore,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_health import attach_data_health, make_data_health
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -106,15 +107,32 @@ class QTimeRepository:
     def fetch_details(self, query: QTimeQuery) -> pd.DataFrame:
         if self._snapshot_store is None:
             source = self._fetch_filtered_source(query)
+            source_start, source_end = self._data_forward_policy.to_source_window(
+                pd.Timestamp(query.start_time), pd.Timestamp(query.end_time),
+            )
+            health = make_data_health(
+                "fresh", source_start=source_start.isoformat(),
+                source_end=source_end.isoformat(),
+                refreshed_at=datetime.now().astimezone().isoformat(),
+            )
         else:
             source_start, source_end = self._rolling_source_window(query.end_time)
-            source = self._load_shop_source(
+            loaded = self._load_shop_source(
                 query.shop,
                 source_start=source_start,
                 source_end=source_end,
                 force_refresh=False,
-            ).frame
-        return self._to_display_details(source, query)
+            )
+            source = loaded.frame
+            metadata = loaded.snapshot.metadata
+            health = make_data_health(
+                "stale" if loaded.degraded else "fresh",
+                source_start=metadata.source_start,
+                source_end=metadata.source_end,
+                refreshed_at=metadata.refreshed_at,
+                error_code="QTIME_SOURCE_READ_FAILED" if loaded.degraded else "",
+            )
+        return attach_data_health(self._to_display_details(source, query), health)
 
     def cache_signature(self, shop: Shop) -> tuple[object, ...]:
         signature = (QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature)
@@ -245,7 +263,7 @@ class QTimeRepository:
                 "Using stale Q-Time %s snapshot after database refresh failure",
                 shop,
             )
-            return _LoadedShopSource(stale.frame, stale, False)
+            return _LoadedShopSource(stale.frame, stale, False, degraded=True)
 
         merged = self._merge_refresh(
             stale.frame if stale is not None else pd.DataFrame(columns=DETAIL_COLUMNS),
@@ -467,3 +485,4 @@ class _LoadedShopSource:
     frame: pd.DataFrame
     snapshot: QTimeSnapshot
     refreshed_from_database: bool
+    degraded: bool = False

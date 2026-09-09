@@ -19,11 +19,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
-from src.equipment_domain.infrastructure.data_loader import (
-    load_spec_baseline,
-    load_report_part_life_snapshots,
-    PartsRepository,
-)
+from src.equipment_domain.application.ports import PartsDataPort
 from src.equipment_domain.core.parts_matcher import build_and_match_all
 from src.equipment_domain.core.parts_calculator import (
     apply_over_spec_alert_and_decoration,
@@ -31,11 +27,20 @@ from src.equipment_domain.core.parts_calculator import (
 )
 from src.equipment_domain.config import get_equipment_runtime_config
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.cache_ports import cache_default_port
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_data_port(db_manager, data_port: PartsDataPort | None = None) -> PartsDataPort:
+    """Resolve legacy static callers through the default composition root."""
+    if data_port is not None:
+        return data_port
+    from src.equipment_domain.composition import create_parts_data_port
+    return create_parts_data_port(db_manager)
 
 
 def _file_signature(path: Path) -> str:
@@ -93,18 +98,18 @@ class PartsReportService:
     def safe_refresh_snapshots(
         _db_manager: "DatabaseManager",
         baseline_path: str,
+        _data_port: PartsDataPort | None = None,
     ) -> bool:
         """刷新关键备件 L1 Parquet 快照，不触碰 Streamlit L2 缓存。"""
         try:
-            spec_df = load_spec_baseline(baseline_path)
-            repo = PartsRepository(_db_manager, spec_df)
-            snapshot_df = repo.get_snapshot(force_refresh=True)
+            snapshot_df = _resolve_data_port(_db_manager, _data_port).refresh(baseline_path)
             return not snapshot_df.empty
         except Exception as e:
             logger.error(f"关键备件快照刷新失败: {e}", exc_info=True)
             return False
 
     @staticmethod
+    @cache_default_port
     @st.cache_data(
         ttl=ConfigLoader.get_cache_ttl_seconds(),
         max_entries=8,
@@ -116,6 +121,7 @@ class PartsReportService:
         as_of_date: str = "",
         baseline_signature: str = "",
         runtime_config_signature: str = "",
+        _data_port: PartsDataPort | None = None,
     ) -> dict[str, object]:
         """
         获取可安全跨模块重载缓存的关键备件报表载荷。
@@ -136,12 +142,12 @@ class PartsReportService:
         del baseline_signature, runtime_config_signature
 
         # 1. 加载基线 CSV
-        spec_df = load_spec_baseline(baseline_path)
+        data_port = _resolve_data_port(_db_manager, _data_port)
+        spec_df = data_port.load_baseline(baseline_path)
 
         # 2. 查询数据库快照数据
         runtime_config = get_equipment_runtime_config()
-        snapshot_df, fabricated_snapshot_df = load_report_part_life_snapshots(
-            _db_manager,
+        snapshot_df, fabricated_snapshot_df = data_port.load_snapshots(
             spec_df,
             as_of=(
                 min(
@@ -203,6 +209,7 @@ class PartsReportService:
         as_of_date: str = "",
         baseline_signature: str = "",
         runtime_config_signature: str = "",
+        _data_port: PartsDataPort | None = None,
     ) -> PartsReportViewModel:
         """读取缓存载荷，并在 pickle 边界之外构造当前模块的 ViewModel。"""
         payload = PartsReportService.fetch_report_payload(
@@ -212,6 +219,7 @@ class PartsReportService:
             as_of_date=as_of_date,
             baseline_signature=baseline_signature,
             runtime_config_signature=runtime_config_signature,
+            _data_port=_data_port,
         )
         report_df = payload.get("report_df")
         report_df = report_df if isinstance(report_df, pd.DataFrame) else pd.DataFrame()

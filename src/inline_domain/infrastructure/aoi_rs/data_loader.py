@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 import pandas as pd
 from sqlalchemy import text
@@ -76,7 +77,12 @@ def _read_sql(
         df.columns = df.columns.str.lower()
         return df
     except Exception as exc:  # noqa: BLE001 - DAO 层容错，返回空表由上层降级
-        logger.error("%s: %s", error_message, exc, exc_info=True)
+        logger.error(
+            "%s code=AOI_RS_QUERY_FAILED exception_type=%s correlation_id=%s",
+            error_message,
+            type(exc).__name__,
+            uuid4().hex,
+        )
         return pd.DataFrame()
 
 

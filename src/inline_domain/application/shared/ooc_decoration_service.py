@@ -9,9 +9,10 @@ import pandas as pd
 from src.inline_domain.core.shared.sheet_ooc_decoration import (
     SCOPE_OOC_DECORATION_FILE_NAME,
 )
-from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+from src.inline_domain.application.shared.decoration_defaults import (
     persist_sheet_oos_decoration_outcome,
 )
+from src.inline_domain.application.shared.decoration_ports import SheetDecorationPort
 
 
 def persist_ooc_facts(
@@ -25,9 +26,15 @@ def persist_ooc_facts(
     coverage_end: pd.Timestamp,
     product_revision: str = "",
     decision_signature: str = "",
+    decoration_port: SheetDecorationPort | None = None,
 ) -> pd.DataFrame:
     """Write the mutable ledger; intermediate alarm results stay in cache."""
-    outcome = persist_sheet_oos_decoration_outcome(
+    persist_outcome = (
+        decoration_port.persist_sheet_oos_decoration_outcome
+        if decoration_port is not None
+        else persist_sheet_oos_decoration_outcome
+    )
+    outcome = persist_outcome(
         product_dir,
         detail_df,
         file_name=SCOPE_OOC_DECORATION_FILE_NAME[scope],

@@ -8,8 +8,8 @@ SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
 ## Operating Model
 
 - `app/` 是 Streamlit 展示层，包含门户、页面、区块、组件和图表适配器。
-- `src/` 按领域划分业务代码；每个领域遵循 Application → Core →
-  Infrastructure 分层。运行流和模块职责见 `ARCHITECTURE.md`。
+- `src/` 按领域划分业务代码；应用层编排 Core 规则并通过消费方端口调用基础设施，
+  组合根负责装配，Core 不依赖持久化。存量兼容边界见 `ARCHITECTURE.md`。
 - `config/` 保存全局、产品、SPC、设备与合规配置；全局配置与产品配置由
   `ConfigLoader` 深度合并为 `AppConfig`。
 - `resources/` 保存受版本控制的业务输入、产品规格和人工修饰文件；`data/`

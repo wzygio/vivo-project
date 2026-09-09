@@ -26,11 +26,9 @@ from src.shared_kernel.utils.excel_tools import (
     replace_workbook_sheets,
 )
 
+from src.inline_domain.application.shared.decoration_ports import CapabilityDecorationReadError
+
 logger = logging.getLogger(__name__)
-
-
-class CapabilityDecorationReadError(RuntimeError):
-    """The ledger could not be read and must not be replaced with computed rows."""
 
 
 def get_cpk_decoration_path(product_dir: Path) -> Path:

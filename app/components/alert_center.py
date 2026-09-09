@@ -111,7 +111,10 @@ def build_trend_context(alert_service_result, mwd_code_data, mwd_group_data):
     return ctx
 
 
-def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_lots, time_period=30):
+def render_alert_center(
+    trend_alerts, trend_context, oos_records, total_recent_lots, time_period=30,
+    *, source_current: bool = True,
+):
     """
     统一预警中心：合并趋势异常 + Lot 超规预警。
 
@@ -121,6 +124,7 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
         oos_records: compute_lot_oos_records 返回的超规记录列表
         total_recent_lots: 近 N 天总 Lot 数
         time_period: 时间窗口天数
+        source_current: 所有参与统计的数据源是否已确认可用于当前判断
     """
     oos_df = pd.DataFrame(oos_records)
     oos_count = oos_df["超规 Lot ID"].nunique() if not oos_df.empty else 0
@@ -136,8 +140,10 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
     if has_oos and total_recent_lots > 0:
         oos_rate_str = f"{(oos_count / total_recent_lots * 100):.1f}%"
         lot_line += f"，其中 {oos_count} 个超规 ({oos_rate_str})"
-    else:
+    elif source_current:
         lot_line += "，全部在规格线内"
+    else:
+        lot_line = f"历史数据包含 {total_recent_lots} 个 Lot，当前超规状态未知"
 
     # Code 趋势监控信息
     parts = []
@@ -164,11 +170,15 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
 
     if has_trend:
         trend_line = f"已监控 {trend_scope}，{comparison_str}，发现 {len(trend_alerts)} 项异常"
-    else:
+    elif source_current:
         trend_line = f"已监控 {trend_scope}，{comparison_str}，无异常升高"
+    else:
+        trend_line = f"历史数据覆盖 {trend_scope}，当前趋势状态未知"
 
     # --- 渲染 ---
     with st.expander(f"智能预警中心（近{time_period}天）", expanded=False):
+        if not source_current:
+            st.warning("数据陈旧或完整性未确认，当前状态未知；以下仅展示已有历史结果。")
         if has_any:
             parts_summary = []
             if has_trend:
@@ -176,8 +186,9 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
             if has_oos:
                 oos_rate_summary = f"{(oos_count / total_recent_lots * 100):.1f}%" if total_recent_lots > 0 else "0.0%"
                 parts_summary.append(f"{oos_count} 个超规 Lot ({oos_rate_summary})")
-            st.error("检测到: " + " + ".join(parts_summary) + "，请关注！")
-        else:
+            prefix = "检测到: " if source_current else "历史数据检测到: "
+            st.error(prefix + " + ".join(parts_summary) + "，请关注！")
+        elif source_current:
             st.success("系统监测正常")
 
         # 监控概览卡片（始终显示）
@@ -216,5 +227,5 @@ def render_alert_center(trend_alerts, trend_context, oos_records, total_recent_l
                         "实际不良率": st.column_config.TextColumn("实际不良率"),
                     },
                     hide_index=True,
-                    use_container_width=True,
+                    width="stretch",
                 )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache, partial
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepository
 from src.inline_domain.infrastructure.aoi_tt.particle_size_loader import (
@@ -38,6 +39,17 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.snapshot_paths import (
     inline_measurement_directory, aoi_rs_snapshot_directory,
 )
+
+if TYPE_CHECKING:
+    from src.inline_domain.application.shared.decoration_ports import DecorationPort
+
+
+@lru_cache(maxsize=1)
+def build_decoration_port() -> DecorationPort:
+    """Share one stateless workbook adapter across compatibility call sites."""
+    from src.inline_domain.infrastructure.shared.decoration_store import ExcelDecorationStore
+
+    return ExcelDecorationStore()
 
 
 def build_oos_history_service(resource_dir: Path | None = None):

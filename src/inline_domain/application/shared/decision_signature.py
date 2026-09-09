@@ -26,22 +26,15 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     EMPTY_DECISION_SIGNATURE,
     compute_decision_signature,
 )
-from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
+from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
+    get_decision_file_stat,
+    scope_resource_dir,
 )
+from src.inline_domain.application.shared.decoration_ports import DecisionSignaturePort, DecorationResourcePort
 from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
 logger = logging.getLogger(__name__)
-
-
-def get_decision_file_stat(workbook_path: Path) -> tuple[int, int] | None:
-    """阶段 1：廉价 file_stat 探针；工作簿不存在返回 None。"""
-    try:
-        stat = Path(workbook_path).stat()
-    except OSError:
-        return None
-    return (int(stat.st_mtime_ns), int(stat.st_size))
 
 
 @st.cache_data(
@@ -64,16 +57,29 @@ def _cached_decision_signature(
     return compute_decision_signature(decisions_df)
 
 
-def get_decision_signature(workbook_path: Path | str, sheet_name: str) -> str:
+def get_decision_signature(
+    workbook_path: Path | str, sheet_name: str, *,
+    signature_port: DecisionSignaturePort | None = None,
+) -> str:
     """返回指定工作簿中 ``<sheet_name>__flags`` 决策台账的内容签名。
 
     工作簿不存在 -> 确定性空签名；``__flags`` 存在但读取失败 ->
     ``SheetOosDecorationReadError`` 上抛（页面现有 except 路径处理）。
     """
     path = Path(workbook_path)
-    file_stat = get_decision_file_stat(path)
+    file_stat = (
+        signature_port.get_decision_file_stat(path)
+        if signature_port is not None
+        else get_decision_file_stat(path)
+    )
     if file_stat is None:
         return EMPTY_DECISION_SIGNATURE
+    if signature_port is not None:
+        # Explicit adapters bypass the process-wide workbook cache. An injected
+        # memory store must never collide with another store at the same path.
+        return compute_decision_signature(signature_port.load_sheet_oos_decisions(
+            product_dir=path.parent, file_name=path.name, sheet_name=sheet_name,
+        ))
     mtime_ns, size = file_stat
     return _cached_decision_signature(str(path), str(sheet_name), mtime_ns, size)
 
@@ -82,6 +88,9 @@ def get_scope_decision_signature(
     scope: str,
     prod_code: str,
     product_dir: Path | None = None,
+    *,
+    signature_port: DecisionSignaturePort | None = None,
+    resource_port: DecorationResourcePort | None = None,
 ) -> str:
     """scope 便捷入口：按 scope 定位用户维护的修饰工作簿并计算决策签名。
 
@@ -96,7 +105,7 @@ def get_scope_decision_signature(
     base_dir = (
         Path(product_dir)
         if product_dir is not None
-        else scope_resource_dir(normalized_scope)
+        else (resource_port.scope_resource_dir(normalized_scope) if resource_port is not None else scope_resource_dir(normalized_scope))
     )
     workbook_path = base_dir / SCOPE_DECORATION_FILE_NAME[normalized_scope]
-    return get_decision_signature(workbook_path, prod_code)
+    return get_decision_signature(workbook_path, prod_code, signature_port=signature_port)

@@ -536,7 +536,29 @@ def test_yield_trend_loader_returns_none_is_no_data() -> None:
 def _qtime_frames(
     alerts: list[dict], details: list[dict] | None = None
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    return pd.DataFrame(details or []), pd.DataFrame(alerts)
+    from src.shared_kernel.data_health import attach_data_health, make_data_health
+    return (
+        attach_data_health(pd.DataFrame(details or []), make_data_health("fresh")),
+        attach_data_health(pd.DataFrame(alerts), make_data_health("fresh")),
+    )
+
+
+def test_qtime_stale_or_unknown_sources_cannot_make_a_green_cell():
+    details, alerts = _qtime_frames([], [{"prodcode": PROD, "lot_id": "L1"}])
+    details.attrs["data_health"]["status"] = "stale"
+    context = _make_context(qtime_monitoring_loader=lambda: (details, alerts))
+    assert _evaluate("qtime_sheet_oos", context)["state"] == CELL_STATE_NO_DATA
+    details.attrs.clear()
+    context = _make_context(qtime_monitoring_loader=lambda: (details, alerts))
+    assert _evaluate("qtime_sheet_oos", context)["state"] == CELL_STATE_NO_DATA
+
+
+def test_yield_stale_source_cannot_make_a_green_cell():
+    context = _make_context(
+        yield_lot_loader=lambda prod: (_lot_data(["20260901"]), WARNING_LINES),
+        yield_health_loader=lambda prod, indicator: {"status": "stale"},
+    )
+    assert _evaluate("yield_lot_oos", context)["state"] == CELL_STATE_NO_DATA
 
 
 def _qtime_alert(prodcode: str, timekey: str) -> dict:
@@ -892,3 +914,29 @@ def test_load_all_product_qtime_monitoring_tags_shop_on_union(monkeypatch) -> No
 
     assert alerts_df["shop"].tolist() == ["ARRAY", "OLED", "TP"]
     assert "shop" not in details_df.columns
+
+
+@pytest.mark.parametrize("oled_status", ["fresh", "stale", "unknown", "missing"])
+def test_shop_union_preserves_unhealthy_empty_sources(monkeypatch, oled_status):
+    from src.indicator_domain.application.qtime.service import QTimeMonitoringResult
+    from src.indicator_domain.application.qtime.dtos import QTimeQuery
+    from src.shared_kernel.data_health import make_data_health, get_data_health
+
+    monkeypatch.setattr(cache_module, "build_qtime_service", lambda db: SimpleNamespace(decoration_path=None))
+
+    def read_shop(service, *, shop, **kwargs):
+        if shop == "OLED" and oled_status == "missing":
+            QTimeQuery()  # The no-station validation branch is not a successful source.
+        status = oled_status if shop == "OLED" else "fresh"
+        details = pd.DataFrame() if shop == "OLED" else pd.DataFrame([{"prodcode": PROD, "lot_id": "L1"}])
+        return QTimeMonitoringResult(
+            details, pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), None,
+            make_data_health(status),
+        )
+
+    monkeypatch.setattr(cache_module, "get_cached_shop_monitoring", read_shop)
+    details, alerts = cache_module.load_all_product_qtime_monitoring(object(), REFERENCE_DATE)
+    context = _make_context(qtime_monitoring_loader=lambda: (details, alerts))
+    expected = CELL_STATE_OK if oled_status == "fresh" else CELL_STATE_NO_DATA
+    assert _evaluate("qtime_sheet_oos", context)["state"] == expected
+    assert get_data_health(details)["status"] == ("unknown" if oled_status == "missing" else oled_status)

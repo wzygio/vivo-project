@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.equipment_domain.application import parts_service
+from src.equipment_domain.infrastructure import report_data_adapter
 
 
 def test_today_cache_key_does_not_pass_end_of_day_as_current_time(monkeypatch) -> None:
@@ -17,8 +18,8 @@ def test_today_cache_key_does_not_pass_end_of_day_as_current_time(monkeypatch) -
         observed.append(as_of)
         raise RuntimeError("clock captured")
 
-    monkeypatch.setattr(parts_service, "load_spec_baseline", lambda _: pd.DataFrame())
-    monkeypatch.setattr(parts_service, "load_report_part_life_snapshots", capture_clock)
+    monkeypatch.setattr(report_data_adapter, "load_spec_baseline", lambda _: pd.DataFrame())
+    monkeypatch.setattr(report_data_adapter, "load_report_part_life_snapshots", capture_clock)
     parts_service.PartsReportService.fetch_report_payload.clear()
     with pytest.raises(RuntimeError, match="clock captured"):
         parts_service.PartsReportService.fetch_report_payload(
@@ -67,7 +68,7 @@ Array,Target,PVD,MO,Mo DEPO,41000KWH,1K200,3AFS01-SPU-PM5,%TRGTLIFE%_G_MAX
     original_service = original_module.PartsReportService
     original_service.fetch_report_payload.clear()
     monkeypatch.setattr(
-        original_module,
+        report_data_adapter,
         "load_report_part_life_snapshots",
         blocking_snapshot_load,
     )
