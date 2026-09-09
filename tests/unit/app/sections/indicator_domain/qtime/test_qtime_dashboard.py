@@ -75,7 +75,7 @@ def test_qtime_dashboard_renders_the_alert_center_and_decoration_admin(admin) ->
     expander_labels = [expander.label for expander in app.expander]
     assert "Q-Time 超规预警中心" in expander_labels
     assert ("开发者后台：Q-Time 超规数据修饰" in expander_labels) is (admin == "true")
-    assert any("2 条已确认真实超规" in message.value for message in app.error)
+    assert any("2 条已确认超规" in message.value for message in app.error)
 
 
 def test_qtime_dashboard_supports_multiple_paths() -> None:
@@ -184,7 +184,7 @@ def test_qtime_dashboard_filters_results_to_selected_products_in_memory() -> Non
         frame = getattr(result, frame_name)
         assert not frame.empty, frame_name
         assert set(frame["prodcode"].unique()) == {"M626"}, frame_name
-    assert any("1 条已确认真实超规" in message.value for message in app.error)
+    assert any("1 条已确认超规" in message.value for message in app.error)
     assert len(app.get("plotly_chart")) == 1
 
 

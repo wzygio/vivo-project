@@ -159,32 +159,6 @@ def test_compact_expander_assigns_unique_plotly_keys(monkeypatch):
     assert len(fake_st.plotly_keys) == len(set(fake_st.plotly_keys))
 
 
-def test_compact_mapping_defaults_to_penultimate_batch(monkeypatch):
-    fake_st = _FakeStreamlit()
-    monkeypatch.setattr(yield_dashboard, "st", fake_st)
-    monkeypatch.setattr(yield_dashboard, "create_mapping_heatmap", lambda *args, **kwargs: go.Figure())
-
-    mapping_data = pd.DataFrame(
-        {
-            "defect_group": ["GROUP-A"] * 3,
-            "defect_desc": ["CODE-A"] * 3,
-            "batch_no": ["BATCH-1", "BATCH-2", "BATCH-3"],
-            "batch_total_input": [100, 100, 100],
-            "panel_id": ["1-1", "1-1", "1-1"],
-        }
-    )
-
-    yield_dashboard._render_compact_mapping_section(
-        mapping_data=mapping_data,
-        curr_group="GROUP-A",
-        curr_code="CODE-A",
-        hotspot_scripts=[],
-        product_code="TEST",
-    )
-
-    assert fake_st.tab_defaults == ["BATCH-2 (100)"]
-
-
 def test_compact_mapping_supports_legacy_streamlit_tabs(monkeypatch):
     fake_st = _LegacyTabsStreamlit()
     monkeypatch.setattr(yield_dashboard, "st", fake_st)

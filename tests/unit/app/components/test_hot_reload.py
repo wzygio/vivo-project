@@ -241,17 +241,3 @@ def test_page_header_separates_product_filter_and_gates_admin_actions(
     assert captions == expected_groups
     assert len(bordered_containers) == len(expected_groups)
     assert all(kwargs.get("width") == "stretch" for _label, kwargs in button_calls)
-
-
-def test_every_streamlit_page_uses_the_shared_page_header():
-    """所有业务页面都必须通过共享页头获得一致的产品与管理员控件。"""
-    pages_dir = PROJECT_ROOT / "app" / "pages"
-    page_files = sorted(pages_dir.glob("*.py"))
-    pages_without_header = [
-        page_file.name
-        for page_file in page_files
-        if "render_page_header(" not in page_file.read_text(encoding="utf-8")
-    ]
-
-    assert len(page_files) == 13
-    assert pages_without_header == []

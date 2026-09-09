@@ -6,3 +6,6 @@
 - 最终定向回归128passed/1deselected；全仓unit1242passed/6既存失败，详见verification.md。不扩大范围更改门户、CPK显示修饰TTL或Yield业务策略。
 - 隔离E2E通过后关闭本次测试服务器和浏览器，保留output测试证据。
 - 已更新架构说明、产品页缓存审查和ARCHITECTURE入口。
+- 2026-09-09：用户授权退役上次六项失败测试并合并当前分支。只删除指定函数，保留同文件其他测试；删除前后全仓收集1248→1242，无收集错误。同步当前分支ea1f348的两处Q-Time文案断言，不删其行为测试。
+- 本轮全仓测试在Excel相关检查长时间停滞，已中止；未关闭用户Excel。验证边界详见verification.md。
+- 合并前受影响范围（unit/app、unit/shared_kernel、两个Yield测试文件、矩阵integration）374 passed；结果output/test-results/indicator-product-cache/retirement-targeted.xml。
