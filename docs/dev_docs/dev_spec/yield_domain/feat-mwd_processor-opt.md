@@ -8,7 +8,7 @@
 ## References
 - 当前入库良率生成逻辑：
     * 代码实现：`src\yield_domain\core\mwd_trend\mwd_trend_processor.py`
-    * 当前设计（具体细节可能与代码有些许不同，以代码为准）：`references\domain\yield_domian\mwd_trend_processor_algorithm.md`
+    * 当前设计（具体细节可能与代码有些许不同，以代码为准）：`references\domain\yield_domain\algorithm-mwd-trend.md`
 - 术语解释（当你遇到不确定的名词时使用）：`references\domain\GLOSSARY.md`
 - 良损/良率：实际含义不同，但在当前任务中指代同一含义
 

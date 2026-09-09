@@ -180,4 +180,4 @@ Streamlit Pages  (可视化呈现)
 
 ---
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`inline_domain.md`](./inline_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`overview-inline.md`](../Inline_domain/overview-inline.md) · [`overview-shared-kernel.md`](../shared_kernel/overview-shared-kernel.md)

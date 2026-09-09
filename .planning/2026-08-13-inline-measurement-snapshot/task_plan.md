@@ -85,7 +85,7 @@ Phase 5 — Architecture record and delivery gate
 
 | Error | Attempt | Resolution |
 |---|---:|---|
-| 首次读取旧文档路径 `references/domain/aoi_tt/spec-data_source.md` 不存在 | 1 | 用 `rg --files` 定位为 `references/domain/Inline_domain/spec-data_source-aoi_tt.md`，不重复旧路径。 |
+| 首次读取旧文档路径 `references/domain/aoi_tt/spec-data_source.md` 不存在 | 1 | 用 `rg --files` 定位为 `references/domain/Inline_domain/data-source-aoi-tt.md`，不重复旧路径。 |
 
 ## Scope guard
 

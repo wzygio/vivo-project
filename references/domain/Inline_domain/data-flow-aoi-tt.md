@@ -305,7 +305,7 @@ By Sheet 以 `厂别 + 站点 + TT 名称 + Particle Size + Sheet/Glass` 分组�
 
 ### 9.1 现有资料中的口径差异
 
-现有 `spec-data_source-aoi_tt.md` 的图表清单曾把 By Lot 描述为“Lot 的 TT 数量合计”。当前报表实际口径已经是：
+现有 `data-source-aoi-tt.md` 的图表清单曾把 By Lot 描述为“Lot 的 TT 数量合计”。当前报表实际口径已经是：
 
 > Lot 内 TT 数量合计 ÷ Lot 内去重检测片数
 

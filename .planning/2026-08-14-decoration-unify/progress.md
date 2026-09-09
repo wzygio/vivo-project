@@ -68,8 +68,8 @@
 
 ## 2026-08-14 — 模块 3 · Phase 6/7 文档与 E2E
 
-- [x] 6.1 文档同步：`references/domain/Inline_domain/spec-infrastructure-architecture.md` §5、
-  `inline_domain.md` 分层图更新至最终态（含"改工作簿→刷新缓存"操作契约）；
+- [x] 6.1 文档同步：`references/domain/Inline_domain/architecture-inline-infrastructure.md` §5、
+  `overview-inline.md` 分层图更新至最终态（含"改工作簿→刷新缓存"操作契约）；
   generated 三份文档加状态更新并按最终态修订。
 - [x] 6.2 全量回归：417 passed / 5 failed = 基线（见 Phase 5）。
 - E2E 基础设施：8503 旧进程（PID 33172，改动前代码）重启为新代码；

@@ -20,6 +20,11 @@ When a durable artifact class is added under `docs/`, add its folder route here.
 
 ## Harness Evolution
 
+- 2026-09-09: Per user request, `references/index.md` now routes questions to
+  individual domain and feature-design files, documents type-prefix naming,
+  and provides filename scanning when routes are stale. `AGENTS.md` records
+  this exception to folder-only Harness indexes.
+
 - 2026-07-29: Consolidated `$harness-creator` and `$harness-refactor` into
   `$manage-harness`.
 - Harness creation and repair now keep a minimal project router and do not copy

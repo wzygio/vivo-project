@@ -89,7 +89,7 @@ Complete
 
 | Error | Attempt | Resolution |
 |---|---:|---|
-| 领域 spec 旧路径不存在 | 1 | 通过 references 路由定位到 `references/domain/Inline_domain/spec-data_source-aoi_rs.md` |
+| 领域 spec 旧路径不存在 | 1 | 通过 references 路由定位到 `references/domain/Inline_domain/data-source-aoi-rs.md` |
 | `references/dev_references/coding_spec` 不存在 | 1 | 使用项目 AGENTS、ADR、现有 tooling 与 ECC common+python 规则作为约束，并在交付证据中注明 |
 | 全量 pytest 存在跨域既有失败并触发 Excel COM `0x80010108` 噪声 | 1 | AOI_RS/Inline 定向套件均全绿；用 `--tb=no` 复取精确计数，并将加密 Excel、专项页头、Code selector、Yield 配置失败登记为任务外基线，不修改无关模块 |
 

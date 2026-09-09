@@ -27,7 +27,7 @@ D3 —— monitor 的 AOI 行免于 SPC 修饰（对齐 aoi_tt 的无修饰口�
    `main_process_trace.py`、`measurement_preprocessor.py` 一并迁入（命名去 SPC 化）。
 2. **管线顺序是行为契约**：排除参数（LOSS）在 data_type 过滤之前，异常点过滤在
    其后；迁移逐行平移保序。该约束写入
-   `references/domain/Inline_domain/spec-infrastructure-architecture.md`。
+   `references/domain/Inline_domain/architecture-inline-infrastructure.md`。
 3. **业务模块退化为薄投影**：`SpcRepository`（524→29 行）与 `CtqRepository`
    对称，各自只做投影；报废逻辑（`get_scrap_data` + 厂别推断）迁入
    `infrastructure/monitor/scrap_repository.py`——它仅 monitor 消费且与
@@ -79,5 +79,5 @@ D3 —— monitor 的 AOI 行免于 SPC 修饰（对齐 aoi_tt 的无修饰口�
 - Issue: `.scratch/inline-pipeline-reuse/issues/01-shared-pipeline-to-measurement-and-monitor-reuse.md`
 - Plan: `.planning/2026-08-13-inline-pipeline-reuse/`
 - 设计文档: `docs/dev_docs/generated/Inline_domain/monitor_data_reuse_evaluation_and_design.md`（V3 定稿）
-- 架构规范: `references/domain/Inline_domain/spec-infrastructure-architecture.md`
+- 架构规范: `references/domain/Inline_domain/architecture-inline-infrastructure.md`
 - Supersedes: ADR-0012 中"共享逻辑暂留 spc_repository"的过渡形态

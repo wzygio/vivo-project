@@ -46,7 +46,7 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 └─────────────────────────────────────────────────┘
 ```
 
-> Infrastructure 详细规范见 [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。
+> Infrastructure 详细规范见 [`architecture-inline-infrastructure.md`](./architecture-inline-infrastructure.md)。
 
 PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路。其 CLI、用例编排和
 专用规格比较规则统一位于 `tools/indicator_improvement/`，只读取离线 Excel 并向
@@ -200,7 +200,7 @@ def classify_param_type(raw_data_type: Optional[str]) -> str:
 ## 6. 基础设施层 (Infrastructure)
 
 完整规范（模块矩阵、制备管线顺序、快照契约、装配）见
-[`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md)。要点：
+[`architecture-inline-infrastructure.md`](./architecture-inline-infrastructure.md)。要点：
 
 - `shared/`（原 `measurement/`，2026-08 按 shared 约束更名归位）拥有三厂测量 DAO、
   参数元数据 DAO、产品级原始 Parquet 快照（3 个月滚动窗口、TTL 统一配置于
@@ -321,4 +321,4 @@ shared/measurement_preparation.py               ← 筛选在此层消费
 ---
 
 
-> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`spc-data-flow.md`](./spc-data-flow.md) · [`spec-infrastructure-architecture.md`](./spec-infrastructure-architecture.md) · [`yield_domain.md`](./yield_domain.md) · [`shared_kernel.md`](./shared_kernel.md)
+> **相关文件**: [`ARCHITECTURE.md`](../../ARCHITECTURE.md) · [`data-flow-spc.md`](./data-flow-spc.md) · [`architecture-inline-infrastructure.md`](./architecture-inline-infrastructure.md) · [`overview-yield.md`](../yield_domain/overview-yield.md) · [`overview-shared-kernel.md`](../shared_kernel/overview-shared-kernel.md)

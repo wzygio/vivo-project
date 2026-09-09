@@ -45,5 +45,5 @@ Task1-1-1 将 Particle Size 范围调整为 ARRAY/TP 的 S/M/L/H，OLED 暂不�
 ## Traceability
 
 - Requirement: `docs/dev_docs/dev_spec/Inline_domain/feat-AOI_TT.md#task1-1-1aoi_tt报表优化-数据生成`
-- Domain flow: `references/domain/Inline_domain/aoi-tt-report-data-lineage.md`
+- Domain flow: `references/domain/Inline_domain/data-flow-aoi-tt.md`
 - Key tests: `tests/unit/inline_domain/**/aoi_tt/`、`tests/unit/app/sections/aoi_tt/`、`tests/e2e/aoi_tt_report.js`

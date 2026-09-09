@@ -54,8 +54,8 @@
 
 - Issue: `.scratch/inline-measurement-snapshot/issues/01-centralize-inline-measurement-snapshot.md`
 - ADR-0001: `docs/ADR/0001-streamlit-cache-native-payload-boundary.md`
-- SPC source spec: `references/domain/Inline_domain/spec-data_source-spc.md`
-- AOI_TT source spec: `references/domain/Inline_domain/spec-data_source-aoi_tt.md`
+- SPC source spec: `references/domain/Inline_domain/data-source-spc-main-process.md`
+- AOI_TT source spec: `references/domain/Inline_domain/data-source-aoi-tt.md`
 
 ## Visual/Browser Findings
 

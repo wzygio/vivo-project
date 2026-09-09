@@ -32,7 +32,7 @@
 
 | Issue | Resolution |
 |---|---|
-| issue/ADR 引用的旧领域 spec 路径已失效 | 使用 `references/index.md` 路由和文件检索，定位现路径 `references/domain/Inline_domain/spec-data_source-aoi_rs.md` |
+| issue/ADR 引用的旧领域 spec 路径已失效 | 使用 `references/index.md` 路由和文件检索，定位现路径 `references/domain/Inline_domain/data-source-aoi-rs.md` |
 | development-testing 要求的 `references/dev_references/coding_spec` 不存在 | 记录为仓库缺失；继续遵循根 AGENTS、现有 pyproject/tooling、ADR 与 ECC common+python 规则，不创建未经请求的本地规范副本 |
 
 ## Resources
@@ -40,7 +40,7 @@
 - `.scratch/aoi-rs-local-snapshot/issues/01-add-aoi-rs-local-snapshot.md`
 - `docs/ADR/0007-aoi-rs-report-data-source-and-counting.md`
 - `docs/ADR/0012-shared-inline-measurement-snapshot.md`
-- `references/domain/Inline_domain/spec-data_source-aoi_rs.md`
+- `references/domain/Inline_domain/data-source-aoi-rs.md`
 - `src/inline_domain/infrastructure/measurement/measurement_snapshot_repository.py`
 - `src/inline_domain/infrastructure/aoi_rs/data_loader.py`
 - `src/inline_domain/application/aoi_rs/aoi_rs_service.py`

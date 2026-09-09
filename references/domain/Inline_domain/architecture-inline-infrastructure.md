@@ -2,7 +2,7 @@
 
 > **范围**: [`src/inline_domain/infrastructure/`](../../../src/inline_domain/infrastructure/)
 > **最后更新**: 2026-08-13（段1重构定稿）
-> **关联**: [ADR-0012](../../../docs/ADR/0012-shared-inline-measurement-snapshot.md) · [inline_domain.md](./inline_domain.md)
+> **关联**: [ADR-0012](../../../docs/ADR/0012-shared-inline-measurement-snapshot.md) · [overview-inline.md](./overview-inline.md)
 
 ---
 

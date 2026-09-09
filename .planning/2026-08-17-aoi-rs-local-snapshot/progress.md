@@ -103,7 +103,7 @@
 
 | Timestamp | Error | Attempt | Resolution |
 |---|---|---:|---|
-| 2026-08-17 | `references/domain/aoi_rs/spec-data_source.md` 不存在 | 1 | 经 references 路由定位到 `references/domain/Inline_domain/spec-data_source-aoi_rs.md` |
+| 2026-08-17 | `references/domain/aoi_rs/spec-data_source.md` 不存在 | 1 | 经 references 路由定位到 `references/domain/Inline_domain/data-source-aoi-rs.md` |
 | 2026-08-17 | `references/dev_references/coding_spec` 不存在 | 1 | 记录缺失，采用仓库 AGENTS/ADR/tooling 与 ECC common+python 规则 |
 | 2026-08-17 | 全量 pytest 8 个跨域失败 + Excel COM `0x80010108` | 1 | 定向套件已全绿；以 `--tb=no` 复取计数并登记任务外基线 |
 | 2026-08-17 | pandas/openpyxl 不能直接读取企业加密的 AOI_RS 修饰工作簿，Excel COM 会话又出现宿主噪声 | 1 | 使用 file-decryption 工具分别解密当前文件与 Git HEAD；sheet、9 个字段和两行业务数据一致，确认仅为加密二进制重新封装；临时副本已清理 |

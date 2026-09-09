@@ -16,8 +16,8 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 - For Harness creation, audit, or repair, use `$manage-harness`.
 - For shared engineering standards, use `$ecc-production-rules`.
 - For project-owned knowledge routing, start at `references/index.md`.
-- For project-owned domain knowledge, read `references/domain/`.
-- For specs, runtime traces, or templates, use `specs/` when present.
+- For project-owned domain knowledge, use `references/index.md` to select
+  relevant files under `references/domain/`.
 
 ## Iteration Router
 
@@ -26,7 +26,8 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 - Update `references/domain/` when stable terminology, invariants, mappings, or
   project-specific designs change.
 - Update `references/retrospective.md` when the Harness itself evolves.
-- Keep Harness `index.md` files folder-only.
+- Keep Harness `index.md` files folder-only, except `references/index.md`:
+  it routes questions to specific knowledge files and owns their naming rules.
 
 ## Safety Boundary
 
@@ -44,7 +45,7 @@ Prefer explicit, testable, traceable workflows over broad automatic inference.
 Use `$manage-harness` to create, audit, or repair the repository Harness.
 
 - Keep only minimal project routing; do not copy shared Harness templates into
-  this repository.
+  this repository. 
 - Use `$ecc-production-rules` rather than Harness reference copies for
   engineering standards.
 - `references/domain/` is project-owned and outside Harness management.

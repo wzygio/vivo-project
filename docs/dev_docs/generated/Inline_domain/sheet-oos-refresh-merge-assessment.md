@@ -2,7 +2,7 @@
 
 - 评估日期：2026-08-27
 - 评估对象：worktree 分支 `feat/inline-sheet-oos-refresh`（HEAD = `62e35f1`，基于 `e1f0af4`，相对 master 单提交、+3276/−116 行、32 个文件）
-- 评估依据：`docs/PRD/PRD-2026-08-18-Inline-Sheet-OOS修饰刷新与决策持久化.md`、`references/domain/Inline_domain/sheet-oos-decoration-mechanism.md`
+- 评估依据：`docs/PRD/PRD-2026-08-18-Inline-Sheet-OOS修饰刷新与决策持久化.md`、`references/domain/Inline_domain/rules-sheet-oos-decoration.md`
 - 评估方式：PRD 逐条对照评审（核心层 / 应用层）+ 与 master 的 merge-tree 冲突分析 + 测试运行验证
 
 ## 0. 总体结论
