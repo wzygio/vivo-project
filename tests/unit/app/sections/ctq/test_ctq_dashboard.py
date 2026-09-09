@@ -59,6 +59,7 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     chamber_figure = object()
     time_figure = object()
     rendered_figures: list[object] = []
+    rendered_configs: list[dict] = []
     column_calls: list[int] = []
     captured: dict[str, object] = {}
     sheet_features_df = pd.DataFrame(
@@ -82,11 +83,11 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
         "columns",
         lambda count: column_calls.append(count) or [nullcontext() for _ in range(count)],
     )
-    monkeypatch.setattr(
-        ctq_dashboard.st,
-        "plotly_chart",
-        lambda figure, **_kwargs: rendered_figures.append(figure),
-    )
+    def capture_chart(figure, **kwargs):
+        rendered_figures.append(figure)
+        rendered_configs.append(kwargs.get("config", {}))
+
+    monkeypatch.setattr(ctq_dashboard.st, "plotly_chart", capture_chart)
     monkeypatch.setattr(
         ctq_dashboard.st,
         "metric",
@@ -116,6 +117,7 @@ def test_ctq_indicator_sections_render_distributions_without_capability_widgets(
     )
 
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
+    assert all(config.get("scrollZoom") is False for config in rendered_configs)
     assert column_calls == [3]
     assert "chart_type" not in captured
     assert captured["sheet_chart_type"] == "line"

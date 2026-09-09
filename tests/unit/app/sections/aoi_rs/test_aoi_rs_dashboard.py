@@ -194,6 +194,7 @@ def test_point_chart_supports_value_column_for_lot_average() -> None:
 
 def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkeypatch) -> None:
     rendered: list[object] = []
+    rendered_configs: list[dict] = []
     expander_titles: list[str] = []
     expander_expanded: list[bool] = []
 
@@ -213,7 +214,11 @@ def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkey
         "expander",
         lambda title, expanded=False, **_kw: _FakeExpander(title, expanded),
     )
-    monkeypatch.setattr(aoi_rs_dashboard.st, "plotly_chart", lambda fig, **_kw: rendered.append(fig))
+    def capture_chart(figure, **kwargs):
+        rendered.append(figure)
+        rendered_configs.append(kwargs.get("config", {}))
+
+    monkeypatch.setattr(aoi_rs_dashboard.st, "plotly_chart", capture_chart)
     monkeypatch.setattr(
         aoi_rs_dashboard.st,
         "columns",
@@ -273,6 +278,7 @@ def test_render_sections_expander_per_code_with_three_side_by_side_charts(monkey
     assert len(expander_titles) == 3
     assert all(expander_expanded)
     assert len(rendered) == 9
+    assert all(config.get("scrollZoom") is False for config in rendered_configs)
     # Expander 标题含站点与 Code（带中文名）
     assert any("11629" in t and "A1PPS" in t and "PHT责M1残留" in t for t in expander_titles)
     assert any("43629" in t and "T3DMR" in t for t in expander_titles)

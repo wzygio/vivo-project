@@ -317,6 +317,7 @@ def render_aoi_rs_indicator_sections(
                         ),
                         width="stretch",
                         key=_alert_chart_key(chart_key_prefix, factory, step_id, code, "trend"),
+                        config={"scrollZoom": False},
                     )
                 with c_lot:
                     st.plotly_chart(
@@ -331,6 +332,7 @@ def render_aoi_rs_indicator_sections(
                         ),
                         width="stretch",
                         key=_alert_chart_key(chart_key_prefix, factory, step_id, code, "lot"),
+                        config={"scrollZoom": False},
                     )
                 with c_sheet:
                     st.plotly_chart(
@@ -344,6 +346,7 @@ def render_aoi_rs_indicator_sections(
                         ),
                         width="stretch",
                         key=_alert_chart_key(chart_key_prefix, factory, step_id, code, "sheet"),
+                        config={"scrollZoom": False},
                     )
 
 

@@ -684,6 +684,8 @@ def _render_indicator_payload(
                 st.plotly_chart(
                     payload[figure_name],
                     width="stretch",
+                    # Let the wheel scroll the report; toolbar zoom remains available.
+                    config={"scrollZoom": False},
                     key=_build_indicator_chart_key(chart_key_prefix, payload["label"], chart_slot),
                 )
 

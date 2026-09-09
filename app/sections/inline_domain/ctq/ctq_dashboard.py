@@ -193,6 +193,7 @@ def _render_ctq_indicator_payload(
                 st.plotly_chart(
                     payload[figure_name],
                     width="stretch",
+                    config={"scrollZoom": False},
                     key=_build_ctq_chart_key(chart_key_prefix, payload["label"], chart_slot),
                 )
 

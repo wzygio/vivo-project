@@ -964,6 +964,7 @@ def test_render_indicator_sections_places_charts_side_by_side_in_one_row(monkeyp
 
 def test_indicator_payload_assigns_unique_plotly_keys_across_page_sections(monkeypatch) -> None:
     rendered_keys: list[str | None] = []
+    rendered_configs: list[dict] = []
     shared_figure = object()
 
     class FakeColumn:
@@ -993,17 +994,19 @@ def test_indicator_payload_assigns_unique_plotly_keys_across_page_sections(monke
         "columns",
         lambda spec, **_kwargs: [FakeColumn() for _ in range(spec if isinstance(spec, int) else len(spec))],
     )
-    monkeypatch.setattr(
-        spc_dashboard.st,
-        "plotly_chart",
-        lambda _figure, **kwargs: rendered_keys.append(kwargs.get("key")),
-    )
+    def capture_chart(_figure, **kwargs):
+        rendered_keys.append(kwargs.get("key"))
+        rendered_configs.append(kwargs.get("config", {}))
+
+    monkeypatch.setattr(spc_dashboard.st, "plotly_chart", capture_chart)
 
     spc_dashboard._render_indicator_payload(payload, chart_key_prefix="spc_alert")
     spc_dashboard._render_indicator_payload(payload, chart_key_prefix="spc_report")
 
     assert all(rendered_keys)
     assert len(rendered_keys) == len(set(rendered_keys)) == 6
+    # All three plots in both report and alert sections must release the wheel.
+    assert all(config.get("scrollZoom") is False for config in rendered_configs)
 
 
 def test_period_capability_table_shows_cpm_and_cpk_together() -> None:

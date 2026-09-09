@@ -289,6 +289,7 @@ def _render_particle_size_charts(
                 title="月周天趋势（平均每片 TT 个数）",
             ),
             width="stretch",
+            config={"scrollZoom": False},
         )
     with c_lot:
         st.plotly_chart(
@@ -301,6 +302,7 @@ def _render_particle_size_charts(
                 y_col="value",
             ),
             width="stretch",
+            config={"scrollZoom": False},
         )
     with c_sheet:
         st.plotly_chart(
@@ -312,6 +314,7 @@ def _render_particle_size_charts(
                 y_title="TT 个数",
             ),
             width="stretch",
+            config={"scrollZoom": False},
         )
 
 
