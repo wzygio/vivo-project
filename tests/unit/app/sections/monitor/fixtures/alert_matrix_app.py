@@ -77,6 +77,7 @@ cells[NO_DATA_CELL] = _cell(*NO_DATA_CELL, CELL_STATE_NO_DATA, NO_DATA_MESSAGE)
 cells[ERROR_CELL] = _cell(*ERROR_CELL, CELL_STATE_ERROR, ERROR_MESSAGE)
 
 nonce = st.session_state.get("fixture_nonce", "default")
+cells = {key: {**cell, "cache_signature": f"fixture-{nonce}-{key}"} for key, cell in cells.items()}
 payload = {
     "products": PRODUCTS,
     "rows": [

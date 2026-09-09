@@ -2,16 +2,14 @@
 
 与纯计算层 ``alert_matrix_service.py`` 分离：
 
-- ``get_cached_alert_matrix``：``@st.cache_data`` 包装，TTL 读
+- ``get_cached_alert_matrix``：轻量拼装，各单元格 ``@st.cache_data``，TTL 读
   ``config/global.yaml`` 的 ``application.cache_ttl_hours``；
-  键 = (products, 参考周周一, 签名)，签名由
+  键 = (指标, 产品, 参考周, 输入签名, 独立 revision)，签名由
   ``alert_matrix_service.build_alert_matrix_signature`` 对
   ``build_default_signature_components`` 的分量做确定性摘要；
-- ``build_default_signature_components``：集中采集逐产品 revision、
-  逐 (prod, scope) 决策签名（file_stat 门控）、qtime 决策工作簿 stat——
-  签名组装只此一处（PRD §6 风险缓解）；
+- ``build_cell_source_signature``：仅采集本指标输入，不混入其他指标 revision；
 - ``build_default_matrix_context``：生产依赖装配（inline 资源目录、SPC CPK
-  payload、yield 只读入口、qtime 全产品监控）。所有服务对象经下划线前缀
+  Excel、yield 只读入口、qtime 全产品监控）。所有服务对象经下划线前缀
   参数或闭包进入缓存函数，不参与哈希。
 """
 
@@ -19,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,29 +25,26 @@ import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
 
-from app.components.page_header import (
-    build_product_cache_signature,
-    get_product_cache_revision,
+from app.components.indicator_cache import (
+    build_indicator_product_cache_signature,
+    get_indicator_product_revision,
 )
 from app.sections.inline_domain.monitor.alert_matrix_service import (
+    MATRIX_ROWS,
     AlertMatrixContext,
+    AlertMatrixRow,
     build_alert_matrix_payload,
     build_alert_matrix_signature,
 )
-from app.sections.inline_domain.spc.spc_dashboard import get_default_spc_start_date
 from src.indicator_domain.application.qtime.cached_monitoring import (
     MISSING_DECISION_FILE_STAT,
     get_cached_shop_monitoring,
     get_qtime_decision_file_stat,
 )
 from src.indicator_domain.composition import build_qtime_service
-from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.application.shared.decision_signature import (
-    get_scope_decision_signature,
-)
-from src.inline_domain.application.spc.dtos import SpcQueryConfig
-from src.inline_domain.application.spc.spc_service import SpcReportService
-from src.inline_domain.composition import build_spc_repository
+from src.inline_domain.application.shared.decorated_data import SCOPE_DECORATION_FILE_NAME
+from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -70,42 +65,52 @@ def get_alert_matrix_week_start(reference_date: date | None = None) -> date:
 
 
 def build_default_signature_components(products: Sequence[str]) -> dict[str, Any]:
-    """采集签名分量：逐产品 revision + 逐 (prod, scope) 决策签名 + qtime 决策 stat。
-
-    分量采集失败降级为确定性 "unavailable" 标记：对应域的数据加载大概率同样
-    失败并落入 error 单元格；缓存键保持确定性，不产生每次 rerun 都变化的脏键。
-    """
-    revisions: dict[str, str] = {}
-    decisions: dict[str, str] = {}
-    for prod_code in products:
-        try:
-            revisions[prod_code] = get_product_cache_revision(prod_code)
-        except Exception as exc:  # noqa: BLE001 - 降级为确定性标记，见 docstring
-            logger.warning("[alert-matrix] 产品 %s revision 读取失败: %s", prod_code, exc)
-            revisions[prod_code] = "unavailable"
-        for scope in MATRIX_INLINE_SCOPES:
-            key = f"{scope}|{prod_code}"
-            try:
-                decisions[key] = get_scope_decision_signature(scope, prod_code)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "[alert-matrix] 决策签名读取失败 (%s): %s", key, exc
-                )
-                decisions[key] = "unavailable"
-
-    try:
-        qtime_path = ConfigLoader.get_domain_resource_path(
-            "indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx"
-        )
-        qtime_stat = get_qtime_decision_file_stat(qtime_path)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[alert-matrix] qtime 决策文件 stat 失败: %s", exc)
-        qtime_stat = None
+    """诊断用逐单元格输入签名映射；不再用作整板缓存键。"""
     return {
-        "product_revisions": revisions,
-        "scope_decision_signatures": decisions,
-        "qtime_decision_file_stat": list(qtime_stat or MISSING_DECISION_FILE_STAT),
+        f"{row.row_key}|{product}": build_cell_source_signature(row.row_key, product)
+        for row in MATRIX_ROWS for product in products
     }
+
+
+def cpk_latest_store() -> CpkLatestExcelStore:
+    return CpkLatestExcelStore(
+        ConfigLoader.get_domain_resource_dir("inline_domain")
+        / "spc" / "spc_cpk_cpm_decoration.xlsx"
+    )
+
+
+def _file_signature(path: Path) -> str:
+    try:
+        stat = path.stat()
+        return f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+    except FileNotFoundError:
+        return f"{path.resolve()}:missing"
+
+
+def build_cell_source_signature(row_key: str, product: str) -> str:
+    """Only the selected indicator's real input signatures; no board/global revision."""
+    if row_key == "spc_cpk_trend":
+        return cpk_latest_store().source_signature()
+    if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
+        scope = row_key.removesuffix("_sheet_oos")
+        return _file_signature(scope_resource_dir(scope) / SCOPE_DECORATION_FILE_NAME[scope])
+    if row_key.startswith("yield_"):
+        from yield_domain.application.yield_service import YieldAnalysisService
+
+        config = ConfigLoader.load_config(product)
+        directory = ConfigLoader.get_domain_resource_dir("yield_domain") / product
+        context = YieldAnalysisService.build_cache_context(config, directory)
+        if row_key == "yield_trend_fluctuation":
+            context = {key: value for key, value in context.items() if key != "warning_signature"}
+        return build_alert_matrix_signature(products=(product,), components=context)
+    path = ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx")
+    source_dir = ConfigLoader.get_project_root() / "data" / "indicator_domain" / "qtime"
+    return build_alert_matrix_signature(products=(product,), components={
+        "decision": _file_signature(Path(path)),
+        "sources": [_file_signature(source_dir / f"qtime_source_{shop.lower()}.parquet") for shop in QTIME_SHOPS],
+        "settings": ConfigLoader.load_domain_config("indicator_domain").get("qtime", {}),
+        "data_policy": ConfigLoader.get_data_forward_policy().signature,
+    })
 
 
 def load_all_product_qtime_monitoring(
@@ -157,55 +162,27 @@ def build_default_matrix_context(
     """生产装配：构建带真实数据源的 AlertMatrixContext（在缓存 miss 时调用一次）。"""
     from yield_domain.application.yield_service import YieldAnalysisService
 
-    db_manager = DatabaseManager()
     inline_resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
 
-    _, default_end_dt = MonitorAnalysisService.get_time_window()
-    spc_start_date = get_default_spc_start_date(default_end_dt.date())
-    spc_end_date = default_end_dt.strftime("%Y-%m-%d")
-
     def spc_cpk_loader(prod_code: str) -> pd.DataFrame | None:
-        """复用 SPC 页装配：fetch_spc_report_payload（L2 缓存）→ period_capability_df。"""
-        query_config = SpcQueryConfig(
-            prod_code=prod_code,
-            start_date=spc_start_date.strftime("%Y-%m-%d"),
-            end_date=spc_end_date,
-            data_type_filter="SPC",
-        )
-        payload = SpcReportService.fetch_spc_report_payload(
-            _data_port=build_spc_repository(db_manager, prod_code),
-            query_config_json=query_config.model_dump_json(),
-            snapshot_signature=build_product_cache_signature(
-                MATRIX_CACHE_BASE_SIGNATURE, prod_code
-            ),
-            period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
-            product_revision=get_product_cache_revision(prod_code),
-            decision_signature=get_scope_decision_signature("spc", prod_code),
-            capability_exempt_param_name_contains=tuple(
-                ConfigLoader.get_spc_capability_param_exemptions()
-            ),
-        )
-        capability_df = payload.get("period_capability_df")
-        if not isinstance(capability_df, pd.DataFrame) or capability_df.empty:
-            return None
-        return capability_df
+        return cpk_latest_store().read_product(prod_code)
 
-    def _yield_product_resources(prod_code: str):
+    def _yield_product_resources(prod_code: str, indicator_key: str):
         config = ConfigLoader.load_config(prod_code)
         product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / prod_code
-        snapshot_signature = build_product_cache_signature(
-            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code
+        snapshot_signature = build_indicator_product_cache_signature(
+            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code, (indicator_key,)
         )
         cache_context = YieldAnalysisService.build_cache_context(config, product_dir)
         return config, product_dir, snapshot_signature, cache_context
 
     def yield_lot_loader(prod_code: str):
         """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code)
+        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code, "yield_lot_oos")
         lot_data = YieldAnalysisService.get_lot_defect_rates(
             config,
             product_dir,
-            _db_manager=db_manager,
+            _db_manager=DatabaseManager(),
             snapshot_signature=snapshot_signature,
             read_only=True,
             **cache_context,
@@ -222,11 +199,11 @@ def build_default_matrix_context(
 
     def yield_trend_loader(prod_code: str):
         """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code)
+        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code, "yield_trend_fluctuation")
         mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
             config,
             product_dir,
-            _db_manager=db_manager,
+            _db_manager=DatabaseManager(),
             snapshot_signature=snapshot_signature,
             read_only=True,
             analysis_start_date=cache_context["analysis_start_date"],
@@ -236,7 +213,7 @@ def build_default_matrix_context(
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config,
             product_dir,
-            _db_manager=db_manager,
+            _db_manager=DatabaseManager(),
             snapshot_signature=snapshot_signature,
             read_only=True,
             analysis_start_date=cache_context["analysis_start_date"],
@@ -249,7 +226,7 @@ def build_default_matrix_context(
 
     def qtime_monitoring_loader() -> tuple[pd.DataFrame, pd.DataFrame]:
         """全产品 Q-Time 监控（共享入口，与点击详情同一 L2 缓存）。"""
-        return load_all_product_qtime_monitoring(db_manager, reference_date)
+        return load_all_product_qtime_monitoring(DatabaseManager(), reference_date)
 
     return AlertMatrixContext(
         reference_date=reference_date,
@@ -263,22 +240,22 @@ def build_default_matrix_context(
 
 @st.cache_data(
     show_spinner=False,
-    max_entries=8,
+    max_entries=1024,
     ttl=ConfigLoader.get_cache_ttl_seconds(),
 )
-def _cached_alert_matrix_payload(
-    products: tuple[str, ...],
+def _cached_alert_matrix_cell(
+    row_key: str,
+    product: str,
     week_start: str,
     signature: str,
-    _context_factory: Callable[[], AlertMatrixContext],
+    revision: str,
+    _loader: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
-    """缓存边界：键全部原生可哈希；context 工厂下划线前缀排除哈希（ADR-0001）。"""
-    context = _context_factory()
-    return build_alert_matrix_payload(
-        context=context,
-        products=list(products),
-        signature=signature,
-    )
+    """Independent indicator/product result; loader executes only for this cell's miss."""
+    return {
+        **_loader(), "cache_signature": signature, "cache_revision": revision,
+        "computed_at": datetime.now().isoformat(timespec="microseconds"),
+    }
 
 
 def get_cached_alert_matrix(
@@ -286,6 +263,8 @@ def get_cached_alert_matrix(
     reference_date: date | None = None,
     products: Sequence[str] | None = None,
     _context_factory: Callable[[], AlertMatrixContext] | None = None,
+    _signature_provider: Callable[[str, str], str] | None = None,
+    _revision_provider: Callable[[str, str], str] | None = None,
 ) -> dict[str, Any]:
     """矩阵 payload 的缓存入口（普通 rerun 命中缓存，签名/周变化才重建）。"""
     product_tuple = (
@@ -294,48 +273,42 @@ def get_cached_alert_matrix(
         else tuple(ConfigLoader.get_enabled_products())
     )
     week_start = get_alert_matrix_week_start(reference_date)
-    signature = build_alert_matrix_signature(products=product_tuple)
+    reference = reference_date or date.today()
     factory = _context_factory or (
-        lambda: build_default_matrix_context(product_tuple, reference_date=week_start)
+        lambda: build_default_matrix_context(product_tuple, reference_date=reference)
     )
-    return _cached_alert_matrix_payload(
-        product_tuple,
-        week_start.isoformat(),
-        signature,
-        factory,
+    source_signature = _signature_provider or build_cell_source_signature
+    revision_provider = _revision_provider or get_indicator_product_revision
+    context = factory()  # construction is lazy: no DB/SPC/Yield calculation here
+
+    def load_cell(
+        row: AlertMatrixRow, product: str, active_context: AlertMatrixContext,
+    ) -> dict[str, Any]:
+        try:
+            revision = revision_provider(row.row_key, product)
+            signature = build_alert_matrix_signature(products=(product,), components={
+                "indicator": row.row_key, "source": source_signature(row.row_key, product),
+                "revision": revision, "week": week_start.isoformat(),
+                "as_of": reference.isoformat() if row.row_key == "qtime_sheet_oos" else None,
+            })
+        except Exception as exc:
+            logger.exception("[alert-matrix] cell signature failed: %s/%s", row.row_key, product)
+            return {
+                "state": "error", "detail_key": f"{row.row_key}|{product}",
+                "message": str(exc)[:200], "alert_factories": [],
+            }
+        return _cached_alert_matrix_cell(
+            row.row_key, product, week_start.isoformat(), signature, revision,
+            lambda: row.evaluator(product, active_context),
+        )
+
+    return build_alert_matrix_payload(
+        context=context, products=product_tuple, cell_loader=load_cell,
     )
 
 
 def get_alert_matrix_cached_funcs() -> list:
-    """页头「刷新缓存」需一并清理的矩阵相关 L2 缓存函数清单。
-
-    矩阵页为全产品聚合页（无 product_cache_scope），刷新时不会推进产品
-    revision，因此矩阵 payload、点击详情数据包、qtime 监控以及详情懒加载
-    链路复用的各域报表 payload 缓存都必须显式 clear，才能保证"刷新缓存后
-    矩阵正确重建"（PRD §3.2-5）。
-    """
-    from app.components.page_header import extract_cached_funcs
-    from app.sections.inline_domain.monitor.alert_matrix_detail import (
-        _cached_matrix_detail_bundle,
-    )
-    from src.indicator_domain.application.qtime.cached_monitoring import (
-        _cached_monitoring,
-    )
-    from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
-    from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
-    from src.inline_domain.application.ctq.ctq_service import CtqReportService
-    from src.inline_domain.application.spc.spc_service import SpcReportService
-    from yield_domain.application.yield_service import YieldAnalysisService
-
-    return [
-        _cached_alert_matrix_payload,
-        _cached_matrix_detail_bundle,
-        _cached_monitoring,
-        *extract_cached_funcs(
-            SpcReportService,
-            CtqReportService,
-            AoiTtReportService,
-            AoiRsReportService,
-            YieldAnalysisService,
-        ),
-    ]
+    """兼容入口：整板不应全局清理任何指标缓存，改用定向 revision。"""
+    # The aggregate page must never clear shared application caches globally.
+    # Refresh is driven exclusively by the selected indicator/product revision.
+    return []

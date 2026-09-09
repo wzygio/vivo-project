@@ -1,3 +1,4 @@
+from app.components import indicator_cache
 from contextlib import nullcontext
 from pathlib import Path
 import runpy
@@ -17,6 +18,8 @@ from src.shared_kernel.infrastructure import db_handler
 
 
 def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypatch) -> None:
+    from src.inline_domain.application.shared import decision_signature
+    monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *_args: "test-decisions")
     events: list[str] = []
     loaded_queries: list[SpcQueryConfig] = []
     loaded_signatures: list[str] = []
@@ -64,9 +67,9 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
-        page_header,
-        "build_product_cache_signature",
-        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+        indicator_cache,
+        "build_indicator_product_cache_signature",
+        lambda base_signature, product_code, indicator_keys: f"{base_signature}|scoped={product_code}",
     )
     monkeypatch.setattr(
         page_header,

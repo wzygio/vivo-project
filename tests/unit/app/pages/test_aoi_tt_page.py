@@ -1,3 +1,4 @@
+from app.components import indicator_cache
 """AOI_TT 页面测试：加载链路、固定时间窗、渲染顺序、门户注册。"""
 
 from contextlib import nullcontext
@@ -85,9 +86,9 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        page_header,
-        "build_product_cache_signature",
-        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+        indicator_cache,
+        "build_indicator_product_cache_signature",
+        lambda base_signature, product_code, indicator_keys: f"{base_signature}|scoped={product_code}",
     )
     monkeypatch.setattr(
         page_header,

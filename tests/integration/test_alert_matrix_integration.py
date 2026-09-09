@@ -18,7 +18,6 @@ from app.sections.inline_domain.monitor.alert_matrix_service import (
     AlertMatrixContext,
     build_alert_matrix_payload,
 )
-from app.sections.inline_domain.spc.spc_dashboard import build_weekly_cpk_alerts
 from src.inline_domain.application.shared.decorated_data import (
     SCOPE_DECORATION_FILE_NAME,
 )
@@ -72,12 +71,13 @@ def _capability_df(prod: str, cpk: float) -> pd.DataFrame:
         [
             {
                 "factory": "OLED",
+                "prod_code": prod,
                 "step_id": "21200",
                 "param_name": f"CD_X_{prod}",
                 "period_type": "week",
                 "period_label": PREV_WEEK_LABEL,
-                "cpk": cpk,
-                "cpk_decorated": False,
+                "cpk_corrected": cpk,
+                "flag": False,
             }
         ]
     )
@@ -201,9 +201,10 @@ def test_matrix_cells_match_per_domain_criteria(tmp_path: Path) -> None:
     for prod, capability_df in cpk_by_prod.items():
         expected = (
             "alert"
-            if not build_weekly_cpk_alerts(
-                capability_df, reference_date=REFERENCE_DATE
-            ).empty
+            if (capability_df["period_type"].eq("week")
+                & capability_df["period_label"].eq(PREV_WEEK_LABEL)
+                & capability_df["flag"].eq(False)
+                & capability_df["cpk_corrected"].lt(1.33)).any()
             else "ok"
         )
         assert cells[("spc_cpk_trend", prod)]["state"] == expected, prod

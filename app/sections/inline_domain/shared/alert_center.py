@@ -72,7 +72,7 @@ def render_sheet_oos_alert_center(
     has_alerts = not alerts_df.empty
     with st.expander(title, expanded=has_alerts):
         if has_alerts:
-            st.error(f"检测到 {len(alerts_df)} 条单片异常预警（flag=已确认真实超规），请关注。")
+            st.error(f"检测到 {len(alerts_df)} 条单片异常预警，请关注。")
             display_alerts_df = alerts_df
             if step_desc_map and "站点" in alerts_df.columns:
                 display_alerts_df = alerts_df.copy()
@@ -81,6 +81,6 @@ def render_sheet_oos_alert_center(
                 )
             st.dataframe(display_alerts_df, hide_index=True, use_container_width=True)
         elif has_source_data:
-            st.success("上一周未发现已确认真实超规（flag=FALSE）的单片异常。")
+            st.success("上一周未发现超规的单片异常。")
         else:
             st.info("当前产品暂无单片异常明细数据。")

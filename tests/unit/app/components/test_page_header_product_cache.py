@@ -143,6 +143,29 @@ class _StreamlitStub:
         raise AssertionError("渲染页头时不应触发 rerun")
 
 
+def test_aggregate_header_can_hide_legacy_global_cache_button(monkeypatch) -> None:
+    stub = _StreamlitStub()
+    monkeypatch.setattr(page_header, "st", stub)
+    monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
+    page_header.render_page_header(
+        title="全指标", show_product_filter=False, show_cache_refresh=False,
+    )
+    assert "btn_clear_全指标" not in stub.button_callbacks
+    assert "btn_refresh_全指标" in stub.button_callbacks
+
+
+def test_scoped_header_refresh_controls_are_admin_only(monkeypatch) -> None:
+    stub = _StreamlitStub()
+    stub.query_params = {}
+    monkeypatch.setattr(page_header, "st", stub)
+    monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
+    page_header.render_page_header(
+        title="普通用户", show_product_filter=False,
+        product_cache_scope="M626", product_cache_indicators=("yield_lot_oos",),
+    )
+    assert not stub.button_callbacks
+
+
 def _render_header_and_get_refresh_callback(
     monkeypatch,
     *,

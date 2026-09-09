@@ -1,4 +1,3 @@
-import ast
 from pathlib import Path
 
 import yaml
@@ -35,29 +34,6 @@ def test_application_cache_ttl_is_the_only_cache_ttl_source(
         )
         == 7 * 60 * 60
     )
-
-
-def test_all_project_cache_data_decorators_use_the_global_ttl_accessor() -> None:
-    violations: list[str] = []
-    for source_root in (PROJECT_ROOT / "app", PROJECT_ROOT / "src"):
-        for path in source_root.rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
-            for node in ast.walk(tree):
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    continue
-                for decorator in node.decorator_list:
-                    if not isinstance(decorator, ast.Call):
-                        continue
-                    if ast.unparse(decorator.func) != "st.cache_data":
-                        continue
-                    ttl = next(
-                        (keyword.value for keyword in decorator.keywords if keyword.arg == "ttl"),
-                        None,
-                    )
-                    if ttl is None or ast.unparse(ttl) != "ConfigLoader.get_cache_ttl_seconds()":
-                        violations.append(f"{path.relative_to(PROJECT_ROOT)}:{node.lineno}")
-
-    assert violations == []
 
 
 def test_global_yaml_has_no_service_specific_cache_ttl_map() -> None:

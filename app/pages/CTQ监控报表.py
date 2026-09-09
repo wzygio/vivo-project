@@ -17,10 +17,15 @@ if project_root:
 
 import streamlit as st
 
+from app.components.indicator_cache import (
+    build_indicator_product_cache_signature,
+    get_indicator_product_revision,
+)
+
+PRODUCT_CACHE_INDICATORS = ("ctq_sheet_oos",)
+
 from app.components.page_header import (
-    build_product_cache_signature,
     extract_cached_funcs,
-    get_product_cache_revision,
     render_page_header,
 )
 from app.sections.inline_domain.ctq.ctq_dashboard import (
@@ -60,9 +65,10 @@ AppSetup.initialize_app()
 
 active_config = SessionManager.get_active_config()
 current_product = active_config.data_source.product_code
-product_cache_signature = build_product_cache_signature(
+product_cache_signature = build_indicator_product_cache_signature(
     CTQ_PAGE_CACHE_SIGNATURE,
     current_product,
+    PRODUCT_CACHE_INDICATORS,
 )
 db_manager = DatabaseManager()
 step_desc_map = get_cached_step_description_map(db_manager)
@@ -83,6 +89,7 @@ render_page_header(
     config=active_config,
     cached_funcs=extract_cached_funcs(CtqReportService) + [fetch_decorated_features, get_cached_step_description_map],
     product_cache_scope=current_product,
+    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
     refresh_handlers=[
         lambda: refresh_raw_measurements(
             db_manager,
@@ -94,7 +101,7 @@ render_page_header(
 
 # Phase 4 门控：共享产品 revision + 两阶段决策签名进入 L2 缓存键；
 # 决策表读取失败时显式失败（不降级为空决策）。
-product_revision = get_product_cache_revision(current_product)
+product_revision = get_indicator_product_revision("ctq_sheet_oos", current_product)
 try:
     decision_signature = get_scope_decision_signature("ctq", current_product)
 except SheetOosDecorationReadError:

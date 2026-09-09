@@ -1,3 +1,4 @@
+from app.components import indicator_cache
 from contextlib import nullcontext
 import importlib
 from pathlib import Path
@@ -81,9 +82,9 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
-        page_header,
-        "build_product_cache_signature",
-        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+        indicator_cache,
+        "build_indicator_product_cache_signature",
+        lambda base_signature, product_code, indicator_keys: f"{base_signature}|scoped={product_code}",
     )
     monkeypatch.setattr(
         page_header,

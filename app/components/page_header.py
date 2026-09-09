@@ -8,6 +8,7 @@ import streamlit as st
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.config_model import AppConfig
 from app.manager.session_manager import SessionManager
+from app.components.indicator_cache import bump_indicator_product_revision
 
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
 PRODUCT_CACHE_REVISION_DIR = Path("output") / "tmp" / "product_cache_revisions"
@@ -74,9 +75,14 @@ def invalidate_page_cache(
     cached_funcs: list | None = None,
     *,
     product_code: str | None = None,
+    indicator_keys: tuple[str, ...] = (),
 ) -> str:
     """Invalidate one product when scoped, otherwise preserve legacy global clearing."""
     if product_code:
+        if indicator_keys:
+            for indicator_key in dict.fromkeys(indicator_keys):
+                bump_indicator_product_revision(indicator_key, product_code)
+            return "indicator_product"
         bump_product_cache_revision(product_code)
         return "product"
 
@@ -93,13 +99,21 @@ def invalidate_page_cache(
 def perform_hard_reset(
     cached_funcs: list | None = None,
     product_cache_scope: str | None = None,
+    product_cache_indicators: tuple[str, ...] = (),
 ) -> None:
     """执行「刷新缓存」的完整硬重置流程，可被页头按钮或独立页面按钮复用。"""
     # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
     cache_scope = invalidate_page_cache(
         cached_funcs,
         product_code=product_cache_scope,
+        indicator_keys=product_cache_indicators,
     )
+
+    if cache_scope == "indicator_product":
+        # Scoped invalidation must not unload modules or clear other products' caches.
+        SessionManager.load_and_set_config(product_cache_scope)
+        st.toast(f"🔄 {product_cache_scope} 当前报表指标缓存已刷新", icon="✅")
+        return
 
     # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
     for key in list(st.session_state.keys()):
@@ -154,6 +168,8 @@ def render_page_header(
     refresh_handlers: list = None,
     product_cache_scope: str | None = None,
     show_product_filter: bool = True,
+    product_cache_indicators: tuple[str, ...] = (),
+    show_cache_refresh: bool = True,
 ) -> None:
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
     # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
@@ -207,7 +223,10 @@ def render_page_header(
         # 快照全部刷新成功后失效 L2：产品页面仅推进当前产品的共享 revision；
         # 无产品作用域但有缓存函数时保留旧的全量 func.clear() 语义。
         if product_cache_scope:
-            invalidate_page_cache(cached_funcs, product_code=product_cache_scope)
+            invalidate_page_cache(cached_funcs, product_code=product_cache_scope, indicator_keys=product_cache_indicators)
+            if product_cache_indicators:
+                st.toast("✅ 当前产品 L1 快照与对应指标缓存已刷新。", icon="🎉")
+                return
         elif cached_funcs:
             invalidate_page_cache(cached_funcs)
 
@@ -227,7 +246,7 @@ def render_page_header(
     # 产品页面通过共享版本键仅失效当前产品；聚合/无产品页面保留旧的
     # func.clear() + 模块重载行为。
     def _hard_reset_callback():
-        perform_hard_reset(cached_funcs, product_cache_scope)
+        perform_hard_reset(cached_funcs, product_cache_scope, product_cache_indicators)
 
     # 产品筛选与管理员操作使用独立边框分组，避免把常规筛选误认为维护操作。
     # show_product_filter=False（如 Q-Time 页，产品多选内聚在页面筛选区）时
@@ -269,17 +288,18 @@ def render_page_header(
                             else "刷新底层 L1 数据快照，并同步刷新当前页面的 L2 缓存。"
                         ),
                     )
-                    st.button(
-                        "🔄 刷新缓存",
-                        key=f"btn_clear_{title}",
-                        on_click=_hard_reset_callback,
-                        width="stretch",
-                        help=(
-                            f"仅刷新产品 {product_cache_scope} 的当前报表缓存，并重载代码与配置。"
-                            if product_cache_scope
-                            else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
-                        ),
-                    )
+                    if show_cache_refresh:
+                        st.button(
+                            "🔄 刷新缓存",
+                            key=f"btn_clear_{title}",
+                            on_click=_hard_reset_callback,
+                            width="stretch",
+                            help=(
+                                f"仅刷新产品 {product_cache_scope} 的当前报表指标缓存，并重读产品配置。"
+                                if product_cache_scope
+                                else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
+                            ),
+                        )
                 if st.session_state.get("code_update_pending"):
                     st.caption("⚠️ 检测到项目文件变更，点击「刷新缓存」应用")
 

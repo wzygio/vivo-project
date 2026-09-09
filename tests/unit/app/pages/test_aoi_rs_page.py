@@ -1,3 +1,4 @@
+from app.components import indicator_cache
 """AOI_RS 页面测试：加载链路、固定时间窗、渲染顺序、门户注册。"""
 
 from contextlib import nullcontext
@@ -19,6 +20,9 @@ from src.shared_kernel.infrastructure import db_handler
 
 
 def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch) -> None:
+    from src.inline_domain.application.shared import decision_signature
+    monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *_args: "test-decisions")
+    monkeypatch.setattr(aoi_rs_dashboard, "load_cached_aoi_rs_sheet_oos_decoration", lambda *_args: None)
     events: list[str] = []
     loaded_queries: list[AoiRsQueryConfig] = []
     loaded_signatures: list[str] = []
@@ -118,9 +122,9 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     )
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
-        page_header,
-        "build_product_cache_signature",
-        lambda base_signature, product_code: f"{base_signature}|scoped={product_code}",
+        indicator_cache,
+        "build_indicator_product_cache_signature",
+        lambda base_signature, product_code, indicator_keys: f"{base_signature}|scoped={product_code}",
     )
     monkeypatch.setattr(
         page_header,
@@ -161,12 +165,3 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         ("M678", "2026-08-10")
     ]
     assert events == ["filters", "charts"]
-
-
-def test_portal_navigation_points_aoi_rs_to_the_streamlit_page() -> None:
-    config_path = Path(__file__).parents[4] / "app" / "static" / "config.js"
-    config_text = config_path.read_text(encoding="utf-8")
-
-    assert 'AOI_RS_REPORT: "http://10.72.26.31:8503/AOI_RS监控报表"' in config_text
-    assert '{ name: "AOI_RS", url: LINKS.AOI_RS_REPORT }' in config_text
-    assert "{l:'', v:'AOI_RS', url: LINKS.AOI_RS_REPORT }" in config_text

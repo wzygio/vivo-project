@@ -9,7 +9,7 @@ import hashlib
 import pandas as pd
 import streamlit as st
 
-from app.components.page_header import build_product_cache_signature
+from app.components.indicator_cache import build_indicator_product_cache_signature
 from app.manager.render_gate import RenderGate
 from app.charts.inline_domain import (
     PERIOD_LABELS,
@@ -767,17 +767,19 @@ def _alert_charts_signature(
     alerts_df: pd.DataFrame,
     alert_sheet_features_df: pd.DataFrame,
     base: str = "spc_alert_charts",
+    *,
+    indicator_key: str = "spc_cpk_trend",
 ) -> str:
-    """自动预警图表的构建签名：产品缓存 revision + 预警内容指纹。
+    """自动预警图表的构建签名：指标×产品 revision + 预警内容指纹。
 
-    点"刷新缓存"会 bump 产品 revision，签名必变、图表必重建；
+    对应指标/产品刷新会改变签名；其他指标或产品不影响当前图像 memo。
     同一版数据重复 rerun 时签名稳定，命中 memo 直接复用构建结果。
     """
     product_code = ""
     if "prod_code" in alert_sheet_features_df.columns and not alert_sheet_features_df.empty:
         product_code = str(alert_sheet_features_df["prod_code"].iloc[0])
     if product_code:
-        base = build_product_cache_signature(base, product_code)
+        base = build_indicator_product_cache_signature(base, product_code, (indicator_key,))
     else:
         base = f"{base}|product=unknown"
     fingerprint = hashlib.sha256(
@@ -824,7 +826,8 @@ def render_sheet_oos_alert_indicator_sections(
             raw_measurements_df=alert_raw_measurements_df,
             period_box_source=period_box_source,
             memo_signature=_alert_charts_signature(
-                alerts_df, alert_sheet_features_df, base="spc_oos_alert_charts"
+                alerts_df, alert_sheet_features_df, base="spc_oos_alert_charts",
+                indicator_key="spc_sheet_oos",
             ),
             memo_state_key="spc_oos_alert_charts_memo",
             chart_key_prefix="spc_oos_alert",

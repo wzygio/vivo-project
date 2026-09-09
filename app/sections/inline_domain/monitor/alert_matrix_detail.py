@@ -31,9 +31,9 @@ import pandas as pd
 import streamlit as st
 
 from app.components.alert_center import compute_lot_oos_records
-from app.components.page_header import (
-    build_product_cache_signature,
-    get_product_cache_revision,
+from app.components.indicator_cache import (
+    build_indicator_product_cache_signature,
+    get_indicator_product_revision,
 )
 from app.manager.render_gate import RenderGate
 from app.sections.inline_domain.monitor.alert_matrix import MATRIX_SELECTION_STATE_KEY
@@ -41,12 +41,14 @@ from app.sections.inline_domain.monitor.alert_matrix_cache import (
     MATRIX_CACHE_BASE_SIGNATURE,
     YIELD_SNAPSHOT_SIGNATURE_BASE,
     load_all_product_qtime_monitoring,
+    cpk_latest_store,
 )
 from app.sections.inline_domain.monitor.alert_matrix_service import (
     CELL_STATE_ALERT,
     CELL_STATE_ERROR,
     CELL_STATE_NO_DATA,
     CELL_STATE_OK,
+    build_latest_cpk_alerts,
 )
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
@@ -74,12 +76,19 @@ MATRIX_DETAIL_CHART_KEY_PREFIX = "matrix_detail"
 DetailLoader = Callable[[str, date], dict[str, Any]]
 
 
+def _resolve_db_manager(db_manager: Any) -> Any:
+    if db_manager is not None:
+        return db_manager
+    from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    return DatabaseManager()
+
+
 # ---------------------------------------------------------------------------
 # 缓存边界（ADR-0001：原生载荷进出）
 # ---------------------------------------------------------------------------
 @st.cache_data(
     show_spinner=False,
-    max_entries=16,
+    max_entries=128,
     ttl=ConfigLoader.get_cache_ttl_seconds(),
 )
 def _cached_matrix_detail_bundle(
@@ -88,7 +97,7 @@ def _cached_matrix_detail_bundle(
     signature: str,
     _loader: Callable[[], dict[str, Any]],
 ) -> dict[str, Any]:
-    """详情数据包缓存：键 = detail_key + 参考周 + 矩阵签名；loader 下划线排除哈希。"""
+    """详情缓存：单元格身份 + 参考日 + 该单元格版本；不使用整板版本。"""
     del detail_key, reference_date, signature  # 仅作为缓存键参与
     return _loader()
 
@@ -206,11 +215,11 @@ def _load_spc_view(db_manager: Any, prod_code: str):
         _data_port=build_spc_repository(db_manager, prod_code),
         query_config_json=query_config.model_dump_json(),
         # 与矩阵 CPK 行同一 snapshot 基签名：复用矩阵构建时已填充的 L2 条目。
-        snapshot_signature=build_product_cache_signature(
-            MATRIX_CACHE_BASE_SIGNATURE, prod_code
+        snapshot_signature=build_indicator_product_cache_signature(
+            MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("spc_sheet_oos",)
         ),
         period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
-        product_revision=get_product_cache_revision(prod_code),
+        product_revision=get_indicator_product_revision("spc_sheet_oos", prod_code),
         decision_signature=get_scope_decision_signature("spc", prod_code),
     )
 
@@ -220,6 +229,7 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
         alerts_df = _load_sheet_oos_alerts_display(scope, prod_code, reference_date)
+        active_db = _resolve_db_manager(db_manager)
         end_date = _report_end_date()
         frames: dict[str, pd.DataFrame] = {}
 
@@ -228,7 +238,7 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
                 CPK_ALERT_KEY_COLUMN_MAP,
             )
 
-            view = _load_spc_view(db_manager, prod_code)
+            view = _load_spc_view(active_db, prod_code)
             for name, frame in (
                 ("period_capability_df", view.period_capability_df),
                 ("sheet_features_df", view.sheet_features_df),
@@ -257,12 +267,12 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
                 data_type_filter="CTQ",
             )
             view = CtqReportService.get_ctq_report_data(
-                _data_port=build_ctq_repository(db_manager, prod_code),
+                _data_port=build_ctq_repository(active_db, prod_code),
                 query_config_json=query_config.model_dump_json(),
-                snapshot_signature=build_product_cache_signature(
-                    MATRIX_CACHE_BASE_SIGNATURE, prod_code
+                snapshot_signature=build_indicator_product_cache_signature(
+                    MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("ctq_sheet_oos",)
                 ),
-                product_revision=get_product_cache_revision(prod_code),
+                product_revision=get_indicator_product_revision("ctq_sheet_oos", prod_code),
                 decision_signature=get_scope_decision_signature("ctq", prod_code),
             )
             for name, frame in (
@@ -293,12 +303,12 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
                 end_date=end_date.strftime("%Y-%m-%d"),
             )
             view = AoiTtReportService.get_aoi_tt_report_data(
-                _data_port=build_aoi_tt_repository(db_manager, prod_code),
+                _data_port=build_aoi_tt_repository(active_db, prod_code),
                 query_config_json=query_config.model_dump_json(),
-                snapshot_signature=build_product_cache_signature(
-                    MATRIX_CACHE_BASE_SIGNATURE, prod_code
+                snapshot_signature=build_indicator_product_cache_signature(
+                    MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("aoi_tt_sheet_oos",)
                 ),
-                product_revision=get_product_cache_revision(prod_code),
+                product_revision=get_indicator_product_revision("aoi_tt_sheet_oos", prod_code),
                 decision_signature=get_scope_decision_signature("aoi_tt", prod_code),
             )
             frames["tt_details_df"] = filter_report_by_alert_keys(
@@ -330,12 +340,12 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
                 end_date=end_date.strftime("%Y-%m-%d"),
             )
             view = AoiRsReportService.get_aoi_rs_report_data(
-                _data_port=build_aoi_rs_repository(db_manager, prod_code),
+                _data_port=build_aoi_rs_repository(active_db, prod_code),
                 query_config_json=query_config.model_dump_json(),
-                snapshot_signature=build_product_cache_signature(
-                    MATRIX_CACHE_BASE_SIGNATURE, prod_code
+                snapshot_signature=build_indicator_product_cache_signature(
+                    MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("aoi_rs_sheet_oos",)
                 ),
-                product_revision=get_product_cache_revision(prod_code),
+                product_revision=get_indicator_product_revision("aoi_rs_sheet_oos", prod_code),
                 decision_signature=get_scope_decision_signature("aoi_rs", prod_code),
             )
             frames["rs_details_df"] = filter_report_by_alert_keys(
@@ -370,30 +380,12 @@ def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
     """SPC 趋势波动（CPK）行：上一周 CPK 预警表 + 命中指标帧。"""
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
-        from app.sections.inline_domain.spc.spc_dashboard import (
-            build_weekly_cpk_alerts,
-            filter_spc_report_by_alerts,
-        )
-
-        view = _load_spc_view(db_manager, prod_code)
-        alerts_df = build_weekly_cpk_alerts(
-            view.period_capability_df,
-            reference_date=reference_date,
-        )
+        frame = cpk_latest_store().read_product(prod_code)
+        alerts_df = (build_latest_cpk_alerts(frame, reference_date)
+                     if frame is not None and not frame.empty else pd.DataFrame())
         return {
-            "kind": "spc_cpk",
+            "kind": "spc_cpk_excel",
             "alerts_df": alerts_df,
-            "frames": {
-                "period_capability_df": filter_spc_report_by_alerts(
-                    view.period_capability_df, alerts_df
-                ),
-                "sheet_features_df": filter_spc_report_by_alerts(
-                    view.sheet_features_df, alerts_df
-                ),
-                "raw_measurements_df": filter_spc_report_by_alerts(
-                    view.raw_measurements_df, alerts_df
-                ),
-            },
         }
 
     return load
@@ -408,8 +400,9 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
 
         config = ConfigLoader.load_config(prod_code)
         product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / prod_code
-        snapshot_signature = build_product_cache_signature(
-            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code
+        snapshot_signature = build_indicator_product_cache_signature(
+            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code,
+            ("yield_lot_oos" if mode == "lot" else "yield_trend_fluctuation",),
         )
         cache_context = YieldAnalysisService.build_cache_context(config, product_dir)
         # read_only=True：矩阵详情只读消费，不触发良损修饰表回写（与矩阵一致）。
@@ -421,7 +414,7 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             analysis_start_date=cache_context["analysis_start_date"],
             analysis_end_date=cache_context["analysis_end_date"],
             modifier_signature=cache_context["modifier_signature"],
-        )
+        ) if mode == "trend" else {}
         mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
             config, product_dir,
             _db_manager=db_manager,
@@ -430,21 +423,21 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             analysis_start_date=cache_context["analysis_start_date"],
             analysis_end_date=cache_context["analysis_end_date"],
             modifier_signature=cache_context["modifier_signature"],
-        )
+        ) if mode == "trend" else {}
         lot_data = YieldAnalysisService.get_lot_defect_rates(
             config, product_dir,
             _db_manager=db_manager,
             snapshot_signature=snapshot_signature,
             read_only=True,
             **cache_context,
-        )
+        ) if mode == "lot" else {}
         sheet_data = YieldAnalysisService.get_sheet_defect_rates(
             config, product_dir,
             _db_manager=db_manager,
             snapshot_signature=snapshot_signature,
             read_only=True,
             **cache_context,
-        )
+        ) if mode == "lot" else {}
         mapping_data = YieldAnalysisService.get_mapping_data(
             config,
             _db_manager=db_manager,
@@ -454,13 +447,13 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             analysis_start_date=cache_context["analysis_start_date"],
             analysis_end_date=cache_context["analysis_end_date"],
             modifier_signature=cache_context["modifier_signature"],
-        )
+        ) if mode == "lot" else {}
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             config,
             product_dir,
             snapshot_signature,
             warning_signature=cache_context["warning_signature"],
-        )
+        ) if mode == "lot" else {}
 
         if mode == "lot":
             oos_records, _ = compute_lot_oos_records(lot_data, warning_lines)
@@ -500,7 +493,7 @@ def _make_qtime_loader(db_manager: Any) -> DetailLoader:
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
         details_df, alerts_df = load_all_product_qtime_monitoring(
-            db_manager, reference_date
+            _resolve_db_manager(db_manager), reference_date
         )
 
         def _for_product(frame: pd.DataFrame) -> pd.DataFrame:
@@ -537,10 +530,6 @@ def _make_qtime_loader(db_manager: Any) -> DetailLoader:
 
 def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoader]:
     """生产装配：8 行详情 loader。仅在点击 🔴 单元格后调用（懒加载边界）。"""
-    if db_manager is None:
-        from src.shared_kernel.infrastructure.db_handler import DatabaseManager
-
-        db_manager = DatabaseManager()
     return {
         "aoi_rs_sheet_oos": _make_sheet_oos_loader("aoi_rs", db_manager),
         "aoi_tt_sheet_oos": _make_sheet_oos_loader("aoi_tt", db_manager),
@@ -562,12 +551,8 @@ def _detail_charts_signature(
     alerts_df: pd.DataFrame,
     memo_base: str,
 ) -> str:
-    """详情图像的 memo 签名：产品 revision + 矩阵签名 + 预警内容指纹。
-
-    memo_base 含矩阵 payload 的 generated_at：「刷新缓存」后 payload 重建，
-    签名必变、图像必重建；同一版数据重复 rerun 命中 memo 直接复用。
-    """
-    revision = get_product_cache_revision(prod_code)
+    """本指标/产品 revision + 单元格签名 + 预警指纹，与整板生成时间无关。"""
+    revision = get_indicator_product_revision(row_key, prod_code)
     fingerprint = hashlib.sha256(
         f"{len(alerts_df)}|{alerts_df.astype(str).to_csv(index=False)}".encode("utf-8")
     ).hexdigest()[:16]
@@ -842,6 +827,13 @@ def _render_detail_bundle(
             step_desc_map=step_desc_map,
             memo_base=memo_base,
         )
+    elif kind == "spc_cpk_excel":
+        with st.expander(f"CPK 预警明细（上一周 {week_label}，CPK < 1.33）", expanded=True):
+            if bundle["alerts_df"].empty:
+                st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
+            else:
+                st.dataframe(bundle["alerts_df"], hide_index=True, width="stretch")
+        st.caption("来源：SPC CPK 本地修饰结果；不重新分析底层量测。")
     elif kind == "spc_cpk":
         _render_spc_cpk_detail(
             bundle,
@@ -890,8 +882,8 @@ def render_alert_matrix_detail(
     week = payload.get("reference_week", {})
     week_label = week.get("label", "")
     # 矩阵 reference_date 归一为本周一，即 reference_week["end"]。
-    reference_date = date.fromisoformat(week["end"])
-    memo_base = f"{payload.get('signature', '')}|{payload.get('generated_at', '')}"
+    reference_date = date.fromisoformat(payload.get("reference_date", week["end"]))
+    memo_base = f"{cell.get('cache_signature', '')}|{cell.get('computed_at', '')}"
 
     with st.container(border=True):
         title_column, close_column = st.columns([11, 1], vertical_alignment="center")
@@ -931,7 +923,7 @@ def render_alert_matrix_detail(
             bundle = get_cached_matrix_detail(
                 detail_key=str(detail_key),
                 reference_date=reference_date,
-                signature=str(payload.get("signature", "")),
+                signature=memo_base,
                 _loader=lambda: loader(prod_code, reference_date),
             )
         except Exception as exc:  # noqa: BLE001 - 详情级降级，不影响矩阵本体
