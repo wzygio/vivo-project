@@ -1270,12 +1270,14 @@ def render_alert_code_expanders(
     mapping_layout: Optional[dict] = None,
     memo_state_key: str = "yield_alert_charts_memo",
     chart_key_prefix: str = "yield_alert",
+    data_signature: str = "",
 ) -> None:
     """渲染预警命中 Defect Code 的图像（趋势 + Mapping + Lot + Sheet），无需手动筛选。
 
     命中集合由 collect_alert_hit_codes 汇总（趋势波动 + Lot 超规）；
     无命中时不渲染任何内容。所有图表 key 统一带 chart_key_prefix 前缀，
     与下方手动筛选区的 plotly key 完全隔离。
+    data_signature 由调用方传入源数据及规格版本，避免命中 Code 不变时复用旧图。
     """
     hit_codes = collect_alert_hit_codes(trend_records, lot_oos_records, mwd_code_data)
     if not hit_codes:
@@ -1306,7 +1308,7 @@ def render_alert_code_expanders(
 
     payloads = gate.collect_memoized(
         memo_state_key,
-        _alert_charts_signature(hit_codes, warning_lines, product_code),
+        f"{_alert_charts_signature(hit_codes, warning_lines, product_code)}|data={data_signature}",
     )
     with st.expander(f"🚨 自动预警缺陷图像（{len(hit_codes)} 个 Code）", expanded=False):
         st.caption("以下图像由预警自动匹配（趋势波动 + Lot 超规），无需通过筛选器查询。")

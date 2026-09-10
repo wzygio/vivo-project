@@ -4,8 +4,8 @@
 
 - **懒加载**：未选中单元格（session_state 无 ``MATRIX_SELECTION_STATE_KEY``）时
   不产生任何详情计算；选中后按 ``detail_key`` 经 ``get_cached_matrix_detail``
-  （st.cache_data，键 = detail_key + 参考周 + 矩阵签名）加载，再次打开同一
-  单元格命中缓存不重算；
+  （st.cache_data，键 = detail_key + 参考日 + 单元格输入签名）加载；Yield
+  详情额外跟踪规格、修饰与趋势/Lot/Sheet 版本，同一版输入再次打开命中缓存；
 - **ADR-0001**：详情数据包只含原生载荷（DataFrame / dict / list / 标量），
   各域 ViewModel 在缓存边界外即时消费，不进入缓存；
 - **图像复用**：SPC（单片异常 / CPK）走 ``render_spc_indicator_sections`` 的
@@ -48,6 +48,7 @@ from app.sections.inline_domain.monitor.alert_matrix_service import (
     CELL_STATE_ERROR,
     CELL_STATE_NO_DATA,
     CELL_STATE_OK,
+    build_alert_matrix_signature,
     build_latest_cpk_alerts,
 )
 from app.sections.inline_domain.shared.alert_center import (
@@ -391,6 +392,22 @@ def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
     return load
 
 
+def _yield_detail_signature(prod_code: str, cell_signature: str) -> str:
+    """详情包含跨指标图像；其缓存独立跟踪完整输入，不扩大矩阵判据的依赖。"""
+    from yield_domain.application.yield_service import YieldAnalysisService
+
+    config = ConfigLoader.load_config(prod_code)
+    product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / prod_code
+    return build_alert_matrix_signature(products=(prod_code,), components={
+        "cell": cell_signature,
+        "inputs": YieldAnalysisService.build_cache_context(config, product_dir),
+        "revision": build_indicator_product_cache_signature(
+            "yield_detail_complete_v2", prod_code,
+            ("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos"),
+        ),
+    })
+
+
 def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
     """yield 两行（lot 超规 / 趋势波动）：命中记录 + 出图所需全量数据（只读）。"""
 
@@ -402,7 +419,13 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
         product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / prod_code
         snapshot_signature = build_indicator_product_cache_signature(
             YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code,
-            ("yield_lot_oos" if mode == "lot" else "yield_trend_fluctuation",),
+            ("yield_trend_fluctuation",),
+        )
+        lot_signature = build_indicator_product_cache_signature(
+            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code, ("yield_lot_oos",),
+        )
+        sheet_signature = build_indicator_product_cache_signature(
+            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code, ("yield_sheet_oos",),
         )
         cache_context = YieldAnalysisService.build_cache_context(config, product_dir)
         # read_only=True：矩阵详情只读消费，不触发良损修饰表回写（与矩阵一致）。
@@ -423,21 +446,21 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             analysis_start_date=cache_context["analysis_start_date"],
             analysis_end_date=cache_context["analysis_end_date"],
             modifier_signature=cache_context["modifier_signature"],
-        ) if mode == "trend" else {}
+        )
         lot_data = YieldAnalysisService.get_lot_defect_rates(
             config, product_dir,
             _db_manager=db_manager,
-            snapshot_signature=snapshot_signature,
+            snapshot_signature=lot_signature,
             read_only=True,
             **cache_context,
-        ) if mode == "lot" else {}
+        )
         sheet_data = YieldAnalysisService.get_sheet_defect_rates(
             config, product_dir,
             _db_manager=db_manager,
-            snapshot_signature=snapshot_signature,
+            snapshot_signature=sheet_signature,
             read_only=True,
             **cache_context,
-        ) if mode == "lot" else {}
+        )
         mapping_data = YieldAnalysisService.get_mapping_data(
             config,
             _db_manager=db_manager,
@@ -447,13 +470,13 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             analysis_start_date=cache_context["analysis_start_date"],
             analysis_end_date=cache_context["analysis_end_date"],
             modifier_signature=cache_context["modifier_signature"],
-        ) if mode == "lot" else {}
+        )
         warning_lines = YieldAnalysisService.load_static_warning_lines(
             config,
             product_dir,
-            snapshot_signature,
+            lot_signature,
             warning_signature=cache_context["warning_signature"],
-        ) if mode == "lot" else {}
+        )
 
         if mode == "lot":
             oos_records, _ = compute_lot_oos_records(lot_data, warning_lines)
@@ -735,6 +758,7 @@ def _render_yield_detail(
     *,
     prod_code: str,
     week_label: str,
+    memo_base: str = "",
 ) -> None:
     from app.sections.yield_domain.yield_dashboard import render_alert_code_expanders
 
@@ -765,6 +789,7 @@ def _render_yield_detail(
         mapping_layout=bundle["mapping_layout"],
         memo_state_key="matrix_detail_yield_charts_memo",
         chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_yield",
+        data_signature=memo_base,
     )
 
 
@@ -844,7 +869,9 @@ def _render_detail_bundle(
             memo_base=memo_base,
         )
     elif kind == "yield":
-        _render_yield_detail(bundle, prod_code=prod_code, week_label=week_label)
+        _render_yield_detail(
+            bundle, prod_code=prod_code, week_label=week_label, memo_base=memo_base,
+        )
     elif kind == "qtime":
         _render_qtime_detail(
             bundle, row_key=row_key, prod_code=prod_code, memo_base=memo_base
@@ -920,6 +947,8 @@ def render_alert_matrix_detail(
             return
 
         try:
+            if row_key.startswith("yield_"):
+                memo_base = _yield_detail_signature(prod_code, memo_base)
             bundle = get_cached_matrix_detail(
                 detail_key=str(detail_key),
                 reference_date=reference_date,

@@ -1,12 +1,12 @@
 # SPC 数据链路
 
-本文以 `src/inline_domain/application/spc/spc_service.py` 为入口，梳理 `src/inline_domain/` 内与 SPC 报表有关的后端数据链路，按当前代码的 DDD 层级 **infrastructure、core、application** 组织。各步骤说明处理逻辑、输入输出及相互关系，不展开 SQL、代码实现或前端交互。
+本文以 `app/pages/SPC监控报表.py` 和 `src/inline_domain/application/spc/spc_service.py` 为入口，梳理 SPC 从后端取数到前端展示的数据链路。后端按当前代码的 DDD 层级 **infrastructure、core、application** 组织，前端单列 **app** 展示层。各步骤说明处理逻辑、输入输出及相互关系，不展开 SQL 或逐行代码。
 
-核对日期：2026-09-09。分层按当前实现归属记录：清洗、异常点过滤和主制程追溯目前在 infrastructure；能力豁免和计算截止日选择目前在 application。本文不将它们重新归类为理想架构中的职责。
+核对日期：后端 2026-09-09，前端 2026-09-10。分层按当前实现归属记录：清洗、异常点过滤和主制程追溯目前在 infrastructure；能力豁免和计算截止日选择目前在 application。本文不将它们重新归类为理想架构中的职责。
 
 ## 1. 链路概览
 
-以下层名、步骤名与正文标题逐一一致。该列表是分层导航，不表示运行时先完整执行 infrastructure、再完整执行 core；实际由 application 发起并交替调用另外两层。
+以下层名、步骤名与正文标题逐一一致。该列表是分层导航，不表示运行时先完整执行 infrastructure、再完整执行 core；实际由 app 发起查询，application 编排并交替调用另外两层，结果再交回 app 展示。
 
 ```text
 2. infrastructure：数据访问与持久化层
@@ -37,6 +37,18 @@
    4.4 排除能力豁免参数并确定截止日
    4.5 编排周期能力计算与两项能力修饰
    4.6 组装报表结果并处理缓存与异常
+
+5. app：页面交互与可视化层
+   5.1 确定产品、查询窗口与刷新入口
+   5.2 接收报表结果并处理页面状态
+   5.3 建立级联筛选与查询门控
+   5.4 组装全产品能力与单片预警
+   5.5 按查询条件筛选并拆分指标
+   5.6 生成能力摘要与月周能力表
+   5.7 生成月周日分布图
+   5.8 生成两类 Sheet 点位图
+   5.9 叠加规格线与确定纵轴范围
+   5.10 渲染结果、复用图表与回传人工决策
 ```
 
 实际数据流为：接收 SPC 查询 → 获取并制备测量与规格 → 生成修饰前 Sheet 特征 → 读取决策并修饰点位 → 重算 Sheet 特征 → 排除能力豁免参数并确定截止日 → 汇总周期并计算能力 → 依次应用 CPK、CPM 台账修饰 → 输出报表结果。
@@ -295,11 +307,121 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 
 测量为空、规格整体为空或 Sheet 特征为空时返回空报表；能力输入全部被豁免时只将能力表置空。Sheet OOS 工作簿读取失败报告专门错误，其他未处理构建异常报告报表构建失败；能力工作簿的读取降级按“2.9 读取并保存能力修饰台账”执行。
 
-本链路至后端结果输出结束，不包含页面筛选、图表渲染或页面预警区域的组装。
+以上结果进入 app 层。页面以完整产品数据构建自动预警，以已提交的筛选条件构建手动查询结果，两条展示分支消费同一份后端输出。
 
-## 5. 后端实现依据
+## 5. app：页面交互与可视化层
 
-| DDD 层级 | 对应步骤 | 主要实现 |
+本层接收 application 输出的能力表、Sheet 特征、点位明细、指标清单与修饰结果，组织筛选、预警、图表和维护入口。页面脚本负责装配，`app/sections/inline_domain/spc/` 负责 SPC 展示组装，`app/charts/inline_domain/` 与共享 sections 提供绘图和交互能力。图表类型不由后端能力表中的字段决定。
+
+### 5.1 确定产品、查询窗口与刷新入口
+
+页面从当前会话配置取得产品编码，从公共时间窗口取得结束日期，再按 SPC 周期窗口规则推导开始日期，构造只包含产品、日期和 SPC 类型的查询。页面没有单独的日期选择器，手动选择厂别、站点和参数不会改变这次后端查询范围。
+
+页头提供产品切换与刷新入口。产品编码、`spc_sheet_oos` 和 `spc_cpk_trend` 指标的缓存版本共同进入页面签名；该签名还作为产品刷新标识传给后端。刷新处理器调用当前产品的共享原始测量刷新，避免将页面筛选后的数据当作完整产品快照。
+
+同时加载站点描述映射。站点选择器、预警表和指标标题可显示“站点编号＋描述”，筛选和数据匹配仍使用原站点编号，不用显示名称作为业务键。
+
+### 5.2 接收报表结果并处理页面状态
+
+页头渲染后，页面读取 Sheet 决策签名，在加载提示中调用应用服务，并拆出“4.6 组装报表结果并处理缓存与异常”列出的各项输出。
+
+| 返回状态 | 页面处理 |
+|---|---|
+| Sheet OOS 修饰表读取失败 | 显示工作簿读取错误与重试提示，停止后续展示。 |
+| 报表构建失败 | 显示报表加载错误，停止后续展示。 |
+| Sheet 特征或指标清单为空 | 显示“当前产品暂无可展示的 SPC 数据”，不继续生成筛选和预警区。 |
+| 有特征与指标，但能力表为空 | 继续提供筛选、单片预警及分布图；能力区按可用结果显示空状态。 |
+
+“无可展示数据”是后端输出为空的统一表现，不能仅凭该提示判断数据库完全没有该产品。分类过滤、无有效规格或处理后没有特征等情况，也可能进入同一页面分支。
+
+### 5.3 建立级联筛选与查询门控
+
+筛选候选来自完整指标清单，而不是能力异常表，因此能力豁免参数仍可被查询。选择顺序为厂别、站点、参数名称：厂别限定站点范围，所选站点再限定参数范围；站点和参数支持多选。
+
+切换厂别时清空站点和参数选择。站点组合改变后，自动选择该组合下的全部可用参数；旧选择中已不可用的值会被移除。没有选中站点时，参数选择器不可操作。
+
+只有厂别、站点和参数都已选定时才能点击“查询”。点击后保存当前选择组合；后续选择一旦变化，当前组合与已提交组合不一致，手动结果区提示“当前筛选条件尚未查询”，直到再次点击查询。
+
+这道门控只控制手动结果区。产品级后端加载已经完成，自动预警也会继续生成，不要求先点击查询。
+
+### 5.4 组装全产品能力与单片预警
+
+页面按 CPK、CPM、单片异常的顺序生成预警区，均使用当前产品的完整结果，不受手动查询条件限制。
+
+| 区域 | 输入与筛选 | 输出 |
+|---|---|---|
+| CPK 预警 | 最终周期能力表；查询结束日期的上一 ISO 周；CPK < 1.33 且未标记已修饰。 | 厂别、站点、参数、周次、CPK 值。 |
+| CPM 预警 | 同一能力表；同一上一周；CPM < 1.33 且未标记已修饰。 | 厂别、站点、参数、周次、CPM 值。 |
+| 单片异常预警 | Sheet OOS 修饰结果中的异常明细；上一 ISO 周且 flag=False。 | 厂别、站点、参数、Sheet、超规时间、超规类型。 |
+
+CPK 和 CPM 分别判断，不能用其中一项的修饰状态替代另一项。能力区有预警时显示数量与明细；无预警时根据能力表是否为空选择无预警提示或无能力数据提示。日度能力为空不会产生能力预警。
+
+预警明细再按“厂别＋站点＋参数”匹配能力、特征和点位三份数据，自动生成每个异常指标的图表，无需通过筛选器查询。这里仅用指标键筛图，不把整组图表限制在报警周或某个报警 Sheet；图中仍可保留该指标的其他月、周、日及其他 Sheet，供对比。多个异常片命中同一指标时按指标分组出图。
+
+### 5.5 按查询条件筛选并拆分指标
+
+完成自动预警后，页面检查“5.3 建立级联筛选与查询门控”的提交状态。允许展示时，将相同的厂别、站点和参数条件分别应用于周期能力表、Sheet 特征和点位明细，形成三份范围一致的手动查询输入；这一过程不重新计算能力值。
+
+随后以筛选后的 Sheet 特征为主，按“厂别＋站点＋参数”遍历指标，为每个指标截取对应的能力行与点位行。指标标题使用同一组业务键和站点描述。即使某个指标没有能力值，只要仍有 Sheet 特征，就可以展示分布数据。
+
+每个指标输出四项能力摘要、一张月周能力表，以及月周日分布、主制程设备/腔室点位、过货时间点位三张图。自动预警区复用同一套指标组装逻辑，只是输入由异常指标键选出。
+
+### 5.6 生成能力摘要与月周能力表
+
+从指标能力表分别取出有效的 CPK、CPM，生成中位 CPK、最小 CPK、中位 CPM、最小 CPM。摘要使用传入指标范围内全部非空能力行，不先截取能力表最终显示的少数周期，因此摘要不一定等于可见列的中位数或最小值。
+
+能力表只取月度与周度，按周期顺序排序、按周期标签去重，最多保留 2 个月和 3 个周。表格转置为“CPM、CPK 两行，周期为列”，数值保留三位小数，缺失值显示为“-”；不生成日度能力列。
+
+摘要与能力表都消费后端已应用替换值的最终能力结果。flag=True 的匹配周可以显示 1.33～1.40 之间已保存的替换值，但其他月周不会因此被同步替换。下方分布图来自测量点或 Sheet 特征，也不会被能力替换值反向改变。
+
+### 5.7 生成月周日分布图
+
+周期分布图接收指标的 Sheet 特征、能力表及点位明细。优先从能力表的周期结束时间推导显示截止日，没有可用值时使用最新 Sheet 时间；再按现有 Sheet 数据构建最近可用周期轴，最多展示 2 个月、3 个周和 7 个有数据的日。
+
+`period_box_source` 决定分布样本：`point_value` 使用修饰后点位的测量值，`sheet_mean` 使用修饰后的 Sheet 均值。样本按时间分别归入月、周、日，再与显示周期轴匹配；没有样本的周期不绘制箱体。
+
+这张图始终为箱线图，以周期类型区分颜色，横轴为带月、周、日标签的分类轴。日度分布与“不计算日度 CPK/CPM”并不冲突。该样本来源配置仅影响分布展示，不等同于后端决定能力标准差的 `period_sigma_source`。
+
+### 5.8 生成两类 Sheet 点位图
+
+两张 Sheet 图都使用修饰后点位的测量值，不使用能力替换值，也不将主制程分组当作新的 CPK/CPM 计算维度。
+
+前端读取 `line_param_name_contains`，将参数名与配置文本作不区分大小写的普通子串匹配；命中则使用点线图，否则使用箱线图。空配置回退为箱线图，当前 UNI 等参数的展示由配置决定。这一选择同时作用于下列两图，不改变月周日分布图的类型。
+
+| 图表 | 分组与排序 | 展示结果 |
+|---|---|---|
+| By 主站点设备/腔室 | 使用点位携带的主制程分组信息，按分组、测量时间和 Sheet 排序。 | 箱线模式按 Sheet 展示点位分布、按设备/腔室着色；点线模式按设备/腔室分线，横轴为 Sheet。 |
+| By 过货时间 | 按测量时间和 Sheet 排序，生成附带过货时间的 Sheet 标签。 | 箱线模式按 Sheet 成箱；点线模式连接点位值。两种模式均使用 Sheet 分类轴，无过货日期不占据连续时间轴空间。 |
+
+过货时间用于排序、刻度标签和悬浮信息，当前实现不是旧参考文档所述的连续 date 轴。点位图的通用纵轴标签为 Param Value，当前 SPC 绘图入口未按参数追加工程单位。
+
+### 5.9 叠加规格线与确定纵轴范围
+
+三张分布图共用规格线逻辑，从 Sheet 特征中选择首条携带至少一个有效数值规格的记录作为绘线依据，不对每个箱体分别寻找一套规格。
+
+| 规格情况 | 绘线处理 |
+|---|---|
+| 没有可用规格记录 | 不绘规格线。 |
+| LSL 为空或为 0 | 只绘可用的 USL、UCL，不绘下限及 Target。 |
+| LSL 为其他数值 | 绘可用的 USL、LSL、UCL、LCL 和 Target；Target 缺失时可取 USL、LSL 中点。 |
+
+当前 CL 线已暂停显示，即使相关推导函数仍保留，也不能将其记为实际展示输出。规格线带名称和数值，纵轴范围结合数据极值与规格范围推导：有效双边规格内的数据可直接使用规格范围，超出时扩展范围并留边距。
+
+这只是绘图策略，不改写后端规格和能力公式。尤其 LSL=0 时，图上不画下限不代表后端忽略这个数值下限。
+
+### 5.10 渲染结果、复用图表与回传人工决策
+
+指标组装先交由 RenderGate 构建图表、能力表与摘要，再统一渲染为每个指标独立的折叠区域。能力摘要和表格位于上方，三张图并排位于下方；图表键包含区域和指标信息，区分预警图与手动查询图。
+
+自动预警图可按签名复用会话中的构建结果，签名涵盖产品/指标缓存版本、预警内容、图表配置和能力结果指纹。能力替换值变化时，即使异常指标集合没有改变，也会重建相关能力展示。当前手动结果区未传入该 memo 签名，不能将两条分支描述为相同的图表复用策略。
+
+管理员 URL 入口额外显示 Sheet OOS、CPK、CPM 三类维护页签。Sheet OOS 下载包含当前明细和独立决策台账，上传只更新决策表；能力页签下载对应产品与指标的能力台账，上传覆盖对应能力 Sheet。保存后的重载重新进入后端修饰链路，而不是直接在图上改数值。能力工作簿的版本参与应用层缓存，后续页面运行可重新读取已保存的 flag 与替换值。
+
+参考分析提供了图表类型、规格线和时间轴的阅读线索；以上以前端当前实现为准，未沿用其旧配置路径、连续时间轴或 CL 显示等已变化的结论。
+
+## 6. 实现依据
+
+| 层级 | 对应步骤 | 主要实现 |
 |---|---|---|
 | infrastructure | 2.1 | [measurement_snapshot_repository.py](../../../src/inline_domain/infrastructure/shared/measurement_snapshot_repository.py)、[measurement_data_loader.py](../../../src/inline_domain/infrastructure/shared/measurement_data_loader.py) |
 | infrastructure | 2.2～2.7 | [measurement_preparation.py](../../../src/inline_domain/infrastructure/shared/measurement_preparation.py)、[main_process_trace.py](../../../src/inline_domain/infrastructure/shared/main_process_trace.py)、[measurement_metadata_loader.py](../../../src/inline_domain/infrastructure/shared/measurement_metadata_loader.py) |
@@ -313,3 +435,11 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 | application | 4.1、4.4～4.6 | [spc_service.py](../../../src/inline_domain/application/spc/spc_service.py)、[capability_decoration_service.py](../../../src/inline_domain/application/spc/capability_decoration_service.py) |
 | application | 4.2～4.3 | [decorated_features.py](../../../src/inline_domain/application/shared/decorated_features.py)、[decorated_data.py](../../../src/inline_domain/application/shared/decorated_data.py)、[sheet_oos_decoration_service.py](../../../src/inline_domain/application/shared/sheet_oos_decoration_service.py) |
 | 组合与配置 | 依赖接入、资源路径和参数 | [composition.py](../../../src/inline_domain/composition.py)、[inline_domain.yaml](../../../config/domain/inline_domain.yaml) |
+| app | 5.1～5.2、5.4～5.6 | [SPC监控报表.py](../../../app/pages/SPC监控报表.py)、[spc_dashboard.py](../../../app/sections/inline_domain/spc/spc_dashboard.py) |
+| app | 5.3 | [filters.py](../../../app/sections/inline_domain/shared/filters.py) |
+| app | 5.4 | [alert_center.py](../../../app/sections/inline_domain/shared/alert_center.py)、[sheet_oos_alerts.py](../../../src/inline_domain/core/shared/sheet_oos_alerts.py) |
+| app | 5.7～5.8 | [sheet_charts.py](../../../app/charts/inline_domain/sheet_charts.py)、[sheet_axis.py](../../../app/charts/inline_domain/sheet_axis.py)、[chart_type.py](../../../app/charts/inline_domain/chart_type.py)、[constants.py](../../../app/charts/inline_domain/constants.py) |
+| app | 5.9 | [spec_lines.py](../../../app/charts/inline_domain/spec_lines.py) |
+| app | 5.10 | [render_gate.py](../../../app/manager/render_gate.py)、[indicator_cache.py](../../../app/components/indicator_cache.py)、[decoration_admin.py](../../../app/sections/inline_domain/shared/decoration_admin.py)、[sheet_oos_admin.py](../../../app/sections/inline_domain/shared/sheet_oos_admin.py) |
+
+前端参考分析：[spc-monitor-page-logic-analysis.md](../../../docs/dev_docs/generated/Inline_domain/spc-monitor-page-logic-analysis.md)。该文状态日期早于本次核验，用于定位历史设计线索，当前行为以上述实现依据为准。

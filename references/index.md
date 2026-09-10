@@ -11,7 +11,7 @@
 | Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/GLOSSARY.md) |
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/Inline_domain/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/Inline_domain/architecture-inline-infrastructure.md) |
-| SPC 后端输入、分层处理与输出 | [SPC 数据流](domain/Inline_domain/data-flow-spc.md) |
+| SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/Inline_domain/data-flow-spc.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/Inline_domain/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/Inline_domain/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/Inline_domain/data-flow-aoi-tt.md) |
@@ -23,6 +23,7 @@
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/algorithm-mwd-trend.md) |
 | Sheet / Lot 不良率、热点分配与覆盖率计算 | [Sheet / Lot 算法](domain/yield_domain/algorithm-sheet-lot.md) |
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](domain/shared_kernel/overview-shared-kernel.md) |
+| 日期前推、offset_days、源日期与显示日期、跨模块报表时间链路 | [报表日期前推数据链路](domain/shared_kernel/data-flow-report-date-forward.md) |
 
 ### 跨域范式与功能设计
 

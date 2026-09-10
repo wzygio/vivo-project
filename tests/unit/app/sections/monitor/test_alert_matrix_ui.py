@@ -536,6 +536,7 @@ def test_yield_trend_detail_wires_alert_code_expanders(
     assert kwargs["product_code"] == "M678"
     assert kwargs["chart_key_prefix"] == "matrix_detail_yield"
     assert kwargs["memo_state_key"] == "matrix_detail_yield_charts_memo"
+    assert kwargs["data_signature"]
 
 
 # ---------------------------------------------------------------------------

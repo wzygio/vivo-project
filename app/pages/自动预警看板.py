@@ -40,6 +40,7 @@ from app.sections.inline_domain.monitor.alert_matrix import (
     MATRIX_SELECTION_STATE_KEY,
     render_alert_matrix_board,
     render_alert_matrix_filter_bar,
+    render_matrix_refresh_controls,
 )
 from app.sections.inline_domain.monitor.alert_matrix_cache import (
     get_alert_matrix_cached_funcs,
@@ -191,12 +192,16 @@ with st.expander("全指标状态总览", expanded=True):
         SessionManager.AVAILABLE_PRODUCTS,
         action_renderer=_render_matrix_action_button,
     )
+    # 管理入口不依赖本会话是否查询过；切换 admin URL 后可直接定向失效。
+    # 查询仍使用跨会话共享的单元格缓存，admin 只控制操作面板的显示。
+    render_matrix_refresh_controls()
     if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
         db_manager = DatabaseManager()
         render_alert_matrix_board(
             db_manager=db_manager,
             step_desc_map=get_cached_step_description_map(db_manager),
             filter_selection=matrix_filter_selection,
+            show_refresh_controls=False,
         )
 
 # --------------------------------------------------------------------------

@@ -298,6 +298,7 @@ def render_alert_matrix_board(
     step_desc_map: dict[str, str] | None = None,
     detail_loaders: Mapping[str, Any] | None = None,
     filter_selection: tuple[str, list[str], list[str]] | None = None,
+    show_refresh_controls: bool = True,
 ) -> None:
     """页首矩阵区入口：拼装独立单元格缓存，再按选中单元格懒加载详情。
 
@@ -307,7 +308,8 @@ def render_alert_matrix_board(
     矩阵整体失败（如签名采集异常）降级为 warning 提示（加载失败属错误类，
     必须可见），不阻断页面其余部分。
     """
-    render_matrix_refresh_controls()
+    if show_refresh_controls:
+        render_matrix_refresh_controls()
     try:
         with st.spinner("正在加载预警矩阵..."):
             payload = get_cached_alert_matrix()
@@ -359,8 +361,16 @@ def render_matrix_refresh_controls() -> None:
 
     with st.expander("指标缓存管理（管理员）", expanded=False):
         names = {row.row_key: row.display_name for row in MATRIX_ROWS}
-        indicator = st.selectbox("刷新指标", list(names), format_func=names.get, key="matrix_refresh_indicator")
-        product = st.selectbox("刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product")
-        if st.button("刷新所选指标缓存", key="matrix_refresh_cell"):
-            bump_indicator_product_revision(indicator, product)
+        indicator_column, product_column, action_column = st.columns(
+            [2, 2, 0.8], vertical_alignment="bottom",
+        )
+        with indicator_column:
+            indicator = st.selectbox("刷新指标", list(names), format_func=names.get, key="matrix_refresh_indicator")
+        with product_column:
+            product = st.selectbox("刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product")
+        with action_column:
+            if st.button("刷新", key="matrix_refresh_cell", width="stretch"):
+                bump_indicator_product_revision(indicator, product)
+                st.toast("所选指标缓存已失效；查询时将重新计算，普通界面同步生效。")
+        st.caption("普通界面与开发者界面共用计算缓存；无需先查询即可刷新。")
         st.caption("仅刷新所选指标 × 产品；其他单元格及底层共享原始快照保持复用。")

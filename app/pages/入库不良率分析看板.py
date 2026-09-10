@@ -234,6 +234,7 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
         product_code=active_config.data_source.product_code,
         mapping_layout=active_config.processing.get('mapping_layout'),
+        data_signature=repr(sorted(yield_cache_context.items())),
     )
 
 # ==============================================================================
