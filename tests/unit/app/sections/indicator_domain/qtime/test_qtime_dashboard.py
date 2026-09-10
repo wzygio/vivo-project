@@ -193,7 +193,7 @@ def test_qtime_dashboard_shows_a_safe_database_error() -> None:
     ).run()
     app.button(key="qtime_search").click().run()
 
-    assert app.error[0].value == "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
+    assert app.error[0].value == "Q-Time 数据读取失败，请稍后重试。"
     assert not app.get("plotly_chart")
 
 

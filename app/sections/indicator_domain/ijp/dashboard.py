@@ -126,14 +126,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
         st.info("当前筛选条件下暂无 IJP 溢流数据。")
         return
 
-    if not ratios.empty:
-        st.caption(
-            "显示修饰：C3DM1 使用 "
-            f"{service.settings.c3dm1_minimum:.0%}～{service.settings.c3dm1_maximum:.0%}"
-            " 的稳定随机目标值，低于目标时修饰，其它 CODE 同比例缩放。"
-            "仅对所选 CODE 包含 C3DM1 的查询生效；悬停可查看实际占比和记录数。"
-        )
-        _render_grouped_glass_charts(ratios, period_summary=True)
+    _render_grouped_glass_charts(ratios, period_summary=True)
 
     # 暂停查询和展示明细；保留 _render_details_table / build_ijp_table 供恢复。
 

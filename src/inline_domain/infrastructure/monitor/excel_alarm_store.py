@@ -35,6 +35,16 @@ def clear_excel_alarm_cache() -> None:
     read_cached_alarm_workbook.clear()
 
 
+def clear_alarm_workbook_cache(path: Path | str) -> None:
+    """Invalidate only this workbook's current cache entry."""
+    workbook = Path(path).resolve()
+    try:
+        stat = workbook.stat()
+    except FileNotFoundError:
+        return
+    read_cached_alarm_workbook.clear(str(workbook), stat.st_mtime_ns, stat.st_size)
+
+
 class ExcelAlarmStore:
     """Missing files/sheets are explicit, not an authoritative zero result."""
 

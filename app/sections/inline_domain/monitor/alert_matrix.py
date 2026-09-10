@@ -90,6 +90,8 @@ def _cell_help(cell: Mapping[str, str]) -> str:
     state = cell.get("state", CELL_STATE_ERROR)
     if state == CELL_STATE_NO_DATA:
         return _STATE_HELP[CELL_STATE_OK]
+    if state == CELL_STATE_ERROR:
+        return "数据加载失败，请稍后重试。"
     message = (cell.get("message") or "").strip()
     base = _STATE_HELP.get(state, str(state))
     return f"{base}：{message}" if message else base
@@ -315,20 +317,19 @@ def render_alert_matrix_board(
             payload = get_cached_alert_matrix()
     except Exception as exc:  # noqa: BLE001 - 矩阵区整体降级是契约要求
         logger.exception("[alert-matrix] 矩阵 payload 加载失败: %s", exc)
-        st.warning(f"预警矩阵暂时不可用（{exc}），下方看板功能不受影响。")
+        st.warning("预警矩阵暂时不可用，请稍后重试。下方看板功能不受影响。")
         return
 
     from app.manager.compliance_manager import apply_matrix_compliance, load_matrix_config
 
     st.button(
         "更新显示", key="matrix_refresh_display",
-        help="保存 compliance_config.xlsx 后点击；只更新显示修饰，不清理指标计算缓存。",
     )
     try:
         payload = apply_matrix_compliance(payload, load_matrix_config())
-    except Exception as exc:
+    except Exception:
         logger.exception("[alert-matrix] 显示修饰配置读取失败")
-        st.warning(f"显示修饰配置未生效，保留原始状态：{exc}")
+        st.warning("显示配置加载失败，请稍后重试。")
 
     render_alert_matrix_section(payload, filter_selection=filter_selection)
 
@@ -352,25 +353,58 @@ def render_alert_matrix_board(
     )
 
 
+def _refresh_matrix(indicator: str, product: str, refresh_data: bool) -> None:
+    if st.query_params.get("admin") != "true":
+        return
+    try:
+        if refresh_data:
+            from app.sections.inline_domain.monitor.refresh_controls import clear_cpk_source_cache
+            from src.inline_domain.infrastructure.monitor.excel_alarm_store import clear_alarm_workbook_cache
+            from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+
+            if indicator == "spc_cpk_trend":
+                clear_cpk_source_cache()
+            elif indicator.endswith("_sheet_oos") and indicator != "qtime_sheet_oos":
+                clear_alarm_workbook_cache(scope_decoration_path(indicator.removesuffix("_sheet_oos")))
+        bump_indicator_product_revision(indicator, product)
+    except Exception:
+        logger.exception("Matrix refresh failed: %s/%s", indicator, product)
+        st.error("刷新失败，请检查源文件与缓存目录是否可访问后重试。")
+        return
+    st.session_state.pop(MATRIX_SELECTION_STATE_KEY, None)
+    if refresh_data:
+        st.session_state["alert_matrix_board_loaded"] = True
+    else:
+        st.session_state.pop("alert_matrix_board_loaded", None)
+        st.toast("所选指标缓存已失效；点击查询重新加载，普通界面同步生效。")
+
+
 def render_matrix_refresh_controls() -> None:
     """Manual refresh is explicitly targeted and visible only in admin mode."""
-    if str(st.query_params.get("admin", "")).lower() != "true":
+    if st.query_params.get("admin") != "true":
         return
     from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROWS
     from src.shared_kernel.config import ConfigLoader
 
-    with st.expander("指标缓存管理（管理员）", expanded=False):
+    with st.expander("指标刷新管理（管理员）", expanded=False):
         names = {row.row_key: row.display_name for row in MATRIX_ROWS}
         indicator_column, product_column, action_column = st.columns(
-            [2, 2, 0.8], vertical_alignment="bottom",
+            [2, 2, 2], vertical_alignment="bottom",
         )
         with indicator_column:
             indicator = st.selectbox("刷新指标", list(names), format_func=names.get, key="matrix_refresh_indicator")
         with product_column:
             product = st.selectbox("刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product")
         with action_column:
-            if st.button("刷新", key="matrix_refresh_cell", width="stretch"):
-                bump_indicator_product_revision(indicator, product)
-                st.toast("所选指标缓存已失效；查询时将重新计算，普通界面同步生效。")
+            with st.container(horizontal=True):
+                st.button(
+                    "刷新缓存", key="matrix_refresh_cell",
+                    on_click=_refresh_matrix, args=(indicator, product, False),
+                )
+                st.button(
+                    "刷新数据", key="matrix_refresh_data",
+                    on_click=_refresh_matrix, args=(indicator, product, True),
+                    help="重新读取所选指标的当前输入并更新矩阵；源数据由对应业务模块维护。",
+                )
         st.caption("普通界面与开发者界面共用计算缓存；无需先查询即可刷新。")
         st.caption("仅刷新所选指标 × 产品；其他单元格及底层共享原始快照保持复用。")

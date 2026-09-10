@@ -5,7 +5,7 @@ application:
 # 制造事实显示时间策略：客户报表展示源数据四天后的日期。
 data_forward:
   enabled: true
-  offset_days: 3
+  offset_days: 4
 
 # 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
 domain_config:

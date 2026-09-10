@@ -23,7 +23,7 @@ def render_qtime_decoration_admin(
     with st.expander("开发者后台：Q-Time 超规数据修饰", expanded=False):
         st.caption(
             f"flag 支持 True（修饰）、False（保留真实超规预警）、{DELETE_ACTION}（删除记录）。"
-            "启用报表展示修饰时，柱形值仍保持在规格内，原始值可通过悬停查看。"
+            "启用报表展示修饰时，柱形值仍保持在规格内。"
             "修改下载文件中的“决策台账”后上传。"
         )
         if result.decoration_path is not None:

@@ -102,9 +102,35 @@ def test_normal_and_admin_sessions_reuse_cells_and_targeted_refresh(matrix_sessi
 
     admin.button(key="matrix_refresh_cell").click().run()
     assert not admin.exception
+    assert calls == expected
+    admin.button(key="btn_load_alert_matrix").click().run()
+    assert not admin.exception
     expected[INDICATORS[0], PRODUCTS[0]] += 1
     assert calls == expected
 
     normal.run()
     assert not normal.exception
     assert calls == expected
+
+
+def test_matrix_data_refresh_reloads_target_and_preserves_other_boards(matrix_sessions, monkeypatch):
+    from app.sections.inline_domain.monitor import refresh_controls
+
+    cleared = []
+    monkeypatch.setattr(refresh_controls, "clear_cpk_source_cache", lambda: cleared.append("cpk"))
+    calls, new_session = matrix_sessions
+    admin = new_session(admin=True)
+    admin.button(key="btn_load_alert_matrix").click().run()
+    before = calls.copy()
+    admin.session_state["monitor_query_signature"] = "oos-selection"
+    admin.session_state["cpk_monitor_query_signature"] = "cpk-selection"
+    admin.selectbox(key="matrix_refresh_indicator").select("spc_cpk_trend").run()
+
+    admin.button(key="matrix_refresh_data").click().run()
+
+    assert not admin.exception
+    before["spc_cpk_trend", PRODUCTS[0]] += 1
+    assert calls == before
+    assert cleared == ["cpk"]
+    assert admin.session_state["monitor_query_signature"] == "oos-selection"
+    assert admin.session_state["cpk_monitor_query_signature"] == "cpk-selection"

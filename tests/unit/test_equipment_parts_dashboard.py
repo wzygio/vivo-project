@@ -6,6 +6,16 @@ from app.sections.equipment_domain import parts_filters
 from app.sections.equipment_domain import parts_dashboard
 
 
+def test_measurement_time_is_displayed_as_date_without_mutating_source(monkeypatch):
+    frames = []
+    monkeypatch.setattr(parts_dashboard.st, "dataframe", lambda df, **kwargs: frames.append(df))
+    source = pd.DataFrame({"测量时间": ["2026-09-10 14:37:07", None]})
+    original = source.copy()
+    parts_dashboard.render_parts_table(source)
+    assert frames[0]["测量时间"].tolist() == ["2026-09-10", ""]
+    pd.testing.assert_frame_equal(source, original)
+
+
 def _report_df() -> pd.DataFrame:
     return pd.DataFrame({
         "厂别": ["Array", "Array", "Array", "TP"],
@@ -101,8 +111,10 @@ def test_trend_row_requires_an_explicit_table_selection() -> None:
 
 def test_parts_tables_never_expose_parameter_columns(monkeypatch) -> None:
     captured_column_orders: list[list[str]] = []
+    captured_frames: list[pd.DataFrame] = []
 
     def fake_dataframe(_df, **kwargs):
+        captured_frames.append(_df.copy())
         captured_column_orders.append(list(kwargs["column_order"]))
         return {"selection": {"rows": []}}
 
@@ -119,6 +131,8 @@ def test_parts_tables_never_expose_parameter_columns(monkeypatch) -> None:
         "参数名称": ["%TRGTLIFE%_G_MAX"],
         "匹配参数名": ["P5_TRGTLIFE_G_MAX"],
         "测量值": [30000.0],
+        "原始测量值": [45000.0],
+        "数据修饰": ["超规修饰"],
         "使用进度": [73.17],
         "预警状态": ["正常"],
         "测量时间": ["2026-07-15 08:30:00"],
@@ -134,6 +148,11 @@ def test_parts_tables_never_expose_parameter_columns(monkeypatch) -> None:
         assert "参数名称" not in column_order
         assert "匹配参数名" not in column_order
         assert all(not column.startswith("__FABRICATED_PART__") for column in column_order)
+    for frame in captured_frames:
+        assert set(frame.columns) == set(parts_dashboard.PARTS_TABLE_COLUMN_ORDER)
+        assert frame["测量值"].tolist() == [30000.0]
+    assert report_df["原始测量值"].tolist() == [45000.0]
+    assert report_df["数据修饰"].tolist() == ["超规修饰"]
 
 
 def test_station_display_preserves_codes_and_removes_excel_decimal_suffix(monkeypatch) -> None:

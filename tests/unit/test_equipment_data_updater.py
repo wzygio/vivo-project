@@ -199,7 +199,7 @@ def test_ensure_bootstraps_missing_snapshot_and_loader_maintains_it_automaticall
     assert loaded["glass_start_time"].diff().equals(before["glass_start_time"].diff())
 
 
-def test_report_snapshot_boundary_filters_source_time_before_display_shift(
+def test_report_snapshot_boundary_keeps_current_dates_despite_global_forward(
     monkeypatch,
 ) -> None:
     from src.shared_kernel.data_forward import DataForwardPolicy
@@ -261,10 +261,10 @@ def test_report_snapshot_boundary_filters_source_time_before_display_shift(
 
     assert filtered_times == [pd.Timestamp("2026-08-08 08:00:00")]
     assert displayed_real.loc[0, "glass_start_time"] == pd.Timestamp(
-        "2026-08-12 08:00:00"
+        "2026-08-08 08:00:00"
     )
     assert displayed_fabricated.loc[0, "glass_start_time"] == pd.Timestamp(
-        "2026-08-13 09:00:00"
+        "2026-08-09 09:00:00"
     )
     assert source_real.loc[0, "glass_start_time"] == pd.Timestamp(
         "2026-08-08 08:00:00"

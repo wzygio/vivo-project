@@ -278,11 +278,10 @@ def load_report_part_life_snapshots(
     as_of: pd.Timestamp,
     max_age_days: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Return real and fabricated snapshots on the report display-time axis.
+    """Return current-state measurements without the global report date offset.
 
-    Snapshot creation, persistence, and freshness filtering all use source
-    timestamps. The display offset is applied only to copied frames returned
-    across this repository boundary.
+    Fabrication already runs against the current clock. Shifting its output
+    again creates future measurements; this report uses snapshot time directly.
     """
     source_snapshot = load_part_life_snapshot(db_manager, spec_df)
     recent_source_snapshot = filter_recent_part_life_measurements(
@@ -294,10 +293,9 @@ def load_report_part_life_snapshots(
         spec_df,
         now=as_of,
     )
-    policy = ConfigLoader.get_data_forward_policy()
     return (
-        policy.shift_frame(recent_source_snapshot, ("glass_start_time",)),
-        policy.shift_frame(source_fabricated_snapshot, ("glass_start_time",)),
+        recent_source_snapshot.copy(),
+        source_fabricated_snapshot.copy(),
     )
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:

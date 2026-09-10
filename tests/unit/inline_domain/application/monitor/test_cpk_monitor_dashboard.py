@@ -12,7 +12,7 @@ class Service:
         st.session_state["calls"] = st.session_state.get("calls", 0) + 1
         return CpkMonitorViewModel(
             pd.DataFrame({"指标": ["CPK总项目数"], "Y26": [2]}),
-            pd.DataFrame({"period_type": ["month"], "cpk": [2.0], "status": ["达标"]}),
+            pd.DataFrame({"period_type": ["month"], "cpk": [2.0], "flag": [True], "status": ["已修饰或达标"]}),
         )
 render_cpk_monitor_section(Service(), ["M626", "M673"], ["ARRAY", "OLED"])
 ''')
@@ -23,6 +23,10 @@ render_cpk_monitor_section(Service(), ["M626", "M673"], ["ARRAY", "OLED"])
     assert not app.exception
     assert app.session_state["calls"] == 1
     assert len(app.dataframe) == 2  # Summary and latest project details.
+    detail = app.dataframe[1].value
+    assert "已修饰" not in detail.columns
+    assert detail["已达标"].tolist() == [True]
+    assert detail["判定状态"].tolist() == ["达标"]
     app.multiselect(key="cpk_monitor_products").set_value(["M626"]).run()
     assert not app.exception
     assert app.session_state["calls"] == 1

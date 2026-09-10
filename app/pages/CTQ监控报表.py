@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -105,9 +106,9 @@ product_revision = get_indicator_product_revision("ctq_sheet_oos", current_produ
 try:
     decision_signature = get_scope_decision_signature("ctq", current_product)
 except SheetOosDecorationReadError:
+    logging.getLogger(__name__).exception("CTQ report inputs could not be read")
     st.error(
-        "CTQ 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
-        "然后点击页头“刷新缓存”重试。"
+        "CTQ 数据读取失败，请稍后重试。"
     )
     st.stop()
 

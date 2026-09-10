@@ -858,7 +858,6 @@ def _render_detail_bundle(
                 st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
             else:
                 st.dataframe(bundle["alerts_df"], hide_index=True, width="stretch")
-        st.caption("来源：SPC CPK 本地修饰结果；不重新分析底层量测。")
     elif kind == "spc_cpk":
         _render_spc_cpk_detail(
             bundle,
@@ -931,7 +930,7 @@ def render_alert_matrix_detail(
             st.success("该产品该项上一周期无预警（达标）。")
             return
         if state == CELL_STATE_ERROR:
-            st.warning(f"加载失败：{cell.get('message') or '未知原因'}")
+            st.warning("数据加载失败，请稍后重试。")
             return
         if state != CELL_STATE_ALERT:
             st.caption(f"当前状态（{state}）无详情可查看。")
@@ -957,7 +956,7 @@ def render_alert_matrix_detail(
             )
         except Exception as exc:  # noqa: BLE001 - 详情级降级，不影响矩阵本体
             logger.exception("[alert-matrix] 详情加载失败 %s: %s", detail_key, exc)
-            st.error(f"预警详情加载失败：{exc}")
+            st.error("预警详情加载失败，请稍后重试。")
             return
 
         _render_detail_bundle(

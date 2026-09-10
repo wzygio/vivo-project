@@ -25,10 +25,8 @@ import pandas as pd
 from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
-from app.components.page_header import (
-    render_page_header,
-)
 from app.sections.inline_domain.monitor.oos_monitor_dashboard import (
+    MONITOR_QUERY_SIGNATURE_KEY,
     render_oos_monitor_control_panel,
     render_oos_monitor_results,
     render_oos_refresh_status,
@@ -42,14 +40,14 @@ from app.sections.inline_domain.monitor.alert_matrix import (
     render_alert_matrix_filter_bar,
     render_matrix_refresh_controls,
 )
-from app.sections.inline_domain.monitor.alert_matrix_cache import (
-    get_alert_matrix_cached_funcs,
+from app.sections.inline_domain.monitor.refresh_controls import (
+    clear_oos_source_cache,
+    render_board_refresh_controls,
 )
 from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorService,
     OosMonitorViewModel,
 )
-from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
@@ -108,7 +106,7 @@ def get_cached_oos_monitor_payload(
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
-# [权限控制] 检测 URL 参数，仅用于控制修饰器面板显示
+# [权限控制] 检测 URL 参数，控制管理员刷新入口与状态面板显示
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true"
 
@@ -120,27 +118,10 @@ try:
     start_date_str, end_date_str = get_cached_query_window(
         pd.Timestamp.today().date().isoformat()
     )
-    active_config = SessionManager.get_active_config()
 except Exception:
     logging.exception("自动预警看板初始化失败")
     st.error("页面初始化失败，请稍后重试或联系管理员。")
     st.stop()
-
-funcs_to_clear = [
-    get_cached_query_window,
-    get_cached_oos_monitor_payload,
-    get_cached_step_description_map,
-    read_cached_alarm_workbook,
-] + get_alert_matrix_cached_funcs()
-render_page_header(
-    title="自动预警看板",
-    config=active_config,
-    cached_funcs=funcs_to_clear,
-    refresh_handlers=[],
-    # 本页为全产品视图（矩阵与超规片预警均跨产品），页头产品框无意义
-    show_product_filter=False,
-    show_cache_refresh=False,
-)
 
 # --------------------------------------------------------------------------
 # 模块一：预警矩阵（产品 × 监控参数，按钮门控加载）
@@ -149,8 +130,7 @@ render_page_header(
 # 「加载预警矩阵」按钮（无 info 文案，门控语义由按钮承担，UI 优化轮次），
 # 点击后才读取 L2 缓存 payload 并按当前筛选选择客户端切片展示（真正的
 # 全量计算仍由既有 monitor 管线在缓存 miss 时完成，按钮本身只是读取缓存）。
-# 已加载状态存 session_state，普通 rerun 保持可见；「刷新缓存/刷新数据」由
-# perform_hard_reset 阶段 4 / _refresh_data_callback 清除该状态。
+# 已加载状态存 session_state，普通 rerun 保持可见；刷新只影响本看板。
 # --------------------------------------------------------------------------
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
 
@@ -209,8 +189,7 @@ with st.expander("全指标状态总览", expanded=True):
 # 页面打开不读取历史：未点击「查询」时 Expander 内只有控制台与查询
 # 按钮（无 info 文案，门控语义由按钮承担）；点击后普通 rerun 保持已提交
 # 状态；筛选 signature 变化静默回到未提交态；
-# 「刷新缓存/刷新数据」由 perform_hard_reset 阶段 4 /
-# _refresh_data_callback 清除该 session key。
+# 本看板刷新只清除自身缓存和查询状态。
 # --------------------------------------------------------------------------
 st.subheader("⚠️ 超规片预警看板")
 with st.expander("Inline超规预警", expanded=True):
@@ -230,8 +209,17 @@ with st.expander("Inline超规预警", expanded=True):
         action_renderer=_render_query_button_in_row,
     )
 
+    def _clear_oos_monitor_cache() -> None:
+        clear_oos_source_cache(selected_scopes(filter_state.data_type_filter))
+        get_cached_oos_monitor_payload.clear()
+
+    refresh_oos_data = render_board_refresh_controls(
+        key="oos_monitor", clear_cache=_clear_oos_monitor_cache,
+        query_state_key=MONITOR_QUERY_SIGNATURE_KEY,
+        selection_valid=bool(filter_state.selected_products and filter_state.selected_factories),
+    )
     if render_monitor_query_gate(
-        filter_state, clicked=query_click_box.get("clicked", False)
+        filter_state, clicked=query_click_box.get("clicked", False) or refresh_oos_data
     ):
         products = tuple(filter_state.selected_products)
         scopes = selected_scopes(filter_state.data_type_filter)

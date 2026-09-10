@@ -80,6 +80,10 @@ def render_parts_table(df: pd.DataFrame):
         return
 
     df = df.copy()
+    if "测量时间" in df.columns:
+        df["测量时间"] = pd.to_datetime(
+            df["测量时间"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d").fillna("")
     if "站点" in df.columns:
         df["站点"] = (
             df["站点"].astype("string").str.strip()
@@ -115,7 +119,7 @@ def render_parts_table(df: pd.DataFrame):
     valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     st.dataframe(
-        df,
+        df[valid_columns],
         column_config=column_config,
         column_order=valid_columns,
         hide_index=True,
@@ -165,7 +169,7 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
     valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     selected_rows = st.dataframe(
-        df,
+        df[valid_columns],
         column_config=column_config,
         column_order=valid_columns,
         hide_index=True,

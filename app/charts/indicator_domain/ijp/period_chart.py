@@ -1,4 +1,4 @@
-"""Five period stacks with CODE annotations and raw/display provenance."""
+"""Five period stacks with CODE annotations and reporting ratios."""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -16,11 +16,11 @@ def build_ijp_period_figure(ratios: pd.DataFrame, *, title: str) -> go.Figure:
         figure.add_bar(
             x=periods, y=rows.display_ratio * 100, name=f"{code}：{CODE_DESCRIPTIONS[code]}",
             marker_color=color,
-            customdata=rows[["raw_ratio", "code_num", "period_start", "period_end"]].to_numpy(),
+            customdata=rows[["code_num", "period_start", "period_end"]].to_numpy(),
             hovertemplate=(f"{code}：{CODE_DESCRIPTIONS[code]}<br>" +
-                "%{x}<br>%{customdata[2]} 至 %{customdata[3]}"
-                "<br>显示占比 %{y:.2f}%<br>实际占比 %{customdata[0]:.2%}"
-                "<br>记录数 %{customdata[1]:,.0f}<extra></extra>"),
+                "%{x}<br>%{customdata[1]} 至 %{customdata[2]}"
+                "<br>占比 %{y:.2f}%"
+                "<br>记录数 %{customdata[0]:,.0f}<extra></extra>"),
         )
     for period in periods:
         if not ratios[ratios.period == period].has_data.any():
@@ -32,7 +32,7 @@ def build_ijp_period_figure(ratios: pd.DataFrame, *, title: str) -> go.Figure:
                 "font": {"size": 10}},
         xaxis={"title": "月份 / 周（周一开始）", "type": "category",
                "categoryorder": "array", "categoryarray": periods},
-        yaxis={"title": "显示占比（%）", "range": [0, 100], "ticksuffix": "%"},
+        yaxis={"title": "占比（%）", "range": [0, 100], "ticksuffix": "%"},
         plot_bgcolor="white", paper_bgcolor="white", bargap=0.35,
     )
     return figure

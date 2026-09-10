@@ -17,10 +17,10 @@ def build_ijp_printer_figure(ratios: pd.DataFrame, *, title: str) -> go.Figure:
         text=[f"{value:.2%}" for value in frame["display_ratio"]],
         textposition="outside",
         cliponaxis=False,
-        customdata=frame[["raw_ratio", "code_num"]].to_numpy(),
+        customdata=frame[["code_num"]].to_numpy(),
         hovertemplate=(
-            "%{x}<br>显示占比 %{y:.2f}%<br>实际占比 %{customdata[0]:.2%}"
-            "<br>记录数 %{customdata[1]:,.0f}<extra></extra>"
+            "%{x}<br>占比 %{y:.2f}%"
+            "<br>记录数 %{customdata[0]:,.0f}<extra></extra>"
         ),
     ))
     figure.update_layout(
@@ -30,7 +30,7 @@ def build_ijp_printer_figure(ratios: pd.DataFrame, *, title: str) -> go.Figure:
         plot_bgcolor="#ffffff", paper_bgcolor="#ffffff",
         xaxis={"title": "CODE", "type": "category", "categoryorder": "array",
                "categoryarray": list(PRINTER_CODES)},
-        yaxis={"title": "显示占比（%）", "range": [0, 110],
+        yaxis={"title": "占比（%）", "range": [0, 110],
                "tickvals": [0, 20, 40, 60, 80, 100], "ticksuffix": "%"},
     )
     return figure

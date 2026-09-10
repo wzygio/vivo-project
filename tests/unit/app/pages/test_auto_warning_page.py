@@ -1,6 +1,6 @@
 """自动预警看板页面组合层测试（2026-09-03 需求轮次）。
 
-- 页头不渲染产品筛选（show_product_filter=False，全产品视图）；
+- 无统一页头，各看板拥有管理员专用刷新入口；
 - 「超规片自动预警」区查询门控：未点击「查询」不执行签名预算与数据加载，
   点击后才执行（monkeypatch 计数）；
 - 模块化结构：每个模块 = st.subheader 标题 + st.expander（默认展开）；
@@ -21,6 +21,7 @@ import types
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 # monitor_dashboard 的第三方组件在 bare 模式下无法真实注册，沿用
 # test_monitor_dashboard_type_rollup.py 的 stub 惯例。
@@ -323,7 +324,7 @@ def test_page_hides_header_product_filter_and_gates_data_loading(monkeypatch) ->
 
     _run_page()
 
-    assert trackers["header_kwargs"]["show_product_filter"] is False
+    assert trackers["header_kwargs"] == {}
     _assert_module_structure(trackers)
     # 未点击「查询」：签名预算与数据加载都不执行
     assert trackers["load_calls"] == []
@@ -368,7 +369,7 @@ def test_page_loads_data_after_query_submitted(monkeypatch) -> None:
 
     _run_page()
 
-    assert trackers["header_kwargs"]["show_product_filter"] is False
+    assert trackers["header_kwargs"] == {}
     _assert_module_structure(trackers)
     # 点击「查询」：直接读取四类共享 OOS 历史，不再执行旧决策签名预算/全量计算。
     assert trackers["decision_calls"] == []
@@ -396,6 +397,57 @@ def test_refresh_status_is_rendered_only_for_admin_query_param(monkeypatch) -> N
     assert trackers["ooc_admin_calls"] == []
 
 
+def test_each_board_has_admin_only_refresh_controls(monkeypatch) -> None:
+    st.session_state.clear()
+    st.query_params.clear()
+    trackers = _stub_page_dependencies(monkeypatch)
+    _run_page()
+    assert not any("刷新" in item["label"] for item in trackers["buttons"])
+
+    st.query_params["admin"] = "true"
+    trackers["buttons"].clear()
+    try:
+        _run_page()
+    finally:
+        st.query_params.clear()
+    buttons = {item["key"]: item["label"] for item in trackers["buttons"]}
+    for cache_key, data_key in (
+        ("matrix_refresh_cell", "matrix_refresh_data"),
+        ("oos_monitor_refresh_cache", "oos_monitor_refresh_data"),
+        ("cpk_monitor_refresh_cache", "cpk_monitor_refresh_data"),
+    ):
+        assert buttons[cache_key] == "刷新缓存"
+        assert buttons[data_key] == "刷新数据"
+
+
+@pytest.mark.parametrize("action", ["cache", "data"])
+def test_oos_refresh_preserves_other_board_state(monkeypatch, action) -> None:
+    from app.sections.inline_domain.monitor import refresh_controls, cpk_monitor_dashboard
+
+    st.session_state.clear()
+    st.query_params["admin"] = "true"
+    trackers = _stub_page_dependencies(
+        monkeypatch, clicked_keys={f"oos_monitor_refresh_{action}"},
+    )
+    cleared = []
+    monkeypatch.setattr(refresh_controls, "clear_oos_source_cache", lambda scopes: cleared.append(scopes))
+    monkeypatch.setattr(cpk_monitor_dashboard, "render_cpk_monitor_section", lambda *args: None)
+    st.session_state["alert_matrix_board_loaded"] = True
+    st.session_state["cpk_monitor_query_signature"] = "cpk-selection"
+    st.session_state["monitor_query_signature"] = "old-selection"
+    try:
+        _run_page()
+        assert st.session_state["alert_matrix_board_loaded"] is True
+        assert st.session_state["cpk_monitor_query_signature"] == "cpk-selection"
+        assert bool(trackers["load_calls"]) is (action == "data")
+        assert len(cleared) == 1
+        if action == "cache":
+            assert "monitor_query_signature" not in st.session_state
+    finally:
+        st.query_params.clear()
+        st.session_state.clear()
+
+
 def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
     monkeypatch,
 ) -> None:
@@ -406,7 +458,7 @@ def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
 
     _run_page()
 
-    assert trackers["header_kwargs"]["show_product_filter"] is False
+    assert trackers["header_kwargs"] == {}
     _assert_module_structure(trackers)
     # 筛选条只渲染一处（无 widget key 重复）
     assert _matrix_filter_keys(trackers) == list(MATRIX_FILTER_KEYS)

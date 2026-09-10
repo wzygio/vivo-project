@@ -11,6 +11,10 @@ import streamlit as st
 from src.inline_domain.application.monitor.cpk_monitor_service import (
     CpkMonitorViewModel,
 )
+from app.sections.inline_domain.monitor.refresh_controls import (
+    clear_cpk_source_cache,
+    render_board_refresh_controls,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +34,6 @@ def render_cpk_monitor_results(view: CpkMonitorViewModel) -> None:
     st.altair_chart(build_period_trend_chart(
         view.summary_df, label_column="指标", metric_rows=("预警项目数",),
     ), width="stretch")
-    st.caption("上一完整周及当月：从 CPK 修饰表统计未修饰且 CPK＜1.33 的项目；总项目数取汇总 Excel。年、季和其他历史保持维护值。图表缺失值仅按0占位，不回写历史。")
     if st.query_params.get("admin") == "true" and not view.refresh_status_df.empty:
         st.markdown("#### CPK 数据更新状态（管理员）")
         st.dataframe(view.refresh_status_df, hide_index=True, width="stretch")
@@ -41,9 +44,11 @@ def render_cpk_monitor_results(view: CpkMonitorViewModel) -> None:
     display = view.detail_df.rename(columns={
         "prod_code": "产品", "factory": "厂别", "step_id": "站点",
         "param_name": "参数", "period_label": "周期", "period_type": "周期类型",
-        "cpk_corrected": "CPK", "flag": "已修饰", "status": "判定状态",
+        "cpk_corrected": "CPK", "flag": "已达标", "status": "判定状态",
     })
-    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", "CPK", "已修饰", "判定状态") if column in display]
+    if "判定状态" in display:
+        display["判定状态"] = display["判定状态"].replace("已修饰或达标", "达标")
+    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", "CPK", "已达标", "判定状态") if column in display]
     st.dataframe(display[columns], hide_index=True, width="stretch")
 
 
@@ -60,10 +65,14 @@ def render_cpk_monitor_section(
     )
     clicked = columns[2].button("查询", type="primary", key="cpk_monitor_query_submit")
     signature = (tuple(sorted(products)), tuple(sorted(factories)))
-    if clicked:
+    refresh_data = render_board_refresh_controls(
+        key="cpk_monitor", clear_cache=clear_cpk_source_cache,
+        query_state_key="cpk_monitor_query_signature",
+        selection_valid=bool(products and factories),
+    )
+    if clicked or refresh_data:
         st.session_state["cpk_monitor_query_signature"] = signature
     if st.session_state.get("cpk_monitor_query_signature") != signature:
-        st.info("选择产品和厂别后，点击查询生成 CPK 预警看板。")
         return
     if not products or not factories:
         st.warning("请至少选择一个产品和厂别。")
@@ -73,6 +82,6 @@ def render_cpk_monitor_section(
             view = service.build_dashboard(products=products, factories=factories)
     except Exception:
         logger.exception("CPK warning dashboard query failed")
-        st.error("CPK 查询失败，请检查规格、修饰配置和汇总工作簿是否可读取。")
+        st.error("CPK 数据读取失败，请稍后重试。")
         return
     render_cpk_monitor_results(view)

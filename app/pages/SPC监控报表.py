@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -128,9 +129,9 @@ try:
             decision_signature=decision_signature,
         )
 except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):
+    logging.getLogger(__name__).exception("SPC report inputs could not be read")
     st.error(
-        "SPC 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
-        "然后点击页头“刷新缓存”重试。"
+        "SPC 数据读取失败，请稍后重试。"
     )
     st.stop()
 except SPC_REPORT_BUILD_ERRORS:

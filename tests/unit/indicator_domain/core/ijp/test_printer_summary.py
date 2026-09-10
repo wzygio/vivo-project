@@ -55,7 +55,8 @@ def test_chart_keeps_six_positions_and_zero_labels():
     assert list(figure.data[0].x) == list(PRINTER_CODES)
     assert list(figure.data[0].y) == [0, 100, 0, 0, 0, 0]
     assert figure.data[0].text[0] == "0.00%"
-    assert "实际占比" in figure.data[0].hovertemplate
+    assert "占比 %{y:.2f}%" in figure.data[0].hovertemplate
+    assert "实际占比" not in figure.data[0].hovertemplate
 
 
 @pytest.mark.parametrize("values", [[], ["C3RA1"], ["C3DM1", "C3DM1"]])

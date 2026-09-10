@@ -208,12 +208,12 @@ def test_matrix_renders_title_legend_groups_and_four_states() -> None:
     assert by_key[matrix_cell_button_key("aoi_rs_sheet_oos", "M678")].label == "🟢"
 
 
-def test_error_cell_tooltip_carries_message() -> None:
+def test_error_cell_tooltip_hides_internal_message() -> None:
     app = _new_app("render-tooltip").run()
 
     error_button = app.button(key=matrix_cell_button_key("yield_lot_oos", "Z571"))
     assert "加载失败" in error_button.help
-    assert "修饰工作簿读取失败" in error_button.help
+    assert error_button.help == "数据加载失败，请稍后重试。"
     no_data_button = app.button(key=matrix_cell_button_key("ctq_sheet_oos", "M678"))
     assert no_data_button.help == "达标：上一周期无预警"
 
@@ -395,7 +395,7 @@ def test_click_error_cell_shows_message_without_loading(
     app.button(key=matrix_cell_button_key("yield_lot_oos", "Z571")).click().run()
 
     assert not app.exception
-    assert any("修饰工作簿读取失败" in w.value for w in app.warning)
+    assert any(w.value == "数据加载失败，请稍后重试。" for w in app.warning)
     assert factory_calls == []
 
 

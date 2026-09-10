@@ -58,7 +58,7 @@ from app.sections.equipment_domain.parts_dashboard import (
 # ==============================================================================
 
 BASELINE_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline", "critical_parts_baseline.csv")
-PARTS_REPORT_CACHE_SIGNATURE = "parts_report_manual_refresh_v1"
+PARTS_REPORT_CACHE_SIGNATURE = "parts_report_current_dates_v2"
 
 
 # ==============================================================================

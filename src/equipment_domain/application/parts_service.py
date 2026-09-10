@@ -188,7 +188,7 @@ class PartsReportService:
         if not valid_times.empty:
             parsed_times = pd.to_datetime(valid_times, errors="coerce")
             valid_parsed = parsed_times.dropna()
-            last_update = str(valid_parsed.max()) if not valid_parsed.empty else ""
+            last_update = valid_parsed.max().strftime("%Y-%m-%d") if not valid_parsed.empty else ""
         else:
             last_update = ""
 

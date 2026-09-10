@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -98,9 +99,9 @@ product_revision = get_indicator_product_revision("aoi_tt_sheet_oos", current_pr
 try:
     decision_signature = get_scope_decision_signature("aoi_tt", current_product)
 except SheetOosDecorationReadError:
+    logging.getLogger(__name__).exception("AOI TT report inputs could not be read")
     st.error(
-        "AOI_TT 超规片修饰表读取失败。请确认 Excel 文件可正常打开且未被锁定，"
-        "然后点击页头“刷新缓存”重试。"
+        "AOI_TT 数据读取失败，请稍后重试。"
     )
     st.stop()
 

@@ -31,15 +31,10 @@ def build_qtime_figure(
             x=_lot_ids(group),
             y=_numeric_column(group, "wait_time"),
             name=str(step_name),
+            showlegend=False,
             marker_color=BAR_COLORS[index % len(BAR_COLORS)],
-            customdata=pd.DataFrame({
-                "raw_wait": group.get("wait_time_raw", group.get("wait_time")),
-                "raw_spec": group.get("q_spec_raw", group.get("q_spec")),
-            }, index=group.index),
             hovertemplate=(
-                "Lot %{x}<br>展示等待时长 %{y:.2f} h"
-                "<br>原始等待时长 %{customdata[0]:.2f} h"
-                "<br>源规格 %{customdata[1]:.2f} h<extra></extra>"
+                "Lot %{x}<br>等待时长 %{y:.2f} h<extra></extra>"
             ),
         )
 

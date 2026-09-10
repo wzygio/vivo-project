@@ -55,4 +55,4 @@ def render_qtime_alert_center(alerts: pd.DataFrame, *, total_lots: int) -> None:
                 },
             )
         else:
-            st.success("当前查询窗口内未发现已确认真实超规（flag=False）的 Q-Time 记录。")
+            st.success("当前查询窗口内未发现超规的 Q-Time 记录。")

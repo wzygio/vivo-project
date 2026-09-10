@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from datetime import date
 
@@ -34,6 +35,7 @@ from src.shared_kernel.data_health import attach_data_health
 
 RESULT_STATE_KEY = "qtime_report_result"
 SIGNATURE_STATE_KEY = "qtime_report_signature"
+logger = logging.getLogger(__name__)
 
 
 def render_qtime_dashboard(service: QTimeReportService) -> None:
@@ -139,12 +141,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             monitoring.alerts,
             total_lots=details["lot_id"].nunique(),
         )
-    if "wait_time_raw" in details and (
-        details["wait_time"].ne(details["wait_time_raw"]).any()
-        or details["q_spec"].ne(details["q_spec_raw"]).any()
-    ):
-        st.caption("图表已应用报表规格及等待时长修饰；悬停可查看原始值，真实超规预警保留。")
-
     for index, step_option in enumerate(step_options):
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
         with st.expander(step_option.label, expanded=True):
@@ -248,8 +244,9 @@ def _run_query(
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))
         return
-    except (QTimeDataAccessError, QTimeDecorationAccessError) as exc:
-        st.error(str(exc))
+    except (QTimeDataAccessError, QTimeDecorationAccessError):
+        logger.exception("Q-Time report query failed")
+        st.error("Q-Time 数据读取失败，请稍后重试。")
         return
 
     st.session_state[RESULT_STATE_KEY] = _filter_monitoring_result(
