@@ -42,6 +42,11 @@ def load_particle_size_counts(
     policy = data_forward_policy or ConfigLoader.get_data_forward_policy()
     display_start = pd.Timestamp(query.start_date)
     display_end = pd.Timestamp(query.end_date) + pd.Timedelta(days=1)
+    # The loaders aggregate with MIN(time)/COUNT(*); cap before aggregation.
+    display_end = min(
+        display_end,
+        ConfigLoader.get_report_cutoff_policy().boundary() + pd.Timedelta(microseconds=1),
+    )
     source_start, source_end = policy.to_source_window(display_start, display_end)
     loaders = []
     if requested_factory in {None, "ARRAY"}:
@@ -68,4 +73,7 @@ def load_particle_size_counts(
         normalized["particle_qty"], errors="coerce"
     ).fillna(0)
     normalized = normalized.dropna(subset=["start_time"])
-    return policy.shift_frame(normalized, ("start_time",)).reset_index(drop=True)
+    displayed = policy.shift_frame(normalized, ("start_time",))
+    return ConfigLoader.get_report_cutoff_policy().filter_frame(
+        displayed, "start_time",
+    ).reset_index(drop=True)

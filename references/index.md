@@ -12,6 +12,7 @@
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/Inline_domain/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/Inline_domain/architecture-inline-infrastructure.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/Inline_domain/data-flow-spc.md) |
+| 全指标预警矩阵、每天 07:30 计划任务、跨进程预计算快照 | [矩阵定时预计算](domain/inline_domain/data-flow-alert-matrix-schedule.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/Inline_domain/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/Inline_domain/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/Inline_domain/data-flow-aoi-tt.md) |
@@ -30,6 +31,8 @@
 | 问题 / 关键词 | 首选文件 |
 |---|---|
 | 数据修饰统一语义、原始事实 / 决策台账 / 报表投影、分层职责 | [数据修饰架构范式](design/feat_design/architecture-data-decoration.md) |
+| Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间 | [系统数据刷新机制](design/system_design/data-flow-infrastructure-refresh.md) |
+| 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/system_design/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/feat_design/architecture-data-health-and-outbound-ports.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/feat_design/interaction-inline-report-scroll.md) |
 
@@ -37,7 +40,7 @@
 
 ## 文件命名规则
 
-适用于 `references/domain/` 和 `references/design/feat_design/` 中的知识文件：
+适用于 `references/domain/`、`references/design/feat_design/` 和 `references/design/system_design/` 中的知识文件：
 
 ```text
 <类型前缀>-<具体程序或业务主题>.<扩展名>
@@ -79,6 +82,6 @@ rg --files references/domain references/design/feat_design -g 'algorithm-*.md'
 ## 维护约定
 
 - 新增、重命名或调整文档范围时，同步更新本路由的问题关键词、路径和相关引用；本文件允许路由到具体文件。
-- 当前知识放在 `domain/`，跨域范式与功能设计放在 `design/feat_design/`；决策背景与取舍继续记录在 `docs/ADR/`。
+- 当前领域知识放在 `domain/`，跨域范式与功能设计放在 `design/feat_design/`，系统级机制放在 `design/system_design/`；决策背景与取舍继续记录在 `docs/ADR/`。
 - 每条规则维护一个权威位置，概览和其他文档通过链接引用。核验日期表示实际核验时间；设计意图与已验证实现应明确区分。
 - 修改完成后检查新文件名、路由覆盖、链接目标及旧名称残留。发现索引遗漏时，补充已确认的入口。

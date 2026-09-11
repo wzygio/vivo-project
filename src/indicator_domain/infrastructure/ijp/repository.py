@@ -26,6 +26,7 @@ from src.indicator_domain.core.ijp.overflow import (
     map_panel_location,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -148,7 +149,7 @@ class IjpRepository:
         return frame.reindex(columns=GLASS_COLUMNS)
 
     def fetch_daily_counts(self, query: IjpQuery) -> pd.DataFrame:
-        """Untruncated raw counts by display day, for monthly/weekly aggregation."""
+        """Counts by display day after applying the latest-day time boundary."""
         select = (
             "SELECT P.PRODUCTCODE AS productcode, "
             "SUBSTR(H.SUB_EQUIP_ID, 1, 6) AS line, H.SUB_EQUIP_ID AS printer, "
@@ -195,7 +196,7 @@ class IjpRepository:
         sql = f"{select}\n{_JOINED_FROM}"
         source_start, source_end = self._data_forward_policy.to_source_window(
             pd.Timestamp(window_start),
-            pd.Timestamp(query.end_time),
+            load_report_cutoff_policy().cap_end(query.end_time),
         )
         params: dict[str, object] = {
             "start_time": _format_timestamp(source_start.to_pydatetime()),
@@ -236,7 +237,7 @@ class IjpRepository:
     def _window_params(self, start_time: datetime, end_time: datetime) -> dict[str, object]:
         source_start, source_end = self._data_forward_policy.to_source_window(
             pd.Timestamp(start_time),
-            pd.Timestamp(end_time),
+            load_report_cutoff_policy().cap_end(end_time),
         )
         return {
             "start_time": _format_timestamp(source_start.to_pydatetime()),

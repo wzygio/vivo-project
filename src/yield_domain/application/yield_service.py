@@ -130,7 +130,7 @@ class YieldAnalysisService:
             "analysis_end_date": end_dt.strftime("%Y-%m-%d"),
             "modifier_signature": YieldAnalysisService.compute_snapshot_signature(
                 YieldAnalysisService.resolve_modifier_table_path(config, product_dir)
-            ),
+            ) + "|" + ConfigLoader.get_report_cutoff_policy().signature,
             "warning_signature": (
                 YieldAnalysisService.compute_snapshot_signature(warning_path)
                 if warning_path is not None

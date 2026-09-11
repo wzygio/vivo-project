@@ -15,6 +15,7 @@ from src.indicator_domain.core.ijp.period_summary import CODE_DESCRIPTIONS
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
+from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 TABLE_COLUMN_MAP = {
     "print_time": "Print Time",
@@ -190,7 +191,10 @@ def _run_query(
 
 
 def _filter_signature(*values: object) -> tuple[object, ...]:
-    return tuple(tuple(value) if isinstance(value, list) else value for value in values)
+    return (
+        *tuple(tuple(value) if isinstance(value, list) else value for value in values),
+        load_report_cutoff_policy().signature,
+    )
 
 
 def _render_grouped_glass_charts(

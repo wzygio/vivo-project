@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 # 引入我们定义的 Pydantic 模型
 from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.data_forward import DataForwardPolicy
+from src.shared_kernel.report_cutoff import ReportCutoffPolicy
 
 class ConfigLoader:
     """
@@ -172,6 +173,13 @@ class ConfigLoader:
             enabled=data_forward.get("enabled", False),
             offset_days=data_forward.get("offset_days", 4),
         )
+
+    @classmethod
+    def get_report_cutoff_policy(cls) -> ReportCutoffPolicy:
+        """Read the global latest-day cutoff; never derive it from UI dates."""
+        from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
+
+        return load_report_cutoff_policy(cls)
 
     @classmethod
     def get_cache_ttl_seconds(cls) -> int:

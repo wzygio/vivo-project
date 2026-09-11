@@ -133,6 +133,10 @@ app/ ──调用──> application/ ──使用──> core/
 | `resources/` | 规格、人工维护台账、基线与静态输入；部分资源仍在根部，不假设全部按领域迁移 |
 | `data/`、`output/` | 前者为运行快照；后者为可重建报告、日志、下载与测试产物。不得将人工维护数据当临时产物清理 |
 | `tools/` | 刷新、诊断和离线分析；独立离线能力不因使用同类业务数据就必须归入报表领域 |
+
+全指标矩阵的定时入口位于 `tools/`，复用 app 层跨域组装，并由 app 层矩阵快照适配器
+保存原生 JSON 状态至 `output/cache/alert_matrix/`。页面按日期、TTL、源签名和指标版本消费，
+缺失或失效项回到既有计算路径；具体运行约定见 [矩阵定时预计算](references/domain/inline_domain/data-flow-alert-matrix-schedule.md)。
 | `tests/` | 单元、架构、集成与浏览器证据；兼有镜像目录和扁平命名，需检索确认 |
 
 ## AI 按任务定位代码

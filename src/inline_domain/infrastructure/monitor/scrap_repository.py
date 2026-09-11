@@ -111,6 +111,7 @@ class InlineScrapRepository:
                 df,
                 ("sheet_start_time",),
             )
+            df = ConfigLoader.get_report_cutoff_policy().filter_frame(df, "sheet_start_time")
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
             return df
 

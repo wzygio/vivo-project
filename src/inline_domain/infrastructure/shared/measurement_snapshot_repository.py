@@ -81,7 +81,10 @@ class InlineMeasurementSnapshotRepository:
         result = self._load_measurements(prod_code, end_date, force_refresh)
         if force_refresh:
             self.last_refresh_from_db = result.refreshed_from_db
-        return self.data_forward_policy.shift_frame(result.measurements, ("start_time",))
+        return ConfigLoader.get_report_cutoff_policy().filter_frame(
+            self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
+            "start_time",
+        )
 
     def refresh_measurements(
         self,
@@ -97,7 +100,10 @@ class InlineMeasurementSnapshotRepository:
         result = self._load_measurements(prod_code, end_date, force_refresh=True)
         self.last_refresh_from_db = result.refreshed_from_db
         return MeasurementRefreshResult(
-            self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
+            ConfigLoader.get_report_cutoff_policy().filter_frame(
+                self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
+                "start_time",
+            ),
             result.refreshed_from_db,
         )
 

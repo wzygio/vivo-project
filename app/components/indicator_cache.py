@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 INDICATOR_CACHE_REVISION_DIR = Path("output/tmp/indicator_product_cache_revisions")
 
@@ -55,5 +56,6 @@ def build_indicator_product_cache_signature(
     return (
         f"{base_signature}|product={str(product_code).strip().upper()}"
         f"|indicators={revisions!r}"
+        f"|report_cutoff={load_report_cutoff_policy().signature}"
         f"|data_forward={ConfigLoader.get_data_forward_policy().signature}"
     )

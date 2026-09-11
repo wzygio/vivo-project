@@ -64,6 +64,7 @@ class PanelRepository:
         req_end = pd.Timestamp(query.end_date)
         source_start, source_end = self.data_forward_policy.to_source_window(req_start, req_end)
         time_col = "warehousing_time"
+        event_col = "warehousing_event_time"
         cache = None
         cache_health = make_data_health("unknown")
         fresh = False
@@ -86,7 +87,7 @@ class PanelRepository:
                     cache_health["status"] == "unknown" and not cache.empty
                     and cache[time_col].max().date() >= min(source_end, pd.Timestamp.now()).date()
                 )
-                fresh = age < self.SNAPSHOT_TTL_HOURS and (covered or legacy_covered)
+                fresh = age < self.SNAPSHOT_TTL_HOURS and (covered or legacy_covered) and event_col in cache
             except Exception:
                 logging.warning("YIELD_SNAPSHOT_READ_FAILED")
                 cache = None
@@ -99,6 +100,7 @@ class PanelRepository:
                 fetch_start = source_start
                 incremental = (
                     cache is not None and not cache.empty and not force_refresh
+                    and event_col in cache
                     and bool(cache_health["source_start"])
                     and pd.Timestamp(cache_health["source_start"]) <= source_start
                 )
@@ -108,8 +110,15 @@ class PanelRepository:
                     fetch_start.strftime("%Y-%m-%d"), source_end.strftime("%Y-%m-%d"),
                     query.product_code, self.data_policy.work_order_types,
                 )
+                if delta.empty and event_col not in delta:
+                    delta = delta.assign(**{event_col: pd.Series(dtype="datetime64[ns]")})
                 if not delta.empty:
                     delta[time_col] = pd.to_datetime(delta[time_col])
+                    if event_col in delta:
+                        delta[event_col] = pd.to_datetime(
+                            delta[event_col].astype("string"),
+                            format="%Y%m%d%H%M%S%f", errors="coerce",
+                        )
                 # Successful empty chunks are facts, not connection failures.
                 result = pd.concat([cache, delta], ignore_index=True) if incremental else delta
                 if not result.empty:
@@ -138,10 +147,16 @@ class PanelRepository:
                     refreshed_at=cache_health["refreshed_at"], error_code="YIELD_SOURCE_UNAVAILABLE",
                 )
         if not result.empty:
-            result = self.data_forward_policy.shift_frame(result, (time_col,))
+            result = self.data_forward_policy.shift_frame(result, (time_col, event_col))
+            cutoff = ConfigLoader.get_report_cutoff_policy().boundary()
+            # first_ship_date owns business-day grouping; actual shipment may be later.
+            historical = result[time_col].dt.normalize().lt(cutoff.normalize())
+            event_time = pd.to_datetime(result.get(event_col, pd.Series(pd.NaT, index=result.index)))
+            latest = result[time_col].dt.normalize().eq(cutoff.normalize()) & event_time.le(cutoff)
+            result = result.loc[historical | latest].drop(columns=[event_col], errors="ignore").copy()
             result = result[(result[time_col] >= req_start) & (result[time_col] <= req_end)].copy()
             result = self._apply_data_policy(result).reset_index(drop=True)
-        return attach_data_health(result, health)
+        return attach_data_health(result.drop(columns=[event_col], errors="ignore"), health)
 
     def _fetch_from_db_in_chunks(
         self,

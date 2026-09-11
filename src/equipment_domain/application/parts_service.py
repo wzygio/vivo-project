@@ -27,6 +27,7 @@ from src.equipment_domain.core.parts_calculator import (
 )
 from src.equipment_domain.config import get_equipment_runtime_config
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 from src.shared_kernel.cache_ports import cache_default_port
 
 if TYPE_CHECKING:
@@ -64,7 +65,7 @@ def build_parts_report_cache_context(baseline_path: str | Path) -> dict[str, str
         "as_of_date": date.today().isoformat(),
         "baseline_signature": _file_signature(Path(baseline_path)),
         "runtime_config_signature": hashlib.sha256(
-            runtime_payload.encode("utf-8")
+            (runtime_payload + load_report_cutoff_policy().signature).encode("utf-8")
         ).hexdigest()[:16],
     }
 

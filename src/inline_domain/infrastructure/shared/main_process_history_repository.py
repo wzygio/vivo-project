@@ -186,7 +186,10 @@ class InlineMainProcessHistoryRepository:
             format="%Y%m%d%H%M%S",
             errors="coerce",
         )
-        return self.data_forward_policy.shift_frame(
+        displayed = self.data_forward_policy.shift_frame(
             history[HISTORY_OUTPUT_COLUMNS],
             (MAIN_PROCESS_EVENT_TIME_COLUMN,),
+        )
+        return ConfigLoader.get_report_cutoff_policy().filter_frame(
+            displayed, MAIN_PROCESS_EVENT_TIME_COLUMN,
         )

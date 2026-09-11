@@ -135,7 +135,10 @@ class QTimeRepository:
         return attach_data_health(self._to_display_details(source, query), health)
 
     def cache_signature(self, shop: Shop) -> tuple[object, ...]:
-        signature = (QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature)
+        signature = (
+            QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature,
+            ConfigLoader.get_report_cutoff_policy().signature,
+        )
         if self._snapshot_store is None:
             return signature
         try:
@@ -397,12 +400,14 @@ class QTimeRepository:
     def _normalize_source_details(frame: pd.DataFrame) -> pd.DataFrame:
         normalized = frame.copy()
         normalized.columns = normalized.columns.str.lower()
+        precise_time = normalized.get("_source_event_time")
         normalized = normalized.reindex(columns=DETAIL_COLUMNS)
         for column in ("prod_qty", "q_spec", "wait_time"):
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
         # The source uses YYYYMMDDHHMMSSffffff; snapshots/report keys use seconds.
         # Accept both contracts without treating the microsecond suffix as invalid.
-        timekeys = normalized["timekey"].astype("string").str.replace(
+        raw_timekeys = normalized["timekey"].astype("string")
+        timekeys = raw_timekeys.str.replace(
             r"^(\d{14})\d{6}$", r"\1", regex=True
         )
         source_time = pd.to_datetime(
@@ -411,6 +416,11 @@ class QTimeRepository:
             errors="coerce",
         )
         normalized["timekey"] = source_time.dt.strftime("%Y%m%d%H%M%S")
+        # Retain source precision for the inclusive cutoff; public keys stay seconds.
+        if precise_time is None:
+            micros = pd.to_numeric(raw_timekeys.str[14:].where(raw_timekeys.str.len().eq(20), "0"), errors="coerce")
+            precise_time = source_time + pd.to_timedelta(micros, unit="us")
+        normalized["_source_event_time"] = pd.to_datetime(precise_time, errors="coerce")
         return normalized
 
     def _to_display_details(
@@ -418,14 +428,17 @@ class QTimeRepository:
         source: pd.DataFrame,
         query: QTimeQuery,
     ) -> pd.DataFrame:
-        displayed = self._data_forward_policy.shift_frame(source, ("timekey",))
+        displayed = self._data_forward_policy.shift_frame(source, ("timekey", "_source_event_time"))
+        displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(
+            displayed, "_source_event_time" if "_source_event_time" in displayed else "timekey",
+        )
         display_time = pd.to_datetime(displayed["timekey"], errors="coerce")
         mask = display_time.ge(query.start_time) & display_time.lt(query.end_time)
         mask &= displayed["step_desc"].isin(query.step_descriptions)
         if query.products:
             mask &= displayed["prodcode"].isin(query.products)
         displayed["timekey"] = display_time.dt.strftime("%Y%m%d%H%M%S")
-        return displayed.loc[mask].reset_index(drop=True)
+        return displayed.loc[mask].drop(columns=["_source_event_time"], errors="ignore").reset_index(drop=True)
 
     def _read_snapshot(
         self,

@@ -39,6 +39,7 @@ def load_panel_details(
         substr(dwp.panel_id, 1, 11) as sheet_id, 
         dwp.panel_id as panel_id, 
         dwp.first_ship_date as warehousing_time, 
+        dwp.first_ship_time as warehousing_event_time,
         dmp.productcode as prod_code, 
         ddwd.defect_code as defect_code,
         icdg.defect_desc as defect_desc, 

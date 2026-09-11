@@ -14,6 +14,8 @@ SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
   `ConfigLoader` 深度合并为 `AppConfig`。
 - `resources/` 保存受版本控制的业务输入、产品规格和人工修饰文件；`data/`
   保存本地运行数据和 Parquet 快照；`output/` 仅存放可重建产物。
+- 全指标预警矩阵可由 Windows 每日 07:30 任务预计算，通过当天有效的本地状态快照跨进程复用，
+  页面按原有源签名与产品指标版本校验结果。运行约定见 [矩阵定时预计算](references/domain/inline_domain/data-flow-alert-matrix-schedule.md)。
 
 ## Directory Guide
 
@@ -53,6 +55,8 @@ SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
   表格列菜单、悬浮提示和导出内容，确认没有权限或双版本线索。
 - 报表日期前推只改变仓储输出的显示时间轴；数据库事实与原始 Parquet 保持源时间，
   直接查询窗口需在仓储边界反向换算，相关缓存签名需包含前推策略。
+- 最新报表日以服务器当天为准，在仓储输出边界按全局 `report_cutoff.latest_day_time`
+  截断（默认中午 12 点，含）；历史筛选日期不截半天，原始快照保留完整窗口。
 - 未获得具体任务与回归证明前，不重构已验证的 Yield 浓度和 Mapping 算法。
 - 不随意修改 `DatabaseManager` 的单例与重试语义。
 - 不移除页面数据流中的 `st.cache_data`；缓存只跨越原生 payload，ViewModel

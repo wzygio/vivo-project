@@ -9,6 +9,23 @@ from src.equipment_domain.application import parts_service
 from src.equipment_domain.infrastructure import report_data_adapter
 
 
+def test_parts_cache_context_accepts_config_class_loaded_before_cutoff_api(monkeypatch, tmp_path):
+    from src.shared_kernel.config import ConfigLoader
+    from src.equipment_domain.infrastructure import data_loader
+
+    monkeypatch.delattr(ConfigLoader, "get_report_cutoff_policy")
+    context = parts_service.build_parts_report_cache_context(tmp_path / "baseline.csv")
+    assert context["runtime_config_signature"]
+    raw = pd.DataFrame({"glass_start_time": [pd.Timestamp.now().normalize() - pd.Timedelta(days=1)]})
+    monkeypatch.setattr(data_loader, "load_part_life_snapshot", lambda *args: raw.copy())
+    monkeypatch.setattr(data_loader, "load_fabricated_part_life_snapshot", lambda *args, **kwargs: raw.copy())
+    real, fabricated = data_loader.load_report_part_life_snapshots(
+        object(), pd.DataFrame(), as_of=pd.Timestamp.now(), max_age_days=3,
+    )
+    pd.testing.assert_frame_equal(real, raw)
+    pd.testing.assert_frame_equal(fabricated, raw)
+
+
 def test_today_cache_key_does_not_pass_end_of_day_as_current_time(monkeypatch) -> None:
     import pytest
 

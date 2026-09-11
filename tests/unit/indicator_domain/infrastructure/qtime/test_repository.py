@@ -301,6 +301,10 @@ def test_expired_snapshot_refresh_replaces_overlap_and_prunes_old_month(
     tmp_path,
     monkeypatch,
 ) -> None:
+    from src.shared_kernel.report_cutoff import ReportCutoffPolicy
+
+    # This scenario advances through October; keep its wall clock explicit.
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-10-02 12:00:00"))
     responses = iter(
         [
             pd.DataFrame(

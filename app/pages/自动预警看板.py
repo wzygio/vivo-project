@@ -44,6 +44,7 @@ from app.sections.inline_domain.monitor.refresh_controls import (
     clear_oos_source_cache,
     render_board_refresh_controls,
 )
+from app.sections.inline_domain.monitor.alert_matrix_snapshot import has_daily_matrix_snapshot
 from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorService,
     OosMonitorViewModel,
@@ -133,6 +134,16 @@ except Exception:
 # 已加载状态存 session_state，普通 rerun 保持可见；刷新只影响本看板。
 # --------------------------------------------------------------------------
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
+ALERT_MATRIX_AUTO_OPENED_KEY = "alert_matrix_auto_opened_date"
+
+today_label = pd.Timestamp.today().date().isoformat()
+if (
+    not st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY)
+    and st.session_state.get(ALERT_MATRIX_AUTO_OPENED_KEY) != today_label
+    and has_daily_matrix_snapshot()
+):
+    st.session_state[ALERT_MATRIX_LOADED_STATE_KEY] = True
+    st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
 
 
 def _load_alert_matrix() -> None:
@@ -142,6 +153,7 @@ def _load_alert_matrix() -> None:
 def _collapse_alert_matrix() -> None:
     st.session_state.pop(ALERT_MATRIX_LOADED_STATE_KEY, None)
     st.session_state.pop(MATRIX_SELECTION_STATE_KEY, None)
+    st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
 
 
 def _render_matrix_action_button() -> None:

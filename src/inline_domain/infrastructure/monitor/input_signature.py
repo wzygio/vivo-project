@@ -6,6 +6,8 @@ import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 
+from src.shared_kernel.config import ConfigLoader
+
 
 def monitor_input_signature(
     project_root: Path,
@@ -34,7 +36,7 @@ def monitor_input_signature(
         if root.exists():
             paths.update(root.glob("inline_measurements*"))
             paths.update(root.glob("aoi_rs_*"))
-    parts = []
+    parts = [ConfigLoader.get_report_cutoff_policy().signature]
     for path in sorted(paths):
         stat = path.stat()
         parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")

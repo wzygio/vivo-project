@@ -28,6 +28,7 @@ from src.equipment_domain.infrastructure.fake_data_updater import (
     ensure_fabricated_snapshot_file,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -294,8 +295,8 @@ def load_report_part_life_snapshots(
         now=as_of,
     )
     return (
-        recent_source_snapshot.copy(),
-        source_fabricated_snapshot.copy(),
+        load_report_cutoff_policy().filter_frame(recent_source_snapshot, "glass_start_time"),
+        load_report_cutoff_policy().filter_frame(source_fabricated_snapshot, "glass_start_time"),
     )
 
 def _generate_baseline_csv_from_excel(csv_path: Path) -> None:

@@ -7,6 +7,11 @@ data_forward:
   enabled: true
   offset_days: 4
 
+# 仅服务器当天的报表数据截止到此时刻（含）；日期前推在仓储边界换算。
+# 历史日期仍保留整天；原始快照不截断，以便次日恢复完整历史。
+report_cutoff:
+  latest_day_time: "12:00:00"
+
 # 各 domain 配置文件路由（domain 配置文件路径的唯一真理来源）
 domain_config:
   inline_domain: config/domain/inline_domain.yaml

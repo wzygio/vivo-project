@@ -25,6 +25,8 @@ import pandas as pd
 import streamlit as st
 from pydantic import ValidationError
 
+from app.sections.inline_domain.monitor.alert_matrix_snapshot import DailyMatrixSnapshot
+
 from app.components.indicator_cache import (
     build_indicator_product_cache_signature,
     get_indicator_product_revision,
@@ -286,6 +288,8 @@ def get_cached_alert_matrix(
     _context_factory: Callable[[], AlertMatrixContext] | None = None,
     _signature_provider: Callable[[str, str], str] | None = None,
     _revision_provider: Callable[[str, str], str] | None = None,
+    _snapshot_store: DailyMatrixSnapshot | None = None,
+    reuse_snapshot: bool = True,
 ) -> dict[str, Any]:
     """矩阵 payload 的缓存入口（普通 rerun 命中缓存，签名/周变化才重建）。"""
     product_tuple = (
@@ -301,6 +305,12 @@ def get_cached_alert_matrix(
     source_signature = _signature_provider or build_cell_source_signature
     revision_provider = _revision_provider or get_indicator_product_revision
     context = factory()  # construction is lazy: no DB/SPC/Yield calculation here
+    # Custom providers are isolated unless they explicitly inject a store.
+    production = all(provider is None for provider in (
+        _context_factory, _signature_provider, _revision_provider,
+    ))
+    store = _snapshot_store or (DailyMatrixSnapshot() if production else None)
+    daily = store.read(reference, ConfigLoader.get_cache_ttl_seconds()) if store and reuse_snapshot else None
 
     def load_cell(
         row: AlertMatrixRow, product: str, active_context: AlertMatrixContext,
@@ -309,6 +319,7 @@ def get_cached_alert_matrix(
             revision = revision_provider(row.row_key, product)
             signature = build_alert_matrix_signature(products=(product,), components={
                 "indicator": row.row_key, "source": source_signature(row.row_key, product),
+                "report_cutoff": ConfigLoader.get_report_cutoff_policy().signature,
                 "revision": revision, "week": week_start.isoformat(),
                 "as_of": reference.isoformat() if row.row_key == "qtime_sheet_oos" else None,
             })
@@ -318,6 +329,9 @@ def get_cached_alert_matrix(
                 "state": "error", "detail_key": f"{row.row_key}|{product}",
                 "message": str(exc)[:200], "alert_factories": [],
             }
+        saved_cell = daily["cells"].get((row.row_key, product)) if daily else None
+        if saved_cell and saved_cell.get("cache_signature") == signature:
+            return dict(saved_cell)
         return _cached_alert_matrix_cell(
             row.row_key, product, week_start.isoformat(), signature, revision,
             lambda: row.evaluator(product, active_context),

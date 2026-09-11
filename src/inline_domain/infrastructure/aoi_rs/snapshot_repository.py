@@ -167,6 +167,7 @@ class AoiRsSnapshotRepository:
 
     def _filter_window(self, details: pd.DataFrame, query: AoiRsQueryConfig) -> pd.DataFrame:
         displayed = self.data_forward_policy.shift_frame(details, ("start_time",))
+        displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(displayed, "start_time")
         start = pd.Timestamp(query.start_date)
         end = pd.Timestamp(query.end_date) + pd.Timedelta(days=1)
         time = pd.to_datetime(displayed["start_time"], errors="coerce")

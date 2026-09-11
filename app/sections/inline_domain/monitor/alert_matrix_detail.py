@@ -8,7 +8,8 @@
   详情额外跟踪规格、修饰与趋势/Lot/Sheet 版本，同一版输入再次打开命中缓存；
 - **ADR-0001**：详情数据包只含原生载荷（DataFrame / dict / list / 标量），
   各域 ViewModel 在缓存边界外即时消费，不进入缓存；
-- **图像复用**：SPC（单片异常 / CPK）走 ``render_spc_indicator_sections`` 的
+- **图像复用**：CPK 默认只读台账，绘制命中指标截至上周的历史周记录；
+  SPC 单片异常走 ``render_spc_indicator_sections`` 的
   RenderGate ``collect_memoized``；CTQ 走 ``render_ctq_indicator_sections``
   （同款 memo 参数）；Yield 走 ``render_alert_code_expanders``
   （collect_memoized）；Q-Time 由本层 RenderGate ``collect_memoized`` 包装
@@ -378,15 +379,28 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
 
 
 def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
-    """SPC 趋势波动（CPK）行：上一周 CPK 预警表 + 命中指标帧。"""
+    """上一周 CPK 预警及同一台账中的历史周记录；不加载或回写原始 SPC。"""
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
         frame = cpk_latest_store().read_product(prod_code)
         alerts_df = (build_latest_cpk_alerts(frame, reference_date)
                      if frame is not None and not frame.empty else pd.DataFrame())
+        history = pd.DataFrame()
+        if not alerts_df.empty:
+            keys = alerts_df.rename(columns={"厂别": "factory", "站点": "step_id", "参数名称": "param_name"})
+            key_columns = ["factory", "step_id", "param_name"]
+            history = frame.loc[frame["period_type"].eq("week")].merge(
+                keys[key_columns].drop_duplicates(), on=key_columns, how="inner",
+            )
+            history["week_start"] = pd.to_datetime(
+                history["period_label"] + "-1", format="%G-W%V-%u", errors="coerce",
+            )
+            previous_start, _ = previous_iso_week_range(reference_date)
+            history = history.loc[history["week_start"].le(previous_start)].copy()
         return {
             "kind": "spc_cpk_excel",
             "alerts_df": alerts_df,
+            "history_df": history,
         }
 
     return load
@@ -695,6 +709,37 @@ def _render_sheet_oos_detail(
             )
 
 
+def _render_spc_cpk_ledger_detail(
+    bundle: Mapping[str, Any], *, prod_code: str, week_label: str,
+    step_desc_map: dict[str, str] | None,
+) -> None:
+    from app.charts.inline_domain.cpk_ledger_chart import build_cpk_ledger_figure
+    from app.utils.step_labels import format_step_label
+    from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD
+
+    alerts = bundle["alerts_df"]
+    with st.expander(f"CPK 预警明细（上一周 {week_label}，CPK < {CPK_THRESHOLD:.2f}）", expanded=True):
+        if alerts.empty:
+            st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
+            return
+        display = alerts.copy()
+        if step_desc_map:
+            display["站点"] = display["站点"].map(lambda step: format_step_label(step, step_desc_map))
+        st.dataframe(display, hide_index=True, width="stretch")
+    history = bundle.get("history_df", pd.DataFrame())
+    if history.empty:
+        st.caption("预警指标暂无可绘制的历史周 CPK 台账记录。")
+        return
+    with st.expander("CPK 自动预警指标图像（历史周台账）", expanded=True):
+        st.caption("仅展示命中预警指标截至上周的台账 CPK；红点表示台账预警。缺失周不代表达标，单周记录仅显示一个点。")
+        for (factory, step, param), records in history.groupby(["factory", "step_id", "param_name"], sort=False):
+            label = format_step_label(step, step_desc_map) if step_desc_map else str(step)
+            with st.expander(f"{factory} | {label} | {param}", expanded=True):
+                chart_id = hashlib.sha256(f"{prod_code}|{factory}|{step}|{param}".encode()).hexdigest()[:16]
+                st.plotly_chart(build_cpk_ledger_figure(records), width="stretch",
+                                key=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_cpk_ledger_{chart_id}")
+
+
 def _render_spc_cpk_detail(
     bundle: Mapping[str, Any],
     *,
@@ -853,11 +898,9 @@ def _render_detail_bundle(
             memo_base=memo_base,
         )
     elif kind == "spc_cpk_excel":
-        with st.expander(f"CPK 预警明细（上一周 {week_label}，CPK < 1.33）", expanded=True):
-            if bundle["alerts_df"].empty:
-                st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
-            else:
-                st.dataframe(bundle["alerts_df"], hide_index=True, width="stretch")
+        _render_spc_cpk_ledger_detail(
+            bundle, prod_code=prod_code, week_label=week_label, step_desc_map=step_desc_map,
+        )
     elif kind == "spc_cpk":
         _render_spc_cpk_detail(
             bundle,
@@ -948,6 +991,8 @@ def render_alert_matrix_detail(
         try:
             if row_key.startswith("yield_"):
                 memo_base = _yield_detail_signature(prod_code, memo_base)
+            elif row_key == "spc_cpk_trend":
+                memo_base = f"{memo_base}|cpk-ledger-history-v1"
             bundle = get_cached_matrix_detail(
                 detail_key=str(detail_key),
                 reference_date=reference_date,

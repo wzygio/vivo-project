@@ -443,3 +443,15 @@ CPK 和 CPM 分别判断，不能用其中一项的修饰状态替代另一项�
 | app | 5.10 | [render_gate.py](../../../app/manager/render_gate.py)、[indicator_cache.py](../../../app/components/indicator_cache.py)、[decoration_admin.py](../../../app/sections/inline_domain/shared/decoration_admin.py)、[sheet_oos_admin.py](../../../app/sections/inline_domain/shared/sheet_oos_admin.py) |
 
 前端参考分析：[spc-monitor-page-logic-analysis.md](../../../docs/dev_docs/generated/Inline_domain/spc-monitor-page-logic-analysis.md)。该文状态日期早于本次核验，用于定位历史设计线索，当前行为以上述实现依据为准。
+
+## 全指标预警矩阵中的 CPK 图像
+
+矩阵 CPK 详情只读 `spc_cpk_cpm_decoration.xlsx` 的产品 CPK sheet，按既有台账状态选择上一 ISO 周预警。
+详情自动展示这些厂别、站点、参数对应的历史周 CPK 图像，数值沿用规范化后的 `cpk_corrected`，
+红点按台账 `status` 标识，不根据图中数值重新决定人工修饰记录是否预警。
+历史限制为截至上周的周记录，不包含本周、未来周、月数据或其他未命中指标。
+缺失周不代表达标，图像保留空缺；只有一周记录时只显示一个点。
+
+此入口不调用底层 SPC 测量分析、不回写台账，因此不会提供原始点位分布或控制图。
+详情数据随原有台账签名失效，新增图像使用独立图表 key；实现位于
+`app/sections/inline_domain/monitor/alert_matrix_detail.py` 与 `app/charts/inline_domain/cpk_ledger_chart.py`。

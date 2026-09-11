@@ -10,6 +10,7 @@ from app.components import indicator_cache, page_header
 from app.manager.session_manager import SessionManager
 from app.sections.inline_domain.monitor import alert_matrix, alert_matrix_cache
 from app.sections.inline_domain.monitor import alert_matrix_service, cpk_monitor_dashboard
+from app.sections.inline_domain.monitor import alert_matrix_snapshot
 from app.utils import step_labels
 from app.utils.app_setup import AppSetup
 from src.shared_kernel.config import ConfigLoader
@@ -23,6 +24,7 @@ INDICATORS = ("spc_sheet_oos", "spc_cpk_trend")
 
 @pytest.fixture
 def matrix_sessions(monkeypatch, tmp_path):
+    monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)
     calls = Counter()
     rows = []
     for key in INDICATORS:
@@ -134,3 +136,29 @@ def test_matrix_data_refresh_reloads_target_and_preserves_other_boards(matrix_se
     assert cleared == ["cpk"]
     assert admin.session_state["monitor_query_signature"] == "oos-selection"
     assert admin.session_state["cpk_monitor_query_signature"] == "cpk-selection"
+
+
+def test_daily_snapshot_opens_matrix_once_and_respects_collapse(matrix_sessions, monkeypatch):
+    calls, new_session = matrix_sessions
+    monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: True)
+    app = new_session()
+    assert app.session_state["alert_matrix_board_loaded"] is True
+    assert calls
+    assert app.button(key="btn_collapse_alert_matrix")
+    before = calls.copy()
+    app.button(key="btn_collapse_alert_matrix").click().run()
+    app.run()
+    assert not app.exception
+    assert app.button(key="btn_load_alert_matrix")
+    assert calls == before
+
+
+def test_snapshot_becoming_available_opens_an_existing_session(matrix_sessions, monkeypatch):
+    calls, new_session = matrix_sessions
+    app = new_session()
+    assert not calls
+    monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: True)
+    app.run()
+    assert not app.exception
+    assert app.session_state["alert_matrix_board_loaded"] is True
+    assert calls

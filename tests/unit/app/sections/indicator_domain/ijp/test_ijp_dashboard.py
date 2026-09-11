@@ -40,6 +40,16 @@ def _details() -> pd.DataFrame:
     )
 
 
+def test_ijp_signature_works_with_pre_cutoff_config_class(monkeypatch):
+    from src.shared_kernel.config import ConfigLoader
+    from app.sections.indicator_domain.ijp.dashboard import _filter_signature
+
+    monkeypatch.delattr(ConfigLoader, "get_report_cutoff_policy")
+    signature = _filter_signature(["M626"], "2026-09-11")
+    assert signature[:2] == (("M626",), "2026-09-11")
+    assert signature[-1].startswith("report-cutoff-v1:")
+
+
 def test_ijp_table_uses_the_reference_column_contract_and_total_row() -> None:
     table = build_ijp_table(_details())
 
