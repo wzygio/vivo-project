@@ -12,7 +12,7 @@
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/Inline_domain/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/Inline_domain/architecture-inline-infrastructure.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/Inline_domain/data-flow-spc.md) |
-| 全指标预警矩阵、每天 07:30 计划任务、跨进程预计算快照 | [矩阵定时预计算](domain/inline_domain/data-flow-alert-matrix-schedule.md) |
+| 全指标预警矩阵、计划任务、跨进程预计算快照 | 专题文档当前缺失；先查 [Architecture 运行入口](../ARCHITECTURE.md#presentation-and-operational-entry-points)，再核对实际任务注册与快照代码 |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/Inline_domain/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/Inline_domain/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/Inline_domain/data-flow-aoi-tt.md) |
@@ -23,7 +23,7 @@
 | Mapping 坐标、矩阵修饰、随机分布与守恒 | [Mapping 算法](domain/yield_domain/algorithm-mapping.md) |
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/algorithm-mwd-trend.md) |
 | Sheet / Lot 不良率、热点分配与覆盖率计算 | [Sheet / Lot 算法](domain/yield_domain/algorithm-sheet-lot.md) |
-| 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](domain/shared_kernel/overview-shared-kernel.md) |
+| 共享内核、配置、日志、缓存与数据库公共能力 | 概览文档当前缺失；先查 [Architecture 职责地图](../ARCHITECTURE.md#responsibility-map)，再在 `src/shared_kernel/` 内按职责检索 |
 | 日期前推、offset_days、源日期与显示日期、跨模块报表时间链路 | [报表日期前推数据链路](domain/shared_kernel/data-flow-report-date-forward.md) |
 
 ### 跨域范式与功能设计
@@ -36,7 +36,7 @@
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/feat_design/architecture-data-health-and-outbound-ports.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/feat_design/interaction-inline-report-scroll.md) |
 
-共享工程标准按任务使用 `$ecc-production-rules`；Harness 演进记录见 [retrospective.md](retrospective.md)。
+共享工程标准按任务使用 `$ecc-production-rules`；Harness 架构与演进记录见 [HARNESS.md](../HARNESS.md)。
 
 ## 文件命名规则
 

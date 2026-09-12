@@ -2,85 +2,49 @@
 
 ## Project Overview
 
-This project is `vivo-project`. 天柱专项报表系统 - 基于标准 src 布局
-
-Prefer explicit, testable, traceable workflows over broad automatic inference.
-
-## Code Intelligence Policy
-
-- Keep `ARCHITECTURE.md` shallow and use code intelligence for deep lookup.
+`vivo-project` is the Tianzhu manufacturing quality reporting system, built with Streamlit and a standard `src` layout with DDD layers. Prefer explicit, testable, traceable workflows.
 
 ## Context Router
 
-- For project shape or runtime flow, read `ARCHITECTURE.md`.
-- For Harness creation, audit, or repair, use `$manage-harness`.
-- For shared engineering standards, use `$ecc-production-rules`.
-- For project-owned knowledge routing, start at `references/index.md`.
-- For project-owned domain knowledge, use `references/index.md` to select
-  relevant files under `references/domain/`.
+Use this file as the repository entry point. Load additional context by task; do not read every linked document automatically.
 
-## Iteration Router
+| Task | Read next |
+|---|---|
+| First substantive task in this repository; project purpose or business constraints | [CONTEXT.md](CONTEXT.md) |
+| Locate code, understand runtime flow, or change ownership/dependencies | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Change UI, messages, downloads, or exports | [Non-administrator presentation boundary](CONTEXT.md#non-administrator-presentation-boundary) before editing |
+| Find business rules or project-specific designs | [Knowledge router](references/index.md); select only relevant entries |
+| Interpret manufacturing terminology | [Manufacturing glossary](references/domain/GLOSSARY.md) |
+| Change an established architectural boundary | Relevant decisions under [docs/ADR/](docs/ADR/) |
+| Change agent instructions, document ownership, or knowledge routing | [HARNESS.md](HARNESS.md) |
 
-- Update `CONTEXT.md` when the project purpose or stable operating model changes.
-- Update `ARCHITECTURE.md` when ownership or runtime flow changes.
-- Update `references/domain/` when stable terminology, invariants, mappings, or
-  project-specific designs change.
-- Update `references/retrospective.md` when the Harness itself evolves.
-- Keep Harness `index.md` files folder-only, except `references/index.md`:
-  it routes questions to specific knowledge files and owns their naming rules.
+If `.codegraph/` exists, use CodeGraph before text search or source reads for code discovery. Otherwise, skip indexing and follow the scoped `rg` workflow in `ARCHITECTURE.md`. Verify actual paths rather than inventing missing files.
 
 ## Safety Boundary
 
 - Do not print, copy, commit, or persist secrets.
-- Do not delete user data unless the user explicitly asks.
-- Preserve unrelated user changes.
-- E2E/browser automation artifacts (playwright-cli page snapshots, DOM dumps,
-  console logs, screenshots) must be written to `output/test-results/` or
-  `output/tmp/`, never to the repository root or `src/`.
+- Do not delete user data unless explicitly requested. Preserve unrelated user changes.
+- Write browser snapshots, DOM dumps, console logs, and screenshots only to `output/test-results/` or `output/tmp/`, never to the repository root or `src/`. See [output classification](output/README.md).
+- Follow the project constraints in `CONTEXT.md`; a linked constraint is not optional when its task trigger applies.
 
-## Agent skills
+## Development Conventions
 
-### Harness lifecycle
+Use `$ecc-production-rules` for implementation, refactoring, debugging, testing, security/code review, performance work, and development workflow decisions.
 
-Use `$manage-harness` to create, audit, or repair the repository Harness.
+- Default rule sets: `common + python`. Load only task-relevant rules directly from the installed skill; do not copy rule libraries into this repository.
+- Python rules override common rules where they conflict. Project instructions, applicable ADRs, and repository tooling override conflicting ECC defaults, subject to higher-priority instructions and the current user request.
+- Load FastAPI-specific rules only for confirmed FastAPI code. Do not activate unrelated language/framework rules.
+- Issues and PRDs use local Markdown: [issue tracker](docs/agents/issue-tracker.md). For triage, read [role labels](docs/agents/triage-labels.md); for domain documentation, read [domain conventions](docs/agents/domain.md).
+- Choose verification that matches the change; report commands, results, and material omissions. Documentation-only edits need route/content checks, not a business-suite run by default.
 
-- Keep only minimal project routing; do not copy shared Harness templates into
-  this repository. 
-- Use `$ecc-production-rules` rather than Harness reference copies for
-  engineering standards.
-- `references/domain/` is project-owned and outside Harness management.
+## Iteration Router
 
-### ECC production rules
+Update the owner of the changed fact:
 
-Use `$ecc-production-rules` for implementation, refactoring, debugging,
-testing, security review, code review, performance work, and development
-workflow decisions.
+- Purpose, operating assumptions, or project-wide business constraints: `CONTEXT.md`.
+- Domain/layer/submodule ownership or runtime dependencies: `ARCHITECTURE.md`.
+- Agent entry instructions or task triggers: this file.
+- Harness topology, document ownership, or disclosure policy: `HARNESS.md`.
+- Domain rules and project designs: the relevant document selected through `references/index.md`; update its route when needed.
 
-- This repository's default ECC rule sets are `common + python`.
-- Load only task-relevant files from those two rule sets; Python rules override
-  common rules when they conflict.
-- Load rules directly from the installed Skill; do not create project-local
-  rule copies.
-- Load the FastAPI-specific rule only after confirming that the affected code
-  belongs to a FastAPI application.
-- Project instructions, ADRs, and repository tooling override conflicting ECC
-  defaults.
-- Do not activate other ECC language or framework rule sets unless the task
-  explicitly requires them.
-
-### Issue tracker
-
-Issues and PRDs are tracked as local Markdown under `.scratch/`.
-See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Triage uses the canonical Matt Skills role names.
-See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This is a single-context repository. Read root `CONTEXT.md`, then the
-manufacturing glossary at `references/domain/GLOSSARY.md`
-when relevant; consult `docs/ADR/` for applicable architectural decisions.
-See `docs/agents/domain.md`.
+Keep Harness `index.md` files folder-only, except `references/index.md`, which owns file-level knowledge routes and naming rules. Do not expand root documents into file catalogs.

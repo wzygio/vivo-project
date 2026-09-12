@@ -2,80 +2,50 @@
 
 ## Purpose
 
-天柱专项报表系统面向 OLED/Array 显示制造质量分析，提供入库不良率（Yield）、
-SPC/CTQ、自动预警、Q-Time 过货监控和关键备件寿命管理报表。
+Tianzhu provides manufacturing quality reports for OLED/Array display production: warehouse-entry defect rates (Yield), SPC/CTQ and AOI analysis, automatic warnings, Q-Time monitoring, IJP overflow monitoring, and critical-parts lifetime management. IQC currently provides example reports rather than production quality decisions.
 
 ## Operating Model
 
-- `app/` 是 Streamlit 展示层，包含门户、页面、区块、组件和图表适配器。
-- `src/` 按领域划分业务代码；应用层编排 Core 规则并通过消费方端口调用基础设施，
-  组合根负责装配，Core 不依赖持久化。存量兼容边界见 `ARCHITECTURE.md`。
-- `config/` 保存全局、产品、SPC、设备与合规配置；全局配置与产品配置由
-  `ConfigLoader` 深度合并为 `AppConfig`。
-- `resources/` 保存受版本控制的业务输入、产品规格和人工修饰文件；`data/`
-  保存本地运行数据和 Parquet 快照；`output/` 仅存放可重建产物。
-- 全指标预警矩阵可由 Windows 每日 07:30 任务预计算，通过当天有效的本地状态快照跨进程复用，
-  页面按原有源签名与产品指标版本校验结果。运行约定见 [矩阵定时预计算](references/domain/inline_domain/data-flow-alert-matrix-schedule.md)。
+- Streamlit pages present reports; domain application services coordinate business rules and data adapters. The code ownership map is in [ARCHITECTURE.md](ARCHITECTURE.md).
+- PostgreSQL supplies manufacturing facts. Local Parquet snapshots support reuse and defined fallback behavior. Workbooks can contain user-maintained decisions and historical baselines, not merely disposable exports.
+- Global, domain, and product configuration controls runtime behavior. Resolve configuration and resource locations through the existing loaders and composition roots; do not assume every resource lives under a product-named directory.
 
-## Directory Guide
+## Important Routes
 
-| Path | Purpose |
+| Need | Location |
 |---|---|
-| `app/` | Streamlit 门户、页面、UI 组件、展示区块和图表。 |
-| `src/yield_domain/` | Yield 趋势、Lot/Sheet、Mapping、告警和导出。 |
-| `src/inline_domain/` | SPC、CTQ 和自动预警。 |
-| `src/equipment_domain/` | 关键备件规格、寿命计算和快照匹配。 |
-| `src/indicator_domain/` | 指标监控领域；Q-Time 与 IJP 作为同级子模块，分别承担过货时长及溢流监控。 |
-| `src/shared_kernel/` | 配置、数据库单例、输出路径和跨领域工具。 |
-| `config/` | 应用与产品配置。 |
-| `resources/` | 版本控制的产品资源、规格、人工覆盖和前端静态文件。 |
-| `data/` | 本地运行数据和领域 Parquet 快照。 |
-| `output/` | 可重建的报告、下载、日志、截图、测试结果和临时文件。 |
-| `tools/` | 分域 smoke、离线分析及设备仿造快照维护命令。 |
-| `tests/` | 单元、集成和端到端测试。 |
-| `docs/ADR/` | 已接受的架构决策。 |
-| `docs/agents/` | 本项目的 issue、领域和 triage 协作规则。 |
-| `references/` | 项目自有领域知识与 Harness 演进记录的索引入口。 |
-| `projects/` | 独立交付项目的源文件、分析和导出物。 |
+| Agent instructions and task-specific reading triggers | [AGENTS.md](AGENTS.md) |
+| Domains, DDD layers, submodules, and code lookup | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Knowledge ownership, Harness maintenance, and work artifacts | [HARNESS.md](HARNESS.md) |
+| Business vocabulary and project-specific rules/designs | [references/index.md](references/index.md) |
+| Architectural decisions and tradeoffs | [docs/ADR/](docs/ADR/) |
+| Runtime configuration | `config/`; inspect the responsible loader before changing values |
+| Specifications, manual decisions, baselines, and static inputs | `resources/`; preserve maintained state |
+| Runtime snapshots | `data/`; follow the owning domain's lifecycle |
+| Rebuildable runtime artifacts | [output/README.md](output/README.md) |
+| Operational/analysis commands and tests | `tools/`, `tests/`; scope execution to the task |
+| Independent delivery projects | `projects/`; inspect that project's instructions before working there |
 
 ## Hard Boundaries
 
-- **管理员权限保密铁律：非管理员模式下，任何用户可见或可取得的内容，都不得
-  直接或间接提示管理员权限、管理员入口或另一版数据的存在。** URL 未设置
-  `admin=true` 时为默认的非管理员模式；普通界面只使用清晰的业务术语和当前报表值。
-- 此规则覆盖所有页面及其调用组件，包括导航、按钮及帮助、提示文案、表格及列菜单、
-  图例、坐标轴、悬浮提示、下载导出，以及空数据、加载失败和降级等异常路径。
-  不得出现“管理员可见”“切换管理员”“原始／修饰后”“实际／显示”等权限或
-  双版本提示，也不得暴露 `admin=true`、内部 `flag`、修饰规则、配置路径或调试信息。
-- 普通模式不需要的内部列和原始值，必须在传入前端组件或生成导出文件前剔除；
-  仅用 CSS、`column_order` 或隐藏列设置遮挡，不满足本规则。
-- 异常仍须明确告知用户数据加载失败或暂不可用，界面使用不含内部实现细节的业务
-  提示；技术原因保留在服务端日志中，不将异常原文直接透传到普通界面。
-- 涉及展示层的修改，交付前须检查非管理员模式的正常、空数据和失败分支，以及
-  表格列菜单、悬浮提示和导出内容，确认没有权限或双版本线索。
-- 报表日期前推只改变仓储输出的显示时间轴；数据库事实与原始 Parquet 保持源时间，
-  直接查询窗口需在仓储边界反向换算，相关缓存签名需包含前推策略。
-- 最新报表日以服务器当天为准，在仓储输出边界按全局 `report_cutoff.latest_day_time`
-  截断（默认中午 12 点，含）；历史筛选日期不截半天，原始快照保留完整窗口。
-- 未获得具体任务与回归证明前，不重构已验证的 Yield 浓度和 Mapping 算法。
-- 不随意修改 `DatabaseManager` 的单例与重试语义。
-- 不移除页面数据流中的 `st.cache_data`；缓存只跨越原生 payload，ViewModel
-  在缓存外构建。
-- 未经批准，不简化 Parquet 快照刷新或数据库失败时的降级策略。
-- `output/` 中的内容可清理和重建；业务源数据、规格和人工修饰应保留在
-  `resources/` 中。
+### Time and Data Semantics
 
-## Fast Routing
+- Date forwarding changes the report display time axis at the repository output boundary. Database facts and raw Parquet snapshots retain source time. Translate direct-query display windows back to source windows, and include the time policy in relevant cache signatures.
+- The latest report day is the server's current date. Apply the global `report_cutoff.latest_day_time` at the repository output boundary; the default cutoff is noon, inclusive. Historical selected dates are not reduced to a partial day, and raw snapshots retain their complete source windows.
+- Do not casually change the `DatabaseManager` singleton or retry lifecycle. Do not simplify snapshot refresh or database-failure fallback without authorization covering that behavior change.
+- Preserve the page data-cache boundary. Cache DataFrames, scalars, and native containers; construct project-defined ViewModels outside the cache. Detailed cache and health contracts are routed by `ARCHITECTURE.md`.
 
-- 项目目标、目录职责和硬约束：`CONTEXT.md`（本文件）
-- 运行调用流、领域边界、缓存和验证入口：`ARCHITECTURE.md`
-- 架构决策：`docs/ADR/`
-- 领域术语（涉及制造数据时必读）：
-  `references/domain/GLOSSARY.md`
-- 项目自有领域资料：`references/domain/`
-- 共享工程规范：`$ecc-production-rules`（默认 `common + python`）
-- Harness 创建与修正：`$manage-harness`
-- 项目参考资料入口：`references/index.md`
-- 需求与 issue 工作流：`docs/agents/issue-tracker.md`
-- 运行产物分类规则：`output/README.md`
-- 产品配置与产品资源：`config/products/`、`resources/<product>/`
+### Non-administrator Presentation Boundary
+
+The default presentation mode applies when the URL does not set `admin=true`. This is the current display-mode convention; it does not by itself establish authenticated authorization.
+
+- In non-administrator mode, no user-visible or retrievable content may reveal administrator privileges, entry points, or an alternative version of the data. Use clear business terms and the current report values.
+- Apply this rule to every page and called component: navigation, buttons/help, messages, tables and column menus, legends, axes, hover text, downloads/exports, and empty, loading, failure, or degraded states.
+- Do not expose administrator-mode prompts, original-versus-modified or actual-versus-displayed comparisons, `admin=true`, internal `flag` fields, modification rules, configuration paths, or debugging details.
+- Remove unneeded internal columns and source values before passing data to frontend components or export generation. CSS, `column_order`, and hidden-column settings alone do not satisfy this boundary.
+- Still communicate loading failures, unavailable data, and applicable data-health limitations in safe business language. Keep technical causes in server-side logs; do not forward raw exceptions to the ordinary UI.
+- Before delivering presentation changes, check normal, empty, and failure branches in non-administrator mode, including column menus, hover content, and exports.
+
+## Maintenance
+
+This file owns stable project context and business constraints. Technical dependency rules belong in `ARCHITECTURE.md`; document lifecycle rules belong in `HARNESS.md`. Update the owning source and link to it instead of maintaining competing copies. An explicit current request may authorize a behavior change; do not invent an additional approval step for already-authorized work.
