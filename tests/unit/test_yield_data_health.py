@@ -98,3 +98,31 @@ def test_source_health_survives_display_shift(repository, monkeypatch):
     assert result.warehousing_time.iloc[0] == pd.Timestamp("2026-06-09")
     assert result.attrs["data_health"]["source_start"] == "2026-05-28"
     assert pd.read_parquet(repository.snapshot_path).warehousing_time.iloc[0] == pd.Timestamp("2026-06-05")
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_force_refresh_replaces_old_history_in_full_request_window(repository, monkeypatch, empty):
+    old = pd.DataFrame({
+        "panel_id": ["CHANGED", "DELETED", "LATEST"],
+        "warehousing_time": pd.to_datetime(["2026-06-05", "2026-07-01", "2026-08-01"]),
+        "warehousing_event_time": ["20260605080000", "20260701080000", "20260801080000"],
+        "quantity": [1, 2, 3],
+    })
+    new = old.iloc[:0] if empty else old.iloc[:1].assign(quantity=99)
+    batches = [old, new]
+    calls = []
+
+    def fetch(start, end, product, work_orders):
+        calls.append((start, end, product))
+        return batches.pop(0).copy()
+
+    monkeypatch.setattr(repository, "_fetch_from_db_in_chunks", fetch)
+    repository.get_panel_details(query())
+    refreshed = repository.get_panel_details(query(), force_refresh=True)
+    assert calls == [("2026-06-01", "2026-08-01", "TEST")] * 2
+    snapshot = pd.read_parquet(repository.snapshot_path)
+    assert snapshot.panel_id.tolist() == ([] if empty else ["CHANGED"])
+    assert snapshot.quantity.tolist() == ([] if empty else [99])
+    assert refreshed.attrs["data_health"]["status"] == "fresh"
+    repository.get_panel_details(query())
+    assert len(calls) == 2

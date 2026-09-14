@@ -18,6 +18,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     capability_decoration_columns,
     ensure_capability_replacements,
     merge_capability_detail_with_decoration_flags,
+    refresh_existing_capability_values,
 )
 from src.shared_kernel.utils.excel_tools import (
     _is_missing_sheet_error,
@@ -88,6 +89,7 @@ def persist_capability_decoration(
     detail_df: pd.DataFrame,
     sheet_name: str | None = None,
     metric: str = CAPABILITY_METRIC_CPK,
+    *, computed_detail_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     _validate_metric(metric)
     product_dir.mkdir(parents=True, exist_ok=True)
@@ -114,8 +116,11 @@ def persist_capability_decoration(
     if sheet_exists and existing.empty:
         should_write = not current.empty
     if sheet_exists and not existing.empty:
+        refreshed = refresh_existing_capability_values(
+            existing, computed_detail_df if computed_detail_df is not None else detail_df, metric,
+        )
         persisted = ensure_capability_replacements(
-            _append_missing_detail_rows(existing, current, metric), metric,
+            _append_missing_detail_rows(refreshed, current, metric), metric,
         )
         should_write = not persisted.equals(existing)
     if should_write:

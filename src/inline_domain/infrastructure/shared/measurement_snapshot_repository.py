@@ -91,7 +91,7 @@ class InlineMeasurementSnapshotRepository:
         prod_code: str,
         end_date: str,
     ) -> MeasurementRefreshResult:
-        """Force a DB refresh and report whether the data truly came from the DB.
+        """Reload the full rolling window and report actual DB refresh success.
 
         An empty data window counts as success when the loader returned
         normally; only loader failures (served via the old snapshot fallback)
@@ -129,7 +129,10 @@ class InlineMeasurementSnapshotRepository:
                 except Exception:
                     logger.exception("Unreadable Inline snapshot; rebuilding %s", snapshot_path)
                     metadata = None
-            load_start = incremental_start(metadata, end_timestamp)
+            load_start = (
+                inline_snapshot_window_start(end_timestamp)
+                if force_refresh else incremental_start(metadata, end_timestamp)
+            )
             try:
                 measurements = self.measurement_loader(
                     self.db_manager,
@@ -144,7 +147,9 @@ class InlineMeasurementSnapshotRepository:
                 )
             if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
-            measurements = replace_tail(previous, measurements, load_start, end_timestamp)
+            measurements = replace_tail(
+                None if force_refresh else previous, measurements, load_start, end_timestamp,
+            )
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
             self._write_snapshot(snapshot_path, measurements, end_timestamp)
             return MeasurementRefreshResult(measurements.copy(), True)

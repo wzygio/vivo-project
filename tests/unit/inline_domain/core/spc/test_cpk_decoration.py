@@ -176,7 +176,7 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     assert loaded_df.equals(expected_df)
 
 
-def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: Path) -> None:
+def test_prepare_cpk_decoration_refreshes_values_preserving_user_decisions(tmp_path: Path) -> None:
     computed_df = _capability_frame(1.26)
     decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
     existing_df = prepare_cpk_decoration(
@@ -188,7 +188,6 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: 
     with pd.ExcelWriter(decoration_path, engine="openpyxl") as writer:
         existing_df.to_excel(writer, index=False, sheet_name="M678")
         other_sheet_df.to_excel(writer, index=False, sheet_name="OTHER")
-    original_bytes = decoration_path.read_bytes()
 
     result = prepare_cpk_decoration(
         period_capability_df=computed_df,
@@ -196,7 +195,10 @@ def test_prepare_cpk_decoration_never_rewrites_an_existing_user_sheet(tmp_path: 
         sheet_name="M678",
     )
 
-    assert decoration_path.read_bytes() == original_bytes
+    stored = pd.read_excel(decoration_path, sheet_name="M678")
+    assert stored["cpk_corrected"].tolist() == [1.26]
+    assert stored["flag"].tolist() == ["TURE"]
+    assert stored["cpk_replacement"].tolist() == [1.372]
     assert not (tmp_path / "spc_cpk_detail.xlsx").exists()
     assert result.decoration_sheet == "M678"
     assert result.period_capability_df["cpk"].tolist() == [1.372]
@@ -240,11 +242,44 @@ def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
 
     persisted_df = pd.read_excel(decoration_path, sheet_name="M678")
     assert persisted_df["period_label"].tolist() == ["2026-W30", "2026-W35"]
-    assert persisted_df["cpk_corrected"].tolist() == [1.72, 0.919]
+    assert persisted_df["cpk_corrected"].tolist() == [1.26, 0.919]
     assert persisted_df["flag"].tolist() == [True, False]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True, False]
     other_loaded = pd.read_excel(decoration_path, sheet_name="OTHER")
     assert other_loaded["note"].tolist() == ["keep-me"]
+
+
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
+@pytest.mark.parametrize("value", [1.1, 1.6])
+def test_existing_capability_value_refreshes_even_when_passing_or_from_older_week(tmp_path, metric, value):
+    sheet = resolve_capability_decoration_sheet("M678", metric)
+    initial = _capability_frame(1.2).rename(columns={"cpk": metric})
+    result = prepare_capability_decoration(initial, tmp_path, sheet_name=sheet, metric=metric)
+    path = result.decoration_path
+    saved = result.decoration_df.assign(flag=True, **{f"{metric}_replacement": 1.372})
+    saved.to_excel(path, sheet_name=sheet, index=False)
+    updated = initial.assign(**{metric: value})
+    # The stored week is no longer the previous week; a new normal key must not be added.
+    updated = pd.concat([updated, updated.assign(param_name="NEW_NORMAL", **{metric: 1.8})])
+    result = prepare_capability_decoration(
+        updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),
+    )
+    stored = pd.read_excel(path, sheet_name=sheet)
+    assert stored[f"{metric}_corrected"].tolist() == [value]
+    assert stored["flag"].tolist() == [True]
+    assert stored[f"{metric}_replacement"].tolist() == [1.372]
+    assert result.period_capability_df[metric].tolist() == [1.372, 1.8]
+    before = path.read_bytes()
+    prepare_capability_decoration(
+        updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),
+    )
+    assert path.read_bytes() == before
+    # A run that does not cover the stored key must not erase or reset its value.
+    prepare_capability_decoration(
+        updated.iloc[1:], tmp_path, sheet_name=sheet, metric=metric,
+        reference_date=date(2026, 8, 31),
+    )
+    assert path.read_bytes() == before
 
 
 def test_prepare_cpk_decoration_preserves_an_unreadable_existing_user_file(
@@ -370,11 +405,13 @@ def test_existing_decision_survives_when_no_new_anomalies(tmp_path: Path) -> Non
     first.decoration_df.assign(cpk_corrected=1.72, cpk_replacement=1.372, flag=True).to_excel(
         first.decoration_path, sheet_name="M678", index=False,
     )
-    before = first.decoration_path.read_bytes()
     result = prepare_capability_decoration(
         rows, tmp_path, sheet_name="M678", reference_date=date(2026, 8, 10),
     )
-    assert first.decoration_path.read_bytes() == before
+    stored = pd.read_excel(first.decoration_path, sheet_name="M678")
+    assert stored["cpk_corrected"].tolist() == [0.8]
+    assert stored["flag"].tolist() == [True]
+    assert stored["cpk_replacement"].tolist() == [1.372]
     assert result.period_capability_df["cpk"].tolist() == [1.372]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True]
 

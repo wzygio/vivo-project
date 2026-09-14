@@ -17,9 +17,38 @@ def test_incremental_replaces_deleted_tail_and_never_corrects_old_rows_twice(tmp
         return batches.pop(0)
     repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader, lambda df: df.assign(param_value=df.param_value + 10))
     repo.get_measurements("M1", "2026-08-13")
-    result = repo.get_measurements("M1", "2026-08-14", force_refresh=True)
+    result = repo.get_measurements("M1", "2026-08-14")
     assert calls == [("2026-05-01", "2026-08-13"), ("2026-08-11", "2026-08-14")]
     assert result.param_value.tolist() == [11, 12, 14]
+
+
+@pytest.mark.parametrize("entrypoint", ["get_measurements", "refresh_measurements"])
+@pytest.mark.parametrize("empty", [False, True])
+def test_force_refresh_replaces_full_history_and_only_selected_product(tmp_path, entrypoint, empty):
+    calls = []
+    old = pd.DataFrame({"start_time": pd.to_datetime(["2026-06-10", "2026-07-10", "2026-09-08"]), "param_value": [1, 2, 3]})
+    new = old.iloc[:1].assign(param_value=99) if not empty else old.iloc[:0]
+    batches = [old, old, new]
+
+    def loader(_db, start, end, product):
+        calls.append((start, end, product))
+        return batches.pop(0)
+
+    repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader)
+    repo.get_measurements("M1", "2026-09-08")
+    repo.get_measurements("M2", "2026-09-08")
+    other = {p: p.read_bytes() for p in tmp_path.glob("*M2*")}
+    if entrypoint == "get_measurements":
+        repo.get_measurements("M1", "2026-09-08", force_refresh=True)
+        assert repo.last_refresh_from_db is True
+    else:
+        assert repo.refresh_measurements("M1", "2026-09-08").refreshed_from_db
+
+    assert calls[-1] == ("2026-06-01", "2026-09-08", "M1")
+    pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / "inline_measurements_M1.parquet"), new.reset_index(drop=True))
+    assert {p: p.read_bytes() for p in other} == other
+    repo.get_measurements("M1", "2026-09-08")
+    assert len(calls) == 3
 
 
 def test_empty_query_is_persisted_and_reused_without_latest_fact(tmp_path):

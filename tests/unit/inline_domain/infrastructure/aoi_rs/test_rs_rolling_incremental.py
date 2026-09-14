@@ -58,3 +58,40 @@ def test_second_loader_failure_keeps_first_snapshot_and_metadata_untouched(tmp_p
     failed = True
     assert repo.refresh(query) is False
     assert {p: p.read_bytes() for p in tmp_path.iterdir()} == originals
+
+
+@pytest.mark.parametrize("entrypoint", ["refresh", "get_rs_details", "get_pass_through"])
+@pytest.mark.parametrize("empty", [False, True])
+def test_force_refresh_replaces_full_history_and_is_product_scoped(tmp_path, entrypoint, empty):
+    calls = []
+    refreshing = False
+    old = pd.concat([_frame("2026-06-10"), _frame("2026-07-10"), _frame("2026-09-08")], ignore_index=True)
+    new = _frame("2026-06-10", 99) if not empty else old.iloc[:0]
+
+    def loader(columns):
+        def load(_db, query):
+            calls.append((query.start_date, query.end_date, query.prod_code))
+            return (new if refreshing else old).reindex(columns=columns)
+        return load
+
+    repo = AoiRsSnapshotRepository(tmp_path, object(), details_loader=loader(RS_DETAIL_COLUMNS), pass_through_loader=loader(PASS_THROUGH_COLUMNS))
+    query = AoiRsQueryConfig(prod_code="M1", start_date="2026-09-01", end_date="2026-09-08")
+    assert repo.refresh(query)
+    assert repo.refresh(query.model_copy(update={"prod_code": "M2"}))
+    other = {p: p.read_bytes() for p in tmp_path.glob("*M2*")}
+    refreshing = True
+    if entrypoint == "refresh":
+        assert repo.refresh(query)
+        targets = [("details", RS_DETAIL_COLUMNS), ("pass_through", PASS_THROUGH_COLUMNS)]
+        assert calls[-2:] == [("2026-06-01", "2026-09-08", "M1")] * 2
+    else:
+        getattr(repo, entrypoint)(query, force_refresh=True)
+        targets = [("details", RS_DETAIL_COLUMNS)] if entrypoint == "get_rs_details" else [("pass_through", PASS_THROUGH_COLUMNS)]
+        assert calls[-1] == ("2026-06-01", "2026-09-08", "M1")
+    for prefix, columns in targets:
+        pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / f"aoi_rs_{prefix}_M1.parquet"), new.reindex(columns=columns).reset_index(drop=True))
+    assert {p: p.read_bytes() for p in other} == other
+    count = len(calls)
+    repo.get_rs_details(query)
+    repo.get_pass_through(query)
+    assert len(calls) == count

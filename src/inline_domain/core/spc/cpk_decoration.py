@@ -190,11 +190,10 @@ def merge_capability_detail_with_decoration_flags(
     existing_decoration_df: pd.DataFrame,
     metric: str = CAPABILITY_METRIC_CPK,
 ) -> pd.DataFrame:
-    """Attach user-maintained corrected values and opt-in flags to current details."""
+    """Attach saved flags and replacement targets while keeping freshly computed values."""
     _validate_metric(metric)
     detail_columns = capability_detail_columns(metric)
     decoration_columns = capability_decoration_columns(metric)
-    corrected_column = capability_corrected_column(metric)
     replacement_column = capability_replacement_column(metric)
     if detail_df.empty:
         return _empty_decoration_frame(metric)
@@ -207,19 +206,31 @@ def merge_capability_detail_with_decoration_flags(
 
     user_values_df = _normalize_key_columns(
         _ordered_existing_columns(existing_decoration_df, decoration_columns)
-    )[[*CPK_KEY_COLUMNS, corrected_column, "flag", replacement_column]].copy()
-    user_values_df = user_values_df.rename(
-        columns={corrected_column: "_user_corrected_value"}
-    )
+    )[[*CPK_KEY_COLUMNS, "flag", replacement_column]].copy()
     user_values_df["flag"] = user_values_df["flag"].apply(_parse_flag)
     user_values_df = user_values_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
     result = detail_df.merge(user_values_df, on=CPK_KEY_COLUMNS, how="left")
-    user_corrected_values = pd.to_numeric(result["_user_corrected_value"], errors="coerce")
-    result.loc[user_corrected_values.notna(), corrected_column] = user_corrected_values[
-        user_corrected_values.notna()
-    ]
     result["flag"] = result["flag"].apply(_parse_flag)
-    return ensure_capability_replacements(result.drop(columns=["_user_corrected_value"]), metric)
+    return ensure_capability_replacements(result, metric)
+
+
+def refresh_existing_capability_values(
+    existing: pd.DataFrame, computed: pd.DataFrame, metric: str,
+) -> pd.DataFrame:
+    """Update calculated values for matching keys; retain history absent from this run."""
+    if existing.empty or computed.empty:
+        return existing.copy()
+    column = capability_corrected_column(metric)
+    latest = _normalize_key_columns(computed)[[*CPK_KEY_COLUMNS, column]].drop_duplicates(
+        CPK_KEY_COLUMNS, keep="last",
+    ).rename(columns={column: "_computed_value"})
+    result = _normalize_key_columns(existing).merge(
+        latest, on=CPK_KEY_COLUMNS, how="left", indicator="_computed_match",
+        validate="many_to_one",
+    )
+    matched = result["_computed_match"].eq("both")
+    result.loc[matched, column] = result.loc[matched, "_computed_value"]
+    return result.drop(columns=["_computed_value", "_computed_match"])
 
 
 def _append_missing_detail_rows(

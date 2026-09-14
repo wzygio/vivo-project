@@ -73,7 +73,9 @@ class AoiRsSnapshotRepository:
             if not force_refresh and is_fresh(metadata, query.end_date, self.SNAPSHOT_TTL_HOURS):
                 return self._filter_window(old, query)
             try:
-                frame = self._load_tail(query, columns, loader, metadata, old)
+                frame = self._load_tail(
+                    query, columns, loader, metadata, old, force_refresh=force_refresh,
+                )
             except Exception:
                 logger.exception("Failed to refresh AOI_RS snapshot %s", path)
                 if old is not None and metadata is not None:
@@ -97,8 +99,12 @@ class AoiRsSnapshotRepository:
     def _load_tail(
         self, query: AoiRsQueryConfig, columns: list[str], loader: DetailsLoader,
         metadata: dict | None, old: pd.DataFrame | None,
+        *, force_refresh: bool = False,
     ) -> pd.DataFrame:
-        start = incremental_start(metadata, query.end_date)
+        start = (
+            inline_snapshot_window_start(query.end_date)
+            if force_refresh else incremental_start(metadata, query.end_date)
+        )
         loader_query = query.model_copy(update={"start_date": start.strftime("%Y-%m-%d")})
         frame = loader(self.db_manager, loader_query)
         if not frame.empty and set(columns).difference(frame.columns):
@@ -106,19 +112,21 @@ class AoiRsSnapshotRepository:
         frame = frame.reindex(columns=columns)
         if "code_qty" in frame:
             frame["code_qty"] = pd.to_numeric(frame["code_qty"], errors="raise")
-        return replace_tail(old, frame, start, query.end_date)
+        return replace_tail(None if force_refresh else old, frame, start, query.end_date)
 
     def refresh(self, query: AoiRsQueryConfig) -> bool:
-        """Load both tails before publishing either; empty successful loads are valid."""
+        """Reload both full windows before publishing either; empty loads are valid."""
         details_path = self.snapshot_dir / f"aoi_rs_details_{query.prod_code}.parquet"
         pass_path = self.snapshot_dir / f"aoi_rs_pass_through_{query.prod_code}.parquet"
         identity = self.snapshot_dir / f"aoi_rs_{query.prod_code}"
         with self._lock_for(identity), snapshot_process_lock(identity):
             try:
-                details_meta, details_old = self._existing(details_path, RS_DETAIL_COLUMNS)
-                pass_meta, pass_old = self._existing(pass_path, PASS_THROUGH_COLUMNS)
-                details = self._load_tail(query, RS_DETAIL_COLUMNS, self.details_loader, details_meta, details_old)
-                passed = self._load_tail(query, PASS_THROUGH_COLUMNS, self.pass_through_loader, pass_meta, pass_old)
+                details = self._load_tail(
+                    query, RS_DETAIL_COLUMNS, self.details_loader, None, None, force_refresh=True,
+                )
+                passed = self._load_tail(
+                    query, PASS_THROUGH_COLUMNS, self.pass_through_loader, None, None, force_refresh=True,
+                )
                 publish_snapshots([
                     (details_path, details, self.SNAPSHOT_POLICY_VERSION, query.end_date, False),
                     (pass_path, passed, self.SNAPSHOT_POLICY_VERSION, query.end_date, False),

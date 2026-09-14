@@ -62,6 +62,7 @@ class CapabilityDecorationPort(Protocol):
     def persist_capability_decoration(
         self, product_dir: Path, detail_df: pd.DataFrame,
         sheet_name: str | None = None, metric: str = CAPABILITY_METRIC_CPK,
+        *, computed_detail_df: pd.DataFrame | None = None,
     ) -> pd.DataFrame: ...
 
     def get_capability_decoration_signature(self, product_dir: Path) -> tuple[int, int]: ...
