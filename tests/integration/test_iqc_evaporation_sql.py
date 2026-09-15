@@ -4,7 +4,7 @@ import sqlite3
 
 import pandas as pd
 
-from src.iqc_domain.infrastructure.evaporation_repository import REPORT_SQL
+from src.iqc_domain.infrastructure.eva_materials.evaporation_repository import REPORT_SQL
 
 
 def test_catalog_expands_unmeasured_items_and_preserves_result_source():

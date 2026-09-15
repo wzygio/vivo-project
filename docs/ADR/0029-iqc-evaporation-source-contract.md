@@ -17,7 +17,8 @@ SQL 同时输出整体 IQC/COA 结果和测点 CASE 判定，二者不能互换�
    缺表、权限或查询错误使整次读取失败，不以部分记录、示例数据或空集作为成功结果。
 2. IQC_RESULT、COA_RESULT 原值是报表结论，缺失保持空白；规格/测点用于展示，不在本次读取中重新判定。
 3. application 持有读端口，composition 绑定 infrastructure；core 维护公开字段投影及筛选。
-   既有寿命示例继续独立读取，生产页面不依赖其数据。
+   蒸镀材料实现在各层的 `eva_materials/` 子模块中，对应 section 也使用同名子模块；域级 composition 保持统一组装。
+   既有寿命示例继续独立读取，生产页面不依赖其数据。后续业务的组织规则见 [CONTEXT.md](../../CONTEXT.md#business-submodule-organization)。
 4. 检验日期窗口遵循原 SQL 的 CHECKEDDATE；仓储反算源窗口，输出 REQUESTDATE/CHECKEDDATE 时应用共享前推与当日截止。
    Streamlit 仅缓存公开 DataFrame，键包含显示窗口、前推策略和截止策略，TTL 服从全局配置。
 5. 页面仅接收所需 27 列，保留原表样式并分页；数据库内部字段和异常细节不送往普通用户界面。

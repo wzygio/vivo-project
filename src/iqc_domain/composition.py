@@ -1,7 +1,7 @@
 """Bind the IQC use case to the shared database lifecycle."""
 
-from src.iqc_domain.application.evaporation import EvaporationReportService
-from src.iqc_domain.infrastructure.evaporation_repository import EvaporationRepository
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
+from src.iqc_domain.infrastructure.eva_materials.evaporation_repository import EvaporationRepository
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 

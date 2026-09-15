@@ -104,6 +104,15 @@ MATER_TYPE；txLotno 精确筛 LOTNO；cmcbExist 筛 ifexist。未选择参数�
 
 ## 6. 验证入口
 
+### 代码归属
+
+蒸镀材料后端分别位于 `src/iqc_domain/application/eva_materials/`、
+`src/iqc_domain/core/eva_materials/`、`src/iqc_domain/infrastructure/eva_materials/`；
+页面 section 位于 `app/sections/iqc_domain/eva_materials/`。域级 `composition.py` 负责依赖组装，
+IQC 表格渲染器仍由蒸镀材料和示例页面共享。目录迁移不改变 SQL、业务字段或页面行为。
+
+### 测试
+
 - 服务/规则：`tests/unit/test_iqc_evaporation.py`。
 - 源窗口、截止、失败：`tests/unit/test_iqc_evaporation_repository.py`。
 - 缓存热重载和策略隔离：`tests/unit/test_iqc_evaporation_cache.py`。

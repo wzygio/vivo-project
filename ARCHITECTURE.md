@@ -16,7 +16,7 @@ src/<domain>/<layer>/<submodule>/
 - Domains follow business responsibilities, not page names or storage technologies.
 - Layers are `application` (use cases), `core` (domain rules), and `infrastructure` (external adapters). Presentation lives in `app/`.
 - Submodules represent stable business capabilities or shared responsibilities within a layer. Prefer the same business name across layers, such as `qtime`; technical directories may use role-based names.
-- Small layers may keep files directly at the layer root. Do not create empty directories or move files solely to make every layer symmetrical.
+- Small layers may keep shared or legacy files directly at the layer root. Distinct business capabilities use named submodules consistently across their implemented layers, following the [business submodule rule](CONTEXT.md#business-submodule-organization). Do not create empty directories solely to make every layer symmetrical.
 - A domain-level `composition.py` assembles dependencies; it is not a fourth business layer. `shared_kernel` supplies cross-domain capabilities and does not require a full DDD layout.
 
 ### Current Directory Skeleton
@@ -71,9 +71,12 @@ src/
 │  ├─ core/              (layer root)
 │  └─ infrastructure/    (layer root)
 ├─ iqc_domain/
-│  ├─ application/       (layer root)
-│  ├─ core/              (layer root)
-│  └─ infrastructure/    (layer root; WMS and example data adapters)
+│  ├─ application/       (example reads also at layer root)
+│  │  └─ eva_materials/
+│  ├─ core/
+│  │  └─ eva_materials/
+│  └─ infrastructure/    (example adapter also at layer root)
+│     └─ eva_materials/
 └─ shared_kernel/        (shared contracts and configuration at root)
    ├─ infrastructure/
    └─ utils/
@@ -97,9 +100,9 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `equipment_domain`: critical parts, lifetime, real/fabricated matching | `application` | Layer root -> reports, data ports, refresh, and caching |
 | `equipment_domain` | `core` | Layer root -> identity, measurement matching, lifetime, and status calculations |
 | `equipment_domain` | `infrastructure` | Layer root -> baselines, real/fabricated data, and snapshot maintenance |
-| `iqc_domain`: incoming material inspection and lifetime examples | `application` | Layer root -> material report use case and read-only outbound port; retained example report reads |
-| `iqc_domain` | `core` | Layer root -> public material-report field projection, specification/operator pairing and filtering; stored quality decisions are not recalculated |
-| `iqc_domain` | `infrastructure` | Layer root -> WMS ticket/sample/catalog/measurement joins, source/display-time conversion and latest-day cutoff; retained example resources |
+| `iqc_domain`: incoming material inspection and lifetime examples | `application` | `eva_materials/` -> evaporation material report use case and read-only outbound port; layer root -> retained example report reads |
+| `iqc_domain` | `core` | `eva_materials/` -> public material-report field projection, specification/operator pairing and filtering; stored quality decisions are not recalculated |
+| `iqc_domain` | `infrastructure` | `eva_materials/` -> WMS ticket/sample/catalog/measurement joins, source/display-time conversion and latest-day cutoff; layer root -> retained example resources |
 
 `shared_kernel` owns configuration, source/display time, data health, cache helpers, and path contracts at its root; `infrastructure/` owns shared database connectivity, and `utils/` owns Excel/CSV utilities. Logic reused only within one domain should remain in that domain's corresponding `shared/` layer.
 
@@ -129,6 +132,7 @@ domain composition -> assembles application services and concrete adapters
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
 | `app/sections/<domain>/[<submodule>/]` | Query gates, session state, page sections, and presentation coordination; small domains may omit the submodule directory |
+| `app/sections/iqc_domain/eva_materials/` | Evaporation material query, filters, pagination and cached public payloads; the IQC report-table renderer is shared with example pages at the domain section root |
 | `app/charts/<domain>/[<submodule>/]` | Chart adapters; Inline shared charts live in `app/charts/inline_domain/`, without a one-to-one directory for every backend submodule |
 | `app/components/` | Cross-page components and filter/refresh coordination |
 | `app/sections/inline_domain/monitor/` | Current cross-indicator matrix assembly; consumes results from their owning domains |

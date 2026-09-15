@@ -5,7 +5,7 @@ from typing import Protocol
 
 import pandas as pd
 
-from src.iqc_domain.core.evaporation import project_report
+from src.iqc_domain.core.eva_materials.evaporation import project_report
 
 
 class IqcSourceUnavailable(RuntimeError):

@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import text
 
 from src.iqc_domain.composition import build_evaporation_service
-from src.iqc_domain.core.evaporation import REPORT_FIELDS, project_report
+from src.iqc_domain.core.eva_materials.evaporation import REPORT_FIELDS, project_report
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 

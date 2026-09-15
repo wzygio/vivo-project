@@ -7,9 +7,9 @@ import pandas as pd
 import streamlit as st
 
 from app.sections.iqc_domain.report_table import build_report_table
-from src.iqc_domain.application.evaporation import EvaporationReportService
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
 from src.iqc_domain.composition import build_evaporation_service
-from src.iqc_domain.core.evaporation import FILTER_COLUMNS, filter_report
+from src.iqc_domain.core.eva_materials.evaporation import FILTER_COLUMNS, filter_report
 from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)

@@ -4,13 +4,13 @@ import importlib
 import pandas as pd
 import pytest
 
-from src.iqc_domain.application.evaporation import EvaporationReportService
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
 from tests.unit.test_iqc_evaporation import MemorySource, source_frame
 
 
 def test_cache_native_payload_survives_module_reload_and_separates_policy(monkeypatch):
-    from app.sections.iqc_domain import evaporation_dashboard as dashboard
-    import src.iqc_domain.application.evaporation as application
+    from app.sections.iqc_domain.eva_materials import evaporation_dashboard as dashboard
+    import src.iqc_domain.application.eva_materials.evaporation as application
 
     calls = []
 
@@ -38,7 +38,7 @@ def test_cache_native_payload_survives_module_reload_and_separates_policy(monkey
 
 
 def test_source_failure_is_not_cached(monkeypatch):
-    from app.sections.iqc_domain import evaporation_dashboard as dashboard
+    from app.sections.iqc_domain.eva_materials import evaporation_dashboard as dashboard
 
     calls = []
 

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from src.iqc_domain.application.evaporation import IqcSourceUnavailable
-from src.iqc_domain.infrastructure.evaporation_repository import EvaporationRepository
+from src.iqc_domain.application.eva_materials.evaporation import IqcSourceUnavailable
+from src.iqc_domain.infrastructure.eva_materials.evaporation_repository import EvaporationRepository
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.shared_kernel.report_cutoff import ReportCutoffPolicy
 from tests.unit.test_iqc_evaporation import source_frame

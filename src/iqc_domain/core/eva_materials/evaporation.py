@@ -1,4 +1,4 @@
-"""Public report projection; measurement decisions remain source facts."""
+"""Evaporation report projection; measurement decisions remain source facts."""
 
 from collections.abc import Mapping, Sequence
 

@@ -6,8 +6,8 @@ from streamlit.testing.v1 import AppTest
 APP = '''
 import streamlit as st
 from tests.unit.test_iqc_evaporation import MemorySource, source_frame
-from src.iqc_domain.application.evaporation import EvaporationReportService, IqcSourceUnavailable
-from app.sections.iqc_domain.evaporation_dashboard import render_evaporation_dashboard
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService, IqcSourceUnavailable
+from app.sections.iqc_domain.eva_materials.evaporation_dashboard import render_evaporation_dashboard
 
 class Source(MemorySource):
     def read_report(self, start, end):

@@ -28,6 +28,13 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 
 ## Hard Boundaries
 
+### Business Submodule Organization
+
+- Organize distinct business capabilities within a domain as `src/<domain>/<layer>/<submodule>/`, keeping the same business submodule name across `application`, `core`, and `infrastructure` where those layers contain implementation.
+- IQC evaporation material reporting belongs to `eva_materials`. Future IQC capabilities must use their own sibling submodules instead of adding capability-specific programs directly to layer roots. Follow the same organization used by Inline capabilities such as `spc` and `ctq`.
+- Put capability-specific presentation sections under `app/sections/<domain>/<submodule>/`. Domain composition roots assemble dependencies; genuinely shared components remain shared. Create only directories with actual responsibilities, and preserve existing example resources until their owning capability is developed.
+- Keep concrete ownership and dependency details in [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ### Time and Data Semantics
 
 - Date forwarding changes the report display time axis at the repository output boundary. Database facts and raw Parquet snapshots retain source time. Translate direct-query display windows back to source windows, and include the time policy in relevant cache signatures.

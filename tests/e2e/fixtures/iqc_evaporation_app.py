@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from app.sections.iqc_domain import evaporation_dashboard
-from src.iqc_domain.application.evaporation import EvaporationReportService, IqcSourceUnavailable
+from app.sections.iqc_domain.eva_materials import evaporation_dashboard
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService, IqcSourceUnavailable
 from tests.unit.test_iqc_evaporation import source_frame
 
 

@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from src.iqc_domain.application.evaporation import EvaporationReportService
+from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
 
 
 class MemorySource:
@@ -69,7 +69,7 @@ def test_empty_report_has_full_schema_and_missing_columns_fail():
 
 
 def test_combined_filters_preserve_blanks_and_do_not_mutate():
-    from src.iqc_domain.core.evaporation import filter_report
+    from src.iqc_domain.core.eva_materials.evaporation import filter_report
 
     source = pd.concat([source_frame(), source_frame().assign(factory='V4', iqc_result='OK')], ignore_index=True)
     report = EvaporationReportService(MemorySource(source)).get_report(date(2026, 8, 1), date(2026, 8, 31))

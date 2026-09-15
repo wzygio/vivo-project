@@ -9,7 +9,7 @@ for path in (project_root, project_root / "src"):
 import streamlit as st
 
 from app.components.page_header import render_page_header
-from app.sections.iqc_domain.evaporation_dashboard import (
+from app.sections.iqc_domain.eva_materials.evaporation_dashboard import (
     fetch_report_payload,
     render_evaporation_dashboard,
 )
