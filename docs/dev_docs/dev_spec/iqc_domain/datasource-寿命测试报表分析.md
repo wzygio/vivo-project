@@ -38,7 +38,7 @@ Excel 企业加密，使用 enterprise-excel-markdown 的 Excel COM 只读单元
 - 编号先在全组生成再筛选，五个样品不是限制；不跨批次/画面混线。同一数据集乱序、翻页、筛选不会改变编号；新样品加入排序更靠前的位置时可能重排，本期没有持久编号表。
 - M3 独立连接池，只读事务、连接/语句超时、参数隐藏；不改动原 DatabaseManager，不覆盖 DB_*。
 - 样品 ID 及额外字段在服务返回前删除；页面、图表 JSON、表格、HTML、缓存只接收公开列。
-- 页面仅产品型号、批次号两个业务筛选；按组曲线与明细分页；全局缓存 TTL，失败不缓存、不回退示例。
+- 页面包含产品型号、产品状态、批次号三个业务筛选。产品选项来自全局 enabled_products，并在展示前限制数据范围；按产品/批次组织 Expander，W/R/G/B 每行四图、横轴步长 100。全局缓存 TTL，失败不缓存、不回退示例。
 
 ## 开发与验收
 
@@ -47,7 +47,7 @@ Excel 企业加密，使用 enterprise-excel-markdown 的 Excel COM 只读单元
 ### 实现
 
 - `src/iqc_domain/{application,core,infrastructure}/lifetime/`：应用读端口、匿名投影与校验、M3 独立池及只读查询。
-- `app/sections/iqc_domain/lifetime/`：公开数据缓存、刷新、两个联动筛选框、明细分页；`app/charts/iqc_domain/lifetime.py`：分组曲线构造。
+- `app/sections/iqc_domain/lifetime/`：公开数据缓存、三个联动筛选框、明细分页；`app/charts/iqc_domain/lifetime.py`：分组曲线构造。页面向共享页头注册本报表缓存函数，关闭快照刷新入口，沿用页头管理模式下的“刷新缓存”。
 - 原寿命页面改为调用正式 section，保留既有示例资源供其它使用者；更新 CONTEXT、ARCHITECTURE 与 [ADR-0030](../../../ADR/0030-iqc-lifetime-anonymous-m3-boundary.md)。
 
 ### 验收结果（2026-09-15）
@@ -90,3 +90,10 @@ playwright-cli -s=iqc-lifetime run-code --filename=D:/wzy/Python/vivo-project/te
 - 8 项既有失败：Inline Excel-only E2E 触发原页面 DB 构造（1）；设备 real/fabricated 结果条数断言（1）；SPC 加密文件诊断与当前文件格式不符（3）；自动预警页面门控断言（3）。本次未修改这些业务模块。
 - 回归输出包含已有 Windows COM `0x80010108` 诊断及弃用提示，测试进程仍完成并生成汇总。记录在 `regression-tests.log/xml` 与 `baseline.log/xml`。
 - 环境没有 pyright/ruff/coverage 插件，本次未声称完成静态类型或覆盖率百分比验证。未部署、远程推送或合并 master；开发提交保留在 `feat/iqc-lifetime-report`。
+
+### 2026-09-15 后续交互优化
+
+根据用户后续要求，取消独立“刷新数据”按钮，使用页头缓存刷新；添加产品状态；产品选项和“全部”结果范围统一受 enabled_products 控制（原则写入 CONTEXT）；每个产品/批次使用一个默认展开的 Expander，桌面 W/R/G/B 四图同排，窄屏沿用 Streamlit 自适应换行。横轴只调整刻度为 100 的整数步长，不舍入或重采样测点。
+
+验证：49 项相关测试通过，包含页头既有行为回归、真实 M3 对账、配置变化后清理旧选择、产品状态筛选及空启用范围。真实与受控 Playwright 均通过，增加 Expander 开合、四图位置、图例不遮挡曲线、三筛选、禁用产品不展示、实际页头缓存刷新等断言。
+本轮未重复全库回归；前述全库限制属于首次开发的历史证据。浏览器截图保存在 `output/test-results/iqc-lifetime-optimization/`。

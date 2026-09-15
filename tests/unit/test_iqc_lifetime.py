@@ -110,3 +110,6 @@ def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover():
     assert chart.data[0].connectgaps is False
     assert 'private' not in chart.to_json() and 'panel_id' not in chart.to_json()
     assert chart.layout.xaxis.type == 'linear'
+    assert chart.layout.xaxis.dtick == 100
+    assert chart.layout.xaxis.tick0 == 0
+    assert chart.layout.xaxis.tickformat == '.0f'

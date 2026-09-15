@@ -166,6 +166,25 @@ def test_scoped_header_refresh_controls_are_admin_only(monkeypatch) -> None:
     assert not stub.button_callbacks
 
 
+def test_snapshot_free_header_only_exposes_registered_cache_refresh(monkeypatch) -> None:
+    stub = _StreamlitStub()
+    monkeypatch.setattr(page_header, "st", stub)
+    monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
+    calls = []
+    cached = SimpleNamespace(clear=lambda: calls.append("cleared"))
+    monkeypatch.setattr(
+        page_header, "perform_hard_reset",
+        lambda funcs, *args: page_header.invalidate_page_cache(funcs),
+    )
+    page_header.render_page_header(
+        title="寿命", show_product_filter=False, show_data_refresh=False,
+        cached_funcs=[cached],
+    )
+    assert set(stub.button_callbacks) == {"btn_clear_寿命"}
+    stub.button_callbacks["btn_clear_寿命"]()
+    assert calls == ["cleared"]
+
+
 def _render_header_and_get_refresh_callback(
     monkeypatch,
     *,

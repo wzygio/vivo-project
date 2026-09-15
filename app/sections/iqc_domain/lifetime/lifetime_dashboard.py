@@ -1,4 +1,4 @@
-"""Two business filters, grouped curves and paginated measurement details."""
+"""Enabled product scope, measurement filters and grouped lifetime presentation."""
 
 import logging
 
@@ -28,17 +28,23 @@ def _select(label: str, options: list[str], key: str) -> list[str]:
     return st.multiselect(label, options, placeholder='全部', key=key)
 
 
-def _render_filters(frame: pd.DataFrame) -> tuple[list[str], list[str]]:
+def _render_filters(
+    frame: pd.DataFrame, enabled_products: list[str],
+) -> tuple[list[str], list[str], list[str]]:
     with st.container(border=True):
-        product_column, batch_column = st.columns(2)
+        product_column, status_column, batch_column = st.columns(3)
         with product_column:
-            products = _select('产品型号', sorted(frame['产品型号'].unique().tolist()),
+            products = _select('产品型号', enabled_products,
                                'iqc_lifetime_products')
-        with batch_column:
+        with status_column:
             scope = filter_report(frame, products, [])
+            statuses = _select('产品状态', sorted(scope['产品状态'].dropna().unique().tolist()),
+                               'iqc_lifetime_statuses')
+        with batch_column:
+            scope = filter_report(scope, [], [], statuses)
             batches = _select('批次号', sorted(scope['批次号'].unique().tolist()),
                               'iqc_lifetime_batches')
-    return products, batches
+    return products, batches, statuses
 
 
 def _render_trends(frame: pd.DataFrame) -> None:
@@ -46,21 +52,21 @@ def _render_trends(frame: pd.DataFrame) -> None:
     order = {'W': 0, 'R': 1, 'G': 2, 'B': 3}
     chart_index = 0
     for (product, batch), scope in frame.groupby(['产品型号', '批次号'], sort=True):
-        st.text(f'{product} · {batch}')
         screens = sorted(scope['测试画面'].unique(), key=lambda x: (order.get(x, 4), x))
-        for offset in range(0, len(screens), 2):
-            for screen, column in zip(screens[offset:offset + 2], st.columns(2)):
-                with column.container(border=True):
-                    group = scope.loc[scope['测试画面'].eq(screen)]
-                    st.text(str(screen))
-                    st.caption(f'{group["样品编号"].nunique()} 个样品 · {len(group)} 个测点')
-                    if group['效率衰减'].notna().any():
-                        st.plotly_chart(build_lifetime_chart(group), width='stretch',
-                                        key=f'iqc_lifetime_chart_{chart_index}',
-                                        config={'displayModeBar': False})
-                    else:
-                        st.info('该组暂无有效效率衰减测点。')
-                    chart_index += 1
+        with st.expander(f'{product} · {batch}', expanded=True):
+            for offset in range(0, len(screens), 4):
+                for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
+                    with column:
+                        group = scope.loc[scope['测试画面'].eq(screen)]
+                        st.text(str(screen))
+                        st.caption(f'{group["样品编号"].nunique()} 个样品 · {len(group)} 个测点')
+                        if group['效率衰减'].notna().any():
+                            st.plotly_chart(build_lifetime_chart(group), width='stretch',
+                                            key=f'iqc_lifetime_chart_{chart_index}',
+                                            config={'displayModeBar': False})
+                        else:
+                            st.info('该组暂无有效效率衰减测点。')
+                        chart_index += 1
 
 
 def _render_details(frame: pd.DataFrame, selections: tuple) -> None:
@@ -78,8 +84,6 @@ def _render_details(frame: pd.DataFrame, selections: tuple) -> None:
 
 
 def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> None:
-    if st.button('刷新数据', key='iqc_lifetime_refresh') and service is None:
-        fetch_report_payload.clear()
     try:
         with st.spinner('正在读取寿命测试数据…'):
             frame = service.get_report() if service is not None else fetch_report_payload()
@@ -87,8 +91,11 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
         logger.error('LIFETIME_REPORT_UNAVAILABLE exception_type=%s', type(exc).__name__)
         st.error('寿命测试数据暂时无法读取，请稍后刷新重试。')
         return
-    products, batches = _render_filters(frame)
-    selected = filter_report(frame, products, batches)
+    enabled_products = list(dict.fromkeys(ConfigLoader.get_enabled_products()))
+    # Apply the allowlist even when "all" is selected; never send disabled facts to UI.
+    frame = frame.loc[frame['产品型号'].isin(enabled_products)].copy()
+    products, batches, statuses = _render_filters(frame, enabled_products)
+    selected = filter_report(frame, products, batches, statuses)
     if selected.empty:
         st.info('没有符合筛选条件的寿命测试记录，请调整筛选条件或稍后刷新。')
         return
@@ -96,4 +103,4 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
     if selected[MEASUREMENT_COLUMNS].isna().any(axis=None):
         st.warning('部分测量值缺失，明细保留空白，趋势图在缺失测点处断开。')
     _render_trends(selected)
-    _render_details(selected, (tuple(products), tuple(batches)))
+    _render_details(selected, (tuple(products), tuple(batches), tuple(statuses)))

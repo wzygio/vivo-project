@@ -52,9 +52,11 @@ def project_report(source: pd.DataFrame) -> pd.DataFrame:
 
 def filter_report(
     frame: pd.DataFrame, products: list[str], batches: list[str],
+    statuses: list[str] | None = None,
 ) -> pd.DataFrame:
     mask = pd.Series(True, index=frame.index)
-    for column, values in [('产品型号', products), ('批次号', batches)]:
+    for column, values in [('产品型号', products), ('批次号', batches),
+                           ('产品状态', statuses)]:
         if values:
             mask &= frame[column].isin(values)
     return frame.loc[mask].copy()

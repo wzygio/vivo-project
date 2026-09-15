@@ -34,9 +34,13 @@ class ScenarioSource:
             sample['panel_id'] = f'private-{number}'
             frames.append(sample)
         other = frame.iloc[[0]].copy()
-        other['product_group'] = 'M999'
+        other['product_group'] = 'M626'
+        other['product_id'] = '模组'
         other['date_key'] = 'other-batch'
         frames.append(other)
+        disabled = other.copy()
+        disabled['product_group'] = 'M999'
+        frames.append(disabled)
         return pd.concat(frames, ignore_index=True)
 
 

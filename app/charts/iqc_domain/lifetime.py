@@ -19,11 +19,13 @@ def build_lifetime_chart(group: pd.DataFrame) -> go.Figure:
                            '<br>效率衰减：%{y:.4f}<extra></extra>'),
         ))
     figure.update_layout(
-        height=320, margin={'l': 12, 'r': 12, 't': 12, 'b': 12},
+        height=320, margin={'l': 12, 'r': 12, 't': 74, 'b': 12},
         paper_bgcolor='white', plot_bgcolor='white',
         font={'family': 'Microsoft YaHei, sans-serif', 'color': '#334155'},
-        legend={'title': {'text': '样品编号'}, 'orientation': 'h', 'y': 1.15},
-        xaxis={'title': '测试时间', 'type': 'linear', 'gridcolor': '#edf1f5'},
+        legend={'title': {'text': '样品编号'}, 'orientation': 'h',
+                'x': 0, 'xanchor': 'left', 'y': 1.02, 'yanchor': 'bottom'},
+        xaxis={'title': '测试时间', 'type': 'linear', 'gridcolor': '#edf1f5',
+               'tickmode': 'linear', 'tick0': 0, 'dtick': 100, 'tickformat': '.0f'},
         yaxis={'title': '效率衰减', 'tickformat': '.3f', 'gridcolor': '#edf1f5',
                'rangemode': 'normal'},
     )

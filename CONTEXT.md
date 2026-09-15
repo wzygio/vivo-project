@@ -35,6 +35,11 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 - Put capability-specific presentation sections under `app/sections/<domain>/<submodule>/`. Domain composition roots assemble dependencies; genuinely shared components remain shared. Create only directories with actual responsibilities, and preserve existing example resources until their owning capability is developed.
 - Keep concrete ownership and dependency details in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+### Product Availability
+
+- `config/global.yaml` -> `product_registry.enabled_products` is the single source of truth for report product selectors, including page-local selectors that replace the shared page-header selector. Read it through `ConfigLoader.get_enabled_products()` and preserve its configured order.
+- An empty product selection means all enabled products. Restrict report data to the enabled scope before rendering charts, tables, options or exports; hiding disabled products only in selector options is insufficient. Clear obsolete selections when the available scope changes.
+
 ### Time and Data Semantics
 
 - Date forwarding changes the report display time axis at the repository output boundary. Database facts and raw Parquet snapshots retain source time. Translate direct-query display windows back to source windows, and include the time policy in relevant cache signatures.

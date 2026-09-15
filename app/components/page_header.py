@@ -170,6 +170,7 @@ def render_page_header(
     show_product_filter: bool = True,
     product_cache_indicators: tuple[str, ...] = (),
     show_cache_refresh: bool = True,
+    show_data_refresh: bool = True,
 ) -> None:
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
     # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
@@ -277,17 +278,18 @@ def render_page_header(
             with st.container(border=True):
                 st.caption("管理员操作")
                 with st.container(horizontal=True):
-                    st.button(
-                        "🔄 刷新数据",
-                        key=f"btn_refresh_{title}",
-                        on_click=_refresh_data_callback,
-                        width="stretch",
-                        help=(
-                            f"刷新底层 L1 数据快照，并同步刷新产品 {product_cache_scope} 的 L2 页面缓存。"
-                            if product_cache_scope
-                            else "刷新底层 L1 数据快照，并同步刷新当前页面的 L2 缓存。"
-                        ),
-                    )
+                    if show_data_refresh:
+                        st.button(
+                            "🔄 刷新数据",
+                            key=f"btn_refresh_{title}",
+                            on_click=_refresh_data_callback,
+                            width="stretch",
+                            help=(
+                                f"刷新底层 L1 数据快照，并同步刷新产品 {product_cache_scope} 的 L2 页面缓存。"
+                                if product_cache_scope
+                                else "刷新底层 L1 数据快照，并同步刷新当前页面的 L2 缓存。"
+                            ),
+                        )
                     if show_cache_refresh:
                         st.button(
                             "🔄 刷新缓存",
