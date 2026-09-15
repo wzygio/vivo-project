@@ -72,7 +72,8 @@ src/
 │  └─ infrastructure/    (layer root)
 ├─ iqc_domain/
 │  ├─ application/       (layer root)
-│  └─ infrastructure/    (layer root; example data adapter)
+│  ├─ core/              (layer root)
+│  └─ infrastructure/    (layer root; WMS and example data adapters)
 └─ shared_kernel/        (shared contracts and configuration at root)
    ├─ infrastructure/
    └─ utils/
@@ -96,8 +97,9 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `equipment_domain`: critical parts, lifetime, real/fabricated matching | `application` | Layer root -> reports, data ports, refresh, and caching |
 | `equipment_domain` | `core` | Layer root -> identity, measurement matching, lifetime, and status calculations |
 | `equipment_domain` | `infrastructure` | Layer root -> baselines, real/fabricated data, and snapshot maintenance |
-| `iqc_domain`: incoming inspection and lifetime examples | `application` | Layer root -> example report reads and filtering |
-| `iqc_domain` | `infrastructure` | Layer root -> example resources; no independent `core/` or production quality-decision implementation currently |
+| `iqc_domain`: incoming material inspection and lifetime examples | `application` | Layer root -> material report use case and read-only outbound port; retained example report reads |
+| `iqc_domain` | `core` | Layer root -> public material-report field projection, specification/operator pairing and filtering; stored quality decisions are not recalculated |
+| `iqc_domain` | `infrastructure` | Layer root -> WMS ticket/sample/catalog/measurement joins, source/display-time conversion and latest-day cutoff; retained example resources |
 
 `shared_kernel` owns configuration, source/display time, data health, cache helpers, and path contracts at its root; `infrastructure/` owns shared database connectivity, and `utils/` owns Excel/CSV utilities. Logic reused only within one domain should remain in that domain's corresponding `shared/` layer.
 

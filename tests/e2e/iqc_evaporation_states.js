@@ -1,0 +1,32 @@
+async page => {
+  await page.setViewportSize({ width: 1365, height: 900 });
+  await page.goto('http://localhost:8518/?scenario=failure');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  await page.getByText('蒸镀材料检验数据暂时无法读取，请稍后重新查询。', { exact: true }).waitFor();
+  if (await page.locator('.iqc-sheet').count()) throw new Error('Failure shows stale table');
+  const body = await page.locator('body').innerText();
+  if (/private SQL|connection details|Traceback|管理员|admin=true/.test(body)) throw new Error('Failure leaks internals');
+  await page.screenshot({ path: 'controlled-failure.png', fullPage: true });
+  await page.goto('http://localhost:8518/');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  const table = page.locator('.iqc-sheet');
+  await table.waitFor();
+  await page.getByRole('spinbutton', { name: '页码', exact: true }).fill('3');
+  await page.getByRole('spinbutton', { name: '页码', exact: true }).press('Enter');
+  await page.waitForFunction(() => document.querySelectorAll('.iqc-sheet tbody tr').length === 5);
+  const rows = await table.locator('tbody tr').evaluateAll(rows => rows.map(r => [...r.children].map(c => c.textContent)));
+  if (rows[0][0] !== '201' || rows[4][0] !== '205') throw new Error('Last page loses records');
+  if (rows.some(r => r[25] !== 'NG' || r[26] !== '')) throw new Error('Stored NG or blank decision changed');
+  await page.locator('[role="combobox"][aria-label*="IQC结果"]').click();
+  await page.getByRole('option', { name: 'NG', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelector('input[aria-label="页码"]')?.value === '1');
+  await page.locator('[role="combobox"][aria-label*="COA结果"]').click();
+  await page.getByRole('option', { name: 'NG', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.getByText('没有符合筛选条件的记录，请调整筛选条件。', { exact: true }).waitFor();
+  if (await table.count()) throw new Error('Empty intersection shows stale data');
+  await page.screenshot({ path: 'controlled-empty-filter.png', fullPage: true });
+  if (await page.locator('[data-testid="stException"]').count()) throw new Error('Streamlit exception');
+  return { status: 'passed', source: 'controlled data port', scenarios: ['failure', 'recovery', 'last-page', 'stored-NG', 'blank-COA', 'combined-empty'] };
+}
