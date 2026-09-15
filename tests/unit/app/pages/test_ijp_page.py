@@ -1,16 +1,20 @@
 from pathlib import Path
 import runpy
 from types import SimpleNamespace
+import pytest
 
 from app.components import page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.ijp import dashboard as ijp_dashboard
+from app.sections.indicator_domain.ijp import filters as ijp_filters
+from app.sections.indicator_domain.ijp_hole import dashboard as hole_dashboard
 from app.utils.app_setup import AppSetup
 from src.indicator_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 
-def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
+@pytest.mark.parametrize('region', ['AA区', '孔区'])
+def test_ijp_page_is_a_thin_composition_layer(monkeypatch, region) -> None:
     events: list[object] = []
     database = object()
     service = object()
@@ -33,6 +37,7 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
         lambda **kwargs: events.append(("header", kwargs)),
     )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: database)
+    monkeypatch.setattr(ijp_filters, 'get_ijp_region', lambda: region)
     monkeypatch.setattr(
         composition,
         "build_ijp_service",
@@ -44,6 +49,10 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch) -> None:
         lambda received: events.append(("dashboard", received)),
         raising=False,
     )
+    monkeypatch.setattr(composition, 'build_ijp_hole_service',
+                        lambda received: events.append(('service', received)) or service)
+    monkeypatch.setattr(hole_dashboard, 'render_ijp_hole_dashboard',
+                        lambda received: events.append(('dashboard', received)))
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "IJP溢流监控报表.py"
     runpy.run_path(str(page_path), run_name="__main__")

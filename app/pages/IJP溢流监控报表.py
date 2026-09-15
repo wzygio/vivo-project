@@ -20,8 +20,11 @@ import streamlit as st
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
+from app.sections.indicator_domain.ijp.filters import get_ijp_region
 from app.utils.app_setup import AppSetup
 from src.indicator_domain.composition import build_ijp_service
+from src.indicator_domain.composition import build_ijp_hole_service
+from app.sections.indicator_domain.ijp_hole.dashboard import render_ijp_hole_dashboard
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -39,4 +42,7 @@ render_page_header(
     cached_funcs=[],
     show_product_filter=False,
 )
-render_ijp_dashboard(build_ijp_service(DatabaseManager()))
+if get_ijp_region() == '孔区':
+    render_ijp_hole_dashboard(build_ijp_hole_service(DatabaseManager()))
+else:
+    render_ijp_dashboard(build_ijp_service(DatabaseManager()))

@@ -1,0 +1,1 @@
+"""Large-hole SQL adapter."""

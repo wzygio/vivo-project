@@ -11,6 +11,7 @@ import streamlit as st
 from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
 from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
+from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
 from src.indicator_domain.core.ijp.period_summary import CODE_DESCRIPTIONS
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
@@ -60,6 +61,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
         st.caption(f"数据范围：{start_time:%Y/%m/%d} 至 {end_time:%Y/%m/%d}（上月 1 日至今天）")
         st.caption("两月三周：上月、本月及最近三周（含本周，周一开始）；月与周分别汇总，跨边界仅统计范围内数据。")
 
+        product_column, line_column, code_column, pici_column = render_ijp_filter_columns()
         try:
             options = service.get_filter_options(
                 tuple(st.session_state.get("ijp_product_codes", [])),
@@ -69,7 +71,6 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             st.error(str(exc))
             return
 
-        product_column, line_column, code_column, pici_column = st.columns(4)
         with product_column:
             _retain_available_multiselect_values(
                 "ijp_product_codes",

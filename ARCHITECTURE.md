@@ -59,13 +59,16 @@ src/
 ├─ indicator_domain/
 │  ├─ application/
 │  │  ├─ qtime/
-│  │  └─ ijp/
+│  │  ├─ ijp/
+│  │  └─ ijp_hole/
 │  ├─ core/
 │  │  ├─ qtime/
-│  │  └─ ijp/
+│  │  ├─ ijp/
+│  │  └─ ijp_hole/
 │  └─ infrastructure/
 │     ├─ qtime/
-│     └─ ijp/
+│     ├─ ijp/
+│     └─ ijp_hole/
 ├─ equipment_domain/
 │  ├─ application/       (layer root)
 │  ├─ core/              (layer root)
@@ -100,6 +103,7 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `indicator_domain`: Q-Time, IJP | `application` | `qtime/` -> monitoring, decoration, and cached use cases; `ijp/` -> overflow queries/filtering/report coordination; each owns its DTOs, ports, and errors |
 | `indicator_domain` | `core` | `qtime/` -> shop, exceedance, and decoration rules; `ijp/` -> overflow, period, and printer aggregation |
 | `indicator_domain` | `infrastructure` | `qtime/` -> queries, shop-level source snapshots, and decision workbooks; `ijp/` -> query adapters |
+| `indicator_domain`: IJP large holes | `application`, `core`, `infrastructure` | `ijp_hole/` -> enabled-product-scoped queries, three-code glass/total/day ratios, and source-filtered large-hole SQL; independent from border IJP counting, presented through the existing IJP page region selector. See [source and report boundary](docs/ADR/0031-ijp-hole-source-and-report-boundary.md) |
 | `equipment_domain`: critical parts, lifetime, real/fabricated matching | `application` | Layer root -> reports, data ports, refresh, and caching |
 | `equipment_domain` | `core` | Layer root -> identity, measurement matching, lifetime, and status calculations |
 | `equipment_domain` | `infrastructure` | Layer root -> baselines, real/fabricated data, and snapshot maintenance |

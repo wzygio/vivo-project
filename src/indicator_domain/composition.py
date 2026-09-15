@@ -2,6 +2,8 @@
 
 from src.indicator_domain.application.ijp.service import IjpReportService
 from src.indicator_domain.application.ijp.settings import IjpSettings
+from src.indicator_domain.application.ijp_hole.service import IjpHoleReportService
+from src.indicator_domain.infrastructure.ijp_hole.repository import IjpHoleRepository
 from src.indicator_domain.application.qtime.service import QTimeReportService
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
 from src.indicator_domain.infrastructure.qtime.decoration_repository import (
@@ -49,4 +51,12 @@ def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
         settings=IjpSettings.model_validate(
             ConfigLoader.load_domain_config("indicator_domain").get("ijp", {})
         ),
+    )
+
+
+def build_ijp_hole_service(db_manager: DatabaseManager) -> IjpHoleReportService:
+    return IjpHoleReportService(
+        IjpHoleRepository(db_manager),
+        enabled_products=tuple(ConfigLoader.get_enabled_products()),
+        work_order_types=tuple(ConfigLoader.get_work_order_types()),
     )

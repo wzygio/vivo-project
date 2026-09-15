@@ -98,8 +98,9 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.text_input
     assert "Cycle" not in labels
     filter_columns = app.get("column")
-    assert len(filter_columns) == 4
-    assert all(column.weight == 0.25 for column in filter_columns)
+    assert len(filter_columns) == 5
+    assert all(column.weight == 0.2 for column in filter_columns)
+    assert app.selectbox(key="ijp_region").options == ["AA区", "孔区"]
     assert app.info[0].value == "请选择筛选条件并点击“查询”。"
     assert not app.dataframe
 
@@ -109,7 +110,7 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.info
     assert not app.dataframe
     assert len(app.get("plotly_chart")) == 4
-    chart_columns = app.get("column")[4:]
+    chart_columns = app.get("column")[5:]
     assert [column.weight for column in chart_columns] == [0.5, 0.5, 1.0, 1.0]
     assert [expander.label for expander in app.expander] == [
         "产品：M626",
