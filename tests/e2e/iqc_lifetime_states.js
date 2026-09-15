@@ -1,8 +1,10 @@
 async page => {
+  // Exercise Streamlit's native download fallback without an OS save dialog.
+  await page.addInitScript(() => { delete window.showSaveFilePicker; });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1365, height: 1000 });
-  const table = page.locator('.iqc-sheet');
+  const table = page.getByTestId('stDataFrame');
   for (const scenario of ['failure', 'empty']) {
     await page.goto(`http://localhost:8522/?scenario=${scenario}`);
     await page.getByText(scenario === 'failure'
@@ -23,20 +25,19 @@ async page => {
   const mainGroup = page.getByTestId('stExpander').filter({ has: page.locator('summary', { hasText: 'M678' }) });
   const traces = await mainGroup.locator('.js-plotly-plot').first().evaluate(el => el.data);
   if (traces.length !== 9 || traces[0].y[1] !== null || traces[0].connectgaps !== false) throw new Error('Missing gaps or >5 samples lost');
-  await page.getByRole('spinbutton', { name: '页码', exact: true }).fill('2');
-  await page.getByRole('spinbutton', { name: '页码', exact: true }).press('Enter');
-  await page.waitForFunction(() => document.querySelectorAll('.iqc-sheet tbody tr').length === 9);
-  await page.screenshot({ path: 'controlled-last-page.png', fullPage: true });
+  if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
+  await table.hover();
+  const pending = page.waitForEvent('download');
+  await table.getByRole('button', { name: 'Download as CSV', exact: true }).click();
+  const download = await pending;
+  await download.saveAs('native-lifetime-controlled.csv');
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '2026/3/10', exact: true }).click();
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelector('input[aria-label="页码"]')?.value === '1');
   await page.getByRole('combobox', { name: '产品型号', exact: true }).click();
   await page.getByRole('option', { name: 'M626', exact: true }).click();
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelectorAll('.iqc-sheet tbody tr').length === 1);
-  const cells = await table.locator('tbody tr').first().locator('td').allTextContents();
-  if (cells[0] !== 'M626' || cells[1] !== '模组' || cells[3] !== 'other-batch' || cells[4] !== '1') throw new Error('Dependent filters or group numbering wrong');
+  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 1);
   await page.getByRole('combobox', { name: '产品状态', exact: true }).click();
   await page.getByRole('option', { name: '模组', exact: true }).click();
   await page.keyboard.press('Escape');
@@ -48,5 +49,5 @@ async page => {
   const exposed = await page.evaluate(() => document.body.innerText + JSON.stringify([...document.querySelectorAll('.js-plotly-plot')].map(el => el.data)));
   if (/private-|panel_id|admin=true|管理员/.test(exposed)) throw new Error('Identity leak');
   if (await page.locator('[data-testid="stException"]').count() || errors.length) throw new Error(errors.join('\n') || 'Streamlit exception');
-  return { status: 'passed', scenarios: ['failure', 'empty', 'recovery', 'missing', 'nine-samples', 'last-page', 'filter-reset', 'anonymous-hover', 'enabled-products', 'product-status'] };
+  return { status: 'passed', scenarios: ['failure', 'empty', 'recovery', 'missing', 'nine-samples', 'complete-native-export', 'filter-reset', 'anonymous-hover', 'enabled-products', 'product-status'] };
 }

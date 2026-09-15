@@ -6,14 +6,12 @@ import pandas as pd
 import streamlit as st
 
 from app.charts.iqc_domain.lifetime import build_lifetime_chart
-from app.sections.iqc_domain.report_table import build_report_table
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from src.iqc_domain.composition import build_lifetime_service
 from src.iqc_domain.core.lifetime.lifetime import MEASUREMENT_COLUMNS, filter_report
 from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
-PAGE_SIZE = 100
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=1, show_spinner=False)
@@ -69,18 +67,10 @@ def _render_trends(frame: pd.DataFrame) -> None:
                         chart_index += 1
 
 
-def _render_details(frame: pd.DataFrame, selections: tuple) -> None:
+def _render_details(frame: pd.DataFrame) -> None:
     st.subheader('寿命测试明细')
-    page_count = (len(frame) + PAGE_SIZE - 1) // PAGE_SIZE
-    signature = (selections, len(frame))
-    if st.session_state.get('iqc_lifetime_view') != signature:
-        st.session_state['iqc_lifetime_page'] = 1
-        st.session_state['iqc_lifetime_view'] = signature
-    page = st.number_input('页码', min_value=1, max_value=page_count, step=1,
-                           key='iqc_lifetime_page')
-    start = (int(page) - 1) * PAGE_SIZE
-    st.caption(f'共 {len(frame)} 条记录 · 第 {page} / {page_count} 页 · 每页 {PAGE_SIZE} 条')
-    st.html(build_report_table(frame.iloc[start:start + PAGE_SIZE], 'lifetime'))
+    st.caption(f'共 {len(frame)} 条记录')
+    st.dataframe(frame.reset_index(drop=True), hide_index=True, width='stretch')
 
 
 def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> None:
@@ -103,4 +93,4 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
     if selected[MEASUREMENT_COLUMNS].isna().any(axis=None):
         st.warning('部分测量值缺失，明细保留空白，趋势图在缺失测点处断开。')
     _render_trends(selected)
-    _render_details(selected, (tuple(products), tuple(batches), tuple(statuses)))
+    _render_details(selected)

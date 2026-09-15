@@ -17,6 +17,10 @@ class Source(MemorySource):
             raise RuntimeError('private SQL credentials')
         if mode == 'empty':
             return self.frame.iloc[:0]
+        if mode == 'many':
+            frame = pd.concat([self.frame] * 6, ignore_index=True)
+            frame['test_time'] = range(len(frame))
+            return frame
         if st.session_state.get('extended'):
             other = self.frame.copy()
             other['product_group'] = 'M626'
@@ -38,18 +42,20 @@ def test_filter_empty_failure_and_recovery():
     assert len(app.expander) == 1
     assert app.expander[0].label == 'M678 · 2026/3/10'
     assert len(app.get('plotly_chart')) == 4
-    assert 'private' not in app.get('html')[0].body
+    assert 'private' not in app.dataframe[0].value.to_json(force_ascii=False)
+    assert list(app.dataframe[0].value.columns)[4] == '样品编号'
+    assert len(app.dataframe[0].value.columns) == 15
     app.multiselect(key='iqc_lifetime_products').set_value(['M678']).run()
     assert not app.exception and len(app.get('plotly_chart')) == 4
     app.session_state['mode'] = 'failure'
     app.run()
     assert not app.exception and len(app.error) == 1
     assert 'private' not in app.error[0].value
-    assert not app.get('plotly_chart') and not app.get('html')
+    assert not app.get('plotly_chart') and not app.dataframe
     app.session_state['mode'] = 'empty'
     app.run()
     assert not app.exception and app.info
-    assert not app.get('html')
+    assert not app.dataframe
     app.session_state['mode'] = 'normal'
     app.run()
     assert not app.exception and len(app.get('plotly_chart')) == 4
@@ -61,12 +67,12 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     app.run()
     assert not app.exception
     assert app.multiselect(key='iqc_lifetime_products').options == ['M678', 'M626']
-    assert 'DISABLED' not in app.get('html')[0].body
+    assert 'DISABLED' not in app.dataframe[0].value.to_json(force_ascii=False)
     assert len(app.expander) == 2
     app.multiselect(key='iqc_lifetime_statuses').set_value(['模组']).run()
     assert not app.exception and len(app.expander) == 1
     assert app.expander[0].label.startswith('M626')
-    assert '屏体' not in app.get('html')[0].body
+    assert '屏体' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.multiselect(key='iqc_lifetime_products').set_value(['M626']).run()
     app.session_state['enabled'] = ['M678']
     app.run()
@@ -74,8 +80,20 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     assert app.multiselect(key='iqc_lifetime_products').value == []
     assert app.multiselect(key='iqc_lifetime_statuses').value == []
     assert len(app.expander) == 1 and app.expander[0].label.startswith('M678')
-    assert 'M626' not in app.get('html')[0].body
+    assert 'M626' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.session_state['enabled'] = []
     app.run()
     assert not app.exception and app.info
-    assert not app.get('html') and not app.get('plotly_chart')
+    assert not app.dataframe and not app.get('plotly_chart')
+
+
+def test_native_table_receives_all_filtered_rows_without_pagination():
+    app = AppTest.from_string(APP).run()
+    app.session_state['mode'] = 'many'
+    app.run()
+    assert not app.exception
+    assert not app.number_input
+    assert len(app.dataframe[0].value) == 144
+    assert app.dataframe[0].value.index.tolist() == list(range(144))
+    assert 'panel_id' not in app.dataframe[0].value.columns
+    assert not app.get('html')

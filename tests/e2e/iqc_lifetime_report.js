@@ -1,9 +1,11 @@
 async page => {
+  // Exercise Streamlit's native download fallback without an OS save dialog.
+  await page.addInitScript(() => { delete window.showSaveFilePicker; });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.goto('http://localhost:8521');
-  const table = page.locator('.iqc-sheet');
+  const table = page.getByTestId('stDataFrame');
   await table.waitFor({ timeout: 90000 });
   await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 4);
   if (await page.getByRole('combobox').count() !== 3) throw new Error('Expected product, status and batch filters');
@@ -23,9 +25,7 @@ async page => {
   await expander.locator('summary').click();
   await page.waitForFunction(() => !document.querySelector('[data-testid="stExpander"] details').open);
   await expander.locator('summary').click();
-  const headers = await table.locator('th').allTextContents();
-  if (headers.length !== 15 || headers[4] !== '样品编号' || headers[14] !== '效率衰减') throw new Error('Incorrect columns');
-  if (await table.locator('tbody tr').count() !== 100) throw new Error('Expected 100 live measurements');
+  if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
   const charts = await page.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => ({
     traces: el.data.map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate })),
     xaxis: el.layout.xaxis.title.text, yaxis: el.layout.yaxis.title.text,
@@ -49,23 +49,26 @@ async page => {
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '2026/3/10', exact: true }).click();
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => document.querySelectorAll('.iqc-sheet tbody tr').length === 100);
+  await table.waitFor();
   await page.locator('.js-plotly-plot').first().locator('.scatterlayer .trace').first().locator('.point').first().hover({ force: true });
   await page.locator('.hoverlayer').first().getByText(/样品编号/).waitFor();
   await page.screenshot({ path: 'live-hover.png', fullPage: true });
-  const exposed = await page.evaluate(() => document.body.innerText + document.querySelector('.iqc-sheet').outerHTML +
+  const exposed = await page.evaluate(() => document.body.innerText +
     JSON.stringify([...document.querySelectorAll('.js-plotly-plot')].map(el => el.data)));
   if (/L3MR|panel_id|private-|admin=true|管理员|m3dwd|Traceback/.test(exposed)) throw new Error('Internal content leaked');
   for (const width of [1365, 768, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.waitForTimeout(350);
     if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error(`Page overflow at ${width}`);
-    await table.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-    if (!await table.evaluate(el => el.scrollLeft + el.clientWidth >= el.scrollWidth - 2)) throw new Error('Cannot reach final measurement column');
+    await table.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `live-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 1365, height: 1000 });
-  await table.evaluate(el => { el.scrollLeft = 0; });
+  await table.hover();
+  const pending = page.waitForEvent('download');
+  await table.getByRole('button', { name: 'Download as CSV', exact: true }).click();
+  const download = await pending;
+  await download.saveAs('native-lifetime-live.csv');
   await page.goto('http://localhost:8521/?admin=true');
   await table.waitFor({ timeout: 90000 });
   if (await page.getByRole('button', { name: /刷新数据/ }).count()) throw new Error('Snapshot control should be absent');

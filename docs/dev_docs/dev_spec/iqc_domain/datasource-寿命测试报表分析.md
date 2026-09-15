@@ -47,7 +47,7 @@ Excel 企业加密，使用 enterprise-excel-markdown 的 Excel COM 只读单元
 ### 实现
 
 - `src/iqc_domain/{application,core,infrastructure}/lifetime/`：应用读端口、匿名投影与校验、M3 独立池及只读查询。
-- `app/sections/iqc_domain/lifetime/`：公开数据缓存、三个联动筛选框、明细分页；`app/charts/iqc_domain/lifetime.py`：分组曲线构造。页面向共享页头注册本报表缓存函数，关闭快照刷新入口，沿用页头管理模式下的“刷新缓存”。
+- `app/sections/iqc_domain/lifetime/`：公开数据缓存、三个联动筛选框、原生完整明细表；`app/charts/iqc_domain/lifetime.py`：分组曲线构造。页面向共享页头注册本报表缓存函数，关闭快照刷新入口，沿用页头管理模式下的“刷新缓存”。
 - 原寿命页面改为调用正式 section，保留既有示例资源供其它使用者；更新 CONTEXT、ARCHITECTURE 与 [ADR-0030](../../../ADR/0030-iqc-lifetime-anonymous-m3-boundary.md)。
 
 ### 验收结果（2026-09-15）
@@ -97,3 +97,11 @@ playwright-cli -s=iqc-lifetime run-code --filename=D:/wzy/Python/vivo-project/te
 
 验证：49 项相关测试通过，包含页头既有行为回归、真实 M3 对账、配置变化后清理旧选择、产品状态筛选及空启用范围。真实与受控 Playwright 均通过，增加 Expander 开合、四图位置、图例不遮挡曲线、三筛选、禁用产品不展示、实际页头缓存刷新等断言。
 本轮未重复全库回归；前述全库限制属于首次开发的历史证据。浏览器截图保存在 `output/test-results/iqc-lifetime-optimization/`。
+
+### 原生明细表简化
+
+后续按用户建议改为普通 `st.dataframe`，隐藏无业务含义的索引，取消自定义 HTML 和手动分页。将全部筛选后公开记录传给组件，以便原生搜索、排序、列显隐、全屏和 CSV 导出覆盖完整结果；没有自定义表格样式或额外数据处理。
+
+17 项相关单元/AppTest 通过，涵盖 144 条完整载荷、产品范围及状态筛选、空集和故障恢复。两组 Playwright 通过；下载实库 100 行与受控 109 行的 15 列 CSV，实库导出逐字段对账通过，受控导出保留 36 个缺测值。下载未包含原 panel_id、内部列或禁用产品。
+当前 Streamlit 优先调用系统保存对话框；自动化测试通过禁用浏览器 File System Access API 走组件内置的下载兼容路径，生产页面不修改浏览器 API。受控入口使用会话内服务注入，避免全局替换 renderer 带来的并发重跑冲突。
+截图和导出验证文件位于 `output/test-results/iqc-lifetime-native/`。本轮未重复全库回归。

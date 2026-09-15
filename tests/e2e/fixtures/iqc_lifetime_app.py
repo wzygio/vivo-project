@@ -1,7 +1,6 @@
 """Controlled scenarios around the actual page; not a production route."""
 
 from pathlib import Path
-import runpy
 import sys
 
 import pandas as pd
@@ -12,7 +11,11 @@ for path in (ROOT, ROOT / 'src'):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from app.sections.iqc_domain.lifetime import lifetime_dashboard
+from app.components.page_header import render_page_header
+from app.sections.iqc_domain.lifetime.lifetime_dashboard import (
+    fetch_report_payload, render_lifetime_dashboard,
+)
+from app.utils.app_setup import AppSetup
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from tests.unit.test_iqc_lifetime import source_frame
 
@@ -44,11 +47,12 @@ class ScenarioSource:
         return pd.concat(frames, ignore_index=True)
 
 
-original_render = lifetime_dashboard.render_lifetime_dashboard
-try:
-    lifetime_dashboard.render_lifetime_dashboard = lambda: original_render(
-        LifetimeReportService(ScenarioSource())
-    )
-    runpy.run_path(str(ROOT / 'app/pages/IQC寿命测试报表.py'), run_name='__main__')
-finally:
-    lifetime_dashboard.render_lifetime_dashboard = original_render
+# Keep injection local to this session; mutating a module-level renderer races
+# with Streamlit reruns and concurrent browser sessions.
+st.set_page_config(page_title='IQC寿命测试报表', layout='wide', initial_sidebar_state='collapsed')
+AppSetup.initialize_app()
+render_page_header(
+    title='IQC寿命测试报表', show_product_filter=False,
+    show_data_refresh=False, cached_funcs=[fetch_report_payload],
+)
+render_lifetime_dashboard(LifetimeReportService(ScenarioSource()))

@@ -3,7 +3,7 @@ async page => {
   await page.goto('http://localhost:8518/?scenario=failure');
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await page.getByText('蒸镀材料检验数据暂时无法读取，请稍后重新查询。', { exact: true }).waitFor();
-  if (await page.locator('.iqc-sheet').count()) throw new Error('Failure shows stale table');
+  if (await page.getByTestId('stDataFrame').count()) throw new Error('Failure shows stale table');
   const body = await page.locator('body').innerText();
   if (/private SQL|connection details|Traceback|管理员|admin=true/.test(body)) throw new Error('Failure leaks internals');
   await page.goto('http://localhost:8518/');
@@ -11,26 +11,18 @@ async page => {
   await product.click();
   await page.getByRole('option', { name: 'M626', exact: true }).click();
   await page.getByRole('button', { name: '查询', exact: true }).click();
-  const table = page.locator('.iqc-sheet');
+  const table = page.getByTestId('stDataFrame');
   await table.waitFor();
-  if ((await table.locator('th').allTextContents())[1] !== '产品型号') throw new Error('Column not renamed');
-  if (await table.locator('tbody tr').count() !== 100) throw new Error('Wrong page size');
-  if ((await table.innerText()).includes('999.999')) throw new Error('Common material leaked');
-  await page.getByRole('spinbutton', { name: '页码', exact: true }).fill('3');
-  await page.getByRole('spinbutton', { name: '页码', exact: true }).press('Enter');
-  await page.waitForFunction(() => document.querySelectorAll('.iqc-sheet tbody tr').length === 5);
-  const rows = await table.locator('tbody tr').evaluateAll(rows => rows.map(r => [...r.children].map(c => c.textContent)));
-  if (rows.some(r => r[1] !== 'M626' || r[25] !== 'NG' || r[26] !== '')) throw new Error('Wrong product or decisions');
-  await page.screenshot({ path: 'product-controlled-last-page.png', fullPage: true });
+  await page.getByText('共 205 条记录 · 左右滚动查看全部测点和检验结果', { exact: true }).waitFor();
+  if (await page.getByRole('spinbutton', { name: '页码', exact: true }).count()) throw new Error('Manual pagination remains');
+  await page.screenshot({ path: 'native-controlled-full-result.png', fullPage: true });
   await product.click();
   await page.getByRole('option', { name: 'M678', exact: true }).click();
   await page.getByText('请选择检验日期范围和产品型号并点击“查询”。', { exact: true }).waitFor();
   if (await table.count()) throw new Error('Old product rows remain');
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await table.waitFor();
-  if (await table.locator('tbody tr').count() !== 1) throw new Error('Wrong product row count');
-  if (!(await table.innerText()).includes('12.345')) throw new Error('Wrong product value');
-  if (await page.getByRole('spinbutton', { name: '页码', exact: true }).inputValue() !== '1') throw new Error('Page not reset');
+  await page.getByText('共 1 条记录 · 左右滚动查看全部测点和检验结果', { exact: true }).waitFor();
   await product.click();
   await page.getByRole('option', { name: 'Z571', exact: true }).click();
   await page.getByRole('button', { name: '查询', exact: true }).click();
@@ -38,5 +30,5 @@ async page => {
   if (await table.count()) throw new Error('Common rows shown for unmatched product');
   if (await page.locator('[data-testid="stMultiSelect"]').count()) throw new Error('Extra filters remain');
   if (await page.locator('[data-testid="stException"]').count()) throw new Error('Streamlit exception');
-  return { status: 'passed', source: 'controlled data port', scenarios: ['failure', 'recovery', 'pagination', 'exact-product', 'exclude-common', 'empty'] };
+  return { status: 'passed', source: 'controlled data port', scenarios: ['failure', 'recovery', 'full-result', 'exact-product', 'exclude-common', 'empty'] };
 }

@@ -135,8 +135,8 @@ domain composition -> assembles application services and concrete adapters
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
 | `app/sections/<domain>/[<submodule>/]` | Query gates, session state, page sections, and presentation coordination; small domains may omit the submodule directory |
-| `app/sections/iqc_domain/eva_materials/` | Evaporation material query, filters, pagination and cached public payloads; the IQC report-table renderer is shared with example pages at the domain section root |
-| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, product/status/batch filters, anonymous public cache and paginated details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency-decay curves grouped in product/batch expanders |
+| `app/sections/iqc_domain/eva_materials/` | Evaporation material query, filters, native Streamlit dataframe and cached public payloads; the complete public result supports native sorting, search and CSV export |
+| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, product/status/batch filters, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency-decay curves grouped in product/batch expanders |
 | `app/charts/<domain>/[<submodule>/]` | Chart adapters; Inline shared charts live in `app/charts/inline_domain/`, without a one-to-one directory for every backend submodule |
 | `app/components/` | Cross-page components and filter/refresh coordination |
 | `app/sections/inline_domain/monitor/` | Current cross-indicator matrix assembly; consumes results from their owning domains |
