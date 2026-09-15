@@ -9,10 +9,10 @@ for path in (project_root, project_root / "src"):
 import streamlit as st
 
 from app.components.page_header import render_page_header
-from app.sections.iqc_domain.demo_dashboard import render_demo_dashboard
+from app.sections.iqc_domain.lifetime.lifetime_dashboard import render_lifetime_dashboard
 from app.utils.app_setup import AppSetup
 
 st.set_page_config(page_title="IQC寿命测试报表", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 render_page_header(title="IQC寿命测试报表", show_product_filter=False)
-render_demo_dashboard("lifetime")
+render_lifetime_dashboard()
