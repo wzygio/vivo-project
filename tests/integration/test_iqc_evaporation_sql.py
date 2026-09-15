@@ -45,6 +45,13 @@ def test_catalog_expands_unmeasured_items_and_preserves_result_source():
         assert measured.iqc_result == "NG"  # Stored decision, even with an in-spec value.
         assert pd.isna(measured.coa_result)
         assert frame.loc[frame.cha_item.eq("未测项目"), "iqc_1"].isna().all()
+        connection.execute("UPDATE mdw.dwr_wms_tblqcticket SET eattribute5='V4'")
+        assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
+        connection.execute("UPDATE mdw.dwr_wms_tblqcticket SET eattribute5='V3'")
+        connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='无机'")
+        connection.execute("INSERT INTO mdw.dwr_wms_tblmitemset VALUES ('无机')")
+        assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
+        connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='有机'")
         # Exemption and cleanup flags are SQL exclusions, not UI hiding.
         for column, value in (("eattribute1", "免检"), ("eattribute12", "清除统计"), ("eattribute10", "/")):
             connection.execute(f"UPDATE mdw.dwr_wms_tblqcticket SET {column}=?", (value,))

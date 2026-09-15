@@ -68,15 +68,16 @@ def test_empty_report_has_full_schema_and_missing_columns_fail():
         EvaporationReportService(MemorySource(pd.DataFrame())).get_report(date(2026, 8, 1), date(2026, 8, 31))
 
 
-def test_combined_filters_preserve_blanks_and_do_not_mutate():
-    from src.iqc_domain.core.eva_materials.evaporation import filter_report
-
-    source = pd.concat([source_frame(), source_frame().assign(factory='V4', iqc_result='OK')], ignore_index=True)
-    report = EvaporationReportService(MemorySource(source)).get_report(date(2026, 8, 1), date(2026, 8, 31))
-    original = report.copy(deep=True)
-    assert len(filter_report(report, {'工厂': ['V3'], 'IQC结果': ['NG']})) == 1
-    assert filter_report(report, {'工厂': ['V3'], 'IQC结果': ['OK']}).empty
-    assert len(filter_report(report, {'COA结果': []})) == 2
-    with pytest.raises(ValueError, match='IQC_FILTER_INVALID'):
-        filter_report(report, {'flag': ['True']})
-    pd.testing.assert_frame_equal(report, original)
+def test_product_selection_excludes_common_and_other_products_without_mutation():
+    source = pd.concat([
+        source_frame(), source_frame().assign(prod_code='M626'),
+        source_frame().assign(prod_code='M678'), source_frame().assign(prod_code=None),
+    ], ignore_index=True)
+    original = source.copy(deep=True)
+    service = EvaporationReportService(MemorySource(source))
+    report = service.get_report(date(2026, 8, 1), date(2026, 8, 31), product_code='M626')
+    assert len(report) == 1
+    assert report['产品型号'].tolist() == ['M626']
+    assert '项目名' not in report
+    assert service.get_report(date(2026, 8, 1), date(2026, 8, 31), product_code='Z571').empty
+    pd.testing.assert_frame_equal(source, original)

@@ -47,6 +47,7 @@ def test_live_report_matches_supplied_finereport_sql():
             'start_time': source_start.to_pydatetime(), 'end_time': source_end.to_pydatetime(),
         })
     original = original.rename(columns={'eattribute5': 'factory'})
+    original = original.loc[original.factory.eq('V3') & original.mater_type.eq('有机')].copy()
     original = original.loc[:, list(REPORT_FIELDS)]
     original = policy.shift_frame(original, ('requestdate', 'checkeddate'))
     original = ConfigLoader.get_report_cutoff_policy().filter_frame(original, 'checkeddate')

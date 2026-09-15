@@ -5,7 +5,7 @@ from typing import Protocol
 
 import pandas as pd
 
-from src.iqc_domain.core.eva_materials.evaporation import project_report
+from src.iqc_domain.core.eva_materials.evaporation import filter_report, project_report
 
 
 class IqcSourceUnavailable(RuntimeError):
@@ -30,6 +30,7 @@ class EvaporationReportService:
     def __init__(self, source: EvaporationDataPort) -> None:
         self._source = source
 
-    def get_report(self, start: date, end: date) -> pd.DataFrame:
+    def get_report(self, start: date, end: date, product_code: str | None = None) -> pd.DataFrame:
         validate_dates(start, end)
-        return project_report(self._source.read_report(start, end))
+        report = project_report(self._source.read_report(start, end))
+        return filter_report(report, product_code) if product_code is not None else report

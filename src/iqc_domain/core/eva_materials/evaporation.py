@@ -1,12 +1,10 @@
 """Evaporation report projection; measurement decisions remain source facts."""
 
-from collections.abc import Mapping, Sequence
-
 import pandas as pd
 
 
 REPORT_FIELDS = {
-    "prod_code": "项目名", "materialtype": "量产/非量产",
+    "prod_code": "产品型号", "materialtype": "量产/非量产",
     "requestdate": "报检日期", "checkeddate": "检验时间",
     "mitemname": "物料号", "mitemdesc": "物料描述",
     "check_user": "检验人员", "mater_type": "物料分类", "factory": "工厂",
@@ -17,7 +15,6 @@ REPORT_FIELDS = {
     "iqc_result": "IQC结果", "coa_result": "COA结果",
 }
 REPORT_COLUMNS = ("序号", *REPORT_FIELDS.values())
-FILTER_COLUMNS = ("项目名", "工厂", "物料分类", "特性项目", "IQC结果", "COA结果")
 
 
 def project_report(source: pd.DataFrame) -> pd.DataFrame:
@@ -36,13 +33,6 @@ def project_report(source: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def filter_report(
-    frame: pd.DataFrame, selections: Mapping[str, Sequence[str]],
-) -> pd.DataFrame:
-    mask = pd.Series(True, index=frame.index)
-    for column, values in selections.items():
-        if column not in FILTER_COLUMNS:
-            raise ValueError("IQC_FILTER_INVALID")
-        if values:
-            mask &= frame[column].isin(values)
-    return frame.loc[mask, list(REPORT_COLUMNS)].copy()
+def filter_report(frame: pd.DataFrame, product_code: str) -> pd.DataFrame:
+    """Match the selected source value exactly, including an explicit common selection."""
+    return frame.loc[frame["产品型号"].eq(product_code), list(REPORT_COLUMNS)].copy()
