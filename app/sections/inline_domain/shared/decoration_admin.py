@@ -52,11 +52,10 @@ def render_sheet_oos_decoration_admin(
         else nullcontext()
     )
     with container:
-        st.caption(
-            f"flag 支持 True（修饰）、False（保留原值）、{DELETE_ACTION}"
-            "（不显示该 Sheet 的当前参数记录）；修改“决策台账”sheet 后上传并确认，"
-            "或点击页头“刷新缓存”。"
-        )
+        supported_flags = "True（修饰）、False（保留原值）"
+        if report_name != "SPC":
+            supported_flags += f"、{DELETE_ACTION}（不显示该 Sheet 的当前参数记录）"
+        st.caption(f"flag 支持 {supported_flags}；修改“决策台账”sheet 后上传并确认，或点击页头“刷新缓存”。")
         st.caption(f"修饰工作簿：{decoration_result.decoration_path}")
         st.caption(
             f"产品 sheet：{decoration_result.decoration_sheet}；决策 sheet：{decision_sheet}"
@@ -73,7 +72,7 @@ def render_sheet_oos_decoration_admin(
                 file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_oos_decoration_download",
-                use_container_width=True,
+                width="stretch",
             )
 
         with c_upload:
@@ -89,10 +88,10 @@ def render_sheet_oos_decoration_admin(
                     "确认覆盖并刷新",
                     type="primary",
                     key=f"{key_prefix}_oos_decoration_upload_btn",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     outcome = handle_decision_upload(
-                        decoration_result, uploaded_file.getbuffer()
+                        decoration_result, uploaded_file.getbuffer(), allow_delete=report_name != "SPC",
                     )
                     # 决策签名变化会自然触发 L2 miss，无需手动清缓存
                     if outcome.status == "success":

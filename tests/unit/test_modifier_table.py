@@ -152,6 +152,21 @@ class TestComputeCurrentMonthLoss:
         loss = compute_current_month_loss(_panel_rows(), level="code", month="2026-06")
         assert loss.empty
 
+    def test_month_with_input_includes_zero_loss_for_absent_defects(self):
+        losses = compute_current_month_losses(_panel_rows(), month="2026-08")
+        assert losses["code"].to_dict() == {
+            "G向单亮线": 1.0, "HBM亮点": 0.0, "G向单暗线": 0.0,
+        }
+        assert losses["group"].to_dict() == {"Array_Line": 1.0, "OLED_Mura": 0.0}
+
+    def test_repeated_ledger_defects_produce_one_zero_entry(self):
+        losses = compute_current_month_losses(
+            _panel_rows(), month="2026-08",
+            known_defects={"code": ["HistoricalOnly", "HistoricalOnly"]},
+        )
+        assert losses["code"].index.is_unique
+        assert losses["code"]["HistoricalOnly"] == 0.0
+
     def test_both_levels_share_one_date_parse(self, monkeypatch):
         """Group/Code 当月良损必须复用同一份日期解析和当月切片。"""
         import src.yield_domain.core.mwd_trend.modifier_table as module
@@ -249,7 +264,13 @@ def test_read_modifier_table_rejects_negative_rate_with_row_context(tmp_path):
 
 
 class TestComputeScaleFactors:
-    """缩放倍数 = round(指定良损 / 当月良损, 3)；异常口径记 1.0。"""
+    """指定/当月良损的倍率截断到 [0.3, 3.0]；无有效分母时记 1.0。"""
+
+    @pytest.mark.parametrize("specified,expected", [(0, 0.3), (0.001, 0.3), (0.02, 2.0), (0.06, 3.0)])
+    def test_computed_factor_is_clipped_without_changing_trend_target(self, specified, expected):
+        frame = pd.DataFrame([_row("C", "2026-09", 0.01, specified)])
+        assert compute_scale_factors(frame)[("C", "2026-09")] == expected
+        assert resolve_monthly_targets(frame, ["2026-09"])["C"]["2026-09"] == specified
 
     def test_factor_rounded_to_three_decimals(self):
         df = pd.DataFrame(
@@ -295,6 +316,68 @@ from src.yield_domain.application.modifier_table_service import sync_modifier_ta
 
 class TestSyncModifierTable:
     """写回 orchestration：更新当月良损，并仅在持久化成功后推进签名。"""
+
+    def test_factor_only_change_is_written_even_with_current_signature(self, tmp_path):
+        import json
+
+        path = tmp_path / "modifier.xlsx"
+        row = _row("C", "2026-09", 0.01, 0.06)
+        row["缩放倍数"] = 6.0
+        _write_table(path, "M626_Code级", [row])
+        signature = specified_signature(pd.DataFrame([row]))
+        path.with_suffix(".sig.json").write_text(json.dumps({"M626:code": signature}), encoding="utf-8")
+        # No source refresh: even historical/current references that stay unchanged
+        # need their derived factors migrated to the new policy.
+        sync_modifier_table(path, "M626", pd.DataFrame(), "2026-09")
+        result = read_modifier_table(path, "M626")["code"].iloc[0]
+        assert result["缩放倍数"] == 3.0
+        assert result["指定良损"] == 0.06
+
+    @pytest.mark.parametrize("read_only", [False, True])
+    def test_zero_loss_month_rows_preserve_manual_targets(self, tmp_path, read_only):
+        path = tmp_path / "modifier.xlsx"
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            for suffix in ("Group级", "Code级"):
+                pd.DataFrame([
+                    _row("HistoricalOnly", "2026-08", 0.12, 0.00078),
+                    _row("Existing", "2026-09", 0.12, 0.03),
+                ], columns=MODIFIER_TABLE_COLUMNS).to_excel(
+                    writer, sheet_name=f"M626_{suffix}", index=False,
+                )
+        before = path.read_bytes()
+        panels = pd.DataFrame({
+            "warehousing_time": ["20260901", "20260902"],
+            "panel_id": ["P1", "P2"],
+            "defect_group": [None, None],
+            "defect_desc": [None, None],
+        })
+        table = sync_modifier_table(path, "M626", panels, "2026-09", read_only=read_only)
+        for frame in table.values():
+            september = frame[frame["时间标签"].eq("2026-09")].set_index("不良类型")
+            assert set(september.index) == {"HistoricalOnly", "Existing"}
+            assert (september["当月良损"] == 0.0).all()
+            assert pd.isna(september.loc["HistoricalOnly", "指定良损"])
+            assert september.loc["Existing", "指定良损"] == pytest.approx(0.03)
+            assert resolve_monthly_targets(frame, ["2026-09"])["HistoricalOnly"]["2026-09"] == pytest.approx(0.00078)
+            august = frame[frame["时间标签"].eq("2026-08")].iloc[0]
+            assert august["当月良损"] == pytest.approx(0.12)
+        if read_only:
+            assert path.read_bytes() == before
+            assert not path.with_suffix(".sig.json").exists()
+        else:
+            persisted = read_modifier_table(path, "M626")
+            repeated = sync_modifier_table(path, "M626", panels, "2026-09")
+            for level in table:
+                pd.testing.assert_frame_equal(persisted[level], table[level], check_dtype=False)
+                pd.testing.assert_frame_equal(repeated[level], table[level], check_dtype=False)
+
+    def test_month_without_input_does_not_overwrite_reference_with_zero(self, tmp_path):
+        path = tmp_path / "modifier.xlsx"
+        _write_table(path, "M626_Code级", [_row("C", "2026-09", 0.12, 0.02)])
+        table = sync_modifier_table(path, "M626", _panel_rows(), "2026-09", read_only=True)
+        september = table["code"][table["code"]["时间标签"].eq("2026-09")]
+        assert len(september) == 1
+        assert september.iloc[0]["当月良损"] == pytest.approx(0.12)
 
     @pytest.mark.parametrize("read_only", [False, True])
     def test_backfills_history_without_overwriting_existing_values(self, tmp_path, read_only):
@@ -385,6 +468,8 @@ class TestSyncModifierTable:
             _row("HBM亮点", "2026-07", raw_loss=0.5),
             _row("G向单暗线", "2026-07", raw_loss=0.5),
         ]
+        for row, factor in zip(rows, [1.6, 1.0, 1.0]):
+            row["缩放倍数"] = factor
         path = tmp_path / "modifier.xlsx"
         _write_table(path, "M999_Code级", rows)
         # 预置相同签名

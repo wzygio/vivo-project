@@ -231,6 +231,9 @@ def test_persist_sheet_oos_decoration_does_not_overwrite_unreadable_existing_fil
     original_bytes = b"\x00\x00\x00\x00enterprise-encrypted"
     decoration_path.write_bytes(original_bytes)
 
+    # Enumeration has its own COM fallback; isolate it as well as content reads.
+    monkeypatch.setattr(sheet_oos_decoration, "list_workbook_sheet_names", lambda _path: None)
+
     monkeypatch.setattr(
         sheet_oos_decoration.pd,
         "read_excel",

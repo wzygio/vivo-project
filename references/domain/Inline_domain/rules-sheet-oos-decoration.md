@@ -4,6 +4,10 @@
 > 重点文件：`resources/inline_domain/spc_sheet_oos_decoration.xlsx`  
 > 核验日期：2026-09-03
 
+## SPC 当前规则（2026-09-21）
+
+SPC 已改为布尔决策：点位直接关联规格与 flag，True 修饰超规点，False 保留原值；旧 Delete 兼容为 False，新上传拒绝 Delete。完整历史点位仍供月周日分布图使用，SPC 报表仅计算上周一之后的完整 Sheet 特征及上一完整周能力。CTQ 等其他口径仍保留下述三态处理；SPC 具体链路见 [SPC 数据链路](data-flow-spc.md)。
+
 ## 1. 结论
 
 Sheet OOS 修饰不是对源数据库或 Inline Parquet 快照的回写，而是在报表计算期间对内存中的点位测量值执行三态处理：

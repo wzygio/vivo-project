@@ -35,21 +35,22 @@ def test_query_filter_empty_failure_and_retry(monkeypatch):
     app = AppTest.from_string(APP).run()
     assert not app.exception
     assert '查询' in app.info[0].value
-    assert len(app.date_input) == 1 and len(app.selectbox) == 1
-    assert not app.multiselect
-    assert app.selectbox[0].label == '产品型号'
-    assert app.selectbox[0].options == ['M626', 'M678', '通用']
+    assert len(app.date_input) == 1 and len(app.multiselect) == 1
+    assert not app.selectbox
+    assert app.multiselect[0].label == '产品型号'
+    assert app.multiselect[0].options == ['M626', 'M678', '通用']
+    app.multiselect(key='iqc_evap_products').set_value(['M626']).run()
     app.button(key='iqc_evap_query').click().run()
     assert not app.exception
     assert len(app.dataframe) == 1
     frame = app.dataframe[0].value
     assert list(frame.columns) == list(REPORT_COLUMNS)
     assert frame['IQC-1'].tolist() == [63.081]
-    assert frame['IQC结果'].tolist() == ['NG']
-    assert frame['COA结果'].isna().all()
+    assert frame['IQC结果'].tolist() == ['OK']
+    assert frame['COA结果'].tolist() == ['OK']
     assert frame['产品型号'].tolist() == ['M626']
     assert not app.number_input
-    app.selectbox(key='iqc_evap_product').set_value('M678').run()
+    app.multiselect(key='iqc_evap_products').set_value(['M678']).run()
     assert not app.dataframe
     assert '点击' in app.info[0].value
     app.button(key='iqc_evap_query').click().run()
@@ -76,25 +77,25 @@ def test_removed_product_resets_selection_and_excludes_common_records(monkeypatc
     products = ['M626', 'M678']
     monkeypatch.setattr(ConfigLoader, 'get_enabled_products', classmethod(lambda cls: products))
     app = AppTest.from_string(APP).run()
+    app.multiselect[0].set_value(['M626']).run()
     app.button(key='iqc_evap_query').click().run()
     assert app.dataframe
     products[:] = ['Z571']
     app.run()
     assert not app.exception
-    assert app.selectbox[0].options == ['Z571', '通用']
-    assert app.selectbox[0].value == 'Z571'
+    assert app.multiselect[0].options == ['Z571', '通用']
+    assert app.multiselect[0].value == []
     assert not app.dataframe
     app.button(key='iqc_evap_query').click().run()
     assert not app.exception
-    assert not app.dataframe
-    assert '没有符合' in app.info[0].value
+    assert app.dataframe[0].value['产品型号'].tolist() == ['通用']
 
 
 def test_common_is_an_explicit_deduplicated_option(monkeypatch):
     monkeypatch.setattr(ConfigLoader, 'get_enabled_products', classmethod(lambda cls: ['M626', '通用']))
     app = AppTest.from_string(APP).run()
-    assert app.selectbox[0].options == ['M626', '通用']
-    app.selectbox(key='iqc_evap_product').set_value('通用').run()
+    assert app.multiselect[0].options == ['M626', '通用']
+    app.multiselect(key='iqc_evap_products').set_value(['通用']).run()
     app.button(key='iqc_evap_query').click().run()
     assert not app.exception
     assert app.dataframe[0].value['IQC-1'].tolist() == [999.999]
@@ -115,3 +116,20 @@ def test_full_result_is_available_to_native_table(monkeypatch):
     assert list(frame.columns) == list(REPORT_COLUMNS)
     assert frame['序号'].tolist() == list(range(1, 206))
     assert not app.number_input
+
+
+def test_multiple_and_all_products_stay_within_enabled_scope(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, 'get_enabled_products', classmethod(lambda cls: ['M626', 'M678']))
+    scoped_app = APP.replace("source_frame().assign(iqc_1=999.999),", "source_frame().assign(iqc_1=999.999), source_frame().assign(prod_code='DISABLED'),")
+    app = AppTest.from_string(scoped_app).run()
+    assert app.multiselect[0].value == []
+    app.button(key='iqc_evap_query').click().run()
+    assert set(app.dataframe[0].value['产品型号']) == {'M626', 'M678', '通用'}
+    app.multiselect[0].set_value(['M626', 'M678']).run()
+    assert not app.dataframe
+    app.button(key='iqc_evap_query').click().run()
+    assert set(app.dataframe[0].value['产品型号']) == {'M626', 'M678'}
+    app.multiselect[0].set_value([]).run()
+    app.button(key='iqc_evap_query').click().run()
+    assert set(app.dataframe[0].value['产品型号']) == {'M626', 'M678', '通用'}
+    assert not app.exception

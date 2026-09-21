@@ -104,14 +104,20 @@ def prepare_decorated_data(
     decision_signature: str = "",
     decoration_port: SheetDecorationPort | None = None,
     resource_port: DecorationResourcePort | None = None,
+    sheet_features_start_date: str = "",
 ) -> DecoratedData:
-    """Apply the scope's tri-state Sheet actions and recompute Sheet features.
+    """Apply scope-specific actions and compute features in the requested window.
 
     The user-maintained decoration sheet (named after the product) is matched
     against the original out-of-spec Sheets: ``flag=Delete`` removes the matching
     product/station/parameter/Sheet points, ``True`` clips OOS points and
     ``False`` preserves their real values. ``scope`` only selects the workbook
     (``SCOPE_DECORATION_FILE_NAME``); the engine and flag semantics are shared.
+
+    SPC uses boolean decisions directly on points (legacy Delete becomes False).
+    Its optional ``sheet_features_start_date`` bounds both feature passes; the
+    full decorated point window remains available for the historical overview.
+    Other scopes retain their tri-state Sheet action semantics.
 
     ``product_revision``/``decision_signature`` 透传到 core 刷新门控：
     相同 revision + 相同决策签名 + 距成功写入不足 4h 时不重写工作簿；
@@ -121,7 +127,15 @@ def prepare_decorated_data(
     if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
         raise ValueError(f"unknown decoration scope: {scope!r}")
 
-    original_features_df = _preprocess_sheet_features_by_type(raw_measurements_df, spec_df)
+    def feature_points(points: pd.DataFrame) -> pd.DataFrame:
+        if not sheet_features_start_date or points.empty:
+            return points
+        timestamps = pd.to_datetime(points["sheet_start_time"], errors="coerce")
+        return points.loc[timestamps.ge(pd.Timestamp(sheet_features_start_date))].copy()
+
+    if sheet_features_start_date and normalized_scope != "spc":
+        raise ValueError("A separate Sheet feature window is supported only for SPC")
+    original_features_df = _preprocess_sheet_features_by_type(feature_points(raw_measurements_df), spec_df)
     decoration_result = prepare_sheet_oos_decoration(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
@@ -136,9 +150,10 @@ def prepare_decorated_data(
         product_revision=product_revision,
         decision_signature=decision_signature,
         decoration_port=decoration_port,
+        point_spec_df=spec_df,
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
-        decoration_result.raw_measurements_df,
+        feature_points(decoration_result.raw_measurements_df),
         spec_df,
     )
     logger.info(

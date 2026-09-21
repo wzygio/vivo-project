@@ -33,7 +33,7 @@ def source_frame():
     }])
 
 
-def test_report_preserves_result_blanks_and_pairs_specifications():
+def test_report_computes_results_preserves_measurement_blanks_and_pairs_specifications():
     source = MemorySource(source_frame())
     original = source.frame.copy(deep=True)
     report = EvaporationReportService(source).get_report(date(2026, 8, 1), date(2026, 8, 31))
@@ -43,8 +43,8 @@ def test_report_preserves_result_blanks_and_pairs_specifications():
     assert report.loc[0, '规格上限'] == 64
     assert report.loc[0, '规格样式2'] == '>='
     assert report.loc[0, '规格下限'] == 62
-    assert report.loc[0, 'IQC结果'] == 'NG'
-    assert pd.isna(report.loc[0, 'COA结果'])
+    assert report.loc[0, 'IQC结果'] == 'OK'
+    assert report.loc[0, 'COA结果'] == 'OK'
     assert pd.isna(report.loc[0, 'IQC-2'])
     assert 'flag' not in report and 'ticketno' not in report
     pd.testing.assert_frame_equal(source.frame, original)
@@ -81,3 +81,54 @@ def test_product_selection_excludes_common_and_other_products_without_mutation()
     assert '项目名' not in report
     assert service.get_report(date(2026, 8, 1), date(2026, 8, 31), product_code='Z571').empty
     pd.testing.assert_frame_equal(source, original)
+
+
+@pytest.mark.parametrize('prefix', ['iqc', 'coa'])
+@pytest.mark.parametrize('point', range(1, 6))
+def test_any_failing_point_sets_only_its_overall_result(prefix, point):
+    frame = source_frame().assign(iqc_result='OK', coa_result='OK')
+    frame.loc[0, f'{prefix}_{point}'] = 65
+    report = EvaporationReportService(MemorySource(frame)).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    assert report.loc[0, 'IQC结果'] == ('NG' if prefix == 'iqc' else 'OK')
+    assert report.loc[0, 'COA结果'] == ('NG' if prefix == 'coa' else 'OK')
+
+
+def test_missing_measurements_use_case_else_ok_without_filling_values():
+    frame = source_frame()
+    for prefix in ('iqc', 'coa'):
+        for point in range(1, 6):
+            frame[f'{prefix}_{point}'] = None
+    report = EvaporationReportService(MemorySource(frame)).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    assert report[['IQC结果', 'COA结果']].iloc[0].tolist() == ['OK', 'OK']
+    assert report[[f'{prefix}-{point}' for prefix in ('IQC', 'COA') for point in range(1, 6)]].isna().all(axis=None)
+
+
+def test_measurement_decisions_match_original_sql_case_for_boundaries_and_nulls():
+    import itertools
+    from pathlib import Path
+    import re
+    import sqlite3
+    from src.iqc_domain.core.eva_materials.evaporation import measurement_results
+
+    reference = (Path(__file__).resolve().parents[2] / 'docs/project_files/iqc_domain/蒸镀材料体系报表-sql语句.txt').read_text(encoding='utf-8')
+    cases = re.findall(r'CASE\s+-- 下限违规.*?END AS (?:IQC|COA)_[1-5]_RESULT', reference, flags=re.DOTALL)
+    assert len(cases) == 10
+    rows = []
+    for side, operator, boundary, value in itertools.product(
+        ['low', 'upp'], ['>=', '<=', '>', '<', '=', 'unknown', None], [62.0, None], [61.0, 62.0, 63.0, None],
+    ):
+        row = source_frame().iloc[0].to_dict()
+        row.update(spec_req1=None, low_spec=None, spec_req2=None, upp_spec=None)
+        row['spec_req1' if side == 'low' else 'spec_req2'] = operator
+        row[f'{side}_spec'] = boundary
+        for prefix in ('iqc', 'coa'):
+            for point in range(1, 6):
+                row[f'{prefix}_{point}'] = value
+        rows.append(row)
+    frame = pd.DataFrame(rows)
+    columns = ['spec_req1', 'low_spec', 'spec_req2', 'upp_spec', *[f'{prefix}_{i}' for prefix in ('iqc', 'coa') for i in range(1, 6)]]
+    with sqlite3.connect(':memory:') as connection:
+        frame[columns].to_sql('measurements', connection, index=False)
+        expected = pd.read_sql_query('SELECT ' + ', '.join(cases) + ' FROM measurements', connection)
+    expected.columns = expected.columns.str.lower()
+    pd.testing.assert_frame_equal(measurement_results(frame), expected)

@@ -35,7 +35,7 @@ from app.sections.inline_domain.shared.alert_center import (
 )
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
-from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
+from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts, previous_iso_week_range
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
@@ -191,6 +191,7 @@ def _render_capability_alert_section(
     memo_state_key: str,
     signature_base: str,
     chart_key_prefix: str,
+    reference_date: date | None = None,
 ) -> None:
     """Render one expander per metric: 预警表在上，对应的自动预警指标图像在下。
 
@@ -213,7 +214,7 @@ def _render_capability_alert_section(
                 display_alerts_df,
                 column_config={value_label: st.column_config.NumberColumn(value_label, format="%.3f")},
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
         elif has_capability_data:
             st.success(f"未发现低于 {threshold:.2f} 的 {metric_label}。")
@@ -250,6 +251,7 @@ def _render_capability_alert_section(
             memo_state_key=memo_state_key,
             chart_key_prefix=chart_key_prefix,
             step_desc_map=step_desc_map,
+            reference_date=reference_date,
         )
 
 
@@ -263,6 +265,7 @@ def render_cpk_alert_section(
     period_box_source: str = "point_value",
     threshold: float = CPK_ALERT_THRESHOLD,
     step_desc_map: dict[str, str] | None = None,
+    reference_date: date | None = None,
 ) -> None:
     """Render the CPK alert center: 预警表 + CPK 超规指标的自动预警图像。"""
     _render_capability_alert_section(
@@ -276,6 +279,7 @@ def render_cpk_alert_section(
         raw_measurements_df=raw_measurements_df,
         period_box_source=period_box_source,
         step_desc_map=step_desc_map,
+        reference_date=reference_date,
         memo_state_key="spc_alert_charts_memo",
         signature_base="spc_alert_charts",
         chart_key_prefix="spc_alert",
@@ -292,6 +296,7 @@ def render_cpm_alert_section(
     period_box_source: str = "point_value",
     threshold: float = CPM_ALERT_THRESHOLD,
     step_desc_map: dict[str, str] | None = None,
+    reference_date: date | None = None,
 ) -> None:
     """Render the CPM alert center: 预警表 + CPM 超规指标的自动预警图像。"""
     _render_capability_alert_section(
@@ -305,6 +310,7 @@ def render_cpm_alert_section(
         raw_measurements_df=raw_measurements_df,
         period_box_source=period_box_source,
         step_desc_map=step_desc_map,
+        reference_date=reference_date,
         memo_state_key="spc_cpm_alert_charts_memo",
         signature_base="spc_cpm_alert_charts",
         chart_key_prefix="spc_cpm_alert",
@@ -547,10 +553,7 @@ def _format_metric_value(value: object) -> str:
 
 
 def _create_period_capability_table(period_capability_df: pd.DataFrame) -> pd.DataFrame:
-    """Return a transposed CPM/CPK table: 周期为列，CPM/CPK 为行（仅月/周）。
-
-    日度不再计算 CPM/CPK，明细表仅保留月度与周度周期。
-    """
+    """Transpose capability rows; the SPC service supplies only the previous week."""
     metric_column = "指标"
     required_cols = {"period_type", "period_label"}
     if period_capability_df.empty or not required_cols.issubset(period_capability_df.columns):
@@ -608,6 +611,7 @@ def _build_indicator_render_payload(
     indicator_capability_df: pd.DataFrame,
     indicator_raw_df: pd.DataFrame,
     period_box_source: str,
+    reference_date: date | None = None,
 ) -> dict[str, object]:
     """[RenderGate 阶段1] 纯计算：构建单个指标的全部图表与表格，禁止触碰 st.*。"""
     cpk_values = (
@@ -620,16 +624,25 @@ def _build_indicator_render_payload(
         if "cpm" in indicator_capability_df.columns
         else pd.Series(dtype="float64")
     )
+    reference_date = reference_date or date.today()
     fig1 = _create_period_overview_chart(
         sheet_features_df=indicator_features_df,
         period_capability_df=indicator_capability_df,
         raw_measurements_df=indicator_raw_df,
         period_box_source=period_box_source,
         title=f"{label} | 月周天分布",
+        reference_date=reference_date,
     )
+    detail_start, _ = previous_iso_week_range(reference_date)
+    detail_points = indicator_raw_df
+    if not detail_points.empty:
+        times = pd.to_datetime(detail_points["sheet_start_time"], errors="coerce")
+        detail_points = detail_points.loc[
+            times.ge(detail_start) & times.lt(pd.Timestamp(reference_date) + pd.Timedelta(days=1))
+        ].copy()
     chamber_fig, time_fig = _create_sheet_points_box_charts(
-        raw_measurements_df=indicator_raw_df,
-        title_prefix=label,
+        raw_measurements_df=detail_points,
+        title_prefix=f"{label} | {detail_start:%m-%d} 起",
         spec_df=indicator_features_df,
         chart_type=chart_type,
     )
@@ -699,6 +712,7 @@ def render_spc_indicator_sections(
     memo_state_key: str = "spc_alert_charts_memo",
     chart_key_prefix: str = "spc_report",
     step_desc_map: dict[str, str] | None = None,
+    reference_date: date | None = None,
 ) -> None:
     """Render one expander per monitoring indicator with Task2 distribution figures.
 
@@ -709,14 +723,21 @@ def render_spc_indicator_sections(
     同一版数据重复 rerun 只渲染不重建；签名含产品缓存 revision，
     点"刷新缓存"后签名必变、必重建。
     """
-    if sheet_features_df.empty:
-        st.info("当前筛选条件下无 CPM/CPK 数据。")
+    if raw_measurements_df.empty:
+        st.info("当前筛选条件下无 SPC 数据。")
         return
 
     gate = RenderGate()
     line_param_name_contains = ConfigLoader.get_spc_line_chart_param_name_contains()
-    grouped = sheet_features_df.groupby(["factory", "step_id", "param_name"], sort=True)
-    for (factory, step_id, param_name), indicator_features_df in grouped:
+    grouped = raw_measurements_df.groupby(["factory", "step_id", "param_name"], sort=True)
+    for (factory, step_id, param_name), indicator_raw_df in grouped:
+        indicator_features_df = sheet_features_df
+        if not sheet_features_df.empty:
+            indicator_features_df = sheet_features_df.loc[
+                sheet_features_df["factory"].astype(str).eq(str(factory))
+                & sheet_features_df["step_id"].astype(str).eq(str(step_id))
+                & sheet_features_df["param_name"].astype(str).eq(str(param_name))
+            ].copy()
         label = f"{factory} | {format_step_label(step_id, step_desc_map)} | {param_name}"
         if {"factory", "step_id", "param_name"}.issubset(period_capability_df.columns):
             indicator_capability_df = period_capability_df[
@@ -726,14 +747,6 @@ def render_spc_indicator_sections(
             ].copy()
         else:
             indicator_capability_df = pd.DataFrame()
-        if {"factory", "step_id", "param_name"}.issubset(raw_measurements_df.columns):
-            indicator_raw_df = raw_measurements_df[
-                (raw_measurements_df["factory"].astype(str) == str(factory))
-                & (raw_measurements_df["step_id"].astype(str) == str(step_id))
-                & (raw_measurements_df["param_name"].astype(str) == str(param_name))
-            ].copy()
-        else:
-            indicator_raw_df = pd.DataFrame()
         chart_type = _resolve_chart_type(param_name, line_param_name_contains)
         gate.stage(
             partial(
@@ -744,6 +757,7 @@ def render_spc_indicator_sections(
                 indicator_capability_df=indicator_capability_df,
                 indicator_raw_df=indicator_raw_df,
                 period_box_source=period_box_source,
+                reference_date=reference_date,
             )
         )
 
@@ -752,6 +766,7 @@ def render_spc_indicator_sections(
         if memo_signature is None
         else (
             f"{memo_signature}|chart-config="
+            f"recent-sheets-v1:{reference_date or date.today()}:{period_box_source}|"
             f"{hashlib.sha256('|'.join(line_param_name_contains).encode('utf-8')).hexdigest()[:16]}"
             f"|capability={hashlib.sha256(period_capability_df.to_csv(index=False).encode('utf-8')).hexdigest()[:16]}"
         )
@@ -797,6 +812,7 @@ def render_sheet_oos_alert_indicator_sections(
     raw_measurements_df: pd.DataFrame,
     period_box_source: str = "point_value",
     step_desc_map: dict[str, str] | None = None,
+    reference_date: date | None = None,
 ) -> None:
     """Render every Sheet-OOS-alerted indicator directly, without requiring filter interaction."""
     if alerts_df.empty:
@@ -834,4 +850,5 @@ def render_sheet_oos_alert_indicator_sections(
             memo_state_key="spc_oos_alert_charts_memo",
             chart_key_prefix="spc_oos_alert",
             step_desc_map=step_desc_map,
+            reference_date=reference_date,
         )

@@ -25,6 +25,7 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     compute_decision_signature,
     get_decision_sheet_name,
     merge_detail_with_decoration_flags,
+    normalize_spc_decisions,
     should_regenerate_detail,
 )
 from src.shared_kernel.utils.excel_tools import (
@@ -183,6 +184,8 @@ def persist_sheet_oos_decoration_outcome(
     decision_sheet = get_decision_sheet_name(sheet)
     sheet_names = list_workbook_sheet_names(path)
     decisions = load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
+    if scope == "spc" and file_name == OOS_DECORATION_FILE_NAME:
+        decisions = normalize_spc_decisions(decisions)
     merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
     effective_now = now or datetime.now()
     effective_revision = "" if product_revision is None else str(product_revision)

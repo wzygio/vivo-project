@@ -74,12 +74,12 @@ class TestMappingMonthlyFactor:
         # 6 月批次未被月度因子缩放（级联衰减可能再降，但不会因为 0.5 因子恰好减半）
         assert _count(june, "CodeX") >= 5
 
-    def test_excessive_factor_is_ignored_to_prevent_row_explosion(self, caplog):
-        factors = {("CodeX", "2026-07"): 100.0}
+    @pytest.mark.parametrize("factor,expected", [(0, 3), (0.1, 3), (0.3, 3), (3, 30), (100, 30)])
+    def test_factor_is_clipped_to_mapping_bounds(self, factor, expected):
+        factors = {("CodeX", "2026-07"): factor}
 
         result = prepare_mapping_data(
             _single_batch_df(), scaling_factor=1.0, monthly_factors=factors
         )
 
-        assert _count(result, "CodeX") == 10
-        assert "超出防御上限" in caplog.text
+        assert _count(result, "CodeX") == expected

@@ -13,6 +13,7 @@ from src.inline_domain.core.spc.spc_calculator import (
     build_period_capability_report,
     normalize_period_sigma_source,
 )
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
@@ -212,8 +213,8 @@ class SpcReportService:
             raise SpcReportBuildError("SPC query config is invalid.") from e
 
         try:
-            # 共享修饰+特征管线（scope='spc'）：缓存 key 含产品/窗口/签名，
-            # 与 monitor 的 SPC 分组在窗口一致时命中同一条目。
+            previous_week_start, previous_week_end = previous_iso_week_range(pd.Timestamp(query_config.end_date))
+            # Historical points feed the overview; only recent points need Sheet features.
             features_payload = fetch_decorated_features(
                 _features_source=_data_port,
                 prod_code=query_config.prod_code,
@@ -223,27 +224,24 @@ class SpcReportService:
                 snapshot_signature=snapshot_signature,
                 product_revision=product_revision,
                 decision_signature=decision_signature,
+                sheet_features_start_date=previous_week_start.strftime("%Y-%m-%d"),
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
 
             measurements_df = features_payload["raw_measurements_df"]
             sheet_features_df = features_payload["sheet_features_df"]
-            if sheet_features_df.empty:
-                return SpcReportService._empty_payload()
 
             capability_sheet_features_df = exclude_cpm_cpk_parameters(
                 sheet_features_df,
                 capability_exempt_param_name_contains,
             )
+            point_times = pd.to_datetime(measurements_df["sheet_start_time"], errors="coerce")
             capability_measurements_df = exclude_cpm_cpk_parameters(
-                measurements_df,
+                measurements_df.loc[point_times.ge(previous_week_start) & point_times.lt(previous_week_end)],
                 capability_exempt_param_name_contains,
             )
-            capability_end_date = resolve_period_capability_end_date(
-                capability_sheet_features_df,
-                query_config.end_date,
-            )
+            capability_end_date = pd.Timestamp(query_config.end_date).date()
 
             if capability_sheet_features_df.empty or capability_end_date is None:
                 period_capability_df = pd.DataFrame()
@@ -259,6 +257,7 @@ class SpcReportService:
                     if resolved_period_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
                     else None,
                     sigma_source=resolved_period_sigma_source,
+                    previous_week_only=True,
                 )
             product_resource_dir = resolve_product_resource_dir(query_config.prod_code)
             cpk_decoration_result = prepare_capability_decoration(
@@ -278,11 +277,11 @@ class SpcReportService:
             )
             period_capability_df = cpm_decoration_result.period_capability_df
             indicators_df = (
-                sheet_features_df[["prod_code", "factory", "step_id", "param_name"]]
+                measurements_df[["prod_code", "factory", "step_id", "param_name"]]
                 .drop_duplicates()
                 .sort_values(["param_name", "step_id", "factory"])
                 .reset_index(drop=True)
-                if not sheet_features_df.empty
+                if not measurements_df.empty
                 else pd.DataFrame(columns=["prod_code", "factory", "step_id", "param_name"])
             )
             return {

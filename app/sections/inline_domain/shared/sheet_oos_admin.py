@@ -87,6 +87,8 @@ def build_decision_download_sheets(
 
 def validate_decision_upload(
     uploaded_df: pd.DataFrame | None,
+    *,
+    allow_delete: bool = True,
 ) -> tuple[bool, str | None, pd.DataFrame | None]:
     """校验并规范化上传的决策台账。
 
@@ -105,11 +107,13 @@ def validate_decision_upload(
 
     df = _normalize_key_columns(uploaded_df[DECISION_DOWNLOAD_COLUMNS].copy(), OOS_KEY_COLUMNS)
     invalid_mask = ~df[DECISION_FLAG_COLUMN].apply(_is_valid_flag)
+    if not allow_delete:
+        invalid_mask |= df[DECISION_FLAG_COLUMN].astype(str).str.strip().str.lower().eq("delete")
     if invalid_mask.any():
         bad_values = df.loc[invalid_mask, DECISION_FLAG_COLUMN].head(3).tolist()
         return (
             False,
-            f"flag 存在非法取值（仅支持 True/False/Delete）：{bad_values}",
+            f"flag 存在非法取值（仅支持 {'True/False/Delete' if allow_delete else 'True/False'}）：{bad_values}",
             None,
         )
     duplicated_mask = df.duplicated(OOS_KEY_COLUMNS, keep=False)
@@ -123,6 +127,8 @@ def validate_decision_upload(
 
 def parse_decision_upload(
     file_bytes: bytes,
+    *,
+    allow_delete: bool = True,
 ) -> tuple[bool, str | None, pd.DataFrame | None]:
     """解析上传的 Excel：优先“决策台账”sheet；兼容旧单 sheet 文件（取第一个 sheet）。"""
     try:
@@ -136,7 +142,7 @@ def parse_decision_upload(
     else:
         # 兼容旧单 sheet 修饰表：取第一个 sheet，键列/flag 缺失由校验报错
         df = next(iter(sheets.values()))
-    return validate_decision_upload(df)
+    return validate_decision_upload(df, allow_delete=allow_delete)
 
 
 def apply_decision_upload(
@@ -169,9 +175,11 @@ def apply_decision_upload(
 def handle_decision_upload(
     decoration_result: SheetOosDecorationResult,
     file_bytes: bytes,
+    *,
+    allow_delete: bool = True,
 ) -> DecisionUploadOutcome:
     """上传处理入口：解析 → 校验 → 写入 __flags。"""
-    ok, error, normalized_df = parse_decision_upload(file_bytes)
+    ok, error, normalized_df = parse_decision_upload(file_bytes, allow_delete=allow_delete)
     if not ok:
         return DecisionUploadOutcome("error", error or "上传校验失败。")
     return apply_decision_upload(decoration_result, normalized_df)

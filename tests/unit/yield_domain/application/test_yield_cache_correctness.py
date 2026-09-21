@@ -16,6 +16,23 @@ from src.yield_domain.application.yield_service import (
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 
 
+def test_manual_resource_revision_ignores_file_changes(monkeypatch, mock_config, tmp_path):
+    def unexpected_stat(_path):
+        pytest.fail("Manual resource revisions must not inspect resource files")
+
+    monkeypatch.setattr(YieldAnalysisService, "compute_snapshot_signature", unexpected_stat)
+    before = YieldAnalysisService.build_cache_context(
+        mock_config, tmp_path, resource_revision="manual-v1"
+    )
+    after = YieldAnalysisService.build_cache_context(
+        mock_config, tmp_path, resource_revision="manual-v2"
+    )
+    for key in ("modifier_signature", "warning_signature", "rate_override_signature"):
+        assert before[key] != after[key]
+    assert before["analysis_start_date"] == after["analysis_start_date"]
+    assert before["analysis_end_date"] == after["analysis_end_date"]
+
+
 def test_empty_health_survives_modified_cache_and_facade(monkeypatch, mock_config):
     health = make_data_health("fresh", source_start="2026-06-01", source_end="2026-09-01")
     monkeypatch.setattr(YieldAnalysisService, "get_raw_panel_details", staticmethod(lambda *args: attach_data_health(pd.DataFrame(), health)))

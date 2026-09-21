@@ -85,7 +85,7 @@ def test_ijp_table_handles_empty_and_non_numeric_ratios() -> None:
 def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
-    assert app.subheader[0].value == "OLED IJP 溢流监控"
+    assert not app.subheader
     assert not app.date_input
     assert not app.datetime_input
     assert not app.number_input
@@ -135,7 +135,7 @@ def test_ijp_dashboard_shows_a_safe_database_error() -> None:
     app.multiselect(key="ijp_product_codes").set_value(["M678"])
     app.button(key="ijp_search").click().run()
 
-    assert app.error[0].value == "IJP 溢流数据读取失败，请联系系统管理员确认数据库权限。"
+    assert app.error[0].value == "IJP 数据暂时无法读取，请稍后重试。"
     assert not app.dataframe
 
 
@@ -165,6 +165,6 @@ def test_fixed_window_and_period_chart_without_details():
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
     app.button(key="ijp_search").click().run()
     assert not app.date_input
-    assert any("2026/08/01 至 2026/09/07" in item.value for item in app.caption)
+    assert not app.caption
     assert len(app.get("plotly_chart")) == 4
     assert not app.dataframe

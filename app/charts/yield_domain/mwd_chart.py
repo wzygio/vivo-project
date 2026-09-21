@@ -396,7 +396,7 @@ def prepare_union_data_for_filter(
             'defect_group': k[0],
             'defect_desc': k[1],
             'defect_rate': v,
-            'monthly_avg_rate': monthly_avg_rates.get(k, 0.0),
+            'monthly_avg_rate': monthly_avg_rates.get(k, float('nan')),
         }
         for k, v in candidates.items()
     ]

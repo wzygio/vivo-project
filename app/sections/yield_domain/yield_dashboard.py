@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import plotly.graph_objects as go
 
 from app.components.indicator_cache import build_indicator_product_cache_signature
+from app.components.code_selector import DEFAULT_MONTHLY_RATE_THRESHOLD, build_batch_code_options_by_group
 from app.manager.render_gate import RenderGate
 
 # 引入现有的绘图函数
@@ -1135,10 +1136,11 @@ def render_code_compact_expanders(
 # ==============================================================================
 #  7. 自动预警缺陷图像 (Alert-driven Code Charts)
 # ==============================================================================
-def _positive_monthly_code_pairs(
+def _eligible_monthly_code_pairs(
     mwd_code_data: dict,
-) -> Optional[set[tuple[str, str]]]:
-    """返回至少一个月度不良率大于零的 Code；无月度口径时不限制。"""
+    rate_threshold: float,
+) -> set[tuple[str, str]]:
+    """Reuse the manual selector's monthly-average eligibility rule."""
     monthly = mwd_code_data.get("monthly") if mwd_code_data else None
     required_columns = {"defect_group", "defect_desc", "defect_rate"}
     if (
@@ -1146,21 +1148,14 @@ def _positive_monthly_code_pairs(
         or monthly.empty
         or not required_columns.issubset(monthly.columns)
     ):
-        return None
-
-    rates = monthly[["defect_group", "defect_desc", "defect_rate"]].dropna(
-        subset=["defect_group", "defect_desc"]
-    ).copy()
-    rates["defect_rate"] = pd.to_numeric(
-        rates["defect_rate"], errors="coerce"
-    ).fillna(0.0)
-    maximums = rates.groupby(
-        ["defect_group", "defect_desc"], observed=True
-    )["defect_rate"].max()
+        return set()
+    options = build_batch_code_options_by_group(
+        {"monthly": monthly}, rate_threshold=rate_threshold,
+    )
     return {
         (str(group), str(code))
-        for (group, code), rate in maximums.items()
-        if float(rate) > 0.0
+        for group, codes in options.items()
+        for code in codes
     }
 
 
@@ -1168,6 +1163,7 @@ def collect_alert_hit_codes(
     trend_records: Optional[List[dict]],
     lot_oos_records: Optional[List[dict]],
     mwd_code_data: dict,
+    rate_threshold: float = DEFAULT_MONTHLY_RATE_THRESHOLD,
 ) -> List[tuple]:
     """汇总趋势波动与 Lot 超规预警命中的 (defect_group, defect_desc) 集合。
 
@@ -1177,8 +1173,8 @@ def collect_alert_hit_codes(
     - Lot 超规记录：取 "异常 Code" 字段并按同一映射补齐 group。
 
     group↔code 映射取自 mwd_code_data['monthly']，monthly 缺失时回退 weekly。
-    有月度口径时，仅至少一个月不良率大于零的 Code 生成图像；无月度记录或
-    全周期不良率均不大于零的 Code 均隐藏。无法映射到 group 的 code 直接跳过。
+    仅月均不良率达到共享阈值的 Code 生成图像；缺少月度记录时隐藏。
+    无法映射到 group 的 code 直接跳过。
     结果去重并按 (group, code) 稳定排序。
     """
     pair_df = None
@@ -1222,12 +1218,7 @@ def collect_alert_hit_codes(
         if group:
             hits.add((group, code))
 
-    positive_monthly_pairs = _positive_monthly_code_pairs(mwd_code_data)
-    visible_hits = (
-        hits
-        if positive_monthly_pairs is None
-        else hits & positive_monthly_pairs
-    )
+    visible_hits = hits & _eligible_monthly_code_pairs(mwd_code_data, rate_threshold)
     return sorted(visible_hits)
 
 
@@ -1271,6 +1262,7 @@ def render_alert_code_expanders(
     memo_state_key: str = "yield_alert_charts_memo",
     chart_key_prefix: str = "yield_alert",
     data_signature: str = "",
+    rate_threshold: float = DEFAULT_MONTHLY_RATE_THRESHOLD,
 ) -> None:
     """渲染预警命中 Defect Code 的图像（趋势 + Mapping + Lot + Sheet），无需手动筛选。
 
@@ -1279,7 +1271,9 @@ def render_alert_code_expanders(
     与下方手动筛选区的 plotly key 完全隔离。
     data_signature 由调用方传入源数据及规格版本，避免命中 Code 不变时复用旧图。
     """
-    hit_codes = collect_alert_hit_codes(trend_records, lot_oos_records, mwd_code_data)
+    hit_codes = collect_alert_hit_codes(
+        trend_records, lot_oos_records, mwd_code_data, rate_threshold=rate_threshold,
+    )
     if not hit_codes:
         return
 

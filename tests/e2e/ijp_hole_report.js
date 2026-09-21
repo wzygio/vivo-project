@@ -4,6 +4,9 @@ async page => {
   await page.getByRole('combobox', {name: '监控区域', exact: true}).click();
   await page.getByRole('option', {name: '孔区', exact: true}).click();
   await page.getByText('请选择筛选条件并点击“查询”。').waitFor();
+  if (await page.locator('h3, [data-testid="stCaptionContainer"]').count())
+    throw Error('Unexpected region subtitle or caption');
+  await page.getByRole('heading', {name: 'IJP溢流监控报表', exact: true}).waitFor();
   const filters = await page.locator('[data-testid="stSelectbox"], [data-testid="stMultiSelect"]').evaluateAll(elements =>
     elements.map(element => element.getBoundingClientRect().top));
   if (filters.length !== 5 || Math.max(...filters) - Math.min(...filters) > 3)
@@ -52,14 +55,14 @@ async page => {
   await page.getByRole('option', {name: '3CEE02', exact: true}).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', {name: '查询', exact: true}).click();
-  await page.getByText('当前筛选条件下暂无 IJP 大孔数据。').waitFor();
+  await page.getByText('当前筛选条件下暂无 IJP 溢流数据。').waitFor();
   await page.screenshot({path: 'hole-empty.png', fullPage: true});
   await line.click(); await page.keyboard.press('Backspace'); await page.keyboard.press('Escape');
   await page.locator('[role="combobox"][aria-label*="产品型号"]').click();
   await page.getByRole('option', {name: 'M678', exact: true}).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', {name: '查询', exact: true}).click();
-  await page.getByText('IJP 孔区数据暂时无法读取，请稍后重试。').waitFor();
+  await page.getByText('IJP 数据暂时无法读取，请稍后重试。').waitFor();
   if (await page.locator('.js-plotly-plot').count()) throw Error('Stale chart after error');
   const content = await page.locator('body').innerText();
   if (/admin=true|raw_ratio|in_window|SELECT |数据库权限|Traceback/.test(content))
@@ -67,6 +70,6 @@ async page => {
   await page.screenshot({path: 'hole-error.png', fullPage: true});
   await page.getByRole('combobox', {name: '监控区域', exact: true}).click();
   await page.getByRole('option', {name: 'AA区', exact: true}).click();
-  await page.getByRole('heading', {name: 'OLED IJP 溢流监控', exact: true}).waitFor();
+  await page.getByRole('heading', {name: 'IJP溢流监控报表', exact: true}).waitFor();
   return 'PASS: actual page, SQL adapter, three views, denominator, filters, empty/error, region switch, viewport';
 }

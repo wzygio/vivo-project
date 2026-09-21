@@ -11,6 +11,8 @@ import pandas as pd
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_DECORATION_FILE_NAME,
     apply_sheet_oos_decoration,
+    apply_spc_point_decoration,
+    normalize_spc_decisions,
     build_sheet_oos_detail,
     get_decision_sheet_name,
     merge_detail_with_decoration_flags,
@@ -48,6 +50,7 @@ def prepare_sheet_oos_decoration(
     now: datetime | None = None,
     force: bool = False,
     decoration_port: SheetDecorationPort | None = None,
+    point_spec_df: pd.DataFrame | None = None,
 ) -> SheetOosDecorationResult:
     """Load decisions, invoke pure rules, and persist generated audit detail."""
     detail = build_sheet_oos_detail(sheet_features_df)
@@ -86,12 +89,23 @@ def prepare_sheet_oos_decoration(
         )
         decoration = merge_detail_with_decoration_flags(detail, decisions)
         refresh_reason = ""
+    if scope == "spc":
+        decisions = normalize_spc_decisions(decisions)
+        decoration = normalize_spc_decisions(decoration)
+        resolved_specs = point_spec_df
+        if resolved_specs is None:
+            spec_columns = [
+                column for column in ("prod_code", "step_id", "param_name", "usl", "lsl", "ucl", "lcl", "target")
+                if column in sheet_features_df.columns
+            ]
+            resolved_specs = sheet_features_df[spec_columns].drop_duplicates()
+        decorated_points = apply_spc_point_decoration(
+            raw_measurements_df, resolved_specs, decisions,
+        )
+    else:
+        decorated_points = apply_sheet_oos_decoration(raw_measurements_df, sheet_features_df, decoration)
     return SheetOosDecorationResult(
-        raw_measurements_df=apply_sheet_oos_decoration(
-            raw_measurements_df,
-            sheet_features_df,
-            decoration,
-        ),
+        raw_measurements_df=decorated_points,
         decoration_df=decoration,
         decoration_path=product_dir / decoration_file_name,
         decoration_sheet=sheet,

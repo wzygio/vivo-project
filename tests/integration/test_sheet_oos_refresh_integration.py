@@ -297,7 +297,11 @@ def test_revision_change_rebuilds_immediately(tmp_path: Path, monkeypatch) -> No
 
     # 用户决策在重建后仍保留
     product = _read_product_sheet(product_dir / OOS_DECORATION_FILE_NAME)
-    assert _flags_by_sheet_id(product) == {"S1": False, "S2": "Delete"}
+    # SPC legacy Delete is read as False; the user-owned decision sheet is preserved.
+    assert _flags_by_sheet_id(product) == {"S1": False, "S2": False}
+    assert _flags_by_sheet_id(pd.read_excel(workbook_path, sheet_name=f"{SHEET}__flags")) == {
+        "S1": False, "S2": "Delete",
+    }
 
 
 # ---------------------------------------------------------------------------

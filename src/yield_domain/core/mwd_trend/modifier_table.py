@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 
 import pandas as pd
+from src.yield_domain.core.mapping.scale_policy import normalize_monthly_scale_factor
 
 MODIFIER_TABLE_COLUMNS = [
     "不良类型",
@@ -116,8 +117,14 @@ def compute_current_month_loss(
 def compute_current_month_losses(
     panel_details_df: pd.DataFrame,
     month: str,
+    *,
+    known_defects: dict[str, list[str]] | None = None,
 ) -> dict[str, pd.Series]:
-    """一次准备当月 Panel 切片，同时返回 Group/Code 两级原始良损。"""
+    """计算两级原始良损，有投入时为已知但当月未发生的不良补零。
+
+    已知清单来自分析窗口的明细及修饰表；整月无投入仍返回空结果，
+    避免把缺失数据误当成零不良，并覆盖已有参考值。
+    """
     empty = {
         "group": pd.Series(dtype=float),
         "code": pd.Series(dtype=float),
@@ -155,7 +162,11 @@ def compute_current_month_losses(
             .groupby(key_column)["panel_id"]
             .nunique()
         )
-        losses[level] = defective / total_panels
+        catalog = pd.Index(panel_details_df[key_column].dropna().unique())
+        catalog = catalog.union(
+            pd.Index((known_defects or {}).get(level, [])).unique(), sort=False
+        )
+        losses[level] = defective.reindex(catalog, fill_value=0) / total_panels
     return losses
 
 
@@ -218,10 +229,11 @@ def resolve_monthly_targets(
 
 
 def compute_scale_factors(table_df: pd.DataFrame) -> dict[tuple[str, str], float]:
-    """缩放倍数 = round(回退后指定良损 / 当月良损, 3)（保留三位小数）。
+    """缩放倍数按指定/当月良损计算，截断到 [0.3, 3.0] 后保留三位小数。
 
     回退口径与 `resolve_monthly_targets` 一致：当月未指定时用最近上月的指定良损，
-    保证趋势日度与 Mapping 缩放使用同一水准。从未指定或当月良损为 0/缺失时记 1.0。
+    趋势日度与 Mapping 使用同一指定来源，但仅 Mapping 倍率执行截断。
+    从未指定或当月良损为 0/缺失时记 1.0。
     """
     factors: dict[tuple[str, str], float] = {}
     if table_df.empty:
@@ -246,7 +258,9 @@ def compute_scale_factors(table_df: pd.DataFrame) -> dict[tuple[str, str], float
             if resolved is None or pd.isna(raw) or not raw:
                 factors[(defect, month)] = 1.0
             else:
-                factors[(defect, month)] = round(resolved / raw, FACTOR_DECIMALS)
+                factors[(defect, month)] = round(
+                    normalize_monthly_scale_factor(resolved / raw), FACTOR_DECIMALS
+                )
     return factors
 
 

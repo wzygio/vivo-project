@@ -129,7 +129,7 @@ def test_spc_service_surfaces_decoration_read_failure_without_caching_it(
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="SPC",
     )
 
@@ -160,7 +160,7 @@ def test_spc_service_requests_spc_only_and_returns_distribution_report(monkeypat
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="CTQ",
     )
 
@@ -207,7 +207,7 @@ def test_spc_service_can_switch_period_sigma_source_from_global_config(monkeypat
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="SPC",
     )
 
@@ -258,7 +258,7 @@ def test_spc_service_excludes_configured_parameters_from_cpm_and_cpk_calculation
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="SPC",
     )
 
@@ -325,7 +325,7 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="SPC",
     )
     outcome: dict[str, object] = {}
@@ -379,7 +379,7 @@ def test_spc_service_threads_gate_params_to_shared_pipeline(monkeypatch) -> None
     query = SpcQueryConfig(
         prod_code="M626",
         start_date="2026-06-01",
-        end_date="2026-06-07",
+        end_date="2026-06-08",
         data_type_filter="SPC",
     )
 
@@ -408,7 +408,7 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(decorated_data.ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
     capability = pd.DataFrame([{
         "prod_code": "M626", "factory": "ARRAY", "step_id": "10140", "param_name": "SE_L1T",
-        "period_type": "week", "period_label": "2026-W30", "cpk": 1.084, "cpm": 1.133,
+        "period_type": "week", "period_label": "2026-W23", "cpk": 1.084, "cpm": 1.133,
     }])
     monkeypatch.setattr(spc_service, "build_period_capability_report", lambda **kwargs: capability.copy())
     ledger_path = tmp_path / "spc_cpk_cpm_decoration.xlsx"
@@ -428,7 +428,7 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     save(False)
     kwargs = dict(
         _data_port=FakeSpcRepository(Path("data"), True, object()),
-        query_config_json=SpcQueryConfig(prod_code="M626", start_date="2026-06-01", end_date="2026-07-27").model_dump_json(),
+        query_config_json=SpcQueryConfig(prod_code="M626", start_date="2026-06-01", end_date="2026-06-08").model_dump_json(),
         snapshot_signature="excel-save-cache-test",
     )
     first = SpcReportService.get_spc_report_data(**kwargs)

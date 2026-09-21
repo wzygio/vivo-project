@@ -259,12 +259,23 @@ def build_all_available_period_axis(sheet_features: pd.DataFrame, end_date: date
     return pd.DataFrame(records)
 
 
-def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
+def _period_frame(df: pd.DataFrame, end_date: date, previous_week_only: bool = False) -> pd.DataFrame:
     period_df = df.copy()
     period_df["sheet_start_time"] = pd.to_datetime(period_df["sheet_start_time"], errors="coerce")
     period_df = period_df.dropna(subset=["sheet_start_time"]).copy()
     if period_df.empty:
         return period_df
+
+    if previous_week_only:
+        week_end = pd.Timestamp(_start_of_week(end_date))
+        week_start = week_end - pd.Timedelta(days=7)
+        period_df = period_df.loc[
+            period_df["sheet_start_time"].ge(week_start) & period_df["sheet_start_time"].lt(week_end)
+        ].copy()
+        iso_week = week_start.isocalendar()
+        return period_df.assign(
+            period_type="week", period_label=f"{iso_week.year}-W{iso_week.week:02d}", period_sort=201,
+        )
 
     end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1)
     period_axis = build_all_available_period_axis(period_df, end_date)
@@ -298,7 +309,9 @@ def _period_frame(df: pd.DataFrame, end_date: date) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True).merge(period_sort_lookup, on=["period_type", "period_label"], how="inner")
 
 
-def _build_period_measurement_stats(raw_measurements: pd.DataFrame | None, end_date: date) -> dict[tuple[object, ...], dict[str, float]]:
+def _build_period_measurement_stats(
+    raw_measurements: pd.DataFrame | None, end_date: date, previous_week_only: bool = False,
+) -> dict[tuple[object, ...], dict[str, float]]:
     """Return point-level sigma inputs keyed by indicator and M/W/D period."""
     required_cols = {
         "prod_code",
@@ -318,7 +331,7 @@ def _build_period_measurement_stats(raw_measurements: pd.DataFrame | None, end_d
     if df.empty:
         return {}
 
-    period_df = _period_frame(df, end_date)
+    period_df = _period_frame(df, end_date, previous_week_only)
     if period_df.empty:
         return {}
 
@@ -355,11 +368,15 @@ def build_period_capability_report(
     end_date: date,
     raw_measurements: pd.DataFrame | None = None,
     sigma_source: str = PERIOD_SIGMA_SOURCE_SHEET_MEAN,
+    *,
+    previous_week_only: bool = False,
 ) -> pd.DataFrame:
     """Aggregate M/W/D rows with Sheet means and point-level sigma.
 
     CPM/CPK are computed for month and week periods only; day-period rows
     carry NaN capability metrics.
+    ``previous_week_only`` skips M/W/D expansion and aggregates only the ISO
+    week before end_date, regardless of the latest available measurement.
     """
     required_cols = {
         "prod_code",
@@ -387,14 +404,14 @@ def build_period_capability_report(
         if col not in df.columns:
             df[col] = np.nan
 
-    df = _period_frame(df, end_date)
+    df = _period_frame(df, end_date, previous_week_only)
     if df.empty:
         return pd.DataFrame()
 
     group_cols = ["prod_code", "factory", "step_id", "param_name", "period_type", "period_label", "period_sort"]
     resolved_sigma_source = normalize_period_sigma_source(sigma_source)
     measurement_stats = (
-        _build_period_measurement_stats(raw_measurements, end_date)
+        _build_period_measurement_stats(raw_measurements, end_date, previous_week_only)
         if resolved_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
         else {}
     )

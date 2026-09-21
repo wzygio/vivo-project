@@ -61,7 +61,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         period_capability_df=period_capability_df,
         indicators_df=indicator_df,
         sheet_features_df=sheet_features_df,
-        raw_measurements_df=pd.DataFrame(),
+        raw_measurements_df=sheet_features_df.copy(),
         sheet_oos_decoration_result=None,
     )
 
@@ -140,7 +140,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
 
     assert load_count == 1
     assert loaded_signatures == [
-        "spc_capability_previous_week_anomalies_v2|scoped=M673"
+        "spc_recent_sheets_point_decoration_v3|scoped=M673"
     ]
     assert header_kwargs["product_cache_scope"] == "M673"
     assert rendered_alerts[0].to_dict("records") == [

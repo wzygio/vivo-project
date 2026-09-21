@@ -4,6 +4,7 @@ import pandas as pd
 from typing import Dict, List, Optional, Union
 
 PLACEHOLDER_OPTION = "---请选择---"
+DEFAULT_MONTHLY_RATE_THRESHOLD = 0.0001
 
 
 def _prepare_processed_dataframe(
@@ -162,7 +163,7 @@ def create_group_batch_selection_ui(
     source_data: Union[pd.DataFrame, Dict[str, pd.DataFrame]],
     key_prefix: str,
     filter_by: str = "rate",
-    rate_threshold: float = 0.0001,
+    rate_threshold: float = DEFAULT_MONTHLY_RATE_THRESHOLD,
     count_threshold: int = 10,
 ) -> Dict[str, object]:
     """Render Group filters and gate batch Code rendering behind an explicit query."""

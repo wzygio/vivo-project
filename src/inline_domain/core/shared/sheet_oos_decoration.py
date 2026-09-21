@@ -135,6 +135,54 @@ def _clip_inside_spec(row: pd.Series, side: str) -> float:
     return float(lsl) + margin
 
 
+def normalize_spc_decisions(decisions: pd.DataFrame) -> pd.DataFrame:
+    """SPC supports boolean actions only; legacy Delete preserves source values."""
+    result = decisions.copy()
+    if "flag" in result.columns:
+        result["flag"] = result["flag"].map(
+            lambda value: False if _is_delete_action(value) else _parse_flag(value)
+        )
+    return result
+
+
+def apply_spc_point_decoration(
+    measurements: pd.DataFrame, specs: pd.DataFrame, decisions: pd.DataFrame,
+) -> pd.DataFrame:
+    """Decorate SPC points directly, without Sheet aggregation or row deletion.
+
+    Specifications remain available to the historical distribution chart even
+    when an indicator has no recent Sheets. Decision keys retain their existing
+    normalization and last-record-wins semantics.
+    """
+    if measurements.empty or specs.empty:
+        return measurements.copy()
+    spec_keys = ["prod_code", "step_id", "param_name"]
+    spec_columns = [c for c in ["usl", "lsl", "ucl", "lcl", "target"] if c in specs.columns]
+    df = _normalize_key_columns(measurements).drop(columns=spec_columns, errors="ignore")
+    limits = _normalize_key_columns(specs, spec_keys)[spec_keys + spec_columns]
+    df = df.merge(limits, on=spec_keys, how="left", validate="many_to_one")
+    flags = normalize_spc_decisions(decisions)
+    if flags.empty:
+        df["_decorate"] = True
+    else:
+        flags = _normalize_key_columns(flags)[[*OOS_KEY_COLUMNS, "flag"]]
+        flags = flags.drop_duplicates(OOS_KEY_COLUMNS, keep="last").rename(columns={"flag": "_decorate"})
+        df = df.merge(flags, on=OOS_KEY_COLUMNS, how="left", validate="many_to_one")
+        # Flags were normalized before the join; unmatched points default to True.
+        df["_decorate"] = df["_decorate"].ne(False)
+    df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
+    df["_oos_usl"] = pd.to_numeric(df.get("usl"), errors="coerce")
+    df["_oos_lsl"] = pd.to_numeric(df.get("lsl"), errors="coerce")
+    for side, mask in [
+        ("upper", df["param_value"] > df["_oos_usl"]),
+        ("lower", df["param_value"] < df["_oos_lsl"]),
+    ]:
+        active = mask & df["_decorate"]
+        if active.any():
+            df.loc[active, "param_value"] = df.loc[active].apply(_clip_inside_spec, axis=1, side=side)
+    return df.drop(columns=["_decorate", "_oos_usl", "_oos_lsl"])
+
+
 def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:
     """Return Sheet-level rows whose point max/min crosses USL/LSL."""
     required_cols = {"factory", *OOS_KEY_COLUMNS, "sheet_start_time", "sheet_max", "sheet_min", "sheet_mean", "usl", "lsl"}

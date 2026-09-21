@@ -1,7 +1,6 @@
 # src/vivo_project/core/mapping_processor.py
 import pandas as pd
 import logging
-import math
 import re
 from typing import Any, Optional
 from src.yield_domain.core.batch_statistics import BatchStatistics
@@ -10,6 +9,7 @@ from yield_domain.core.mapping.hotspot_modification import (
     resolve_mapping_modification_plan,
 )
 from yield_domain.core.mapping.layout import resolve_mapping_layout
+from src.yield_domain.core.mapping.scale_policy import normalize_monthly_scale_factor
 from yield_domain.core.mapping.panel_position import (
     get_deterministically_modified_panel_id as _get_deterministically_modified_panel_id,
     parse_panel_id_to_coords as _parse_panel_id_to_coords,
@@ -19,25 +19,9 @@ from yield_domain.core.mapping.panel_position import (
 # ==============================================================================
 #                      月度缩放倍数（批次所属月份 × Code）
 # ==============================================================================
-MAX_MONTHLY_SCALE_FACTOR = 10.0
-
-
 def _safe_monthly_factor(factor: object, code_desc: str, month: str) -> float:
-    """拒绝异常或过大的倍率，避免单个配置触发 Mapping 行爆炸。"""
-    try:
-        parsed = float(factor)
-    except (TypeError, ValueError):
-        parsed = math.nan
-    if not math.isfinite(parsed) or parsed < 0 or parsed > MAX_MONTHLY_SCALE_FACTOR:
-        logging.error(
-            "Mapping 月度倍率无效或超出防御上限 %.1f，按 1.0 处理: Code=%s, 月份=%s, 原值=%r",
-            MAX_MONTHLY_SCALE_FACTOR,
-            code_desc,
-            month,
-            factor,
-        )
-        return 1.0
-    return parsed
+    """与修饰表回写共用 [0.3, 3.0] 的月度倍率边界。"""
+    return normalize_monthly_scale_factor(factor)
 
 
 def _apply_monthly_scale_factors(

@@ -16,6 +16,8 @@ st.session_state[RESULT_KEY] = {'previous': 'result'}
 render_ijp_hole_dashboard(Service())
 ''').run()
     assert not app.exception
-    assert app.error[0].value == 'IJP 孔区筛选项暂时无法读取，请稍后重试。'
+    assert app.error[0].value == 'IJP 筛选项暂时无法读取，请稍后重试。'
+    assert not app.subheader
+    assert not app.caption
     assert 'ijp_hole_result' not in app.session_state
     assert not app.get('plotly_chart')

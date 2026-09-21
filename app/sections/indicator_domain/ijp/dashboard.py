@@ -54,21 +54,17 @@ def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
 
 def render_ijp_dashboard(service: IjpReportService) -> None:
     """Render filters, gated query results, and explicit operational states."""
-    st.subheader("OLED IJP 溢流监控", anchor=False, text_alignment="center")
     start_time, end_time = service.get_reporting_window()
 
     with st.container(border=True):
-        st.caption(f"数据范围：{start_time:%Y/%m/%d} 至 {end_time:%Y/%m/%d}（上月 1 日至今天）")
-        st.caption("两月三周：上月、本月及最近三周（含本周，周一开始）；月与周分别汇总，跨边界仅统计范围内数据。")
-
         product_column, line_column, code_column, pici_column = render_ijp_filter_columns()
         try:
             options = service.get_filter_options(
                 tuple(st.session_state.get("ijp_product_codes", [])),
                 start_time=start_time, end_time=end_time,
             )
-        except IjpDataAccessError as exc:
-            st.error(str(exc))
+        except IjpDataAccessError:
+            st.error("IJP 筛选项暂时无法读取，请稍后重试。")
             return
 
         with product_column:
@@ -178,8 +174,8 @@ def _run_query(
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))
         return
-    except IjpDataAccessError as exc:
-        st.error(str(exc))
+    except IjpDataAccessError:
+        st.error("IJP 数据暂时无法读取，请稍后重试。")
         return
     except ValueError as exc:
         st.error(str(exc))

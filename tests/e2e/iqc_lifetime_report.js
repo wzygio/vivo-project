@@ -7,11 +7,12 @@ async page => {
   await page.goto('http://localhost:8521');
   const table = page.getByTestId('stDataFrame');
   await table.waitFor({ timeout: 90000 });
-  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 4);
+  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 8);
   if (await page.getByRole('combobox').count() !== 3) throw new Error('Expected product, status and batch filters');
   if (await page.getByRole('button', { name: /刷新数据|刷新缓存/ }).count()) throw new Error('Normal view exposes maintenance controls');
-  const expander = page.getByTestId('stExpander');
-  if (await expander.count() !== 1) throw new Error('Expected one product/batch expander');
+  const expanders = page.getByTestId('stExpander');
+  if (await expanders.count() !== 2) throw new Error('Expected two metric expanders per product/batch');
+  const expander = expanders.first();
   const boxes = await expander.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => {
     const r = el.getBoundingClientRect(); return { x: r.x, y: r.y };
   }));
@@ -32,7 +33,7 @@ async page => {
     dtick: el.layout.xaxis.dtick, tickformat: el.layout.xaxis.tickformat,
   })));
   for (const chart of charts) {
-    if (chart.traces.length !== 5 || chart.xaxis !== '测试时间' || chart.yaxis !== '效率衰减') throw new Error('Wrong axes or traces');
+    if (chart.traces.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
     if (chart.dtick !== 100 || chart.tickformat !== '.0f') throw new Error('Wrong time tick precision');
     for (const [index, trace] of chart.traces.entries()) {
       if (trace.name !== String(index + 1)) throw new Error('Non-numeric sample legend');
@@ -76,5 +77,5 @@ async page => {
   await page.getByText('🔄 缓存已刷新 · 代码与配置已重载', { exact: true }).waitFor();
   await table.waitFor({ timeout: 90000 });
   if (await page.locator('[data-testid="stException"]').count() || errors.length) throw new Error(errors.join('\n') || 'Streamlit exception');
-  return { status: 'passed', source: 'live M3', rows: 100, columns: 15, charts: 4, layout: 'four charts per expander row', filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
+  return { status: 'passed', source: 'live M3', rows: 100, columns: 15, charts: 8, layout: 'four charts per metric expander row', filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
 }

@@ -40,7 +40,15 @@ def sync_modifier_table(
     stored = load_modifier_signatures(signature_path)
     committed = stored.copy()
     table = read_modifier_table(path, product_code)
-    losses = compute_current_month_losses(panel_details_df, current_month)
+    known_defects = {
+        level: frame[COL_DEFECT].dropna().astype(str).str.strip().loc[
+            lambda names: names.ne("")
+        ].unique().tolist()
+        for level, frame in table.items()
+    }
+    losses = compute_current_month_losses(
+        panel_details_df, current_month, known_defects=known_defects
+    )
     historical_losses = {}
     if not panel_details_df.empty:
         dates = pd.to_datetime(
@@ -48,7 +56,9 @@ def sync_modifier_table(
         )
         months = dates.dropna().dt.to_period("M").astype(str).unique()
         historical_losses = {
-            month: compute_current_month_losses(panel_details_df, month)
+            month: compute_current_month_losses(
+                panel_details_df, month, known_defects=known_defects
+            )
             for month in sorted(months)
             if month < current_month
         }
@@ -73,15 +83,19 @@ def sync_modifier_table(
         signature = specified_signature(updated)
         signature_key = f"{product_code}:{level}"
         factors = compute_scale_factors(updated)
+        factors_changed = False
         if not updated.empty:
-            updated[COL_SCALE_FACTOR] = [
+            factor_values = [
                 factors.get((str(defect).strip(), str(month).strip()), 1.0)
                 for defect, month in zip(updated[COL_DEFECT], updated[COL_MONTH])
             ]
+            previous_factors = pd.to_numeric(updated[COL_SCALE_FACTOR], errors="coerce")
+            factors_changed = not previous_factors.eq(factor_values).all()
+            updated[COL_SCALE_FACTOR] = factor_values
         needs_write = (
             not read_only
             and not updated.empty
-            and (loss_changed or stored.get(signature_key) != signature)
+            and (loss_changed or factors_changed or stored.get(signature_key) != signature)
         )
         if needs_write:
             try:

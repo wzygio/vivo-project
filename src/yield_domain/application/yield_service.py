@@ -118,9 +118,28 @@ class YieldAnalysisService:
         return hashlib.md5(f"{stat.st_mtime}_{stat.st_size}".encode()).hexdigest()[:8]
 
     @staticmethod
-    def build_cache_context(config: AppConfig, product_dir: Path) -> Dict[str, str]:
-        """Build explicit native cache-key components for all Yield report inputs."""
+    def build_cache_context(
+        config: AppConfig,
+        product_dir: Path,
+        *,
+        resource_revision: str | None = None,
+    ) -> Dict[str, str]:
+        """Build cache keys using file versions or an explicit manual revision.
+
+        Interactive dashboards can opt out of resource-file change detection.
+        Dates and cutoff policy remain part of the key in either mode.
+        """
         start_dt, end_dt = YieldAnalysisService.get_time_window()
+        if resource_revision is not None:
+            return {
+                "analysis_start_date": start_dt.strftime("%Y-%m-%d"),
+                "analysis_end_date": end_dt.strftime("%Y-%m-%d"),
+                "modifier_signature": (
+                    resource_revision + "|" + ConfigLoader.get_report_cutoff_policy().signature
+                ),
+                "warning_signature": resource_revision,
+                "rate_override_signature": resource_revision,
+            }
         warning_res = config.paths.get("static_warning_lines")
         override_res = config.paths.get("rate_override_config")
         warning_path = product_dir.parent / warning_res.file_name if warning_res else None

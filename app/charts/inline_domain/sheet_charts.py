@@ -82,7 +82,9 @@ def _period_points(
     if source_df.empty or "sheet_start_time" not in source_df.columns or value_column not in source_df.columns:
         return _empty_period_points_frame(value_column)
 
-    df = source_df.copy()
+    # Period boxes need only time and value; avoid copying Sheet IDs, equipment
+    # routes and specifications three times for the month/week/day expansion.
+    df = source_df[["sheet_start_time", value_column]].copy()
     df["sheet_start_time"] = pd.to_datetime(df["sheet_start_time"], errors="coerce")
     df[value_column] = pd.to_numeric(df[value_column], errors="coerce")
     df = df.dropna(subset=["sheet_start_time", value_column]).copy()
@@ -128,18 +130,29 @@ def create_period_overview_chart(
     title: str,
     raw_measurements_df: pd.DataFrame | None = None,
     period_box_source: str = "sheet_mean",
+    reference_date: date | None = None,
 ) -> go.Figure:
     """Create the month/week/day box distribution figure."""
     fig = go.Figure()
+    spec_source = sheet_features_df
 
-    axis_end_date = infer_period_axis_end_date(sheet_features_df, period_capability_df)
-    period_axis_df = period_axis_with_display(axis_end_date, sheet_features_df)
+    axis_source = sheet_features_df
+    if reference_date is not None and raw_measurements_df is not None and not raw_measurements_df.empty:
+        axis_source = raw_measurements_df[["sheet_start_time"]].drop_duplicates()
+    axis_end_date = reference_date or infer_period_axis_end_date(sheet_features_df, period_capability_df)
+    period_axis_df = period_axis_with_display(axis_end_date, axis_source)
     use_point_values = period_box_source == "point_value" and raw_measurements_df is not None
     if use_point_values:
         points_df = measurement_period_points(raw_measurements_df, period_axis_df)
         value_column = "param_value"
         value_label = "Point Value"
     else:
+        if reference_date is not None and raw_measurements_df is not None and not raw_measurements_df.empty:
+            # Optional Sheet-mean display needs only means/timestamps, not the full
+            # historical OOS/OOC feature pipeline.
+            sheet_features_df = raw_measurements_df.groupby(
+                ["factory", "prod_code", "step_id", "param_name", "sheet_id"], as_index=False,
+            ).agg(sheet_mean=("param_value", "mean"), sheet_start_time=("sheet_start_time", "min"))
         points_df = sheet_period_points(sheet_features_df, period_axis_df)
         value_column = "sheet_mean"
         value_label = "Sheet Mean"
@@ -164,7 +177,11 @@ def create_period_overview_chart(
                 ),
             )
 
-    spec_source = sheet_features_df
+    spec_source = (
+        raw_measurements_df
+        if reference_date is not None and raw_measurements_df is not None and "usl" in raw_measurements_df
+        else spec_source
+    )
     apply_measurement_spec_lines(fig, spec_source)
     y_range = resolve_measurement_y_range(points_df[value_column], spec_source)
     if y_range is not None:

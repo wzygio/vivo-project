@@ -58,7 +58,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     SheetOosDecorationReadError,
 )
 
-SPC_PAGE_CACHE_SIGNATURE = "spc_capability_previous_week_anomalies_v2"
+SPC_PAGE_CACHE_SIGNATURE = "spc_recent_sheets_point_decoration_v3"
 SpcReportService = spc_service.SpcReportService
 _spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
 _spc_report_build_error = getattr(spc_service, "SpcReportBuildError", None)
@@ -143,7 +143,7 @@ raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
 period_capability_df = view_model.period_capability_df
 
-if sheet_features_df.empty or indicator_df.empty:
+if raw_measurements_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 SPC 数据。")
     st.stop()
 
@@ -178,6 +178,7 @@ render_cpk_alert_section(
     raw_measurements_df=raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
     step_desc_map=step_desc_map,
+    reference_date=default_end_dt.date(),
 )
 
 render_cpm_alert_section(
@@ -188,6 +189,7 @@ render_cpm_alert_section(
     raw_measurements_df=raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
     step_desc_map=step_desc_map,
+    reference_date=default_end_dt.date(),
 )
 
 sheet_oos_decoration_result = getattr(view_model, "sheet_oos_decoration_result", None)
@@ -213,6 +215,7 @@ render_sheet_oos_alert_indicator_sections(
     raw_measurements_df=raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
     step_desc_map=step_desc_map,
+    reference_date=default_end_dt.date(),
 )
 
 if not should_render_report:
@@ -244,4 +247,5 @@ render_spc_indicator_sections(
     raw_measurements_df=filtered_raw_measurements_df,
     period_box_source=ConfigLoader.get_spc_period_box_source(),
     step_desc_map=step_desc_map,
+    reference_date=default_end_dt.date(),
 )

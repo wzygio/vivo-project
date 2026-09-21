@@ -10,6 +10,7 @@
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 import plotly.graph_objects as go
 
 from app.sections.yield_domain import yield_dashboard
@@ -162,7 +163,7 @@ class TestCollectAlertHitCodes:
             == []
         )
 
-    def test_weekly_fallback_when_monthly_missing(self):
+    def test_no_images_when_monthly_threshold_cannot_be_evaluated(self):
         code_data = {
             "monthly": pd.DataFrame(),
             "weekly": pd.DataFrame(
@@ -172,7 +173,38 @@ class TestCollectAlertHitCodes:
         lot_records = [{"异常 Code": "CODE-Z"}]
         assert yield_dashboard.collect_alert_hit_codes(
             [], lot_records, code_data
-        ) == [("G9", "CODE-Z")]
+        ) == []
+
+    @pytest.mark.parametrize("threshold,expected", [
+        (0.0001, {"BOUNDARY", "ABOVE"}), (0.0002, {"ABOVE"}),
+        (0.0, {"ZERO", "SPIKE", "BOUNDARY", "ABOVE"}),
+    ])
+    def test_alert_and_manual_filters_share_monthly_average_rule(self, threshold, expected):
+        from app.charts.yield_domain.mwd_chart import prepare_union_data_for_filter
+        from app.components.code_selector import build_batch_code_options_by_group
+
+        monthly = pd.DataFrame([
+            {"defect_group": "G", "defect_desc": code, "defect_rate": rate, "time_period": month}
+            for code, rates in {
+                "ZERO": [0, 0, 0], "SPIKE": [0, 0, 0.00027],
+                "BOUNDARY": [0.0001] * 3, "ABOVE": [0.0003] * 3,
+            }.items()
+            for month, rate in zip(["2026-07", "2026-08", "2026-09"], rates)
+        ])
+        data = {"monthly": monthly}
+        mapping = pd.concat([
+            monthly[["defect_group", "defect_desc"]],
+            pd.DataFrame([{"defect_group": "G", "defect_desc": "MAPPING_ONLY"}]),
+        ], ignore_index=True)
+        candidates = prepare_union_data_for_filter(data, {}, mapping)
+        manual = build_batch_code_options_by_group(candidates, rate_threshold=threshold)
+        alert = yield_dashboard.collect_alert_hit_codes(
+            [{"level": "group", "defect_group": "G"}], [], data,
+            rate_threshold=threshold,
+        )
+        assert set(manual["G"]) == expected
+        assert set(alert) == {("G", code) for code in expected}
+        assert yield_dashboard.collect_alert_hit_codes([], [], data, rate_threshold=threshold) == []
 
 
 class TestRenderAlertCodeExpanders:

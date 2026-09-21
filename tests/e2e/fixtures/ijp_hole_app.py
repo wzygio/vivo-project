@@ -50,7 +50,6 @@ from app.sections.indicator_domain.ijp import dashboard
 composition.build_ijp_service = lambda _db: None
 def render_border_stub(_service):
     from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
-    st.subheader('OLED IJP 溢流监控')
     render_ijp_filter_columns()
 
 

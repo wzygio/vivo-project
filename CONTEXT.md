@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Tianzhu provides manufacturing quality reports for OLED/Array display production: warehouse-entry defect rates (Yield), SPC/CTQ and AOI analysis, automatic warnings, Q-Time monitoring, IJP overflow monitoring, and critical-parts lifetime management. IQC reads incoming-material inspection characteristics and stored IQC/COA results from WMS; missing decisions remain blank. IQC lifetime reporting reads M3 measurements and presents anonymous samples within each product, batch and test-screen group.
+Tianzhu provides manufacturing quality reports for OLED/Array display production: warehouse-entry defect rates (Yield), SPC/CTQ and AOI analysis, automatic warnings, Q-Time monitoring, IJP overflow monitoring, and critical-parts lifetime management. IQC reads incoming-material inspection characteristics, specifications and measurements from WMS. Evaporation IQC/COA decisions follow the supplied SQL CASE rules: any failing point makes the corresponding overall result NG; otherwise it is OK, including missing measurements, as explicitly requested on 2026-09-21. Missing measurement values themselves remain blank. IQC lifetime reporting reads M3 measurements and presents anonymous samples within each product, batch and test-screen group.
 
 ## Operating Model
 

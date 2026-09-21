@@ -2,6 +2,7 @@ from app.sections.yield_domain.data_health import render_yield_data_health
 import streamlit as st
 import pandas as pd
 import numpy as np
+import logging
 
 # ==============================================================================
 #  配置与初始化
@@ -17,7 +18,6 @@ from yield_domain.application.yield_service import (
     YieldWarningLinesReadError,
 )
 from src.yield_domain.infrastructure.rate_override_repository import RateOverrideReadError
-from yield_domain.application.excel_service import ExcelService
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
@@ -26,7 +26,6 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.components.indicator_cache import build_indicator_product_cache_signature
-from app.components.code_selector import create_group_batch_selection_ui
 from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
 from app.components.file_uploader import render_yield_config_uploader
 from app.charts.yield_domain.mwd_chart import (
@@ -35,9 +34,10 @@ from app.charts.yield_domain.mwd_chart import (
 # [新增引入区块渲染组件]
 from app.sections.yield_domain.yield_dashboard import (
     render_macro_trend_section,
-    render_code_compact_expanders,
     render_alert_code_expanders,
 )
+from app.sections.yield_domain.resource_config import get_dashboard_resource_config, get_code_monthly_rate_threshold
+from app.sections.yield_domain.code_analysis import render_code_analysis_section
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
@@ -86,8 +86,20 @@ render_page_header(
 query_params = st.query_params
 if query_params.get("admin") == "true":
     render_yield_config_uploader(active_config, product_dir)
-ExcelService.inject_mapping_config_to_config(active_config)
-yield_cache_context = YieldAnalysisService.build_cache_context(active_config, product_dir)
+active_config = get_dashboard_resource_config(active_config, product_cache_signature)
+try:
+    code_rate_threshold = get_code_monthly_rate_threshold()
+except (ValueError, TypeError, AttributeError):
+    logging.exception("Invalid Yield code image threshold configuration")
+    st.error("图像筛选设置不可用，请检查报表设置后重试。")
+    st.stop()
+# Resource edits (including modifier-table writeback) must not invalidate this
+# page on widget reruns. The header's explicit revision controls synchronization.
+yield_cache_context = YieldAnalysisService.build_cache_context(
+    active_config,
+    product_dir,
+    resource_revision=YIELD_DASHBOARD_CACHE_SIGNATURE,
+)
 
 # ==============================================================================
 #  数据加载
@@ -235,6 +247,7 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
         product_code=active_config.data_source.product_code,
         mapping_layout=active_config.processing.get('mapping_layout'),
         data_signature=repr(sorted(yield_cache_context.items())),
+        rate_threshold=code_rate_threshold,
     )
 
 # ==============================================================================
@@ -246,45 +259,19 @@ render_macro_trend_section(mwd_group_data)
 st.divider()
 
 # ==============================================================================
-#  第二部分: 核心筛选器 (统一控制下方所有图表)
+#  第二部分: 独立交互区（筛选与详细图表只触发 fragment rerun）
 # ==============================================================================
-st.subheader("2️⃣ 入库不良率分析 (Code Level)")
-
-# 1. 准备“全能候选池”
+# 候选池仅在整页加载时准备；筛选操作复用同一份全维度结果。
 master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
-
-# 2. 渲染 Group / Code 批量筛选器
-selection = create_group_batch_selection_ui(
-    source_data=master_df,
-    key_prefix="unified_focus"
-)
-
-selected_groups = selection.get("groups", [])
-codes_by_group = selection.get("codes_by_group", {})
-if not selected_groups or not codes_by_group:
-    st.info("请至少选择一个 Defect Group 和 Defect Code。")
-    st.stop()
-
-if not selection.get("should_render", False):
-    st.info("当前筛选条件尚未查询。")
-    st.stop()
-
-# ==============================================================================
-#  第三部分: 微观分析 (Group 下所有 Code 批量展示)
-# ==============================================================================
-hotspot_scripts = active_config.processing.get('mapping_hotspot_script', [])
-
-# 查询门控通过后才进入两阶段渲染：RenderGate 先在统一 spinner 下构建
-# 全部 Code payload，再按原顺序集中渲染，避免图表逐张出现。
-render_code_compact_expanders(
-    selected_groups=selected_groups,
-    codes_by_group=codes_by_group,
+render_code_analysis_section(
+    master_df,
+    rate_threshold=code_rate_threshold,
     warning_lines=warning_lines,
     mwd_code_data=mwd_code_data,
     lot_data=lot_data,
     sheet_data=sheet_data,
     mapping_data=mapping_data,
-    hotspot_scripts=hotspot_scripts,
+    hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
     product_code=active_config.data_source.product_code,
     mapping_layout=active_config.processing.get('mapping_layout'),
 )

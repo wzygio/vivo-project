@@ -16,16 +16,14 @@ VIEW_LABELS = {'玻璃': 'glass', 'Total': 'total', '按天': 'day'}
 
 
 def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
-    st.subheader('OLED IJP 孔区溢流监控（大孔）', anchor=False, text_alignment='center')
     start, end = service.get_reporting_window()
     with st.container(border=True):
-        st.caption(f'数据范围：{start:%Y/%m/%d} 至 {end:%Y/%m/%d}（上月 1 日至今天）')
         filter_columns = render_ijp_filter_columns()
         try:
             options = service.get_filter_options(tuple(st.session_state.get('ijp_hole_products', ())))
         except IjpDataAccessError:
             st.session_state.pop(RESULT_KEY, None)
-            st.error('IJP 孔区筛选项暂时无法读取，请稍后重试。')
+            st.error('IJP 筛选项暂时无法读取，请稍后重试。')
             return
         values = {}
         fields = [('产品型号', 'products', 'product_codes'), ('线体', 'lines', 'lines'),
@@ -53,7 +51,7 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
             ))
             st.session_state[RESULT_KEY] = {'signature': signature, 'report': report}
         except IjpDataAccessError:
-            st.error('IJP 孔区数据暂时无法读取，请稍后重试。')
+            st.error('IJP 数据暂时无法读取，请稍后重试。')
             return
     stored = st.session_state.get(RESULT_KEY)
     if not stored or stored['signature'] != signature:
@@ -63,7 +61,7 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
     view = VIEW_LABELS[view_label]
     frame = stored['report'][view]
     if frame.empty:
-        st.info('当前筛选条件下暂无 IJP 大孔数据。')
+        st.info('当前筛选条件下暂无 IJP 溢流数据。')
         return
     render_hole_charts(frame, view)
 

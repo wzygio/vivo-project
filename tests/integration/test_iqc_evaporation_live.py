@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import text
 
 from src.iqc_domain.composition import build_evaporation_service
-from src.iqc_domain.core.eva_materials.evaporation import REPORT_FIELDS, project_report
+from src.iqc_domain.core.eva_materials.evaporation import REPORT_FIELDS, project_report, measurement_results
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -48,6 +48,12 @@ def test_live_report_matches_supplied_finereport_sql():
         })
     original = original.rename(columns={'eattribute5': 'factory'})
     original = original.loc[original.factory.eq('V3') & original.mater_type.eq('有机')].copy()
+    # Independent parity with the ten CASE expressions executed by PostgreSQL.
+    case_columns = [f'{prefix}_{i}_result' for prefix in ('iqc', 'coa') for i in range(1, 6)]
+    pd.testing.assert_frame_equal(
+        measurement_results(original).reset_index(drop=True),
+        original[case_columns].reset_index(drop=True),
+    )
     original = original.loc[:, list(REPORT_FIELDS)]
     original = policy.shift_frame(original, ('requestdate', 'checkeddate'))
     original = ConfigLoader.get_report_cutoff_policy().filter_frame(original, 'checkeddate')

@@ -1,4 +1,9 @@
 # Yield 域配置（资源文件路径；dir 相对项目根目录，files 值为纯文件名时相对 dir 解析）
+dashboard:
+  # 月均不良率图像门槛，两处共用：手动 Code 筛选、自动预警缺陷图像。
+  # 使用小数比例：0.0001 = 0.01%；自动图像还必须命中预警。
+  code_monthly_rate_threshold: 0.0001
+
 resources:
   dir: resources/yield_domain
   files:

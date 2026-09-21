@@ -96,13 +96,16 @@ def test_group_numbers_do_not_change_on_filtering_or_cross_group_overlap():
     assert filter_report(report, ['M678'], ['other-batch']).empty
 
 
-def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover():
+@pytest.mark.parametrize('metric,source_column', [
+    ('效率衰减', 'eff_decay'), ('亮度衰减', 'lumi_decay'),
+])
+def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover(metric, source_column):
     from app.charts.iqc_domain.lifetime import build_lifetime_chart
     raw = source_frame()
-    raw.loc[raw.test_time.eq('20'), 'eff_decay'] = None
+    raw.loc[raw.test_time.eq('20'), source_column] = None
     report = LifetimeReportService(MemorySource(raw)).get_report()
     group = report[report['测试画面'].eq('W')]
-    chart = build_lifetime_chart(group)
+    chart = build_lifetime_chart(group, metric=metric)
     assert len(chart.data) == 2
     assert chart.data[0].name == '1'
     assert list(chart.data[0].x) == [0, 20, 100]
@@ -113,3 +116,6 @@ def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover():
     assert chart.layout.xaxis.dtick == 100
     assert chart.layout.xaxis.tick0 == 0
     assert chart.layout.xaxis.tickformat == '.0f'
+    assert chart.layout.yaxis.title.text == metric
+    assert metric in chart.data[0].hovertemplate
+    assert chart.data[0].y[0] == group.iloc[0][metric]

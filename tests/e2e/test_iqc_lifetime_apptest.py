@@ -17,6 +17,8 @@ class Source(MemorySource):
             raise RuntimeError('private SQL credentials')
         if mode == 'empty':
             return self.frame.iloc[:0]
+        if mode == 'missing_luminance':
+            return self.frame.assign(lumi_decay=None)
         if mode == 'many':
             frame = pd.concat([self.frame] * 6, ignore_index=True)
             frame['test_time'] = range(len(frame))
@@ -39,14 +41,16 @@ def test_filter_empty_failure_and_recovery():
     assert not app.exception
     assert len(app.multiselect) == 3
     assert not app.button
-    assert len(app.expander) == 1
-    assert app.expander[0].label == 'M678 · 2026/3/10'
-    assert len(app.get('plotly_chart')) == 4
+    assert [expander.label for expander in app.expander] == [
+        'M678 · 2026/3/10 · 效率衰减', 'M678 · 2026/3/10 · 亮度衰减',
+    ]
+    assert all(len(expander.get('plotly_chart')) == 4 for expander in app.expander)
+    assert len(app.get('plotly_chart')) == 8
     assert 'private' not in app.dataframe[0].value.to_json(force_ascii=False)
     assert list(app.dataframe[0].value.columns)[4] == '样品编号'
     assert len(app.dataframe[0].value.columns) == 15
     app.multiselect(key='iqc_lifetime_products').set_value(['M678']).run()
-    assert not app.exception and len(app.get('plotly_chart')) == 4
+    assert not app.exception and len(app.get('plotly_chart')) == 8
     app.session_state['mode'] = 'failure'
     app.run()
     assert not app.exception and len(app.error) == 1
@@ -58,7 +62,7 @@ def test_filter_empty_failure_and_recovery():
     assert not app.dataframe
     app.session_state['mode'] = 'normal'
     app.run()
-    assert not app.exception and len(app.get('plotly_chart')) == 4
+    assert not app.exception and len(app.get('plotly_chart')) == 8
 
 
 def test_enabled_product_scope_status_filter_and_configuration_change():
@@ -68,9 +72,9 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     assert not app.exception
     assert app.multiselect(key='iqc_lifetime_products').options == ['M678', 'M626']
     assert 'DISABLED' not in app.dataframe[0].value.to_json(force_ascii=False)
-    assert len(app.expander) == 2
+    assert len(app.expander) == 4
     app.multiselect(key='iqc_lifetime_statuses').set_value(['模组']).run()
-    assert not app.exception and len(app.expander) == 1
+    assert not app.exception and len(app.expander) == 2
     assert app.expander[0].label.startswith('M626')
     assert '屏体' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.multiselect(key='iqc_lifetime_products').set_value(['M626']).run()
@@ -79,7 +83,7 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     assert not app.exception
     assert app.multiselect(key='iqc_lifetime_products').value == []
     assert app.multiselect(key='iqc_lifetime_statuses').value == []
-    assert len(app.expander) == 1 and app.expander[0].label.startswith('M678')
+    assert len(app.expander) == 2 and app.expander[0].label.startswith('M678')
     assert 'M626' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.session_state['enabled'] = []
     app.run()
@@ -97,3 +101,15 @@ def test_native_table_receives_all_filtered_rows_without_pagination():
     assert app.dataframe[0].value.index.tolist() == list(range(144))
     assert 'panel_id' not in app.dataframe[0].value.columns
     assert not app.get('html')
+
+
+def test_missing_luminance_does_not_hide_efficiency_charts():
+    app = AppTest.from_string(APP).run()
+    app.session_state['mode'] = 'missing_luminance'
+    app.run()
+    assert not app.exception
+    assert len(app.expander[0].get('plotly_chart')) == 4
+    assert not app.expander[1].get('plotly_chart')
+    assert len(app.expander[1].info) == 4
+    assert all(info.value == '该组暂无有效亮度衰减测点。' for info in app.expander[1].info)
+    assert app.warning and len(app.dataframe[0].value) == 24

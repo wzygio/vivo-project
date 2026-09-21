@@ -45,6 +45,11 @@
 - 手动查询区图表仍在每次 rerun 重建（渲染顺序已由 RenderGate 批量化）；
   如后续需要可复用同一 memo 机制。
 - CTQ service 的同类 `max_entries` 未调整，列为后续项。
+- 2026-09-21：Yield 入库不良率分析看板将 Code 筛选与详细图表放入独立
+  `st.fragment`。普通筛选、查询和详情控件只执行该区域，复用整页运行时传入的
+  数据；上方数据加载、预警扫描和 Group 趋势不随之重跑。产品切换、页头刷新
+  仍整页执行，并向 fragment 提供最新数据。候选池也仅在整页执行时生成。
+  此调整没有增加手动查询区的图表 memo；详情图仍按当前选择构建。
 - 配套测试：`tests/unit/app/manager/test_render_gate.py`（memo 命中/未命中/
   签名变化）、`tests/unit/app/sections/spc/test_spc_dashboard.py`
   （预警区重复渲染不重建）。

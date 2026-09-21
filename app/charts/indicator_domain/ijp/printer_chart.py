@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 
 from src.indicator_domain.core.ijp.printer_summary import PRINTER_CODES
 
-CODE_COLORS = ("#b00040", "#008000", "#9dccff", "#ff6600", "#9467bd", "#80df96")
+CODE_COLORS = ("#9467bd", "#008000", "#9dccff", "#ff6600", "#8b0000", "#80df96")
 
 
 def build_ijp_printer_figure(ratios: pd.DataFrame, *, title: str) -> go.Figure:

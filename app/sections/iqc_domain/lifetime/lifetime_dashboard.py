@@ -51,20 +51,27 @@ def _render_trends(frame: pd.DataFrame) -> None:
     chart_index = 0
     for (product, batch), scope in frame.groupby(['产品型号', '批次号'], sort=True):
         screens = sorted(scope['测试画面'].unique(), key=lambda x: (order.get(x, 4), x))
-        with st.expander(f'{product} · {batch}', expanded=True):
-            for offset in range(0, len(screens), 4):
-                for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
-                    with column:
+        for metric in ('效率衰减', '亮度衰减'):
+            with st.expander(f'{product} · {batch} · {metric}', expanded=True):
+                for offset in range(0, len(screens), 4):
+                    for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
                         group = scope.loc[scope['测试画面'].eq(screen)]
-                        st.text(str(screen))
-                        st.caption(f'{group["样品编号"].nunique()} 个样品 · {len(group)} 个测点')
-                        if group['效率衰减'].notna().any():
-                            st.plotly_chart(build_lifetime_chart(group), width='stretch',
-                                            key=f'iqc_lifetime_chart_{chart_index}',
-                                            config={'displayModeBar': False})
-                        else:
-                            st.info('该组暂无有效效率衰减测点。')
+                        with column:
+                            _render_screen_chart(group, str(screen), metric, chart_index)
                         chart_index += 1
+
+
+def _render_screen_chart(
+    group: pd.DataFrame, screen: str, metric: str, chart_index: int,
+) -> None:
+    st.text(screen)
+    st.caption(f'{group["样品编号"].nunique()} 个样品 · {len(group)} 个测点')
+    if group[metric].notna().any():
+        st.plotly_chart(build_lifetime_chart(group, metric=metric), width='stretch',
+                        key=f'iqc_lifetime_chart_{chart_index}',
+                        config={'displayModeBar': False})
+    else:
+        st.info(f'该组暂无有效{metric}测点。')
 
 
 def _render_details(frame: pd.DataFrame) -> None:

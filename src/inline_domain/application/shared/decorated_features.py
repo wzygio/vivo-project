@@ -98,11 +98,12 @@ def fetch_decorated_features(
     snapshot_signature: str = "",
     product_revision: str = "",
     decision_signature: str = "",
+    sheet_features_start_date: str = "",
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
     Cache key = (prod_code, scope, start_date, end_date, snapshot_signature,
-    product_revision, decision_signature); ``_features_source`` is
+    product_revision, decision_signature, sheet_features_start_date); ``_features_source`` is
     underscore-prefixed and therefore excluded from hashing (same pattern as
     the existing ``_db_manager``/``_data_port`` arguments). Identical windows
     share one cache entry across modules; different windows cache separately
@@ -127,10 +128,16 @@ def fetch_decorated_features(
     decorated raw_measurements_df, ``spec_empty`` flag, and the decoration
     payload (decoration_df / decoration_path / decoration_sheet /
     decision_sheet / decision_df / refresh_reason) or None.
+
+    SPC can bound Sheet features separately from historical points. OOC and
+    throughput coverage then starts at that feature boundary, so a short
+    report cannot replace older history with incomplete facts.
     """
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in _DATA_TYPE_FILTER_BY_SCOPE:
         raise ValueError(f"unknown decoration scope: {scope!r}")
+    if sheet_features_start_date and normalized_scope != SCOPE_SPC:
+        raise ValueError("A separate Sheet feature window is supported only for SPC")
     persist_shared_history = bool(
         getattr(_features_source, "supports_shared_history_persistence", False)
     )
@@ -142,9 +149,13 @@ def fetch_decorated_features(
         data_type_filter=_DATA_TYPE_FILTER_BY_SCOPE[normalized_scope],
     )
     measurements_df = _features_source.get_spc_measurements(fetch_config)
+    if normalized_scope == SCOPE_SPC and not measurements_df.empty:
+        measurements_df = ConfigLoader.get_report_cutoff_policy().filter_frame(
+            measurements_df, "sheet_start_time",
+        )
     spec_df = _features_source.get_spc_spec_limits(prod_code)
     coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
-        start_date, end_date
+        max(start_date, sheet_features_start_date), end_date
     )
     if measurements_df.empty:
         if (
@@ -235,6 +246,7 @@ def fetch_decorated_features(
         persist=True,
         product_revision=product_revision,
         decision_signature=decision_signature,
+        **({"sheet_features_start_date": sheet_features_start_date} if sheet_features_start_date else {}),
     )
     decoration_result = decorated_data.sheet_oos_decoration_result
     product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)

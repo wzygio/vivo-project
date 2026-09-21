@@ -358,7 +358,7 @@ def test_admin_upload_success_shows_success_and_reruns(monkeypatch, tmp_path: Pa
     assert write.written
     result = _make_result(tmp_path, decision_df=_decision_df(False))
     messages: dict[str, list] = {"success": [], "error": [], "info": [], "rerun": []}
-    upload = _FakeUpload(_xlsx_bytes({"决策台账": _decision_df("Delete")}))
+    upload = _FakeUpload(_xlsx_bytes({"决策台账": _decision_df(True)}))
     _patch_admin_st(monkeypatch, upload, messages)
 
     decoration_admin.render_sheet_oos_decoration_admin(result)
@@ -367,13 +367,13 @@ def test_admin_upload_success_shows_success_and_reruns(monkeypatch, tmp_path: Pa
     assert messages["rerun"] == [True]
     assert messages["error"] == []
     flags = pd.read_excel(workbook, sheet_name="M678__flags")
-    assert flags["flag"].tolist() == ["Delete"]
+    assert flags["flag"].tolist() == [True]
 
 
 def test_admin_upload_failure_shows_error_without_rerun(monkeypatch, tmp_path: Path) -> None:
     result = _make_result(tmp_path, decision_df=_decision_df(False))
     messages: dict[str, list] = {"success": [], "error": [], "info": [], "rerun": []}
-    upload = _FakeUpload(_xlsx_bytes({"决策台账": _decision_df("Delete")}))
+    upload = _FakeUpload(_xlsx_bytes({"决策台账": _decision_df(True)}))
     _patch_admin_st(monkeypatch, upload, messages)
     monkeypatch.setattr(
         sheet_oos_admin,

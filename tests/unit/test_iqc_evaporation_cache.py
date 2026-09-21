@@ -29,12 +29,14 @@ def test_cache_native_payload_survives_module_reload_and_separates_policy(monkey
         pd.testing.assert_frame_equal(report, dashboard.fetch_report_payload(*args))
         assert len(calls) == 1
         report.loc[0, 'IQC结果'] = 'changed'
-        assert dashboard.fetch_report_payload(*args).loc[0, 'IQC结果'] == 'NG'
+        assert dashboard.fetch_report_payload(*args).loc[0, 'IQC结果'] == 'OK'
         dashboard.fetch_report_payload(*args[:2], 'forward-0', 'cutoff-day1')
         dashboard.fetch_report_payload(*args[:3], 'cutoff-day2')
         assert len(calls) == 3
         assert dashboard.fetch_report_payload(*args, 'M626').empty
         assert len(calls) == 4
+        dashboard.fetch_report_payload(*args, result_rule_version='next-rule')
+        assert len(calls) == 5
     finally:
         dashboard.fetch_report_payload.clear()
 

@@ -105,3 +105,13 @@ playwright-cli -s=iqc-lifetime run-code --filename=D:/wzy/Python/vivo-project/te
 17 项相关单元/AppTest 通过，涵盖 144 条完整载荷、产品范围及状态筛选、空集和故障恢复。两组 Playwright 通过；下载实库 100 行与受控 109 行的 15 列 CSV，实库导出逐字段对账通过，受控导出保留 36 个缺测值。下载未包含原 panel_id、内部列或禁用产品。
 当前 Streamlit 优先调用系统保存对话框；自动化测试通过禁用浏览器 File System Access API 走组件内置的下载兼容路径，生产页面不修改浏览器 API。受控入口使用会话内服务注入，避免全局替换 renderer 带来的并发重跑冲突。
 截图和导出验证文件位于 `output/test-results/iqc-lifetime-native/`。本轮未重复全库回归。
+
+### 2026-09-21 双衰减曲线
+
+每个产品/批次分别显示“效率衰减”和“亮度衰减”两个默认展开的 Expander，每类按 W/R/G/B 四图同排。两类复用绘图函数，分别读取已有公开字段；样品颜色、图例、横轴 100 间隔和缺测断线规则一致。单类测量值全部缺失时，仅该类显示无有效测点提示。
+
+验证命令：`.venv/Scripts/python.exe -m pytest tests/unit/test_iqc_lifetime.py tests/unit/test_iqc_lifetime_repository.py tests/e2e/test_iqc_lifetime_apptest.py -q --tb=short`，19 passed。
+
+在 `output/test-results/iqc-lifetime-two-metrics/` 下执行 `playwright-cli -s=lifetime-two-metrics run-code --filename=D:/wzy/Python/vivo-project/tests/e2e/iqc_lifetime_states.js`，受控浏览器 E2E 通过：两类轴/悬浮信息/数值对应正确、同样品同色、四图同排、独立折叠、筛选、原生导出、缺测、空集与故障恢复。截图、导出和浏览器日志保存在该目录。控制台仅有 Streamlit 外部遥测配置请求被网络拒绝，无页面运行异常。
+
+本轮未运行实库浏览器验收或全库回归。此前只读排查发现 M3 的 466 条记录中，M673/B 画面有一条批次号为空；此源数据问题独立于曲线展示，本次未修改数据或放宽身份校验。

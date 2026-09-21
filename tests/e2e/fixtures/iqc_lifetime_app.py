@@ -30,6 +30,7 @@ class ScenarioSource:
             return frame.iloc[:0]
         if scenario == 'missing':
             frame.loc[frame.test_time.eq('20'), 'eff_decay'] = None
+            frame.loc[frame.test_time.eq('20'), 'lumi_decay'] = None
         # 4 screens x 9 samples x 3 times = 108, plus a second product/batch.
         frames = []
         for number in range(9):

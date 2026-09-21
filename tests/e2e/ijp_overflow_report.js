@@ -3,7 +3,7 @@ async page => {
   await page.setViewportSize({ width: 1365, height: 768 });
   await page.goto("http://localhost:8511");
   await page
-    .getByRole("heading", { name: "OLED IJP 溢流监控" })
+    .getByRole("combobox", { name: "监控区域", exact: true })
     .waitFor({ timeout: 120_000 });
 
   // 1. 查询门控：未点击前只有提示
@@ -65,7 +65,7 @@ async page => {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "查询" }).click();
   await page
-    .getByText("IJP 溢流数据读取失败，请联系系统管理员确认数据库权限。")
+    .getByText("IJP 数据暂时无法读取，请稍后重试。")
     .waitFor({ timeout: 60_000 });
   await page.screenshot({ path: "output/test-results/ijp/ijp_report_error.png" });
 
