@@ -58,7 +58,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     SheetOosDecorationReadError,
 )
 
-SPC_PAGE_CACHE_SIGNATURE = "spc_recent_sheets_point_decoration_v3"
+SPC_PAGE_CACHE_SIGNATURE = "spc_database_target_v4"
 SpcReportService = spc_service.SpcReportService
 _spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
 _spc_report_build_error = getattr(spc_service, "SpcReportBuildError", None)

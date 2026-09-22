@@ -56,13 +56,10 @@ def _add_plain_spec_line(fig: go.Figure, y_value: object, label: str, color: str
 
 
 def resolve_target_value(spec_row: pd.Series) -> float | None:
+    """Return an explicit target; missing targets do not produce a chart line."""
     target = spec_row.get("target")
     if pd.notna(target):
         return float(target)
-    usl = spec_row.get("usl")
-    lsl = spec_row.get("lsl")
-    if pd.notna(usl) and pd.notna(lsl):
-        return float((float(usl) + float(lsl)) / 2.0)
     return None
 
 

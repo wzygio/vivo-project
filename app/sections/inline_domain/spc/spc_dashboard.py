@@ -614,16 +614,6 @@ def _build_indicator_render_payload(
     reference_date: date | None = None,
 ) -> dict[str, object]:
     """[RenderGate 阶段1] 纯计算：构建单个指标的全部图表与表格，禁止触碰 st.*。"""
-    cpk_values = (
-        pd.to_numeric(indicator_capability_df["cpk"], errors="coerce").dropna()
-        if "cpk" in indicator_capability_df.columns
-        else pd.Series(dtype="float64")
-    )
-    cpm_values = (
-        pd.to_numeric(indicator_capability_df["cpm"], errors="coerce").dropna()
-        if "cpm" in indicator_capability_df.columns
-        else pd.Series(dtype="float64")
-    )
     reference_date = reference_date or date.today()
     fig1 = _create_period_overview_chart(
         sheet_features_df=indicator_features_df,
@@ -649,10 +639,6 @@ def _build_indicator_render_payload(
     )
     return {
         "label": label,
-        "cpk_median": _format_metric_value(cpk_values.median() if not cpk_values.empty else pd.NA),
-        "cpk_min": _format_metric_value(cpk_values.min() if not cpk_values.empty else pd.NA),
-        "cpm_median": _format_metric_value(cpm_values.median() if not cpm_values.empty else pd.NA),
-        "cpm_min": _format_metric_value(cpm_values.min() if not cpm_values.empty else pd.NA),
         "capability_table": _create_period_capability_table(indicator_capability_df),
         "fig1": fig1,
         "chamber_fig": chamber_fig,
@@ -672,12 +658,6 @@ def _render_indicator_payload(
 ) -> None:
     """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
     with st.expander(payload["label"], expanded=True):
-        metric_cols = st.columns(4)
-        metric_cols[0].metric("中位CPK", payload["cpk_median"])
-        metric_cols[1].metric("最小CPK", payload["cpk_min"])
-        metric_cols[2].metric("中位CPM", payload["cpm_median"])
-        metric_cols[3].metric("最小CPM", payload["cpm_min"])
-
         capability_table = payload["capability_table"]
         if not capability_table.empty:
             st.dataframe(
@@ -767,7 +747,7 @@ def render_spc_indicator_sections(
         if memo_signature is None
         else (
             f"{memo_signature}|chart-config="
-            f"recent-sheets-v1:{reference_date or date.today()}:{period_box_source}|"
+            f"explicit-target-v4:{reference_date or date.today()}:{period_box_source}|"
             f"{hashlib.sha256('|'.join(line_param_name_contains).encode('utf-8')).hexdigest()[:16]}"
             f"|capability={hashlib.sha256(period_capability_df.to_csv(index=False).encode('utf-8')).hexdigest()[:16]}"
         )

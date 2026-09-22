@@ -1,5 +1,6 @@
 import pandas as pd
 import plotly.graph_objects as go
+import pytest
 
 from app.charts.inline_domain.spec_lines import (
     apply_measurement_spec_lines,
@@ -53,6 +54,21 @@ def test_empty_spec_draws_nothing() -> None:
     fig = go.Figure()
     apply_measurement_spec_lines(fig, pd.DataFrame())
     assert _annotation_texts(fig) == set()
+
+
+@pytest.mark.parametrize("target_fields", [{}, {"target": None}, {"target": float("nan")}, {"target": pd.NA}])
+def test_missing_target_omits_line_without_midpoint_fallback(target_fields) -> None:
+    fig = go.Figure()
+    limits = pd.DataFrame([dict(usl=36.0, lsl=21.0, ucl=30.0, lcl=21.3, **target_fields)])
+    apply_measurement_spec_lines(fig, limits)
+    assert _annotation_texts(fig) == {"USL: 36", "LSL: 21", "UCL: 30", "LCL: 21.3"}
+    assert len(fig.layout.shapes) == 4
+
+
+def test_zero_target_is_drawn() -> None:
+    fig = go.Figure()
+    apply_measurement_spec_lines(fig, _spec_df(usl=2.0, lsl=-1.0, target=0.0))
+    assert "Target: 0" in _annotation_texts(fig)
 
 
 def test_format_spec_value_preserves_tiny_values() -> None:

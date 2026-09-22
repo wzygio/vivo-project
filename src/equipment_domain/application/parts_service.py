@@ -20,6 +20,7 @@ import pandas as pd
 import streamlit as st
 
 from src.equipment_domain.application.ports import PartsDataPort
+from src.equipment_domain.core.cvd_parts import build_cvd_report
 from src.equipment_domain.core.parts_matcher import build_and_match_all
 from src.equipment_domain.core.parts_calculator import (
     apply_over_spec_alert_and_decoration,
@@ -53,7 +54,9 @@ def _file_signature(path: Path) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def build_parts_report_cache_context(baseline_path: str | Path) -> dict[str, str]:
+def build_parts_report_cache_context(
+    baseline_path: str | Path, cvd_path: str | Path = "",
+) -> dict[str, str]:
     """Build global cache-key components from the report's actual inputs."""
     runtime_payload = json.dumps(
         asdict(get_equipment_runtime_config()),
@@ -64,6 +67,7 @@ def build_parts_report_cache_context(baseline_path: str | Path) -> dict[str, str
     return {
         "as_of_date": date.today().isoformat(),
         "baseline_signature": _file_signature(Path(baseline_path)),
+        "cvd_signature": _file_signature(Path(cvd_path)) if cvd_path else "",
         "runtime_config_signature": hashlib.sha256(
             (runtime_payload + load_report_cutoff_policy().signature).encode("utf-8")
         ).hexdigest()[:16],
@@ -123,6 +127,8 @@ class PartsReportService:
         baseline_signature: str = "",
         runtime_config_signature: str = "",
         _data_port: PartsDataPort | None = None,
+        cvd_path: str = "",
+        cvd_signature: str = "",
     ) -> dict[str, object]:
         """
         获取可安全跨模块重载缓存的关键备件报表载荷。
@@ -140,7 +146,7 @@ class PartsReportService:
         Returns:
             仅包含 DataFrame 和原生标量的缓存载荷。
         """
-        del baseline_signature, runtime_config_signature
+        del baseline_signature, runtime_config_signature, cvd_signature
 
         # 1. 加载基线 CSV
         data_port = _resolve_data_port(_db_manager, _data_port)
@@ -179,6 +185,18 @@ class PartsReportService:
         # 5. 计算使用进度和预警状态
         report_df = batch_calculate_progress_and_status(report_df, policy=alert_policy)
 
+        # CVD 独立计算日期寿命和月增量，不进入数值修饰和数据库匹配链路。
+        if cvd_path:
+            if not runtime_config.cvd_baseline_date:
+                raise ValueError("CVD 模拟缺少基准日期配置")
+            cvd_report = build_cvd_report(
+                data_port.load_cvd(cvd_path),
+                as_of_date=as_of_date or date.today().isoformat(),
+                baseline_date=runtime_config.cvd_baseline_date,
+                policy=alert_policy,
+            )
+            report_df = pd.concat([report_df, cvd_report], ignore_index=True)
+
         # 6. 统计信息
         over_count = int((report_df["预警状态"] == "超规").sum())
         warning_count = int((report_df["预警状态"] == "预警").sum())
@@ -211,6 +229,8 @@ class PartsReportService:
         baseline_signature: str = "",
         runtime_config_signature: str = "",
         _data_port: PartsDataPort | None = None,
+        cvd_path: str = "",
+        cvd_signature: str = "",
     ) -> PartsReportViewModel:
         """读取缓存载荷，并在 pickle 边界之外构造当前模块的 ViewModel。"""
         payload = PartsReportService.fetch_report_payload(
@@ -221,6 +241,8 @@ class PartsReportService:
             baseline_signature=baseline_signature,
             runtime_config_signature=runtime_config_signature,
             _data_port=_data_port,
+            cvd_path=cvd_path,
+            cvd_signature=cvd_signature,
         )
         report_df = payload.get("report_df")
         report_df = report_df if isinstance(report_df, pd.DataFrame) else pd.DataFrame()

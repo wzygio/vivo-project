@@ -39,6 +39,7 @@ from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
     render_aoi_rs_sheet_oos_alert_indicator_sections,
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
+from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -93,6 +94,14 @@ render_page_header(
     refresh_handlers=[
         lambda: refresh_aoi_rs_snapshots(db_manager, current_product, query_config.end_date)
     ],
+)
+
+render_aoi_rs_export(
+    current_product=current_product,
+    start_date=default_start_dt,
+    end_date=default_end_dt.date(),
+    db_manager=db_manager,
+    step_desc_map=step_desc_map,
 )
 
 # Phase 4 门控：共享产品 revision + 两阶段决策签名进入 L2 缓存键；

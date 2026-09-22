@@ -11,7 +11,8 @@ dependencies = [
     "pandas>=2.3.1",
     "numpy>=2.3.2",
     "streamlit>=1.57.0",
-    "plotly",                # 绘图核心，requirements 中缺失但代码有引用
+    "plotly>=6.1.1",
+    "kaleido>=1.0,<2",       # RS 图像批量导出，运行环境需安装 Chrome/Chromium
     "sqlalchemy>=2.0.42",
     "psycopg2>=2.9.10",
     "python-dotenv>=1.1.1",

@@ -3,13 +3,14 @@
 📋 关键备件报表 — Streamlit 前端页面
 
 数据流:
-1. 加载 resources/equipment_domain/critical_parts_baseline.csv（规格基线）
+1. 加载关键备件规格基线及 CVD 工作簿首个 sheet
 2. 查询 PostgreSQL eda.ARRAY_PDS_RESULT_T（最新实测值）→ Parquet 快照
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
 4. 渲染卡片：总备件数、超规、预警、正常、最后更新
 5. 中部渲染明细表，支持厂别、设备类型、备件类型多选筛选
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -38,7 +39,6 @@ from src.equipment_domain.application.parts_service import (
     PartsReportService,
     build_parts_report_cache_context,
 )
-from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
 from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
@@ -58,7 +58,9 @@ from app.sections.equipment_domain.parts_dashboard import (
 # ==============================================================================
 
 BASELINE_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline", "critical_parts_baseline.csv")
-PARTS_REPORT_CACHE_SIGNATURE = "parts_report_current_dates_v2"
+CVD_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "cvd_parts", "供应商关键备件寿命管控清单-0921-CVD.xlsx")
+PARTS_REPORT_CACHE_SIGNATURE = "parts_report_cvd_v3"
+logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -74,7 +76,7 @@ st.set_page_config(
 active_config = SessionManager.get_active_config()
 db_manager = DatabaseManager()
 parts_report_cache_signature = PARTS_REPORT_CACHE_SIGNATURE
-parts_report_cache_context = build_parts_report_cache_context(BASELINE_PATH)
+parts_report_cache_context = build_parts_report_cache_context(BASELINE_PATH, CVD_PATH)
 render_page_header(
     "📋 关键备件报表",
     active_config,
@@ -90,25 +92,10 @@ render_page_header(
 
 
 # ==============================================================================
-#  加载规格并渲染级联筛选器
-# ==============================================================================
-
-try:
-    spec_df = load_spec_baseline(BASELINE_PATH)
-except Exception as error:
-    st.error(f"❌ 规格基线加载失败: {error}")
-    st.stop()
-
-selected_factories, selected_equipment_types, selected_part_types = (
-    render_parts_filters(spec_df)
-)
-
-
-# ==============================================================================
 #  加载原始报表数据
 # ==============================================================================
 
-with st.spinner("正在从数据库加载备件寿命数据..."):
+with st.spinner("正在加载备件寿命数据..."):
     try:
         view_model = PartsReportService.get_report_data(
             _db_manager=db_manager,
@@ -117,15 +104,22 @@ with st.spinner("正在从数据库加载备件寿命数据..."):
             as_of_date=parts_report_cache_context["as_of_date"],
             baseline_signature=parts_report_cache_context["baseline_signature"],
             runtime_config_signature=parts_report_cache_context["runtime_config_signature"],
+            cvd_path=str(CVD_PATH),
+            cvd_signature=parts_report_cache_context["cvd_signature"],
         )
-    except Exception as e:
-        st.error(f"❌ 数据加载失败: {e}")
+    except Exception:
+        logger.exception("关键备件报表加载失败")
+        st.error("备件寿命数据暂时无法加载，请稍后重试。")
         st.stop()
 
 
 # ==============================================================================
 #  多维筛选
 # ==============================================================================
+
+selected_factories, selected_equipment_types, selected_part_types = (
+    render_parts_filters(view_model.report_df)
+)
 
 filtered_df = apply_parts_filters(
     view_model.report_df,

@@ -23,6 +23,1015 @@ def _project_tt_param_set(specs: pd.DataFrame) -> pd.DataFrame:
     if specs.empty:
         return pd.DataFrame(columns=["step_id", "param_name"])
     return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
 
 
 def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
@@ -33,6 +1042,4969 @@ def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"param_name": "tt_name"})
         .reset_index(drop=True)
     )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+    return specs[specs["param_type"].isna()][["step_id", "param_name"]].drop_duplicates()
+
+
+def _project_tt_spec_limits(specs: pd.DataFrame) -> pd.DataFrame:
+    if specs.empty:
+        return pd.DataFrame(columns=["prod_code", "step_id", "tt_name", "usl", "ucl"])
+    return (
+        specs[specs["param_type"].isna()][["prod_code", "step_id", "param_name", "usl", "ucl"]]
+        .rename(columns={"param_name": "tt_name"})
+        .reset_index(drop=True)
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class AoiTtRepository:

@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 
 import pandas as pd
+import pytest
 
 from app.sections.equipment_domain import parts_filters
 from app.sections.equipment_domain import parts_dashboard
@@ -170,3 +171,39 @@ def test_station_display_preserves_codes_and_removes_excel_decimal_suffix(monkey
     ]
     assert pd.isna(captured[0]["站点"].iloc[5])
     pd.testing.assert_frame_equal(source, original)
+
+
+def test_mixed_date_and_numeric_values_support_arrow_and_exclude_progress(monkeypatch):
+    import pyarrow as pa
+
+    captured = []
+    monkeypatch.setattr(parts_dashboard.st, "dataframe", lambda frame, **kwargs: captured.append((frame, kwargs)))
+    source = pd.DataFrame({
+        "测量值": [pd.Timestamp("2026-02-01"), 2477 + 352 / 30],
+        "寿命规格": ["2年", 6500], "进度": [None, 352],
+        "原始测量值": [46054, 2477], "预警": ["", ""],
+    })
+    parts_dashboard.render_parts_table(source)
+    parts_dashboard.render_parts_table_selectable(source)
+    for frame, kwargs in captured:
+        assert frame["测量值"].tolist() == ["2026-02-01", "2488.73"]
+        assert frame["寿命规格"].tolist() == ["2年", "6500"]
+        assert set(frame.columns) == {"测量值", "寿命规格"}
+        assert kwargs["column_config"]["测量值"]["type_config"]["type"] == "text"
+        pa.Table.from_pandas(frame)
+
+
+def test_empty_table_shows_business_message_without_data(monkeypatch):
+    messages = []
+    monkeypatch.setattr(parts_dashboard.st, "info", messages.append)
+    monkeypatch.setattr(parts_dashboard.st, "dataframe", lambda *args, **kwargs: pytest.fail("empty table sent"))
+    parts_dashboard.render_parts_table(pd.DataFrame())
+    assert messages == ["当前筛选条件下没有数据。"]
+
+
+def test_numeric_only_selection_retains_numeric_sorting(monkeypatch):
+    captured = []
+    monkeypatch.setattr(parts_dashboard.st, "dataframe", lambda frame, **kwargs: captured.append(frame))
+    source = pd.DataFrame({"测量值": pd.Series([2500.0, 10000.0], dtype=object)})
+    parts_dashboard.render_parts_table(source)
+    assert pd.api.types.is_numeric_dtype(captured[0]["测量值"])

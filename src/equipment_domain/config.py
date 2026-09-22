@@ -1,6 +1,7 @@
 """Typed runtime settings for the critical-parts domain."""
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 import re
 from typing import Any
@@ -24,6 +25,7 @@ class EquipmentRuntimeConfig:
     query_source_table: str
     alert_policy: PartsAlertPolicy
     fabrication_policy: FabricationPolicy
+    cvd_baseline_date: str = ""
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -40,6 +42,11 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
     query = _mapping(config.get("query"), "query")
     alert = _mapping(config.get("alert"), "alert")
     fabrication = _mapping(config.get("fabrication"), "fabrication")
+    cvd = _mapping(config.get("cvd", {}), "cvd")
+    cvd_baseline_date = (
+        date.fromisoformat(str(cvd["baseline_date"])).isoformat()
+        if cvd else ""
+    )
 
     sheet_names = baseline.get("source_sheet_names")
     if not isinstance(sheet_names, list) or not sheet_names:
@@ -99,4 +106,5 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
             ),
             snapshot_ttl_hours=snapshot_ttl_hours,
         ),
+        cvd_baseline_date=cvd_baseline_date,
     )

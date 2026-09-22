@@ -1,6 +1,8 @@
 """Production adapter preserving existing equipment snapshot policies."""
 import pandas as pd
 
+from src.equipment_domain.infrastructure.cvd_parts_loader import load_cvd_parts
+
 from src.equipment_domain.infrastructure.data_loader import PartsRepository, load_spec_baseline, load_report_part_life_snapshots
 
 
@@ -10,6 +12,9 @@ class PartsReportDataAdapter:
 
     def load_baseline(self, baseline_path: str) -> pd.DataFrame:
         return load_spec_baseline(baseline_path)
+
+    def load_cvd(self, workbook_path: str) -> pd.DataFrame:
+        return load_cvd_parts(workbook_path)
 
     def load_snapshots(self, spec_df: pd.DataFrame, *, as_of: pd.Timestamp, max_age_days: int) -> tuple[pd.DataFrame, pd.DataFrame]:
         return load_report_part_life_snapshots(self.db_manager, spec_df, as_of=as_of, max_age_days=max_age_days)

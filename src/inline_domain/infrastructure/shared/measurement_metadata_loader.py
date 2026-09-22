@@ -19,6 +19,7 @@ SPEC_COLUMNS = [
     "lsl",
     "ucl",
     "lcl",
+    "target",
     "main_step_id",
     "main_eqp_type",
 ]
@@ -77,6 +78,7 @@ def load_parameter_specs(
             lsl,
             ucl,
             lcl,
+            target,
             main_step_id,
             main_eqp_type
         FROM mdw.dwd_imp_dv_param_spec
@@ -88,7 +90,7 @@ def load_parameter_specs(
         return pd.DataFrame(columns=SPEC_COLUMNS)
 
     specs = result.reindex(columns=SPEC_COLUMNS).copy()
-    for column in ("usl", "lsl", "ucl", "lcl"):
+    for column in ("usl", "lsl", "ucl", "lcl", "target"):
         specs[column] = pd.to_numeric(specs[column], errors="coerce")
     main_steps = specs["main_step_id"].astype("string").str.strip()
     specs["main_step_id"] = main_steps.mask(main_steps.eq("")).fillna(

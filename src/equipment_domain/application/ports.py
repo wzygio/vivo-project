@@ -5,6 +5,10 @@ import pandas as pd
 
 
 class PartsDataPort(Protocol):
+    def load_cvd(self, workbook_path: str) -> pd.DataFrame:
+        """Return the first CVD worksheet, including monthly increments."""
+        ...
+
     def load_baseline(self, baseline_path: str) -> pd.DataFrame:
         """Return a normalized baseline, including numeric lifespan limits."""
         ...

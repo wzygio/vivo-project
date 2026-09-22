@@ -24,6 +24,59 @@ def specs() -> pd.DataFrame:
                               usl=60.0, lsl=40.0, ucl=55.0, lcl=45.0, target=50.0)])
 
 
+@pytest.mark.parametrize("database_target, expected_target", [("22.5", 22.5), (None, 28.5)])
+def test_database_target_reaches_points_features_capability_and_all_charts(
+    monkeypatch, tmp_path, database_target, expected_target,
+):
+    from app.sections.inline_domain.spc import spc_dashboard
+    from src.inline_domain.infrastructure.shared import measurement_metadata_loader as metadata
+
+    class Decisions:
+        def load_sheet_oos_decisions(self, *args):
+            return pd.DataFrame(columns=[*rules.OOS_KEY_COLUMNS, "flag"])
+
+    database_specs = pd.DataFrame([dict(
+        prod_code="M678", step_id="1D450", param_name="CD1",
+        usl=36.0, lsl=21.0, ucl=None, lcl=21.3, target=database_target,
+    )])
+    monkeypatch.setattr(metadata, "_read_sql", lambda *args: database_specs.copy())
+    limits = metadata.load_parameter_specs(None, "M678")
+    points = measurements().assign(prod_code="M678", step_id="1D450", param_name="CD1")
+    points["param_value"] = points["site_name"].map({"P1": 22.0, "P2": 23.0})
+    result = decorated_data.prepare_decorated_data(
+        points, limits, "M678", "spc", product_dir=tmp_path,
+        persist=False, decoration_port=Decisions(), sheet_features_start_date="2026-09-14",
+    )
+    for frame in [result.raw_measurements_df, result.sheet_features_df]:
+        if database_target is None:
+            assert frame["target"].isna().all()
+        else:
+            assert frame["target"].eq(expected_target).all()
+
+    capability = build_period_capability_report(
+        result.sheet_features_df, date(2026, 9, 21), result.raw_measurements_df,
+        "point_value", previous_week_only=True,
+    )
+    assert capability["target"].tolist() == [expected_target]
+    point_std = pd.Series([22.0, 23.0, 22.0, 23.0]).std()
+    expected_cpm = 15.0 / (6.0 * (point_std ** 2 + (22.5 - expected_target) ** 2) ** 0.5)
+    assert capability.iloc[0]["cpm"] == pytest.approx(expected_cpm)
+
+    payload = spc_dashboard._build_indicator_render_payload(
+        "CD1", "box", result.sheet_features_df, capability,
+        result.raw_measurements_df, "point_value", reference_date=date(2026, 9, 21),
+    )
+    for key in ["fig1", "chamber_fig", "time_fig"]:
+        figure = payload[key]
+        targets = [a.text for a in figure.layout.annotations if a.text.startswith("Target:")]
+        if database_target is None:
+            assert targets == []
+            assert not any(shape.y0 == shape.y1 == expected_target for shape in figure.layout.shapes)
+        else:
+            assert targets == [f"Target: {expected_target}"]
+            assert any(shape.y0 == shape.y1 == expected_target for shape in figure.layout.shapes)
+
+
 @pytest.mark.parametrize("flag", [True, False, None, "Delete"])
 def test_spc_point_decoration_needs_no_sheet_statistics(flag):
     points = measurements()

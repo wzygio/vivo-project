@@ -5,6 +5,8 @@
 
 import streamlit as st
 import pandas as pd
+from datetime import date, datetime
+from numbers import Real
 from typing import List
 
 
@@ -13,6 +15,47 @@ PARTS_TABLE_COLUMN_ORDER = (
     "寿命规格", "站点", "机台号-腔室",
     "测量值", "使用进度", "预警状态", "测量时间",
 )
+
+
+def _format_mixed_value(value: object) -> str:
+    if pd.isna(value):
+        return ""
+    if isinstance(value, (date, datetime, pd.Timestamp)):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, Real):
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
+def _prepare_parts_table(df: pd.DataFrame) -> pd.DataFrame:
+    """在前端边界排除内部字段，混合列统一为文本以兼容 Arrow。"""
+    result = df.loc[:, [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]].copy()
+    if "测量时间" in result:
+        result["测量时间"] = pd.to_datetime(
+            result["测量时间"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d").fillna("")
+    if "站点" in result:
+        result["站点"] = (
+            result["站点"].astype("string").str.strip()
+            .str.replace(r"(?<!\S)(\d+)\.0+(?!\S)", r"\1", regex=True)
+        )
+    for column in ("测量值", "寿命规格"):
+        if column in result and not pd.api.types.is_numeric_dtype(result[column]):
+            numeric = pd.to_numeric(result[column], errors="coerce")
+            result[column] = (
+                numeric if numeric.notna().equals(result[column].notna())
+                else result[column].map(_format_mixed_value)
+            )
+    return result
+
+
+def _configure_mixed_columns(df: pd.DataFrame, config: dict) -> None:
+    for column, help_text in (
+        ("测量值", "当前累计测量值或备件更换日期"),
+        ("寿命规格", "备件额定寿命，含按年限管理的规格"),
+    ):
+        if column in df and not pd.api.types.is_numeric_dtype(df[column]):
+            config[column] = st.column_config.TextColumn(column, help=help_text)
 
 
 def render_parts_header(title: str):
@@ -79,22 +122,13 @@ def render_parts_table(df: pd.DataFrame):
         st.info("当前筛选条件下没有数据。")
         return
 
-    df = df.copy()
-    if "测量时间" in df.columns:
-        df["测量时间"] = pd.to_datetime(
-            df["测量时间"], errors="coerce"
-        ).dt.strftime("%Y-%m-%d").fillna("")
-    if "站点" in df.columns:
-        df["站点"] = (
-            df["站点"].astype("string").str.strip()
-            .str.replace(r"(?<!\S)(\d+)\.0+(?!\S)", r"\1", regex=True)
-        )
+    df = _prepare_parts_table(df)
 
     column_config = {
         "站点": st.column_config.TextColumn("站点"),
         "使用进度": st.column_config.ProgressColumn(
             "使用进度 (%)",
-            help="测量值 / 寿命规格 x 100%",
+            help="累计测量值或已使用时长占额定寿命的百分比",
             format="%.0f%%",
             min_value=0,
             max_value=100,
@@ -102,7 +136,7 @@ def render_parts_table(df: pd.DataFrame):
         "预警状态": st.column_config.TextColumn("预警状态"),
         "测量值": st.column_config.NumberColumn(
             "测量值",
-            help="从数据库查询的最新测量值",
+            help="当前累计测量值",
             format="%.0f",
         ),
         "寿命规格": st.column_config.NumberColumn(
@@ -116,6 +150,7 @@ def render_parts_table(df: pd.DataFrame):
         ),
     }
 
+    _configure_mixed_columns(df, column_config)
     valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     st.dataframe(
@@ -141,10 +176,12 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
         st.info("当前筛选条件下没有数据。")
         return {"selection": {"rows": []}}
 
+    df = _prepare_parts_table(df)
+
     column_config = {
         "使用进度": st.column_config.ProgressColumn(
             "使用进度 (%)",
-            help="测量值 / 寿命规格 x 100%",
+            help="累计测量值或已使用时长占额定寿命的百分比",
             format="%.0f%%",
             min_value=0,
             max_value=100,
@@ -152,7 +189,7 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
         "预警状态": st.column_config.TextColumn("预警状态"),
         "测量值": st.column_config.NumberColumn(
             "测量值",
-            help="从数据库查询的最新测量值",
+            help="当前累计测量值",
             format="%.0f",
         ),
         "寿命规格": st.column_config.NumberColumn(
@@ -166,6 +203,7 @@ def render_parts_table_selectable(df: pd.DataFrame) -> dict:
         ),
     }
 
+    _configure_mixed_columns(df, column_config)
     valid_columns = [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]
 
     selected_rows = st.dataframe(

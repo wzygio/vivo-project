@@ -728,8 +728,9 @@ def test_period_overview_chart_uses_box_without_metric_lines() -> None:
     assert all(trace.boxpoints is False for trace in box_traces)
     assert not line_traces
     assert all(getattr(shape, "y0", None) != 1.33 for shape in fig.layout.shapes)
-    assert any(getattr(shape, "y0", None) == 10.0 for shape in fig.layout.shapes)
+    assert all(getattr(shape, "y0", None) != 10.0 for shape in fig.layout.shapes)
     annotation_texts = {annotation.text for annotation in fig.layout.annotations}
+    assert not any(text.startswith("Target:") for text in annotation_texts)
     assert {"USL: 12", "LSL: 8", "UCL: 11", "LCL: 9"}.issubset(annotation_texts)
     assert fig.layout.yaxis.range == (8.0, 12.0)
     assert fig.layout.height <= 480
@@ -957,7 +958,7 @@ def test_render_indicator_sections_places_charts_side_by_side_in_one_row(monkeyp
         raw_measurements_df=raw_measurements,
     )
 
-    assert column_specs == [4, 3]
+    assert column_specs == [3]
     assert rendered_tables[0].columns.tolist() == ["指标", "月 2026-06"]
     assert rendered_figures == [period_figure, chamber_figure, time_figure]
 
@@ -979,10 +980,6 @@ def test_indicator_payload_assigns_unique_plotly_keys_across_page_sections(monke
 
     payload = {
         "label": "ARRAY | 15260 | 4PP_Rs",
-        "cpk_median": "-",
-        "cpk_min": "-",
-        "cpm_median": "-",
-        "cpm_min": "-",
         "capability_table": pd.DataFrame(),
         "fig1": shared_figure,
         "chamber_fig": shared_figure,
@@ -1500,10 +1497,6 @@ def test_render_cpk_alert_section_reuses_memoized_charts(monkeypatch) -> None:
         build_calls.append(kwargs["label"])
         return {
             "label": kwargs["label"],
-            "cpk_median": "-",
-            "cpk_min": "-",
-            "cpm_median": "-",
-            "cpm_min": "-",
             "capability_table": pd.DataFrame(),
             "fig1": object(),
             "chamber_fig": object(),
