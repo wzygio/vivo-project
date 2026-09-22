@@ -19,6 +19,9 @@ class Source(MemorySource):
             return self.frame.iloc[:0]
         if mode == 'missing_luminance':
             return self.frame.assign(lumi_decay=None)
+        if mode == 'missing_batch':
+            missing = self.frame.assign(date_key=None)
+            return pd.concat([self.frame, missing], ignore_index=True)
         if mode == 'many':
             frame = pd.concat([self.frame] * 6, ignore_index=True)
             frame['test_time'] = range(len(frame))
@@ -113,3 +116,20 @@ def test_missing_luminance_does_not_hide_efficiency_charts():
     assert len(app.expander[1].info) == 4
     assert all(info.value == '该组暂无有效亮度衰减测点。' for info in app.expander[1].info)
     assert app.warning and len(app.dataframe[0].value) == 24
+
+
+def test_missing_batch_filters_and_renders_both_metrics_without_warning():
+    app = AppTest.from_string(APP).run()
+    app.session_state['mode'] = 'missing_batch'
+    app.run()
+    assert not app.exception and not app.error and not app.warning and not app.info
+    assert len(app.dataframe[0].value) == 48
+    assert '未填写批次' in app.multiselect(key='iqc_lifetime_batches').options
+    app.multiselect(key='iqc_lifetime_batches').set_value(['未填写批次']).run()
+    assert not app.exception and not app.error and not app.warning and not app.info
+    assert len(app.dataframe[0].value) == 24
+    assert app.dataframe[0].value['批次号'].unique().tolist() == ['未填写批次']
+    assert [expander.label for expander in app.expander] == [
+        'M678 · 未填写批次 · 效率衰减', 'M678 · 未填写批次 · 亮度衰减',
+    ]
+    assert len(app.get('plotly_chart')) == 8

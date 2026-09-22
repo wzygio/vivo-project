@@ -354,6 +354,40 @@ def test_expired_snapshot_refresh_replaces_overlap_and_prunes_old_month(
     assert "OLD" not in stored["lot_id"].tolist()
 
 
+@pytest.mark.parametrize("days,expected_start,remaining", [
+    (None, "20260823000000", {"OLD"}),
+    (3, "20260827000000", {"OLD", "TAIL"}),
+    (90, "20260728000000", set()),
+])
+def test_incremental_refresh_uses_global_days_and_replaces_empty_tail(
+    tmp_path, monkeypatch, days, expected_start, remaining,
+):
+    responses = iter([
+        pd.DataFrame([
+            _detail_row("A->B", "OLD", "M626", "20260729010000"),
+            _detail_row("A->B", "TAIL", "M626", "20260824010000"),
+        ]),
+        pd.DataFrame(columns=qtime_repository.DETAIL_COLUMNS),
+    ])
+    calls = []
+
+    def read_sql(_statement, _engine, params):
+        calls.append(dict(params))
+        return next(responses)
+
+    monkeypatch.setattr(qtime_repository.pd, "read_sql", read_sql)
+    repository = QTimeRepository(SimpleNamespace(engine=object()), snapshot_dir=tmp_path)
+    query = _current_query(date(2026, 9, 2))
+    repository.fetch_details(query)
+    monkeypatch.setattr(QTimeSnapshotStore, "_is_fresh", lambda *_args: False)
+    if days is not None:
+        monkeypatch.setattr(qtime_repository.ConfigLoader, "get_incremental_refresh_days", lambda: days)
+    repository.fetch_details(query)
+    assert calls[1]["start_time"] == expected_start
+    assert calls[1]["end_time"] == "20260830000000"
+    assert set(pd.read_parquet(tmp_path / "qtime_source_array.parquet").lot_id) == remaining
+
+
 def test_legacy_l1_is_removed_only_after_all_shop_snapshots_exist(tmp_path) -> None:
     legacy_detail = tmp_path / "qtime_details_deadbeef.parquet"
     legacy_options = tmp_path / "qtime_step_options_array_qtime-source-v1.parquet"

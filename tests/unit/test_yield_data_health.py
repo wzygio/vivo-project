@@ -85,6 +85,28 @@ def test_incremental_failure_keeps_original_health_and_bytes(repository, monkeyp
     assert repository.snapshot_path.read_bytes() == before
 
 
+@pytest.mark.parametrize("days,expected_start", [(7, "2026-07-25"), (3, "2026-07-29"), (90, "2026-06-01")])
+def test_incremental_refresh_uses_global_days_in_source_time(repository, monkeypatch, days, expected_start):
+    repository.data_forward_policy = DataForwardPolicy(enabled=True, offset_days=4)
+    display_query = YieldQueryConfig(start_date="2026-06-05", end_date="2026-08-05", product_code="TEST")
+    calls = []
+
+    def fetch(start, end, *_args):
+        calls.append((start, end))
+        return pd.DataFrame({
+            "panel_id": ["LATEST"],
+            "warehousing_time": [pd.Timestamp("2026-08-01")],
+            "warehousing_event_time": ["20260801080000"],
+        })
+
+    monkeypatch.setattr(repository, "_fetch_from_db_in_chunks", fetch)
+    repository.get_panel_details(display_query)
+    repository.SNAPSHOT_TTL_HOURS = -1
+    monkeypatch.setattr(ConfigLoader, "get_incremental_refresh_days", lambda: days)
+    repository.get_panel_details(display_query)
+    assert calls == [("2026-06-01", "2026-08-01"), (expected_start, "2026-08-01")]
+
+
 def test_source_health_survives_display_shift(repository, monkeypatch):
     repository.data_forward_policy = DataForwardPolicy(enabled=True, offset_days=4)
     windows = []

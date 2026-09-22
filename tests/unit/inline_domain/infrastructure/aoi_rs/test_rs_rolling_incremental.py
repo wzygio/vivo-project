@@ -12,7 +12,8 @@ def _frame(date, quantity=3):
 
 
 @pytest.mark.parametrize("kind,columns", [("details", RS_DETAIL_COLUMNS), ("pass_through", PASS_THROUGH_COLUMNS)])
-def test_rs_incremental_tail_replacement_and_month_pruning(tmp_path, monkeypatch, kind, columns):
+@pytest.mark.parametrize("days,expected_start", [(7, "2026-08-24"), (3, "2026-08-28")])
+def test_rs_incremental_tail_replacement_and_month_pruning(tmp_path, monkeypatch, kind, columns, days, expected_start):
     monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_data_forward_policy", lambda: DataForwardPolicy(enabled=False))
     calls = []
     batches = [pd.concat([_frame("2026-05-01"), _frame("2026-06-10"), _frame("2026-08-30")]), pd.concat([_frame("2026-09-01", 4), _frame("2026-09-01", 5), _frame("2026-09-01", 5)])]
@@ -23,8 +24,9 @@ def test_rs_incremental_tail_replacement_and_month_pruning(tmp_path, monkeypatch
     method = repo.get_rs_details if kind == "details" else repo.get_pass_through
     query = AoiRsQueryConfig(prod_code="M1", start_date="2026-06-01", end_date="2026-08-31")
     method(query)
+    monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_incremental_refresh_days", lambda: days)
     result = method(query.model_copy(update={"end_date": "2026-09-01"}))
-    assert calls == ["2026-05-01", "2026-08-29"]
+    assert calls == ["2026-05-01", expected_start]
     assert pd.Timestamp("2026-05-01") not in result.start_time.tolist()
     assert pd.Timestamp("2026-08-30") not in result.start_time.tolist()
     assert len(result) == (3 if kind == "details" else 2)

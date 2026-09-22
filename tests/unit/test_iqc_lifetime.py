@@ -96,6 +96,37 @@ def test_group_numbers_do_not_change_on_filtering_or_cross_group_overlap():
     assert filter_report(report, ['M678'], ['other-batch']).empty
 
 
+@pytest.mark.parametrize('batch', [None, pd.NA, '', ' \t '])
+def test_missing_batch_is_retained_with_public_label(batch):
+    raw = source_frame()
+    missing = raw.copy()
+    missing['date_key'] = batch
+    combined = pd.concat([raw, missing], ignore_index=True)
+    original = combined.copy(deep=True)
+    report = LifetimeReportService(MemorySource(combined)).get_report()
+    selected = filter_report(report, ['M678'], ['未填写批次'])
+    assert len(report) == 48 and len(selected) == 24
+    assert selected['样品编号'].tolist() == [1, 1, 1, 2, 2, 2] * 4
+    assert selected['效率衰减'].tolist() == [1.0, 0.99, 0.98] * 8
+    assert not selected['批次号'].isna().any()
+    pd.testing.assert_frame_equal(combined, original)
+    shuffled = LifetimeReportService(MemorySource(combined.sample(frac=1, random_state=9))).get_report()
+    pd.testing.assert_frame_equal(report, shuffled)
+
+
+def test_different_empty_batch_forms_share_one_group_and_conflicts_still_fail():
+    raw = source_frame()
+    raw['date_key'] = [None, '', ' \t '] * 8
+    duplicate = raw.iloc[[0]].copy()
+    duplicate['date_key'] = ''
+    report = LifetimeReportService(MemorySource(pd.concat([raw, duplicate]))).get_report()
+    assert len(report) == 24
+    assert report['批次号'].unique().tolist() == ['未填写批次']
+    duplicate['eff_decay'] = '0.5'
+    with pytest.raises(LifetimeDataInvalid, match='LIFETIME_MEASUREMENT_CONFLICT'):
+        LifetimeReportService(MemorySource(pd.concat([raw, duplicate]))).get_report()
+
+
 @pytest.mark.parametrize('metric,source_column', [
     ('效率衰减', 'eff_decay'), ('亮度衰减', 'lumi_decay'),
 ])

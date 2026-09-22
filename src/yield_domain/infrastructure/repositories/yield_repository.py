@@ -33,11 +33,9 @@ class PanelRepository:
     职责：Service 层与数据库的接口。
     [能力]: 
     1. TTL 缓存保护（有效期内不连库，TTL 见 global.yaml 的 application.cache_ttl_hours）
-    2. 增量更新 (只查最近 3 天)
+    2. 增量更新 (回刷天数见 global.yaml 的 application.incremental_refresh_days)
     3. 滚动窗口 (自动裁剪过期数据)
     """
-
-    INCREMENTAL_BUFFER_DAYS = 2 # 增量缓冲
 
     def __init__(
         self, 
@@ -96,6 +94,7 @@ class PanelRepository:
             result = cache
             health = cache_health
         else:
+            overlap_days = ConfigLoader.get_incremental_refresh_days()
             try:
                 fetch_start = source_start
                 incremental = (
@@ -105,7 +104,7 @@ class PanelRepository:
                     and pd.Timestamp(cache_health["source_start"]) <= source_start
                 )
                 if incremental:
-                    fetch_start = max(source_start, cache[time_col].max() - timedelta(days=self.INCREMENTAL_BUFFER_DAYS))
+                    fetch_start = max(source_start, cache[time_col].max() - timedelta(days=overlap_days))
                 delta = self._fetch_from_db_in_chunks(
                     fetch_start.strftime("%Y-%m-%d"), source_end.strftime("%Y-%m-%d"),
                     query.product_code, self.data_policy.work_order_types,

@@ -317,7 +317,7 @@ def render_alert_matrix_board(
             payload = get_cached_alert_matrix()
     except Exception as exc:  # noqa: BLE001 - 矩阵区整体降级是契约要求
         logger.exception("[alert-matrix] 矩阵 payload 加载失败: %s", exc)
-        st.warning("预警矩阵暂时不可用，请稍后重试。下方看板功能不受影响。")
+        st.warning("预警矩阵暂时不可用，请稍后重试。")
         return
 
     from app.manager.compliance_manager import apply_matrix_compliance, load_matrix_config

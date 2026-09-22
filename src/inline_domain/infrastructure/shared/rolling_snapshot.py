@@ -16,9 +16,10 @@ from uuid import uuid4
 
 import pandas as pd
 
+from src.shared_kernel.config import ConfigLoader
+
 from .snapshot_window import inline_snapshot_window_start
 
-OVERLAP_DAYS = 2
 logger = logging.getLogger(__name__)
 
 
@@ -109,7 +110,8 @@ def incremental_start(metadata: dict | None, end: object) -> pd.Timestamp:
     covered_through = pd.Timestamp(metadata["covered_through"])
     if covered_from > start or covered_through < start or covered_through > pd.Timestamp(end):
         return start
-    return max(start, covered_through - pd.Timedelta(days=OVERLAP_DAYS))
+    overlap_days = ConfigLoader.get_incremental_refresh_days()
+    return max(start, covered_through - pd.Timedelta(days=overlap_days))
 
 
 def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end: object) -> pd.DataFrame:

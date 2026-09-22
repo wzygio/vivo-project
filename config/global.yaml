@@ -1,6 +1,7 @@
 # 应用程序级别的设置
 application:
   cache_ttl_hours: 12 # 缓存时间（小时）
+  incremental_refresh_days: 7 # 增量刷新从原有截止点向前回刷的天数（正整数）
 
 # 制造事实显示时间策略：客户报表展示源数据四天后的日期。
 data_forward:

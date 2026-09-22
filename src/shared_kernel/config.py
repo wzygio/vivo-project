@@ -163,6 +163,20 @@ class ConfigLoader:
         return cls.get_cache_ttl_seconds() // 3600
 
     @classmethod
+    def get_incremental_refresh_days(cls) -> int:
+        """Load the shared source-snapshot overlap; older configs default to 7 days."""
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        application = cls._load_yaml(yaml_path).get("application", {})
+        if not isinstance(application, dict):
+            raise ValueError("global.yaml: 'application' must be a mapping")
+        days = application.get("incremental_refresh_days", 7)
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+            raise ValueError(
+                "global.yaml: 'application.incremental_refresh_days' must be a positive integer"
+            )
+        return days
+
+    @classmethod
     def get_data_forward_policy(cls) -> DataForwardPolicy:
         """Load the global manufacturing source-time display policy."""
         yaml_path = cls.get_project_root() / "config" / "global.yaml"

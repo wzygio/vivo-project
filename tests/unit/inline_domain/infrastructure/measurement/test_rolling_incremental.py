@@ -8,7 +8,20 @@ from src.inline_domain.infrastructure.shared.measurement_snapshot_repository imp
 from src.shared_kernel.data_forward import DataForwardPolicy
 
 
-def test_incremental_replaces_deleted_tail_and_never_corrects_old_rows_twice(tmp_path, monkeypatch):
+@pytest.mark.parametrize("metadata", [
+    None,
+    {"covered_from": "2026-06-01", "covered_through": "2026-06-03"},
+    {"covered_from": "2026-07-01", "covered_through": "2026-09-13"},
+    {"covered_from": "2026-06-01", "covered_through": "2026-09-20"},
+])
+def test_incremental_start_never_precedes_window_and_rebuilds_invalid_coverage(metadata):
+    from src.inline_domain.infrastructure.shared.rolling_snapshot import incremental_start
+
+    assert incremental_start(metadata, "2026-09-14") == pd.Timestamp("2026-06-01")
+
+
+@pytest.mark.parametrize("days,expected_start,expected_values", [(7, "2026-08-06", [11, 14]), (3, "2026-08-10", [11, 14])])
+def test_incremental_replaces_deleted_tail_and_never_corrects_old_rows_twice(tmp_path, monkeypatch, days, expected_start, expected_values):
     monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_data_forward_policy", lambda: DataForwardPolicy(enabled=False))
     calls = []
     batches = [pd.DataFrame({"start_time": pd.to_datetime(["2026-06-01", "2026-08-10", "2026-08-13"]), "param_value": [1, 2, 3]}), pd.DataFrame({"start_time": pd.to_datetime(["2026-08-14", "2026-08-14"]), "param_value": [4, 4]})]
@@ -17,9 +30,10 @@ def test_incremental_replaces_deleted_tail_and_never_corrects_old_rows_twice(tmp
         return batches.pop(0)
     repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader, lambda df: df.assign(param_value=df.param_value + 10))
     repo.get_measurements("M1", "2026-08-13")
+    monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_incremental_refresh_days", lambda: days)
     result = repo.get_measurements("M1", "2026-08-14")
-    assert calls == [("2026-05-01", "2026-08-13"), ("2026-08-11", "2026-08-14")]
-    assert result.param_value.tolist() == [11, 12, 14]
+    assert calls == [("2026-05-01", "2026-08-13"), (expected_start, "2026-08-14")]
+    assert result.param_value.tolist() == expected_values
 
 
 @pytest.mark.parametrize("entrypoint", ["get_measurements", "refresh_measurements"])
@@ -91,7 +105,7 @@ def test_measurement_ttl_is_coverage_based_and_expiry_loads_tail(tmp_path):
     meta["refreshed_at"] = "2020-01-01T00:00:00+00:00"
     meta_path.write_text(json.dumps(meta), encoding="utf-8")
     repo.get_measurements("M1", "2026-09-08")
-    assert calls == ["2026-06-01", "2026-09-06"]
+    assert calls == ["2026-06-01", "2026-09-01"]
 
 
 @pytest.mark.parametrize("damage", ["policy", "metadata", "parquet"])

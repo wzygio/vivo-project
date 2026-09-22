@@ -1,10 +1,10 @@
-"""自动预警看板页面组合层测试（2026-09-03 需求轮次）。
+"""自动预警矩阵与超规/CPK 独立页面的门控和组合回归测试。
 
 - 无统一页头，各看板拥有管理员专用刷新入口；
 - 「超规片自动预警」区查询门控：未点击「查询」不执行签名预算与数据加载，
   点击后才执行（monkeypatch 计数）；
 - 模块化结构：每个模块 = st.subheader 标题 + st.expander（默认展开）；
-- CPK 独立查询门控提示保留；未查询时不读取 Excel 或数据库；
+- CPK 独立查询门控保留；未查询时不读取 Excel 或数据库；
 - 矩阵筛选条常驻模块 Expander（未加载也渲染，且只渲染一处），加载后
   由 render_alert_matrix_board 按同一选择切片（filter_selection 透传）。
 
@@ -58,7 +58,8 @@ from src.inline_domain.application.shared import decision_signature
 from src.inline_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
-PAGE_PATH = Path(__file__).parents[4] / "app" / "pages" / "自动预警看板.py"
+MATRIX_PAGE_PATH = Path(__file__).parents[4] / "app/pages/自动预警看板.py"
+PAGE_PATH = Path(__file__).parents[4] / "app/pages/超规与CPK预警看板.py"
 QUERY_BUTTON_KEY = "btn_monitor_query_submit"
 MATRIX_FILTER_KEYS = (
     "alert_matrix_data_type",
@@ -69,6 +70,8 @@ MATRIX_FILTER_KEYS = (
 
 def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) -> dict:
     st.cache_data.clear()
+    from app.sections.inline_domain.monitor import alert_matrix_snapshot
+    monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)
     trackers = {
         "header_kwargs": {},
         "load_calls": [],
@@ -254,12 +257,14 @@ def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) 
 
 
 def _run_page() -> None:
+    """Exercise both independent routes for the existing cross-board assertions."""
+    runpy.run_path(str(MATRIX_PAGE_PATH), run_name="__main__")
     runpy.run_path(str(PAGE_PATH), run_name="__main__")
 
 
 def _assert_module_structure(trackers: dict) -> None:
-    """三个独立查询模块；CPK 的查询门控保留提示。"""
-    assert trackers["infos"] == ["选择产品和厂别后，点击查询生成 CPK 预警看板。"]
+    """两个页面合计三个独立查询模块，未查询时不额外展示提示。"""
+    assert trackers["infos"] == []
     assert trackers["subheaders"] == ["🚦 全指标预警看板", "⚠️ 超规片预警看板", "📊 CPK预警看板"]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True

@@ -23,6 +23,10 @@ def test_live_lifetime_public_report_matches_source():
             FROM m3dwd.dwd_panel_eff_dec_enter
         '''), connection)
     actual = build_lifetime_service().get_report()
+    raw['date_key'] = raw['date_key'].map(
+        lambda value: '未填写批次' if pd.isna(value) or not str(value).strip() else str(value)
+    )
+    raw = raw.drop_duplicates()
     assert not actual.empty, 'Live acceptance requires actual measurements'
     assert len(actual) == len(raw.drop_duplicates())
     assert len(actual.columns) == 15
@@ -44,5 +48,7 @@ def test_live_lifetime_public_report_matches_source():
                                   ('cie_x','CIEx'), ('cie_xy','CIEy'), ('iss','Iss'),
                                   ('curr_decay','电流衰减'), ('efficiency','效率'),
                                   ('eff_decay','效率衰减')]:
-                np.testing.assert_allclose(points[label], pd.to_numeric(expected[column]),
+                values = pd.to_numeric(expected[column], errors='coerce').astype(float)
+                values = values.where(np.isfinite(values))
+                np.testing.assert_allclose(points[label], values,
                                            equal_nan=True, err_msg=label)

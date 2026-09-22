@@ -115,3 +115,11 @@ playwright-cli -s=iqc-lifetime run-code --filename=D:/wzy/Python/vivo-project/te
 在 `output/test-results/iqc-lifetime-two-metrics/` 下执行 `playwright-cli -s=lifetime-two-metrics run-code --filename=D:/wzy/Python/vivo-project/tests/e2e/iqc_lifetime_states.js`，受控浏览器 E2E 通过：两类轴/悬浮信息/数值对应正确、同样品同色、四图同排、独立折叠、筛选、原生导出、缺测、空集与故障恢复。截图、导出和浏览器日志保存在该目录。控制台仅有 Streamlit 外部遥测配置请求被网络拒绝，无页面运行异常。
 
 本轮未运行实库浏览器验收或全库回归。此前只读排查发现 M3 的 466 条记录中，M673/B 画面有一条批次号为空；此源数据问题独立于曲线展示，本次未修改数据或放宽身份校验。
+
+### 2026-09-21 空批次展示优化
+
+根据用户确认，允许 NULL、空字符串和纯空白批次号，在公开投影中统一为“未填写批次”。归一化先于分组、去重及匿名编号，筛选、图表、明细和原生导出使用相同标签，不额外提示批次缺失。保留其它身份字段、测试时间及冲突测点校验，源表不写入。
+
+设置 `IQC_LIFETIME_LIVE_DB=1`，执行前述双曲线聚焦 pytest 命令并增加 `tests/integration/test_iqc_lifetime_live.py`，26 passed；实库对账覆盖空批次及源测量值 `/` 对应的缺测语义。
+
+`tests/e2e/iqc_lifetime_missing_batch.js` 在真实 M3 页面通过：选择“未填写批次”后显示两类曲线，无批次缺失提示，原生 CSV 导出保留该记录和公开标签（1 行、15 列）。证据位于 `output/test-results/iqc-lifetime-missing-batch/`。本轮未重复全库回归。

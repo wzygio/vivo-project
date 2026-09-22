@@ -26,6 +26,9 @@ def project_report(source: pd.DataFrame) -> pd.DataFrame:
     frame.attrs = {}
     for column in [*SOURCE_GROUP, 'panel_id', 'product_id', 'wo_name']:
         frame[column] = frame[column].astype('string')
+    # Normalize absent batches before grouping, deduplication and sample numbering.
+    missing_batch = frame['date_key'].isna() | frame['date_key'].str.strip().eq('')
+    frame['date_key'] = frame['date_key'].mask(missing_batch, '未填写批次')
     identifiers = frame[[*SOURCE_GROUP, 'panel_id']]
     if identifiers.isna().any(axis=None) or any(
         identifiers[column].str.strip().eq('').any() for column in identifiers

@@ -21,6 +21,9 @@ class FileResource(BaseModel):
 
 class ApplicationConfig(BaseModel):
     cache_ttl_hours: int = Field(..., gt=0, description="缓存有效期必须为正整数")
+    incremental_refresh_days: int = Field(
+        default=7, gt=0, strict=True, description="源快照增量回刷天数必须为正整数"
+    )
 
 class DataSourceConfig(BaseModel):
     product_code: str = Field(..., min_length=1)

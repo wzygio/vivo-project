@@ -14,6 +14,7 @@ const LINKS = {
     ANALYSIS_FILES: "http://10.72.26.31:8503/专项资料-解析报告",
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
+    WARNING_SUMMARY: "http://10.72.26.31:8503/超规与CPK预警看板",
     CRITICAL_PARTS: "http://10.72.26.31:8503/关键备件报表",
     SPC_REPORT: "http://10.72.26.31:8503/SPC监控报表",
     CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",
@@ -52,6 +53,13 @@ const APP_CONFIG = {
     sidebarLinks: [
             
         // --- 分组链接 (有 children) ---
+        {
+            name: "自动预警",
+            children: [
+                { name: "全指标预警看板", url: LINKS.WARNING_DASHBOARD },
+                { name: "超规与CPK预警看板", url: LINKS.WARNING_SUMMARY },
+            ]
+        },
         { 
             name: "入库不良率", 
             // 有这个 children 字段，就会渲染成折叠菜单
@@ -186,7 +194,8 @@ const APP_CONFIG = {
             label: '自动预警',
             icon: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
             subs: [
-                {l:'', v:'预警看板', url: LINKS.WARNING_DASHBOARD }
+                {l:'', v:'预警看板', url: LINKS.WARNING_DASHBOARD },
+                {l:'', v:'超规与CPK预警', url: LINKS.WARNING_SUMMARY }
             ]
         },
     ]

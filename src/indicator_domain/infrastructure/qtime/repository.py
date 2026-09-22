@@ -43,7 +43,6 @@ DETAIL_COLUMNS = [
     "prodcode",
 ]
 SAFE_DATA_ERROR = "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
-INCREMENTAL_OVERLAP_DAYS = 2
 logger = logging.getLogger(__name__)
 
 
@@ -299,7 +298,7 @@ class QTimeRepository:
         covered_end = min(pd.Timestamp(stale.metadata.source_end), source_end)
         return max(
             source_start,
-            covered_end - pd.Timedelta(days=INCREMENTAL_OVERLAP_DAYS),
+            covered_end - pd.Timedelta(days=ConfigLoader.get_incremental_refresh_days()),
         )
 
     def _merge_refresh(
