@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pandas as pd
+import pytest
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.infrastructure.aoi_tt.aoi_tt_repository import AoiTtRepository
+from src.inline_domain.core.aoi_tt.aoi_tt_calculator import build_sheet_point_df
 
 
 class FakeRawMeasurements:
@@ -124,3 +128,81 @@ def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
 
     assert captured == [query]
     assert result is expected
+
+
+def _tt_fact(**changes: object) -> dict[str, object]:
+    return {
+        "prod_code": "Z517", "factory": "ARRAY", "step_id": "11620",
+        "param_name": "TDSUM", "sheet_id": "L3Z66900P02", "lot_id": "L3Z66900PAA",
+        "start_time": "2026-09-14 08:20:13", "param_value": 354,
+        "unit_id": "3AT001-AOI", "site_name": "G", **changes,
+    }
+
+
+def _repository_for(raw: pd.DataFrame) -> AoiTtRepository:
+    specs = raw[["prod_code", "step_id", "param_name"]].drop_duplicates().assign(param_type=None)
+    return AoiTtRepository(
+        raw_measurements=SimpleNamespace(get_measurements=lambda *_args: raw),
+        metadata=SimpleNamespace(get_parameter_specs=lambda _product: specs),
+    )
+
+
+def _query() -> AoiTtQueryConfig:
+    return AoiTtQueryConfig(prod_code="Z517", start_date="2026-09-01", end_date="2026-09-22")
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_latest_inspection_replaces_older_value_before_sheet_aggregation(reverse: bool) -> None:
+    rows = [
+        _tt_fact(),
+        _tt_fact(start_time="2026-09-15 11:32:35", param_value=309, unit_id="3AT008-AOI"),
+    ]
+    raw = pd.DataFrame(rows[::-1] if reverse else rows)
+    original = raw.copy(deep=True)
+
+    details = _repository_for(raw).get_tt_details(_query())
+
+    assert details.tt_qty.tolist() == [309]
+    assert details.start_time.tolist() == [pd.Timestamp("2026-09-15 11:32:35")]
+    assert build_sheet_point_df(details).tt_qty.tolist() == [309]
+    pd.testing.assert_frame_equal(raw, original)
+
+
+@pytest.mark.parametrize("dimension,value", [
+    ("prod_code", "OTHER"), ("factory", "TP"), ("step_id", "21320"),
+    ("param_name", "DSUM"), ("sheet_id", "ANOTHER-SHEET"),
+])
+def test_latest_inspection_is_scoped_to_all_five_business_dimensions(dimension: str, value: str) -> None:
+    raw = pd.DataFrame([
+        _tt_fact(),
+        _tt_fact(start_time="2026-09-15 11:32:35", param_value=309, **{dimension: value}),
+    ])
+    details = _repository_for(raw).get_tt_details(_query())
+    assert sorted(details.tt_qty.tolist()) == [309, 354]
+
+
+def test_reinspection_does_not_split_by_lot_equipment_or_site() -> None:
+    raw = pd.DataFrame([
+        _tt_fact(),
+        _tt_fact(start_time="2026-09-15 11:32:35", param_value=309,
+                 lot_id="UPDATED-LOT", unit_id="NEW-UNIT", site_name="OTHER-SITE"),
+    ])
+    details = _repository_for(raw).get_tt_details(_query())
+    assert details.tt_qty.tolist() == [309]
+    assert details.lot_id.tolist() == ["UPDATED-LOT"]
+
+
+def test_invalid_and_out_of_window_dates_do_not_displace_latest_eligible_inspection() -> None:
+    raw = pd.DataFrame([
+        _tt_fact(),
+        _tt_fact(start_time="2026-09-15 11:32:35", param_value=309),
+        _tt_fact(start_time="2026-09-23 00:00:00", param_value=999),
+        _tt_fact(start_time="invalid", param_value=888),
+        _tt_fact(start_time="2026-08-31 23:59:59", param_value=777),
+    ])
+    assert _repository_for(raw).get_tt_details(_query()).tt_qty.tolist() == [309]
+
+
+def test_equal_timestamps_keep_last_input_record_without_summing() -> None:
+    raw = pd.DataFrame([_tt_fact(), _tt_fact(param_value=309), _tt_fact(param_value=309)])
+    assert _repository_for(raw).get_tt_details(_query()).tt_qty.tolist() == [309]

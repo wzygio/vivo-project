@@ -9,8 +9,11 @@ async page => {
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '未填写批次', exact: true }).click();
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
   await page.waitForFunction(() => {
-    const labels = [...document.querySelectorAll('[data-testid="stExpander"] summary')];
+    const labels = [...document.querySelectorAll('[data-testid="stExpander"]')]
+      .filter(el => !el.parentElement.closest('[data-testid="stExpander"]'))
+      .map(el => el.querySelector('summary'));
     return labels.length > 0 && labels.every(el => el.textContent.includes('未填写批次'));
   });
   const charts = page.locator('.js-plotly-plot');

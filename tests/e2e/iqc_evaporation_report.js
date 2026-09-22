@@ -15,10 +15,7 @@ async page => {
     });
   });
   await page.goto('http://localhost:8517');
-  const product = page.getByTestId('stMultiSelect').getByRole('combobox');
-  await product.click();
-  await page.getByRole('option', { name: '通用', exact: true }).click();
-  await page.keyboard.press('Escape');
+  if (await page.getByTestId('stMultiSelect').count() || await page.getByTestId('stSelectbox').count()) throw new Error('Product selector remains');
   await page.getByRole('button', { name: '查询', exact: true }).click();
   const table = page.getByTestId('stDataFrame');
   await table.waitFor({ timeout: 60000 });
@@ -26,7 +23,7 @@ async page => {
   for (const width of [1365, 768]) {
     await page.setViewportSize({ width, height: 900 });
     const dates = page.getByRole('textbox', { name: 'Select a date range.', exact: true });
-    const a = await dates.boundingBox(), b = await product.boundingBox();
+    const a = await dates.boundingBox(), b = await page.getByRole('button', { name: '查询', exact: true }).boundingBox();
     if (!a || !b || Math.abs(a.y - b.y) > 5) throw new Error('Filters not on one row');
     if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error('Page overflows');
     await page.screenshot({ path: `native-table-${width}.png`, fullPage: true });
@@ -38,7 +35,9 @@ async page => {
   const lines = csv.trim().split(/\r?\n/);
   const headers = lines[0].replace(/^\uFEFF/, '').split(',');
   if (headers.length !== 27 || headers[0] !== '序号' || headers[1] !== '产品型号') throw new Error('Wrong export schema');
-  const results = lines.slice(1).map(line => line.match(/,(OK|NG),(OK|NG)$/));
+  const firstMeasurement = headers.indexOf('IQC-1');
+  if (headers[firstMeasurement - 2] !== 'IQC结果' || headers[firstMeasurement - 1] !== 'COA结果') throw new Error('Result columns should precede IQC-1');
+  const results = lines.slice(1).map(line => line.match(/,(OK|NG),(OK|NG),/));
   if (results.some(result => !result)) throw new Error('Missing computed IQC/COA results in export');
   await page.getByText('IQC／COA结果按测点判定：任一测点为NG则为NG，否则为OK；缺失测点按OK处理。', { exact: true }).waitFor();
   if (lines.length < 102) throw new Error('Export truncated to former page size');

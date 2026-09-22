@@ -108,8 +108,8 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `equipment_domain` | `core` | Layer root -> identity, measurement matching, lifetime, and status calculations |
 | `equipment_domain` | `infrastructure` | Layer root -> baselines, real/fabricated data, and snapshot maintenance |
 | `iqc_domain`: incoming material inspection and lifetime testing | `application` | `eva_materials/` -> evaporation material report use case and read-only outbound port; `lifetime/` -> anonymous lifetime report use case and read-only outbound port; layer root -> retained example report reads |
-| `iqc_domain` | `core` | `eva_materials/` -> public material-report projection, SQL-equivalent per-point CASE decisions and any-NG overall decisions, specification/operator pairing and filtering; `lifetime/` -> group-local sample numbering, measurement validation, public projection and product/batch filtering |
-| `iqc_domain` | `infrastructure` | `eva_materials/` -> WMS joins, source/display-time conversion and latest-day cutoff; `lifetime/` -> independent M3 connection pool and read-only lifetime measurements (numeric elapsed test time, no calendar shift); layer root -> retained example resources |
+| `iqc_domain` | `core` | `eva_materials/` -> public material-report projection, SQL-equivalent per-point CASE decisions and any-NG overall decisions, specification/operator pairing; `lifetime/` -> group-local sample numbering, measurement validation, public projection and product/batch filtering |
+| `iqc_domain` | `infrastructure` | `eva_materials/` -> V3 organic-material scope and WMS joins (no product filter), source/display-time conversion and latest-day cutoff; `lifetime/` -> independent M3 connection pool and read-only lifetime measurements (numeric elapsed test time, no calendar shift); layer root -> retained example resources |
 
 `shared_kernel` owns configuration, source/display time, data health, cache helpers, and path contracts at its root; `infrastructure/` owns shared database connectivity, and `utils/` owns Excel/CSV utilities. Logic reused only within one domain should remain in that domain's corresponding `shared/` layer.
 
@@ -139,8 +139,8 @@ domain composition -> assembles application services and concrete adapters
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
 | `app/sections/<domain>/[<submodule>/]` | Query gates, session state, page sections, and presentation coordination; small domains may omit the submodule directory |
-| `app/sections/iqc_domain/eva_materials/` | Evaporation material query, filters, native Streamlit dataframe and cached public payloads; the complete public result supports native sorting, search and CSV export |
-| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, product/status/batch filters, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency- and luminance-decay curves in separate expanders per product/batch, with four test screens per row |
+| `app/sections/iqc_domain/eva_materials/` | Evaporation material date query, native Streamlit dataframe and cached public payloads; the complete public result supports native sorting, search and CSV export |
+| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, linked product/status/batch selectors with query-applied filters, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency- and luminance-decay curves in child expanders within each product/batch expander, with four test screens per row |
 | `app/charts/<domain>/[<submodule>/]` | Chart adapters; Inline shared charts live in `app/charts/inline_domain/`, without a one-to-one directory for every backend submodule |
 | `app/components/` | Cross-page components and filter/refresh coordination |
 | `app/sections/inline_domain/monitor/` | Current cross-indicator matrix assembly; consumes results from their owning domains |

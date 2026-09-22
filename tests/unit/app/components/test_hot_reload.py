@@ -1,6 +1,9 @@
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
+import subprocess
+import sys
+import textwrap
 import tomllib
 
 import pytest
@@ -11,6 +14,50 @@ from src.shared_kernel.config import ConfigLoader
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
+
+def test_scoped_hard_reset_imports_changed_backend_code_without_process_restart(tmp_path):
+    """Exercise real sys.modules eviction in an isolated process, not a reload mock."""
+    script = textwrap.dedent('''
+        import importlib
+        import os
+        from pathlib import Path
+        import sys
+        from types import SimpleNamespace
+
+        root = Path(sys.argv[1])
+        package = root / "inline_domain"
+        package.mkdir()
+        (package / "__init__.py").write_text("", encoding="utf-8")
+        source = package / "reload_probe.py"
+        source.write_text("def value():\\n    return 663\\n", encoding="utf-8")
+        sys.path.insert(0, str(root))
+        before = importlib.import_module("inline_domain.reload_probe")
+        assert before.value() == 663
+
+        from app.components import page_header
+        events = []
+        state = {"code_update_pending": True, "aoi_view_model": before}
+        page_header.st = SimpleNamespace(session_state=state, toast=lambda *a, **k: None)
+        page_header.bump_indicator_product_revision = lambda i, p: events.append((i, p))
+        page_header.SessionManager.load_and_set_config = staticmethod(lambda p: events.append(("config", p)))
+        source.write_text("def value():\\n    return 309\\n# new implementation\\n", encoding="utf-8")
+        process_id = os.getpid()
+        page_header.perform_hard_reset([], "Z517", ("aoi_tt_sheet_oos",))
+
+        assert "inline_domain.reload_probe" not in sys.modules
+        after = importlib.import_module("inline_domain.reload_probe")
+        assert os.getpid() == process_id
+        assert after is not before
+        assert after.value() == 309
+        assert state == {}
+        assert events == [("aoi_tt_sheet_oos", "Z517"), ("config", "Z517")]
+    ''')
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path)], cwd=PROJECT_ROOT,
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_streamlit_run_on_save_is_disabled():
@@ -97,7 +144,11 @@ def test_detect_project_changes_only_records_the_initial_revision(monkeypatch):
     assert "code_update_pending" not in session_state
 
 
-def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypatch):
+@pytest.mark.parametrize("cache_scope,indicators", [
+    ("product", ()),
+    ("indicator_product", ("aoi_tt_sheet_oos",)),
+])
+def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypatch, cache_scope, indicators):
     """刷新缓存按钮：缓存失效 + 代码重载 + 配置重读 + 清除变更提示标记。"""
     events: list[tuple[str, object]] = []
     session_state = {
@@ -145,7 +196,7 @@ def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypa
     monkeypatch.setattr(
         page_header,
         "invalidate_page_cache",
-        lambda *args, **kwargs: events.append(("invalidate", kwargs.get("product_code"))) or "product",
+        lambda *args, **kwargs: events.append(("invalidate", kwargs.get("product_code"))) or cache_scope,
     )
     monkeypatch.setattr(
         reloader,
@@ -162,6 +213,7 @@ def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypa
         title="SPC监控报表",
         config=SimpleNamespace(data_source=SimpleNamespace(product_code="M626")),
         product_cache_scope="M626",
+        product_cache_indicators=indicators,
     )
     hard_reset = button_callbacks["🔄 刷新缓存"]
     assert hard_reset is not None

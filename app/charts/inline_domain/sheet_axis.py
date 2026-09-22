@@ -9,6 +9,7 @@ def build_sheet_time_axis_labels(
     source_df: pd.DataFrame,
     *,
     time_column: str,
+    date_only: bool = False,
 ) -> tuple[list[str], dict[str, str]]:
     """Return time-ordered Sheet IDs and compact labels without changing axis semantics."""
     required_columns = {"sheet_id", time_column}
@@ -24,11 +25,12 @@ def build_sheet_time_axis_labels(
     )
 
     sheet_order = axis_df["sheet_id"].tolist()
+    time_format = "%m-%d" if date_only else "%m-%d %H时"
     label_by_sheet: dict[str, str] = {}
     for row in axis_df.itertuples(index=False):
         pass_time = getattr(row, time_column)
         label_by_sheet[row.sheet_id] = (
-            f"{row.sheet_id}<br>{pass_time:%m-%d %H}时"
+            f"{row.sheet_id}<br>{pass_time.strftime(time_format)}"
             if pd.notna(pass_time)
             else row.sheet_id
         )

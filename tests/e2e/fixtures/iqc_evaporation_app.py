@@ -25,13 +25,9 @@ class ScenarioSource:
         if st.query_params.get("scenario") == "failure":
             raise IqcSourceUnavailable("private SQL connection details")
         frame = pd.concat([source_frame()] * 205, ignore_index=True)
-        frame['prod_code'] = 'M626'
-        frame["iqc_result"] = ["OK"] * 200 + ["NG"] * 5
-        frame["coa_result"] = ["NG"] * 200 + [None] * 5
-        return pd.concat([
-            frame, source_frame().assign(prod_code='M678', iqc_1=12.345),
-            source_frame().assign(iqc_1=999.999),
-        ], ignore_index=True)
+        if st.query_params.get("scenario") == "empty":
+            return frame.iloc[:0]
+        return frame
 
 
 st.set_page_config(page_title="IQC-蒸镀材料", layout="wide", initial_sidebar_state="collapsed")

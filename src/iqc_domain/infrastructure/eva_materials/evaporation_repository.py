@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 # Select only the page's business fields. In particular, no report URLs, internal
 # flags, remarks or unshifted timestamps cross the repository output boundary.
+# The report scope is organic material at V3; product is a source attribute,
+# not an additional filter or an enabled_products dependency.
 REPORT_SQL = """
 SELECT Q.EATTRIBUTE10 AS prod_code, Q.EATTRIBUTE15 AS materialtype,
        Q.REQUESTDATE AS requestdate, Q.CHECKEDDATE AS checkeddate,
@@ -37,8 +39,7 @@ LEFT JOIN mdw.dwr_wms_tblqcticketsample S
       AND S.EATTRIBUTE12 IN (SELECT DISTINCT SETCODE FROM mdw.dwr_wms_tblmitemset)
 LEFT JOIN (SELECT DISTINCT MAT_TYPE, CHA_ITEM, TO_COMMENT FROM mdw.imp_iqc_mat_info) M
        ON S.EATTRIBUTE12 = M.MAT_TYPE
-      AND (S.EATTRIBUTE12 <> '有机'
-           OR U.MITEMDESC LIKE '%' || COALESCE(M.TO_COMMENT, '') || '%')
+      AND U.MITEMDESC LIKE '%' || COALESCE(M.TO_COMMENT, '') || '%'
 LEFT JOIN mdw.imp_iqc_mat_info_tbtj T
        ON S.EATTRIBUTE12 = T.MAT_TYPE AND Q.TICKETNO = T.TICKETNO
       AND M.CHA_ITEM = T.CHA_ITEM
@@ -46,13 +47,11 @@ WHERE Q.ORGID = 5000 AND Q.TICKETTYPE LIKE '%IQC%'
   AND Q.CHECKEDDATE >= :start_time AND Q.CHECKEDDATE < :end_time
   AND Q.CHECKEDSAMPLEQTY IS NOT NULL
   AND (Q.EATTRIBUTE1 NOT LIKE '%免检%' OR Q.EATTRIBUTE1 IS NULL)
-  AND (Q.EATTRIBUTE10 <> '/' OR Q.EATTRIBUTE10 IS NULL)
   AND (Q.EATTRIBUTE12 <> '清除统计' OR Q.EATTRIBUTE12 IS NULL)
   AND S.CHECKMODE NOT LIKE '%免检%'
   AND Q.EATTRIBUTE5 = 'V3'
   AND S.EATTRIBUTE12 = '有机'
 """
-
 
 class EvaporationRepository:
     def __init__(

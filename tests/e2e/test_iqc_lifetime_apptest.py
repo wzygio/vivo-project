@@ -43,11 +43,12 @@ def test_filter_empty_failure_and_recovery():
     app = AppTest.from_string(APP).run()
     assert not app.exception
     assert len(app.multiselect) == 3
-    assert not app.button
+    assert app.button(key='iqc_lifetime_query').label == '查询'
     assert [expander.label for expander in app.expander] == [
-        'M678 · 2026/3/10 · 效率衰减', 'M678 · 2026/3/10 · 亮度衰减',
+        'M678 · 2026/3/10', '效率衰减', '亮度衰减',
     ]
-    assert all(len(expander.get('plotly_chart')) == 4 for expander in app.expander)
+    assert len(app.expander[0].get('plotly_chart')) == 8
+    assert all(len(expander.get('plotly_chart')) == 4 for expander in app.expander[1:])
     assert len(app.get('plotly_chart')) == 8
     assert 'private' not in app.dataframe[0].value.to_json(force_ascii=False)
     assert list(app.dataframe[0].value.columns)[4] == '样品编号'
@@ -75,18 +76,21 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     assert not app.exception
     assert app.multiselect(key='iqc_lifetime_products').options == ['M678', 'M626']
     assert 'DISABLED' not in app.dataframe[0].value.to_json(force_ascii=False)
-    assert len(app.expander) == 4
+    assert len(app.expander) == 6
     app.multiselect(key='iqc_lifetime_statuses').set_value(['模组']).run()
-    assert not app.exception and len(app.expander) == 2
+    assert len(app.dataframe[0].value) == 48
+    app.button(key='iqc_lifetime_query').click().run()
+    assert not app.exception and len(app.expander) == 3
     assert app.expander[0].label.startswith('M626')
     assert '屏体' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.multiselect(key='iqc_lifetime_products').set_value(['M626']).run()
+    app.button(key='iqc_lifetime_query').click().run()
     app.session_state['enabled'] = ['M678']
     app.run()
     assert not app.exception
     assert app.multiselect(key='iqc_lifetime_products').value == []
     assert app.multiselect(key='iqc_lifetime_statuses').value == []
-    assert len(app.expander) == 2 and app.expander[0].label.startswith('M678')
+    assert len(app.expander) == 3 and app.expander[0].label.startswith('M678')
     assert 'M626' not in app.dataframe[0].value.to_json(force_ascii=False)
     app.session_state['enabled'] = []
     app.run()
@@ -111,11 +115,11 @@ def test_missing_luminance_does_not_hide_efficiency_charts():
     app.session_state['mode'] = 'missing_luminance'
     app.run()
     assert not app.exception
-    assert len(app.expander[0].get('plotly_chart')) == 4
-    assert not app.expander[1].get('plotly_chart')
-    assert len(app.expander[1].info) == 4
-    assert all(info.value == '该组暂无有效亮度衰减测点。' for info in app.expander[1].info)
-    assert app.warning and len(app.dataframe[0].value) == 24
+    assert len(app.expander[1].get('plotly_chart')) == 4
+    assert not app.expander[2].get('plotly_chart')
+    assert len(app.expander[2].info) == 4
+    assert all(info.value == '该组暂无有效亮度衰减测点。' for info in app.expander[2].info)
+    assert not app.warning and len(app.dataframe[0].value) == 24
 
 
 def test_missing_batch_filters_and_renders_both_metrics_without_warning():
@@ -126,10 +130,16 @@ def test_missing_batch_filters_and_renders_both_metrics_without_warning():
     assert len(app.dataframe[0].value) == 48
     assert '未填写批次' in app.multiselect(key='iqc_lifetime_batches').options
     app.multiselect(key='iqc_lifetime_batches').set_value(['未填写批次']).run()
+    assert len(app.dataframe[0].value) == 48
+    app.button(key='iqc_lifetime_query').click().run()
     assert not app.exception and not app.error and not app.warning and not app.info
     assert len(app.dataframe[0].value) == 24
     assert app.dataframe[0].value['批次号'].unique().tolist() == ['未填写批次']
     assert [expander.label for expander in app.expander] == [
-        'M678 · 未填写批次 · 效率衰减', 'M678 · 未填写批次 · 亮度衰减',
+        'M678 · 未填写批次', '效率衰减', '亮度衰减',
     ]
     assert len(app.get('plotly_chart')) == 8
+    app.multiselect(key='iqc_lifetime_batches').set_value([]).run()
+    assert len(app.dataframe[0].value) == 24
+    app.button(key='iqc_lifetime_query').click().run()
+    assert len(app.dataframe[0].value) == 48

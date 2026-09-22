@@ -39,6 +39,8 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 - `config/global.yaml` -> `product_registry.enabled_products` is the single source of truth for report product selectors, including page-local selectors that replace the shared page-header selector. Read it through `ConfigLoader.get_enabled_products()` and preserve its configured order.
 - An empty product selection means all enabled products. Restrict report data to the enabled scope before rendering charts, tables, options or exports; hiding disabled products only in selector options is insufficient. Clear obsolete selections when the available scope changes.
 
+- Exception confirmed on 2026-09-22: IQC evaporation reports are scoped to V3 organic materials in infrastructure. Their product attribute is 通用; no product selector or enabled-products filter applies. Keep the source product value in the detail table.
+
 ### Time and Data Semantics
 
 - Date forwarding changes the report display time axis at the repository output boundary. Database facts and raw Parquet snapshots retain source time. Translate direct-query display windows back to source windows, and include the time policy in relevant cache signatures.

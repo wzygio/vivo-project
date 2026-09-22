@@ -1,6 +1,7 @@
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.components import indicator_cache, page_header
 
@@ -28,20 +29,31 @@ def test_refresh_only_recomputes_selected_indicator_and_product(tmp_path: Path):
                      ("spc_cpk_trend", "M626"): 1, ("spc_cpk_trend", "M673"): 1}
 
 
-def test_scoped_hard_reset_never_clears_other_caches_or_reloads_modules(monkeypatch):
+def test_scoped_hard_reset_reloads_code_without_clearing_other_product_caches(monkeypatch):
     bumped = []
     configs = []
+    reloads = []
+    session_state = {
+        "code_update_pending": True,
+        "view_model_cache": object(),
+        "matrix_detail_example": object(),
+        "unrelated_filter": "keep",
+    }
+    monkeypatch.setattr(page_header, "st", SimpleNamespace(
+        session_state=session_state, toast=lambda *a, **k: None,
+    ))
     monkeypatch.setattr(page_header, "bump_indicator_product_revision", lambda i, p: bumped.append((i, p)))
     monkeypatch.setattr(page_header.SessionManager, "load_and_set_config", configs.append)
-    monkeypatch.setattr(page_header.st, "toast", lambda *a, **k: None)
     import app.utils.reloader as reloader
-    monkeypatch.setattr(reloader, "deep_reload_modules", lambda: (_ for _ in ()).throw(AssertionError("reload")))
+    monkeypatch.setattr(reloader, "deep_reload_modules", lambda: reloads.append(True))
     class Cached:
         def clear(self):
             raise AssertionError("global clear")
     page_header.perform_hard_reset([Cached()], "M626", ("yield_lot_oos",))
     assert bumped == [("yield_lot_oos", "M626")]
     assert configs == ["M626"]
+    assert reloads == [True]
+    assert session_state == {"unrelated_filter": "keep"}
 
 
 def test_every_single_product_header_declares_indicator_scope():

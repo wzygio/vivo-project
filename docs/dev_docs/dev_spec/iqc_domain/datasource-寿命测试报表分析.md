@@ -123,3 +123,11 @@ playwright-cli -s=iqc-lifetime run-code --filename=D:/wzy/Python/vivo-project/te
 设置 `IQC_LIFETIME_LIVE_DB=1`，执行前述双曲线聚焦 pytest 命令并增加 `tests/integration/test_iqc_lifetime_live.py`，26 passed；实库对账覆盖空批次及源测量值 `/` 对应的缺测语义。
 
 `tests/e2e/iqc_lifetime_missing_batch.js` 在真实 M3 页面通过：选择“未填写批次”后显示两类曲线，无批次缺失提示，原生 CSV 导出保留该记录和公开标签（1 行、15 列）。证据位于 `output/test-results/iqc-lifetime-missing-batch/`。本轮未重复全库回归。
+
+### 2026-09-22 查询与分组折叠
+
+筛选区增加“查询”按钮：首次打开保持全部启用产品的默认结果；产品、状态、批次选项继续联动，修改条件后点击查询才应用到图表和明细。已提交条件保存在会话中，配置或数据范围变化时清理失效选项，结果始终受启用产品范围限制。
+
+每个“产品－批次号”使用一个父 Expander，内部为“效率衰减”和“亮度衰减”两个子 Expander，均默认展开，各类仍按 W/R/G/B 四图同排。按用户要求删除“部分测量值缺失……”提示，保留空值和曲线断线，不改变测点处理。
+
+验证：`.venv/Scripts/python.exe -m pytest tests/unit/test_iqc_lifetime.py tests/unit/test_iqc_lifetime_repository.py tests/e2e/test_iqc_lifetime_apptest.py -q --tb=short`，25 passed。`tests/e2e/iqc_lifetime_states.js` 受控浏览器 E2E 通过，覆盖查询前后结果、父子折叠、四图位置、缺测断线、提示移除、筛选、原生导出及空集/失败恢复。证据保存在 `output/test-results/iqc-lifetime-query/`；未重复实库对账和全库回归。

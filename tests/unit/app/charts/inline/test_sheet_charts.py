@@ -64,14 +64,16 @@ def test_pass_time_line_chart_uses_time_ordered_category_axis() -> None:
         title="t",
         spec_df=_sheet_features_df(),
         chart_type=CHART_TYPE_LINE,
+        date_only=True,
     )
     assert figure.layout.xaxis.type != "date"
-    assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（小时）"
-    expected_labels = ["S1<br>07-01 08时", "S2<br>07-02 09时"]
+    assert figure.layout.xaxis.title.text == "Sheet ID / 过货时间（天）"
+    expected_labels = ["S1<br>07-01", "S2<br>07-02"]
     assert list(figure.layout.xaxis.categoryarray) == expected_labels
     scatter_traces = [trace for trace in figure.data if trace.type == "scatter"]
     assert scatter_traces
     assert list(scatter_traces[0].x) == expected_labels
+    assert [row[1] for row in scatter_traces[0].customdata] == ["2026-07-01", "2026-07-02"]
 
 
 def test_pass_time_box_chart_keeps_category_axis() -> None:
@@ -110,9 +112,12 @@ def test_sheet_points_box_charts_returns_chamber_and_time_figures() -> None:
         title_prefix="ARRAY | 12140 | THK",
         spec_df=_sheet_features_df(),
         chart_type=CHART_TYPE_BOX,
+        date_only=True,
     )
     assert "By主站点设备/腔室" in chamber_fig.layout.title.text
     assert "By过货时间" in time_fig.layout.title.text
+    assert list(time_fig.layout.xaxis.categoryarray) == ["S1<br>07-01", "S2<br>07-02"]
+    assert time_fig.layout.xaxis.title.text == "Sheet ID / 过货时间（天）"
 
 
 def test_empty_raw_measurements_returns_placeholder_figure() -> None:

@@ -15,11 +15,11 @@ def test_cache_native_payload_survives_module_reload_and_separates_policy(monkey
     calls = []
 
     class ReloadingService:
-        def get_report(self, start, end, product_code=None):
+        def get_report(self, start, end):
             calls.append((start, end))
             service = EvaporationReportService(MemorySource(source_frame()))
             importlib.reload(application)
-            return service.get_report(start, end, product_code=product_code)
+            return service.get_report(start, end)
 
     monkeypatch.setattr(dashboard, 'build_evaporation_service', ReloadingService)
     dashboard.fetch_report_payload.clear()
@@ -33,10 +33,8 @@ def test_cache_native_payload_survives_module_reload_and_separates_policy(monkey
         dashboard.fetch_report_payload(*args[:2], 'forward-0', 'cutoff-day1')
         dashboard.fetch_report_payload(*args[:3], 'cutoff-day2')
         assert len(calls) == 3
-        assert dashboard.fetch_report_payload(*args, 'M626').empty
-        assert len(calls) == 4
         dashboard.fetch_report_payload(*args, result_rule_version='next-rule')
-        assert len(calls) == 5
+        assert len(calls) == 4
     finally:
         dashboard.fetch_report_payload.clear()
 
@@ -47,11 +45,11 @@ def test_source_failure_is_not_cached(monkeypatch):
     calls = []
 
     class RecoveringService:
-        def get_report(self, start, end, product_code=None):
+        def get_report(self, start, end):
             calls.append(1)
             if len(calls) == 1:
                 raise RuntimeError('unavailable')
-            return EvaporationReportService(MemorySource(source_frame())).get_report(start, end, product_code=product_code)
+            return EvaporationReportService(MemorySource(source_frame())).get_report(start, end)
 
     monkeypatch.setattr(dashboard, 'build_evaporation_service', RecoveringService)
     dashboard.fetch_report_payload.clear()

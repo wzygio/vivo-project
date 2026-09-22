@@ -4,6 +4,8 @@ import types
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from app.components import page_header
 from app.manager.session_manager import SessionManager
 
@@ -191,7 +193,9 @@ def _render_header_and_get_refresh_callback(
     refresh_handlers,
     cached_funcs=None,
     product_cache_scope=None,
+    product_cache_indicators=(),
     session_state=None,
+    events=None,
 ):
     """渲染页头并返回「刷新数据」按钮的 on_click 回调与 streamlit 替身。"""
     st_stub = _StreamlitStub(session_state)
@@ -202,6 +206,15 @@ def _render_header_and_get_refresh_callback(
         lambda *args, **kwargs: False,
     )
     monkeypatch.setattr(SessionManager, "AVAILABLE_PRODUCTS", ["M626"])
+    events = events if events is not None else []
+    fake_reloader = types.ModuleType("app.utils.reloader")
+    fake_reloader.deep_reload_modules = lambda: events.append("reload")
+    monkeypatch.setitem(sys.modules, "app.utils.reloader", fake_reloader)
+    monkeypatch.setattr(
+        SessionManager,
+        "load_and_set_config",
+        staticmethod(lambda product: events.append(("config", product))),
+    )
     config = SimpleNamespace(data_source=SimpleNamespace(product_code="M626"))
 
     page_header.render_page_header(
@@ -210,6 +223,7 @@ def _render_header_and_get_refresh_callback(
         cached_funcs=cached_funcs,
         refresh_handlers=refresh_handlers,
         product_cache_scope=product_cache_scope,
+        product_cache_indicators=product_cache_indicators,
     )
 
     return st_stub.button_callbacks["btn_refresh_测试页"], st_stub
@@ -251,7 +265,7 @@ def test_refresh_data_success_bumps_product_revision_and_clears_view_model(
     assert revision_after != revision_before
     assert "inline_view_model_1" not in st_stub.session_state
     assert st_stub.session_state["unrelated_key"] == 1
-    assert "✅ L1 快照与 L2 缓存已刷新。" in st_stub.toasts
+    assert any("数据快照已刷新" in toast and "代码与配置已重载" in toast for toast in st_stub.toasts)
 
 
 def test_refresh_data_failure_keeps_revision_and_session_cache(
@@ -298,38 +312,124 @@ def test_refresh_data_without_product_scope_clears_cached_funcs(
 
     assert cached_function.clear_count == 1
     assert "agg_view_model" not in st_stub.session_state
-    assert "✅ L1 快照与 L2 缓存已刷新。" in st_stub.toasts
+    assert any("数据快照已刷新" in toast and "代码与配置已重载" in toast for toast in st_stub.toasts)
     assert (
         page_header.get_product_cache_revision("M626", revision_dir=tmp_path) == "0"
     )
 
 
-def test_refresh_data_does_not_reload_modules_or_config(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    _redirect_revision_writes_to_tmp(monkeypatch, tmp_path)
-    reloaded: list[str] = []
-    fake_reloader = types.ModuleType("app.utils.reloader")
-    fake_reloader.deep_reload_modules = lambda: reloaded.append("reload")  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "app.utils.reloader", fake_reloader)
-    config_loads: list[str] = []
-    monkeypatch.setattr(
-        SessionManager,
-        "load_and_set_config",
-        staticmethod(lambda product: config_loads.append(product)),
-    )
-    refresh_callback, _ = _render_header_and_get_refresh_callback(
+@pytest.mark.parametrize("scope,indicators", [
+    ("M626", ()),
+    ("M626", ("aoi_tt_sheet_oos", "aoi_tt_sheet_ooc")),
+    (None, ()),
+])
+@pytest.mark.parametrize("button", ["refresh", "clear"])
+def test_refresh_buttons_share_cache_code_config_sequence(monkeypatch, scope, indicators, button):
+    events = []
+    _, st_stub = _render_header_and_get_refresh_callback(
         monkeypatch,
-        refresh_handlers=[lambda: True],
+        refresh_handlers=[
+            lambda: events.append("snapshot_1") or True,
+            lambda: events.append("snapshot_2") or True,
+        ],
         cached_funcs=[_CachedFunctionStub()],
-        product_cache_scope="M626",
+        product_cache_scope=scope,
+        product_cache_indicators=indicators,
+        session_state={
+            SessionManager.KEY_PRODUCT: "M626",
+            "inline_view_model": object(),
+            "cpk_monitor_query_signature": "old",
+            "yield_snapshot_sig_M626": "old",
+            "code_update_pending": True,
+            "unrelated_key": 1,
+        },
+        events=events,
     )
+    monkeypatch.setattr(
+        page_header,
+        "invalidate_page_cache",
+        lambda funcs, **kwargs: events.append(("invalidate", kwargs)) or (
+            "indicator_product" if indicators else "product" if scope else "global"
+        ),
+    )
+
+    st_stub.button_callbacks[f"btn_{button}_测试页"]()
+
+    assert events == (["snapshot_1", "snapshot_2"] if button == "refresh" else []) + [
+        ("invalidate", {"product_code": scope, "indicator_keys": indicators}),
+        "reload",
+        ("config", "M626"),
+    ]
+    assert st_stub.session_state == {SessionManager.KEY_PRODUCT: "M626", "unrelated_key": 1}
+    assert len(st_stub.toasts) == 1
+    assert "代码与配置已重载" in st_stub.toasts[0]
+    assert ("数据快照已刷新" in st_stub.toasts[0]) is (button == "refresh")
+
+
+@pytest.mark.parametrize("outcome", ["false", "exception", "no_handlers"])
+def test_snapshot_failure_or_missing_handler_does_not_start_hard_reset(monkeypatch, outcome):
+    events = []
+
+    def refresh():
+        if outcome == "exception":
+            raise RuntimeError("snapshot refresh failed")
+        return False
+
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[] if outcome == "no_handlers" else [refresh],
+        product_cache_scope="M626",
+        session_state={"code_update_pending": True, "inline_view_model": "old"},
+        events=events,
+    )
+    monkeypatch.setattr(page_header, "invalidate_page_cache", lambda *args, **kwargs: events.append("invalidate"))
 
     refresh_callback()
 
-    assert reloaded == []
-    assert config_loads == []
+    assert events == []
+    assert st_stub.session_state == {"code_update_pending": True, "inline_view_model": "old"}
+    assert not any("已重载" in toast for toast in st_stub.toasts)
+
+
+def test_refresh_data_without_scope_or_functions_clears_data_and_resource_cache(monkeypatch):
+    events = []
+    refresh_callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[lambda: events.append("snapshot") or True],
+        session_state={SessionManager.KEY_PRODUCT: "M626"},
+        events=events,
+    )
+    st_stub.cache_data.clear = lambda: events.append("cache_data")
+    st_stub.cache_resource.clear = lambda: events.append("cache_resource")
+
+    refresh_callback()
+
+    assert events == ["snapshot", "cache_data", "cache_resource", "reload", ("config", "M626")]
+
+
+@pytest.mark.parametrize("button", ["refresh", "clear"])
+@pytest.mark.parametrize("failed_step", ["reload", "config"])
+def test_refresh_does_not_report_success_if_code_or_config_reload_fails(monkeypatch, button, failed_step):
+    _, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch,
+        refresh_handlers=[lambda: True],
+        cached_funcs=[_CachedFunctionStub()],
+        session_state={SessionManager.KEY_PRODUCT: "M626", "code_update_pending": True},
+    )
+
+    def fail(*_args):
+        raise ImportError("reload unavailable")
+
+    if failed_step == "reload":
+        monkeypatch.setattr(sys.modules["app.utils.reloader"], "deep_reload_modules", fail)
+    else:
+        monkeypatch.setattr(SessionManager, "load_and_set_config", staticmethod(fail))
+
+    with pytest.raises(ImportError, match="reload unavailable"):
+        st_stub.button_callbacks[f"btn_{button}_测试页"]()
+
+    assert st_stub.session_state["code_update_pending"] is True
+    assert st_stub.toasts == []
 
 
 def test_refresh_data_handler_exception_is_treated_as_failure(

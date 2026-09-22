@@ -645,6 +645,7 @@ def _build_indicator_render_payload(
         title_prefix=f"{label} | {detail_start:%m-%d} 起",
         spec_df=indicator_features_df,
         chart_type=chart_type,
+        date_only=True,
     )
     return {
         "label": label,

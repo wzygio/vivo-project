@@ -53,7 +53,7 @@ def test_catalog_expands_unmeasured_items_and_preserves_result_source():
         assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='有机'")
         # Exemption and cleanup flags are SQL exclusions, not UI hiding.
-        for column, value in (("eattribute1", "免检"), ("eattribute12", "清除统计"), ("eattribute10", "/")):
+        for column, value in (("eattribute1", "免检"), ("eattribute12", "清除统计")):
             connection.execute(f"UPDATE mdw.dwr_wms_tblqcticket SET {column}=?", (value,))
             assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
             connection.execute(f"UPDATE mdw.dwr_wms_tblqcticket SET {column}=NULL")

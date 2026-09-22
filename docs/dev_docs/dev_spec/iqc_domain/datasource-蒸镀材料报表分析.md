@@ -8,13 +8,12 @@ SQL 原件：[蒸镀材料体系报表-sql语句.txt](../../../project_files/iqc
 现有 `app/pages/IQC蒸镀材料报表.py` 原调用 Excel 示例。已读取工作簿
 `resources/iqc_domain/IQC来料检验特性数据明细报表.xlsx` 的 sheet2（129 行含表头、25 列），
 与既有 HTML 样式核对：蓝底白字表头、浅蓝交替行、固定序号、表内横纵滚动，数值显示三位小数、缺失保留空白。
-原顺序保留，末尾增加 IQC结果、COA结果，共 27 列。最新页面按用户简化要求改为原生 `st.dataframe`，完整结果一次传入，通过表内滚动浏览，支持内置排序、搜索和 CSV 导出；不再自定义着色或手写分页。数值显示三位小数，保留底层数值类型和缺失值。
+共 27 列；IQC结果、COA结果排列在 IQC-1 之前。最新页面按用户简化要求改为原生 `st.dataframe`，完整结果一次传入，通过表内滚动浏览，支持内置排序、搜索和 CSV 导出；不再自定义着色或手写分页。数值显示三位小数，保留底层数值类型和缺失值。
 
 查询日期按给定 SQL 的 **检验时间 CHECKEDDATE**，界面标明“检验日期范围”；它与报检日期 REQUESTDATE 不同。
 原示例的日期控件按报检日期过滤，本次真实查询改为所给 SQL 的检验日期口径。
-筛选区只保留“检验日期范围”和“产品型号”，与查询按钮排在同一行。
-产品选项通过 `ConfigLoader.get_enabled_products()` 读取 `global.yaml` 的 `product_registry.enabled_products`，
-使用多选并严格匹配源型号；不选或清空表示全部已启用型号及通用。实库复查确认当前范围均为“通用”，按用户最新要求追加独立的“通用”选项并去重；不修改全局配置，不将通用自动归入其他产品。没有匹配记录时显示空状态。
+筛选区只保留“检验日期范围”和查询按钮，排在同一行。
+2026-09-22 用户确认有机材料的产品型号必然为“通用”：删除产品筛选控件和前后端产品过滤，不再依赖 enabled_products；明细“产品型号”列保留源值。
 工厂和物料分类在 infrastructure SQL 固定为 `Q.EATTRIBUTE5='V3'`、`S.EATTRIBUTE12='有机'`，
 不再提供对应前端筛选；特性项目、IQC结果、COA结果也不再提供筛选控件。结果明细保留这些业务列。
 
@@ -27,7 +26,7 @@ T = `mdw.imp_iqc_mat_info_tbtj`。
 | 页面字段（顺序） | 来源 | 语义与处理 |
 |---|---|---|
 | 序号 | 应用层生成 | 完整结果排序后从 1 编号；筛选保留原序号 |
-| 产品型号 | Q.EATTRIBUTE10 / PROD_CODE | 原“项目名”列更名；精确匹配所选型号（enabled_products 或独立的“通用”），不混入其他型号或空值 |
+| 产品型号 | Q.EATTRIBUTE10 / PROD_CODE | 原“项目名”列更名；保留源值展示，不作为筛选条件 |
 | 量产/非量产 | Q.EATTRIBUTE15 / MATERIALTYPE | SQL 原本通过同 ticketno/ticketseq/transbillno/transbillseq 回查 Q，本实现直接取当前 Q 行字段；真实数据已对账一致 |
 | 报检日期 | Q.REQUESTDATE | 时间戳；在仓储输出边界使用显示时间策略 |
 | 检验时间 | Q.CHECKEDDATE | SQL 日期筛选字段；同样转换显示时间并应用当日截止 |
@@ -41,10 +40,10 @@ T = `mdw.imp_iqc_mat_info_tbtj`。
 | 规格上限 | T.UPP_SPEC | 同一 T 行，原数值 |
 | 规格样式2 | T.SPEC_REQ1 | **下限比较符** |
 | 规格下限 | T.LOW_SPEC | 同一 T 行，原数值 |
-| IQC-1 / IQC-2 / IQC-3 / IQC-4 / IQC-5 | T.IQC_1 / IQC_2 / IQC_3 / IQC_4 / IQC_5 | 五个测点各自独立；NULL 不补零 |
-| COA-1 / COA-2 / COA-3 / COA-4 / COA-5 | T.COA_1 / COA_2 / COA_3 / COA_4 / COA_5 | 五个测点各自独立；NULL 不补零 |
 | IQC结果 | 数据库规格及 IQC-1～5 的 CASE 判定 | 任一测点 NG 则 NG，否则 OK；2026-09-21 用户授权缺测按 OK |
 | COA结果 | 数据库规格及 COA-1～5 的 CASE 判定 | 任一测点 NG 则 NG，否则 OK；2026-09-21 用户授权缺测按 OK |
+| IQC-1 / IQC-2 / IQC-3 / IQC-4 / IQC-5 | T.IQC_1 / IQC_2 / IQC_3 / IQC_4 / IQC_5 | 五个测点各自独立；NULL 不补零 |
+| COA-1 / COA-2 / COA-3 / COA-4 / COA-5 | T.COA_1 / COA_2 / COA_3 / COA_4 / COA_5 | 五个测点各自独立；NULL 不补零 |
 
 ## 3. 关联与过滤
 
@@ -57,7 +56,7 @@ Q 检验批 -> U 物料主数据（物料名、组织）
 ```
 
 - Q：ORGID=5000，TICKETTYPE LIKE '%IQC%'，CHECKEDSAMPLEQTY 非 NULL。
-- Q：EATTRIBUTE1 不含免检或为空；EATTRIBUTE10 不等于 `/` 或为空；EATTRIBUTE12 不等于清除统计或为空。
+- Q：EATTRIBUTE1 不含免检或为空；EATTRIBUTE12 不等于清除统计或为空。
 - S：CHECKMODE NOT LIKE '%免检%'；NULL 与原 SQL 一样不能通过该条件。
 - S 分类在物料集合中且为“有机”，Q 工厂为 V3；LEFT JOIN 后这些 WHERE 条件使不满足的样本/票据不进入结果。
 - M 先对 `(mat_type, cha_item, to_comment)` 做 DISTINCT。有机的描述匹配采用
@@ -283,3 +282,15 @@ Excel 中检查的结果单元格为静态值，没有保留帆软原始公式�
 - 单元对账使用原 SQL 文件的十段完整 CASE 在 SQLite 中独立执行，对 112 个边界／空值组合逐项比较；实库对账 **1 passed**，再次对比 PostgreSQL 执行的十个测点结果。
 
 - 真实浏览器 E2E 通过：660 行、27 列、1365/768 宽度，CSV 全部 IQC／COA 结果均为 OK 或 NG，无空白。此前 Excel 对账的 1039 条 V3／有机明细，按新规则计算后整体结果均与 Excel 的 OK/OK 一致。
+
+### 2026-09-22 固定有机范围、移除产品筛选（当前规则）
+
+- 用户确认有机材料对应通用型号，因此基础查询只按物料业务范围限定，不再额外过滤型号。infrastructure 保留 `S.EATTRIBUTE12='有机'` 和 `Q.EATTRIBUTE5='V3'`，去掉产品字段排除条件，并将目录关联中的有机分支简化为描述匹配。
+- 删除页面产品多选、enabled_products 依赖、应用层产品参数与 core 产品过滤函数；缓存按日期、时间策略和判定版本分区，页面仅保留日期／查询。
+- 明细仍保留产品型号列；此前 CASE 判定、时间前移、截止、字段、原生表格与导出规则不变。
+- 聚焦测试 39 passed，包含有机／非有机和工厂 SQL 范围、页面不读取产品配置、日期切换清除旧结果、空集、失败恢复及缓存。
+- 实库原 SQL 对账 1 passed；真实浏览器 E2E passed，确认没有产品控件，日期／查询同行，导出完整 652 行、27 列，1365/768 宽度正常。
+
+### 2026-09-22 结果列前移
+
+明细及 CSV 导出列顺序调整为“规格下限 → IQC结果 → COA结果 → IQC-1～5 → COA-1～5”。数据及判定规则不变；渲染时按当前列顺序重排，已有缓存也立即生效。

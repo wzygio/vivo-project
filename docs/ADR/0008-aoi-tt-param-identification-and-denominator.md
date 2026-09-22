@@ -22,7 +22,17 @@
 6. 规格线取 `usl`/`ucl` 两条上限（越小越好型，不用 lsl/lcl），按 (step_id, tt_name) 匹配（规格表无 factory 列，step_id 全局唯一隐含厂别），三张图共用；无规格不画线（NaN 降级）。
 7. 时间窗固定为上一自然月 1 日 ~ 当前日期，页面无时间筛选控件；筛选框（厂别/站点/Code名称=TT 参数名）与查询门控交互同 AOI_RS。
 
+## 后续事实修正：重复检测记录
+
+2026-09-22 确认源测量表允许同一片在相同站点、相同 TT 参数下多次检测，
+此前“每 (step, sheet, param) 恰一行”的抽样结论不作为源表唯一性保证。
+AOI_TT 的 infrastructure 投影现按产品、厂别、站点、TT 参数、Sheet 分组，
+在有效报表窗口内保留检测时间最新的一条，再交由原有领域聚合计算。
+检测片数仍使用 distinct Sheet，参数识别和分母来源保持本 ADR 的既有决定。
+完整口径见 [AOI_TT 数据链路](../../references/domain/Inline_domain/data-flow-aoi-tt.md#44-tt-明细标准化)。
+
 ## Alternatives considered
+
 
 - 按 `%SUM%` 命名模式识别 TT 参数：拒绝。命名规则是隐式约定（TOTAL_O_L 即反例），规格表 `param_type IS NULL` 是数据驱动的显式规则，且顺带提供规格。
 - 按 AOI 站点清单（xx620/21320/43620）硬编码过滤：拒绝。站点清单同样需要硬编码且随产品/工艺变化，不如规格表驱动。

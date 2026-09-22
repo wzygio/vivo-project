@@ -80,6 +80,14 @@ class AoiTtRepository:
         if query.tt_name:
             details = details[details["param_name"].eq(query.tt_name)]
 
+        # ARRAY sheet_start_time (OLED/TP glass_start_time) is normalized to
+        # start_time by the shared loader. Reinspection replaces the old count;
+        # lot, equipment and site changes do not create another TT observation.
+        details = details.sort_values("start_time", kind="stable").drop_duplicates(
+            subset=["prod_code", "factory", "step_id", "param_name", "sheet_id"],
+            keep="last",
+        )
+
         return (
             details.rename(columns={"param_name": "tt_name", "param_value": "tt_qty"})
             .reindex(columns=TT_DETAIL_COLUMNS)

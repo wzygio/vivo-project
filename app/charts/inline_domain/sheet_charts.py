@@ -217,6 +217,7 @@ def create_sheet_points_box_chart(
     title: str,
     spec_df: pd.DataFrame | None = None,
     chart_type: str = CHART_TYPE_BOX,
+    date_only: bool = False,
 ) -> go.Figure:
     """Create point-level boxes or point-line trends by chamber/site or pass time."""
     fig = go.Figure()
@@ -239,6 +240,7 @@ def create_sheet_points_box_chart(
         group_labels, label_by_sheet = build_sheet_time_axis_labels(
             sorted_df,
             time_column="sheet_start_time",
+            date_only=date_only,
         )
         time_axis_labels = [label_by_sheet[sheet_id] for sheet_id in group_labels]
         if chart_type == CHART_TYPE_LINE:
@@ -248,7 +250,9 @@ def create_sheet_points_box_chart(
             if not trend_points.empty:
                 trend_points = trend_points.assign(
                     x_label=trend_points["sheet_id"].map(label_by_sheet),
-                    time_label=trend_points["sheet_start_time"].dt.strftime("%Y-%m-%d %H:%M:%S"),
+                    time_label=trend_points["sheet_start_time"].dt.strftime(
+                        "%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M:%S"
+                    ),
                 )
                 fig.add_trace(
                     create_point_line_trace(
@@ -339,7 +343,7 @@ def create_sheet_points_box_chart(
         title=title,
         height=430,
         margin={"l": 32, "r": 24, "t": 56, "b": 108 if uses_sheet_time_axis else 80},
-        xaxis_title="Sheet ID / 过货时间（小时）" if uses_sheet_time_axis else None,
+        xaxis_title=f"Sheet ID / 过货时间（{'天' if date_only else '小时'}）" if uses_sheet_time_axis else None,
         yaxis_title="Param Value",
         plot_bgcolor="#ffffff",
         paper_bgcolor="#ffffff",
@@ -362,6 +366,7 @@ def create_sheet_points_box_charts(
     title_prefix: str,
     spec_df: pd.DataFrame | None = None,
     chart_type: str = CHART_TYPE_BOX,
+    date_only: bool = False,
 ) -> tuple[go.Figure, go.Figure]:
     chamber_fig = create_sheet_points_box_chart(
         raw_measurements_df=raw_measurements_df,
@@ -376,5 +381,6 @@ def create_sheet_points_box_charts(
         title=f"{title_prefix} | Sheet点位分布 By过货时间",
         spec_df=spec_df,
         chart_type=chart_type,
+        date_only=date_only,
     )
     return chamber_fig, time_fig

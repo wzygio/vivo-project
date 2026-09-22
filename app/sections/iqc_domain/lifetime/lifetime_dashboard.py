@@ -8,7 +8,7 @@ import streamlit as st
 from app.charts.iqc_domain.lifetime import build_lifetime_chart
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from src.iqc_domain.composition import build_lifetime_service
-from src.iqc_domain.core.lifetime.lifetime import MEASUREMENT_COLUMNS, filter_report
+from src.iqc_domain.core.lifetime.lifetime import filter_report
 from src.shared_kernel.config import ConfigLoader
 
 logger = logging.getLogger(__name__)
@@ -42,27 +42,45 @@ def _render_filters(
             scope = filter_report(scope, [], [], statuses)
             batches = _select('批次号', sorted(scope['批次号'].unique().tolist()),
                               'iqc_lifetime_batches')
+        submitted = st.button('查询', type='primary', key='iqc_lifetime_query')
+    applied_key = 'iqc_lifetime_applied_filters'
+    if submitted or applied_key not in st.session_state:
+        st.session_state[applied_key] = (products, batches, statuses)
+    # Draft selectors remain linked, while results use the last submitted filters.
+    products, batches, statuses = st.session_state[applied_key]
+    products = [value for value in products if value in enabled_products]
+    scope = filter_report(frame, products, [])
+    statuses = [value for value in statuses if value in scope['产品状态'].dropna().unique()]
+    scope = filter_report(scope, [], [], statuses)
+    batches = [value for value in batches if value in scope['批次号'].unique()]
+    st.session_state[applied_key] = (products, batches, statuses)
     return products, batches, statuses
 
 
 def _render_trends(frame: pd.DataFrame) -> None:
     st.subheader('寿命数据曲线图')
+    for index, ((product, batch), scope) in enumerate(
+        frame.groupby(['产品型号', '批次号'], sort=True)
+    ):
+        with st.expander(f'{product} · {batch}', expanded=True):
+            for metric in ('效率衰减', '亮度衰减'):
+                _render_metric_charts(scope, metric, index)
+
+
+def _render_metric_charts(scope: pd.DataFrame, metric: str, group_index: int) -> None:
     order = {'W': 0, 'R': 1, 'G': 2, 'B': 3}
-    chart_index = 0
-    for (product, batch), scope in frame.groupby(['产品型号', '批次号'], sort=True):
-        screens = sorted(scope['测试画面'].unique(), key=lambda x: (order.get(x, 4), x))
-        for metric in ('效率衰减', '亮度衰减'):
-            with st.expander(f'{product} · {batch} · {metric}', expanded=True):
-                for offset in range(0, len(screens), 4):
-                    for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
-                        group = scope.loc[scope['测试画面'].eq(screen)]
-                        with column:
-                            _render_screen_chart(group, str(screen), metric, chart_index)
-                        chart_index += 1
+    screens = sorted(scope['测试画面'].unique(), key=lambda x: (order.get(x, 4), x))
+    with st.expander(metric, expanded=True):
+        for offset in range(0, len(screens), 4):
+            for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
+                group = scope.loc[scope['测试画面'].eq(screen)]
+                with column:
+                    _render_screen_chart(group, str(screen), metric,
+                                         f'{group_index}_{metric}_{screen}')
 
 
 def _render_screen_chart(
-    group: pd.DataFrame, screen: str, metric: str, chart_index: int,
+    group: pd.DataFrame, screen: str, metric: str, chart_index: str,
 ) -> None:
     st.text(screen)
     st.caption(f'{group["样品编号"].nunique()} 个样品 · {len(group)} 个测点')
@@ -97,7 +115,5 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
         st.info('没有符合筛选条件的寿命测试记录，请调整筛选条件或稍后刷新。')
         return
     st.caption('样品编号按产品型号、批次号、测试画面分别编排；衰减值按比例展示。')
-    if selected[MEASUREMENT_COLUMNS].isna().any(axis=None):
-        st.warning('部分测量值缺失，明细保留空白，趋势图在缺失测点处断开。')
     _render_trends(selected)
     _render_details(selected)

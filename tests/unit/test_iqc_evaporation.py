@@ -68,21 +68,6 @@ def test_empty_report_has_full_schema_and_missing_columns_fail():
         EvaporationReportService(MemorySource(pd.DataFrame())).get_report(date(2026, 8, 1), date(2026, 8, 31))
 
 
-def test_product_selection_excludes_common_and_other_products_without_mutation():
-    source = pd.concat([
-        source_frame(), source_frame().assign(prod_code='M626'),
-        source_frame().assign(prod_code='M678'), source_frame().assign(prod_code=None),
-    ], ignore_index=True)
-    original = source.copy(deep=True)
-    service = EvaporationReportService(MemorySource(source))
-    report = service.get_report(date(2026, 8, 1), date(2026, 8, 31), product_code='M626')
-    assert len(report) == 1
-    assert report['产品型号'].tolist() == ['M626']
-    assert '项目名' not in report
-    assert service.get_report(date(2026, 8, 1), date(2026, 8, 31), product_code='Z571').empty
-    pd.testing.assert_frame_equal(source, original)
-
-
 @pytest.mark.parametrize('prefix', ['iqc', 'coa'])
 @pytest.mark.parametrize('point', range(1, 6))
 def test_any_failing_point_sets_only_its_overall_result(prefix, point):

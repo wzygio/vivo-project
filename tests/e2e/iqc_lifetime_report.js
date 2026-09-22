@@ -11,8 +11,8 @@ async page => {
   if (await page.getByRole('combobox').count() !== 3) throw new Error('Expected product, status and batch filters');
   if (await page.getByRole('button', { name: /刷新数据|刷新缓存/ }).count()) throw new Error('Normal view exposes maintenance controls');
   const expanders = page.getByTestId('stExpander');
-  if (await expanders.count() !== 2) throw new Error('Expected two metric expanders per product/batch');
-  const expander = expanders.first();
+  if (await expanders.count() !== 3) throw new Error('Expected one product/batch expander and two metric children');
+  const expander = expanders.nth(1);
   const boxes = await expander.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => {
     const r = el.getBoundingClientRect(); return { x: r.x, y: r.y };
   }));
@@ -24,7 +24,7 @@ async page => {
   }));
   if (legendOverlap) throw new Error('Legend overlaps measurement curves');
   await expander.locator('summary').click();
-  await page.waitForFunction(() => !document.querySelector('[data-testid="stExpander"] details').open);
+  await expander.locator('details:not([open])').waitFor({ state: 'attached' });
   await expander.locator('summary').click();
   if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
   const charts = await page.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => ({
@@ -50,6 +50,7 @@ async page => {
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '2026/3/10', exact: true }).click();
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
   await table.waitFor();
   await page.locator('.js-plotly-plot').first().locator('.scatterlayer .trace').first().locator('.point').first().hover({ force: true });
   await page.locator('.hoverlayer').first().getByText(/样品编号/).waitFor();

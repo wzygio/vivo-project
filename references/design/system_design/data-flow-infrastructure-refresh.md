@@ -23,6 +23,10 @@
 | Inline 重建工具 | `tools/refresh_inline_snapshots.py` 是停写后的原始快照重建工具；默认只列计划，`--apply --writers-stopped` 才删除识别出的原始快照并重建，不是日常增量调度器 |
 | Streamlit 启动脚本 | `run_hidden.vbs → start_streamlit.bat → tools/restart_streamlit.ps1` 验证旧进程退出并重启服务，清空进程内存缓存；本身没有调用原始快照刷新脚本 |
 
+页头“刷新数据”在快照任务全部成功后，继续刷新缓存、重载代码、重读配置；
+“刷新缓存”直接执行后三项。两者共用同一收尾流程，详见
+[页头更新机制](../feat_design/data-flow-page-header-refresh.md)。
+
 **TTL 是下次访问时的过期判断，不是定时器。** 没有页面访问、命令调用或已运行的
 计划任务时，经过 12 小时并不会自动连接数据库。计划任务是否注册、是否启用及
 是否执行成功，须在部署机器的任务计划程序核实，不能由仓库中存在脚本推断。

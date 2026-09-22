@@ -10,9 +10,9 @@ REPORT_FIELDS = {
     "check_user": "检验人员", "mater_type": "物料分类", "factory": "工厂",
     "cha_item": "特性项目", "spec_req2": "规格样式1", "upp_spec": "规格上限",
     "spec_req1": "规格样式2", "low_spec": "规格下限",
+    "iqc_result": "IQC结果", "coa_result": "COA结果",
     **{f"iqc_{i}": f"IQC-{i}" for i in range(1, 6)},
     **{f"coa_{i}": f"COA-{i}" for i in range(1, 6)},
-    "iqc_result": "IQC结果", "coa_result": "COA结果",
 }
 REPORT_COLUMNS = ("序号", *REPORT_FIELDS.values())
 
@@ -58,8 +58,3 @@ def project_report(source: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
     frame.insert(0, "序号", range(1, len(frame) + 1))
     return frame
-
-
-def filter_report(frame: pd.DataFrame, product_code: str) -> pd.DataFrame:
-    """Match the selected source value exactly, including an explicit common selection."""
-    return frame.loc[frame["产品型号"].eq(product_code), list(REPORT_COLUMNS)].copy()

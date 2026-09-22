@@ -99,6 +99,7 @@ def test_spc_charts_keep_historical_overview_and_recent_detail(monkeypatch):
         reference_date=date(2026, 9, 21),
     )
     assert set(captured["raw_measurements_df"].sheet_id) == {"previous", "previous2", "current"}
+    assert captured["date_only"] is True
     assert any("2026-08" in trace.name for trace in payload["fig1"].data)
     assert any("2026-09-21" in trace.name for trace in payload["fig1"].data)
 

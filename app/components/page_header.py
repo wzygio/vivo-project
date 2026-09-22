@@ -100,20 +100,16 @@ def perform_hard_reset(
     cached_funcs: list | None = None,
     product_cache_scope: str | None = None,
     product_cache_indicators: tuple[str, ...] = (),
+    *,
+    snapshot_refreshed: bool = False,
 ) -> None:
-    """执行「刷新缓存」的完整硬重置流程，可被页头按钮或独立页面按钮复用。"""
+    """统一刷新缓存、重载代码、重读配置；也用于快照刷新成功后的收尾。"""
     # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
     cache_scope = invalidate_page_cache(
         cached_funcs,
         product_code=product_cache_scope,
         indicator_keys=product_cache_indicators,
     )
-
-    if cache_scope == "indicator_product":
-        # Scoped invalidation must not unload modules or clear other products' caches.
-        SessionManager.load_and_set_config(product_cache_scope)
-        st.toast(f"🔄 {product_cache_scope} 当前报表指标缓存已刷新", icon="✅")
-        return
 
     # ---- 阶段 2: 清理前端 session_state 视图缓存 ----
     for key in list(st.session_state.keys()):
@@ -122,21 +118,23 @@ def perform_hard_reset(
 
     # ---- 阶段 3: 手动热重载 = 代码重载 + 配置重读（总是执行） ----
     # 自动热重载已降级为被动检测（detect_project_changes 只置提示标记），
-    # 代码与配置的统一生效全部收敛到本按钮。
+    # 两个刷新按钮都通过本流程应用代码与配置。
     try:
         from app.utils.reloader import deep_reload_modules
         deep_reload_modules()
         logging.info("♻️ [Hard Reset] 已卸载所有后端模块，下次 import 将加载最新代码。")
-    except ImportError:
-        logging.warning("⚠️ 模块重载依赖缺失，跳过 (仅刷新缓存)。")
+    except Exception:
+        logging.exception("❌ [Hard Reset] 代码重载失败，刷新流程未完成。")
+        raise
 
     try:
-        current_product = st.session_state.get(SessionManager.KEY_PRODUCT)
+        current_product = product_cache_scope or st.session_state.get(SessionManager.KEY_PRODUCT)
         if current_product:
             SessionManager.load_and_set_config(current_product)
             logging.info(f"♻️ [Hard Reset] 配置已强制重读: {current_product}")
-    except Exception as exc:
-        logging.warning(f"⚠️ [Hard Reset] 配置重读失败，保留现有配置: {exc}")
+    except Exception:
+        logging.exception("❌ [Hard Reset] 配置重读失败，刷新流程未完成。")
+        raise
 
     st.session_state.pop("code_update_pending", None)
 
@@ -155,10 +153,14 @@ def perform_hard_reset(
         ):
             del st.session_state[key]
 
-    if cache_scope == "product":
-        st.toast(f"🔄 {product_cache_scope} 缓存已刷新 · 代码与配置已重载", icon="✅")
+    if cache_scope == "indicator_product":
+        cache_message = f"{product_cache_scope} 当前报表指标缓存已刷新"
+    elif cache_scope == "product":
+        cache_message = f"{product_cache_scope} 缓存已刷新"
     else:
-        st.toast("🔄 缓存已刷新 · 代码与配置已重载", icon="✅")
+        cache_message = "缓存已刷新"
+    snapshot_message = "数据快照已刷新 · " if snapshot_refreshed else ""
+    st.toast(f"🔄 {snapshot_message}{cache_message} · 代码与配置已重载", icon="✅")
 
 
 def render_page_header(
@@ -173,7 +175,7 @@ def render_page_header(
     show_data_refresh: bool = True,
 ) -> None:
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
-    # 检测只置位提示标记，绝不打断当前 run；代码/配置/缓存的统一生效由"刷新缓存"手动触发。
+    # 检测只置位提示标记，绝不打断当前 run；两个刷新按钮均可手动应用代码/配置/缓存更新。
     detect_project_changes()
 
     is_admin = st.query_params.get("admin") == "true"
@@ -198,8 +200,7 @@ def render_page_header(
     if title:
         st.title(title)
 
-    # [L1+L2] 刷新底层数据快照，成功后同步失效当前页面的 L2 缓存。
-    # 模块卸载与配置重读仍只属于「刷新缓存」(_hard_reset_callback)。
+    # 快照全部刷新成功后，复用「刷新缓存」的缓存失效、代码重载与配置重读流程。
     def _refresh_data_callback():
         if not refresh_handlers:
             st.toast("当前页面没有独立的数据快照刷新任务。", icon="ℹ️")
@@ -221,31 +222,15 @@ def render_page_header(
             st.toast("❌ 数据库连接或快照更新失败，已保留当前缓存视图。", icon="🚨")
             return
 
-        # 快照全部刷新成功后失效 L2：产品页面仅推进当前产品的共享 revision；
-        # 无产品作用域但有缓存函数时保留旧的全量 func.clear() 语义。
-        if product_cache_scope:
-            invalidate_page_cache(cached_funcs, product_code=product_cache_scope, indicator_keys=product_cache_indicators)
-            if product_cache_indicators:
-                st.toast("✅ 当前产品 L1 快照与对应指标缓存已刷新。", icon="🎉")
-                return
-        elif cached_funcs:
-            invalidate_page_cache(cached_funcs)
+        perform_hard_reset(
+            cached_funcs,
+            product_cache_scope,
+            product_cache_indicators,
+            snapshot_refreshed=True,
+        )
+        logging.info("🔄 [UI] 数据快照、页面缓存、代码与配置刷新完毕。")
 
-        # 清理前端 memo 化的视图模型缓存（与 _hard_reset_callback 阶段 2 一致）。
-        for key in list(st.session_state.keys()):
-            if "view_model" in key: # type: ignore
-                del st.session_state[key]
-
-        # 预警矩阵已加载状态一并清除（回到按钮门控，重新读取缓存展示）；
-        # 超规片自动预警的查询已提交签名一并清除（回到查询门控）。
-        st.session_state.pop("alert_matrix_board_loaded", None)
-        st.session_state.pop("monitor_query_signature", None)
-
-        st.toast("✅ L1 快照与 L2 缓存已刷新。", icon="🎉")
-        logging.info("🔄 [UI] L1 数据快照刷新完毕，已同步失效 L2 页面缓存。")
-
-    # 产品页面通过共享版本键仅失效当前产品；聚合/无产品页面保留旧的
-    # func.clear() + 模块重载行为。
+    # 数据缓存按页面作用域失效；所有页面的「刷新缓存」均执行进程级代码重载。
     def _hard_reset_callback():
         perform_hard_reset(cached_funcs, product_cache_scope, product_cache_indicators)
 
@@ -285,9 +270,9 @@ def render_page_header(
                             on_click=_refresh_data_callback,
                             width="stretch",
                             help=(
-                                f"刷新底层 L1 数据快照，并同步刷新产品 {product_cache_scope} 的 L2 页面缓存。"
+                                f"刷新底层数据快照，成功后刷新产品 {product_cache_scope} 的页面缓存，并重载代码、重读配置。"
                                 if product_cache_scope
-                                else "刷新底层 L1 数据快照，并同步刷新当前页面的 L2 缓存。"
+                                else "刷新底层数据快照，成功后刷新当前页面缓存，并重载代码、重读配置。"
                             ),
                         )
                     if show_cache_refresh:
@@ -297,7 +282,7 @@ def render_page_header(
                             on_click=_hard_reset_callback,
                             width="stretch",
                             help=(
-                                f"仅刷新产品 {product_cache_scope} 的当前报表指标缓存，并重读产品配置。"
+                                f"刷新产品 {product_cache_scope} 的当前报表指标缓存，并重载代码与配置。"
                                 if product_cache_scope
                                 else "清除当前报表缓存并重载代码与配置；普通浏览器刷新不会触发。"
                             ),
@@ -334,7 +319,7 @@ def detect_project_changes(enable: bool = True) -> bool:
     监控代码/配置/资源文件的哈希指纹变化，但绝不打断当前 run：
     发现变更时仅置位 st.session_state['code_update_pending'] 提示标记，
     由页头渲染"点击刷新缓存应用"的提示。代码重载、配置重读与缓存失效
-    统一收敛到"刷新缓存"按钮（_hard_reset_callback）手动触发。
+    由两个刷新按钮共用的 perform_hard_reset 手动触发；刷新数据先完成快照刷新。
 
     Returns:
         bool: 本次运行是否检测到了变更（供调用方判断/测试）。
