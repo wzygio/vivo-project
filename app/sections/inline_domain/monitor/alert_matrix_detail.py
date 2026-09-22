@@ -8,8 +8,8 @@
   详情额外跟踪规格、修饰与趋势/Lot/Sheet 版本，同一版输入再次打开命中缓存；
 - **ADR-0001**：详情数据包只含原生载荷（DataFrame / dict / list / 标量），
   各域 ViewModel 在缓存边界外即时消费，不进入缓存；
-- **图像复用**：CPK 默认只读台账，绘制命中指标截至上周的历史周记录；
-  SPC 单片异常走 ``render_spc_indicator_sections`` 的
+- **图像复用**：CPK 按台账预警键加载 SPC 原图；与
+  SPC 单片异常一起走 ``render_spc_indicator_sections`` 的
   RenderGate ``collect_memoized``；CTQ 走 ``render_ctq_indicator_sections``
   （同款 memo 参数）；Yield 走 ``render_alert_code_expanders``
   （collect_memoized）；Q-Time 由本层 RenderGate ``collect_memoized`` 包装
@@ -213,15 +213,15 @@ def _load_spc_view(db_manager: Any, prod_code: str):
         end_date=end_date.strftime("%Y-%m-%d"),
         data_type_filter="SPC",
     )
+    product_signature = build_indicator_product_cache_signature(
+        MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("spc_sheet_oos", "spc_cpk_trend")
+    )
     return SpcReportService.get_spc_report_data(
         _data_port=build_spc_repository(db_manager, prod_code),
         query_config_json=query_config.model_dump_json(),
-        # 与矩阵 CPK 行同一 snapshot 基签名：复用矩阵构建时已填充的 L2 条目。
-        snapshot_signature=build_indicator_product_cache_signature(
-            MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("spc_sheet_oos",)
-        ),
+        snapshot_signature=product_signature,
         period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
-        product_revision=get_indicator_product_revision("spc_sheet_oos", prod_code),
+        product_revision=product_signature,
         decision_signature=get_scope_decision_signature("spc", prod_code),
     )
 
@@ -379,31 +379,52 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
 
 
 def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
-    """上一周 CPK 预警及同一台账中的历史周记录；不加载或回写原始 SPC。"""
+    """保留台账预警判据，按命中指标加载 SPC 页面使用的三图数据。"""
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
         frame = cpk_latest_store().read_product(prod_code)
         alerts_df = (build_latest_cpk_alerts(frame, reference_date)
                      if frame is not None and not frame.empty else pd.DataFrame())
-        history = pd.DataFrame()
+        frames = {
+            name: pd.DataFrame()
+            for name in ("period_capability_df", "sheet_features_df", "raw_measurements_df")
+        }
         if not alerts_df.empty:
-            keys = alerts_df.rename(columns={"厂别": "factory", "站点": "step_id", "参数名称": "param_name"})
-            key_columns = ["factory", "step_id", "param_name"]
-            history = frame.loc[frame["period_type"].eq("week")].merge(
-                keys[key_columns].drop_duplicates(), on=key_columns, how="inner",
+            from app.sections.inline_domain.spc.spc_dashboard import (
+                filter_spc_report_by_alerts,
             )
-            history["week_start"] = pd.to_datetime(
-                history["period_label"] + "-1", format="%G-W%V-%u", errors="coerce",
-            )
-            previous_start, _ = previous_iso_week_range(reference_date)
-            history = history.loc[history["week_start"].le(previous_start)].copy()
+
+            view = _load_spc_view(_resolve_db_manager(db_manager), prod_code)
+            frames = {
+                name: filter_spc_report_by_alerts(getattr(view, name), alerts_df)
+                for name in frames
+            }
         return {
-            "kind": "spc_cpk_excel",
+            "kind": "spc_cpk",
             "alerts_df": alerts_df,
-            "history_df": history,
+            "frames": frames,
+            "end_date": _report_end_date().isoformat(),
         }
 
     return load
+
+
+def _spc_detail_signature(prod_code: str, cell_signature: str) -> str:
+    """三图数据跟踪 SPC 输入版本，独立于矩阵台账判据缓存。"""
+    from src.inline_domain.application.shared.decision_signature import (
+        get_scope_decision_signature,
+    )
+
+    return build_alert_matrix_signature(products=(prod_code,), components={
+        "cell": cell_signature,
+        "revision": build_indicator_product_cache_signature(
+            "spc_detail_indicator_charts_v1", prod_code,
+            ("spc_sheet_oos", "spc_cpk_trend"),
+        ),
+        "decision": get_scope_decision_signature("spc", prod_code),
+        "end_date": _report_end_date().isoformat(),
+        "sigma_source": ConfigLoader.get_spc_period_sigma_source(),
+    })
 
 
 def _yield_detail_signature(prod_code: str, cell_signature: str) -> str:
@@ -665,6 +686,7 @@ def _render_sheet_oos_detail(
                 memo_state_key="matrix_detail_spc_oos_charts_memo",
                 chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_spc_oos",
                 step_desc_map=step_desc_map,
+                reference_date=date.fromisoformat(bundle["end_date"]),
             )
         elif scope == "ctq":
             if frames["sheet_features_df"].empty:
@@ -707,37 +729,6 @@ def _render_sheet_oos_detail(
                 chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_aoi_rs",
                 step_desc_map=step_desc_map,
             )
-
-
-def _render_spc_cpk_ledger_detail(
-    bundle: Mapping[str, Any], *, prod_code: str, week_label: str,
-    step_desc_map: dict[str, str] | None,
-) -> None:
-    from app.charts.inline_domain.cpk_ledger_chart import build_cpk_ledger_figure
-    from app.utils.step_labels import format_step_label
-    from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD
-
-    alerts = bundle["alerts_df"]
-    with st.expander(f"CPK 预警明细（上一周 {week_label}，CPK < {CPK_THRESHOLD:.2f}）", expanded=True):
-        if alerts.empty:
-            st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
-            return
-        display = alerts.copy()
-        if step_desc_map:
-            display["站点"] = display["站点"].map(lambda step: format_step_label(step, step_desc_map))
-        st.dataframe(display, hide_index=True, width="stretch")
-    history = bundle.get("history_df", pd.DataFrame())
-    if history.empty:
-        st.caption("预警指标暂无可绘制的历史周 CPK 台账记录。")
-        return
-    with st.expander("CPK 自动预警指标图像（历史周台账）", expanded=True):
-        st.caption("仅展示命中预警指标截至上周的台账 CPK；红点表示台账预警。缺失周不代表达标，单周记录仅显示一个点。")
-        for (factory, step, param), records in history.groupby(["factory", "step_id", "param_name"], sort=False):
-            label = format_step_label(step, step_desc_map) if step_desc_map else str(step)
-            with st.expander(f"{factory} | {label} | {param}", expanded=True):
-                chart_id = hashlib.sha256(f"{prod_code}|{factory}|{step}|{param}".encode()).hexdigest()[:16]
-                st.plotly_chart(build_cpk_ledger_figure(records), width="stretch",
-                                key=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_cpk_ledger_{chart_id}")
 
 
 def _render_spc_cpk_detail(
@@ -784,7 +775,7 @@ def _render_spc_cpk_detail(
         st.warning("预警指标暂无可绘制的 Sheet 数据。")
         return
     count = _indicator_count(frames["sheet_features_df"], ["factory", "step_id", "param_name"])
-    with st.expander(f"🚨 CPK 自动预警指标图像（{count} 个指标）", expanded=False):
+    with st.expander(f"🚨 CPK 自动预警指标图像（{count} 个指标）", expanded=True):
         st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
         render_spc_indicator_sections(
             period_capability_df=frames["period_capability_df"],
@@ -795,6 +786,7 @@ def _render_spc_cpk_detail(
             memo_state_key="matrix_detail_cpk_charts_memo",
             chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_spc_cpk",
             step_desc_map=step_desc_map,
+            reference_date=date.fromisoformat(bundle["end_date"]),
         )
 
 
@@ -854,28 +846,35 @@ def _render_qtime_detail(
     details_df = bundle["details_df"]
     render_qtime_alert_center(alerts_df, total_lots=int(bundle["total_lots"]))
 
+    if alerts_df.empty:
+        return
     if details_df.empty:
-        st.caption("当前产品暂无 Q-Time 明细数据。")
+        st.caption("预警站点暂无可绘制的 Q-Time 明细数据。")
+        return
+    alert_steps = alerts_df["step_desc"].dropna().unique()
+    details_df = details_df.loc[details_df["step_desc"].isin(alert_steps)].copy()
+    if details_df.empty:
+        st.caption("预警站点暂无可绘制的 Q-Time 明细数据。")
         return
 
+    groups = list(details_df.groupby("step_desc", sort=True))
     gate = RenderGate()
-    gate.stage(
-        partial(
-            build_qtime_figure,
-            details_df,
-            title=f"北极星QTime监控｜{prod_code}",
+    for _, step_details in groups:
+        gate.stage(
+            partial(build_qtime_figure, step_details, title=str(prod_code))
         )
-    )
     figures = gate.collect_memoized(
         "matrix_detail_qtime_chart_memo",
         _detail_charts_signature(row_key, prod_code, alerts_df, memo_base),
     )
-    if figures:
-        st.plotly_chart(
-            figures[0],
-            width="stretch",
-            key=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_qtime_{prod_code}",
-        )
+    for (step_desc, _), figure in zip(groups, figures):
+        step_key = hashlib.sha256(str(step_desc).encode("utf-8")).hexdigest()[:16]
+        with st.expander(str(step_desc), expanded=True):
+            st.plotly_chart(
+                figure,
+                width="stretch",
+                key=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_qtime_{prod_code}_{step_key}",
+            )
 
 
 def _render_detail_bundle(
@@ -896,10 +895,6 @@ def _render_detail_bundle(
             week_label=week_label,
             step_desc_map=step_desc_map,
             memo_base=memo_base,
-        )
-    elif kind == "spc_cpk_excel":
-        _render_spc_cpk_ledger_detail(
-            bundle, prod_code=prod_code, week_label=week_label, step_desc_map=step_desc_map,
         )
     elif kind == "spc_cpk":
         _render_spc_cpk_detail(
@@ -991,8 +986,10 @@ def render_alert_matrix_detail(
         try:
             if row_key.startswith("yield_"):
                 memo_base = _yield_detail_signature(prod_code, memo_base)
-            elif row_key == "spc_cpk_trend":
-                memo_base = f"{memo_base}|cpk-ledger-history-v1"
+            elif row_key in ("spc_cpk_trend", "spc_sheet_oos"):
+                memo_base = _spc_detail_signature(prod_code, memo_base)
+            elif row_key == "qtime_sheet_oos":
+                memo_base = f"{memo_base}|qtime-indicator-charts-v1"
             bundle = get_cached_matrix_detail(
                 detail_key=str(detail_key),
                 reference_date=reference_date,

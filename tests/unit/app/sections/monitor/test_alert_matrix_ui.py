@@ -41,6 +41,11 @@ def _new_app(nonce: str) -> AppTest:
 
 
 def _inject_loaders(monkeypatch: pytest.MonkeyPatch, loaders: dict) -> None:
+    from src.inline_domain.application.shared import decision_signature
+
+    monkeypatch.setattr(
+        decision_signature, "get_scope_decision_signature", lambda *args: "fixture-decisions"
+    )
     monkeypatch.setattr(
         alert_matrix_detail,
         "build_default_detail_loaders",
@@ -147,7 +152,8 @@ def _spc_cpk_bundle() -> dict:
         ]
     )
     bundle = _spc_sheet_oos_bundle()
-    return {"kind": "spc_cpk", "alerts_df": alerts, "frames": bundle["frames"]}
+    return {"kind": "spc_cpk", "alerts_df": alerts, "frames": bundle["frames"],
+            "end_date": bundle["end_date"]}
 
 
 def _yield_trend_bundle() -> dict:
@@ -297,6 +303,29 @@ def test_detail_cache_hit_when_reopening_same_cell(monkeypatch: pytest.MonkeyPat
     assert len(loader_calls) == 1
     assert any("预警详情｜M678 × Q-Time 单片异常" in m.value for m in app.markdown)
     assert len(app.get("plotly_chart")) == 1
+
+
+def test_qtime_detail_separates_alert_steps_and_excludes_other_steps(monkeypatch):
+    bundle = _qtime_bundle()
+    original = bundle["details_df"]
+    bundle["details_df"] = pd.concat([
+        original,
+        original.assign(step_desc="Second step", lot_id="LOT2"),
+        original.assign(step_desc="Normal step", lot_id="LOT3"),
+    ], ignore_index=True)
+    bundle["alerts_df"] = pd.concat([
+        bundle["alerts_df"],
+        bundle["alerts_df"].assign(step_desc="Second step", lot_id="LOT2"),
+    ], ignore_index=True)
+    _inject_loaders(monkeypatch, {"qtime_sheet_oos": lambda *args: bundle})
+    app = _new_app("qtime-multiple-steps").run()
+    app.button(key=matrix_cell_button_key("qtime_sheet_oos", "M678")).click().run()
+    assert not app.exception
+    assert len(app.get("plotly_chart")) == 2
+    labels = [item.label for item in app.expander]
+    assert "M3_DE->M3_STR" in labels
+    assert "Second step" in labels
+    assert "Normal step" not in labels
 
 
 def test_click_ok_cell_shows_explanation_without_loading(
@@ -482,6 +511,7 @@ def test_spc_sheet_oos_detail_wires_alert_table_and_charts(
     assert kwargs["memo_state_key"] == "matrix_detail_spc_oos_charts_memo"
     assert kwargs["memo_signature"].startswith("matrix_detail|spc_sheet_oos|M678|")
     assert not kwargs["sheet_features_df"].empty
+    assert kwargs["reference_date"] == date(2026, 8, 31)
 
 
 def test_spc_cpk_detail_wires_capability_alert_pipeline(
@@ -508,6 +538,7 @@ def test_spc_cpk_detail_wires_capability_alert_pipeline(
     assert kwargs["chart_key_prefix"] == "matrix_detail_spc_cpk"
     assert kwargs["memo_state_key"] == "matrix_detail_cpk_charts_memo"
     assert kwargs["memo_signature"].startswith("matrix_detail|spc_cpk_trend|M678|")
+    assert kwargs["reference_date"] == date(2026, 8, 31)
 
 
 def test_yield_trend_detail_wires_alert_code_expanders(

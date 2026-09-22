@@ -90,3 +90,4 @@ class EvaporationRepository:
             # Database exception strings can contain connection and SQL details.
             logger.error("IQC_SOURCE_UNAVAILABLE exception_type=%s", type(exc).__name__)
             raise IqcSourceUnavailable("IQC_SOURCE_UNAVAILABLE") from None
+

@@ -1,6 +1,7 @@
 """Independent indicator/product reduction and Excel-only CPK contracts."""
 from collections import Counter
 from datetime import date
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -56,7 +57,11 @@ def test_cpk_excel_changes_rebuild_only_cpk_and_default_detail(tmp_path, monkeyp
                        "period_type": "week", "period_label": "2026-W36", "cpk_corrected": 0.8, "flag": flag}]).to_excel(path, sheet_name="P1", index=False)
     monkeypatch.setattr(service, "MATRIX_ROWS", (service.MATRIX_ROW_MAP["spc_cpk_trend"],))
     monkeypatch.setattr(detail, "cpk_latest_store", lambda: store)
-    monkeypatch.setattr(detail, "_load_spc_view", lambda *args: (_ for _ in ()).throw(AssertionError("raw SPC forbidden")))
+    monkeypatch.setattr(detail, "_resolve_db_manager", lambda db: object())
+    monkeypatch.setattr(detail, "_load_spc_view", lambda *args: SimpleNamespace(
+        period_capability_df=pd.DataFrame(), sheet_features_df=pd.DataFrame(),
+        raw_measurements_df=pd.DataFrame(),
+    ))
     def build():
         return cache.get_cached_alert_matrix(products=("P1",), reference_date=date(2026, 9, 8),
             _context_factory=lambda: service.AlertMatrixContext(date(2026, 9, 8), spc_cpk_loader=store.read_product),
