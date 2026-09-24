@@ -1,6 +1,6 @@
 # ADR-0032：全产品良率看板复用矩阵只读 Group 趋势缓存
 
-- Status: Proposed (implemented and verified on feature branch; merge approval pending)
+- Status: Accepted (user-approved integration into master on 2026-09-24)
 - Date: 2026-09-24
 - Scope: 自动预警页面的全产品 Group 月周日趋势
 
