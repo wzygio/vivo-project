@@ -16,16 +16,19 @@ def readings():
     })
 
 
-def test_bars_keep_each_passage_equally_spaced_and_show_hours_only():
+def test_svg_markers_keep_each_passage_equally_spaced_and_show_hours_only():
     figure = build_chamber_figure(readings(), chamber='OC2->OC3', product_order=PRODUCTS)
-    assert {trace.type for trace in figure.data} == {'bar'}
+    assert {trace.type for trace in figure.data} == {'scatter'}
+    assert all(trace.mode == 'markers' for trace in figure.data)
     points = sorted((x, y, extra) for trace in figure.data
                     for x, y, extra in zip(trace.x, trace.y, trace.customdata))
     assert [point[0] for point in points] == [0, 1, 2]
     assert [point[1] for point in points] == [100, 200, 300]
     assert [point[2][0] for point in points] == ['09-23 01时', '09-23 01时', '09-23 20时']
     assert ':59' not in figure.to_json()
-    assert figure.layout.yaxis.range[1] < 6000
+    assert figure.layout.yaxis.range == (0, 6000)
+    assert figure.layout.yaxis.autorange is False
+    assert any(shape.y0 == shape.y1 == 6000 for shape in figure.layout.shapes)
     assert '6000' in str(figure.layout.annotations)
 
 

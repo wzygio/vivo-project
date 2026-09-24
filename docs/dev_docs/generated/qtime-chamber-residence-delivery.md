@@ -9,7 +9,7 @@
 
 ## 已实现
 
-现有 Q-Time 模块下方增加“蒸镀单腔停留时间监控”。产品/线体/腔室多选，空选表示全部；按线体－腔室分组显示等距柱状图，过货时间精确到小时，颜色区分产品。提供超限和缺失汇总，超过1000秒的测量从展示及汇总剔除，保留1000秒及缺失值；逐片明细表和下载已按后续优化要求移除。非启用产品不进入图表、表格或选项。上下两个模块分别为独立fragment，普通页面不包含内部字段或原始异常信息。
+现有 Q-Time 模块下方增加“蒸镀单腔停留时间监控”。产品/线体/腔室多选，空选表示全部；按线体－腔室分组显示等距SVG点位图，过货时间精确到小时，颜色区分产品，纵轴固定0～6000秒。超过1000秒的测量从展示剔除，保留1000秒，缺失值不绘制。按最新优化要求移除说明、覆盖信息、数据完整性警告、统计卡片、明细及汇总表。查询失败和空态仍明确显示。上下两个模块分别为独立fragment，普通页面不包含内部字段或原始异常信息。
 
 代码沿用 `qtime` 命名。领域资源配置通过 `qtime_chamber_3cee001/3cee002` 指向用户提供的两份文件；后续换月应更新这两个配置值。未移动或提交业务工作簿，未恢复用户删除的资料。
 
@@ -48,7 +48,7 @@
 
 在基线独立worktree（`output/tmp/qtime-baseline`）运行涉及失败的7个测试文件，复现8个相同失败：Inline页面按钮缺失、设备报表2项、IQC示例JSON缺失3项、SPC缓存版本期望、Delete规则期望。基线该子集最终20通过9失败，额外1项是另一加密文件的明文头断言。余下当前失败为IQC AppTest 3秒超时和3个依赖透明加密可见状态的诊断断言，基线未稳定复现；相关业务代码未被本次修改。基线COM诊断还输出0x80010108异常，测试进程继续完成并生成XML。没有为了使全套变绿而修改无关模块、资源或断言。
 
-## 本轮展示与 Fragment 优化验证
+## 柱状图与 Fragment 优化历史验证
 
 优化基线为 `8513487`。沿用上文相关回归命令，新增柱形排序、小时显示、稳定颜色和
 1000边界测试后，**181 passed**，报告为 `output/test-results/qtime-chamber/optimization-regression.xml`。
@@ -77,6 +77,17 @@
 
 设计范式已写入 [多模块页面的 Fragment 隔离范式](../../../references/design/feat_design/interaction-multi-module-fragments.md)，
 并加入 `references/index.md` 知识路由。本轮未重跑无关全套用例，上述初版全量限制仍保留。
+
+## 点位图与界面精简验证
+
+后续需求将单腔图恢复为SVG点位图（`go.Scatter(mode="markers")`），纵轴固定0～6000秒，
+规格线及标签保留在图内。删除截图中的说明、数据完整性警告、覆盖信息、统计卡片和汇总表。
+1000秒过滤、等距小时标签、产品配色、分组Expander和双向fragment隔离继续生效。
+
+- `.venv/Scripts/python.exe -m pytest tests/unit/app/charts/indicator_domain/qtime tests/unit/app/sections/indicator_domain/qtime tests/unit/app/pages/test_qtime_page.py -q`：31项通过。
+- 更新后的 `tests/e2e/chamber_qtime.js` 通过：22张SVG点位图同时展示、6000纵轴、无WebGL画布、界面精简、筛选/刷新/空态/安全失败恢复、窄屏和双向fragment隔离。
+- 更新后的 `tests/e2e/chamber_qtime_live.js` 通过：真实数据20个有效测量组别均绘出点位，纵轴上限全部6000；线2 OC2→OC3为3584个点。无效测量组别保持空态，M626及线体筛选通过。
+- 截图保存在 `output/test-results/qtime-chamber/live-oc2-oc3.png`、`oc2-oc3-markers.png`、`mobile-markers.png`。未重跑无关全量套件。
 
 ## 评审与交付状态
 

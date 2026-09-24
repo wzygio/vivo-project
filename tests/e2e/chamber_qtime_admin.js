@@ -22,7 +22,7 @@ async page => {
   };
   await page.goto('http://localhost:8521/?admin=true');
   await page.getByRole('button', {name: '查询单腔', exact: true}).click();
-  await page.getByText('50.00%', {exact: true}).waitFor();
+  await page.getByText('3CEE002 - PT → OC1', {exact: true}).waitFor();
   await page.getByRole('button', {name: '查询', exact: true}).click();
   const beforeWorkbook = await downloadLedger('admin-before.xlsx');
   // Use an in-memory workbook: enterprise filesystem encryption alters bytes read by Node.

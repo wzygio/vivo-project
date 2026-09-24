@@ -48,7 +48,7 @@ class FixtureSource:
             'measurements': measurements,
             'products': pd.DataFrame({'glass_id': ['GLASS_A', 'GLASS_B', 'GLASS_C', 'DISABLED_GLASS', 'OUTLIER_GLASS'],
                                       'prod_code': ['M626', 'M678', 'M678', 'DISABLED_PRODUCT', 'M678']}),
-            'targets': pd.DataFrame([{'line': line, 'chamber': chamber, 'target_seconds': 900}
+            'targets': pd.DataFrame([{'line': line, 'chamber': chamber, 'target_seconds': 6000}
                                     for line in ('3CEE001', '3CEE002') for chamber in CHAMBERS]),
             'invalid_rows': 0,
         }

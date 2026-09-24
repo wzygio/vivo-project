@@ -17,7 +17,7 @@ async page => {
   const healthy = async () => {
     if (await page.locator('[data-testid="stException"]').count()) throw new Error('Streamlit exception');
     const body = await page.locator('body').innerText();
-    for (const forbidden of ['INTERNAL_SECRET_SQL', 'DISABLED_PRODUCT', 'DISABLED_GLASS', 'OUTLIER_GLASS', '下载单腔明细', '单腔停留时间明细']) {
+    for (const forbidden of ['INTERNAL_SECRET_SQL', 'DISABLED_PRODUCT', 'DISABLED_GLASS', 'OUTLIER_GLASS', '下载单腔明细', '单腔停留时间明细', '空选表示全部', '数据覆盖', '产品归属尚未确认', '部分记录缺少玻璃编号']) {
       if (body.includes(forbidden)) throw new Error('Unexpected content: ' + forbidden);
     }
   };
@@ -28,7 +28,7 @@ async page => {
   await waitText('请选择筛选条件并点击“查询单腔”。');
   const beforeLower = await counts();
   await query().click();
-  await waitText('50.00%');
+  await waitText('3CEE002 - PT → OC1');
   await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 2);
   const afterLower = await counts();
   if (beforeLower.page !== afterLower.page || beforeLower.station !== afterLower.station || beforeLower.chamber === afterLower.chamber) {
@@ -50,7 +50,7 @@ async page => {
   await healthy();
   await page.screenshot({ path: output + '/fragment-modules.png', fullPage: true });
   await select('产品型号', 'M678');
-  await waitText('0.00%');
+  await page.getByText('3CEE001 - PT → OC1', {exact: true}).waitFor({state: 'hidden'});
   await select('线体', '3CEE001');
   await waitText('当前筛选条件下暂无单腔停留时间数据。');
   await page.getByRole('button', { name: '刷新单腔缓存', exact: true }).click();
@@ -59,28 +59,30 @@ async page => {
   await page.goto(base);
   await waitText('请选择筛选条件并点击“查询单腔”。');
   await query().click();
-  await waitText('50.00%');
+  await waitText('3CEE002 - PT → OC1');
   // Empty chamber selection means all 11 chambers on both lines.
   await page.locator('[data-testid="stMultiSelect"]').filter({
     has: page.getByRole('combobox', { name: /腔室/ }),
   }).getByRole('button', { name: 'Clear all', exact: true }).click();
   await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 22
-    && [...document.querySelectorAll('.js-plotly-plot')].every(plot => plot.querySelector('.barlayer .point path')));
+    && [...document.querySelectorAll('.js-plotly-plot')].every(plot => plot.querySelector('.scatterlayer .point')));
   const chartEvidence = await page.evaluate(() => [...document.querySelectorAll('.js-plotly-plot')].map(plot => ({
     types: plot.data.map(trace => trace.type), points: plot.data.flatMap(trace => Array.from(trace.y)),
-    bars: plot.querySelectorAll('.barlayer .point path').length,
+    markers: plot.querySelectorAll('.scatterlayer .point').length,
+    upper: plot.layout.yaxis.range[1],
     webgl: plot.querySelectorAll('.gl-container canvas').length,
   })));
-  if (chartEvidence.some(chart => chart.types.some(type => type !== 'bar') || !chart.bars || chart.webgl || chart.points.some(value => value > 1000))) {
+  if (chartEvidence.some(chart => chart.types.some(type => type !== 'scatter') || !chart.markers || chart.webgl || chart.upper !== 6000 || chart.points.some(value => value > 1000))) {
     throw new Error('Invalid rendered chart: ' + JSON.stringify(chartEvidence));
   }
   const oc = page.locator('[data-testid="stExpander"]').filter({hasText: '3CEE002 - OC2 → OC3'});
   await oc.scrollIntoViewIfNeeded();
-  await oc.screenshot({ path: output + '/oc2-oc3-bars.png' });
+  await oc.screenshot({ path: output + '/oc2-oc3-markers.png' });
+  if (await page.locator('[data-testid="stDataFrame"], [data-testid="stMetric"]').count()) throw new Error('Unexpected table/metrics');
   await healthy();
   if (warnings.length) throw new Error('WebGL context errors: ' + warnings.join('\n'));
   await page.setViewportSize({ width: 390, height: 844 });
-  await oc.screenshot({ path: output + '/mobile-bars.png' });
+  await oc.screenshot({ path: output + '/mobile-markers.png' });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2)) throw new Error('Viewport overflow');
 
   for (const [scenario, message] of [['failure', '蒸镀单腔停留时间数据读取失败，请稍后重试。'], ['empty', '当前筛选条件下暂无单腔停留时间数据。']]) {
@@ -94,8 +96,8 @@ async page => {
   await page.goto(base);
   await waitText('请选择筛选条件并点击“查询单腔”。');
   await query().click();
-  await waitText('50.00%');
+  await waitText('3CEE002 - PT → OC1');
   await healthy();
   return { ok: true, charts: chartEvidence.length, beforeLower, afterLower, afterUpper,
-    checks: ['bidirectional fragment isolation', 'line/chamber expanders', '22 SVG bar charts', 'OC2-OC3', '1000 boundary', 'no detail table', 'filters', 'refresh', 'mobile', 'safe failure and recovery'] };
+    checks: ['bidirectional fragment isolation', 'line/chamber expanders', '22 SVG marker charts', '6000 axis limit', 'OC2-OC3', '1000 boundary', 'no tables/metrics/captions', 'filters', 'refresh', 'mobile', 'safe failure and recovery'] };
 }
