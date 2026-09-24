@@ -139,5 +139,6 @@ class FixtureQTimeService:
         raise AssertionError("Fixture tests do not upload a decoration workbook")
 
 
-st.set_page_config(page_title="Q-Time E2E", layout="wide")
-render_qtime_dashboard(FixtureQTimeService())
+if __name__ == '__main__':
+    st.set_page_config(page_title="Q-Time E2E", layout="wide")
+    render_qtime_dashboard(FixtureQTimeService())

@@ -11,6 +11,13 @@ CHAMBERS = (
 )
 DETAIL_COLUMNS = ['prod_code', 'line', 'glass_id', 'entry_time', 'chamber',
                   'duration_seconds', 'target_seconds', 'status']
+MAX_DISPLAY_DURATION_SECONDS = 1000
+
+
+def exclude_chamber_outliers(details: pd.DataFrame) -> pd.DataFrame:
+    """Exclude individual readings above the display limit; retain missing values."""
+    durations = details['duration_seconds']
+    return details.loc[durations.isna() | durations.le(MAX_DISPLAY_DURATION_SECONDS)].copy()
 
 
 def build_chamber_report(

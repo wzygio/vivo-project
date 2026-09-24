@@ -38,6 +38,7 @@ SIGNATURE_STATE_KEY = "qtime_report_signature"
 logger = logging.getLogger(__name__)
 
 
+@st.fragment
 def render_qtime_dashboard(service: QTimeReportService) -> None:
     """Render filters, gated query results, and explicit operational states.
 
@@ -134,7 +135,9 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             selected_products=selected_products,
             signature=signature,
         )
-        st.rerun()
+        # The save button is inside this fragment. Rebuild its download payload
+        # as well as the charts without rerunning the independent chamber report.
+        st.rerun(scope="fragment")
 
     if is_current or not monitoring.alerts.empty:
         render_qtime_alert_center(

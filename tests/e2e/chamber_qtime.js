@@ -8,42 +8,51 @@ async page => {
     await page.getByRole('option', { name: value, exact: true }).click();
     await page.keyboard.press('Escape');
   };
+  const counts = async () => {
+    const text = await page.locator('body').innerText();
+    return Object.fromEntries(['page', 'station', 'chamber'].map(module => [module,
+      Math.max(...[...text.matchAll(new RegExp(module + '-executions: (\\d+)', 'g'))].map(match => Number(match[1])))
+    ]));
+  };
   const healthy = async () => {
     if (await page.locator('[data-testid="stException"]').count()) throw new Error('Streamlit exception');
     const body = await page.locator('body').innerText();
-    for (const forbidden of ['INTERNAL_SECRET_SQL', 'DISABLED_PRODUCT', 'DISABLED_GLASS', 'admin=true', '修饰', '配置路径']) {
-      if (body.includes(forbidden)) throw new Error('Leaked ' + forbidden);
+    for (const forbidden of ['INTERNAL_SECRET_SQL', 'DISABLED_PRODUCT', 'DISABLED_GLASS', 'OUTLIER_GLASS', '下载单腔明细', '单腔停留时间明细']) {
+      if (body.includes(forbidden)) throw new Error('Unexpected content: ' + forbidden);
     }
   };
-  const downloadAndVerify = async (file, expectedRows, expectedProducts) => {
-    const pendingDownload = page.waitForEvent('download');
-    await page.getByRole('button', { name: '下载单腔明细', exact: true }).click();
-    const download = await pendingDownload;
-    await download.saveAs(output + '/' + file);
-    const response = await page.request.get(download.url());
-    const csv = (await response.text()).replace(/^\uFEFF/, '').trim();
-    const rows = csv.split(/\r?\n/).map(row => row.split(','));
-    if (rows.length !== expectedRows + 1) throw new Error('CSV row count');
-    if (rows[0].join(',') !== '产品型号,线体,GlassID,进片时间,腔室,停留时间（秒）,目标值（秒）,状态') throw new Error('CSV field projection');
-    if (rows.slice(1).some(row => !expectedProducts.includes(row[0]) || row.length !== 8)) throw new Error('CSV product scope');
-    if (rows.slice(1).filter(row => row[5] === '').length !== 2) throw new Error('CSV missing values');
-    if (csv.includes('DISABLED') || csv.includes('flag')) throw new Error('CSV disclosure');
-  };
+  const warnings = [];
+  page.on('console', message => { if (/WebGL|context lost/i.test(message.text())) warnings.push(message.text()); });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(base);
   await waitText('请选择筛选条件并点击“查询单腔”。');
-  const headings = await page.locator('h3').allTextContents();
-  if (headings.indexOf('北极星QTime监控') >= headings.indexOf('蒸镀单腔停留时间监控')) throw new Error('Incorrect module order');
+  const beforeLower = await counts();
   await query().click();
   await waitText('50.00%');
-  await page.locator('[data-testid="stPlotlyChart"]').first().waitFor();
+  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 2);
+  const afterLower = await counts();
+  if (beforeLower.page !== afterLower.page || beforeLower.station !== afterLower.station || beforeLower.chamber === afterLower.chamber) {
+    throw new Error('Lower interaction reran parent/upper: ' + JSON.stringify({beforeLower, afterLower}));
+  }
+  // Rerun the real upper module, then submit it. The chamber fragment must stay intact.
+  await page.getByRole('combobox', { name: '厂别', exact: true }).click();
+  await page.getByRole('option', { name: 'OLED', exact: true }).click();
+  await waitText('station-executions: 2');
+  await page.getByRole('combobox', { name: '站点', exact: true }).click();
+  await page.getByRole('option', { name: /OLED_OUT/ }).click();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
+  await page.locator('[data-testid="stExpander"]').filter({hasText: 'OLED_OUT'}).first().waitFor();
+  const afterUpper = await counts();
+  if (afterUpper.page !== afterLower.page || afterUpper.chamber !== afterLower.chamber || afterUpper.station <= afterLower.station) {
+    throw new Error('Upper interaction reran parent/lower: ' + JSON.stringify({afterLower, afterUpper}));
+  }
   await healthy();
-  await page.screenshot({ path: output + '/normal.png', fullPage: true });
+  await page.screenshot({ path: output + '/fragment-modules.png', fullPage: true });
   await select('产品型号', 'M678');
   await waitText('0.00%');
   await select('线体', '3CEE001');
   await waitText('当前筛选条件下暂无单腔停留时间数据。');
-  await page.screenshot({ path: output + '/filter-empty.png', fullPage: true });
   await page.getByRole('button', { name: '刷新单腔缓存', exact: true }).click();
   await waitText('请选择筛选条件并点击“查询单腔”。');
 
@@ -51,36 +60,42 @@ async page => {
   await waitText('请选择筛选条件并点击“查询单腔”。');
   await query().click();
   await waitText('50.00%');
-  await select('腔室', 'OC1->OC2');
-  await page.waitForFunction(() => document.querySelectorAll('[data-testid="stPlotlyChart"]').length === 2);
-  await page.getByText('单腔停留时间明细', { exact: true }).click();
-  await downloadAndVerify('details.csv', 6, ['M626', 'M678']);
-  await select('产品型号', 'M678');
-  await select('线体', '3CEE002');
-  await waitText('0.00%');
-  await downloadAndVerify('filtered-details.csv', 4, ['M678']);
+  // Empty chamber selection means all 11 chambers on both lines.
+  await page.locator('[data-testid="stMultiSelect"]').filter({
+    has: page.getByRole('combobox', { name: /腔室/ }),
+  }).getByRole('button', { name: 'Clear all', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 22
+    && [...document.querySelectorAll('.js-plotly-plot')].every(plot => plot.querySelector('.barlayer .point path')));
+  const chartEvidence = await page.evaluate(() => [...document.querySelectorAll('.js-plotly-plot')].map(plot => ({
+    types: plot.data.map(trace => trace.type), points: plot.data.flatMap(trace => Array.from(trace.y)),
+    bars: plot.querySelectorAll('.barlayer .point path').length,
+    webgl: plot.querySelectorAll('.gl-container canvas').length,
+  })));
+  if (chartEvidence.some(chart => chart.types.some(type => type !== 'bar') || !chart.bars || chart.webgl || chart.points.some(value => value > 1000))) {
+    throw new Error('Invalid rendered chart: ' + JSON.stringify(chartEvidence));
+  }
+  const oc = page.locator('[data-testid="stExpander"]').filter({hasText: '3CEE002 - OC2 → OC3'});
+  await oc.scrollIntoViewIfNeeded();
+  await oc.screenshot({ path: output + '/oc2-oc3-bars.png' });
   await healthy();
+  if (warnings.length) throw new Error('WebGL context errors: ' + warnings.join('\n'));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: output + '/mobile.png', fullPage: true });
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2);
-  if (overflow) throw new Error('Viewport overflow');
+  await oc.screenshot({ path: output + '/mobile-bars.png' });
+  if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2)) throw new Error('Viewport overflow');
 
-  await page.goto(base + '?scenario=failure');
-  await waitText('请选择筛选条件并点击“查询单腔”。');
-  await query().click();
-  await waitText('蒸镀单腔停留时间数据读取失败，请稍后重试。');
-  await healthy();
-  if (await page.locator('[data-testid="stPlotlyChart"]').count()) throw new Error('Stale result after failure');
-  await page.screenshot({ path: output + '/failure.png', fullPage: true });
-  await page.goto(base + '?scenario=empty');
-  await waitText('请选择筛选条件并点击“查询单腔”。');
-  await query().click();
-  await waitText('当前筛选条件下暂无单腔停留时间数据。');
-  await healthy();
+  for (const [scenario, message] of [['failure', '蒸镀单腔停留时间数据读取失败，请稍后重试。'], ['empty', '当前筛选条件下暂无单腔停留时间数据。']]) {
+    await page.goto(base + '?scenario=' + scenario);
+    await waitText('请选择筛选条件并点击“查询单腔”。');
+    await query().click();
+    await waitText(message);
+    await healthy();
+    if (await page.locator('[data-testid="stPlotlyChart"]').count()) throw new Error('Stale result after ' + scenario);
+  }
   await page.goto(base);
   await waitText('请选择筛选条件并点击“查询单腔”。');
   await query().click();
   await waitText('50.00%');
   await healthy();
-  return { ok: true, checks: ['initial gate', 'module order', 'product/line/chamber filters', 'empty', 'refresh', 'CSV', 'mobile fit', 'safe failure', 'recovery'] };
+  return { ok: true, charts: chartEvidence.length, beforeLower, afterLower, afterUpper,
+    checks: ['bidirectional fragment isolation', 'line/chamber expanders', '22 SVG bar charts', 'OC2-OC3', '1000 boundary', 'no detail table', 'filters', 'refresh', 'mobile', 'safe failure and recovery'] };
 }

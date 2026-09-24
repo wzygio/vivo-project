@@ -46,5 +46,7 @@ render_page_header(
     show_product_filter=False,
     refresh_handlers=[refresh_chamber_data, lambda: refresh_qtime_data(service)],
 )
+# Each section owns its fragment and widget/result state. The shared header
+# remains outside so explicit page-wide refreshes can invalidate both modules.
 render_qtime_dashboard(service)
 render_chamber_dashboard(build_chamber_qtime_service(DatabaseManager()))
