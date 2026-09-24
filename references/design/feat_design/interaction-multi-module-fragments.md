@@ -54,7 +54,9 @@ Fragment 解决的是局部重跑，不是数据缓存，也不保证模块在�
 
 图表使用 SVG `go.Scatter(mode="markers")`，不使用 WebGL。旧版同时绘制 11 张 `Scattergl` 图时已复现 WebGL 上下文
 耗尽，第三张 OC2→OC3 的上下文被回收；分组增加图表数量后更不能依赖每图独占 WebGL。
-纵轴固定为 0～6000 秒，6000 秒规格线显示在图表上边界，标签朝图内放置。
+规格由 `config/domain/indicator_domain.yaml` 的 `qtime.chamber_target_seconds` 统一配置，
+默认6000秒，同时控制规格线、超限判定和纵轴上限；规格变更纳入查询缓存签名。
+纵轴范围为0～配置规格，规格线显示在图表上边界，标签朝图内放置。
 
 ## 验证要求
 

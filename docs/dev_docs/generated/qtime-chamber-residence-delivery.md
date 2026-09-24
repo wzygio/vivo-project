@@ -89,6 +89,13 @@
 - 更新后的 `tests/e2e/chamber_qtime_live.js` 通过：真实数据20个有效测量组别均绘出点位，纵轴上限全部6000；线2 OC2→OC3为3584个点。无效测量组别保持空态，M626及线体筛选通过。
 - 截图保存在 `output/test-results/qtime-chamber/live-oc2-oc3.png`、`oc2-oc3-markers.png`、`mobile-markers.png`。未重跑无关全量套件。
 
+## 单腔规格配置
+
+`config/domain/indicator_domain.yaml` 新增 `qtime.chamber_target_seconds`（秒），默认6000。
+生产服务用此配置覆盖工作簿目标值，规格线、纵轴上限和超限判定共用一个值；规格加入缓存
+签名，刷新页面并重新查询后使用新值。上文6000秒描述均为默认配置。
+相关配置、缓存隔离、图表及页面单元检查11项通过；按用户要求跳过E2E。
+
 ## 评审与交付状态
 
 - Standards轴发现注入源缓存隔离问题，已修复并经独立复核关闭。

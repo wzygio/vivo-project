@@ -7,6 +7,8 @@ resources:
 
 qtime:
   constrain_display: true
+  # 单腔停留时间规格（秒），同时用作点位图纵轴上限。
+  chamber_target_seconds: 6000
 
 ijp:
   codes: [C3DM0, C3DM1, C3DM2, C3DM3, C3DM4, C3DM5]

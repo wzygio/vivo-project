@@ -4,8 +4,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.colors import qualitative
 
-DISPLAY_UPPER_SECONDS = 6000
-
 def build_chamber_figure(
     details: pd.DataFrame, *, chamber: str, product_order: tuple[str, ...],
 ) -> go.Figure:
@@ -34,7 +32,7 @@ def build_chamber_figure(
         margin={'l': 45, 'r': 25, 't': 75, 'b': 65},
         legend={'orientation': 'h', 'y': -0.25},
     )
-    figure.update_yaxes(range=[0, DISPLAY_UPPER_SECONDS], autorange=False)
+    figure.update_yaxes(range=[0, float(details['target_seconds'].max())], autorange=False)
     figure.update_xaxes(type='linear', tickmode='array', tickvals=ticks.index.tolist(),
                         ticktext=ticks['hour'].tolist(), range=[-0.5, max(len(measured) - 0.5, 0.5)])
     return figure

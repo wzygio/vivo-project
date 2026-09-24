@@ -40,6 +40,14 @@ def test_product_colors_stay_stable_after_filtering():
     assert filtered.data[0].marker.color == expected
 
 
+def test_configured_target_controls_spec_line_and_axis_upper_bound():
+    details = readings().assign(target_seconds=2500)
+    figure = build_chamber_figure(details, chamber='OC2->OC3', product_order=PRODUCTS)
+    assert figure.layout.yaxis.range == (0, 2500)
+    assert [shape.y0 for shape in figure.layout.shapes] == [2500]
+    assert '2500' in str(figure.layout.annotations)
+
+
 def test_missing_values_do_not_create_empty_product_legend():
     details = readings()
     details.loc[details['prod_code'].eq('M678'), 'duration_seconds'] = None
