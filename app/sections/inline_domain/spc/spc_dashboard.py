@@ -1,16 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 from contextlib import nullcontext
 from datetime import date
 from functools import partial
-import hashlib
-import logging
 
 import pandas as pd
 import streamlit as st
 
-from app.components.indicator_cache import build_indicator_product_cache_signature
-from app.manager.render_gate import RenderGate
 from app.charts.inline_domain import (
     PERIOD_LABELS,
     PERIOD_WINDOW_LIMITS,
@@ -19,33 +17,40 @@ from app.charts.inline_domain import (
     create_sheet_points_box_charts,
     resolve_chart_type,
 )
+from app.charts.inline_domain.spc_charts import build_spc_indicator_figures
+from app.components.indicator_cache import build_indicator_product_cache_signature
+from app.manager.render_gate import RenderGate
 from app.sections.inline_domain.shared import (
     INLINE_FACTORY_OPTIONS,
     apply_report_filter,
     excel_bytes,
-    get_available_factories as _shared_available_factories,
     get_options_for_factory_steps,
-    get_steps_for_factory as _shared_steps_for_factory,
     render_cascade_filters,
     render_sheet_oos_decoration_admin,
+)
+from app.sections.inline_domain.shared import (
+    get_available_factories as _shared_available_factories,
+)
+from app.sections.inline_domain.shared import (
+    get_steps_for_factory as _shared_steps_for_factory,
 )
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
     filter_report_by_alert_keys,
 )
 from app.utils.step_labels import format_step_label
-from src.inline_domain.core.spc.spc_calculator import get_period_window_start
-from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts, previous_iso_week_range
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
 from src.inline_domain.application.spc.capability_decoration_service import (
     CpkDecorationResult,
 )
+from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
 from src.inline_domain.core.spc.cpk_decoration import (
     CPK_KEY_COLUMNS,
     capability_decoration_columns,
 )
+from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import (
     read_uploaded_excel_sheet,
@@ -622,35 +627,21 @@ def _build_indicator_render_payload(
     reference_date: date | None = None,
 ) -> dict[str, object]:
     """[RenderGate 阶段1] 纯计算：构建单个指标的全部图表与表格，禁止触碰 st.*。"""
-    reference_date = reference_date or date.today()
-    fig1 = _create_period_overview_chart(
-        sheet_features_df=indicator_features_df,
-        period_capability_df=indicator_capability_df,
-        raw_measurements_df=indicator_raw_df,
-        period_box_source=period_box_source,
-        title=f"{label} | 月周天分布",
-        reference_date=reference_date,
-    )
-    detail_start, _ = previous_iso_week_range(reference_date)
-    detail_points = indicator_raw_df
-    if not detail_points.empty:
-        times = pd.to_datetime(detail_points["sheet_start_time"], errors="coerce")
-        detail_points = detail_points.loc[
-            times.ge(detail_start) & times.lt(pd.Timestamp(reference_date) + pd.Timedelta(days=1))
-        ].copy()
-    chamber_fig, time_fig = _create_sheet_points_box_charts(
-        raw_measurements_df=detail_points,
-        title_prefix=f"{label} | {detail_start:%m-%d} 起",
-        spec_df=indicator_features_df,
+    figures = build_spc_indicator_figures(
+        label=label,
         chart_type=chart_type,
-        date_only=True,
+        indicator_features_df=indicator_features_df,
+        indicator_capability_df=indicator_capability_df,
+        indicator_raw_df=indicator_raw_df,
+        period_box_source=period_box_source,
+        reference_date=reference_date,
+        period_chart_builder=_create_period_overview_chart,
+        detail_chart_builder=_create_sheet_points_box_charts,
     )
     return {
         "label": label,
         "capability_table": _create_period_capability_table(indicator_capability_df),
-        "fig1": fig1,
-        "chamber_fig": chamber_fig,
-        "time_fig": time_fig,
+        **figures,
     }
 
 

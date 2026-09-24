@@ -42,6 +42,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_spc_decoration_admin,
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
+from app.sections.inline_domain.spc.spc_export import render_spc_export
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -112,6 +113,13 @@ render_page_header(
             query_config.end_date,
         )
     ],
+)
+
+render_spc_export(
+    start_date=default_start_dt,
+    end_date=default_end_dt.date(),
+    db_manager=db_manager,
+    step_desc_map=step_desc_map,
 )
 
 try:

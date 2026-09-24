@@ -24,7 +24,7 @@ def build_chamber_figure(
         ))
     for target in details['target_seconds'].dropna().unique():
         figure.add_hline(y=float(target), line_dash='dash', line_color='#ef4444',
-                         annotation_text=f'目标 {target:g} 秒', annotation_position='bottom right')
+                         annotation_text=f'{target:g} 秒', annotation_position='bottom right')
     ticks = measured.iloc[::max(1, (len(measured) + 9) // 10)]
     figure.update_layout(
         title={'text': chamber.replace('->', ' → '), 'x': 0.5}, height=400,

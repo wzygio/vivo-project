@@ -140,7 +140,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
 
     assert load_count == 1
     assert loaded_signatures == [
-        "spc_recent_sheets_point_decoration_v3|scoped=M673"
+        "spc_database_target_v4|scoped=M673"
     ]
     assert header_kwargs["product_cache_scope"] == "M673"
     assert rendered_alerts[0].to_dict("records") == [
