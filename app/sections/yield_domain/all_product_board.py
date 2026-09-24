@@ -19,8 +19,7 @@ def render_product_yield_trends(product_code: str) -> None:
     """Group interaction reruns only this product and reuses application data."""
     if product_code not in ConfigLoader.get_enabled_products():
         return
-    with st.container(border=True):
-        st.markdown(f"**{product_code}**")
+    with st.expander(product_code, expanded=True):
         try:
             with st.spinner(f"正在加载 {product_code} 良率趋势..."):
                 payload = load_product_group_trends(product_code)
