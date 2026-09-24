@@ -28,7 +28,7 @@
 3. SPC 页面已有完整预警实现可作模板：`build_weekly_cpk_alerts()`（`spc_dashboard.py:67`）、`render_cpk_alert_center()`（:120）、`filter_spc_report_by_alerts()`（:153）、`render_cpk_alert_indicator_sections()`（:556，Expander + RenderGate.collect_memoized）。
 4. Yield 页面已有预警中心（`app/components/alert_center.py`）与 Lot 超规扫描（`compute_lot_oos_records`）、良率波动判定（`AbnormalDetector`，阈值：环比翻倍且 >0.1%，或绝对激增 >0.2%），但**告警只返回 `List[str]` 文本**，无结构化记录，无法驱动按 Defect Code 自动出图；该页当前没有"异常项自动展示图像"能力。
 5. `RenderGate`（`app/manager/render_gate.py`）提供 `stage/collect/collect_memoized` 两阶段渲染；`collect_memoized` 签名须含 `build_product_cache_signature` 的产品 revision。
-6. 项目无共享"ISO 上一周"工具函数；`tools/generate_ppa_oos_weekly_summary.py:previous_calendar_week` 返回半开区间 `[上周一 00:00, 本周一 00:00)`，是现成范式。
+6. 当时的 PPA 周报工具采用半开区间 `[上周一 00:00, 本周一 00:00)`；该离线工具已于 2026-09-24 移除，此处仅保留原需求的时间窗口说明，不再作为可调用入口。
 
 ### 2.2 需求审查结论
 

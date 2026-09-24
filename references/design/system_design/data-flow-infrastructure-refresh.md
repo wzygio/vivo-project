@@ -8,6 +8,8 @@
 增量回刷配置更新：2026-09-22。Yield、Inline 共享测量、AOI_RS 与 Q-Time
 统一读取 `application.incremental_refresh_days`，默认 7 天。
 
+各运维入口的用途、命令参数和写入范围见 [项目工具脚本说明](../../domain/overview-project-tools.md)。
+
 ## 1. 刷新由什么触发
 
 系统没有一个自动刷新所有领域原始快照的统一后台循环。刷新发生在数据读取进入
@@ -19,7 +21,7 @@
 | 页面刷新按钮 | 通过 application/composition 调用仓储；Yield、Inline、Q-Time 全窗口重取，窗口与产品/厂别范围见各模块说明 |
 | Q-Time CLI | `tools/refresh_qtime_snapshots.py` 顺序刷新 ARRAY、OLED、TP；默认增量，`--full` 全窗口重取 |
 | Q-Time 计划任务注册脚本 | `tools/register_qtime_snapshot_task.ps1` 默认每天 07:00 调用上述 CLI；可通过 `-At` 调整 |
-| 预警矩阵预计算 | `tools/warm_alert_matrix.py` 计算矩阵并发布状态 JSON；`register_alert_matrix_task.ps1` 默认每天 07:30；调用现有读取链路，不强刷所有原始快照 |
+| 预警矩阵预计算 | `tools/warm_alert_matrix.py` 计算矩阵并发布状态 JSON；`register_alert_matrix_task.ps1` 默认每天 09:02，安排在 09:00 服务重启后；固定时间触发，调用现有读取链路，不强刷所有原始快照 |
 | Inline 重建工具 | `tools/refresh_inline_snapshots.py` 是停写后的原始快照重建工具；默认只列计划，`--apply --writers-stopped` 才删除识别出的原始快照并重建，不是日常增量调度器 |
 | Streamlit 启动脚本 | `run_hidden.vbs → start_streamlit.bat → tools/restart_streamlit.ps1` 验证旧进程退出并重启服务，清空进程内存缓存；本身没有调用原始快照刷新脚本 |
 

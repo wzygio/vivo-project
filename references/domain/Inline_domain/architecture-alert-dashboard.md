@@ -104,7 +104,7 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
 ## 运行方式
 
-Windows 任务 `vivo-project Alert Matrix Warmup` 每天本地时间 07:30 运行
+Windows 任务 `vivo-project Alert Matrix Warmup` 每天本地时间 09:02 运行
 `tools/warm_alert_matrix.py`，使用项目 `.venv/Scripts/pythonw.exe`，工作目录为仓库根目录。
 注册命令：
 
@@ -115,7 +115,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/register_alert_mat
 脚本默认拒绝覆盖同名任务；显式 `-Force` 可更新任务。任务使用当前登录用户的普通权限，
 不存储密码、不显示控制台；支持锁屏运行、唤醒及错过时间后补跑。电脑需要开机，用户需已登录，
 企业数据库网络和 Excel 环境需可用；关机或用户注销时无法按时执行。失败后间隔 15 分钟重试，最多两次；
-同名任务不并行，单次最长两小时。任务触发按系统时区，中国标准时间下为北京时间 07:30。
+同名任务不并行，单次最长两小时。任务触发按系统时区，中国标准时间下为北京时间 09:02，
+安排在每日 09:00 服务重启之后；这是固定时间触发，不是服务健康检查成功后的联动任务。
+预计算进程将状态发布到磁盘，服务重启清除内存缓存时不会删除该快照，页面校验有效后仍可复用。
 
 手动运行：`.venv/Scripts/python.exe tools/warm_alert_matrix.py`。
 `--check` 仅验证输出目录可以创建，不查询数据库。正常运行等价于矩阵查询，不强刷全部源快照，

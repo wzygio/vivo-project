@@ -25,7 +25,7 @@ def specs() -> pd.DataFrame:
 
 
 @pytest.mark.parametrize("database_target, expected_target", [("22.5", 22.5), (None, 28.5)])
-def test_database_target_reaches_points_features_capability_and_all_charts(
+def test_database_target_reaches_charts_but_cpm_uses_spec_midpoint(
     monkeypatch, tmp_path, database_target, expected_target,
 ):
     from app.sections.inline_domain.spc import spc_dashboard
@@ -59,7 +59,7 @@ def test_database_target_reaches_points_features_capability_and_all_charts(
     )
     assert capability["target"].tolist() == [expected_target]
     point_std = pd.Series([22.0, 23.0, 22.0, 23.0]).std()
-    expected_cpm = 15.0 / (6.0 * (point_std ** 2 + (22.5 - expected_target) ** 2) ** 0.5)
+    expected_cpm = (15.0 / (6.0 * point_std)) / 1.8
     assert capability.iloc[0]["cpm"] == pytest.approx(expected_cpm)
 
     payload = spc_dashboard._build_indicator_render_payload(

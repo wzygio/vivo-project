@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from src.shared_kernel.output_paths import OutputLayout
-from tools.indicator_improvement.indicator_improvement_cli import build_parser
 
 
 def test_output_layout_exposes_canonical_artifact_directories(tmp_path: Path) -> None:
@@ -22,10 +21,3 @@ def test_output_layout_creates_every_canonical_directory(tmp_path: Path) -> None
     layout = OutputLayout.from_project_root(tmp_path).ensure()
 
     assert all(path.is_dir() for path in layout.directories())
-
-
-def test_indicator_improvement_cli_defaults_to_reports_directory() -> None:
-    args = build_parser().parse_args([])
-
-    assert args.output_dir == "output/reports/indicator-improvement"
-    assert args.decrypted_dir == "output/decrypted_files/indicator-improvement"

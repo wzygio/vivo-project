@@ -62,7 +62,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 ```
 清洗（start_time→sheet_start_time、类型 coercion、dropna）
   → 排除参数过滤（LOSS 关键字）
-  → 排序去重（prod/factory/sheet/step/param/site 六键 keep="last"）
+  → 按 sheet_start_time 稳定升序排序去重（prod/step/param/sheet/site 五键 keep="last"，同时间保留输入末条）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤
   → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，参数级或整站规则）
   → 时间窗口 [start, end+1d) + factory/step_id/param_name 维度过滤

@@ -69,7 +69,10 @@ class DailyMatrixSnapshot:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(f"{self.path.name}.{uuid4().hex}.tmp")
         try:
-            temporary.write_text(json.dumps(content, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+            temporary.write_text(
+                json.dumps(content, ensure_ascii=False, allow_nan=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
             os.replace(temporary, self.path)
         finally:
             temporary.unlink(missing_ok=True)

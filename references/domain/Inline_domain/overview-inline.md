@@ -48,9 +48,8 @@ Inline 数据域负责面板制造过程中的在线量测监控。应用路径�
 
 > Infrastructure 详细规范见 [`architecture-inline-infrastructure.md`](./architecture-inline-infrastructure.md)。
 
-PNL 指标规格的版本/产品收严分析不属于在线 Inline 运行链路。其 CLI、用例编排和
-专用规格比较规则统一位于 `tools/indicator_improvement/`，只读取离线 Excel 并向
-`output/` 生成可重建报告，不由 `src/inline_domain/composition.py` 装配。
+PNL 指标规格的版本/产品收严离线分析工具已于 2026-09-24 按维护要求移除，
+不属于在线 Inline 运行链路。当前保留的运维工具见 [工具脚本说明](../overview-project-tools.md)。
 
 ---
 
@@ -115,7 +114,6 @@ OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示
 - Sheet OOS 修饰表的 `flag` 为三态：`True` 修饰超规点、`False` 保留真实值、`Delete` 按产品/站点/参数/Sheet 四键从图表点位中排除；修改表内 `sheet_min/max/mean` 不改变计算结果。
 - 修饰表支持标准或企业加密 XLSX；已有文件双重读取失败时必须中止本次报表重建并保留原文件。直接编辑文件后按 ADR-0005 通过页头“刷新缓存”手动生效。
 - 缓存函数只返回原生 payload，ViewModel 在缓存外构造。
-- 指标改善离线工具位于 `tools/indicator_improvement/`；SPC 应用服务不导入或调用它。
 
 ### 4.3 `ctq/ctq_service.py` — CTQ 分布报表
 

@@ -197,7 +197,7 @@ class SpcReportService:
         capability_exempt_param_name_contains: tuple[str, ...] = (),
         capability_decoration_signature: tuple[int, int] = (0, 0),
     ) -> dict[str, object]:
-        """Cache only reload-stable CPM/CPK payload values.
+        """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
         max_entries=16：缓存为进程级共享，可覆盖已启用产品及短期 revision；
         TTL 由 config/global.yaml 的 application.cache_ttl_hours 统一配置：

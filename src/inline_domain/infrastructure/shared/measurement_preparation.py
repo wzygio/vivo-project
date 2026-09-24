@@ -191,8 +191,10 @@ class InlineMeasurementPreparationRepository:
         )
         prepared = prepared.dropna(subset=["sheet_start_time", "param_value"])
         prepared = filter_excluded_param_names(prepared)
-        prepared = prepared.sort_values("sheet_start_time").drop_duplicates(
-            subset=["prod_code", "factory", "sheet_id", "step_id", "param_name", "site_name"],
+        # Factory/equipment are attributes of the winning measurement, not its identity.
+        # Stable sorting keeps the last input row when measurement times are equal.
+        prepared = prepared.sort_values("sheet_start_time", kind="stable").drop_duplicates(
+            subset=["prod_code", "step_id", "param_name", "sheet_id", "site_name"],
             keep="last",
         )
         catalog = self.metadata.get_parameter_catalog(config.prod_code)

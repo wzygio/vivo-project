@@ -1,5 +1,9 @@
 # `extract_ppa_raw_measurements.py` 代码逻辑详解
 
+> 历史说明：该一次性离线工具已于 2026-09-24 按维护要求删除。本文保留为历史分析资料，
+> 下文脚本路径和运行命令已失效，请勿按其执行。现有工具见
+> [项目工具脚本说明](../../../../references/domain/overview-project-tools.md)。
+
 ## 1. 脚本的作用
 
 `tools/extract_ppa_raw_measurements.py` 不连接数据库，也不执行 SQL。它处理的是已经保存在本地的 Parquet 快照文件。

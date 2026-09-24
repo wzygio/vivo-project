@@ -1,6 +1,6 @@
 param(
     [string]$TaskName = "vivo-project Alert Matrix Warmup",
-    [string]$At = "07:30",
+    [string]$At = "09:02",
     [switch]$Force
 )
 
@@ -28,6 +28,6 @@ $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
     -RestartCount 2 -RestartInterval (New-TimeSpan -Minutes 15)
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger `
     -Settings $Settings -Principal $Principal -Force:$Force `
-    -Description "Daily 07:30 alert matrix status snapshot for vivo-project. Requires the user to be logged on for Excel COM." | Out-Null
+    -Description "Daily $At alert matrix status snapshot for vivo-project. Requires the user to be logged on for Excel COM." | Out-Null
 Get-ScheduledTask -TaskName $TaskName | Select-Object TaskName, State
 Get-ScheduledTaskInfo -TaskName $TaskName | Select-Object NextRunTime, LastTaskResult

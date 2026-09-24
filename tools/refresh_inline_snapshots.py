@@ -2,7 +2,7 @@
 
 Default is a read-only plan. --apply --writers-stopped deletes only recognized
 raw snapshot files and rebuilds through repository ports. No Excel is modified.
-Run migrate_snapshot_layout.py before this command.
+Requires snapshots in the current data/inline_domain/<module>/ layout.
 """
 from __future__ import annotations
 
