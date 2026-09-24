@@ -69,6 +69,14 @@ MATRIX_FILTER_KEYS = (
 
 
 def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) -> dict:
+    # Import with the real decorator before stubbing page-local fragments, so
+    # running this file alone cannot leave undecorated components in sys.modules.
+    from app.sections.yield_domain import all_product_board
+
+    monkeypatch.setattr(all_product_board, "render_all_product_yield_board", lambda: None)
+    # These layout probes run without a ScriptRunContext. Execute page-local
+    # fragment bodies directly; browser tests cover actual rerun isolation.
+    monkeypatch.setattr(st, "fragment", lambda func: func)
     st.cache_data.clear()
     from app.sections.inline_domain.monitor import alert_matrix_snapshot
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)

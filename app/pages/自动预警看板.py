@@ -46,16 +46,6 @@ AppSetup.initialize_app()
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
 ALERT_MATRIX_AUTO_OPENED_KEY = "alert_matrix_auto_opened_date"
 
-today_label = pd.Timestamp.today().date().isoformat()
-if (
-    not st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY)
-    and st.session_state.get(ALERT_MATRIX_AUTO_OPENED_KEY) != today_label
-    and has_daily_matrix_snapshot()
-):
-    st.session_state[ALERT_MATRIX_LOADED_STATE_KEY] = True
-    st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
-
-
 def _load_alert_matrix() -> None:
     st.session_state[ALERT_MATRIX_LOADED_STATE_KEY] = True
 
@@ -63,7 +53,7 @@ def _load_alert_matrix() -> None:
 def _collapse_alert_matrix() -> None:
     st.session_state.pop(ALERT_MATRIX_LOADED_STATE_KEY, None)
     st.session_state.pop(MATRIX_SELECTION_STATE_KEY, None)
-    st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
+    st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = pd.Timestamp.today().date().isoformat()
 
 
 def _render_matrix_action_button() -> None:
@@ -84,26 +74,36 @@ def _render_matrix_action_button() -> None:
         )
 
 
-st.subheader("🚦 全指标预警看板")
-with st.expander("全指标状态总览", expanded=True):
-    # 筛选条常驻（与下方「超规片自动预警」控制台同观感）：未加载时也可先选
-    # 条件，点击加载后按当前选择客户端切片；widget key 只在此渲染一处，
-    # 已加载分支经 filter_selection 透传给矩阵，不重复渲染。
-    # 操作按钮（加载/收起）与筛选三件套同处一行最右列（参照 Q-Time 页布局）。
-    matrix_filter_selection = render_alert_matrix_filter_bar(
-        SessionManager.AVAILABLE_PRODUCTS,
-        action_renderer=_render_matrix_action_button,
-    )
-    # 管理入口不依赖本会话是否查询过；切换 admin URL 后可直接定向失效。
-    # 查询仍使用跨会话共享的单元格缓存，admin 只控制操作面板的显示。
-    render_matrix_refresh_controls()
-    if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
-        db_manager = DatabaseManager()
-        render_alert_matrix_board(
-            db_manager=db_manager,
-            step_desc_map=get_cached_step_description_map(db_manager),
-            filter_selection=matrix_filter_selection,
-            show_refresh_controls=False,
-        )
+@st.fragment
+def render_alert_matrix_panel() -> None:
+    """Keep matrix controls and slow details in one sibling of the Yield fragment."""
+    today_label = pd.Timestamp.today().date().isoformat()
+    if (
+        not st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY)
+        and st.session_state.get(ALERT_MATRIX_AUTO_OPENED_KEY) != today_label
+        and has_daily_matrix_snapshot()
+    ):
+        st.session_state[ALERT_MATRIX_LOADED_STATE_KEY] = True
+        st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
 
+    st.subheader("🚦 全指标预警看板")
+    with st.expander("全指标状态总览", expanded=True):
+        # 筛选、查询、刷新和详情控件都在同一 fragment 内创建，交互只重跑矩阵。
+        matrix_filter_selection = render_alert_matrix_filter_bar(
+            SessionManager.AVAILABLE_PRODUCTS,
+            action_renderer=_render_matrix_action_button,
+        )
+        # 管理入口不依赖本会话是否查询过；查询仍使用跨会话共享的单元格缓存。
+        render_matrix_refresh_controls()
+        if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
+            db_manager = DatabaseManager()
+            render_alert_matrix_board(
+                db_manager=db_manager,
+                step_desc_map=get_cached_step_description_map(db_manager),
+                filter_selection=matrix_filter_selection,
+                show_refresh_controls=False,
+            )
+
+
+render_alert_matrix_panel()
 render_all_product_yield_board()

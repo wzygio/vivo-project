@@ -44,7 +44,7 @@ def test_matrix_route_has_no_summary_service_dependency(isolated_pages, monkeypa
     monkeypatch.setattr(composition, "build_oos_history_service", forbidden)
     app = AppTest.from_file(str(PAGES / "自动预警看板.py")).run()
     assert not app.exception
-    assert [item.value for item in app.subheader] == ["🚦 全指标预警看板"]
+    assert [item.value for item in app.subheader] == ["🚦 全指标预警看板", "全产品良率看板"]
     assert app.button(key="btn_load_alert_matrix")
     assert not any(button.key in {"btn_monitor_query_submit", "cpk_monitor_query_submit"} for button in app.button)
 
