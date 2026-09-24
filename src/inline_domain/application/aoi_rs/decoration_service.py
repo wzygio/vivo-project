@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -12,9 +12,13 @@ import pandas as pd
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     AOI_RS_OOS_DECORATION_FILE_NAME,
     AOI_RS_OOS_KEY_COLUMNS,
-    apply_aoi_rs_decoration,
     build_aoi_rs_oos_detail,
 )
+from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
+    apply_factory_scoped_decoration,
+    build_decorated_period_trend_df,
+)
+from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
 )
@@ -48,6 +52,8 @@ def prepare_aoi_rs_decoration(
     decision_signature: str = "",
     now: datetime | None = None,
     decoration_port: SheetDecorationPort | None = None,
+    rs_details_df: pd.DataFrame | None = None,
+    special_factories: Iterable[str] = (),
 ) -> AoiRsDecorationResult:
     detail = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
     if persist:
@@ -86,13 +92,15 @@ def prepare_aoi_rs_decoration(
             decisions,
             AOI_RS_OOS_KEY_COLUMNS,
         )
-    lot_decorated, sheet_decorated = apply_aoi_rs_decoration(
+    lot_decorated, sheet_decorated = apply_factory_scoped_decoration(
         lot_points_df,
         sheet_points_df,
         spec_df,
         prod_code,
         decoration,
         exempt_param_name_contains,
+        rs_details_df=rs_details_df,
+        special_factories=special_factories,
     )
     return AoiRsDecorationResult(
         lot_decorated,
@@ -100,4 +108,14 @@ def prepare_aoi_rs_decoration(
         decoration,
         product_dir / AOI_RS_OOS_DECORATION_FILE_NAME,
         prod_code,
+    )
+
+
+def build_aoi_rs_period_trend(
+    rs_details_df: pd.DataFrame, pass_through_df: pd.DataFrame, end_date: date,
+) -> pd.DataFrame:
+    """Build page/PDF trends with the configured factory scope."""
+    return build_decorated_period_trend_df(
+        rs_details_df, pass_through_df, end_date,
+        special_factories=ConfigLoader.get_aoi_rs_special_decoration_factories(),
     )

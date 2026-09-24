@@ -18,6 +18,13 @@ auto_decoration:
   exempt_param_name_contains:
     - "PPA"
 
+# AOI_RS 特殊顺序修饰：Sheet 半规格截断 → Lot 归零 → 周/日限幅。
+# 仅对列表中的厂别启用；[] 关闭特殊修饰，其他厂别沿用常规修饰。
+aoi_rs:
+  special_decoration:
+    factories:
+      - "OLED"
+
 # AOI_TT Particle Size：默认按站点比例稳定生成；关闭后改读 ARRAY/TP 缺陷明细表。
 aoi_tt:
   particle_size:

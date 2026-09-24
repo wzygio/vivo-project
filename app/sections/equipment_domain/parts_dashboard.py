@@ -17,13 +17,14 @@ PARTS_TABLE_COLUMN_ORDER = (
 )
 
 
-def _format_mixed_value(value: object) -> str:
+def _format_mixed_value(value: object, decimals: int = 2) -> str:
     if pd.isna(value):
         return ""
     if isinstance(value, (date, datetime, pd.Timestamp)):
         return value.strftime("%Y-%m-%d")
     if isinstance(value, Real):
-        return f"{value:.2f}".rstrip("0").rstrip(".")
+        formatted = f"{value:.{decimals}f}"
+        return formatted.rstrip("0").rstrip(".") if decimals else formatted
     return str(value)
 
 
@@ -44,8 +45,14 @@ def _prepare_parts_table(df: pd.DataFrame) -> pd.DataFrame:
             numeric = pd.to_numeric(result[column], errors="coerce")
             result[column] = (
                 numeric if numeric.notna().equals(result[column].notna())
-                else result[column].map(_format_mixed_value)
+                else result[column].map(
+                    lambda value: _format_mixed_value(
+                        value, decimals=0 if column == "测量值" else 2,
+                    )
+                )
             )
+    if "测量值" in result and pd.api.types.is_numeric_dtype(result["测量值"]):
+        result["测量值"] = result["测量值"].round().astype("Int64")
     return result
 
 

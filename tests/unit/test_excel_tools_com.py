@@ -29,8 +29,10 @@ class FakeExcel:
         self.quit_calls = 0
         self.Workbooks = type("FakeWorkbooks", (), {"Open": self._open})()
 
-    def _open(self, path: str, ReadOnly: bool = False):
+    def _open(self, path: str, ReadOnly: bool = False, UpdateLinks=None):
         self.open_calls.append((path, ReadOnly))
+        assert UpdateLinks == 0
+        assert self.AutomationSecurity == 3
         if self.open_error is not None:
             raise self.open_error
         return self.workbook

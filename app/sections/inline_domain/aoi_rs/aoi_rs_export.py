@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from threading import Event, Lock
+from threading import Lock
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -40,8 +40,8 @@ logger = logging.getLogger(__name__)
 EXPORT_BATCH_SIZE = 24
 MAX_REPORT_BYTES = 200 * 1024 * 1024
 PRODUCT_SELECTION_KEY = "aoi_rs_export_pdf_products"
-FACTORY_SELECTION_KEY = "aoi_rs_export_pdf_factories"
-EXPORT_STATUS_KEY = "aoi_rs_export_status"
+FACTORY_SELECTION_KEY = "aoi_rs_export_pdf_factories_v2"
+EXPORT_STATUS_KEY = "aoi_rs_pdf_generation_status"
 
 
 class AoiRsExportError(ValueError):
@@ -52,17 +52,15 @@ class AoiRsExportError(ValueError):
 class _PreparedPdf:
     data: bytes
     filename: str
-    ready: Event
 
 
 @dataclass
 class _ExportStatus:
-    """Per-session status shared by the download thread and the UI fragment."""
+    """Retain generation status and the last completed PDF in the current session."""
 
     _value: tuple[str, str] = ("idle", "")
     _lock: Lock = field(default_factory=Lock, repr=False)
     _pdf: _PreparedPdf | None = field(default=None, repr=False)
-    _download_ready: Event = field(default_factory=Event, repr=False)
 
     def set(self, kind: str, message: str) -> None:
         with self._lock:
@@ -76,44 +74,31 @@ class _ExportStatus:
         with self._lock:
             if self._value[0] == "busy":
                 return False
-            self._value = ("busy", "正在生成 RS 报告，请等待下载完成。")
+            self._value = ("busy", "正在生成 RS 报告，请稍候。")
             # Keep the last completed PDF downloadable while a new job runs.
-            self._download_ready = Event()
             return True
 
     def publish(self, data: bytes, filename: str) -> None:
         with self._lock:
-            self._pdf = _PreparedPdf(data, filename, self._download_ready)
+            self._pdf = _PreparedPdf(data, filename)
 
     def get_pdf(self) -> _PreparedPdf | None:
         with self._lock:
             return self._pdf
 
-    def mark_download_ready(self, pdf: _PreparedPdf) -> None:
-        # A late fragment for an older PDF must not signal a newer download job.
-        pdf.ready.set()
 
-    def wait_download_ready(self) -> bool:
-        with self._lock:
-            ready = self._download_ready
-        return ready.wait(timeout=30)
-
-
-@st.fragment(run_every=2)
 def _render_export_status(status: _ExportStatus) -> None:
     pdf = status.get_pdf()
     if pdf is not None:
-        # A native bytes download keeps a session reference to the generated PDF.
-        # Deferred-only media can otherwise be collected during fragment reruns.
         st.download_button(
-            "再次下载报告（PDF）",
+            "下载报告（PDF）",
             data=pdf.data,
             file_name=pdf.filename,
             mime="application/pdf",
             key="aoi_rs_pdf_ready_download",
             on_click="ignore",
+            icon=":material/download:",
         )
-        status.mark_download_ready(pdf)
     kind, message = status.get()
     if kind == "error":
         st.error(message)
@@ -264,7 +249,7 @@ def render_aoi_rs_export(
     else:
         st.session_state[PRODUCT_SELECTION_KEY] = list(enabled)
     if FACTORY_SELECTION_KEY not in st.session_state:
-        st.session_state[FACTORY_SELECTION_KEY] = list(INLINE_FACTORY_OPTIONS)
+        st.session_state[FACTORY_SELECTION_KEY] = ["ARRAY"]
     else:
         previous_factories = st.session_state[FACTORY_SELECTION_KEY]
         retained_factories = [
@@ -298,18 +283,15 @@ def render_aoi_rs_export(
             f"待导出 {len(products)} 款产品，厂别：{'、'.join(factories)}。"
             "导出所选范围的主报表，不含预警区，不受下方查询筛选影响。"
             "PDF 内每个指标一行三图（月周天、By Lot、By Sheet），可独立打开；"
-            "生成后自动清理临时图片，仅下载报告。"
+            "点击生成报告后，再点击下载按钮保存；临时图片会自动清理。"
         )
 
-        # Reloads can retain the earlier ZIP status class in an existing session.
-        if EXPORT_STATUS_KEY not in st.session_state or not hasattr(
-            st.session_state[EXPORT_STATUS_KEY], "publish"
-        ):
+        if EXPORT_STATUS_KEY not in st.session_state:
             st.session_state[EXPORT_STATUS_KEY] = _ExportStatus()
         status = st.session_state[EXPORT_STATUS_KEY]
         filename = f"AOI_RS_{start_date}_{end_date}.pdf"
 
-        def download() -> bytes:
+        def generate() -> None:
             def load_report(product: str) -> AoiRsReportViewModel:
                 if product not in ConfigLoader.get_enabled_products():
                     raise AoiRsExportError("导出产品范围已变化，请刷新页面后重试。")
@@ -333,40 +315,39 @@ def render_aoi_rs_export(
                 )
 
             if not status.start():
-                raise RuntimeError("已有 RS 报告正在生成，请等待完成。")
+                return
             try:
-                result = build_aoi_rs_pdf(
-                    products,
-                    factories=factories,
-                    load_report=load_report,
-                    start_date=start_date,
-                    end_date=end_date,
-                    step_desc_map=step_desc_map,
-                )
-                status.publish(result, filename)
-                if not status.wait_download_ready():
-                    raise AoiRsExportError(
-                        "报告已生成，请点击“再次下载报告（PDF）”保存。"
+                with st.spinner("正在生成 RS 报告，请稍候。"):
+                    result = build_aoi_rs_pdf(
+                        products,
+                        factories=factories,
+                        load_report=load_report,
+                        start_date=start_date,
+                        end_date=end_date,
+                        step_desc_map=step_desc_map,
                     )
+                status.publish(result, filename)
+                status.set("success", "RS 报告已生成，临时图片已清理。请点击下载按钮保存。")
             except Exception as exc:
-                logger.exception("AOI RS image export failed for %s", products)
+                logger.exception("AOI RS report generation failed for %s", products)
                 message = (
                     str(exc)
                     if isinstance(exc, AoiRsExportError)
-                    else "RS 报告导出失败，请稍后重试。"
+                    else "RS 报告生成失败，请稍后重试。"
                 )
                 status.set("error", message)
-                raise RuntimeError(message) from None
-            status.set("success", "RS 报告已生成，临时图片已清理。")
-            return result
+                return
+            finally:
+                # Streamlit cancellation inherits BaseException and must propagate.
+                # Restore a retryable state even when the script is interrupted.
+                if status.get()[0] == "busy":
+                    status.set("error", "报告生成已中断，请重新生成。")
 
-        st.download_button(
-            "下载 RS 报告（PDF）",
-            data=download,
-            file_name=filename,
-            mime="application/pdf",
-            key="aoi_rs_pdf_download",
-            on_click="ignore",
-            icon=":material/download:",
+        st.button(
+            "生成报告",
+            key="aoi_rs_pdf_generate",
+            on_click=generate,
+            disabled=status.get()[0] == "busy",
+            icon=":material/description:",
         )
         _render_export_status(status)

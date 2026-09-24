@@ -181,15 +181,38 @@ def test_latest_inspection_is_scoped_to_all_five_business_dimensions(dimension: 
     assert sorted(details.tt_qty.tolist()) == [309, 354]
 
 
-def test_reinspection_does_not_split_by_lot_equipment_or_site() -> None:
+def test_reinspection_does_not_split_by_lot_or_equipment() -> None:
     raw = pd.DataFrame([
         _tt_fact(),
         _tt_fact(start_time="2026-09-15 11:32:35", param_value=309,
-                 lot_id="UPDATED-LOT", unit_id="NEW-UNIT", site_name="OTHER-SITE"),
+                 lot_id="UPDATED-LOT", unit_id="NEW-UNIT"),
     ])
     details = _repository_for(raw).get_tt_details(_query())
     assert details.tt_qty.tolist() == [309]
     assert details.lot_id.tolist() == ["UPDATED-LOT"]
+
+
+@pytest.mark.parametrize("site", ["G", None])
+def test_array_reinspection_keeps_latest_per_site_before_sheet_aggregation(site) -> None:
+    raw = pd.DataFrame([
+        _tt_fact(site_name=site, start_time="2026-09-15 11:32:35", param_value=309),
+        _tt_fact(site_name=site),
+        _tt_fact(site_name="OTHER-SITE", param_value=10),
+    ])
+    details = _repository_for(raw).get_tt_details(_query())
+
+    assert sorted(details.tt_qty.tolist()) == [10, 309]
+    assert build_sheet_point_df(details).tt_qty.tolist() == [319]
+
+
+@pytest.mark.parametrize("factory", ["OLED", "TP"])
+def test_other_factories_preserve_existing_sheet_level_reinspection(factory: str) -> None:
+    raw = pd.DataFrame([
+        _tt_fact(factory=factory),
+        _tt_fact(factory=factory, site_name="OTHER-SITE",
+                 start_time="2026-09-15 11:32:35", param_value=309),
+    ])
+    assert _repository_for(raw).get_tt_details(_query()).tt_qty.tolist() == [309]
 
 
 def test_invalid_and_out_of_window_dates_do_not_displace_latest_eligible_inspection() -> None:

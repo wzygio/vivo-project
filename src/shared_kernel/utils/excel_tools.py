@@ -7,13 +7,35 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Mapping, Optional
+from zipfile import BadZipFile
 
 import pandas as pd
 import streamlit as st  # [新增] 引入 streamlit
 
 from src.shared_kernel.config import ConfigLoader
+
+
+def read_uploaded_excel_sheet(file_bytes: bytes | memoryview) -> pd.DataFrame:
+    """Read an upload's first sheet, including enterprise-encrypted XLSX files.
+
+    Ordinary XLSX stays in memory. Excel COM needs a real, closed file, so its
+    fallback uses a unique temporary directory that is removed on either outcome.
+    No user-provided filename is used for local paths.
+    """
+    try:
+        return pd.read_excel(BytesIO(file_bytes), engine="openpyxl")
+    except (BadZipFile, ValueError):
+        logging.info("[excel_tools] Uploaded workbook requires Excel COM reading")
+
+    staging_root = ConfigLoader.get_project_root() / "output" / "tmp"
+    staging_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="excel-upload-", dir=staging_root) as directory:
+        upload_path = Path(directory) / "upload.xlsx"
+        upload_path.write_bytes(file_bytes)
+        return _read_encrypted_xlsx_via_com(upload_path)
 
 
 def _normalize_excel_com_value(value: object) -> object:
@@ -442,7 +464,8 @@ def _read_encrypted_xlsx_via_com(xlsx_path: Path, sheet_name: Optional[str] = No
         excel = win32com.client.DispatchEx("Excel.Application")
         excel.Visible = False
         excel.DisplayAlerts = False
-        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
+        excel.AutomationSecurity = 3  # Disable macros in uploaded workbooks.
+        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), UpdateLinks=0, ReadOnly=True)
         if sheet_name:
             # sheet 缺失与明文读取语义一致：返回空 DataFrame 而非抛错
             if sheet_name not in [worksheet.Name for worksheet in wb.Worksheets]:

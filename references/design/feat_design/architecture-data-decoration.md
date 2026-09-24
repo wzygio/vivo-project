@@ -95,7 +95,29 @@ Infrastructure；必须有独立策略版本和回归测试，不能借“源校
 | Yield Sheet/Lot | `core/sheet_lot/overrides.py` | `YieldAnalysisService` | `infrastructure/rate_override_repository.py` |
 | Inline 源校正 | `core/shared/measurement_correction.py` | 组合根注入 | 测量快照仓储调用注入的纯函数 |
 
-## 6. 新增或评审检查表
+## 6. AOI_RS 顺序修饰（2026-09-24）
+
+- 特殊规则独立位于 `core/aoi_rs/aoi_rs_special_decoration.py`；厂别范围由
+  `config/domain/inline_domain.yaml` 的 `aoi_rs.special_decoration.factories` 配置，
+  默认 `["OLED"]`，`[]` 表示全部关闭，可列出多个厂别。名称去除首尾空格并忽略大小写。
+  以下顺序规则仅适用于名单内厂别；其余厂别继续在 Sheet/Lot 图各自执行原有三态
+  截断（月周天仍用源明细，不受 Sheet/Lot 回写和 1.3 倍限幅影响）。
+- 按产品、厂别、站点和 RS Code 隔离修饰。先按 Sheet 汇总，超过
+  `SHEET_ID/GLASS_ID` 规格的点截断至 `[0, 0.5 × spec]`，随机值由稳定业务键生成。
+- 将 Sheet 总量按原始明细数量占比分配到报表投影，保留时间分布；以该投影重算 Lot
+  分子，过货 distinct Sheet 分母不变。仍超过 `LOT_RATIO` 的 Lot 及其全部 Sheet
+  归零，同步影响月周天汇总。
+- 月度密度按上述投影计算；周/日密度超过对应月度的 1.3 倍时截断至上限。
+  跨月周取周末所属月份，未结束周取报表截止日所属月份。缺失或无有效分母的月度
+  基准不触发限幅。此步只改变趋势投影（同步其展示分子），不反向修改 Sheet 明细。
+- Sheet/Lot 继续使用三态 flag 与参数豁免。`False` 跳过本阶段自动修饰；Lot 的
+  `Delete` 仅删除 Lot 图点，Sheet 的 `Delete` 同时从后续分子中排除该片；分母不变。
+  上游保留的 Sheet 仍可能随下游超规 Lot 归零。
+- 源明细仍用于 OOS 台账与追溯，源快照不变；应用服务只向页面和 PDF 共用的绘图
+  入口提供明细投影及最终 Sheet/Lot 点帧。缓存键包含修饰策略版本和厂别名单，
+  修改配置后下次查询即使用新范围。
+
+## 7. 新增或评审检查表
 
 - 业务动作、默认值和匹配键是否只定义在 Core？
 - Core 是否完全没有 Excel、COM、数据库、Parquet、文件路径和 Infrastructure 依赖？

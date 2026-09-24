@@ -11,6 +11,9 @@ from src.inline_domain.application.ports.measurement_snapshot import (
     MeasurementMetadataPort,
     MeasurementSnapshotPort,
 )
+from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+    keep_latest_measurements,
+)
 TT_DETAIL_COLUMNS = [
     "factory", "prod_code", "start_time", "sheet_id", "lot_id",
     "step_id", "tt_name", "tt_qty",
@@ -6052,12 +6055,18 @@ class AoiTtRepository:
         if query.tt_name:
             details = details[details["param_name"].eq(query.tt_name)]
 
-        # ARRAY sheet_start_time (OLED/TP glass_start_time) is normalized to
-        # start_time by the shared loader. Reinspection replaces the old count;
-        # lot, equipment and site changes do not create another TT observation.
-        details = details.sort_values("start_time", kind="stable").drop_duplicates(
-            subset=["prod_code", "factory", "step_id", "param_name", "sheet_id"],
-            keep="last",
+        # ARRAY (eda.spc_tzbjx_array) reinspection is scoped to each site.
+        # Keep OLED/TP's existing sheet-level rule. Source snapshots stay intact.
+        keys = ["prod_code", "factory", "step_id", "param_name", "sheet_id"]
+        array = details["factory"].eq("ARRAY")
+        details = pd.concat(
+            [
+                keep_latest_measurements(
+                    details.loc[array], keys + ["site_name"], "start_time",
+                ),
+                keep_latest_measurements(details.loc[~array], keys, "start_time"),
+            ],
+            ignore_index=True,
         )
 
         return (

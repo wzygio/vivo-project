@@ -90,7 +90,7 @@ class MWDTrendProcessor:
         panel_details_df: pd.DataFrame,
         config: AppConfig,
         modifier_targets: Dict[str, Dict[str, float]] | None = None,
-        volatility: float = 0.3,
+        volatility: float = 0.2,
         target_end_date: dt | None = None,
     ) -> Dict[str, pd.DataFrame] | None:
         """Create Code trends driven by the specified monthly loss rates."""

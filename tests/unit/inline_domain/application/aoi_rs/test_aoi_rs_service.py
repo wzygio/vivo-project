@@ -168,6 +168,7 @@ def test_service_surfaces_loader_exception_without_caching(monkeypatch) -> None:
 
 def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
     """修饰在 service 层完成（D4）：payload 直接给出图表就绪的修饰后点帧。"""
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
     spec_df = pd.DataFrame(
         [
             {
@@ -192,28 +193,31 @@ def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
     )
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
 
+    source = _details_df()
+    original = source.copy(deep=True)
     view_model = AoiRsReportService.get_aoi_rs_report_data(
-        _data_port=_data_port(_details_df(), _pass_df(), spec_df),
+        _data_port=_data_port(source, _pass_df(), spec_df),
         query_config_json=_config_json(),
         snapshot_signature="clip-test",
     )
 
-    # 原始明细保持原值（源数据不修饰）
+    # 源事实不变，前端明细使用投影，保证月周天汇总接续 Sheet/Lot 修饰。
+    pd.testing.assert_frame_equal(source, original)
     details = view_model.rs_details_df
-    assert details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0] == 3
 
     # By Sheet：rs_qty=3 超过 spec=2，被截断到线内；spec 列不外泄
     sheet_points = view_model.sheet_points_df
     a1_sheet = sheet_points[sheet_points["rs_code"] == "A1PPS"]
     assert not a1_sheet.empty
-    assert a1_sheet["rs_qty"].iloc[0] < 2.0
+    assert 0 <= a1_sheet["rs_qty"].iloc[0] <= 1.0
+    assert details[details["rs_code"] == "A1PPS"]["code_qty"].iloc[0] == a1_sheet["rs_qty"].iloc[0]
     assert "spec" not in sheet_points.columns
 
-    # By Lot：value = 3/1 = 3 超过 spec=2，被截断到线内
+    # By Lot：Sheet 截断后已低于 spec=2，保留重算结果。
     lot_points = view_model.lot_points_df
     a1_lot = lot_points[lot_points["rs_code"] == "A1PPS"]
     assert not a1_lot.empty
-    assert a1_lot["value"].iloc[0] < 2.0
+    assert a1_lot["value"].iloc[0] == a1_sheet["rs_qty"].iloc[0]
     assert "spec" not in lot_points.columns
 
     # 无规格的 Code 保持真实值
@@ -348,3 +352,117 @@ def test_filtered_query_does_not_write_derived_parquet(monkeypatch) -> None:
     )
 
     assert updates == []
+
+
+def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None:
+    from datetime import date
+    from app.charts.inline_domain import aoi_rs_charts
+
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+
+    source = _details_df().iloc[[0]].copy()
+    source["code_qty"] = 8
+    source["start_time"] = pd.Timestamp("2026-08-09")
+    companion = source.assign(sheet_id="SHT-A02", lot_id="LOT-A2", code_qty=1)
+    source = pd.concat([source, companion], ignore_index=True)
+    throughput = source.drop(columns=["rs_code", "code_qty"])
+    spec = _chart_spec_df()
+    spec.loc[spec.type_flag.eq("SHEET_ID"), "spec"] = 10
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    report = AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=_data_port(source, throughput, spec),
+        query_config_json=_config_json(), snapshot_signature="sequential-render",
+    )
+    assert report.rs_details_df.code_qty.tolist() == [0, 1]
+    assert report.sheet_points_df.rs_qty.tolist() == [0, 1]
+    assert report.lot_points_df.value.tolist() == [0, 1]
+    assert source.code_qty.tolist() == [8, 1]
+    trends = []
+    original = aoi_rs_charts.create_aoi_rs_trend_chart
+
+    def capture(**kwargs):
+        trends.append(kwargs["trend_df"])
+        return original(**kwargs)
+
+    monkeypatch.setattr(aoi_rs_charts, "create_aoi_rs_trend_chart", capture)
+    groups = list(aoi_rs_charts.iter_aoi_rs_chart_groups(
+        **vars(report), end_date=date(2026, 8, 10),
+    ))
+    assert len(groups) == 1 and len(groups[0].figures) == 3
+    assert trends[0].value.eq(.5).all()
+
+
+@pytest.mark.parametrize("sheet_limit", [2., 10.])
+def test_default_oled_only_special_rules_and_factory_config_invalidates_cache(
+    _tmp_project_root, sheet_limit,
+) -> None:
+    import yaml
+
+    source = pd.concat([
+        _details_df().iloc[[0]].assign(factory=factory, code_qty=8)
+        for factory in ["ARRAY", "OLED", "TP"]
+    ], ignore_index=True)
+    original = source.copy(deep=True)
+    spec = pd.concat([
+        _chart_spec_df().assign(factory=factory)
+        for factory in ["ARRAY", "OLED", "TP"]
+    ], ignore_index=True)
+    spec.loc[spec.type_flag.eq("SHEET_ID"), "spec"] = sheet_limit
+    calls = []
+    port = _data_port(source, source, spec)
+
+    def load(_query):
+        calls.append(1)
+        return source
+
+    port.get_rs_details = load
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    config_path = _tmp_project_root / "config/domain/inline_domain.yaml"
+    config_path.parent.mkdir(parents=True)
+
+    for factories in [["OLED"], ["ARRAY", "TP"], []]:
+        config_path.write_text(yaml.safe_dump({
+            "aoi_rs": {"special_decoration": {"factories": factories}},
+        }), encoding="utf-8")
+        report = AoiRsReportService.get_aoi_rs_report_data(
+            _data_port=port, query_config_json=_config_json(), snapshot_signature="factory-toggle",
+        )
+        for factory in ["ARRAY", "OLED", "TP"]:
+            lot = report.lot_points_df.set_index("factory").loc[factory, "value"]
+            sheet = report.sheet_points_df.set_index("factory").loc[factory, "rs_qty"]
+            detail = report.rs_details_df.set_index("factory").loc[factory, "code_qty"]
+            if factory in factories:
+                assert 0 <= sheet <= 1
+                assert lot == sheet == detail
+                if sheet_limit == 10:
+                    assert lot == 0
+            else:
+                assert 1.7 <= lot <= 1.9
+                assert (1.7 <= sheet <= 1.9) if sheet_limit == 2 else sheet == 8
+                assert detail == 8
+    assert len(calls) == 3  # no explicit cache clear between configuration changes
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_period_cap_reads_same_factory_configuration_for_page_and_pdf(monkeypatch) -> None:
+    from datetime import date
+    from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
+
+    frames = []
+    for factory in ["ARRAY", "OLED"]:
+        frames.extend([
+            _details_df().iloc[[0]].assign(factory=factory, code_qty=10,
+                                          start_time=pd.Timestamp("2026-08-01")),
+            _details_df().iloc[[0]].assign(factory=factory, code_qty=0, sheet_id="OTHER",
+                                          start_time=pd.Timestamp("2026-08-09")),
+        ])
+    source = pd.concat(frames, ignore_index=True)
+    for factories in [["OLED"], ["ARRAY"], []]:
+        monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: factories)
+        trend = build_aoi_rs_period_trend(source, source, date(2026, 8, 10))
+        for factory in ["ARRAY", "OLED"]:
+            rows = trend[trend.factory.eq(factory)]
+            assert rows[rows.period_type.eq("month")].value.iloc[0] == 5
+            for period_type in ["week", "day"]:
+                maximum = rows[rows.period_type.eq(period_type)].value.max()
+                assert maximum == (6.5 if factory in factories else 10)

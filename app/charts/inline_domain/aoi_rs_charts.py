@@ -19,8 +19,8 @@ from app.charts.inline_domain import (
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
     build_period_throughput_df,
-    build_period_trend_df,
 )
+from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
 
 
 def create_aoi_rs_trend_chart(
@@ -135,7 +135,7 @@ def iter_aoi_rs_chart_groups(
     if rs_details_df.empty or indicators_df.empty:
         return
     indicators_df = indicators_df.drop_duplicates(["factory", "step_id", "rs_code"])
-    trend_df = build_period_trend_df(rs_details_df, pass_through_df, end_date)
+    trend_df = build_aoi_rs_period_trend(rs_details_df, pass_through_df, end_date)
     throughput_df = build_period_throughput_df(rs_details_df, pass_through_df, end_date)
     lot_df = lot_points_df
     sheet_df = sheet_points_df

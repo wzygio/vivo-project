@@ -39,7 +39,7 @@ _CHART_POINT_META = {
 }
 
 
-def _normalized_points(
+def normalize_aoi_rs_points(
     attached_df: pd.DataFrame, chart_kind: str, prod_code: str
 ) -> pd.DataFrame:
     """把图表点帧归一化为 (key..., point_id, value, spec) 结构。
@@ -55,6 +55,7 @@ def _normalized_points(
     result["point_id"] = result[id_col].fillna("").astype(str)
     result["chart_kind"] = chart_kind
     result["value"] = pd.to_numeric(result[value_col], errors="coerce")
+    result["spec"] = pd.to_numeric(result["spec"], errors="coerce")
     # 预警需要按上一 ISO 周筛选：sheet/lot 的起始时间来自点帧聚合的 first_start_time
     result["sheet_start_time"] = pd.to_datetime(
         result.get("first_start_time"), errors="coerce"
@@ -72,7 +73,7 @@ def build_aoi_rs_oos_detail(
     frames: list[pd.DataFrame] = []
     for chart_kind, points_df in (("lot", lot_points_df), ("sheet", sheet_points_df)):
         attached = attach_spec_values(points_df, spec_df, chart_kind=chart_kind)
-        normalized = _normalized_points(attached, chart_kind, prod_code)
+        normalized = normalize_aoi_rs_points(attached, chart_kind, prod_code)
         if normalized.empty:
             continue
         oos = normalized[
@@ -104,7 +105,7 @@ def _apply_chart_decoration(
     if attached.empty:
         return attached.drop(columns=["spec"], errors="ignore")
 
-    normalized = _normalized_points(attached, chart_kind, prod_code)
+    normalized = normalize_aoi_rs_points(attached, chart_kind, prod_code)
     chart_flags = (
         decoration_df[decoration_df["chart_kind"].astype(str) == chart_kind]
         if not decoration_df.empty and "chart_kind" in decoration_df.columns

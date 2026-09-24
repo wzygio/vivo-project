@@ -3,8 +3,8 @@ from __future__ import annotations
 from contextlib import nullcontext
 from datetime import date
 from functools import partial
-from io import BytesIO
 import hashlib
+import logging
 
 import pandas as pd
 import streamlit as st
@@ -47,7 +47,10 @@ from src.inline_domain.core.spc.cpk_decoration import (
     capability_decoration_columns,
 )
 from src.shared_kernel.config import ConfigLoader
-from src.shared_kernel.utils.excel_tools import replace_workbook_sheet
+from src.shared_kernel.utils.excel_tools import (
+    read_uploaded_excel_sheet,
+    replace_workbook_sheets,
+)
 
 SPC_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
 CPK_ALERT_THRESHOLD = 1.33
@@ -473,22 +476,27 @@ def render_capability_decoration_admin(
                     width="stretch",
                 ):
                     try:
-                        uploaded_df = pd.read_excel(BytesIO(uploaded_file.getbuffer()))
+                        uploaded_df = read_uploaded_excel_sheet(uploaded_file.getbuffer())
                         required_columns = {*CPK_KEY_COLUMNS, corrected_column, "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
                             return
 
-                        replace_workbook_sheet(
+                        write_result = replace_workbook_sheets(
                             decoration_result.decoration_path,
-                            decoration_result.decoration_sheet,
-                            uploaded_df,
+                            {decoration_result.decoration_sheet: uploaded_df},
                         )
+                        if not write_result.written:
+                            st.error(f"保存 {metric_label} 修饰表失败：{write_result.error}")
+                            return
                         st.success(f"{metric_label} 修饰表已覆盖，正在刷新缓存。")
                         st.cache_data.clear()
                         st.rerun()
                     except Exception as exc:
+                        logging.getLogger(__name__).exception(
+                            "Failed to upload SPC %s decoration workbook", metric_label,
+                        )
                         st.error(f"保存 {metric_label} 修饰表失败：{exc}")
 
 

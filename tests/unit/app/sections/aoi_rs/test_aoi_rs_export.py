@@ -26,7 +26,6 @@ FRAME_NAMES = (
     "rs_details_df", "pass_through_df", "spec_df", "indicators_df",
     "lot_points_df", "sheet_points_df",
 )
-RENDER_EXPORT_STATUS = aoi_rs_export._render_export_status.__wrapped__
 
 
 def _report(product: str, *, empty: bool = False) -> AoiRsReportViewModel:
@@ -279,88 +278,284 @@ def test_non_admin_export_returns_before_reading_configuration(monkeypatch, quer
     )
 
 
-@pytest.mark.parametrize(
-    ("previous", "expected"),
-    [(None, ("M999", "M678")), ([], ("M999", "M678")), (["DISABLED", "M678"], ("M678",))],
-)
-def test_admin_selection_is_enabled_scoped_and_export_is_deferred(monkeypatch, previous, expected, export_statuses):
-    downloads = []
-    calls = []
-    key = aoi_rs_export.PRODUCT_SELECTION_KEY
-    state = {} if previous is None else {key: previous}
-
-    def select(_label, *, options, key, **kwargs):
-        if key == aoi_rs_export.PRODUCT_SELECTION_KEY:
-            assert options == ["M999", "M678"]
-            assert "DISABLED" not in state[key]
-        else:
-            assert key == aoi_rs_export.FACTORY_SELECTION_KEY
-            assert tuple(options) == ("ARRAY", "OLED", "TP")
-        return state[key]
-
+@pytest.fixture
+def admin_ui(monkeypatch):
+    buttons, downloads, errors = [], [], []
+    state = {}
     ui = SimpleNamespace(
-        query_params={"admin": "true"},
-        session_state=state,
+        query_params={"admin": "true"}, session_state=state,
         expander=lambda *args, **kwargs: nullcontext(),
-        multiselect=select,
+        spinner=lambda *args, **kwargs: nullcontext(),
+        multiselect=lambda _label, *, key, **kwargs: state[key],
         caption=lambda *args: None,
-        download_button=lambda *args, **kwargs: downloads.append(kwargs),
+        success=lambda *args: None,
+        error=errors.append,
+        button=lambda label, **kwargs: buttons.append({"label": label, **kwargs}),
+        download_button=lambda label, **kwargs: downloads.append({"label": label, **kwargs}),
     )
-
-    def build(products, **kwargs):
-        assert kwargs["factories"] == FACTORIES
-        calls.append(products)
-        return b"complete pdf"
-
     monkeypatch.setattr(aoi_rs_export, "st", ui)
     monkeypatch.setattr(aoi_rs_export.ConfigLoader, "get_enabled_products", lambda: ["M999", "M678"])
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    harness = SimpleNamespace(buttons=buttons, downloads=downloads, errors=errors, state=state)
+    return harness
+
+
+def _render_admin(admin_ui):
     aoi_rs_export.render_aoi_rs_export(
         current_product="M678", start_date=START, end_date=END,
         db_manager=object(), step_desc_map={},
     )
+    admin_ui.status = admin_ui.state[aoi_rs_export.EXPORT_STATUS_KEY]
 
+
+@pytest.mark.parametrize(
+    ("previous", "expected"),
+    [(None, ("M999", "M678")), ([], ("M999", "M678")), (["DISABLED", "M678"], ("M678",))],
+)
+def test_admin_selection_defaults_and_two_step_generation(monkeypatch, admin_ui, previous, expected):
+    if previous is not None:
+        admin_ui.state[aoi_rs_export.PRODUCT_SELECTION_KEY] = previous
+    calls = []
+
+    def build(products, **kwargs):
+        calls.append((products, kwargs["factories"]))
+        return b"complete pdf"
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    _render_admin(admin_ui)
     assert calls == []
+    assert admin_ui.downloads == []
+    assert len(admin_ui.buttons) == 1
+    assert admin_ui.buttons[0]["label"] == "生成报告"
+    assert admin_ui.state[aoi_rs_export.FACTORY_SELECTION_KEY] == ["ARRAY"]
     if previous is None:
-        assert state[key] == ["M999", "M678"]
-    assert state[aoi_rs_export.FACTORY_SELECTION_KEY] == list(FACTORIES)
-    assert len(downloads) == 1
-    assert downloads[0]["mime"] == "application/pdf"
-    assert downloads[0]["file_name"].endswith(".pdf")
-    assert downloads[0]["on_click"] == "ignore"
-    assert callable(downloads[0]["data"])
-    assert downloads[0]["data"]() == b"complete pdf"
-    assert calls == [expected]
+        assert admin_ui.state[aoi_rs_export.PRODUCT_SELECTION_KEY] == ["M999", "M678"]
+    assert "DISABLED" not in admin_ui.state[aoi_rs_export.PRODUCT_SELECTION_KEY]
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert calls == [(expected, ("ARRAY",))]
+    _render_admin(admin_ui)
+    download = admin_ui.downloads[0]
+    assert download["label"] == "下载报告（PDF）"
+    assert download["data"] == b"complete pdf"
+    assert download["mime"] == "application/pdf"
+    assert download["file_name"].endswith(".pdf")
+    assert download["on_click"] == "ignore"
+    _render_admin(admin_ui)
+    assert calls == [(expected, ("ARRAY",))]
 
 
-@pytest.fixture
-def export_statuses(monkeypatch):
-    statuses = []
-    monkeypatch.setattr(aoi_rs_export, "_render_export_status", statuses.append)
-    # Callback tests have no live Streamlit fragment to register the media reference.
-    monkeypatch.setattr(aoi_rs_export._ExportStatus, "wait_download_ready", lambda self: True)
-    return statuses
+@pytest.mark.parametrize("selection", [["OLED"], ["ARRAY", "TP"], []])
+def test_generation_uses_selected_factories(monkeypatch, admin_ui, selection):
+    admin_ui.state[aoi_rs_export.FACTORY_SELECTION_KEY] = selection
+    captured = []
+
+    def build(products, *, factories, **kwargs):
+        captured.append(factories)
+        return b"complete pdf"
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    _render_admin(admin_ui)
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert captured == [tuple(selection) if selection else FACTORIES]
 
 
-@pytest.fixture
-def admin_downloads(monkeypatch, export_statuses):
-    downloads = []
-    key = aoi_rs_export.PRODUCT_SELECTION_KEY
-    state = {key: []}
-    ui = SimpleNamespace(
-        query_params={"admin": "true"},
-        session_state=state,
-        expander=lambda *args, **kwargs: nullcontext(),
-        multiselect=lambda _label, *, key, **kwargs: state[key],
-        caption=lambda *args: None,
-        download_button=lambda *args, **kwargs: downloads.append(kwargs),
-    )
-    monkeypatch.setattr(aoi_rs_export, "st", ui)
+def test_generation_failure_shows_safe_status_without_raising(monkeypatch, admin_ui):
+    logged = []
+
+    def fail(*args, **kwargs):
+        assert admin_ui.status.get()[0] == "busy"
+        raise OSError(r"SYNTHETIC_SECRET in C:\private\synthetic-config.yaml")
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", fail)
+    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: logged.append(args)))
+    _render_admin(admin_ui)
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert len(logged) == 1
+    kind, message = admin_ui.status.get()
+    assert kind == "error"
+    assert "失败" in message
+    assert "SYNTHETIC_SECRET" not in message
+    assert "synthetic-config.yaml" not in message
+    _render_admin(admin_ui)
+    assert admin_ui.errors[-1] == message
+    assert admin_ui.downloads == []
+
+
+def test_generation_empty_data_preserves_specific_safe_message(monkeypatch, admin_ui):
+    message = "所选产品和厂别暂无可导出的 RS 数据。"
+
+    def fail(*args, **kwargs):
+        raise aoi_rs_export.AoiRsExportError(message)
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", fail)
+    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
+    _render_admin(admin_ui)
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert admin_ui.status.get() == ("error", message)
+
+
+def test_generation_transitions_from_idle_through_busy_to_success(monkeypatch, admin_ui):
+    def build(*args, **kwargs):
+        kind, message = admin_ui.status.get()
+        assert kind == "busy"
+        assert "正在生成" in message
+        return b"complete pdf"
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    _render_admin(admin_ui)
+    assert admin_ui.status.get() == ("idle", "")
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert admin_ui.status.get()[0] == "success"
+    assert admin_ui.status.get_pdf().data == b"complete pdf"
+
+
+def test_generation_reentry_does_not_start_second_renderer(monkeypatch, admin_ui):
+    entered, release = Event(), Event()
+    builds = []
+
+    def build(products, **kwargs):
+        builds.append(products)
+        entered.set()
+        assert release.wait(timeout=5)
+        return b"complete pdf"
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    _render_admin(admin_ui)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first = executor.submit(admin_ui.buttons[0]["on_click"])
+        try:
+            assert entered.wait(timeout=5)
+            assert admin_ui.buttons[0]["on_click"]() is None
+            assert builds == [("M999", "M678")]
+            assert admin_ui.status.get()[0] == "busy"
+        finally:
+            release.set()
+        assert first.result(timeout=5) is None
+    assert admin_ui.status.get()[0] == "success"
+
+
+def test_failed_rebuild_keeps_last_completed_report_downloadable(monkeypatch, admin_ui):
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: b"last completed PDF")
+    _render_admin(admin_ui)
+    assert admin_ui.buttons[0]["on_click"]() is None
+    previous = admin_ui.status.get_pdf()
+
+    def fail(*args, **kwargs):
+        assert admin_ui.status.get_pdf() is previous
+        raise OSError("failed rebuild")
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", fail)
+    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert admin_ui.status.get_pdf() is previous
+    _render_admin(admin_ui)
+    assert admin_ui.downloads[-1]["data"] == b"last completed PDF"
+
+
+def test_stopped_generation_preserves_previous_report_and_allows_retry(monkeypatch, admin_ui):
+    from streamlit.runtime.scriptrunner_utils.exceptions import StopException
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: b"previous PDF")
+    _render_admin(admin_ui)
+    generate = admin_ui.buttons[0]["on_click"]
+    assert generate() is None
+    previous = admin_ui.status.get_pdf()
+
+    def stopped_build(*args, **kwargs):
+        assert admin_ui.status.get()[0] == "busy"
+        raise StopException()
+
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", stopped_build)
+    with pytest.raises(StopException):
+        generate()
+    assert admin_ui.status.get() == ("error", "报告生成已中断，请重新生成。")
+    assert admin_ui.status.get_pdf() is previous
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: b"replacement PDF")
+    assert generate() is None
+    assert admin_ui.status.get()[0] == "success"
+    assert admin_ui.status.get_pdf().data == b"replacement PDF"
+
+
+def _export_app_test():
+    from streamlit.testing.v1 import AppTest
+
+    return AppTest.from_string("""
+from datetime import date
+from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
+render_aoi_rs_export(
+    current_product="M678", start_date=date(2026, 8, 1), end_date=date(2026, 9, 22),
+    db_manager=None, step_desc_map={},
+)
+""")
+
+
+def test_streamlit_two_step_generation_and_multiselect_survive_rerun(monkeypatch):
+    calls = []
+    pdf = b"%PDF-report fixture"
+
+    def build(products, *, factories, **kwargs):
+        calls.append((products, factories))
+        return pdf
+
     monkeypatch.setattr(aoi_rs_export.ConfigLoader, "get_enabled_products", lambda: ["M999", "M678"])
-    return downloads
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
+    app = _export_app_test()
+    app.query_params["admin"] = "true"
+    app.session_state["aoi_rs_export_pdf_factories"] = ["ARRAY", "OLED", "TP"]
+    app.run()
+    assert not app.exception
+    assert app.multiselect(key=aoi_rs_export.PRODUCT_SELECTION_KEY).value == ["M999", "M678"]
+    factories = app.multiselect(key=aoi_rs_export.FACTORY_SELECTION_KEY)
+    assert factories.value == ["ARRAY"]
+    assert factories.options == list(FACTORIES)
+    assert len(app.get("download_button")) == 0
+    assert calls == []
+    factories.set_value(["ARRAY", "OLED"]).run()
+    assert not app.exception
+    assert calls == []
+    app.button[0].click().run()
+    assert not app.exception
+    assert calls == [(("M999", "M678"), ("ARRAY", "OLED"))]
+    downloads = app.get("download_button")
+    assert len(downloads) == 1
+    assert downloads[0].proto.label == "下载报告（PDF）"
+    assert downloads[0].proto.url
+    assert app.session_state[aoi_rs_export.EXPORT_STATUS_KEY].get_pdf().data == pdf
+    app.run()
+    assert not app.exception
+    assert len(app.get("download_button")) == 1
+    assert len(calls) == 1
 
 
-def test_download_loads_each_product_with_its_own_query_and_cache_signatures(monkeypatch, admin_downloads):
+def test_streamlit_public_mode_has_no_export_controls(monkeypatch):
+    def forbidden():
+        pytest.fail("Public page must not load export configuration")
+
+    monkeypatch.setattr(aoi_rs_export.ConfigLoader, "get_enabled_products", forbidden)
+    app = _export_app_test().run()
+    assert not app.exception
+    assert not app.button
+    assert not app.multiselect
+    assert not app.get("download_button")
+
+
+def test_streamlit_generation_error_renders_safe_message_without_download(monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError("SYNTHETIC_SECRET")
+
+    monkeypatch.setattr(aoi_rs_export.ConfigLoader, "get_enabled_products", lambda: ["M678"])
+    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", fail)
+    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
+    app = _export_app_test()
+    app.query_params["admin"] = "true"
+    app.run()
+    app.button[0].click().run()
+    assert not app.exception
+    assert len(app.error) == 1
+    assert app.error[0].value == "RS 报告生成失败，请稍后重试。"
+    assert not app.get("download_button")
+
+
+def test_generation_loads_each_product_with_its_own_query_and_cache_signatures(monkeypatch, admin_ui):
     manager = object()
     ports = {product: object() for product in ("M999", "M678")}
     reports = {product: _report(product) for product in ports}
@@ -392,7 +587,7 @@ def test_download_loads_each_product_with_its_own_query_and_cache_signatures(mon
         return reports[query["prod_code"]]
 
     def build(products, *, factories, load_report, start_date, end_date, step_desc_map):
-        assert factories == ("ARRAY", "OLED", "TP")
+        assert factories == ("ARRAY",)
         assert products == ("M999", "M678")
         assert (start_date, end_date) == (START, END)
         assert step_desc_map == labels
@@ -411,8 +606,10 @@ def test_download_loads_each_product_with_its_own_query_and_cache_signatures(mon
         db_manager=manager, step_desc_map=labels,
     )
 
+    admin_ui.status = admin_ui.state[aoi_rs_export.EXPORT_STATUS_KEY]
     assert repository_calls == service_calls == signature_calls == []
-    assert admin_downloads[0]["data"]() == b"complete pdf"
+    assert admin_ui.buttons[0]["on_click"]() is None
+    assert admin_ui.status.get_pdf().data == b"complete pdf"
     assert repository_calls == [(manager, "M999"), (manager, "M678")]
     assert signature_calls == [
         ("aoi_rs_report_v1", product, ("aoi_rs_sheet_oos",)) for product in ports
@@ -428,176 +625,6 @@ def test_download_loads_each_product_with_its_own_query_and_cache_signatures(mon
         assert call["snapshot_signature"] == f"snapshot:{product}"
         assert call["product_revision"] == f"revision:{product}"
         assert call["decision_signature"] == f"decision:{product}"
-
-
-def test_download_failure_hides_raw_exception_details(monkeypatch, admin_downloads, export_statuses):
-    logged = []
-    synthetic_detail = r"SYNTHETIC_SECRET in C:\private\synthetic-config.yaml"
-
-    def fail(*args, **kwargs):
-        assert export_statuses[0].get()[0] == "busy"
-        raise OSError(synthetic_detail)
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", fail)
-    monkeypatch.setattr(
-        aoi_rs_export, "logger",
-        SimpleNamespace(exception=lambda *args: logged.append(args)),
-    )
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-
-    with pytest.raises(RuntimeError) as raised:
-        admin_downloads[0]["data"]()
-
-    assert "RS 报告导出失败" in str(raised.value)
-    assert "SYNTHETIC_SECRET" not in str(raised.value)
-    assert "synthetic-config.yaml" not in str(raised.value)
-    assert raised.value.__suppress_context__ is True
-    assert raised.value.__cause__ is None
-    assert len(logged) == 1
-    kind, message = export_statuses[0].get()
-    assert kind == "error"
-    assert message == str(raised.value)
-    assert "SYNTHETIC_SECRET" not in message
-    assert "synthetic-config.yaml" not in message
-
-
-def test_download_status_transitions_from_idle_through_busy_to_success(monkeypatch, admin_downloads, export_statuses):
-    def build(*args, **kwargs):
-        kind, message = export_statuses[0].get()
-        assert kind == "busy"
-        assert "正在生成" in message
-        return b"complete pdf"
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-
-    assert len(export_statuses) == 1
-    assert export_statuses[0].get() == ("idle", "")
-    assert admin_downloads[0]["data"]() == b"complete pdf"
-    kind, message = export_statuses[0].get()
-    assert kind == "success"
-    assert "已生成" in message
-
-
-def test_download_empty_data_shows_specific_safe_error(monkeypatch, admin_downloads, export_statuses):
-    message = "所选产品暂无可导出的 RS 图像。"
-
-    def empty(*args, **kwargs):
-        assert export_statuses[0].get()[0] == "busy"
-        raise aoi_rs_export.AoiRsExportError(message)
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", empty)
-    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-
-    with pytest.raises(RuntimeError, match=message) as raised:
-        admin_downloads[0]["data"]()
-
-    assert export_statuses[0].get() == ("error", message)
-    assert raised.value.__suppress_context__ is True
-
-
-def test_download_failure_after_rerun_updates_the_same_visible_status(monkeypatch, admin_downloads, export_statuses):
-    entered = Event()
-    release = Event()
-    message = "所选产品暂无可导出的 RS 图像。"
-
-    def blocked_build(*args, **kwargs):
-        entered.set()
-        assert release.wait(timeout=5)
-        raise aoi_rs_export.AoiRsExportError(message)
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", blocked_build)
-    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        old_download = executor.submit(admin_downloads[0]["data"])
-        try:
-            assert entered.wait(timeout=5)
-            assert export_statuses[0].get()[0] == "busy"
-            aoi_rs_export.st.session_state[aoi_rs_export.PRODUCT_SELECTION_KEY] = ["M999"]
-            aoi_rs_export.render_aoi_rs_export(
-                current_product="M999", start_date=START, end_date=END,
-                db_manager=object(), step_desc_map={},
-            )
-            assert len(export_statuses) == 2
-            assert export_statuses[1] is export_statuses[0]
-            assert export_statuses[1].get()[0] == "busy"
-        finally:
-            release.set()
-        with pytest.raises(RuntimeError, match=message):
-            old_download.result(timeout=5)
-
-    assert export_statuses[1].get() == ("error", message)
-
-
-def test_second_download_during_active_export_does_not_start_another_renderer(monkeypatch, admin_downloads, export_statuses):
-    entered = Event()
-    release = Event()
-    builds = []
-
-    def blocked_build(products, **kwargs):
-        builds.append(products)
-        entered.set()
-        assert release.wait(timeout=5)
-        return b"complete pdf"
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", blocked_build)
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        first_download = executor.submit(admin_downloads[0]["data"])
-        try:
-            assert entered.wait(timeout=5)
-            aoi_rs_export.render_aoi_rs_export(
-                current_product="M678", start_date=START, end_date=END,
-                db_manager=object(), step_desc_map={},
-            )
-            with pytest.raises(RuntimeError, match="正在生成"):
-                admin_downloads[1]["data"]()
-            assert builds == [("M999", "M678")]
-            assert export_statuses[1].get()[0] == "busy"
-        finally:
-            release.set()
-        assert first_download.result(timeout=5) == b"complete pdf"
-
-    assert export_statuses[1].get()[0] == "success"
-
-
-@pytest.mark.parametrize("selection", [["OLED"], []])
-def test_download_captures_factory_selection_before_background_execution(monkeypatch, admin_downloads, selection):
-    factories_key = aoi_rs_export.FACTORY_SELECTION_KEY
-    aoi_rs_export.st.session_state[factories_key] = selection
-    captured = []
-
-    def build(products, *, factories, **kwargs):
-        captured.append(factories)
-        return b"complete pdf"
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", build)
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-    aoi_rs_export.st.session_state[factories_key] = ["TP"]
-    assert admin_downloads[0]["data"]() == b"complete pdf"
-    assert captured == [tuple(selection) if selection else FACTORIES]
 
 
 def test_pdf_embedding_failure_cleans_images_from_the_failed_attempt(monkeypatch, rendered_batches, export_root):
@@ -620,139 +647,3 @@ def test_report_styling_does_not_mutate_figures_used_by_the_page(monkeypatch, re
     _build(("M678",), _report)
 
     assert [figure.to_json() for _, figure in group.figures] == originals
-
-
-def test_deferred_download_waits_for_static_pdf_registration_before_returning(monkeypatch):
-    downloads = []
-    statuses = []
-    waiting = Event()
-    state = {}
-    pdf = b"%PDF-complete report"
-    filename = "AOI_RS_2026-08-01_2026-09-22.pdf"
-    original_wait = aoi_rs_export._ExportStatus.wait_download_ready
-
-    def wait_for_registration(status):
-        waiting.set()
-        return original_wait(status)
-
-    def download_button(_label, **kwargs):
-        if isinstance(kwargs["data"], bytes):
-            status = statuses[0]
-            assert status.get()[0] == "busy"
-            assert not status._download_ready.is_set()
-            assert kwargs["data"] == pdf
-            assert kwargs["file_name"] == filename
-            assert kwargs["mime"] == "application/pdf"
-        downloads.append(kwargs)
-
-    ui = SimpleNamespace(
-        query_params={"admin": "true"}, session_state=state,
-        expander=lambda *args, **kwargs: nullcontext(),
-        multiselect=lambda _label, *, key, **kwargs: state[key],
-        caption=lambda *args: None,
-        download_button=download_button,
-    )
-    monkeypatch.setattr(aoi_rs_export, "st", ui)
-    monkeypatch.setattr(aoi_rs_export.ConfigLoader, "get_enabled_products", lambda: ["M678"])
-    monkeypatch.setattr(aoi_rs_export, "_render_export_status", statuses.append)
-    monkeypatch.setattr(aoi_rs_export._ExportStatus, "wait_download_ready", wait_for_registration)
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: pdf)
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-    status = statuses[0]
-    assert status.get_pdf() is None
-    assert not status._download_ready.is_set()
-    RENDER_EXPORT_STATUS(status)
-    assert len(downloads) == 1
-    assert not status._download_ready.is_set()
-
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        download = executor.submit(downloads[0]["data"])
-        try:
-            assert waiting.wait(timeout=5)
-            prepared = status.get_pdf()
-            assert (prepared.data, prepared.filename) == (pdf, filename)
-            assert status.get()[0] == "busy"
-            assert not download.done()
-            with pytest.raises(RuntimeError, match="正在生成"):
-                downloads[0]["data"]()
-            RENDER_EXPORT_STATUS(status)
-            assert len(downloads) == 2
-            assert status._download_ready.is_set()
-            assert download.result(timeout=5) == pdf
-        finally:
-            status.mark_download_ready(status.get_pdf())
-    assert status.get()[0] == "success"
-
-
-def test_registration_timeout_retains_pdf_for_static_download(monkeypatch, admin_downloads, export_statuses):
-    pdf = b"%PDF-complete report"
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: pdf)
-    monkeypatch.setattr(aoi_rs_export._ExportStatus, "wait_download_ready", lambda self: False)
-    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-    with pytest.raises(RuntimeError, match="报告已生成") as raised:
-        admin_downloads[0]["data"]()
-    status = export_statuses[0]
-    assert status.get() == ("error", str(raised.value))
-    prepared = status.get_pdf()
-    assert (prepared.data, prepared.filename) == (pdf, admin_downloads[0]["file_name"])
-    errors = []
-    monkeypatch.setattr(aoi_rs_export.st, "error", errors.append, raising=False)
-    RENDER_EXPORT_STATUS(status)
-    assert admin_downloads[1]["data"] == pdf
-    assert admin_downloads[1]["file_name"] == admin_downloads[0]["file_name"]
-    assert admin_downloads[1]["mime"] == "application/pdf"
-    assert status._download_ready.is_set()
-    assert errors == [str(raised.value)]
-
-
-def test_old_fragment_cannot_release_new_pdf_download():
-    status = aoi_rs_export._ExportStatus()
-    assert status.start()
-    status.publish(b"old report", "old.pdf")
-    old_pdf = status.get_pdf()
-    status.mark_download_ready(old_pdf)
-    assert status.wait_download_ready()
-    status.set("success", "completed")
-
-    assert status.start()
-    assert status.get_pdf() is old_pdf
-    status.publish(b"new report", "new.pdf")
-    new_pdf = status.get_pdf()
-    assert new_pdf.ready is not old_pdf.ready
-    status.mark_download_ready(old_pdf)
-    assert old_pdf.ready.is_set()
-    assert not new_pdf.ready.is_set()
-    assert status.get()[0] == "busy"
-    status.mark_download_ready(new_pdf)
-    assert status.wait_download_ready()
-
-
-def test_failed_rebuild_keeps_last_completed_report_downloadable(monkeypatch, admin_downloads, export_statuses):
-    pdf = b"last completed PDF"
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", lambda *args, **kwargs: pdf)
-    aoi_rs_export.render_aoi_rs_export(
-        current_product="M678", start_date=START, end_date=END,
-        db_manager=object(), step_desc_map={},
-    )
-    assert admin_downloads[0]["data"]() == pdf
-    previous = export_statuses[0].get_pdf()
-
-    def failed_build(*args, **kwargs):
-        assert export_statuses[0].get_pdf() is previous
-        raise OSError("failed rebuild")
-
-    monkeypatch.setattr(aoi_rs_export, "build_aoi_rs_pdf", failed_build)
-    monkeypatch.setattr(aoi_rs_export, "logger", SimpleNamespace(exception=lambda *args: None))
-    with pytest.raises(RuntimeError, match="RS 报告导出失败"):
-        admin_downloads[0]["data"]()
-    assert export_statuses[0].get_pdf() is previous
-    monkeypatch.setattr(aoi_rs_export.st, "error", lambda *args: None, raising=False)
-    RENDER_EXPORT_STATUS(export_statuses[0])
-    assert admin_downloads[1]["data"] == pdf

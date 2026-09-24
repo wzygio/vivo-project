@@ -371,6 +371,22 @@ class ConfigLoader:
             return []
 
     @classmethod
+    def get_aoi_rs_special_decoration_factories(cls) -> list[str]:
+        """Read the AOI_RS special-rule allowlist; an empty list disables it."""
+        report = cls.load_domain_config("inline_domain").get("aoi_rs", {})
+        if not isinstance(report, dict):
+            raise ValueError("aoi_rs must be a mapping")
+        special = report.get("special_decoration", {})
+        if not isinstance(special, dict):
+            raise ValueError("aoi_rs.special_decoration must be a mapping")
+        factories = special.get("factories", ["OLED"])
+        if not isinstance(factories, list) or any(
+            not isinstance(value, str) or not value.strip() for value in factories
+        ):
+            raise ValueError("aoi_rs.special_decoration.factories must be a list of factory names")
+        return list(dict.fromkeys(value.strip().upper() for value in factories))
+
+    @classmethod
     def get_aoi_tt_particle_size_generation_enabled(cls) -> bool:
         """Return whether AOI_TT Particle Size values are generated from ratios."""
         try:

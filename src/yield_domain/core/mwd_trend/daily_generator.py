@@ -112,7 +112,7 @@ def generate_daily_counts(
     padded_daily: pd.DataFrame,
     monthly_targets: dict[str, dict[str, float]],
     product_code: str,
-    volatility: float = 0.3,
+    volatility: float = 0.2,
     raw_monthly_targets: dict[str, dict[str, float]] | None = None,
 ) -> pd.DataFrame:
     """按指定月度良损生成 Code 级日度不良数。

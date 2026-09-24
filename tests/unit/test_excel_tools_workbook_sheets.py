@@ -467,7 +467,7 @@ def test_com_read_returns_empty_for_missing_sheet(monkeypatch, tmp_path: Path) -
         def __init__(self, wb):
             self._wb = wb
 
-        def Open(self, path, ReadOnly=True):
+        def Open(self, path, ReadOnly=True, UpdateLinks=0):
             return self._wb
 
     class _FakeExcel:

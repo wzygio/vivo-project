@@ -186,7 +186,7 @@ def test_mixed_date_and_numeric_values_support_arrow_and_exclude_progress(monkey
     parts_dashboard.render_parts_table(source)
     parts_dashboard.render_parts_table_selectable(source)
     for frame, kwargs in captured:
-        assert frame["测量值"].tolist() == ["2026-02-01", "2488.73"]
+        assert frame["测量值"].tolist() == ["2026-02-01", "2489"]
         assert frame["寿命规格"].tolist() == ["2年", "6500"]
         assert set(frame.columns) == {"测量值", "寿命规格"}
         assert kwargs["column_config"]["测量值"]["type_config"]["type"] == "text"
@@ -204,6 +204,10 @@ def test_empty_table_shows_business_message_without_data(monkeypatch):
 def test_numeric_only_selection_retains_numeric_sorting(monkeypatch):
     captured = []
     monkeypatch.setattr(parts_dashboard.st, "dataframe", lambda frame, **kwargs: captured.append(frame))
-    source = pd.DataFrame({"测量值": pd.Series([2500.0, 10000.0], dtype=object)})
+    source = pd.DataFrame({"测量值": pd.Series([12257.71, 2524.31, None], dtype=object)})
+    original = source.copy(deep=True)
     parts_dashboard.render_parts_table(source)
-    assert pd.api.types.is_numeric_dtype(captured[0]["测量值"])
+    assert pd.api.types.is_integer_dtype(captured[0]["测量值"])
+    assert captured[0]["测量值"].iloc[:2].tolist() == [12258, 2524]
+    assert pd.isna(captured[0]["测量值"].iloc[2])
+    pd.testing.assert_frame_equal(source, original)
