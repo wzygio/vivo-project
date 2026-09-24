@@ -20,11 +20,13 @@ import streamlit as st
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard, refresh_qtime_data
+from app.sections.indicator_domain.qtime.chamber_dashboard import render_chamber_dashboard, refresh_chamber_data
+from src.indicator_domain.application.qtime.chamber_cache import get_chamber_cached_funcs
 from src.indicator_domain.application.qtime.cached_monitoring import (
     get_qtime_cached_funcs,
 )
 from app.utils.app_setup import AppSetup
-from src.indicator_domain.composition import build_qtime_service
+from src.indicator_domain.composition import build_qtime_service, build_chamber_qtime_service
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
@@ -40,8 +42,9 @@ service = build_qtime_service(DatabaseManager())
 render_page_header(
     title="Q-Time监控报表",
     config=active_config,
-    cached_funcs=get_qtime_cached_funcs(),
+    cached_funcs=get_qtime_cached_funcs() + get_chamber_cached_funcs(),
     show_product_filter=False,
-    refresh_handlers=[lambda: refresh_qtime_data(service)],
+    refresh_handlers=[refresh_chamber_data, lambda: refresh_qtime_data(service)],
 )
 render_qtime_dashboard(service)
+render_chamber_dashboard(build_chamber_qtime_service(DatabaseManager()))

@@ -5,6 +5,8 @@ from types import SimpleNamespace
 from app.components import page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.qtime import dashboard as qtime_dashboard
+from app.sections.indicator_domain.qtime import chamber_dashboard
+from src.indicator_domain.application.qtime import chamber_cache
 from app.utils.app_setup import AppSetup
 from src.indicator_domain import composition
 from src.indicator_domain.application.qtime import cached_monitoring
@@ -36,6 +38,10 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
         lambda **kwargs: events.append(("header", kwargs)),
     )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: database)
+    chamber_service = object()
+    monkeypatch.setattr(composition, 'build_chamber_qtime_service', lambda received: chamber_service)
+    monkeypatch.setattr(chamber_dashboard, 'render_chamber_dashboard',
+                        lambda received: events.append(('chambers', received)))
     monkeypatch.setattr(
         composition,
         "build_qtime_service",
@@ -52,7 +58,7 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     runpy.run_path(str(page_path), run_name="__main__")
 
     handlers = events[4][1].pop("refresh_handlers")
-    assert len(handlers) == 1 and callable(handlers[0])
+    assert len(handlers) == 2 and all(callable(handler) for handler in handlers)
 
     assert events == [
         {"page_title": "Q-Time监控报表", "layout": "wide", "initial_sidebar_state": "collapsed"},
@@ -64,11 +70,12 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
             {
                 "title": "Q-Time监控报表",
                 "config": active_config,
-                "cached_funcs": [cached_monitoring._cached_monitoring],
+                "cached_funcs": [cached_monitoring._cached_monitoring, *chamber_cache.get_chamber_cached_funcs()],
                 "show_product_filter": False,
             },
         ),
         ("dashboard", service),
+        ('chambers', chamber_service),
     ]
 
 
