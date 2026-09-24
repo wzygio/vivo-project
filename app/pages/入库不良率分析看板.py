@@ -37,12 +37,13 @@ from app.sections.yield_domain.yield_dashboard import (
     render_alert_code_expanders,
 )
 from app.sections.yield_domain.resource_config import get_dashboard_resource_config, get_code_monthly_rate_threshold
+from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE
 from app.sections.yield_domain.code_analysis import render_code_analysis_section
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
-YIELD_DASHBOARD_CACHE_SIGNATURE = "yield_dashboard_manual_refresh_v1"
+YIELD_DASHBOARD_CACHE_SIGNATURE = YIELD_SNAPSHOT_SIGNATURE_BASE
 
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()

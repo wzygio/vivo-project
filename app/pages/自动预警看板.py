@@ -28,6 +28,7 @@ from app.sections.inline_domain.monitor.alert_matrix import (
     render_matrix_refresh_controls,
 )
 from app.sections.inline_domain.monitor.alert_matrix_snapshot import has_daily_matrix_snapshot
+from app.sections.yield_domain.all_product_board import render_all_product_yield_board
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
@@ -104,3 +105,5 @@ with st.expander("全指标状态总览", expanded=True):
             filter_selection=matrix_filter_selection,
             show_refresh_controls=False,
         )
+
+render_all_product_yield_board()

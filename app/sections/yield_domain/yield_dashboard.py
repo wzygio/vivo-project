@@ -31,7 +31,12 @@ from yield_domain.core.mapping.mapping_processor import apply_hotspot_modificati
 # ==============================================================================
 #  1. 宏观分析区 (Group Level)
 # ==============================================================================
-def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = None):
+def render_macro_trend_section(
+    mwd_group_data: dict,
+    group_order: list | None = None,
+    *,
+    key_prefix: str = "macro",
+):
     """
     渲染 Group 级宏观趋势堆叠柱状图。
 
@@ -43,6 +48,8 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
         可选的 Group 规范排序列表（如 YAML 中的 target_defect_groups）。
         若提供，图表中 Group 将按此顺序排列；未在列表中的 Group 追加到末尾。
         若为 None，则按字母序排序（原行为）。
+    key_prefix : str
+        同页多产品渲染时隔离 Group 控件与图表标识；默认保留原控件 key。
     """
     if not mwd_group_data:
         st.warning("无宏观趋势数据。")
@@ -61,6 +68,11 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
             available_groups = sorted(raw_groups)
     
     dynamic_category_orders = {"defect_group": available_groups}
+    selection_key = f"{key_prefix}_group_sel"
+    if selection_key in st.session_state:
+        st.session_state[selection_key] = [
+            group for group in st.session_state[selection_key] if group in available_groups
+        ]
 
     c1, _, _ = st.columns(3)
     with c1:
@@ -68,7 +80,7 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
             "选择Group (可多选):",
             available_groups,
             default=available_groups,
-            key="macro_group_sel"
+            key=selection_key,
         )
 
     # 两阶段渲染：先在 RenderGate 统一 spinner 下构建全部图表，再集中回流渲染，
@@ -85,10 +97,12 @@ def render_macro_trend_section(mwd_group_data: dict, group_order: list | None = 
     trend_figures = gate.collect()[0]
 
     gc1, gc2, gc3 = st.columns(3)
-    for (title, fig), col in zip(trend_figures, [gc1, gc2, gc3]):
+    for period, (title, fig), col in zip(
+        ("monthly", "weekly", "daily"), trend_figures, [gc1, gc2, gc3]
+    ):
         with col:
             if fig is not None:
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch", key=f"{key_prefix}_{period}")
             else:
                 st.info(f"{title}数据暂无")
 

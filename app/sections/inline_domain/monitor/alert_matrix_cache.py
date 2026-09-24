@@ -26,6 +26,7 @@ import streamlit as st
 from pydantic import ValidationError
 
 from app.sections.inline_domain.monitor.alert_matrix_snapshot import DailyMatrixSnapshot
+from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE
 
 from app.components.indicator_cache import (
     build_indicator_product_cache_signature,
@@ -56,8 +57,7 @@ logger = logging.getLogger(__name__)
 # 矩阵内 sheet OOS 行对应的 inline scope
 MATRIX_INLINE_SCOPES: tuple[str, ...] = ("spc", "ctq", "aoi_tt", "aoi_rs")
 QTIME_SHOPS: tuple[str, ...] = ("ARRAY", "OLED", "TP")
-# 与 yield 看板共享同一缓存基签名，复用其 L2 条目（revision 变化同步失效）
-YIELD_SNAPSHOT_SIGNATURE_BASE = "yield_dashboard_manual_refresh_v1"
+# 同一指标 revision 同步失效；只读/资源版本等参数相同才复用 L2 条目。
 MATRIX_CACHE_BASE_SIGNATURE = "alert_matrix_board_v2_health"
 
 
