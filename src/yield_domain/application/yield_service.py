@@ -337,7 +337,9 @@ class YieldAnalysisService:
         return {
             "targets": resolve_monthly_targets(table["code"], months),
             "group_targets": resolve_monthly_targets(
-                table["group"], months, fallback_to_raw=False
+                table["group"], months,
+                fallback_to_raw=False,
+                fallback_to_previous=False,
             ),
             "factors": compute_scale_factors(table["code"]),
             "signature": (

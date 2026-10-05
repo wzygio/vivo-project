@@ -49,6 +49,7 @@ def prepare_code_raw_data(
     raw_monthly_targets = _compute_code_raw_monthly_targets(
         working,
         code_catalog,
+        last_day,
     )
 
     raw_daily = (
@@ -66,10 +67,15 @@ def prepare_code_raw_data(
 def _compute_code_raw_monthly_targets(
     working: pd.DataFrame,
     code_catalog: pd.DataFrame,
+    end_date: pd.Timestamp,
 ) -> dict[str, dict[str, float]]:
     """Calculate monthly Code loss rates without retaining daily defect counts."""
     month_keys = working["warehousing_time"].dt.strftime("%Y-%m")
-    months = sorted(month_keys.unique().tolist())
+    # 日历补齐可能包含整月无投入的月份；其原始良损按 0 提供给现有目标回退链。
+    calendar_months = pd.period_range(
+        working["warehousing_time"].min(), end_date, freq="M"
+    ).astype(str)
+    months = sorted(set(month_keys.unique()).union(calendar_months))
     codes = sorted(code_catalog["defect_desc"].astype(str).unique().tolist())
     targets = {code: {month: 0.0 for month in months} for code in codes}
 

@@ -3,7 +3,7 @@
 > 评估对象：
 > [`mwd_trend_processor.py`](../../../../src/yield_domain/core/mwd_trend/mwd_trend_processor.py)
 > 及其直接调用链。算法语义参见
-> [`mwd-processor-opt-algorithm.md`](mwd-processor-opt-algorithm.md)。
+> [MWD 指定良损算法逻辑](../../../../references/design/feat_design/algorithm-mwd-trend-specified-loss.md)。
 >
 > 本文最初用于性能诊断，原始基准数据继续保留，用于说明优化来源。
 > 2026-08-28 已按“六、建议实施顺序与验收”完成顺序 1～6；顺序 7 经基准判断

@@ -1,7 +1,7 @@
 # MWD 指定良损算法逻辑
 
 > 本文只描述当前实现的数据流、公式、保证和边界。方案是否适合合入及剩余风险见
-> [MWD 指定良损方案评估与 Merge 建议](mwd-processor-opt-analysis-and-merge-assessment.md)。
+> [MWD 当前算法耗时评估与简化建议](../../../docs/dev_docs/generated/yield_domian/mwd-processor-opt-assessment.md)。
 
 ## 一、算法目标与事实源
 
@@ -31,7 +31,7 @@ Panel 明细在 Code 日度路径中只提供：
 - 实际出现过的 `(Defect Group, Code)` 唯一清单，用于建立日度输出网格；
 - 按自然月、Code 汇总的原始月度良损，作为月度目标的最后回退。
 
-原始月度良损只保留月度聚合结果，不保留原始日度分布。最终有效月度目标始终按
+原始月度良损只保留月度聚合结果，不保留原始日度分布。Code 最终有效月度目标始终按
 “当月指定 → 最近一个更早月份的指定 → 原始月度良损”解析，然后重新生成日度数。
 
 Mapping 使用同一修饰表计算月度倍率，但在倍率应用后仍执行既有批次级联衰减。
@@ -61,7 +61,7 @@ Mapping 使用同一修饰表计算月度倍率，但在倍率应用后仍执行
 
 ```text
 targets[Code][月份] = 该 Code 在该月最终采用的目标良损
-group_targets[Group][月份] = 该 Group 在该月最终采用的月度覆写良损
+group_targets[Group][月份] = 该 Group 在该月明确填写的指定良损（未指定月份不返回目标）
 factors[(Code, 月份)] = 目标良损 / 当月原始良损
 ```
 
@@ -70,8 +70,7 @@ Code Sheet 生成 Code 月度目标和 Mapping 倍率，并驱动 Code 日度趋
 
 ### 2.2 月度目标回退
 
-`modifier_table.py::resolve_monthly_targets` 对每个不良项（Code 或 Group）、每个月按
-以下顺序解析：
+`modifier_table.py::resolve_monthly_targets` 对每个 Code、每个月按以下顺序解析：
 
 ```text
 当月指定良损
@@ -83,8 +82,19 @@ Code Sheet 生成 Code 月度目标和 Mapping 倍率，并驱动 Code 日度趋
 因此，业务人员可以只在需要改变水准的月份填写“指定良损”。未填写月份沿用最近一次
 更早月份的指定；从未指定时使用该 Code 从 Panel 明细按月汇总得到的原始月度良损。
 修饰表中的“当月良损”与该月度汇总使用相同口径，但即使历史月份没有工作簿行，程序
-也会直接从本次 Panel 分析窗口补齐原始月度良损。Group 缺少月度覆写目标时，保留
-Code 日度汇总得到的月度基础值。
+也会直接从本次 Panel 分析窗口补齐原始月度良损。
+
+Group 使用独立的解析策略：应用层调用同一函数时设置
+`fallback_to_raw=False` 和 `fallback_to_previous=False`，只返回同一 Group、
+同一月份明确填写的“指定良损”。当月指定为空、缺失或没有当月行时，不沿用
+最近一个月或任何历史月份的指定，也不使用 Group Sheet 的“当月良损”覆写，
+而是保留 Code 最终日度按 Group 汇总后得到的月度基础值。
+明确填写的 `0` 是有效指定值，会将对应 Group 当月月度良损覆写为 `0`。
+
+分析日历补齐到截止日后，整月无投入的月份，其 Code 原始月度良损按 `0`
+提供给上述目标回退链，包括数据中间的空月份及末尾补齐月份。指定目标的优先级
+不变；无论是否有指定值，零投入月份生成的不良数为 `0`，Code 和 Group
+在月、周、日各周期的投入为零时，最终良损均为 `0`。
 
 ## 三、Code 日度生成
 
@@ -437,7 +447,7 @@ Code 最终日度整数
 - `aggregation.py::safe_trend_aggregator`：从 Group 日度生成周度和月度基础值；
 - `mwd_trend_processor.py::_apply_group_monthly_overrides`：只覆写最终月度值。
 
-Group Sheet 的指定良损转换为该月覆写整数：
+仅当 Group Sheet 对该 Group 的当月有指定良损时，才转换为该月覆写整数：
 
 ```text
 Group 月度覆写整数 = round(Group 指定良损 × 该月投入 Panel 数)
@@ -448,7 +458,8 @@ Group 月度覆写整数 = round(Group 指定良损 × 该月投入 Panel 数)
 
 - `Group 日度 = Σ 同 Group 的 Code 日度`；
 - `Group 周度 = Σ 对应自然周的 Group 日度`；
-- 未指定月份：`Group 月度 = Σ 对应自然月的 Group 日度`；
+- 当月未指定或缺少当月行：`Group 月度 = Σ 对应自然月的 Group 日度`，
+  不沿用历史月份的指定良损；
 - 指定月份：`Group 月度 = Group Sheet 指定良损 × 月投入`（取整并受月投入约束）。
 
 当 Group Sheet 与 Code Sheet 的人工目标不一致时，日度和周度仍服从 Code 汇总；
@@ -519,6 +530,7 @@ Mapping 原始不良行
 - Code Sheet 驱动 Code 日度，Group 日度严格由 Code 日度按 Group 汇总；
 - Code 周/月和 Group 周度均从最终日度聚合；
 - Group Sheet 只覆写 Group 月度，不反向生成 Group 日度；
+- Group 月度仅使用当月指定值；当月未指定时保留日度聚合结果，指定为 `0` 也生效；
 - 跨月插值基线没有月初目标值阶梯。
 
 当前算法不保证：

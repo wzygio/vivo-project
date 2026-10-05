@@ -185,14 +185,16 @@ def resolve_monthly_targets(
     months: list[str],
     *,
     fallback_to_raw: bool = True,
+    fallback_to_previous: bool = True,
 ) -> dict[str, dict[str, float]]:
     """解析每个不良类型在目标月份的目标良损。
 
     回退链：当月 `指定良损` → 最近一个有 `指定良损` 的上个月 → 当月 `当月良损`
     → 不给修饰目标。表中无该月行且从未指定时，Code 日度生成阶段使用从 Panel 明细
     按月汇总的原始月度良损，不回落原始日度不良数。
-    Group 调用时设置 fallback_to_raw=False：仅返回当前或历史指定良损，
-    无指定值时保留 Code 聚合结果；Group 的当月良损仅供参考。
+    Group 调用时设置 fallback_to_raw=False、fallback_to_previous=False：
+    仅返回当月指定良损，无指定值时保留 Code 日度聚合结果；
+    Group 的当月良损仅供参考，不沿用历史指定值。
     """
     months = sorted(str(m) for m in months)
     targets: dict[str, dict[str, float]] = {}
@@ -218,7 +220,7 @@ def resolve_monthly_targets(
                 defect_targets[month] = specified_by_month[month]
                 continue
             earlier = [m for m in specified_by_month if m < month]
-            if earlier:
+            if fallback_to_previous and earlier:
                 defect_targets[month] = specified_by_month[max(earlier)]
                 continue
             if fallback_to_raw and month in raw_by_month:

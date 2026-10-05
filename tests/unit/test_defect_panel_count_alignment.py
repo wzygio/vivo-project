@@ -44,6 +44,44 @@ def _panel_details(days, defective) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+@pytest.mark.parametrize("october_target", [None, 0.2])
+def test_zero_input_month_does_not_block_code_or_group_trends(october_target) -> None:
+    panels = _panel_details(
+        ["20260901"], {"20260901": [("P00", "Array_Pixel", "CodeA")]}
+    )
+    targets = {"CodeA": {"2026-09": 0.1}}
+    if october_target is not None:
+        targets["CodeA"]["2026-10"] = october_target
+    config = _config()
+    end = pd.Timestamp("2026-10-05")
+
+    code = MWDTrendProcessor.create_code_level_mwd_trend_data(
+        panels, config, targets, target_end_date=end
+    )
+    assert code is not None
+    group = MWDTrendProcessor.create_mwd_trend_data(
+        panels, config, code,
+        modifier_targets={"Array_Pixel": {"2026-10": 0.3}},
+        target_end_date=end,
+    )
+    assert group is not None
+    for result in (code, group):
+        october = result["monthly"][
+            result["monthly"]["time_period"].astype(str).str.startswith("2026-10")
+        ]
+        assert not october.empty
+        assert october["total_panels"].eq(0).all()
+        assert october["defect_rate"].eq(0).all()
+        september = result["monthly"][
+            result["monthly"]["time_period"].astype(str).str.startswith("2026-09")
+        ]
+        assert september["defect_rate"].iloc[0] == pytest.approx(0.1)
+        for key in ("daily_full", "weekly"):
+            zero_input = result[key][result[key]["total_panels"].eq(0)]
+            assert not zero_input.empty
+            assert zero_input["defect_rate"].eq(0).all()
+
+
 def test_code_formatter_exposes_full_weekly_history_but_keeps_ui_at_three_weeks() -> None:
     weekly = pd.DataFrame(
         {

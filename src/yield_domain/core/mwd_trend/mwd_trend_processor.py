@@ -4,9 +4,11 @@
 
 - Code 级日度由 `daily_generator.generate_daily_counts` 按"入库良率修饰表"
   解析出的 `modifier_targets`（{defect_desc: {月份: 目标良损}}）确定性生成；
-  修饰目标缺失时回退原始月度良损，不回落原始日度不良数。
+  修饰目标缺失时回退原始月度良损，不回落原始日度不良数；
+  补齐日历中的零投入月份原始良损按 0 计算，Code/Group 最终良损均为 0。
 - Group 级日度由 Code 最终日度按 Group 汇总；Group Sheet 的人工指定良损只覆写
-  最终月度结果，不反向生成日度数据。无可用指定良损时保留 Code 聚合结果，
+  对应月份的最终月度结果，不反向生成日度数据。当月未指定时保留 Code 日度
+  聚合结果，不沿用历史月份的指定良损，
   Group Sheet 的当月良损仅供参考，不作为月度覆写目标。
 - 周度由最终日度直接聚合；月度先由日度聚合，再应用 Group Sheet 的月度覆写。
 """
@@ -93,7 +95,7 @@ class MWDTrendProcessor:
         volatility: float = 0.2,
         target_end_date: dt | None = None,
     ) -> Dict[str, pd.DataFrame] | None:
-        """Create Code trends driven by the specified monthly loss rates."""
+        """Create Code trends; zero-input months use zero raw monthly loss."""
         logging.info("开始 Code 月/周/日趋势处理")
         if panel_details_df.empty:
             return None
@@ -172,7 +174,7 @@ def _apply_group_monthly_overrides(
     monthly_targets: Dict[str, Dict[str, float]],
     target_defects: list[str],
 ) -> pd.DataFrame:
-    """Override final Group monthly counts without changing daily/weekly data."""
+    """按当月指定值覆写 Group 月度；未指定月份保留日度聚合结果。"""
     if monthly.empty or not monthly_targets:
         return monthly.copy()
 

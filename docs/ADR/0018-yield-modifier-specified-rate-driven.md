@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-18
 - Last amended: 2026-08-28（修饰表缓存失效收敛到页头手动刷新）
+- Group monthly rule amended: 2026-10-05（仅使用当月指定良损；未指定时保留日度聚合结果）
 - Scope: `src/yield_domain/core/mwd_trend/`、`src/yield_domain/core/mapping/mapping_processor.py`、`src/yield_domain/core/defect_modifier.py`、`src/yield_domain/application/{yield_service,excel_service}.py`、`app/pages/入库不良率分析看板.py`、`config/products/*.yaml`、`tools/update_yield_modifier_table.py`
 - Trace: Issue `.scratch/mwd-processor-opt/issues/01-simplify-yield-modifier-pipeline.md`、
   Plan `.planning/2026-08-18-mwd-processor-opt/`、
@@ -33,7 +34,8 @@ Mapping 的级联衰减为业务红线，禁止静态重构。
    良损字段按百分数三位小数（分数 5 位）存储。目标良损
    Code 回退链：当月指定 → 最近上月指定 → 当月原始。若修饰表没有该月原始值，Code
    使用本次 Panel 明细按月汇总得到的原始月度良损；不再回落原始日度不良数。
-   Group 回退链：当月指定 → 最近上月指定 → Code 级聚合结果。
+   Group 月度规则：当月指定（含 `0`）→ Code 最终日度按 Group 聚合的月度结果；
+   当月未指定或缺少当月行时，不沿用历史月份的指定良损。
    Group 的 `当月良损` 仅供参考，永不作为覆写目标；无指定目标时不执行月度覆写。
    历史存量迁移曾由 `tools/backfill_modifier_table_specified.py` 一次性完成；迁移结束后
    已删除该脚本，避免旧趋势/基线再次自动写入“指定良损”。

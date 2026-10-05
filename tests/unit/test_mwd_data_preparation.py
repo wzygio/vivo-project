@@ -40,3 +40,18 @@ def test_code_preparation_does_not_calculate_original_daily_defect_counts() -> N
         1,
     ]
     assert raw_monthly_targets == {"CodeA": {"2026-05": 2 / 3}}
+
+
+def test_code_preparation_zero_fills_months_without_input() -> None:
+    panels = pd.DataFrame({
+        "warehousing_time": ["20260701", "20260901"],
+        "panel_id": ["P01", "P02"],
+        "defect_group": ["Array_Pixel", "Array_Pixel"],
+        "defect_desc": ["CodeA", "CodeA"],
+    })
+
+    _, _, targets = prepare_code_raw_data(panels, pd.Timestamp("2026-10-05"))
+
+    assert targets == {"CodeA": {
+        "2026-07": 1.0, "2026-08": 0.0, "2026-09": 1.0, "2026-10": 0.0,
+    }}

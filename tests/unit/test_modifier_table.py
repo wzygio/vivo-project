@@ -244,6 +244,26 @@ class TestResolveMonthlyTargets:
         targets = resolve_monthly_targets(df, ["2026-07"])
         assert "2026-07" not in targets["B暗点"]
 
+    @pytest.mark.parametrize("specified", [None, "", float("nan")])
+    def test_group_targets_only_include_same_month_specified_rates(self, specified):
+        df = pd.DataFrame(
+            [
+                _row("Array_Pixel", "2026-05", raw_loss=0.01, specified=0.20),
+                _row("Array_Pixel", "2026-06", raw_loss=0.03, specified=specified),
+                _row("Array_Pixel", "2026-08", raw_loss=0.04, specified=0.0),
+            ],
+            columns=MODIFIER_TABLE_COLUMNS,
+        )
+
+        targets = resolve_monthly_targets(
+            df,
+            ["2026-05", "2026-06", "2026-07", "2026-08"],
+            fallback_to_raw=False,
+            fallback_to_previous=False,
+        )
+
+        assert targets == {"Array_Pixel": {"2026-05": 0.20, "2026-08": 0.0}}
+
 def test_read_modifier_table_rejects_negative_rate_with_row_context(tmp_path):
     path = tmp_path / "modifier.xlsx"
     _write_table(
