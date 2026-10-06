@@ -30,5 +30,5 @@
 2. 迭代：请检查并完善`AGENTS.md`中的“Iteration Router”
     - 项目功能改动：更新`references`中的对应文件
     - 项目架构改动：更新`ARCHITECTURE.md`
-3. 最后，请审查`CONTEXT.md`是否还有存在的必要，如果没有，请将其删除。
+3. 最后，请审查`HARNESS.md`是否还有存在的必要，如果没有，请将其删除。
 
