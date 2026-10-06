@@ -34,6 +34,7 @@ from src.inline_domain.core.shared.sheet_ooc_decoration import (
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ def fetch_decorated_features(
     product_revision: str = "",
     decision_signature: str = "",
     sheet_features_start_date: str = "",
+    date_exclusion: InlineDateExclusion | None = None,
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
@@ -230,6 +232,9 @@ def fetch_decorated_features(
 
     if normalized_scope == SCOPE_NONE:
         # 免修饰口径：只做 preprocess 特征计算（与 aoi_tt 一致）。
+        measurements_df = exclude_inline_factory_dates(
+            measurements_df, date_exclusion, time_column="sheet_start_time",
+        )
         features_df = _preprocess_sheet_features_by_type(measurements_df, spec_df)
         return {
             "sheet_features_df": features_df,
@@ -246,6 +251,7 @@ def fetch_decorated_features(
         persist=True,
         product_revision=product_revision,
         decision_signature=decision_signature,
+        **({"date_exclusion": date_exclusion} if date_exclusion is not None else {}),
         **({"sheet_features_start_date": sheet_features_start_date} if sheet_features_start_date else {}),
     )
     decoration_result = decorated_data.sheet_oos_decoration_result

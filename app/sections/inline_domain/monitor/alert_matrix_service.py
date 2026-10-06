@@ -43,6 +43,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates, exclude_inline_period_records
 from src.shared_kernel.data_health import get_data_health
 from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 from yield_domain.application.alert_service import AlertService
@@ -205,10 +206,16 @@ def _sheet_oos_evaluator(
             return _cell(
                 row_key, prod_code, CELL_STATE_NO_DATA, f"缺少时间列 {projected_time_column}"
             )
+        decoration_df = exclude_inline_factory_dates(
+            decoration_df, ConfigLoader.get_inline_data_exclusion(), time_column=projected_time_column,
+        )
+        if decoration_df.empty:
+            return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无可用监控数据")
         alerts_df = build_sheet_oos_alerts(
             decoration_df,
             time_column=projected_time_column,
             reference_date=context.reference_date,
+            date_exclusion=ConfigLoader.get_inline_data_exclusion(),
         )
         return _alerts_cell(
             row_key,
@@ -231,6 +238,9 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
     if capability_df is None or capability_df.empty:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无周期能力数据")
     normalized = normalize_latest_cpk(capability_df, prod_code)
+    normalized = exclude_inline_period_records(
+        normalized, ConfigLoader.get_inline_data_exclusion(), as_of=pd.Timestamp(context.reference_date),
+    )
     week_start, _ = previous_iso_week_range(context.reference_date)
     iso = week_start.isocalendar()
     weekly = normalized.loc[normalized["period_type"].eq("week") & normalized["period_label"].eq(f"{iso.year}-W{iso.week:02d}")]
@@ -247,6 +257,9 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
 
 def build_latest_cpk_alerts(frame: pd.DataFrame, reference_date: date) -> pd.DataFrame:
     """Read normalized local ledger records; never recalculate raw SPC capability."""
+    frame = exclude_inline_period_records(
+        frame, ConfigLoader.get_inline_data_exclusion(), as_of=pd.Timestamp(reference_date),
+    )
     start, _ = previous_iso_week_range(reference_date)
     iso = start.isocalendar()
     mask = (frame["period_type"].eq("week")

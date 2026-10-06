@@ -1,10 +1,12 @@
 """Independent chamber monitoring section below the existing station report."""
 
+from collections.abc import Callable
 from datetime import date
 
 import pandas as pd
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.qtime.chamber_chart import build_chamber_figure
 from src.indicator_domain.application.qtime.chamber_cache import cached_chamber_report, clear_chamber_cache
 from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService
@@ -26,23 +28,31 @@ def refresh_chamber_data() -> bool:
     return clear_chamber_result()
 
 
-def _multiselect(label: str, options: list[str], *, key: str, default: list[str]) -> list[str]:
+def _multiselect(
+    label: str, options: list[str], *, key: str, default: list[str],
+    format_func: Callable[[str], str] = str,
+) -> list[str]:
     if key in st.session_state:
         previous = st.session_state[key]
         valid = [value for value in previous if value in options]
         if valid != previous:
             st.session_state[key] = valid
-        return st.multiselect(label, options, key=key, placeholder='全部')
-    return st.multiselect(label, options, default=default, key=key, placeholder='全部')
+        return st.multiselect(label, options, key=key, placeholder='全部', format_func=format_func)
+    return st.multiselect(
+        label, options, default=default, key=key, placeholder='全部', format_func=format_func,
+    )
 
 
 @st.fragment
 def render_chamber_dashboard(service: ChamberQTimeService) -> None:
-    st.subheader('蒸镀单腔停留时间监控', anchor=False, text_alignment='center')
+    st.subheader('蒸镀腔室QTime监控', anchor=False, text_alignment='center')
     with st.container(border=True):
         columns = st.columns([1.4, 1.2, 2.4, 0.7], vertical_alignment='bottom')
         with columns[0]:
-            products = _multiselect('产品型号', list(service.enabled_products), key='chamber_products', default=[])
+            products = _multiselect(
+                '产品型号', list(service.enabled_products), key='chamber_products', default=[],
+                format_func=get_product_label_formatter(),
+            )
         with columns[1]:
             lines = _multiselect('线体', ['3CEE001', '3CEE002'], key='chamber_lines', default=[])
         with columns[2]:

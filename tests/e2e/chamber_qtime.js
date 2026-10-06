@@ -5,7 +5,8 @@ async page => {
   const waitText = text => page.getByText(text, { exact: false }).first().waitFor({ timeout: 30000 });
   const select = async (label, value) => {
     await page.getByRole('combobox', { name: new RegExp(label) }).click();
-    await page.getByRole('option', { name: value, exact: true }).click();
+    const name = label === '产品型号' ? new RegExp(`^${value}(?:（.*）)?$`) : value;
+    await page.getByRole('option', { name, exact: true }).click();
     await page.keyboard.press('Escape');
   };
   const counts = async () => {

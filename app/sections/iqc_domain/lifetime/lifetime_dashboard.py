@@ -1,10 +1,12 @@
 """Enabled product scope, measurement filters and grouped lifetime presentation."""
 
 import logging
+from collections.abc import Callable
 
 import pandas as pd
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.iqc_domain.lifetime import build_lifetime_chart
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from src.iqc_domain.composition import build_lifetime_service
@@ -20,10 +22,12 @@ def fetch_report_payload() -> pd.DataFrame:
     return build_lifetime_service().get_report()
 
 
-def _select(label: str, options: list[str], key: str) -> list[str]:
+def _select(
+    label: str, options: list[str], key: str, *, format_func: Callable[[str], str] = str,
+) -> list[str]:
     if key in st.session_state:
         st.session_state[key] = [v for v in st.session_state[key] if v in options]
-    return st.multiselect(label, options, placeholder='全部', key=key)
+    return st.multiselect(label, options, placeholder='全部', key=key, format_func=format_func)
 
 
 def _render_filters(
@@ -32,8 +36,10 @@ def _render_filters(
     with st.container(border=True):
         product_column, status_column, batch_column = st.columns(3)
         with product_column:
-            products = _select('产品型号', enabled_products,
-                               'iqc_lifetime_products')
+            products = _select(
+                '产品型号', enabled_products, 'iqc_lifetime_products',
+                format_func=get_product_label_formatter(),
+            )
         with status_column:
             scope = filter_report(frame, products, [])
             statuses = _select('产品状态', sorted(scope['产品状态'].dropna().unique().tolist()),

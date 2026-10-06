@@ -22,6 +22,9 @@ from src.inline_domain.core.monitor.cpk_summary import (
 )
 from src.inline_domain.core.monitor.period_summary import current_period_windows
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import (
+    InlineDateExclusion, exclude_inline_factory_dates, exclude_inline_period_records,
+)
 
 
 class CpkInputSource(Protocol):
@@ -52,6 +55,7 @@ def _cached_cpk_inputs(
     source_signature: object, products: tuple[str, ...], factories: tuple[str, ...],
     end_date: str, exemptions: tuple[str, ...], resource_dir: str | None,
     *, _source: CpkInputSource,
+    date_exclusion: InlineDateExclusion | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Cache native frames only; configuration signatures invalidate computations."""
     as_of = pd.Timestamp(end_date)
@@ -67,6 +71,7 @@ def _cached_cpk_inputs(
         if not isinstance(features, pd.DataFrame):
             raise ValueError(f"{product} 的 CPK 输入缺少 Sheet 特征")
         features = exclude_cpm_cpk_parameters(features, exemptions)
+        features = exclude_inline_factory_dates(features, date_exclusion, time_column="sheet_start_time")
         if not features.empty:
             features = features[features["factory"].isin(factories)].copy()
         detail = build_current_cpk_detail(features, end_date=as_of)
@@ -105,21 +110,31 @@ class CpkMonitorService:
                 build_cpk_summary_from_records(pd.DataFrame(columns=CPK_SUMMARY_COLUMNS), end_date=as_of),
                 pd.DataFrame(columns=[*CPK_DETAIL_COLUMNS, "status"]),
             )
+        date_exclusion = ConfigLoader.get_inline_data_exclusion()
         payload = _cached_cpk_inputs(
             self._source.source_signature(selected_products, ("spc",)),
             selected_products, selected_factories, as_of.date().isoformat(),
             tuple(ConfigLoader.get_spc_capability_param_exemptions()), self._resource_dir,
             _source=self._source,
+            date_exclusion=date_exclusion,
         )
         factory_key = _selection_key(selected_factories, ALL_FACTORIES)
         rows = build_current_cpk_records(
             payload["detail_df"], products=selected_products,
             factory_key=factory_key, end_date=as_of,
         )
+        rows = exclude_inline_period_records(
+            rows, date_exclusion, as_of=as_of,
+            factory_column="厂别", period_type_column="周期类型", period_label_column="时间标签",
+        )
         persisted = self._store.upsert_current_periods(rows, as_of=as_of)
         selected = persisted[persisted["产品"].isin(selected_products)
                              & persisted["监控类型"].eq("SPC")
                              & persisted["厂别"].eq(factory_key)]
+        selected = exclude_inline_period_records(
+            selected, date_exclusion, as_of=as_of,
+            factory_column="厂别", period_type_column="周期类型", period_label_column="时间标签",
+        )
         return CpkMonitorViewModel(
             build_cpk_summary_from_records(selected, end_date=as_of, expected_products=selected_products),
             payload["detail_df"].copy(),

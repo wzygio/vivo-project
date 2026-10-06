@@ -3,6 +3,7 @@
 import pandas as pd
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.ijp_hole.chart import build_hole_figure
 from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
 from src.indicator_domain.application.ijp.dtos import IjpQuery
@@ -36,7 +37,10 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
             if current != retained:
                 st.session_state[widget_key] = retained
             with column:
-                values[key] = tuple(st.multiselect(label, available, key=widget_key))
+                values[key] = tuple(st.multiselect(
+                    label, available, key=widget_key,
+                    format_func=get_product_label_formatter() if key == 'products' else str,
+                ))
         clicked = st.button('查询', type='primary', width='stretch', key='ijp_hole_search')
     signature = (
         start, end, *values.values(), service.enabled_products, service.work_order_types,

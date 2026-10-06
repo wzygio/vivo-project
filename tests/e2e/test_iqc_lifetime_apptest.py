@@ -74,7 +74,9 @@ def test_enabled_product_scope_status_filter_and_configuration_change():
     app.session_state['extended'] = True
     app.run()
     assert not app.exception
-    assert app.multiselect(key='iqc_lifetime_products').options == ['M678', 'M626']
+    assert app.multiselect(key='iqc_lifetime_products').options == [
+        'M678（CPD2455）', 'M626（CPD2515）',
+    ]
     assert 'DISABLED' not in app.dataframe[0].value.to_json(force_ascii=False)
     assert len(app.expander) == 6
     app.multiselect(key='iqc_lifetime_statuses').set_value(['模组']).run()

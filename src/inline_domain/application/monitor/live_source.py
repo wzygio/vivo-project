@@ -22,6 +22,7 @@ from src.inline_domain.core.shared.sheet_ooc_decoration import (
 )
 from src.inline_domain.core.shared.throughput_facts import build_daily_throughput_facts
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates
 
 
 def monitor_date_window() -> tuple[str, str]:
@@ -52,7 +53,8 @@ class LiveMonitorSource:
         self._resource_dir_provider = resource_dir_provider
 
     def source_signature(self, products: Iterable[str], scopes: Iterable[str]) -> str:
-        return f"live-v1:{','.join(sorted(scopes))}:{self._signature_provider(products)}"
+        policy = ConfigLoader.get_inline_data_exclusion()
+        return f"live-v2:{','.join(sorted(scopes))}:{self._signature_provider(products)}:{policy!r}"
 
     def read_payload(
         self, product: str, scope: str, start_date: str | None = None,
@@ -76,9 +78,12 @@ class LiveMonitorSource:
     ) -> dict[str, object]:
         port = self._port_factory(scope, product)
         query_args = dict(prod_code=product, start_date=start_date, end_date=end_date)
+        date_exclusion = ConfigLoader.get_inline_data_exclusion()
         if scope in {"spc", "ctq"}:
             query = SpcQueryConfig(**query_args, data_type_filter=scope.upper())
-            raw = port.get_spc_measurements(query)
+            raw = exclude_inline_factory_dates(
+                port.get_spc_measurements(query), date_exclusion, time_column="sheet_start_time",
+            )
             specs = port.get_spc_spec_limits(product)
             if not raw.empty and specs.empty:
                 raise ValueError(f"{product}/{scope}: specifications are unavailable")
@@ -97,7 +102,9 @@ class LiveMonitorSource:
                 "spec_empty": specs.empty,
             }
         if scope == "aoi_tt":
-            details = port.get_tt_details(AoiTtQueryConfig(**query_args))
+            details = exclude_inline_factory_dates(
+                port.get_tt_details(AoiTtQueryConfig(**query_args)), date_exclusion,
+            )
             specs = port.get_tt_spec_limits(product)
             if not details.empty and specs.empty:
                 raise ValueError(f"{product}/{scope}: specifications are unavailable")
@@ -109,6 +116,8 @@ class LiveMonitorSource:
         if scope == "aoi_rs":
             query = AoiRsQueryConfig(**query_args)
             details, passed = port.get_rs_details(query), port.get_pass_through(query)
+            details = exclude_inline_factory_dates(details, date_exclusion)
+            passed = exclude_inline_factory_dates(passed, date_exclusion)
             specs = port.get_rs_spec_limits(product)
             if not details.empty and specs.empty:
                 raise ValueError(f"{product}/{scope}: specifications are unavailable")

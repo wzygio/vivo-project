@@ -36,7 +36,7 @@ async page => {
   const productSelector = page.getByRole("combobox").first();
   if ((await productSelector.inputValue()) !== "M626") {
     await productSelector.click();
-    await page.getByRole("option", { name: "M626", exact: true }).click();
+    await page.getByRole("option", { name: /^M626(?:（.*）)?$/ }).click();
     await page
       .getByText("正在加载 SPC 分布数据...")
       .waitFor({ state: "hidden", timeout: 600_000 });

@@ -17,6 +17,8 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_sheet_point_df,
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
+from src.inline_domain.core.aoi_rs.aoi_rs_decoration import filter_aoi_rs_report_data
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
     AOI_RS_DECORATION_POLICY_VERSION,
     project_factory_scoped_details,
@@ -95,6 +97,7 @@ def _build_chart_points(
     coverage_end: pd.Timestamp | None = None,
     persist_shared_history: bool = False,
     special_factories: tuple[str, ...] = (),
+    date_exclusion: InlineDateExclusion | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
@@ -115,6 +118,8 @@ def _build_chart_points(
         decision_signature=decision_signature,
         rs_details_df=rs_details_df,
         special_factories=special_factories,
+        pass_through_df=pass_through_df,
+        date_exclusion=date_exclusion,
     )
     if (
         persist_shared_history
@@ -189,6 +194,7 @@ class AoiRsReportService:
         decision_signature: str = "",
         decoration_policy_version: str = AOI_RS_DECORATION_POLICY_VERSION,
         special_factories: tuple[str, ...] = ("OLED",),
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -197,6 +203,7 @@ class AoiRsReportService:
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         decoration_policy_version 与 special_factories 使规则或厂别配置变更后重建投影。
+        date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
         """
         try:
             query_config = AoiRsQueryConfig.model_validate_json(query_config_json)
@@ -258,6 +265,10 @@ class AoiRsReportService:
                 coverage_end=(coverage_end if _covers_full_product(query_config) else None),
                 persist_shared_history=persist_shared_history,
                 special_factories=special_factories,
+                date_exclusion=date_exclusion,
+            )
+            rs_details_df, pass_through_df = filter_aoi_rs_report_data(
+                rs_details_df, pass_through_df, date_exclusion,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {
@@ -285,8 +296,9 @@ class AoiRsReportService:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         try:
             factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories())
+            date_exclusion = ConfigLoader.get_inline_data_exclusion()
         except ValueError as exc:
-            logger.exception("[AOI_RS] invalid special decoration configuration")
+            logger.exception("[AOI_RS] invalid report decoration configuration")
             raise AoiRsReportBuildError("AOI_RS report configuration is invalid.") from exc
         payload = AoiRsReportService.fetch_aoi_rs_report_payload(
             _data_port=_data_port,
@@ -296,5 +308,6 @@ class AoiRsReportService:
             decision_signature=decision_signature,
             decoration_policy_version=AOI_RS_DECORATION_POLICY_VERSION,
             special_factories=factories,
+            date_exclusion=date_exclusion,
         )
         return AoiRsReportService._view_model_from_payload(payload)

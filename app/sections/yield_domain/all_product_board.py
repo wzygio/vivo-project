@@ -4,6 +4,7 @@ import logging
 
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.sections.yield_domain.group_trend_data import load_product_group_trends
 from app.sections.yield_domain.yield_dashboard import render_macro_trend_section
 from src.shared_kernel.config import ConfigLoader
@@ -57,6 +58,7 @@ def render_all_product_yield_board() -> None:
     with selection_col:
         selected = st.multiselect(
             "产品型号", products, key=PRODUCTS_KEY,
+            format_func=get_product_label_formatter(),
             placeholder="全部产品", help="留空时展示全部产品。",
         )
     with query_col:

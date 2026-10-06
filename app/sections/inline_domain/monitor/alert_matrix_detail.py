@@ -180,6 +180,7 @@ def _load_sheet_oos_alerts_display(
         decoration_df,
         time_column=time_column,
         reference_date=reference_date,
+        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,
@@ -776,7 +777,6 @@ def _render_spc_cpk_detail(
         return
     count = _indicator_count(frames["sheet_features_df"], ["factory", "step_id", "param_name"])
     with st.expander(f"🚨 CPK 自动预警指标图像（{count} 个指标）", expanded=True):
-        st.caption("以下图像由 CPK 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。")
         render_spc_indicator_sections(
             period_capability_df=frames["period_capability_df"],
             sheet_features_df=frames["sheet_features_df"],

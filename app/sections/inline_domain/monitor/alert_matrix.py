@@ -26,6 +26,7 @@ from typing import Any
 
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.sections.inline_domain.monitor.alert_matrix_cache import get_cached_alert_matrix
 from app.components.indicator_cache import bump_indicator_product_revision
 from app.sections.inline_domain.monitor.alert_matrix_service import (
@@ -140,6 +141,7 @@ def render_alert_matrix_filter_bar(
             options=list(products),
             default=list(products),
             key="alert_matrix_products",
+            format_func=get_product_label_formatter(),
         )
     with factory_column:
         selected_factories = st.multiselect(
@@ -394,7 +396,10 @@ def render_matrix_refresh_controls() -> None:
         with indicator_column:
             indicator = st.selectbox("刷新指标", list(names), format_func=names.get, key="matrix_refresh_indicator")
         with product_column:
-            product = st.selectbox("刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product")
+            product = st.selectbox(
+                "刷新产品", ConfigLoader.get_enabled_products(), key="matrix_refresh_product",
+                format_func=get_product_label_formatter(),
+            )
         with action_column:
             with st.container(horizontal=True):
                 st.button(

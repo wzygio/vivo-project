@@ -10,6 +10,7 @@ import pandas as pd
 from pydantic import ValidationError
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.qtime.chart import build_qtime_figure
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.qtime.alert_center import render_qtime_alert_center
@@ -46,7 +47,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
     同一组 L2 缓存条目），产品/站点筛选为内存过滤；本页不参与 Header
     单产品筛选（产品多选内聚在筛选区首列）。
     """
-    st.subheader("北极星QTime监控", anchor=False, text_alignment="center")
+    st.subheader("重点站点QTime监控", anchor=False, text_alignment="center")
 
     with st.container(border=True):
         product_column, shop_column, path_column, search_column = st.columns(
@@ -58,6 +59,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             selected_products = st.multiselect(
                 "产品",
                 options=product_options,
+                format_func=get_product_label_formatter(),
                 default=product_options,
                 placeholder="请选择一个或多个产品",
                 key="qtime_products",

@@ -18,6 +18,15 @@ auto_decoration:
   exempt_param_name_contains:
     - "PPA"
 
+# Inline 全域日期过滤：按各模块事件时间（报表时间）排除，首尾日期均包含。
+# factories: [] 关闭；end_date 支持 "today"（服务器当天）或 "YYYY-MM-DD"。
+data_exclusion:
+  factories:
+    - "OLED"
+    - "TP"
+  start_date: "2026-10-01"
+  end_date: "today"
+
 # AOI_RS 特殊顺序修饰：Sheet 半规格截断 → Lot 归零 → 周/日限幅。
 # 仅对列表中的厂别启用；[] 关闭特殊修饰，其他厂别沿用常规修饰。
 aoi_rs:

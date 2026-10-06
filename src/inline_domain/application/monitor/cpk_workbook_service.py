@@ -10,6 +10,8 @@ import pandas as pd
 from src.inline_domain.application.monitor.cpk_monitor_service import CpkMonitorViewModel
 from src.inline_domain.application.monitor.summary_workbook_service import ALL_FACTORIES, _selection_key
 from src.inline_domain.core.monitor.cpk_summary import CPK_DETAIL_COLUMNS, build_cpk_summary_from_records
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_period_records
+from src.shared_kernel.config import ConfigLoader
 
 
 class CpkSummaryReader(Protocol):
@@ -40,6 +42,7 @@ class CpkWorkbookMonitorService:
         as_of = pd.Timestamp(end_date if end_date is not None else pd.Timestamp.today()).normalize()
         detail = pd.DataFrame(columns=[*CPK_DETAIL_COLUMNS, "status"])
         status = pd.DataFrame()
+        date_exclusion = ConfigLoader.get_inline_data_exclusion()
         if self._latest_reader is not None:
             frames = [self._latest_reader.read_product(product) for product in products]
             frames = [frame for frame in frames if frame is not None and not frame.empty]
@@ -61,11 +64,17 @@ class CpkWorkbookMonitorService:
                 status["来源文件更新时间"] = updated_at()
         else:
             records = self._store.read()
+        # Existing maintenance still consumes source decisions; filter only the projection.
+        detail = exclude_inline_period_records(detail, date_exclusion, as_of=as_of)
         selected = records.loc[
             records["产品"].isin(products)
             & records["监控类型"].eq("SPC")
             & records["厂别"].eq(_selection_key(factories, ALL_FACTORIES))
         ]
+        selected = exclude_inline_period_records(
+            selected, date_exclusion, as_of=as_of,
+            factory_column="厂别", period_type_column="周期类型", period_label_column="时间标签",
+        )
         return CpkMonitorViewModel(
             build_cpk_summary_from_records(selected, end_date=as_of, expected_products=products, week_count=4),
             detail,

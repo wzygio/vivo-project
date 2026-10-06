@@ -66,7 +66,7 @@ async page => {
   await page.getByRole('option', { name: '2026/3/10', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.getByRole('combobox', { name: '产品型号', exact: true }).click();
-  await page.getByRole('option', { name: 'M626', exact: true }).click();
+  await page.getByRole('option', { name: /^M626(?:（.*）)?$/ }).click();
   await page.keyboard.press('Escape');
   if (await page.locator('.js-plotly-plot').count() !== 10) throw new Error('Draft filters changed results before query');
   await page.getByRole('button', { name: '查询', exact: true }).click();

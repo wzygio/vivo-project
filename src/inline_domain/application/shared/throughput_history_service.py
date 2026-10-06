@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.core.shared.throughput_facts import build_daily_throughput_facts
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates
+from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.application.shared.throughput_ports import (
     ThroughputHistoryPort,
 )
@@ -44,13 +46,16 @@ class ThroughputHistoryService:
         )
 
     def read_product(self, scope: str, prod_code: str) -> pd.DataFrame:
-        return self._store.read(scope, prod_code)
+        return exclude_inline_factory_dates(
+            self._store.read(scope, prod_code), ConfigLoader.get_inline_data_exclusion(),
+            time_column="event_date",
+        )
 
     def snapshot_path(self, scope: str, prod_code: str) -> Path:
         return self._store.snapshot_path(scope, prod_code)
 
     def source_signature(self, products: list[str], scopes: list[str]) -> str:
-        parts: list[str] = []
+        parts: list[str] = [repr(ConfigLoader.get_inline_data_exclusion())]
         for scope in sorted(set(scopes)):
             for prod_code in sorted(set(products)):
                 path = self.snapshot_path(scope, prod_code)

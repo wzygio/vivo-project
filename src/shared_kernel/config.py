@@ -2,6 +2,7 @@
 import yaml
 import logging
 from pathlib import Path
+from datetime import date
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
 
@@ -41,6 +42,28 @@ class ConfigLoader:
         except Exception as e:
             logging.error(f"❌ 读取全局产品列表失败: {e}")
             return ["M678"] # 最后的防线
+
+    @classmethod
+    def get_product_annotations(cls) -> Dict[str, str]:
+        """Read optional product annotations for presentation only."""
+        yaml_path = cls.get_project_root() / "config" / "global.yaml"
+        registry = cls._load_yaml(yaml_path).get("product_registry", {})
+        if not isinstance(registry, dict):
+            raise ValueError("product_registry must be a mapping")
+        annotations = registry.get("product_annotations")
+        if annotations is None:
+            return {}
+        if not isinstance(annotations, dict) or any(
+            not isinstance(code, str)
+            or (annotation is not None and not isinstance(annotation, str))
+            for code, annotation in annotations.items()
+        ):
+            raise ValueError("product_annotations must map product codes to text")
+        return {
+            code: annotation.strip()
+            for code, annotation in annotations.items()
+            if annotation is not None and annotation.strip()
+        }
 
     @classmethod
     def get_work_order_types(cls) -> List[str]:
@@ -369,6 +392,46 @@ class ConfigLoader:
         except Exception as exc:
             logging.error("❌ 读取自动修饰参数豁免配置失败: %s", exc)
             return []
+
+    @classmethod
+    def get_inline_data_exclusion(
+        cls, *, today: date | None = None,
+    ) -> tuple[tuple[str, ...], str, str] | None:
+        """Resolve the domain-wide projection exclusion, including legacy AOI config."""
+        domain = cls.load_domain_config("inline_domain")
+        section = domain.get("data_exclusion", domain.get("aoi_data_exclusion", {}))
+        if not isinstance(section, dict):
+            raise ValueError("data_exclusion must be a mapping")
+        factories = section.get("factories", [])
+        if not isinstance(factories, list) or any(
+            not isinstance(value, str) or not value.strip() for value in factories
+        ):
+            raise ValueError("data_exclusion.factories must be a list of factory names")
+        if not factories:
+            return None
+        try:
+            start = date.fromisoformat(str(section["start_date"]))
+            configured_end = section["end_date"]
+            end = (
+                (today or date.today())
+                if configured_end == "today"
+                else date.fromisoformat(str(configured_end))
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "data_exclusion requires ISO start_date and ISO end_date or 'today'"
+            ) from exc
+        if start > end:
+            raise ValueError("data_exclusion.start_date must not exceed end_date")
+        names = tuple(dict.fromkeys(value.strip().upper() for value in factories))
+        return names, start.isoformat(), end.isoformat()
+
+    @classmethod
+    def get_aoi_data_exclusion(
+        cls, *, today: date | None = None,
+    ) -> tuple[tuple[str, ...], str, str] | None:
+        """Compatibility entry; all Inline modules now share one policy."""
+        return cls.get_inline_data_exclusion(today=today)
 
     @classmethod
     def get_aoi_rs_special_decoration_factories(cls) -> list[str]:

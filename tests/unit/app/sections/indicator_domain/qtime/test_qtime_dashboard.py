@@ -5,6 +5,7 @@ import pytest
 
 from streamlit.testing.v1 import AppTest
 
+from app.components.product_labels import get_product_label_formatter
 from app.manager.session_manager import SessionManager
 from src.indicator_domain.application.qtime.dtos import QTimeStepOption
 
@@ -214,7 +215,10 @@ def test_qtime_dashboard_product_filter_defaults_to_all_and_leads_the_filter_row
 
     product_filter = app.multiselect(key="qtime_products")
     assert product_filter.label == "产品"
-    assert list(product_filter.options) == list(SessionManager.AVAILABLE_PRODUCTS)
+    formatter = get_product_label_formatter()
+    assert list(product_filter.options) == [
+        formatter(product) for product in SessionManager.AVAILABLE_PRODUCTS
+    ]
     assert list(product_filter.value) == list(SessionManager.AVAILABLE_PRODUCTS)
     # 筛选顺序：产品 → 厂别 → 站点 → 查询
     assert app.multiselect[0].key == "qtime_products"

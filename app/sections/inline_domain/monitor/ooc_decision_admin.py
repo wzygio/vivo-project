@@ -7,6 +7,7 @@ from io import BytesIO
 import pandas as pd
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.sections.inline_domain.shared.decoration_admin import excel_bytes
 from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
 from src.inline_domain.core.shared.sheet_oos_decoration import (
@@ -67,7 +68,10 @@ def render_ooc_decision_admin(
     with st.expander("OOC 预警决策管理（管理员）", expanded=False):
         columns = st.columns(2)
         with columns[0]:
-            product = st.selectbox("产品", products, key="monitor_ooc_admin_product")
+            product = st.selectbox(
+                "产品", products, key="monitor_ooc_admin_product",
+                format_func=get_product_label_formatter(),
+            )
         with columns[1]:
             scope = st.selectbox(
                 "类型", scopes, format_func=str.upper, key="monitor_ooc_admin_scope"

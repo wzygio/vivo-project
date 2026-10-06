@@ -7,6 +7,7 @@
 | 同一 Streamlit 页面包含多个独立模块；局部交互不应触发其他模块重跑 | [多模块页面的 Fragment 隔离范式](design/feat_design/interaction-multi-module-fragments.md) |
 | 页头数据刷新、缓存刷新、代码与配置更新 | [页头更新机制](design/feat_design/data-flow-page-header-refresh.md) |
 | Yield MWD 指定良损、Code 日度生成、Group 月度覆写与跨月平滑 | [MWD 指定良损算法逻辑](design/feat_design/algorithm-mwd-trend-specified-loss.md) |
+| Q-Time 超规候选、三态决策、确定性等待时间、展示限幅与决策台账 | [Q-Time 数据修饰逻辑](design/indicator_domian/qtime/algorithm-qtime-data-decoration.md) |
 
 其他知识入口：[领域知识](domain/)、[功能设计](design/feat_design/)、[系统设计](design/system_design/)。
 

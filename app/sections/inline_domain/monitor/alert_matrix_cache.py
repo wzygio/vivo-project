@@ -93,10 +93,12 @@ def _file_signature(path: Path) -> str:
 def build_cell_source_signature(row_key: str, product: str) -> str:
     """Only the selected indicator's real input signatures; no board/global revision."""
     if row_key == "spc_cpk_trend":
-        return cpk_latest_store().source_signature()
+        return cpk_latest_store().source_signature() + ":" + repr(ConfigLoader.get_inline_data_exclusion())
     if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
         scope = row_key.removesuffix("_sheet_oos")
-        return _file_signature(scope_resource_dir(scope) / SCOPE_DECORATION_FILE_NAME[scope])
+        return _file_signature(scope_resource_dir(scope) / SCOPE_DECORATION_FILE_NAME[scope]) + ":" + repr(
+            ConfigLoader.get_inline_data_exclusion(),
+        )
     if row_key.startswith("yield_"):
         from yield_domain.application.yield_service import YieldAnalysisService
 

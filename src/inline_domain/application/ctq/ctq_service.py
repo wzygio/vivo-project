@@ -17,6 +17,7 @@ from src.inline_domain.application.shared.sheet_oos_decoration_service import (
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 
 if TYPE_CHECKING:
     from src.inline_domain.application.ctq.ports import CtqDataPort
@@ -100,6 +101,7 @@ class CtqReportService:
         snapshot_signature: str = "",
         product_revision: str = "",
         decision_signature: str = "",
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> dict[str, object]:
         """Cache only reload-stable CTQ payload values.
 
@@ -123,6 +125,7 @@ class CtqReportService:
                 snapshot_signature=snapshot_signature,
                 product_revision=product_revision,
                 decision_signature=decision_signature,
+                date_exclusion=date_exclusion,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return CtqReportService._empty_payload()
@@ -160,11 +163,17 @@ class CtqReportService:
         decision_signature: str = "",
     ) -> CtqReportViewModel:
         """Build the CTQ ViewModel outside the Streamlit pickle boundary."""
+        try:
+            date_exclusion = ConfigLoader.get_inline_data_exclusion()
+        except ValueError as exc:
+            logger.exception("[CTQ] invalid report date exclusion configuration")
+            raise CtqReportBuildError("CTQ report configuration is invalid.") from exc
         payload = CtqReportService.fetch_ctq_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
             snapshot_signature=snapshot_signature,
             product_revision=product_revision,
             decision_signature=decision_signature,
+            date_exclusion=date_exclusion,
         )
         return CtqReportService._view_model_from_payload(payload)

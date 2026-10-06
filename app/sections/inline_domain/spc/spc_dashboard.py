@@ -362,6 +362,7 @@ def build_spc_sheet_oos_alerts(
         sheet_oos_decoration_result.decoration_df,
         time_column="sheet_start_time",
         reference_date=reference_date,
+        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,

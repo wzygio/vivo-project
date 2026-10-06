@@ -9,6 +9,7 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.config_model import AppConfig
 from app.manager.session_manager import SessionManager
 from app.components.indicator_cache import bump_indicator_product_revision
+from app.components.product_labels import get_product_label_formatter
 
 DEFAULT_CACHE_TTL = 4 * 60 * 60  # 4 Hours
 PRODUCT_CACHE_REVISION_DIR = Path("output") / "tmp" / "product_cache_revisions"
@@ -250,6 +251,7 @@ def render_page_header(
                 selected_prod = st.selectbox(
                     "📦 当前产品型号",
                     options=available_prods,
+                    format_func=get_product_label_formatter(),
                     index=available_prods.index(current_prod) if current_prod in available_prods else 0,
                     key=f"header_prod_sel_{title}",
                     label_visibility="collapsed",

@@ -49,7 +49,7 @@ async page => {
 
   const product = page.getByRole("combobox", { name: /产品型号$/ });
   await product.click();
-  await page.getByRole("option", { name: "M626", exact: true }).click();
+  await page.getByRole("option", { name: /^M626(?:（.*）)?$/ }).click();
   await page.keyboard.press("Escape");
   await waitCharts(3);
   await visible("Full runs: 1");

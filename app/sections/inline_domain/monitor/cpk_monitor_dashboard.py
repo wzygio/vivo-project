@@ -8,6 +8,7 @@ from typing import Protocol
 
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from src.inline_domain.application.monitor.cpk_monitor_service import (
     CpkMonitorViewModel,
 )
@@ -59,6 +60,7 @@ def render_cpk_monitor_section(
     columns = st.columns([2.6, 1.6, 0.8], vertical_alignment="bottom")
     products = columns[0].multiselect(
         "产品型号", available_products, default=available_products, key="cpk_monitor_products",
+        format_func=get_product_label_formatter(),
     )
     factories = columns[1].multiselect(
         "厂别", available_factories, default=available_factories, key="cpk_monitor_factories",

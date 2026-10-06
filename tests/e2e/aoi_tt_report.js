@@ -22,9 +22,9 @@ async page => {
 
   const selectProduct = async product => {
     const selector = page.getByRole("combobox", { name: "📦 当前产品型号" });
-    if ((await selector.inputValue()) === product) return;
+    if ((await selector.inputValue()).split("（", 1)[0] === product) return;
     await selector.click();
-    await page.getByRole("option", { name: product, exact: true }).click();
+    await page.getByRole("option", { name: new RegExp(`^${product}(?:（.*）)?$`) }).click();
     const loading = page.getByText("正在加载 AOI TT 数据...");
     await loading.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
     await loading.waitFor({ state: "hidden", timeout: 600_000 });

@@ -98,7 +98,7 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `yield_domain` | `core` | `mapping/` -> coordinates and defect distribution; `mwd_trend/` -> month/week/day aggregation and overrides; `sheet_lot/` -> allocation and capping; layer root -> common defect processing, batch statistics, and anomaly rules |
 | `yield_domain` | `infrastructure` | `repositories/` -> Panel repository and snapshots; layer root -> source loading, modifier persistence, and application-port adapters |
 | `inline_domain`: SPC, CTQ, AOI, Inline warnings | `application` | `spc/`, `ctq/`, `aoi_tt/`, `aoi_rs/` -> report use cases and ports; `monitor/` -> warnings/history/summaries; `shared/` -> decoration, features, decision signatures, and throughput coordination; `ports/` -> shared measurement snapshot contracts |
-| `inline_domain` | `core` | `spc/` -> capability calculations/decoration; `ctq/` -> indicator chart-type rules; `aoi_tt/`, `aoi_rs/` -> statistics/decoration; `monitor/` -> period summaries/replacement; `shared/` -> OOS/OOC, measurement correction, and throughput facts |
+| `inline_domain` | `core` | `spc/` -> capability calculations/decoration; `ctq/` -> indicator chart-type rules; `aoi_tt/`, `aoi_rs/` -> statistics/decoration; `monitor/` -> period summaries/replacement; `shared/` -> domain-wide factory/date projection exclusion, OOS/OOC, measurement correction, and throughput facts |
 | `inline_domain` | `infrastructure` | `spc/`, `ctq/`, `aoi_tt/` -> projections and specialized persistence/reads; `aoi_rs/` -> independent RS facts/snapshots; `monitor/` -> warning inputs and summary/history stores; `shared/` -> measurement loading/preparation/snapshots, process tracing, decoration, and resource paths |
 | `indicator_domain`: Q-Time, IJP | `application` | `qtime/` -> station monitoring, decoration, cached use cases, and chamber residence reports through an application-owned source port; `ijp/` -> overflow queries/filtering/report coordination; each owns its DTOs, ports, and errors |
 | `indicator_domain` | `core` | `qtime/` -> shop, exceedance, decoration, unique Glass/product attribution, and chamber residence statistics; `ijp/` -> overflow, period, and printer aggregation |
@@ -112,6 +112,76 @@ Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directo
 | `iqc_domain` | `infrastructure` | `eva_materials/` -> V3 organic-material scope and WMS joins (no product filter), source/display-time conversion and latest-day cutoff; `lifetime/` -> independent M3 connection pool and read-only lifetime measurements (numeric elapsed test time, no calendar shift); layer root -> retained example resources |
 
 `shared_kernel` owns configuration, source/display time, data health, cache helpers, and path contracts at its root; `infrastructure/` owns shared database connectivity, and `utils/` owns Excel/CSV utilities. Logic reused only within one domain should remain in that domain's corresponding `shared/` layer.
+
+## Standard Module Structure Within a Business Capability
+
+Use this standard when adding a capability or splitting an existing large module. It describes **module roles and file boundaries**, independent of the DDD directory layout above. The inventory below is a role template, not a single physical directory or a claim that every current capability implements every role. Keep implementations in their existing ownership locations.
+
+### Evidence From Current Domains
+
+| Current shape | Examples relative to `src/` | Convention to retain |
+|---|---|---|
+| Explicit use-case contracts | `indicator_domain/application/qtime/`, `indicator_domain/application/ijp/`; Inline `application/spc/`, `application/aoi_rs/`, `application/aoi_tt/` | A service coordinates the use case; DTOs, outbound ports, and errors become separate modules when their scope warrants it |
+| Compact capability | IQC `application/lifetime/lifetime.py`, `application/eva_materials/evaporation.py`; Indicator `application/qtime/chamber_service.py` | One small use-case module can own its service, single Protocol, and local error/result types |
+| Rules split by business operation | Yield `core/mwd_trend/`, `core/sheet_lot/`, `core/mapping/`; Indicator `core/qtime/` | Name rule modules after the calculation or policy: preparation, aggregation, decoration, alerts, identity, or summary |
+| External responsibilities split by lifecycle | Indicator `infrastructure/qtime/`; Inline `infrastructure/shared/`; Equipment `infrastructure/` | Keep source queries, source preparation, snapshot storage, and maintained-decision persistence distinguishable |
+| Existing larger entry modules | Yield `application/yield_service.py`; Equipment `application/parts_service.py` | Preserve public entry points; extract cohesive responsibilities as needed rather than renaming an entire domain |
+
+These are existing shapes, not interchangeable implementations. For example, IQC lifetime has a compact read-only flow; Q-Time has decision persistence, snapshots, and caching. The standard keeps their responsibilities explicit without requiring identical file counts.
+
+### Role Inventory and Naming
+
+`<capability>` names one business capability; `<operation>` names a concrete rule or input. Each line is optional except the actual use-case entry point and implemented business rules.
+
+```text
+Use-case entry and contracts
+  service.py / <capability>_service.py   orchestration and public operations
+  dtos.py                              query, options, and result contracts
+  ports.py                             consumer-owned outbound Protocols
+  errors.py                            stable application-facing failures
+  settings.py                          validated capability policy, if needed
+  cached_<operation>.py / <operation>_cache.py
+                                       cache wrapper and native payload boundary
+
+Business operations
+  <operation>.py                       preparation, aggregation, summary,
+                                       decoration, alerts, identity, or policy
+
+External adapters
+  repository.py / <capability>_repository.py
+                                       implementation of source/decision ports
+  <operation>_loader.py                 a distinct source-format reader
+  <operation>_preparation.py            source representation normalization
+  snapshot_store.py / snapshot_repository.py
+                                       raw snapshot lifecycle
+  <operation>_store.py / <operation>_repository.py
+                                       maintained decisions or derived history
+
+Domain assembly
+  composition.py                       factories and concrete dependency binding
+```
+
+Choose one entry filename for a capability. Prefer `service.py` / `repository.py` when the package name already supplies the business context; preserve descriptive existing names such as `spc_service.py`. Use `snake_case`, established business names, and responsibility suffixes for new files. Keep `__init__.py` lightweight and make public entry points discoverable without triggering resource access on import.
+
+| Role | Owns | Boundary and split criterion |
+|---|---|---|
+| Service | Load inputs, call rules, coordinate optional writes, assemble the result | Express the use-case sequence; extract a second service only for a separate operation, such as decision upload/download |
+| Contracts | Query validation, result shape, required source/persistence methods, stable errors | Use the existing Pydantic/dataclass/Protocol conventions; keep local types beside a small sole consumer, split when they have independent consumers or grow |
+| Settings | Capability policy values and their validation/signature | Resolve configuration through existing loaders and assembly; pass values into rules rather than having calculations read YAML or paths |
+| Rule modules | Data preparation, calculation, decision semantics, projections | Accept explicit values/DataFrames and return results; split by business operation rather than collecting unrelated functions in `utils.py` |
+| Repository/loader | SQL or workbook/CSV reading, source normalization, adapter errors | A loader handles a distinct input format; a repository implements the consuming port and coordinates its source lifecycle |
+| Snapshot/history/decision store | Persistence and publication of the object named by the store | Keep source facts, user-maintained decisions, and derived history separate; reuse established atomic-write/fallback helpers |
+| Cache wrapper | Key/signature, TTL, invalidation, serialization boundary | Split when independently consumed or invalidated; cache native payloads and rebuild project result types after lookup |
+| Composition | Concrete adapters, policy values, service factories | Bind dependencies once at the existing domain assembly point; a capability does not create a second global database/configuration lifecycle |
+
+### Size, Reuse, and Extension Rules
+
+1. **Start compact.** A single read-only use case may keep its Protocol, local result/error types, and service together, as IQC lifetime does. Create only files with an implemented responsibility.
+2. **Split by ownership or lifecycle.** Separate independently consumed contracts, a substantial calculation, decision management, or separately invalidated caching. A growing file alone does not justify an arbitrary helper package.
+3. **Use explicit operations.** A typical sequence is source read -> preparation -> calculation/decision application -> optional persistence -> result assembly. Document capability-specific ordering in its routed design document. Q-Time's sequence is described in [its decoration logic](references/design/indicator_domian/qtime/algorithm-qtime-data-decoration.md).
+4. **Keep reuse at its actual scope.** Put multi-capability domain reuse in the existing domain `shared/` module; a lone reusable Protocol may belong in the existing `ports/` package. Promote to `shared_kernel` only when cross-domain consumers and a stable common contract exist. Retain capability-specific decisions with their owning capability.
+5. **Preserve compatibility during extraction.** Keep existing public entry points and consumers working; move one responsibility at a time. Existing combined files, static services, and default resolvers are migration context, not reasons to add hidden I/O to new rule modules.
+6. **Verify the boundary that changed.** Match rule tests to calculations, service tests to injected ports and ordering, adapter tests to representation/persistence, and architecture checks to imports. Use scoped test discovery because current tests include both mirrored packages and flat files.
 
 ## Dependency Direction and Composition
 

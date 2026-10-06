@@ -26,7 +26,7 @@ async page => {
   }
   if (await page.getByText('单腔停留时间明细', {exact: true}).count()) throw new Error('Detail table remains');
   await page.getByRole('combobox', { name: '产品型号', exact: true }).click();
-  await page.getByRole('option', { name: 'M626', exact: true }).click();
+  await page.getByRole('option', { name: /^M626(?:（.*）)?$/ }).click();
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => [...document.querySelectorAll('.js-plotly-plot')]
     .every(plot => plot.data.every(trace => trace.name === 'M626')));

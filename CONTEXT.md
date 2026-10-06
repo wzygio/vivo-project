@@ -37,6 +37,7 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 ### Product Availability
 
 - `config/global.yaml` -> `product_registry.enabled_products` is the single source of truth for report product selectors, including page-local selectors that replace the shared page-header selector. Read it through `ConfigLoader.get_enabled_products()` and preserve its configured order.
+- Product selectors append optional annotations from `product_registry.product_annotations`, for example `M678（CPD2455）`. Missing or blank annotations leave the code unchanged. Apply annotations only to widget labels; selected values, queries, caches and report data retain the original product codes. Annotation entries do not enable products.
 - An empty product selection means all enabled products. Restrict report data to the enabled scope before rendering charts, tables, options or exports; hiding disabled products only in selector options is insufficient. Clear obsolete selections when the available scope changes.
 
 - Exception confirmed on 2026-09-22: IQC evaporation reports are scoped to V3 organic materials in infrastructure. Their product attribute is 通用; no product selector or enabled-products filter applies. Keep the source product value in the detail table.
@@ -45,6 +46,7 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 
 - Date forwarding changes the report display time axis at the repository output boundary. Database facts and raw Parquet snapshots retain source time. Translate direct-query display windows back to source windows, and include the time policy in relevant cache signatures.
 - The latest report day is the server's current date. Apply the global `report_cutoff.latest_day_time` at the repository output boundary; the default cutoff is noon, inclusive. Historical selected dates are not reduced to a partial day, and raw snapshots retain their complete source windows.
+- Inline reports and monitoring share the factory/date exclusion configured in `config/domain/inline_domain.yaml: data_exclusion`. Apply it to report event times before statistics, including alarm projections and denominators; preserve source snapshots and maintained decisions. Maintained period aggregates that cannot separate excluded facts are unavailable in the current projection.
 - Do not casually change the `DatabaseManager` singleton or retry lifecycle. Do not simplify snapshot refresh or database-failure fallback without authorization covering that behavior change.
 - Preserve the page data-cache boundary. Cache DataFrames, scalars, and native containers; construct project-defined ViewModels outside the cache. Detailed cache and health contracts are routed by `ARCHITECTURE.md`.
 

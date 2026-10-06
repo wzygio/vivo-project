@@ -7,6 +7,8 @@ from contextvars import ContextVar
 from typing import Protocol
 
 import pandas as pd
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_period_records
+from src.shared_kernel.config import ConfigLoader
 
 from src.inline_domain.core.monitor.period_summary import (
     build_period_summary_from_records,
@@ -18,6 +20,7 @@ ALL_FACTORIES = {"ARRAY", "OLED", "TP"}
 
 class SummaryWorkbookStore(Protocol):
     def source_signature(self) -> str: ...
+    def read(self) -> pd.DataFrame: ...
 
     def refresh_current_week(
         self, alerts: pd.DataFrame, *, products: Iterable[str], scope_key: str,
@@ -83,20 +86,34 @@ class MonitorSummaryWorkbookService:
                     ]
                     if required_scopes.issubset(set(matching["scope"].str.lower())):
                         available_types[product].add(alarm_type)
-        persisted, warnings = self._store.refresh_current_week(
-            alerts_df,
-            products=selected_products,
-            scope_key=scope_key,
-            factory_key=factory_key,
-            as_of=end_date,
-            available_types=available_types,
-        )
+        date_exclusion = ConfigLoader.get_inline_data_exclusion()
+        iso = pd.Timestamp(end_date).isocalendar()
+        current_week = pd.DataFrame([{
+            "factory": factory_key, "period_type": "week",
+            "period_label": f"{iso.year}-W{iso.week:02d}",
+        }])
+        if exclude_inline_period_records(current_week, date_exclusion, as_of=end_date).empty:
+            # A filtered week must not overwrite maintained source counts with partial/zero counts.
+            persisted, warnings = self._store.read(), []
+        else:
+            persisted, warnings = self._store.refresh_current_week(
+                alerts_df,
+                products=selected_products,
+                scope_key=scope_key,
+                factory_key=factory_key,
+                as_of=end_date,
+                available_types=available_types,
+            )
         self._warnings.set(tuple(warnings))
         selected = persisted[
             persisted["产品"].astype(str).isin(selected_products)
             & persisted["监控类型"].astype(str).eq(scope_key)
             & persisted["厂别"].astype(str).eq(factory_key)
         ]
+        selected = exclude_inline_period_records(
+            selected, date_exclusion, as_of=end_date,
+            factory_column="厂别", period_type_column="周期类型", period_label_column="时间标签",
+        )
         return build_period_summary_from_records(
             selected,
             end_date=end_date,

@@ -9,6 +9,7 @@ import altair as alt
 import streamlit as st
 from pydantic import BaseModel, Field
 
+from app.components.product_labels import get_product_label_formatter
 from src.inline_domain.application.monitor.oos_monitor_service import OosMonitorViewModel
 
 SCOPE_OPTIONS = ("ALL", "SPC", "CTQ", "AOI_TT", "AOI_RS")
@@ -96,6 +97,7 @@ def render_oos_monitor_control_panel(
             options=available_products,
             default=available_products,
             key="monitor_products",
+            format_func=get_product_label_formatter(),
         )
     with columns[2]:
         factories = st.multiselect(

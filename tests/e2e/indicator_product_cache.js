@@ -12,7 +12,8 @@ async page => {
     if (label !== expected) throw new Error(`${indicator}/${product}: ${label} != ${expected}`);
   };
   const choose = async (key, label) => {
-    const option = page.getByRole("option", {name:label, exact:true});
+    const name = key === "matrix_refresh_product" ? new RegExp(`^${label}(?:（.*）)?$`) : label;
+    const option = page.getByRole("option", {name, exact:true});
     for (let attempt = 0; attempt < 5; attempt++) {
       if (!await option.isVisible()) {
         await page.locator(`.st-key-${key}`).getByRole("button", {name:"Open",exact:true}).click();

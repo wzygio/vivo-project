@@ -8,6 +8,7 @@ import pandas as pd
 from pydantic import ValidationError
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
 from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
@@ -73,7 +74,8 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
                 options["product_codes"],
             )
             product_codes = st.multiselect(
-                "产品型号", options=options["product_codes"], key="ijp_product_codes"
+                "产品型号", options=options["product_codes"], key="ijp_product_codes",
+                format_func=get_product_label_formatter(),
             )
         with line_column:
             lines = st.multiselect("线体", options=options["lines"], key="ijp_lines")

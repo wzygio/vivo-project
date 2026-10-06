@@ -16,6 +16,7 @@ import plotly.io as pio
 import pymupdf
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.aoi_rs_charts import iter_aoi_rs_chart_groups
 from app.charts.inline_domain.aoi_rs_pdf import AoiRsPdfReport
 from app.components.indicator_cache import (
@@ -261,6 +262,7 @@ def render_aoi_rs_export(
     with st.expander("RS 报告导出", expanded=False):
         selected = st.multiselect(
             "导出产品",
+            format_func=get_product_label_formatter(),
             options=enabled,
             key=PRODUCT_SELECTION_KEY,
             help="留空时导出全部已启用产品。",

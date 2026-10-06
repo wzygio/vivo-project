@@ -9,6 +9,7 @@ from streamlit_echarts import st_echarts
 trace_logger = logging.getLogger("trace")
 from pydantic import BaseModel, Field
 from app.charts.inline_domain.monitor_chart import get_spc_summary_echarts_option
+from app.components.product_labels import get_product_label_formatter
 from app.manager.compliance_manager import get_compliance_file_signature
 from app.manager.render_gate import RenderGate
 from app.utils.step_labels import format_step_label
@@ -71,7 +72,10 @@ def render_monitor_control_panel(
             help="选择要监控的数据类型: SPC(常规SPC参数), CTQ(关键质量参数), AOI(外观检测参数), 报废(报废数据), ALL(全部)"
         )
     with col2:
-        prods = st.multiselect("产品型号", options=available_products, default=available_products, key="monitor_products")
+        prods = st.multiselect(
+            "产品型号", options=available_products, default=available_products, key="monitor_products",
+            format_func=get_product_label_formatter(),
+        )
     with col3:
         facs = st.multiselect("厂别", options=available_factories, default=available_factories, key="monitor_factories")
     
@@ -511,6 +515,7 @@ def get_cached_alarm_detail_tables(
     compliance_signature: str,
     revision_signature: str = "",
     decision_signature: str = "",
+    date_exclusion: tuple[tuple[str, ...], str, str] | None = None,
 ) -> dict[str, pd.DataFrame]:
     """Build cached physical alarm details for the admin table.
 
@@ -521,6 +526,7 @@ def get_cached_alarm_detail_tables(
     用户编辑 __flags 或刷新缓存换 revision 时触发缓存 miss 与明细重建。
     """
     del snapshot_signature, compliance_signature, revision_signature, decision_signature
+    del date_exclusion  # Native cache key; the service resolves the same current policy.
 
     alarm_frames: list[pd.DataFrame] = []
     for monitor_type in ALARM_DETAIL_MONITOR_TYPES:
@@ -628,6 +634,7 @@ def render_alarm_detail_tables(
             _get_compliance_file_signature(),
             _stable_cache_key_fragment(product_revisions),
             _stable_cache_key_fragment(decision_signatures),
+            date_exclusion=ConfigLoader.get_inline_data_exclusion(),
         )
 
     monitor_types = _selected_alarm_monitor_types(filter_state.data_type_filter)

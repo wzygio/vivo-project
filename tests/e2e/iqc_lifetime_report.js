@@ -42,7 +42,7 @@ async page => {
     }
   }
   await page.getByRole('combobox', { name: '产品型号', exact: true }).click();
-  await page.getByRole('option', { name: 'M678', exact: true }).click();
+  await page.getByRole('option', { name: /^M678(?:（.*）)?$/ }).click();
   await page.keyboard.press('Escape');
   await page.getByRole('combobox', { name: '产品状态', exact: true }).click();
   await page.getByRole('option', { name: '屏体', exact: true }).click();

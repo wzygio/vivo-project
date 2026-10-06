@@ -77,9 +77,9 @@ async page => {
     );
   }
 
-  if ((await productSelector.inputValue()) !== "M626") {
+  if ((await productSelector.inputValue()).split("（", 1)[0] !== "M626") {
     await productSelector.click();
-    await page.getByRole("option", { name: "M626", exact: true }).click();
+    await page.getByRole("option", { name: /^M626(?:（.*）)?$/ }).click();
     await waitComboValue("📦 当前产品型号", "M626");
     await page
       .getByText("正在加载 SPC 分布数据...")

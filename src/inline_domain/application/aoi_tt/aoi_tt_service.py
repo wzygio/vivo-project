@@ -13,6 +13,7 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
 from src.inline_domain.application.shared.throughput_persistence import (
     persist_throughput_facts,
@@ -146,6 +147,7 @@ class AoiTtReportService:
         generate_particle_sizes: bool = True,
         particle_ratio_jitter: float = 0.1,
         particle_ratio_signature: str = "",
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -153,6 +155,7 @@ class AoiTtReportService:
         application.cache_ttl_hours 统一配置。product_revision /
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
+        date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
         """
         try:
             query_config = AoiTtQueryConfig.model_validate_json(query_config_json)
@@ -209,6 +212,7 @@ class AoiTtReportService:
                 scope="aoi_tt",
                 product_revision=product_revision,
                 decision_signature=decision_signature,
+                date_exclusion=date_exclusion,
             )
             coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                 query_config.start_date, query_config.end_date
@@ -285,6 +289,11 @@ class AoiTtReportService:
         decision_signature: str = "",
     ) -> AoiTtReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
+        try:
+            date_exclusion = ConfigLoader.get_inline_data_exclusion()
+        except ValueError as exc:
+            logger.exception("[AOI_TT] invalid report decoration configuration")
+            raise AoiTtReportBuildError("AOI_TT report configuration is invalid.") from exc
         generated, jitter, ratio_signature = _particle_size_runtime_config()
         payload = AoiTtReportService.fetch_aoi_tt_report_payload(
             _data_port=_data_port,
@@ -295,5 +304,6 @@ class AoiTtReportService:
             generate_particle_sizes=generated,
             particle_ratio_jitter=jitter,
             particle_ratio_signature=ratio_signature,
+            date_exclusion=date_exclusion,
         )
         return AoiTtReportService._view_model_from_payload(payload)

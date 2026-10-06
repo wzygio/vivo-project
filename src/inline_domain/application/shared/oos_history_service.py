@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Iterable, Protocol
 
 import pandas as pd
+from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates
+from src.shared_kernel.config import ConfigLoader
 
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     AOI_RS_OOS_DECORATION_FILE_NAME,
@@ -108,7 +110,10 @@ class OosHistoryService:
     @classmethod
     def project_detail(cls, scope: str, frame: pd.DataFrame) -> pd.DataFrame:
         """Project already-decided detail without merging flags or computing facts."""
-        return cls._project(scope, frame)
+        return exclude_inline_factory_dates(
+            cls._project(scope, frame), ConfigLoader.get_inline_data_exclusion(),
+            time_column="event_time",
+        )
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
         return self._read_product_with_file(
@@ -139,7 +144,7 @@ class OosHistoryService:
             refreshed_at = self._decisions.load_refresh_time(file_name, scope, prod_code)
             metadata = None
 
-        projected = self._project(scope, decorated)
+        projected = self.project_detail(scope, decorated)
         alert_mask = projected["flag"].apply(self._is_false_flag) if not projected.empty else []
         alerts = projected.loc[alert_mask].reset_index(drop=True) if not projected.empty else projected.copy()
         return OosProductRead(
@@ -168,7 +173,7 @@ class OosHistoryService:
     ) -> str:
         if getattr(self._store, "is_computed_cache", False):
             return self._store.source_signature(products, scopes)
-        parts: list[str] = []
+        parts: list[str] = [repr(ConfigLoader.get_inline_data_exclusion())]
         for scope in sorted(set(scopes)):
             workbook = self._decisions.source_path(file_names[scope])
             parts.append(self._path_signature(workbook))

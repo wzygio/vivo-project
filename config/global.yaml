@@ -29,6 +29,19 @@ product_registry:
     - "Z576"
     - "Z553"
 
+  # 仅用于产品筛选框展示：M678（CPD2455）。缺失或留空时仅显示产品代码。
+  # 此映射不控制产品启用范围，产品列表及顺序仍由 enabled_products 决定。
+  product_annotations:
+    M678: "CPD2455"
+    M626: "CPD2515"
+    M673: "CPD2449"
+    Z517: "CPD2517"
+    Z571: "CPD2571"
+    Z559: "CPD2559"
+    Z576: "CPD2576"
+    Z611: "CPD2611"
+    Z553: "CPD2553"
+
 # Yield 域通用数据策略。产品配置只声明产品差异。
 data_source:
 

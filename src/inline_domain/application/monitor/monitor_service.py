@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
@@ -77,6 +78,7 @@ class MonitorAnalysisService:
         snapshot_signature: str = "",
         product_revision: str = "",
         decision_signatures: Optional[dict] = None,
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> pd.DataFrame:
         """
         [D2/D3] 按 data_type 分组路由到共享修饰+特征管线，各组特征 concat 后返回。
@@ -108,6 +110,7 @@ class MonitorAnalysisService:
                 snapshot_signature=snapshot_signature,
                 product_revision=product_revision,
                 decision_signature=(decision_signatures or {}).get(scope, ""),
+                date_exclusion=date_exclusion,
             )
             features = features_payload["sheet_features_df"]
             if not features.empty:
@@ -285,6 +288,7 @@ class MonitorAnalysisService:
         snapshot_signature: str = "",
         product_revisions: Optional[dict] = None,
         decision_signatures: Optional[dict] = None,
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> dict:
         """
         [内部缓存层] 负责所有重负载的查询与计算，返回原生字典以完美规避 Pickle 序列化陷阱。
@@ -324,7 +328,9 @@ class MonitorAnalysisService:
             # =========================================================================
             if data_type_upper in ('报废', 'ALL'):
                 trace_logger.info(f"🚧 [ScrapTrace][L1-Service] 开始处理产品 {prod} 的报废数据")
-                scrap_df = repo.get_scrap_data(prod)
+                scrap_df = exclude_inline_factory_dates(
+                    repo.get_scrap_data(prod), date_exclusion, time_column="sheet_start_time",
+                )
                 trace_logger.info(f"🚧 [ScrapTrace][L2-Repo] 产品 {prod} get_scrap_data 返回: {len(scrap_df)} 条, 列: {scrap_df.columns.tolist() if not scrap_df.empty else 'N/A'}")
                 
                 if not scrap_df.empty:
@@ -364,6 +370,7 @@ class MonitorAnalysisService:
                     prod, m_df, s_df, start_dt, end_dt, snapshot_signature,
                     product_revision=(product_revisions or {}).get(prod, ""),
                     decision_signatures=(decision_signatures or {}).get(prod),
+                    date_exclusion=date_exclusion,
                 )
                 if features_df.empty:
                     continue
@@ -505,6 +512,7 @@ class MonitorAnalysisService:
             snapshot_signature,
             product_revisions,
             decision_signatures,
+            date_exclusion=ConfigLoader.get_inline_data_exclusion(),
         )
         
         # 2. 实时实例化数据类，彻底消灭热重载时的序列化报错！
@@ -534,6 +542,7 @@ class MonitorAnalysisService:
         :param defect_type: 报警类型 (如 'OOS', 'SOOS', 'OOC')
         """
         logging.info(f"==> [Drill-down API] 开始钻取明细 | 时间节点: {time_group} | 类型: {defect_type} <==")
+        date_exclusion = ConfigLoader.get_inline_data_exclusion()
         
         try:
             config_instance = SpcQueryConfig.model_validate_json(query_config_json)
@@ -563,7 +572,9 @@ class MonitorAnalysisService:
             data_type_upper = data_type_filter.upper() if data_type_filter else 'ALL'
 
             if data_type_upper in ('报废', 'ALL'):
-                scrap_df = repo.get_scrap_data(prod)
+                scrap_df = exclude_inline_factory_dates(
+                    repo.get_scrap_data(prod), date_exclusion, time_column="sheet_start_time",
+                )
                 if not scrap_df.empty:
                     scrap_df['sheet_start_time'] = pd.to_datetime(scrap_df['sheet_start_time'], errors='coerce')
                     mask = (scrap_df['sheet_start_time'] >= start_dt) & (scrap_df['sheet_start_time'] <= end_dt)
@@ -591,6 +602,7 @@ class MonitorAnalysisService:
                     prod, m_df, s_df, start_dt, end_dt,
                     product_revision=(product_revisions or {}).get(prod, ""),
                     decision_signatures=(decision_signatures or {}).get(prod),
+                    date_exclusion=date_exclusion,
                 )
                 if features_df.empty:
                     continue

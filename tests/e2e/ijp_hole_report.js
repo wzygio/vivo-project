@@ -59,7 +59,7 @@ async page => {
   await page.screenshot({path: 'hole-empty.png', fullPage: true});
   await line.click(); await page.keyboard.press('Backspace'); await page.keyboard.press('Escape');
   await page.locator('[role="combobox"][aria-label*="产品型号"]').click();
-  await page.getByRole('option', {name: 'M678', exact: true}).click();
+  await page.getByRole('option', {name: /^M678(?:（.*）)?$/}).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', {name: '查询', exact: true}).click();
   await page.getByText('IJP 数据暂时无法读取，请稍后重试。').waitFor();

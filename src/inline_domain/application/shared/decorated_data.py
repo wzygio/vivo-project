@@ -9,7 +9,7 @@ entry now serves both (see ``docs/dev_docs/generated/Inline_domain/``).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
@@ -22,6 +22,7 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
 )
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
 from src.inline_domain.core.shared.sheet_oos_decoration import OOS_DECORATION_FILE_NAME
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
     prepare_sheet_oos_decoration,
@@ -105,6 +106,7 @@ def prepare_decorated_data(
     decoration_port: SheetDecorationPort | None = None,
     resource_port: DecorationResourcePort | None = None,
     sheet_features_start_date: str = "",
+    date_exclusion: InlineDateExclusion | None = None,
 ) -> DecoratedData:
     """Apply scope-specific actions and compute features in the requested window.
 
@@ -151,6 +153,14 @@ def prepare_decorated_data(
         decision_signature=decision_signature,
         decoration_port=decoration_port,
         point_spec_df=spec_df,
+    )
+    # Persist source decisions above; filter points before report feature aggregation.
+    decoration_result = replace(
+        decoration_result,
+        raw_measurements_df=exclude_inline_factory_dates(
+            decoration_result.raw_measurements_df, date_exclusion,
+            time_column="sheet_start_time",
+        ),
     )
     decorated_features_df = _preprocess_sheet_features_by_type(
         feature_points(decoration_result.raw_measurements_df),

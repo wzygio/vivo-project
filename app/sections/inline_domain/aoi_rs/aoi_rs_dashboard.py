@@ -240,6 +240,7 @@ def build_aoi_rs_sheet_oos_alerts(
         decoration_df,
         time_column="sheet_start_time",
         reference_date=reference_date,
+        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,

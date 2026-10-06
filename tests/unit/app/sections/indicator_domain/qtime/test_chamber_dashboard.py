@@ -73,7 +73,7 @@ def test_changed_enabled_products_clear_results_and_obsolete_selection():
     app.query_params['restricted'] = 'true'
     app.run()
     assert app.multiselect(key='chamber_products').value == []
-    assert app.multiselect(key='chamber_products').options == ['M678']
+    assert app.multiselect(key='chamber_products').options == ['M678（CPD2455）']
     assert len(app.dataframe) == 0
     app.button(key='chamber_search').click().run()
     assert chart_products(app) == {'M678'}

@@ -34,6 +34,7 @@ from src.inline_domain.application.shared.decorated_data import (
     resolve_product_resource_dir,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
@@ -196,6 +197,7 @@ class SpcReportService:
         decision_signature: str = "",
         capability_exempt_param_name_contains: tuple[str, ...] = (),
         capability_decoration_signature: tuple[int, int] = (0, 0),
+        date_exclusion: InlineDateExclusion | None = None,
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
@@ -225,6 +227,7 @@ class SpcReportService:
                 product_revision=product_revision,
                 decision_signature=decision_signature,
                 sheet_features_start_date=previous_week_start.strftime("%Y-%m-%d"),
+                date_exclusion=date_exclusion,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
@@ -334,6 +337,11 @@ class SpcReportService:
             query = SpcQueryConfig.model_validate_json(query_config_json)
         except Exception as exc:
             raise SpcReportBuildError("SPC query config is invalid.") from exc
+        try:
+            date_exclusion = ConfigLoader.get_inline_data_exclusion()
+        except ValueError as exc:
+            logger.exception("[SPC] invalid report date exclusion configuration")
+            raise SpcReportBuildError("SPC report configuration is invalid.") from exc
         capability_signature = get_capability_decoration_signature(
             resolve_product_resource_dir(query.prod_code),
         )
@@ -346,5 +354,6 @@ class SpcReportService:
             decision_signature=decision_signature,
             capability_exempt_param_name_contains=resolved_capability_exemptions,
             capability_decoration_signature=capability_signature,
+            date_exclusion=date_exclusion,
         )
         return SpcReportService._view_model_from_payload(payload)

@@ -8,6 +8,7 @@ from typing import Protocol
 from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService, OosProductRead
 from src.inline_domain.core.monitor.excel_contract import ExcelAlarmReadError
+from src.shared_kernel.config import ConfigLoader
 
 
 class ExcelAlarmStorePort(Protocol):
@@ -32,7 +33,9 @@ class ExcelAlarmReader:
         return True
 
     def source_signature(self, products: list[str], scopes: list[str]) -> str:
-        return self.alarm_type + ":" + self._store.source_signature(products, scopes)
+        return self.alarm_type + ":" + self._store.source_signature(products, scopes) + ":" + repr(
+            ConfigLoader.get_inline_data_exclusion(),
+        )
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
         payload = self._store.read(scope, prod_code)
@@ -46,7 +49,7 @@ class ExcelAlarmReader:
         self._validate(scope, prod_code, frame)
         projected = self._projector.project_detail(scope, frame)
         if scope == "aoi_rs" and "chart_kind" in frame:
-            projected["chart_kind"] = frame["chart_kind"].to_numpy()
+            projected["chart_kind"] = frame["chart_kind"].reindex(projected.index).to_numpy()
         mask = projected["flag"].map(self._projector._is_false_flag)
         alerts = projected.loc[mask.astype(bool)].reset_index(drop=True)
         return OosProductRead(

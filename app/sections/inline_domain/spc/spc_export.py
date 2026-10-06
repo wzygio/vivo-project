@@ -14,6 +14,7 @@ import plotly.io as pio
 import pymupdf
 import streamlit as st
 
+from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.indicator_pdf import IndicatorPdfReport
 from app.charts.inline_domain.spc_charts import iter_spc_chart_groups
 from app.components.indicator_cache import build_indicator_product_cache_signature
@@ -188,6 +189,7 @@ def render_spc_export(
     with st.expander("SPC 报告导出", expanded=False):
         selected = st.multiselect(
             "导出产品", options=enabled, key=PRODUCT_SELECTION_KEY,
+            format_func=get_product_label_formatter(),
             help="留空时导出全部已启用产品。",
         )
         selected_factories = st.multiselect(
