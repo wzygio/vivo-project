@@ -1,6 +1,6 @@
 """AOI_RS 超规修饰：工作簿三态 flag + 默认自动截断。
 
-与 SPC/CTQ/AOI_TT 对齐（见 docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md）：
+与 SPC/CTQ/AOI_TT 对齐（见 references/domain/inline_domain/shared/rules-sheet-oos-decoration.md）：
 
 - 工作簿 `resources/inline_domain/aoi_rs_sheet_oos_decoration.xlsx`，每产品一个 sheet，
   复用共享引擎三态语义：flag=Delete 删除图点、False 释放真实值、True（默认）截断；

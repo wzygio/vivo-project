@@ -49,9 +49,9 @@ O/L 数据源只覆盖 ARRAY 缺陷明细；现有报表还包括 OLED、TP 以�
 
 ## Traceability
 
-- Requirement: `docs/dev_docs/dev_spec/Inline_domain/feat-AOI_TT.md#task1-optaoi_tt报表区分particle_size`
+- Requirement: `docs/dev_docs/dev_spec/inline_domain/aoi_tt/feat-AOI_TT.md#task1-optaoi_tt报表区分particle_size`
 - Issue: `.scratch/aoi-tt-report/issues/02-distinguish-particle-size.md`
 - Plan: `.planning/2026-09-03-aoi-tt-particle-size/`
-- Domain docs: `references/domain/Inline_domain/data-flow-aoi-tt.md`、`references/domain/Inline_domain/data-source-aoi-tt.md`
+- Domain docs: `references/domain/inline_domain/aoi_tt/data-flow-aoi-tt.md`、`references/domain/inline_domain/aoi_tt/data-source-aoi-tt.md`
 - Key code: `src/inline_domain/infrastructure/shared/array_defect_data_loader.py`、`src/inline_domain/infrastructure/aoi_tt/particle_size_loader.py`、`src/inline_domain/core/aoi_tt/aoi_tt_calculator.py`、`src/inline_domain/application/aoi_tt/aoi_tt_service.py`、`app/sections/inline_domain/aoi_tt/aoi_tt_dashboard.py`
 - Tests: `tests/unit/inline_domain/**/aoi_tt/`、`tests/unit/app/sections/aoi_tt/`、`tests/unit/app/pages/test_aoi_tt_page.py`、`tests/e2e/aoi_tt_report.js`

@@ -45,9 +45,8 @@ from src.indicator_domain.application.qtime.cached_monitoring import (
     get_qtime_decision_file_stat,
 )
 from src.indicator_domain.composition import build_qtime_service
-from src.inline_domain.application.shared.decorated_data import SCOPE_DECORATION_FILE_NAME
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -77,8 +76,7 @@ def build_default_signature_components(products: Sequence[str]) -> dict[str, Any
 
 def cpk_latest_store() -> CpkLatestExcelStore:
     return CpkLatestExcelStore(
-        ConfigLoader.get_domain_resource_dir("inline_domain")
-        / "spc" / "spc_cpk_cpm_decoration.xlsx"
+        ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx")
     )
 
 
@@ -96,7 +94,7 @@ def build_cell_source_signature(row_key: str, product: str) -> str:
         return cpk_latest_store().source_signature() + ":" + repr(ConfigLoader.get_inline_data_exclusion())
     if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
         scope = row_key.removesuffix("_sheet_oos")
-        return _file_signature(scope_resource_dir(scope) / SCOPE_DECORATION_FILE_NAME[scope]) + ":" + repr(
+        return _file_signature(scope_decoration_path(scope)) + ":" + repr(
             ConfigLoader.get_inline_data_exclusion(),
         )
     if row_key.startswith("yield_"):

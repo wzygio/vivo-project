@@ -11,7 +11,7 @@ class FileResource(BaseModel):
     通用的文件资源描述。
     不管是 warning_lines 还是 override_config，本质上都是指向一个文件。
     """
-    file_name: str = Field(..., description="文件名，需位于 resources 目录下")
+    file_name: str = Field(..., description="运行时资源路径；ConfigLoader 从全局资源注册表注入，直接构造时允许显式文件名")
     sheet_name: Optional[str] = Field(None, description="Excel Sheet名称，可选")
     
 # ==============================================================================

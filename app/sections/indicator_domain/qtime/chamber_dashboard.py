@@ -15,6 +15,8 @@ from src.indicator_domain.core.qtime.chamber import CHAMBERS, exclude_chamber_ou
 
 RESULT_KEY = 'chamber_qtime_view_model'
 SIGNATURE_KEY = 'chamber_qtime_signature'
+# Temporary frontend cutoff requested for the chamber monitoring report.
+DISPLAY_CUTOFF = pd.Timestamp('2026-10-01')
 
 
 def clear_chamber_result() -> bool:
@@ -84,6 +86,7 @@ def render_chamber_dashboard(service: ChamberQTimeService) -> None:
         & details['prod_code'].isin(service.enabled_products)
         & details['line'].isin(lines or ['3CEE001', '3CEE002'])
         & details['chamber'].isin(chambers or CHAMBERS)
+        & details['entry_time'].lt(DISPLAY_CUTOFF)
     ].copy()
     selected = exclude_chamber_outliers(selected)
     if selected.empty:

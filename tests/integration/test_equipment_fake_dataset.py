@@ -2,6 +2,9 @@ from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
+import pytest
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.report_cutoff import ReportCutoffPolicy
 
 from src.equipment_domain.application import parts_service
 from src.equipment_domain.config import get_equipment_runtime_config
@@ -17,6 +20,17 @@ from src.equipment_domain.infrastructure.fake_data import (
 
 class _OfflineDatabase:
     engine = None
+
+
+@pytest.fixture(autouse=True)
+def full_day_coverage_policy(monkeypatch):
+    """Test fallback coverage independently of the hour the suite is executed.
+
+    Noon projection filtering has dedicated cutoff tests; these tests expect
+    every generated source row, including today's afternoon measurements.
+    """
+    policy = ReportCutoffPolicy(latest_day_time="23:59:59")
+    monkeypatch.setattr(data_loader, "load_report_cutoff_policy", lambda: policy)
 
 
 def test_report_service_bootstraps_fabrication_without_an_operator_command(
@@ -56,7 +70,7 @@ def test_current_baseline_fabrication_covers_every_part_type_with_recent_times(
     monkeypatch,
 ) -> None:
     now = pd.Timestamp("2026-08-12 18:30:00")
-    baseline_path = Path("resources/equipment_domain/critical_parts_baseline.csv")
+    baseline_path = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline")
     spec_df = load_spec_baseline(baseline_path)
     runtime = replace(get_equipment_runtime_config(), snapshot_dir=tmp_path)
     monkeypatch.setattr(data_loader, "get_equipment_runtime_config", lambda: runtime)
@@ -85,7 +99,7 @@ def test_report_service_prefers_real_snapshot_and_fills_its_gaps_from_fabricatio
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    baseline_path = Path("resources/equipment_domain/critical_parts_baseline.csv")
+    baseline_path = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline")
     spec_df = load_spec_baseline(baseline_path)
     runtime = get_equipment_runtime_config()
     as_of = pd.Timestamp.now().floor("s")

@@ -19,6 +19,21 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     SheetOosDecorationReadError,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
+
+
+@pytest.fixture(autouse=True)
+def isolate_workbook_paths(monkeypatch, tmp_path):
+    """Report-service fixtures must never read or write maintained workbooks."""
+    write_inline_resource_config(tmp_path)
+    original = spc_service.ConfigLoader.get_domain_resource_path
+    monkeypatch.setattr(
+        spc_service.ConfigLoader, "get_domain_resource_path",
+        classmethod(lambda cls, domain, key, default_name=None: (
+            tmp_path / original(domain, key, default_name).name
+            if domain == "inline_domain" else original(domain, key, default_name)
+        )),
+    )
 
 
 class FakeSpcRepository:
@@ -406,6 +421,14 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     SpcReportService.fetch_spc_report_payload.clear()
     monkeypatch.setattr(spc_service, "resolve_product_resource_dir", lambda _product: tmp_path)
     monkeypatch.setattr(decorated_data.ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
+    original_resource_path = spc_service.ConfigLoader.get_domain_resource_path
+    monkeypatch.setattr(
+        spc_service.ConfigLoader, "get_domain_resource_path",
+        classmethod(lambda cls, domain, key, default_name=None: (
+            tmp_path / "spc_cpk_cpm_decoration.xlsx" if key == "spc_cpk_cpm_decoration"
+            else original_resource_path(domain, key, default_name)
+        )),
+    )
     capability = pd.DataFrame([{
         "prod_code": "M626", "factory": "ARRAY", "step_id": "10140", "param_name": "SE_L1T",
         "period_type": "week", "period_label": "2026-W23", "cpk": 1.084, "cpm": 1.133,

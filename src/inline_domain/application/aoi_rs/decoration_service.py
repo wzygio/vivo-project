@@ -62,8 +62,12 @@ def prepare_aoi_rs_decoration(
     special_factories: Iterable[str] = (),
     pass_through_df: pd.DataFrame | None = None,
     date_exclusion: InlineDateExclusion | None = None,
+    workbook_path: Path | None = None,
 ) -> AoiRsDecorationResult:
     detail = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
+    if workbook_path is not None:
+        product_dir = Path(workbook_path).parent
+    file_name = Path(workbook_path).name if workbook_path is not None else AOI_RS_OOS_DECORATION_FILE_NAME
     if persist:
         persist_outcome = (
             decoration_port.persist_sheet_oos_decoration_outcome
@@ -73,7 +77,7 @@ def prepare_aoi_rs_decoration(
         outcome = persist_outcome(
             product_dir,
             detail,
-            AOI_RS_OOS_DECORATION_FILE_NAME,
+            file_name,
             prod_code,
             key_columns=AOI_RS_OOS_KEY_COLUMNS,
             scope=scope,
@@ -91,7 +95,7 @@ def prepare_aoi_rs_decoration(
         )
         decisions = load_decisions(
             product_dir,
-            AOI_RS_OOS_DECORATION_FILE_NAME,
+            file_name,
             prod_code,
             AOI_RS_OOS_KEY_COLUMNS,
         )
@@ -123,7 +127,7 @@ def prepare_aoi_rs_decoration(
         lot_decorated,
         sheet_decorated,
         decoration,
-        product_dir / AOI_RS_OOS_DECORATION_FILE_NAME,
+        product_dir / file_name,
         prod_code,
     )
 

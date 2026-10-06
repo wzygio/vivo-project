@@ -46,7 +46,7 @@ class LiveMonitorSource:
 
     def __init__(
         self, *, port_factory: Callable, signature_provider: Callable,
-        resource_dir_provider: Callable,
+        resource_dir_provider: Callable | None = None,
     ) -> None:
         self._port_factory = port_factory
         self._signature_provider = signature_provider
@@ -89,7 +89,7 @@ class LiveMonitorSource:
                 raise ValueError(f"{product}/{scope}: specifications are unavailable")
             decorated = prepare_decorated_data(
                 raw, specs, product, scope,
-                product_dir=Path(self._resource_dir_provider(scope)), persist=False,
+                product_dir=(Path(self._resource_dir_provider(scope)) if self._resource_dir_provider is not None else None), persist=False,
             )
             original = decorated.original_sheet_features_df
             original = original if original is not None else pd.DataFrame()

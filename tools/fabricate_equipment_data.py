@@ -19,6 +19,7 @@ for import_path in (REPO_ROOT, REPO_ROOT / "src"):
         sys.path.insert(0, path_text)
 
 from src.equipment_domain.config import get_equipment_runtime_config
+from src.shared_kernel.config import ConfigLoader
 from src.equipment_domain.infrastructure.data_loader import load_spec_baseline
 from src.equipment_domain.infrastructure.fake_data import (
     generate_fabricated_snapshot,
@@ -33,7 +34,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--baseline",
         type=Path,
-        default=Path("resources/equipment_domain/critical_parts_baseline.csv"),
+        default=ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline"),
     )
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--seed", type=int)

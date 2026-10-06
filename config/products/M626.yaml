@@ -2,18 +2,15 @@
 data_source:
   product_code: "M626"
 
-# 本地文件读取：根目录并不是resources，而是resources/"产品号"
+# 资源位置由 global.yaml 管理；产品只指定工作簿 Sheet。
 paths:
   static_warning_lines: 
-    file_name: '入库不良率规格.xlsx'
     sheet_name: 'M626'
   
   rate_override_config:
-    file_name: "override_rates.xlsx"
     sheet_name: "M626"
     
-  yield_modifier_config:
-    file_name: "入库良率修饰表.xlsx"
+  yield_modifier_config: {}
 
 # 数据处理相关的参数
 processing:

@@ -2,7 +2,6 @@
 
 import sys
 from dataclasses import replace
-from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -28,14 +27,14 @@ from src.indicator_domain.core.qtime.chamber import CHAMBERS
 
 class FixtureSource:
     def cache_signature(self):
-        return ('chamber-browser-fixture-v2', st.query_params.get('scenario', 'normal'))
+        return ('chamber-browser-fixture-v3', st.query_params.get('scenario', 'normal'))
 
     def read(self, *, as_of):
         scenario = st.query_params.get('scenario', 'normal')
         if scenario == 'failure':
             raise QTimeDataAccessError('INTERNAL_SECRET_SQL_MUST_NOT_LEAK')
         records = [
-            {'line': line, 'glass_id': glass, 'entry_time': pd.Timestamp(date.today()) - pd.Timedelta(days=1),
+            {'line': line, 'glass_id': glass, 'entry_time': pd.Timestamp('2026-09-23'),
              **dict.fromkeys(CHAMBERS, value)}
             for line, glass, value in [('3CEE001', 'GLASS_A', 1000), ('3CEE002', 'GLASS_B', 120),
                                       ('3CEE002', 'GLASS_C', None), ('3CEE001', 'DISABLED_GLASS', 10),

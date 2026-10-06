@@ -21,6 +21,7 @@ import streamlit as st
 
 from src.inline_domain.application.shared.decorated_data import (
     SCOPE_DECORATION_FILE_NAME,
+    resolve_scope_decoration_path,
 )
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     EMPTY_DECISION_SIGNATURE,
@@ -29,7 +30,6 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
 from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
     get_decision_file_stat,
-    scope_resource_dir,
 )
 from src.inline_domain.application.shared.decoration_ports import DecisionSignaturePort, DecorationResourcePort
 from src.shared_kernel.config import ConfigLoader
@@ -102,10 +102,7 @@ def get_scope_decision_signature(
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
         raise ValueError(f"unknown decoration scope: {scope!r}")
-    base_dir = (
-        Path(product_dir)
-        if product_dir is not None
-        else (resource_port.scope_resource_dir(normalized_scope) if resource_port is not None else scope_resource_dir(normalized_scope))
+    workbook_path = resolve_scope_decoration_path(
+        normalized_scope, product_dir, resource_port=resource_port,
     )
-    workbook_path = base_dir / SCOPE_DECORATION_FILE_NAME[normalized_scope]
     return get_decision_signature(workbook_path, prod_code, signature_port=signature_port)

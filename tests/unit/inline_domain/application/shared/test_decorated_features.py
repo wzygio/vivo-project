@@ -24,6 +24,7 @@ from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
 from src.shared_kernel.config import ConfigLoader
+from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
 
 PROD = "M678"
 START_DATE = "2026-08-01"
@@ -56,6 +57,7 @@ def _clear_shared_cache():
 @pytest.fixture
 def decoration_root(monkeypatch, tmp_path: Path) -> Path:
     """Redirect the decoration workbooks into tmp_path (existing test pattern)."""
+    write_inline_resource_config(tmp_path)
     monkeypatch.setattr(
         ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
     )

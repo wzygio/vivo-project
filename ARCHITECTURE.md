@@ -2,186 +2,99 @@
 
 ## Purpose and Lookup Order
 
-This document maps domain ownership, DDD layers, submodules, dependencies, and runtime entry points. Project purpose and business constraints are owned by [CONTEXT.md](CONTEXT.md); documentation lifecycle is owned by [HARNESS.md](HARNESS.md).
+This document maps domains, their business submodules, dependencies, runtime entry points, and physical code locations. Project purpose and business constraints are owned by [CONTEXT.md](CONTEXT.md); document ownership and artifact lifecycle are owned by [CONTEXT.md](CONTEXT.md#maintenance-and-document-ownership).
 
-Locate code in this order: **business question -> domain -> DDD layer -> submodule -> file/symbol -> consumers and tests**. Use [references/index.md](references/index.md) for algorithms, SQL contracts, product exceptions, and detailed designs. Do not maintain a program-by-program catalog here.
+Locate code in this order: **business question -> domain -> business submodule -> file/symbol -> consumers and tests**. Use [references/index.md](references/index.md) for algorithms, SQL contracts, product exceptions, and detailed designs. Do not maintain a program-by-program catalog here.
 
-## Three-Level Layout
+## Domain Submodule Architecture
+
+This overview groups the current source by **domain -> business submodule**. Repeated occurrences of the same submodule are combined into one capability; technical directories such as `ports` and `repositories` are excluded from the business inventory. The tree is a logical ownership map, not a proposed filesystem move.
+
+### Current Business Submodules
+
+```text
+src
+|-- inline_domain
+|   |-- aoi_rs
+|   |-- aoi_tt
+|   |-- ctq
+|   |-- spc
+|   |-- monitor
+|   `-- shared
+|-- indicator_domain
+|   |-- qtime
+|   |-- ijp
+|   `-- ijp_hole
+|-- iqc_domain
+|   |-- eva_materials
+|   `-- lifetime
+|-- yield_domain
+|   |-- mapping
+|   |-- mwd_trend
+|   `-- sheet_lot
+|-- equipment_domain
+|   `-- (no named business submodule packages)
+`-- shared_kernel                  cross-domain support, not a business domain
+```
+
+### Submodule Responsibilities and Collaboration
+
+| Domain | Submodule | Business responsibility and relationship |
+|---|---|---|
+| `inline_domain` | `aoi_rs` | AOI RS defect counts/density, Sheet/Lot and month/week/day reports, and RS-specific decoration; owns independent RS facts while reusing domain-shared throughput and decision capabilities |
+| `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities |
+| `inline_domain` | `ctq` | Critical-to-quality measurement reports, indicator selection and chart-type rules; reuses the shared measurement/feature/decoration pipeline |
+| `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; supplies SPC capability inputs used by monitoring |
+| `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
+| `inline_domain` | `shared` | Domain-local measurement preparation and snapshots, parameter/specification metadata, OOS/OOC decisions and decoration, throughput/history, process tracing and shared date filtering; supports multiple Inline report modules |
+| `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
+| `indicator_domain` | `ijp` | IJP border-overflow analysis, Glass ratios, printer summaries and period summaries |
+| `indicator_domain` | `ijp_hole` | IJP large-hole analysis and Glass/total/day ratios; independent counting rules from `ijp`, while reusing its query/filter contracts |
+| `iqc_domain` | `eva_materials` | Evaporation incoming-material measurements, specifications, per-point decisions and overall material results |
+| `iqc_domain` | `lifetime` | Lifetime-test measurement validation, group-local anonymous sample numbering, product/batch filtering and report projection; uses an independent M3 data source |
+| `yield_domain` | `mapping` | Panel coordinates, mapping layouts, defect distribution, hotspot modification and monthly scaling policies |
+| `yield_domain` | `mwd_trend` | Month/week/day defect-rate trends, Code/Group aggregation, daily generation and maintained monthly target overrides |
+| `yield_domain` | `sheet_lot` | Sheet/Lot defect rates, allocation, aggregation, capping, simulation and rate overrides |
+| `equipment_domain` | No named package split | One integrated critical-parts reporting capability: part identity, baseline/source matching, usage/lifetime progress, warning/decoration and a dedicated CVD rule branch; these are file-level responsibilities, not existing `parts/` or `cvd/` submodule packages |
+
+### Capabilities Outside Named Submodule Packages
+
+Yield also keeps common Panel-data loading, defect processing, batch statistics, anomaly/alert handling, modifier persistence and exports outside its three named business packages. The three submodules use these common inputs and report coordination; `repositories` is a data-access grouping rather than another business capability.
+
+IQC retains example-report loading/filtering outside `eva_materials` and `lifetime`. These examples are not a third production business submodule. Inline's `ports` directory groups shared measurement contracts and is not a seventh business submodule. Domain composition/configuration files support module assembly and are likewise excluded from the inventory.
+
+`shared_kernel` is the separate cross-domain support package for configuration, source/display-time policies, cutoff handling, data health, cache/path/snapshot contracts, database connectivity and Excel/CSV utilities. Inline's `shared` belongs to Inline; it is not interchangeable with `shared_kernel`.
+
+### Submodule Boundaries and Lookup
+
+Select a domain and named business submodule from this overview first, then use the path grammar below to find its actual implementation. Keep the same stable capability name wherever its implementation is present; add a submodule for a distinct business responsibility, and keep domain-local reuse in that domain's `shared` area. The overview records existing packages and explicitly marks ungrouped capabilities; it does not require creating empty or hypothetical packages.
+
+Within `qtime`, station monitoring uses [the documented decoration workflow](references/design/indicator_domain/qtime/algorithm-qtime-data-decoration.md); chamber monitoring uses independent residence rules. Sharing a submodule or page does not imply sharing an algorithm.
+
+## Shared Path Grammar
+
+Use the Domain Submodule Architecture as the sole maintained capability inventory across these trees:
 
 ```text
 src/<domain>/<layer>/<submodule>/
-     domain    DDD layer  submodule
+app/{sections,charts}/<domain>/[<submodule>/]
+docs/dev_docs/{dev_spec,generated}/<domain>/<submodule>/
+references/{domain,design}/<domain>/<submodule>/
+resources/<domain>/<submodule>/
+data/<domain>/<lifecycle-group>/
 ```
 
-- Domains follow business responsibilities, not page names or storage technologies.
-- Layers are `application` (use cases), `core` (domain rules), and `infrastructure` (external adapters). Presentation lives in `app/`.
-- Submodules represent stable business capabilities or shared responsibilities within a layer. Prefer the same business name across layers, such as `qtime`; technical directories may use role-based names.
-- Small layers may keep shared or legacy files directly at the layer root. Distinct business capabilities use named submodules consistently across their implemented layers, following the [business submodule rule](CONTEXT.md#business-submodule-organization). Do not create empty directories solely to make every layer symmetrical.
-- A domain-level `composition.py` assembles dependencies; it is not a fourth business layer. `shared_kernel` supplies cross-domain capabilities and does not require a full DDD layout.
+### Three-Level Layout
 
-### Current Directory Skeleton
+Source code retains its implemented `application`, `core` and `infrastructure` ownership boundaries. Match a business submodule name across its implemented locations; keep existing ungrouped code and shared contracts where they are owned. Presentation and artifacts follow domain/submodule ownership without inserting source-code layer names. Create only directories that contain a real responsibility.
 
-Only domains, layers, and submodules are listed. Files, cache directories, and deeper implementation details are omitted. `(layer root)` indicates responsibilities also implemented directly in that layer.
+Shared/domain-wide artifacts use `<domain>/shared/`; project-wide material uses `shared_kernel/shared/`. Equipment artifacts use `equipment_domain/parts/` for its integrated parts capability even though the source remains ungrouped. IQC example inputs use `iqc_domain/shared/demo/`. Optional technical archive folders may follow the submodule, while filenames retain their existing naming contracts.
 
-```text
-src/
-├─ yield_domain/
-│  ├─ application/       (layer root)
-│  ├─ core/              (layer root)
-│  │  ├─ mapping/
-│  │  ├─ mwd_trend/
-│  │  └─ sheet_lot/
-│  └─ infrastructure/    (layer root)
-│     └─ repositories/
-├─ inline_domain/
-│  ├─ application/
-│  │  ├─ spc/
-│  │  ├─ ctq/
-│  │  ├─ aoi_tt/
-│  │  ├─ aoi_rs/
-│  │  ├─ monitor/
-│  │  ├─ shared/
-│  │  └─ ports/
-│  ├─ core/
-│  │  ├─ spc/
-│  │  ├─ ctq/
-│  │  ├─ aoi_tt/
-│  │  ├─ aoi_rs/
-│  │  ├─ monitor/
-│  │  └─ shared/
-│  └─ infrastructure/
-│     ├─ spc/
-│     ├─ ctq/
-│     ├─ aoi_tt/
-│     ├─ aoi_rs/
-│     ├─ monitor/
-│     └─ shared/
-├─ indicator_domain/
-│  ├─ application/
-│  │  ├─ qtime/
-│  │  ├─ ijp/
-│  │  └─ ijp_hole/
-│  ├─ core/
-│  │  ├─ qtime/
-│  │  ├─ ijp/
-│  │  └─ ijp_hole/
-│  └─ infrastructure/
-│     ├─ qtime/
-│     ├─ ijp/
-│     └─ ijp_hole/
-├─ equipment_domain/
-│  ├─ application/       (layer root)
-│  ├─ core/              (layer root)
-│  └─ infrastructure/    (layer root)
-├─ iqc_domain/
-│  ├─ application/       (example reads also at layer root)
-│  │  ├─ eva_materials/
-│  │  └─ lifetime/
-│  ├─ core/
-│  │  ├─ eva_materials/
-│  │  └─ lifetime/
-│  └─ infrastructure/    (example adapter also at layer root)
-│     ├─ eva_materials/
-│     └─ lifetime/
-└─ shared_kernel/        (shared contracts and configuration at root)
-   ├─ infrastructure/
-   └─ utils/
-```
+Data already uses lifecycle groups: Inline `aoi_rs`, `aoi_tt`, `ctq`, `spc`, `shared`; Indicator `qtime`; Equipment `parts`; Yield `yield` for common Panel source facts. These existing groups are retained, not relabeled to match every report submodule. Source snapshots and maintained history follow their owning lifecycle.
 
 ### Responsibility Map
 
-Submodule paths are relative to `src/<domain>/<layer>/`. Read the target directory to find the actual implementations.
-
-| Domain / business terms | Layer | Submodule -> responsibility |
-|---|---|---|
-| `yield_domain`: entry defect rates, Code/Group, Lot/Sheet, Mapping | `application` | Layer root -> report/alert use cases, data ports, modifier-table management, and Office export coordination |
-| `yield_domain` | `core` | `mapping/` -> coordinates and defect distribution; `mwd_trend/` -> month/week/day aggregation and overrides; `sheet_lot/` -> allocation and capping; layer root -> common defect processing, batch statistics, and anomaly rules |
-| `yield_domain` | `infrastructure` | `repositories/` -> Panel repository and snapshots; layer root -> source loading, modifier persistence, and application-port adapters |
-| `inline_domain`: SPC, CTQ, AOI, Inline warnings | `application` | `spc/`, `ctq/`, `aoi_tt/`, `aoi_rs/` -> report use cases and ports; `monitor/` -> warnings/history/summaries; `shared/` -> decoration, features, decision signatures, and throughput coordination; `ports/` -> shared measurement snapshot contracts |
-| `inline_domain` | `core` | `spc/` -> capability calculations/decoration; `ctq/` -> indicator chart-type rules; `aoi_tt/`, `aoi_rs/` -> statistics/decoration; `monitor/` -> period summaries/replacement; `shared/` -> domain-wide factory/date projection exclusion, OOS/OOC, measurement correction, and throughput facts |
-| `inline_domain` | `infrastructure` | `spc/`, `ctq/`, `aoi_tt/` -> projections and specialized persistence/reads; `aoi_rs/` -> independent RS facts/snapshots; `monitor/` -> warning inputs and summary/history stores; `shared/` -> measurement loading/preparation/snapshots, process tracing, decoration, and resource paths |
-| `indicator_domain`: Q-Time, IJP | `application` | `qtime/` -> station monitoring, decoration, cached use cases, and chamber residence reports through an application-owned source port; `ijp/` -> overflow queries/filtering/report coordination; each owns its DTOs, ports, and errors |
-| `indicator_domain` | `core` | `qtime/` -> shop, exceedance, decoration, unique Glass/product attribution, and chamber residence statistics; `ijp/` -> overflow, period, and printer aggregation |
-| `indicator_domain` | `infrastructure` | `qtime/` -> queries, shop-level source snapshots, decision workbooks, and read-only chamber workbooks joined to source-month OLED SPC product identities; `ijp/` -> query adapters |
-| `indicator_domain`: IJP large holes | `application`, `core`, `infrastructure` | `ijp_hole/` -> enabled-product-scoped queries, three-code glass/total/day ratios, and source-filtered large-hole SQL; independent from border IJP counting, presented through the existing IJP page region selector. See [source and report boundary](docs/ADR/0031-ijp-hole-source-and-report-boundary.md) |
-| `equipment_domain`: critical parts, lifetime, real/fabricated matching | `application` | Layer root -> reports, data ports, refresh, and caching |
-| `equipment_domain` | `core` | Layer root -> identity, measurement matching, lifetime, and status calculations; independent CVD rules retain replacement dates and advance numeric measurements by monthly increment / 30 |
-| `equipment_domain` | `infrastructure` | Layer root -> baselines, real/fabricated data, snapshot maintenance, and the first CVD workbook sheet (including enterprise-encrypted workbooks); application merges CVD after the existing numeric calculation pipeline |
-| `iqc_domain`: incoming material inspection and lifetime testing | `application` | `eva_materials/` -> evaporation material report use case and read-only outbound port; `lifetime/` -> anonymous lifetime report use case and read-only outbound port; layer root -> retained example report reads |
-| `iqc_domain` | `core` | `eva_materials/` -> public material-report projection, SQL-equivalent per-point CASE decisions and any-NG overall decisions, specification/operator pairing; `lifetime/` -> group-local sample numbering, measurement validation, public projection and product/batch filtering |
-| `iqc_domain` | `infrastructure` | `eva_materials/` -> V3 organic-material scope and WMS joins (no product filter), source/display-time conversion and latest-day cutoff; `lifetime/` -> independent M3 connection pool and read-only lifetime measurements (numeric elapsed test time, no calendar shift); layer root -> retained example resources |
-
-`shared_kernel` owns configuration, source/display time, data health, cache helpers, and path contracts at its root; `infrastructure/` owns shared database connectivity, and `utils/` owns Excel/CSV utilities. Logic reused only within one domain should remain in that domain's corresponding `shared/` layer.
-
-## Standard Module Structure Within a Business Capability
-
-Use this standard when adding a capability or splitting an existing large module. It describes **module roles and file boundaries**, independent of the DDD directory layout above. The inventory below is a role template, not a single physical directory or a claim that every current capability implements every role. Keep implementations in their existing ownership locations.
-
-### Evidence From Current Domains
-
-| Current shape | Examples relative to `src/` | Convention to retain |
-|---|---|---|
-| Explicit use-case contracts | `indicator_domain/application/qtime/`, `indicator_domain/application/ijp/`; Inline `application/spc/`, `application/aoi_rs/`, `application/aoi_tt/` | A service coordinates the use case; DTOs, outbound ports, and errors become separate modules when their scope warrants it |
-| Compact capability | IQC `application/lifetime/lifetime.py`, `application/eva_materials/evaporation.py`; Indicator `application/qtime/chamber_service.py` | One small use-case module can own its service, single Protocol, and local error/result types |
-| Rules split by business operation | Yield `core/mwd_trend/`, `core/sheet_lot/`, `core/mapping/`; Indicator `core/qtime/` | Name rule modules after the calculation or policy: preparation, aggregation, decoration, alerts, identity, or summary |
-| External responsibilities split by lifecycle | Indicator `infrastructure/qtime/`; Inline `infrastructure/shared/`; Equipment `infrastructure/` | Keep source queries, source preparation, snapshot storage, and maintained-decision persistence distinguishable |
-| Existing larger entry modules | Yield `application/yield_service.py`; Equipment `application/parts_service.py` | Preserve public entry points; extract cohesive responsibilities as needed rather than renaming an entire domain |
-
-These are existing shapes, not interchangeable implementations. For example, IQC lifetime has a compact read-only flow; Q-Time has decision persistence, snapshots, and caching. The standard keeps their responsibilities explicit without requiring identical file counts.
-
-### Role Inventory and Naming
-
-`<capability>` names one business capability; `<operation>` names a concrete rule or input. Each line is optional except the actual use-case entry point and implemented business rules.
-
-```text
-Use-case entry and contracts
-  service.py / <capability>_service.py   orchestration and public operations
-  dtos.py                              query, options, and result contracts
-  ports.py                             consumer-owned outbound Protocols
-  errors.py                            stable application-facing failures
-  settings.py                          validated capability policy, if needed
-  cached_<operation>.py / <operation>_cache.py
-                                       cache wrapper and native payload boundary
-
-Business operations
-  <operation>.py                       preparation, aggregation, summary,
-                                       decoration, alerts, identity, or policy
-
-External adapters
-  repository.py / <capability>_repository.py
-                                       implementation of source/decision ports
-  <operation>_loader.py                 a distinct source-format reader
-  <operation>_preparation.py            source representation normalization
-  snapshot_store.py / snapshot_repository.py
-                                       raw snapshot lifecycle
-  <operation>_store.py / <operation>_repository.py
-                                       maintained decisions or derived history
-
-Domain assembly
-  composition.py                       factories and concrete dependency binding
-```
-
-Choose one entry filename for a capability. Prefer `service.py` / `repository.py` when the package name already supplies the business context; preserve descriptive existing names such as `spc_service.py`. Use `snake_case`, established business names, and responsibility suffixes for new files. Keep `__init__.py` lightweight and make public entry points discoverable without triggering resource access on import.
-
-| Role | Owns | Boundary and split criterion |
-|---|---|---|
-| Service | Load inputs, call rules, coordinate optional writes, assemble the result | Express the use-case sequence; extract a second service only for a separate operation, such as decision upload/download |
-| Contracts | Query validation, result shape, required source/persistence methods, stable errors | Use the existing Pydantic/dataclass/Protocol conventions; keep local types beside a small sole consumer, split when they have independent consumers or grow |
-| Settings | Capability policy values and their validation/signature | Resolve configuration through existing loaders and assembly; pass values into rules rather than having calculations read YAML or paths |
-| Rule modules | Data preparation, calculation, decision semantics, projections | Accept explicit values/DataFrames and return results; split by business operation rather than collecting unrelated functions in `utils.py` |
-| Repository/loader | SQL or workbook/CSV reading, source normalization, adapter errors | A loader handles a distinct input format; a repository implements the consuming port and coordinates its source lifecycle |
-| Snapshot/history/decision store | Persistence and publication of the object named by the store | Keep source facts, user-maintained decisions, and derived history separate; reuse established atomic-write/fallback helpers |
-| Cache wrapper | Key/signature, TTL, invalidation, serialization boundary | Split when independently consumed or invalidated; cache native payloads and rebuild project result types after lookup |
-| Composition | Concrete adapters, policy values, service factories | Bind dependencies once at the existing domain assembly point; a capability does not create a second global database/configuration lifecycle |
-
-### Size, Reuse, and Extension Rules
-
-1. **Start compact.** A single read-only use case may keep its Protocol, local result/error types, and service together, as IQC lifetime does. Create only files with an implemented responsibility.
-2. **Split by ownership or lifecycle.** Separate independently consumed contracts, a substantial calculation, decision management, or separately invalidated caching. A growing file alone does not justify an arbitrary helper package.
-3. **Use explicit operations.** A typical sequence is source read -> preparation -> calculation/decision application -> optional persistence -> result assembly. Document capability-specific ordering in its routed design document. Q-Time's sequence is described in [its decoration logic](references/design/indicator_domian/qtime/algorithm-qtime-data-decoration.md).
-4. **Keep reuse at its actual scope.** Put multi-capability domain reuse in the existing domain `shared/` module; a lone reusable Protocol may belong in the existing `ports/` package. Promote to `shared_kernel` only when cross-domain consumers and a stable common contract exist. Retain capability-specific decisions with their owning capability.
-5. **Preserve compatibility during extraction.** Keep existing public entry points and consumers working; move one responsibility at a time. Existing combined files, static services, and default resolvers are migration context, not reasons to add hidden I/O to new rule modules.
-6. **Verify the boundary that changed.** Match rule tests to calculations, service tests to injected ports and ordering, adapter tests to representation/persistence, and architecture checks to imports. Use scoped test discovery because current tests include both mirrored packages and flat files.
+The [Domain Submodule Architecture](#domain-submodule-architecture) owns the capability inventory and relationships. Select a capability there, then search its scoped paths above. `shared_kernel` supplies cross-domain configuration, time, health, cache/path/snapshot contracts, database connectivity and Excel/CSV helpers; domain-local shared work remains with its domain.
 
 ## Dependency Direction and Composition
 
@@ -219,11 +132,11 @@ domain composition -> assembles application services and concrete adapters
 
 The scheduled matrix entry point in `tools/` reuses app-level cross-domain assembly. Its app-level snapshot adapter stores native JSON status under `output/cache/alert_matrix/`; consumers validate freshness and signatures and use the existing computation path for missing or invalid items. Locate this path through [the scheduled command](tools/warm_alert_matrix.py) and [the snapshot adapter](app/sections/inline_domain/monitor/alert_matrix_snapshot.py). This is an existing orchestration boundary, not a rule allowing business calculations in every page.
 
-Configuration, maintained resources, runtime data, and output ownership are summarized in `CONTEXT.md`; do not infer that every resource follows a uniform product-directory layout.
+Configuration, maintained resources, runtime data, and output lifecycle are owned by `CONTEXT.md`. Resolve maintained resource locations from the global resource registry; product sheets do not imply product-named resource directories.
 
 ## Task-Directed Code Lookup
 
-1. Select the domain and business submodule from the responsibility map. Start a cross-indicator task at the presentation aggregator, then trace each contributing domain.
+1. Select the domain and business submodule from the Domain Submodule Architecture. Start a cross-indicator task at the presentation aggregator, then trace each contributing domain.
 2. Select the layer: calculations/invariants in Core; use-case steps, health propagation, and cache contracts in Application; SQL/files/source snapshots in Infrastructure; dependency choices in Composition; interaction/rendering in `app/`.
 3. If `.codegraph/` exists, use CodeGraph for symbol/call-path discovery first, as required by `AGENTS.md`. Otherwise list the scoped directory with `rg --files`, then search definitions and references with `rg -n`. A filename is a clue, not proof of responsibility.
 4. Trace one use case through its entry point, consumer port, composition binding, and adapter; enter Core when the rule is relevant. Stop unrelated scanning once inputs, outputs, ownership, consumers, and applicable tests are identified.
@@ -248,17 +161,6 @@ rg --files tests -g '*qtime*' -g '*yield*' -g '*dependencies*'
 rg -n 'QTimeReportService|data_health' tests/unit tests/integration tests/architecture
 ```
 
-## Technical Contracts and Verification Routes
-
-| Change | Contract / evidence |
-|---|---|
-| Cache, hot reload, or injected ports | [Native payload boundary](docs/ADR/0001-streamlit-cache-native-payload-boundary.md) and [health/ports contract](references/design/feat_design/architecture-data-health-and-outbound-ports.md); construct project result types outside caches and isolate explicit ports from shared default cache entries |
-| Failure, empty results, or fallback presentation | [Health/ports contract](references/design/feat_design/architecture-data-health-and-outbound-ports.md): Yield/Q-Time distinguish successful emptiness, unavailable, stale, and unknown; a failed Yield chunk must not publish a partial new window; stale data cannot support a current-normal conclusion. Do not assume every domain implements this contract |
-| Time or source snapshots | [Source/display time ADR](docs/ADR/0022-source-and-display-time-boundary.md), [refresh design](references/design/system_design/data-flow-infrastructure-refresh.md), and the business time constraints in `CONTEXT.md`; verify domain-specific windows and fallback semantics |
-| TTL or refresh | Use `config/global.yaml` -> `application.cache_ttl_hours` for project data caches and domain snapshots; preserve targeted product/indicator invalidation. See [cache semantics](docs/ADR/0006-rerun-slimming-cache-semantics.md) and [matrix cache](docs/ADR/0022-alert-matrix-board-and-qtime-cache.md) |
-| Decoration, shared measurement, or maintained workbooks | [Decoration architecture](references/design/feat_design/architecture-data-decoration.md), then relevant [knowledge routes](references/index.md); distinguish source facts, decisions, projections, and maintained history |
-| UI messages, tables, or exports | Read the [non-administrator presentation boundary](CONTEXT.md#non-administrator-presentation-boundary) before changing normal or exceptional paths |
-| Choosing checks | [Architecture tests](tests/architecture/) enforce dependencies; unit/integration tests verify behavior; browser checks verify presentation. [Testing guidance](docs/dev_docs/generated/others/solo-developer-testing-and-release-explained.md) explains coverage gaps; `tools/smoke.py all` is not an all-category release check |
 
 ## Extension Rules
 

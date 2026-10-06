@@ -190,7 +190,7 @@ def render_aoi_rs_indicator_sections(
 # ---------------------------------------------------------------------------
 
 
-def _load_aoi_rs_sheet_oos_decoration(product_dir: Path, prod_code: str) -> pd.DataFrame | None:
+def _load_aoi_rs_sheet_oos_decoration(product_dir: Path, prod_code: str, file_name: str = AOI_RS_OOS_DECORATION_FILE_NAME) -> pd.DataFrame | None:
     """只读加载 AOI_RS 超规修饰明细工作簿；读取失败（含企业加密 COM 回退失败）降级为 None。
 
     预警是纯只读消费，绝不触发工作簿写入；返回 None 表示"预警数据不可用"，
@@ -199,14 +199,14 @@ def _load_aoi_rs_sheet_oos_decoration(product_dir: Path, prod_code: str) -> pd.D
     try:
         return load_sheet_oos_decoration(
             product_dir,
-            AOI_RS_OOS_DECORATION_FILE_NAME,
+            file_name,
             prod_code,
             key_columns=AOI_RS_OOS_KEY_COLUMNS,
         )
     except Exception as exc:  # SheetOosDecorationReadError 及 COM 侧其他异常
         logger.warning(
             "[AOI_RS] Sheet OOS 预警明细加载失败，单片异常预警降级为空：%s (%s)",
-            product_dir / AOI_RS_OOS_DECORATION_FILE_NAME,
+            product_dir / file_name,
             exc,
         )
         return None
@@ -218,10 +218,11 @@ def load_cached_aoi_rs_sheet_oos_decoration(
     file_size: int,
     prod_code: str,
     product_dir_str: str,
+    file_name: str = AOI_RS_OOS_DECORATION_FILE_NAME,
 ) -> pd.DataFrame | None:
     """按（文件 mtime_ns, size, 产品）缓存的工作簿只读加载，普通 rerun 不重复启动 COM。"""
     del file_mtime_ns, file_size  # 仅作为缓存键参与
-    return _load_aoi_rs_sheet_oos_decoration(Path(product_dir_str), prod_code)
+    return _load_aoi_rs_sheet_oos_decoration(Path(product_dir_str), prod_code, file_name)
 
 
 def build_aoi_rs_sheet_oos_alerts(

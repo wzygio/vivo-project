@@ -27,7 +27,7 @@
 
 新增 AST 架构守卫，覆盖 application 的具体基础设施依赖、Core 出向依赖和跨域私有访问。存量例外精确登记，新增越界和已经迁移却未删除的例外都会失败。该守卫不声称能检测任意动态导入或所有隐式文件读写；Yield Alert/Modifier 等少量历史入口继续渐进迁移。本次不是全仓接口化。
 
-详细契约见[数据健康与出站端口设计](../../../../references/design/feat_design/architecture-data-health-and-outbound-ports.md)。
+详细契约见[数据健康与出站端口设计](../../references/design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md)。
 
 ## 验证证据与限制
 
@@ -58,7 +58,7 @@ Standards 和 Spec 两轴复审均无剩余阻断。复审发现的端口缓存�
 
 ## H5 及暂缓范围
 
-[个人开发者测试与发布检查解释](solo-developer-testing-and-release-explained.md)说明现有验收价值、具体缺口、失败后果、低成本测试方法和建议命令。本轮 H5 仅文档，没有新增发布平台或修改依赖锁定方案。
+[个人开发者测试与发布检查解释](../dev_docs/generated/shared_kernel/shared/solo-developer-testing-and-release-explained.md)说明现有验收价值、具体缺口、失败后果、低成本测试方法和建议命令。本轮 H5 仅文档，没有新增发布平台或修改依赖锁定方案。
 
 H2 的原子写入、版本冲突、审计及 H3 的认证授权均按用户决定暂缓。本次不改变这些能力。
 

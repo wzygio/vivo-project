@@ -10,7 +10,7 @@ import pandas as pd
 import streamlit as st
 
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
-from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir, resolve_scope_decoration_path
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
@@ -181,6 +181,7 @@ class AoiTtReportService:
                         prod_code=query_config.prod_code,
                         detail_df=build_aoi_tt_ooc_detail(pd.DataFrame(), pd.DataFrame()),
                         key_columns=AOI_TT_OOC_KEY_COLUMNS,
+                        workbook_path=resolve_scope_decoration_path('aoi_tt', alarm_type="ooc"),
                         product_dir=product_dir,
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
@@ -204,6 +205,7 @@ class AoiTtReportService:
             decoration_result = prepare_aoi_tt_decoration(
                 tt_details_df,
                 spec_df,
+                workbook_path=resolve_scope_decoration_path('aoi_tt'),
                 product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
                 prod_code=query_config.prod_code,
                 exempt_param_name_contains=(
@@ -231,6 +233,7 @@ class AoiTtReportService:
                     prod_code=query_config.prod_code,
                     detail_df=build_aoi_tt_ooc_detail(tt_details_df, spec_df),
                     key_columns=AOI_TT_OOC_KEY_COLUMNS,
+                    workbook_path=resolve_scope_decoration_path('aoi_tt', alarm_type="ooc"),
                     product_dir=product_dir,
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,

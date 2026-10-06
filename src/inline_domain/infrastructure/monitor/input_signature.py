@@ -15,6 +15,7 @@ def monitor_input_signature(
     products: Iterable[str],
     *,
     excluded_paths: Iterable[Path] = (),
+    include_configured_paths: bool = True,
 ) -> str:
     """Track source snapshots and editable inputs, excluding generated summaries."""
     excluded = {
@@ -22,6 +23,23 @@ def monitor_input_signature(
         for path in excluded_paths
     }
     paths: set[Path] = set()
+    # Maintained files may be configured outside the domain resource directory.
+    from src.inline_domain.infrastructure.shared.resource_paths import decision_workbook_paths
+
+    if include_configured_paths:
+        configured_paths = [
+            *decision_workbook_paths("oos").values(),
+            *decision_workbook_paths("ooc").values(),
+            *(ConfigLoader.get_domain_resource_path("inline_domain", key, name)
+              for key, name in (
+                  ("spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
+                  ("spc_outlier_filters", "spc_outlier_filters.csv"),
+                  ("aoi_tt_particle_size_ratio_spec", "aoi_tt_particle_size_ratio_spec.xlsx"),
+                  ("compliance_config", "compliance_config.yaml"),
+                  ("scrap_sheets", "scrap_sheets.xlsx"),
+              )),
+        ]
+        paths.update(path for path in configured_paths if path.is_file() and path.resolve() not in excluded)
     for root in (resource_root, project_root / "config"):
         if root.exists():
             paths.update(

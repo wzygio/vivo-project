@@ -28,7 +28,7 @@ def build_chamber_figure(
     ticks = measured.iloc[::max(1, (len(measured) + 9) // 10)]
     figure.update_layout(
         title={'text': chamber.replace('->', ' → '), 'x': 0.5}, height=400,
-        xaxis_title='过货时间（小时，逐片等距）', yaxis_title='停留时间（秒）',
+        xaxis_title='过货时间（小时）', yaxis_title='停留时间（秒）',
         margin={'l': 45, 'r': 25, 't': 75, 'b': 65},
         legend={'orientation': 'h', 'y': -0.25},
     )

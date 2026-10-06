@@ -1,0 +1,19 @@
+{
+  "layout_file_counts": {
+    "docs/dev_docs/dev_spec": 31,
+    "docs/dev_docs/generated": 16,
+    "references/domain": 22,
+    "references/design": 10,
+    "resources": 116
+  },
+  "manifest_targets_verified": 195,
+  "registered_file_paths": 119,
+  "missing_optional_inputs": [
+    "resources/indicator_domain/qtime/qtime_oos_decoration.xlsx",
+    "resources/iqc_domain/shared/demo/inspection.json",
+    "resources/iqc_domain/shared/demo/lifetime.json"
+  ],
+  "compiled_changed_python_files": 57,
+  "live_link_errors": [],
+  "historical_attachment_link_errors": 5
+}

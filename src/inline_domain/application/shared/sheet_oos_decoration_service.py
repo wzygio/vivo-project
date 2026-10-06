@@ -72,6 +72,7 @@ def prepare_sheet_oos_decoration(
             decision_signature=decision_signature,
             now=now,
             force=force,
+            alarm_type="oos",
         )
         decoration = outcome.decoration_df
         decisions = outcome.decisions_df

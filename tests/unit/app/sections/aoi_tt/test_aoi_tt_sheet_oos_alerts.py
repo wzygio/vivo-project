@@ -115,10 +115,11 @@ def test_build_alerts_none_or_empty_returns_empty_display_frame() -> None:
 
 
 def test_load_decoration_returns_none_on_read_error(monkeypatch, tmp_path) -> None:
-    workbook = tmp_path / "aoi_tt_sheet_oos_decoration.xlsx"
+    workbook = tmp_path / "manual-tt.xlsx"
     workbook.write_bytes(b"not-a-real-xlsx")
 
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard.ConfigLoader, "get_domain_resource_path",
+                        classmethod(lambda cls, domain, key, default_name=None: tmp_path / "manual-tt.xlsx"))
 
     def _raise(*_args, **_kwargs):
         raise SheetOosDecorationReadError("unreadable decoration file")
@@ -129,10 +130,11 @@ def test_load_decoration_returns_none_on_read_error(monkeypatch, tmp_path) -> No
 
 
 def test_load_decoration_returns_dataframe_on_success(monkeypatch, tmp_path) -> None:
-    workbook = tmp_path / "aoi_tt_sheet_oos_decoration.xlsx"
+    workbook = tmp_path / "manual-tt.xlsx"
     workbook.write_bytes(b"fake-bytes")
 
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard.ConfigLoader, "get_domain_resource_path",
+                        classmethod(lambda cls, domain, key, default_name=None: tmp_path / "manual-tt.xlsx"))
     expected = pd.DataFrame([_decoration_row()])
     monkeypatch.setattr(
         aoi_tt_dashboard, "load_sheet_oos_decoration", lambda *_a, **_kw: expected
@@ -145,7 +147,8 @@ def test_load_decoration_returns_dataframe_on_success(monkeypatch, tmp_path) -> 
 
 
 def test_load_decoration_missing_file_returns_none(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(aoi_tt_dashboard, "resolve_product_resource_dir", lambda _prod, **_kwargs: tmp_path)
+    monkeypatch.setattr(aoi_tt_dashboard.ConfigLoader, "get_domain_resource_path",
+                        classmethod(lambda cls, domain, key, default_name=None: tmp_path / "manual-tt.xlsx"))
     called = {"count": 0}
 
     def _counting_loader(*_args, **_kwargs):

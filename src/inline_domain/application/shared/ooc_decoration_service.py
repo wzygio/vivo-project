@@ -27,6 +27,7 @@ def persist_ooc_facts(
     product_revision: str = "",
     decision_signature: str = "",
     decoration_port: SheetDecorationPort | None = None,
+    workbook_path: Path | None = None,
 ) -> pd.DataFrame:
     """Write the mutable ledger; intermediate alarm results stay in cache."""
     persist_outcome = (
@@ -35,9 +36,9 @@ def persist_ooc_facts(
         else persist_sheet_oos_decoration_outcome
     )
     outcome = persist_outcome(
-        product_dir,
+        Path(workbook_path).parent if workbook_path is not None else product_dir,
         detail_df,
-        file_name=SCOPE_OOC_DECORATION_FILE_NAME[scope],
+        file_name=Path(workbook_path).name if workbook_path is not None else SCOPE_OOC_DECORATION_FILE_NAME[scope],
         sheet_name=prod_code,
         key_columns=key_columns,
         scope=scope,
@@ -46,5 +47,6 @@ def persist_ooc_facts(
         # OOC decisions are independent from the OOS ledger/cache signature.
         # The repository computes the signature from this OOC workbook.
         decision_signature=None,
+        alarm_type="ooc",
     )
     return outcome.decoration_df

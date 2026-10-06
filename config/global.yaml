@@ -18,6 +18,8 @@ domain_config:
   inline_domain: config/domain/inline_domain.yaml
   yield_domain: config/domain/yield_domain.yaml
   equipment_domain: config/domain/equipment_domain.yaml
+  indicator_domain: config/domain/indicator_domain.yaml
+  iqc_domain: config/domain/iqc_domain.yaml
 
 product_registry:
   enabled_products:
@@ -77,3 +79,149 @@ ui:
     error: "❌"
     warning: "⚠️"
     info: "ℹ️"
+
+# Maintained resource locations: repository-relative or absolute full paths.
+# Backups, historical extraction copies and reference assets are retained.
+resources:
+  inline_domain:
+    dir: resources/inline_domain
+    files:
+      aoi_rs_sheet_oos_decoration: resources/inline_domain/aoi_rs/aoi_rs_sheet_oos_decoration.xlsx
+      aoi_rs_sheet_ooc_decoration: resources/inline_domain/aoi_rs/aoi_rs_sheet_ooc_decoration.xlsx
+      aoi_tt_sheet_oos_decoration: resources/inline_domain/aoi_tt/aoi_tt_sheet_oos_decoration.xlsx
+      aoi_tt_sheet_ooc_decoration: resources/inline_domain/aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx
+      aoi_tt_particle_size_ratio_spec: resources/inline_domain/aoi_tt/AOI_TT-比例规格表.xlsx
+      compliance_config: resources/inline_domain/monitor/compliance_config.xlsx
+      monitor_summary_workbook: resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx
+      ctq_sheet_oos_decoration: resources/inline_domain/ctq/ctq_sheet_oos_decoration.xlsx
+      ctq_sheet_ooc_decoration: resources/inline_domain/ctq/ctq_sheet_ooc_decoration.xlsx
+      scrap_sheets: resources/inline_domain/monitor/scrap_sheets.xlsx
+      spc_cpk_cpm_decoration: resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx
+      spc_outlier_filters: resources/inline_domain/spc/spc_outlier_filters.xlsx
+      spc_sheet_oos_decoration: resources/inline_domain/spc/spc_sheet_oos_decoration.xlsx
+      spc_sheet_ooc_decoration: resources/inline_domain/spc/spc_sheet_ooc_decoration.xlsx
+      asset_compliance_config_xlsx_337c0336: resources/inline_domain/monitor/decrypted_files/compliance_config.xlsx
+      asset_compliance_config_decrypted_044b9521_xlsx_e9dbe148: resources/inline_domain/monitor/decrypted_files/compliance_config_decrypted_044b9521.xlsx
+      asset_compliance_config_decrypted_044b9521_2_xlsx_c7c00f99: resources/inline_domain/monitor/decrypted_files/compliance_config_decrypted_044b9521_2.xlsx
+      asset_compliance_config_decrypted_044b9521_3_xlsx_e4f5aa3f: resources/inline_domain/monitor/decrypted_files/compliance_config_decrypted_044b9521_3.xlsx
+      asset_compliance_config_decrypted_044b9521_4_xlsx_6e673e7f: resources/inline_domain/monitor/decrypted_files/compliance_config_decrypted_044b9521_4.xlsx
+      asset_ppa_raw_measurements_202607_xlsx_1efbc21f: resources/inline_domain/shared/decrypted_files/ppa_raw_measurements_202607.xlsx
+      asset_ppa_raw_measurements_202607_decrypted_22aee30e_xlsx_ff9af985: resources/inline_domain/shared/decrypted_files/ppa_raw_measurements_202607_decrypted_22aee30e.xlsx
+      asset_spc_cpk_decoration_xlsx_6d36d3ee: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration.xlsx
+      asset_spc_cpk_decoration_decrypted_63b2f5ec_xlsx_1d0b5824: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration_decrypted_63b2f5ec.xlsx
+      asset_spc_cpk_decoration_decrypted_63b2f5ec_2_xlsx_ab5c3b4b: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration_decrypted_63b2f5ec_2.xlsx
+      asset_spc_cpk_decoration_decrypted_63b2f5ec_3_xlsx_ba7c652c: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration_decrypted_63b2f5ec_3.xlsx
+      asset_spc_cpk_decoration_decrypted_63b2f5ec_4_xlsx_e310e807: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration_decrypted_63b2f5ec_4.xlsx
+      asset_spc_cpk_decoration_decrypted_63b2f5ec_5_xlsx_1d322d89: resources/inline_domain/spc/decrypted_files/spc_cpk_decoration_decrypted_63b2f5ec_5.xlsx
+      asset_spc_sheet_ooc_decoration_xlsx_67e64d4e: resources/inline_domain/spc/decrypted_files/spc_sheet_ooc_decoration.xlsx
+      asset_spc_sheet_ooc_decoration_decrypted_8a5b866e_xlsx_a4ec6781: resources/inline_domain/spc/decrypted_files/spc_sheet_ooc_decoration_decrypted_8a5b866e.xlsx
+      asset_spc_sheet_ooc_decoration_decrypted_8a5b866e_2_xlsx_4ded0679: resources/inline_domain/spc/decrypted_files/spc_sheet_ooc_decoration_decrypted_8a5b866e_2.xlsx
+      asset_spc_sheet_ooc_decoration_decrypted_8a5b866e_3_xlsx_688d356b: resources/inline_domain/spc/decrypted_files/spc_sheet_ooc_decoration_decrypted_8a5b866e_3.xlsx
+      asset_spc_sheet_ooc_decoration_decrypted_8a5b866e_4_xlsx_dfdb382b: resources/inline_domain/spc/decrypted_files/spc_sheet_ooc_decoration_decrypted_8a5b866e_4.xlsx
+      asset_cpk_xlsx_ce0e5ee8: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总.xlsx
+      asset_cpk_decrypted_d9700b0f_xlsx_1a064929: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f.xlsx
+      asset_cpk_decrypted_d9700b0f_10_xlsx_25717a53: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_10.xlsx
+      asset_cpk_decrypted_d9700b0f_11_xlsx_0b926669: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_11.xlsx
+      asset_cpk_decrypted_d9700b0f_12_xlsx_d0ea9002: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_12.xlsx
+      asset_cpk_decrypted_d9700b0f_13_xlsx_fa7684aa: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_13.xlsx
+      asset_cpk_decrypted_d9700b0f_14_xlsx_7afda953: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_14.xlsx
+      asset_cpk_decrypted_d9700b0f_2_xlsx_11228464: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_2.xlsx
+      asset_cpk_decrypted_d9700b0f_3_xlsx_7c6e64e9: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_3.xlsx
+      asset_cpk_decrypted_d9700b0f_4_xlsx_0451f0ea: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_4.xlsx
+      asset_cpk_decrypted_d9700b0f_5_xlsx_a48eb8cb: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_5.xlsx
+      asset_cpk_decrypted_d9700b0f_6_xlsx_affc8052: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_6.xlsx
+      asset_cpk_decrypted_d9700b0f_7_xlsx_355a0929: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_7.xlsx
+      asset_cpk_decrypted_d9700b0f_8_xlsx_afa7e9bc: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_8.xlsx
+      asset_cpk_decrypted_d9700b0f_9_xlsx_bff46684: resources/inline_domain/monitor/decrypted_files/北极星报警率与CPK汇总_decrypted_d9700b0f_9.xlsx
+      asset_aoi_rs_sheet_ooc_decoration_xlsx_bak_5364511f: resources/inline_domain/aoi_rs/aoi_rs_sheet_ooc_decoration.xlsx.bak
+      asset_aoi_rs_sheet_oos_decoration_xlsx_bak_23502872: resources/inline_domain/aoi_rs/aoi_rs_sheet_oos_decoration.xlsx.bak
+      asset_aoi_tt_sheet_ooc_decoration_xlsx_bak_9128d5e4: resources/inline_domain/aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx.bak
+      asset_aoi_tt_sheet_oos_decoration_xlsx_bak_904ce8e0: resources/inline_domain/aoi_tt/aoi_tt_sheet_oos_decoration.xlsx.bak
+      asset_ctq_sheet_ooc_decoration_xlsx_bak_2498740b: resources/inline_domain/ctq/ctq_sheet_ooc_decoration.xlsx.bak
+      asset_ctq_sheet_oos_decoration_xlsx_bak_c91b385b: resources/inline_domain/ctq/ctq_sheet_oos_decoration.xlsx.bak
+      asset_cpk_xlsx_bak_ef2be5bf: resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx.bak
+      asset_spc_cpk_cpm_decoration_xlsx_bak_6a1a8e2d: resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx.bak
+      asset_spc_sheet_ooc_decoration_xlsx_bak_6dce11d5: resources/inline_domain/spc/spc_sheet_ooc_decoration.xlsx.bak
+      asset_spc_sheet_oos_decoration_xlsx_bak_4d74fdb4: resources/inline_domain/spc/spc_sheet_oos_decoration.xlsx.bak
+  yield_domain:
+    dir: resources/yield_domain
+    files:
+      mapping_config: resources/yield_domain/mapping/mapping_config.xlsx
+      override_rates: resources/yield_domain/sheet_lot/override_rates.xlsx
+      static_warning_lines: resources/yield_domain/shared/入库不良率规格.xlsx
+      yield_modifier_table: resources/yield_domain/mwd_trend/入库良率修饰表.xlsx
+      asset_cpd2455_sv4_20251113_pdf_c6f994bf: resources/yield_domain/shared/analysis_files/CPD2455 SV4整机组装检出点状白斑不良分析报告20251113.pdf
+      asset_m678_2nit_b_0918_pptx_11d60746: resources/yield_domain/shared/analysis_files/M678 2nit发红色不均不良调查报告B -0918.pptx
+      asset_m678_sv2_20250904_pptx_7bc38349: resources/yield_domain/shared/analysis_files/M678 SV2客诉亮点报告-20250904.pptx
+      asset_m678_sv3_2_fa_report_20251024_pdf_8aef3a6f: resources/yield_domain/shared/analysis_files/M678 SV3-2 客户端 整机组装前
+        边缘黑斑_FA Report_20251024.pdf
+      asset_m678_fib_10_pptx_6a2c3b80: resources/yield_domain/shared/analysis_files/北极星-M678产品FIB确认-10月.pptx
+      asset_xlsx_800e2766: resources/yield_domain/shared/decrypted_files/入库不良率规格.xlsx
+      asset_decrypted_0fa375ca_xlsx_b5035ff2: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca.xlsx
+      asset_decrypted_0fa375ca_2_xlsx_9875245c: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_2.xlsx
+      asset_decrypted_0fa375ca_3_xlsx_014c8bca: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_3.xlsx
+      asset_decrypted_0fa375ca_4_xlsx_fb20b791: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_4.xlsx
+      asset_decrypted_0fa375ca_5_xlsx_7b0566df: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_5.xlsx
+      asset_decrypted_0fa375ca_6_xlsx_a2e19180: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_6.xlsx
+      asset_decrypted_0fa375ca_7_xlsx_0ebe04e1: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_7.xlsx
+      asset_decrypted_0fa375ca_8_xlsx_a5ab8d12: resources/yield_domain/shared/decrypted_files/入库不良率规格_decrypted_0fa375ca_8.xlsx
+      asset_xlsx_7f6eb7f5: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表.xlsx
+      asset_decrypted_3b1ed228_xlsx_dff054fb: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228.xlsx
+      asset_decrypted_3b1ed228_10_xlsx_8034750e: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_10.xlsx
+      asset_decrypted_3b1ed228_11_xlsx_aff73b03: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_11.xlsx
+      asset_decrypted_3b1ed228_12_xlsx_4ff9d5df: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_12.xlsx
+      asset_decrypted_3b1ed228_2_xlsx_c7108f63: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_2.xlsx
+      asset_decrypted_3b1ed228_3_xlsx_0ea77958: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_3.xlsx
+      asset_decrypted_3b1ed228_4_xlsx_e9c13d8f: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_4.xlsx
+      asset_decrypted_3b1ed228_5_xlsx_0b065108: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_5.xlsx
+      asset_decrypted_3b1ed228_6_xlsx_78a457a4: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_6.xlsx
+      asset_decrypted_3b1ed228_7_xlsx_dfa43b30: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_7.xlsx
+      asset_decrypted_3b1ed228_8_xlsx_8d1a0706: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_8.xlsx
+      asset_decrypted_3b1ed228_9_xlsx_5b77c89a: resources/yield_domain/mwd_trend/decrypted_files/入库良率修饰表_decrypted_3b1ed228_9.xlsx
+      asset_xlsx_1dd270d8: resources/yield_domain/shared/decrypted_files/原始入库不良率数据.xlsx
+      asset_decrypted_fce38166_xlsx_473b66b3: resources/yield_domain/shared/decrypted_files/原始入库不良率数据_decrypted_fce38166.xlsx
+      asset_decrypted_fce38166_2_xlsx_d337d608: resources/yield_domain/shared/decrypted_files/原始入库不良率数据_decrypted_fce38166_2.xlsx
+      asset_decrypted_fce38166_3_xlsx_faa86a82: resources/yield_domain/shared/decrypted_files/原始入库不良率数据_decrypted_fce38166_3.xlsx
+      asset_decrypted_fce38166_4_xlsx_215bf162: resources/yield_domain/shared/decrypted_files/原始入库不良率数据_decrypted_fce38166_4.xlsx
+      asset_xlsx_4d4e7541: resources/yield_domain/shared/decrypted_files/趋势图人工修正.xlsx
+      asset_decrypted_e790a3fd_xlsx_39dc103b: resources/yield_domain/shared/decrypted_files/趋势图人工修正_decrypted_e790a3fd.xlsx
+      asset_decrypted_e790a3fd_2_xlsx_f8cddbdd: resources/yield_domain/shared/decrypted_files/趋势图人工修正_decrypted_e790a3fd_2.xlsx
+      asset_decrypted_e790a3fd_3_xlsx_53503472: resources/yield_domain/shared/decrypted_files/趋势图人工修正_decrypted_e790a3fd_3.xlsx
+      asset_decrypted_e790a3fd_4_xlsx_5d4b183e: resources/yield_domain/shared/decrypted_files/趋势图人工修正_decrypted_e790a3fd_4.xlsx
+      asset_decrypted_e790a3fd_5_xlsx_e844d074: resources/yield_domain/shared/decrypted_files/趋势图人工修正_decrypted_e790a3fd_5.xlsx
+      asset_sig_json_909181e8: resources/yield_domain/mwd_trend/入库良率修饰表.sig.json
+      asset_xlsx_bak_319e41d7: resources/yield_domain/mwd_trend/入库良率修饰表.xlsx.bak
+    directories:
+      analysis_files: resources/yield_domain/shared/analysis_files
+  equipment_domain:
+    dir: resources/equipment_domain
+    files:
+      critical_parts_baseline: resources/equipment_domain/parts/critical_parts_baseline.csv
+      cvd_parts: resources/equipment_domain/parts/供应商关键备件寿命管控清单-0921-CVD.xlsx
+      baseline_source_excel: resources/equipment_domain/parts/供应商关键备件寿命管控清单-0604.xlsx
+  indicator_domain:
+    dir: resources/indicator_domain
+    files:
+      qtime_oos_decoration: resources/indicator_domain/qtime/qtime_oos_decoration.xlsx
+      qtime_chamber_3cee001: resources/indicator_domain/qtime/V3蒸镀机QTime一级报表-3CEE01-0924.xlsx
+      qtime_chamber_3cee002: resources/indicator_domain/qtime/V3蒸镀机QTime一级报表-3CEE02-0924.xlsx
+      qtime_spec: resources/indicator_domain/qtime/Q-Time规格表.xlsx
+  iqc_domain:
+    dir: resources/iqc_domain
+    files:
+      demo_inspection: resources/iqc_domain/shared/demo/inspection.json
+      demo_lifetime: resources/iqc_domain/shared/demo/lifetime.json
+      asset_iqc_1_xlsx_30f1a66b: resources/iqc_domain/eva_materials/decrypted_files/IQC来料检验特性数据明细报表 (1).xlsx
+      asset_xlsx_8805528f: resources/iqc_domain/lifetime/decrypted_files/寿命测试报表 (自动保存的).xlsx
+  shared_kernel:
+    dir: resources/shared_kernel
+    files:
+      asset_m678_lot_md_6636e6b5: resources/shared_kernel/shared/project_files/北极星-M678高发Lot调查报告.md
+      asset_md_b89251c3: resources/shared_kernel/shared/project_files/北极星-上半年规格收严统计报告.md
+      asset_md_4044d8cb: resources/shared_kernel/shared/project_files/北极星-专项资料汇总.md
+      asset_md_7fd1eb27: resources/shared_kernel/shared/project_files/北极星-异常处置数量统计分析报告.md
+      asset_0407_md_2f8dd1cf: resources/shared_kernel/shared/project_files/北极星-风险预防共创台账-0407.md
+      asset_0703_md_491c9e05: resources/shared_kernel/shared/project_files/北极星-风险预防共创台账-0703.md
+      asset_pnl_20260901_xlsx_f5d88a54: resources/shared_kernel/shared/project_files/维信诺北极星PNL指标-20260901.xlsx
+    directories:
+      project_files: resources/shared_kernel/shared/project_files

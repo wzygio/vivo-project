@@ -29,7 +29,7 @@
 AOI_TT 的 infrastructure 投影现按产品、厂别、站点、TT 参数、Sheet 分组，
 在有效报表窗口内保留检测时间最新的一条，再交由原有领域聚合计算。
 检测片数仍使用 distinct Sheet，参数识别和分母来源保持本 ADR 的既有决定。
-完整口径见 [AOI_TT 数据链路](../../references/domain/Inline_domain/data-flow-aoi-tt.md#44-tt-明细标准化)。
+完整口径见 [AOI_TT 数据链路](../../references/domain/inline_domain/aoi_tt/data-flow-aoi-tt.md#44-tt-明细标准化)。
 
 ## Alternatives considered
 

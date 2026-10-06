@@ -2,6 +2,7 @@
 import streamlit as st
 import os
 import time
+import logging
 from pathlib import Path
 
 # --- 1. 初始化与配置 ---
@@ -20,7 +21,7 @@ project_root = ConfigLoader.get_project_root()
 resource_dir = SessionManager.get_resource_dir()
 
 # 动态构建绝对路径 (取代全局变量)
-doc_source_dir = resource_dir / "analysis_files"
+doc_source_dir = ConfigLoader.get_domain_resource_directory("yield_domain", "analysis_files")
 doc_source_dir.mkdir(parents=True, exist_ok=True)
 img_cache_rel_dir = "output/screenshots/document-preview"
 
@@ -64,7 +65,8 @@ with st.expander("📤 上传新解析报告", expanded=False):
                     try:
                         target_path.unlink()
                     except Exception as e:
-                        st.error(f"❌ 无法覆盖旧文件 {uf.name}，可能正被占用: {e}")
+                        logging.exception("Unable to replace uploaded analysis report")
+                        st.error(f"❌ 无法覆盖旧文件 {uf.name}，可能正被占用，请稍后重试。")
                         continue
                 
                 with open(target_path, "wb") as f:
@@ -86,8 +88,7 @@ else:
     all_files = []
 
 if not all_files:
-    rel_display_path = doc_source_dir.relative_to(project_root)
-    st.warning(f"文件夹 `{rel_display_path}` 为空，请在上方上传文件。")
+    st.warning("暂无解析报告，请在上方上传文件。")
 else:
     st.markdown("### 资料列表")
     for doc_file in all_files:
@@ -114,7 +115,7 @@ else:
                     
                     service, doc_type = get_service_by_filename(doc_file, img_cache_rel_dir)
                     if service:
-                        rel_path_str = str(doc_source_dir.relative_to(project_root) / doc_file)
+                        rel_path_str = str(doc_source_dir / doc_file)
                         success = False
                         with st.spinner(f"正在启动 {doc_type} 引擎解析，请稍候..."):
                             success = service.convert_to_images(rel_path_str)

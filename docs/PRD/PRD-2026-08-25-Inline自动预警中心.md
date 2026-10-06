@@ -3,7 +3,7 @@
 - 日期：2026-08-25
 - 状态：已评审（需求口径已与需求方确认，待实施）
 - 适用范围：`src/inline_domain` 四个子模块（spc、ctq、aoi_tt、aoi_rs）对应页面及 `app/pages/入库不良率分析看板.py`
-- 需求来源：`docs/dev_docs/dev_spec/Inline_domain/feat-alert_center.md`
+- 需求来源：`docs/dev_docs/dev_spec/inline_domain/monitor/feat-alert_center.md`
 - 重点资源：`resources/spc_sheet_oos_decoration.xlsx`、`resources/ctq_sheet_oos_decoration.xlsx`、`resources/aoi_tt_sheet_oos_decoration.xlsx`、`resources/aoi_rs_sheet_oos_decoration.xlsx`
 - 参考实现：`app/sections/inline_domain/spc/spc_dashboard.py`（CPK 预警中心 + 自动预警指标图像）、`app/components/alert_center.py`、`app/manager/render_gate.py`、`src/yield_domain/core/abnormal_detector.py`
 

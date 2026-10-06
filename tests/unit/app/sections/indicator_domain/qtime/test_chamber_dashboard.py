@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from src.indicator_domain.application.qtime.chamber_cache import clear_chamber_cache
@@ -77,3 +78,39 @@ def test_changed_enabled_products_clear_results_and_obsolete_selection():
     assert len(app.dataframe) == 0
     app.button(key='chamber_search').click().run()
     assert chart_products(app) == {'M678'}
+
+
+def test_chamber_frontend_excludes_october_even_from_existing_session_results():
+    clear_chamber_cache()
+    app = AppTest.from_file(str(FIXTURE)).run()
+    app.button(key='chamber_search').click().run()
+    report = app.session_state['chamber_qtime_view_model']
+    sample = report['details'].loc[
+        report['details']['chamber'].eq('PT->OC1')
+        & report['details']['prod_code'].eq('M626')
+    ].iloc[[0]].copy()
+    details = pd.concat([
+        sample.assign(entry_time=pd.Timestamp(timestamp), glass_id=glass)
+        for timestamp, glass in [
+            ('2026-09-30 23:59:59.999999', 'SEPTEMBER'),
+            ('2026-10-01 00:00:00', 'OCTOBER_BOUNDARY'),
+            ('2026-10-05 12:00:00', 'OCTOBER_LATER'),
+        ]
+    ], ignore_index=True)
+    app.session_state['chamber_qtime_view_model'] = {**report, 'details': details}
+    app.run()
+
+    assert not app.exception
+    charts = [json.loads(chart.proto.spec) for chart in app.get('plotly_chart')]
+    assert len(charts) == 1
+    assert [row[1] for chart in charts for trace in chart['data']
+            for row in trace['customdata']] == ['SEPTEMBER']
+    assert charts[0]['layout']['xaxis']['ticktext'] == ['09-30 23时']
+    pd.testing.assert_frame_equal(
+        app.session_state['chamber_qtime_view_model']['details'], details,
+    )
+
+    app.session_state['chamber_qtime_view_model'] = {**report, 'details': details.iloc[1:].copy()}
+    app.run()
+    assert not app.exception and not app.get('plotly_chart')
+    assert any('暂无单腔' in item.value for item in app.info)

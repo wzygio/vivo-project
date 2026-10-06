@@ -3,7 +3,7 @@
 Replaces the former per-module wrappers (``spc_data_decoration.py`` /
 ``ctq_data_decoration.py``): the only difference between the SPC and CTQ
 decoration calibres was the workbook file name, so a single scope-parameterized
-entry now serves both (see ``docs/dev_docs/generated/Inline_domain/``).
+entry now serves both (see ``references/domain/inline_domain/shared/``).
 """
 
 from __future__ import annotations
@@ -44,6 +44,25 @@ SCOPE_DECORATION_FILE_NAME = {
 }
 
 
+def resolve_scope_decoration_path(
+    scope: str, product_dir: Path | None = None, *, alarm_type: str = "oos",
+    resource_port: DecorationResourcePort | None = None,
+) -> Path:
+    """Preserve explicit directory/port overrides; production uses the full path."""
+    scope = scope.strip().lower()
+    name = f"{scope}_sheet_{alarm_type}_decoration.xlsx"
+    if product_dir is not None:
+        return Path(product_dir) / name
+    if resource_port is not None:
+        path_resolver = getattr(resource_port, "scope_decoration_path", None)
+        if path_resolver is not None:
+            return Path(path_resolver(scope, alarm_type))
+        return Path(resource_port.scope_resource_dir(scope, alarm_type)) / name
+    return ConfigLoader.get_domain_resource_path(
+        "inline_domain", f"{scope}_sheet_{alarm_type}_decoration", name,
+    )
+
+
 @dataclass(frozen=True)
 class DecoratedData:
     """Measurement data after scope-scoped Sheet OOS decoration."""
@@ -63,8 +82,8 @@ def resolve_product_resource_dir(
 ) -> Path:
     """Resolve the shared resources directory used by the per-sheet decoration workbooks.
 
-    Decoration workbooks live in the inline domain resources directory (routed via
-    ``config/domain/inline_domain.yaml``) with one sheet per product;
+    Decoration workbooks use the configured full paths in ``config/global.yaml``
+    with one sheet per product;
     ``product_dir`` stays an explicit override for tests.
     """
     if product_dir is not None:
@@ -138,14 +157,15 @@ def prepare_decorated_data(
     if sheet_features_start_date and normalized_scope != "spc":
         raise ValueError("A separate Sheet feature window is supported only for SPC")
     original_features_df = _preprocess_sheet_features_by_type(feature_points(raw_measurements_df), spec_df)
+    workbook_path = resolve_scope_decoration_path(
+        normalized_scope, product_dir, resource_port=resource_port,
+    )
     decoration_result = prepare_sheet_oos_decoration(
         raw_measurements_df=raw_measurements_df,
         sheet_features_df=original_features_df,
-        product_dir=resolve_product_resource_dir(
-            prod_code, product_dir, scope=normalized_scope, resource_port=resource_port,
-        ),
+        product_dir=workbook_path.parent,
         persist_files=persist,
-        decoration_file_name=SCOPE_DECORATION_FILE_NAME[normalized_scope],
+        decoration_file_name=workbook_path.name,
         decoration_sheet_name=prod_code,
         scope=normalized_scope,
         prod_code=prod_code,

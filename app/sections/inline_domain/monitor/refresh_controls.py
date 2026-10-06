@@ -18,8 +18,7 @@ def clear_oos_source_cache(scopes: Sequence[str]) -> None:
 
 def clear_cpk_source_cache() -> None:
     clear_alarm_workbook_cache(
-        ConfigLoader.get_domain_resource_dir("inline_domain")
-        / "spc" / "spc_cpk_cpm_decoration.xlsx"
+        ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx")
     )
 
 

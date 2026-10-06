@@ -48,8 +48,12 @@ def prepare_aoi_tt_decoration(
     now: datetime | None = None,
     decoration_port: SheetDecorationPort | None = None,
     date_exclusion: InlineDateExclusion | None = None,
+    workbook_path: Path | None = None,
 ) -> AoiTtDecorationResult:
     detail = build_aoi_tt_oos_detail(tt_details_df, spec_df)
+    if workbook_path is not None:
+        product_dir = Path(workbook_path).parent
+    file_name = Path(workbook_path).name if workbook_path is not None else AOI_TT_OOS_DECORATION_FILE_NAME
     if persist:
         persist_outcome = (
             decoration_port.persist_sheet_oos_decoration_outcome
@@ -59,7 +63,7 @@ def prepare_aoi_tt_decoration(
         outcome = persist_outcome(
             product_dir,
             detail,
-            AOI_TT_OOS_DECORATION_FILE_NAME,
+            file_name,
             prod_code,
             key_columns=AOI_TT_OOS_KEY_COLUMNS,
             scope=scope,
@@ -77,7 +81,7 @@ def prepare_aoi_tt_decoration(
         )
         decisions = load_decisions(
             product_dir,
-            AOI_TT_OOS_DECORATION_FILE_NAME,
+            file_name,
             prod_code,
             AOI_TT_OOS_KEY_COLUMNS,
         )
@@ -95,6 +99,6 @@ def prepare_aoi_tt_decoration(
             date_exclusion=date_exclusion,
         ),
         decoration_df=decoration,
-        decoration_path=product_dir / AOI_TT_OOS_DECORATION_FILE_NAME,
+        decoration_path=product_dir / file_name,
         decoration_sheet=prod_code,
     )

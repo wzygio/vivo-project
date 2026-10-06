@@ -1,15 +1,5 @@
-# Generated Facts
+# Generated Assessments and Delivery Evidence
 
-Rebuildable generated summaries, scans, and audit outputs live here.
+Organize assessments and durable delivery evidence by the domain/submodule map in `ARCHITECTURE.md`. Use `shared_kernel/shared/` for project-wide work; folder names follow source-domain spelling.
 
-## Current Files
-
-- `harness-audit.md`: output from `harness-builder` audit for the current repository.
-- `harness-garbage-collection.md`: cleanup loop for stale Harness content.
-- `monitor-data-decoration-chain.md`: current automatic-warning data decoration and compliance visibility chain.
-
-## Rules
-
-- Files in this directory should be reproducible from source files, scripts, or explicit commands.
-- Do not hand-maintain business rules here; put stable rules in `specs/`, `config/`, or a design doc.
-- Do not store generated reports or task outputs here; use `output/` for those artifacts.
+State the scope, verification date and reproducible commands. Distinguish recommendations from accepted decisions and verified behavior. Promote stable business rules to their scoped `references` documents. Runtime report files, browser captures and temporary outputs belong under `output/`.

@@ -45,7 +45,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates, exclude_inline_period_records
 from src.shared_kernel.data_health import get_data_health
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 from yield_domain.application.alert_service import AlertService
 
 logger = logging.getLogger(__name__)
@@ -183,7 +183,7 @@ def _sheet_oos_evaluator(
         resource_dir = (
             Path(context.inline_resource_dir)
             if explicit_override
-            else scope_resource_dir(scope)
+            else scope_decoration_path(scope).parent
         )
         projected_time_column = time_column
         if context.oos_product_loader is not None:
@@ -191,7 +191,7 @@ def _sheet_oos_evaluator(
             decoration_df = result.decorated_df
             projected_time_column = "event_time"
         else:
-            file_name = SCOPE_DECORATION_FILE_NAME[scope]
+            file_name = SCOPE_DECORATION_FILE_NAME[scope] if explicit_override else scope_decoration_path(scope).name
             if not (resource_dir / file_name).exists():
                 return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "修饰工作簿不存在")
             decoration_df = load_sheet_oos_decoration(

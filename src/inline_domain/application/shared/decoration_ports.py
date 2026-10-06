@@ -50,6 +50,7 @@ class SheetDecorationPort(Protocol):
         prod_code: str | None = None, product_revision: str | None = None,
         decision_signature: str | None = None, now: datetime | None = None,
         force: bool = False,
+        alarm_type: str | None = None,
     ) -> SheetOosPersistOutcome: ...
 
 
@@ -57,15 +58,16 @@ class CapabilityDecorationPort(Protocol):
     def load_capability_decoration(
         self, product_dir: Path, sheet_name: str | None = None,
         metric: str = CAPABILITY_METRIC_CPK, *, raise_on_error: bool = False,
+        workbook_path: Path | None = None,
     ) -> pd.DataFrame: ...
 
     def persist_capability_decoration(
         self, product_dir: Path, detail_df: pd.DataFrame,
         sheet_name: str | None = None, metric: str = CAPABILITY_METRIC_CPK,
-        *, computed_detail_df: pd.DataFrame | None = None,
+        *, computed_detail_df: pd.DataFrame | None = None, workbook_path: Path | None = None,
     ) -> pd.DataFrame: ...
 
-    def get_capability_decoration_signature(self, product_dir: Path) -> tuple[int, int]: ...
+    def get_capability_decoration_signature(self, product_dir: Path, *, workbook_path: Path | None = None) -> tuple[int, int]: ...
 
 
 class DecisionSignaturePort(Protocol):

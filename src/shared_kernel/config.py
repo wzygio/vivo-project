@@ -153,7 +153,7 @@ class ConfigLoader:
             load_dotenv(dotenv_path=env_path, override=True)
 
         # 3. 加载 YAML
-        global_conf = cls._load_yaml(global_yaml_path)
+        global_conf = cls._load_resource_global_config()
         product_conf = cls._load_yaml(product_yaml_path)
 
         if not global_conf and not product_conf:
@@ -164,6 +164,18 @@ class ConfigLoader:
 
         # 4. 深度合并 (Global < Product)
         merged_conf = cls._deep_merge(global_conf, product_conf)
+        # Resource locations are global; product configuration owns sheet selection.
+        if cls._global_resource_config("yield_domain", global_conf) is not None:
+            paths = dict(merged_conf.get("paths", {}))
+            for alias, resource_key in {
+                "static_warning_lines": "static_warning_lines",
+                "rate_override_config": "override_rates",
+                "yield_modifier_config": "yield_modifier_table",
+            }.items():
+                metadata = dict(paths.get(alias, {}))
+                metadata["file_name"] = str(cls.get_domain_resource_path("yield_domain", resource_key))
+                paths[alias] = metadata
+            merged_conf["paths"] = paths
 
         # 5. 数据源一致性强制覆盖
         # 即使 YAML 里写错了 product_code，也以传入参数为准
@@ -269,11 +281,64 @@ class ConfigLoader:
         return cls._load_yaml(cls.get_domain_config_path(domain))
 
     @classmethod
+    def _load_resource_global_config(cls) -> Dict[str, Any]:
+        """A broken global config must never select a different maintained file."""
+        path = cls.get_project_root() / "config" / "global.yaml"
+        try:
+            with path.open(encoding="utf-8") as stream:
+                config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError("global.yaml cannot be parsed for resource resolution") from exc
+        if not isinstance(config, dict) or not config:
+            raise ValueError("global.yaml must contain a non-empty mapping")
+        return config
+
+    @classmethod
+    def _global_resource_config(
+        cls, domain: str, global_conf: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any] | None:
+        """None supports older isolated configs; an active registry is strict."""
+        if global_conf is None:
+            global_conf = cls._load_resource_global_config()
+        if "resources" not in global_conf:
+            return None
+        registry = global_conf["resources"]
+        if not isinstance(registry, dict):
+            raise ValueError("global.yaml: 'resources' must be a mapping")
+        values = registry[domain]
+        if not isinstance(values, dict):
+            raise ValueError(f"global.yaml: resources.{domain} must be a mapping")
+        return values
+
+    @classmethod
+    def _resolve_registered_path(cls, value: object, setting: str) -> Path:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"global.yaml: {setting} must be a non-empty path string")
+        path = Path(value.strip())
+        return path if path.is_absolute() else cls.get_project_root() / path
+
+    @classmethod
+    def get_domain_resource_directory(cls, domain: str, key: str) -> Path:
+        """Resolve an explicitly registered collection directory, including uploads."""
+        resources = cls._global_resource_config(domain)
+        if resources is None:
+            raise KeyError(f"Global resource directories are not configured: {domain}/{key}")
+        directories = resources.get("directories", {})
+        if not isinstance(directories, dict):
+            raise ValueError(f"global.yaml: resources.{domain}.directories must be a mapping")
+        return cls._resolve_registered_path(
+            directories[key], f"resources.{domain}.directories.{key}",
+        )
+
+    @classmethod
     def get_domain_resource_dir(cls, domain: str) -> Path:
         """
-        解析 domain 资源目录：读取 domain 配置 resources.dir，
-        未配置时回退到 resources/<domain>。
+        Resolve the domain root from global resources.<domain>.dir.
+        Valid older isolated configs without a registry retain legacy resolution.
         """
+        global_resources = cls._global_resource_config(domain)
+        if global_resources is not None:
+            return cls._resolve_registered_path(global_resources["dir"], f"resources.{domain}.dir")
         root_dir = cls.get_project_root()
         resources_conf = cls.load_domain_config(domain).get("resources", {})
         configured = resources_conf.get("dir") if isinstance(resources_conf, dict) else None
@@ -285,10 +350,16 @@ class ConfigLoader:
     @classmethod
     def get_domain_resource_path(cls, domain: str, key: str, default_name: Optional[str] = None) -> Path:
         """
-        解析 domain 资源文件路径：读取 domain 配置 resources.files[key]。
-        配置值为纯文件名时相对 resources.dir 解析；含目录分隔符时相对项目根目录解析。
-        未配置时以 default_name 回退到 domain 资源目录下。
+        Resolve a full relative/absolute file path from the global registry.
+        Active registries reject missing keys; legacy defaults apply only to valid
+        older isolated configs without the resources section.
         """
+        global_resources = cls._global_resource_config(domain)
+        if global_resources is not None:
+            files = global_resources.get("files", {})
+            if not isinstance(files, dict):
+                raise ValueError(f"global.yaml: resources.{domain}.files must be a mapping")
+            return cls._resolve_registered_path(files[key], f"resources.{domain}.files.{key}")
         root_dir = cls.get_project_root()
         resources_conf = cls.load_domain_config(domain).get("resources", {})
         files = resources_conf.get("files", {}) if isinstance(resources_conf, dict) else {}
@@ -513,4 +584,9 @@ class ConfigLoader:
                 "equipment_domain.yaml is missing required 'equipment' settings: "
                 f"{cls.get_domain_config_path('equipment_domain')}"
             )
+        resources = cls._global_resource_config("equipment_domain")
+        if resources is not None:
+            equipment = cls._deep_merge(equipment, {"baseline": {
+                "source_excel_path": str(cls.get_domain_resource_path("equipment_domain", "baseline_source_excel")),
+            }})
         return equipment

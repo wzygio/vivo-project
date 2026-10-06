@@ -3,7 +3,7 @@
 - Date: 2026-09-15
 - Status: Accepted
 - Scope: IQC lifetime
-- Trace: [数据源分析](../dev_docs/dev_spec/iqc_domain/datasource-寿命测试报表分析.md)、`.scratch/iqc-lifetime/PRD.md`
+- Trace: [数据源分析](../dev_docs/dev_spec/iqc_domain/lifetime/datasource-寿命测试报表分析.md)、`.scratch/iqc-lifetime/PRD.md`
 
 ## Context
 

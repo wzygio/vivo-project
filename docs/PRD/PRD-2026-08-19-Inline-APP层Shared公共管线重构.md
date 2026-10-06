@@ -4,7 +4,7 @@
 - 状态：待评审（未实施）
 - 适用范围：`app/sections/inline_domain/` 下 `spc`、`ctq`、`aoi_rs`、`aoi_tt` 四个报表 section
 - 关联代码：`app/sections/inline_domain/*/`、`app/components/distribution_charts.py`、`app/manager/render_gate.py`、`app/utils/step_labels.py`、`src/shared_kernel/config.py`、`src/inline_domain/core/shared/`（后端先例）
-- 需求来源：`docs/dev_docs/dev_spec/Inline_domain/refactor-app_shared.md`
+- 需求来源：`docs/dev_docs/dev_spec/inline_domain/shared/refactor-app_shared.md`
 
 ## 1. CAPABILITY
 

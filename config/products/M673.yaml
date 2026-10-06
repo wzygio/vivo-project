@@ -7,15 +7,12 @@ data_source:
 # 本地文件读取
 paths:
   static_warning_lines: 
-    file_name: '入库不良率规格.xlsx'
     sheet_name: 'M673'
 
   rate_override_config:
-    file_name: "override_rates.xlsx"
     sheet_name: "M673"
 
-  yield_modifier_config:
-    file_name: "入库良率修饰表.xlsx"
+  yield_modifier_config: {}
 
 # 数据处理相关的参数
 processing:

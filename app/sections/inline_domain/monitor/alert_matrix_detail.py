@@ -57,9 +57,6 @@ from app.sections.inline_domain.shared.alert_center import (
     filter_report_by_alert_keys,
     render_sheet_oos_alert_center,
 )
-from src.inline_domain.application.shared.decorated_data import (
-    SCOPE_DECORATION_FILE_NAME,
-)
 from src.inline_domain.core.shared.sheet_oos_alerts import (
     build_sheet_oos_alerts,
     previous_iso_week_range,
@@ -68,7 +65,7 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     load_sheet_oos_decoration,
 )
 from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 
 logger = logging.getLogger(__name__)
 
@@ -167,10 +164,11 @@ def _load_sheet_oos_alerts_display(
     }
     time_column, key_columns, column_map, output_columns = scope_config[scope]
 
-    resource_dir = scope_resource_dir(scope)
+    workbook_path = scope_decoration_path(scope)
+    resource_dir = workbook_path.parent
     decoration_df = load_sheet_oos_decoration(
         resource_dir,
-        file_name=SCOPE_DECORATION_FILE_NAME[scope],
+        file_name=workbook_path.name,
         sheet_name=prod_code,
         key_columns=key_columns,
     )

@@ -6,6 +6,12 @@ from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
 from src.inline_domain.core.shared import sheet_oos_decoration as rules
 from src.inline_domain.core.spc.spc_calculator import build_period_capability_report
+from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
+
+
+@pytest.fixture(autouse=True)
+def isolated_resource_config(tmp_path):
+    write_inline_resource_config(tmp_path)
 
 
 def measurements() -> pd.DataFrame:

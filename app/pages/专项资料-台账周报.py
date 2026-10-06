@@ -23,7 +23,7 @@ project_root = ConfigLoader.get_project_root()
 resource_dir = SessionManager.get_resource_dir()
 
 # 动态构建绝对路径 (取代全局变量)
-doc_source_dir = resource_dir / "project_files"
+doc_source_dir = ConfigLoader.get_domain_resource_directory("shared_kernel", "project_files")
 doc_source_dir.mkdir(parents=True, exist_ok=True)
 img_cache_rel_dir = "output/screenshots/document-preview"
 
@@ -81,7 +81,8 @@ with st.expander("📤 上传新台账/周报/专项资料", expanded=False):
                     try:
                         target_path.unlink()
                     except Exception as e:
-                        st.error(f"❌ 无法覆盖旧文件 {uf.name}，可能正被占用: {e}")
+                        logging.exception("Unable to replace uploaded document")
+                        st.error(f"❌ 无法覆盖旧文件 {uf.name}，可能正被占用，请稍后重试。")
                         continue
                 
                 with open(target_path, "wb") as f:
@@ -141,7 +142,7 @@ for title, files, default_expanded in category_map:
                         if f_type in ['PDF', 'PPT']:
                             service = PDFService(img_cache_rel_dir, project_root) if f_type == 'PDF' else PPTService(img_cache_rel_dir, project_root)
                             # 动态计算相对路径
-                            rel_file_path_str = str(doc_source_dir.relative_to(project_root) / doc_file)
+                            rel_file_path_str = str(doc_source_dir / doc_file)
                             
                             with st.spinner(f"正在启动 {f_type} 引擎解析..."):
                                 success = service.convert_to_images(rel_file_path_str)
@@ -259,7 +260,8 @@ if st.session_state.viewing_file:
                             time.sleep(1) 
                             st.rerun() 
                         else:
-                            st.error(f"⚠️ {msg}")
+                            logging.error("Document save failed: %s", msg)
+                            st.error("保存失败，文件可能已更新或正在被占用。请刷新后重试，或下载备份。")
                             import io
                             buffer = io.BytesIO()
                             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
@@ -285,5 +287,5 @@ if st.session_state.viewing_file:
             st.markdown(md_content)
                 
     except Exception as e:
-        st.error(f"预览渲染出错: {e}")
+        st.error("预览暂时不可用，请稍后重试。")
         logging.error(f"Render error: {e}", exc_info=True)

@@ -6,7 +6,7 @@
 - Trace: Issue `.scratch/inline-app-shared/issues/01-inline-app-shared-pipeline.md`、
   PRD `docs/PRD/PRD-2026-08-19-Inline-APP层Shared公共管线重构.md`、
   Plan `.planning/2026-08-19-inline-app-shared/`、
-  需求 `docs/dev_docs/dev_spec/Inline_domain/refactor-app_shared.md`
+  需求 `docs/dev_docs/dev_spec/inline_domain/shared/refactor-app_shared.md`
 
 ## Context
 

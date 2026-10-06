@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-14
 - Scope: `src/inline_domain/{core,application}/`、`app/{pages,sections}/`、`resources/`、
-  `tests/e2e/`、`references/domain/Inline_domain/`
+  `tests/e2e/`、`references/domain/inline_domain/`
 - Trace: Issue `.scratch/decoration-unify/issues/01-unify-decoration-into-shared.md`、
   PRD `.scratch/decoration-unify/PRD.md`、Plan `.planning/2026-08-14-decoration-unify/`、
   方案 `docs/dev_docs/generated/Inline_domain/decoration-unify-proposal.md`

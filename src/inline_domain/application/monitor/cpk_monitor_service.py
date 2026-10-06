@@ -79,6 +79,9 @@ def _cached_cpk_inputs(
             detail, resolve_product_resource_dir(
                 product, Path(resource_dir) if resource_dir else None,
             ), persist_files=False, sheet_name=product, metric="cpk",
+            **({"workbook_path": ConfigLoader.get_domain_resource_path(
+                "inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx",
+            )} if resource_dir is None else {}),
         )
         if not decoration.period_capability_df.empty:
             frames.append(decoration.period_capability_df)

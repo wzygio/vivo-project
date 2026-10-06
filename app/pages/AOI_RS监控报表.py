@@ -145,14 +145,15 @@ selected_factory, selected_codes, selected_steps, should_render_report = render_
 
 # 单片异常预警：只读加载工作簿（企业加密读取失败降级为 None，不阻断报表）
 product_resource_dir = resolve_product_resource_dir(current_product, scope="aoi_rs")
-decoration_path = product_resource_dir / AOI_RS_OOS_DECORATION_FILE_NAME
+decoration_path = ConfigLoader.get_domain_resource_path("inline_domain", "aoi_rs_sheet_oos_decoration", AOI_RS_OOS_DECORATION_FILE_NAME)
 if decoration_path.exists():
     decoration_stat = decoration_path.stat()
     sheet_oos_decoration_df = load_cached_aoi_rs_sheet_oos_decoration(
         decoration_stat.st_mtime_ns,
         decoration_stat.st_size,
         current_product,
-        str(product_resource_dir),
+        str(decoration_path.parent),
+        decoration_path.name,
     )
 else:
     sheet_oos_decoration_df = None

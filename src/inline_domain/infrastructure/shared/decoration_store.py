@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from src.inline_domain.infrastructure.shared import sheet_oos_decoration_repository as sheet
-from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
+from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir, scope_decoration_path
 from src.inline_domain.infrastructure.spc import capability_decoration_repository as capability
 
 
@@ -14,6 +14,7 @@ class ExcelDecorationStore:
     persist_capability_decoration = staticmethod(capability.persist_capability_decoration)
     get_capability_decoration_signature = staticmethod(capability.get_capability_decoration_signature)
     scope_resource_dir = staticmethod(scope_resource_dir)
+    scope_decoration_path = staticmethod(scope_decoration_path)
 
     @staticmethod
     def get_decision_file_stat(workbook_path: Path) -> tuple[int, int] | None:

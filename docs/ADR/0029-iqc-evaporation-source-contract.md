@@ -3,7 +3,7 @@
 - Date: 2026-09-15
 - Status: Accepted
 - Scope: IQC 蒸镀材料报告
-- Trace: [需求与数据源分析](../dev_docs/dev_spec/iqc_domain/datasource-蒸镀材料报表分析.md)、`.scratch/iqc-evaporation/PRD.md`
+- Trace: [需求与数据源分析](../dev_docs/dev_spec/iqc_domain/eva_materials/datasource-蒸镀材料报表分析.md)、`.scratch/iqc-evaporation/PRD.md`
 
 ## Context
 

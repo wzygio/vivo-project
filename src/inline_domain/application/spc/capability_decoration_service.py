@@ -40,6 +40,7 @@ def prepare_capability_decoration(
     reference_date: date | None = None,
     *,
     decoration_port: CapabilityDecorationPort | None = None,
+    workbook_path: Path | None = None,
 ) -> CpkDecorationResult:
     detail = build_capability_anomaly_detail(
         period_capability_df, metric, reference_date or date.today(),
@@ -54,22 +55,24 @@ def prepare_capability_decoration(
         if decoration_port is not None
         else load_capability_decoration
     )
+    path_kwargs = {"workbook_path": workbook_path} if workbook_path is not None else {}
     decoration = (
         persist_decoration(
             product_dir, detail, sheet_name, metric,
             computed_detail_df=build_capability_detail(period_capability_df, metric),
+            **path_kwargs,
         )
         if persist_files
         else merge_capability_detail_with_decoration_flags(
             detail,
-            load_decoration(product_dir, sheet_name, metric),
+            load_decoration(product_dir, sheet_name, metric, **path_kwargs),
             metric,
         )
     )
     return CpkDecorationResult(
         apply_capability_decoration(period_capability_df, decoration, metric),
         decoration,
-        product_dir / CPK_DECORATION_FILE_NAME,
+        Path(workbook_path) if workbook_path is not None else product_dir / CPK_DECORATION_FILE_NAME,
         sheet_name or "Sheet1",
     )
 

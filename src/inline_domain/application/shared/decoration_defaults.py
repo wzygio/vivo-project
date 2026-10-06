@@ -32,8 +32,10 @@ def persist_capability_decoration(*args, **kwargs):
     return default_decoration_port().persist_capability_decoration(*args, **kwargs)
 
 
-def get_capability_decoration_signature(product_dir: Path) -> tuple[int, int]:
-    return default_decoration_port().get_capability_decoration_signature(product_dir)
+def get_capability_decoration_signature(product_dir: Path, *, workbook_path: Path | None = None) -> tuple[int, int]:
+    return default_decoration_port().get_capability_decoration_signature(product_dir, **(
+        {"workbook_path": workbook_path} if workbook_path is not None else {}
+    ))
 
 
 def get_decision_file_stat(workbook_path: Path) -> tuple[int, int] | None:

@@ -157,7 +157,6 @@ def _build_oos_history_service(
 def build_live_monitor_source(resource_dir: Path | None = None):
     from src.inline_domain.application.monitor.live_source import LiveMonitorSource
     from src.inline_domain.infrastructure.monitor.input_signature import monitor_input_signature
-    from src.inline_domain.infrastructure.shared.resource_paths import scope_resource_dir
 
     resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
     summary_path = monitor_summary_workbook_path(resource_dir)
@@ -179,8 +178,9 @@ def build_live_monitor_source(resource_dir: Path | None = None):
             Path(resources),
             products,
             excluded_paths=(summary_path,),
+            include_configured_paths=resource_dir is None,
         ),
-        resource_dir_provider=(lambda scope: Path(resource_dir)) if resource_dir else scope_resource_dir,
+        resource_dir_provider=(lambda scope: Path(resource_dir)) if resource_dir is not None else None,
     )
 
 
@@ -195,10 +195,14 @@ def build_cpk_monitor_service(resource_dir: Path | None = None):
     from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
     from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
 
-    resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")
     return CpkWorkbookMonitorService(
         CpkSummaryWorkbookStore(monitor_summary_workbook_path(resource_dir)),
-        latest_reader=CpkLatestExcelStore(Path(resources) / "spc" / "spc_cpk_cpm_decoration.xlsx"),
+        latest_reader=CpkLatestExcelStore(
+            Path(resource_dir) / "spc" / "spc_cpk_cpm_decoration.xlsx"
+            if resource_dir is not None else ConfigLoader.get_domain_resource_path(
+                "inline_domain", "spc_cpk_cpm_decoration", "spc/spc_cpk_cpm_decoration.xlsx",
+            )
+        ),
     )
 
 

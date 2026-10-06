@@ -34,8 +34,8 @@ def _isolate_legacy_workbook_fixtures(monkeypatch, tmp_path):
         lambda resource_dir=None: SimpleNamespace(has_history=lambda scope, product: False),
     )
     monkeypatch.setattr(
-        "app.sections.inline_domain.monitor.alert_matrix_service.scope_resource_dir",
-        lambda scope: tmp_path,
+        "app.sections.inline_domain.monitor.alert_matrix_service.scope_decoration_path",
+        lambda scope: tmp_path / f"{scope}_sheet_oos_decoration.xlsx",
     )
 
 

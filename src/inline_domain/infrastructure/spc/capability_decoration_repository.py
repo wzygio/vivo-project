@@ -32,14 +32,14 @@ from src.inline_domain.application.shared.decoration_ports import CapabilityDeco
 logger = logging.getLogger(__name__)
 
 
-def get_cpk_decoration_path(product_dir: Path) -> Path:
-    return product_dir / CPK_DECORATION_FILE_NAME
+def get_cpk_decoration_path(product_dir: Path, *, workbook_path: Path | None = None) -> Path:
+    return Path(workbook_path) if workbook_path is not None else product_dir / CPK_DECORATION_FILE_NAME
 
 
-def get_capability_decoration_signature(product_dir: Path) -> tuple[int, int]:
+def get_capability_decoration_signature(product_dir: Path, *, workbook_path: Path | None = None) -> tuple[int, int]:
     """Cheap cache invalidation when Excel saves flags or replacement values."""
     try:
-        stat = get_cpk_decoration_path(product_dir).stat()
+        stat = get_cpk_decoration_path(product_dir, workbook_path=workbook_path).stat()
     except FileNotFoundError:
         return (0, 0)
     return (stat.st_mtime_ns, stat.st_size)
@@ -51,9 +51,10 @@ def load_capability_decoration(
     metric: str = CAPABILITY_METRIC_CPK,
     *,
     raise_on_error: bool = False,
+    workbook_path: Path | None = None,
 ) -> pd.DataFrame:
     _validate_metric(metric)
-    path = get_cpk_decoration_path(product_dir)
+    path = get_cpk_decoration_path(product_dir, workbook_path=workbook_path)
     if not path.exists():
         return _empty_decoration_frame(metric)
     try:
@@ -89,15 +90,15 @@ def persist_capability_decoration(
     detail_df: pd.DataFrame,
     sheet_name: str | None = None,
     metric: str = CAPABILITY_METRIC_CPK,
-    *, computed_detail_df: pd.DataFrame | None = None,
+    *, computed_detail_df: pd.DataFrame | None = None, workbook_path: Path | None = None,
 ) -> pd.DataFrame:
     _validate_metric(metric)
-    product_dir.mkdir(parents=True, exist_ok=True)
-    path = get_cpk_decoration_path(product_dir)
+    path = get_cpk_decoration_path(product_dir, workbook_path=workbook_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     target_sheet = sheet_name or "Sheet1"
     try:
         existing = load_capability_decoration(
-            product_dir, sheet_name, metric, raise_on_error=True,
+            product_dir, sheet_name, metric, raise_on_error=True, workbook_path=workbook_path,
         )
     except CapabilityDecorationReadError:
         # A read failure is not a successfully read empty sheet. Preserve the file.

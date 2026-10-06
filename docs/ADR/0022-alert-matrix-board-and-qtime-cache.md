@@ -6,7 +6,7 @@
 - Trace: Issue `.scratch/alert-matrix-board/issues/01-alert-matrix-board.md`、
   Plan `.planning/2026-09-02-alert-matrix-board/`、
   PRD `docs/PRD/PRD-2026-09-02-自动预警看板矩阵化.md`、
-  可行性分析 `docs/dev_docs/generated/others/alert-center-matrix-board-feasibility.md`、
+  可行性分析 `docs/dev_docs/generated/inline_domain/monitor/alert-center-matrix-board-feasibility.md`、
   前置 ADR-0017（inline 预警中心）、ADR-0001（cache 原生载荷边界）、
   ADR-0021（indicator_domain 对等子模块）
 

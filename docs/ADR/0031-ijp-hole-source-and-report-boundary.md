@@ -2,7 +2,7 @@
 
 - Status: Implemented; production data validation pending
 - Date: 2026-09-15
-- Trace: [任务书](../dev_docs/dev_spec/indicator_domain/task-IJP溢流报表开发-孔区.md)、[数据来源分析](../dev_docs/dev_spec/indicator_domain/datasource-IJP溢流报表分析-孔区.md)、`.scratch/ijp-hole/PRD.md`
+- Trace: [任务书](../dev_docs/dev_spec/indicator_domain/ijp_hole/task-IJP溢流报表开发-孔区.md)、[数据来源分析](../dev_docs/dev_spec/indicator_domain/ijp_hole/datasource-IJP溢流报表分析-孔区.md)、`.scratch/ijp-hole/PRD.md`
 
 ## Context
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -42,7 +43,6 @@ from app.sections.inline_domain.shared.alert_center import (
     filter_report_by_alert_keys,
 )
 from app.utils.step_labels import format_step_label
-from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     PARTICLE_SIZE_OPTIONS,
     attach_spec_values,
@@ -405,17 +405,18 @@ def _load_aoi_tt_oos_decoration_cached(
     prod_code: str,
     file_mtime_ns: int,
     file_size: int,
+    workbook_path: str = "",
 ) -> pd.DataFrame | None:
     """只读加载当前产品的 Sheet OOS 修饰明细；缓存键含文件 (mtime_ns, size)。
 
     读取失败（含企业加密文件 COM 回退失败）降级返回 None，绝不阻断页面、
     也绝不触发工作簿写入。
     """
-    product_dir = resolve_product_resource_dir(prod_code, scope="aoi_tt")
+    path = Path(workbook_path) if workbook_path else ConfigLoader.get_domain_resource_path("inline_domain", "aoi_tt_sheet_oos_decoration", AOI_TT_OOS_DECORATION_FILE_NAME)
     try:
         return load_sheet_oos_decoration(
-            product_dir,
-            AOI_TT_OOS_DECORATION_FILE_NAME,
+            path.parent,
+            path.name,
             prod_code,
             key_columns=AOI_TT_OOS_KEY_COLUMNS,
         )
@@ -434,13 +435,13 @@ def load_aoi_tt_oos_decoration(prod_code: str) -> pd.DataFrame | None:
     普通 rerun 不会重复读取工作簿。
     """
     decoration_path = (
-        resolve_product_resource_dir(prod_code, scope="aoi_tt") / AOI_TT_OOS_DECORATION_FILE_NAME
+        ConfigLoader.get_domain_resource_path("inline_domain", "aoi_tt_sheet_oos_decoration", AOI_TT_OOS_DECORATION_FILE_NAME)
     )
     try:
         stat = decoration_path.stat()
     except OSError:
         return None
-    return _load_aoi_tt_oos_decoration_cached(prod_code, stat.st_mtime_ns, stat.st_size)
+    return _load_aoi_tt_oos_decoration_cached(prod_code, stat.st_mtime_ns, stat.st_size, str(decoration_path))
 
 
 def build_aoi_tt_sheet_oos_alerts(

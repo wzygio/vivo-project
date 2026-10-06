@@ -112,7 +112,7 @@ def test_prepare_decorated_data_respects_flag_false_for_real_values(tmp_path: Pa
     assert result.sheet_features_df["sheet_max"].iloc[0] == 8.0
 
 
-def test_prepare_decorated_data_removes_delete_flagged_sheet_from_report(tmp_path: Path) -> None:
+def test_prepare_decorated_data_preserves_spc_legacy_delete_values(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
     _write_flag_workbook(product_dir, OOS_DECORATION_FILE_NAME, "Delete")
 
@@ -124,12 +124,15 @@ def test_prepare_decorated_data_removes_delete_flagged_sheet_from_report(tmp_pat
         product_dir=product_dir,
     )
 
-    assert result.raw_measurements_df.empty
-    assert result.sheet_features_df.empty
-    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == ["Delete"]
+    # SPC normalizes legacy Delete to False; CTQ retains tri-state actions.
+    assert result.raw_measurements_df["param_value"].tolist() == [8.0, 0.0]
+    assert result.sheet_features_df["sheet_max"].tolist() == [8.0]
+    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == [False]
     assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
     persisted = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="Z571")
-    assert persisted["flag"].tolist() == ["Delete"]
+    assert persisted["flag"].tolist() == [False]
+    decisions = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="Z571__flags")
+    assert decisions["flag"].tolist() == ["Delete"]
 
 
 def test_ctq_scope_uses_ctq_workbook(tmp_path: Path) -> None:

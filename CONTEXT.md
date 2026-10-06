@@ -12,19 +12,27 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 
 ## Important Routes
 
-| Need | Location |
+Search by the **Domain Submodule Architecture** in [ARCHITECTURE.md](ARCHITECTURE.md#domain-submodule-architecture): select the domain, then the business submodule, and look in the corresponding scoped directories below. This one map routes code, development artifacts, knowledge and resources; each tree does not need a separate file catalog. Use `shared` for domain-wide material and `shared_kernel/shared` for project-wide mechanisms. Confirm actual paths before reading; source packages and existing data lifecycle groups retain their documented exceptions.
+
+| Need | Location and lifecycle |
 |---|---|
-| Agent instructions and task-specific reading triggers | [AGENTS.md](AGENTS.md) |
-| Domains, DDD layers, submodules, and code lookup | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Knowledge ownership, Harness maintenance, and work artifacts | [HARNESS.md](HARNESS.md) |
-| Business vocabulary and project-specific rules/designs | [references/index.md](references/index.md) |
-| Architectural decisions and tradeoffs | [docs/ADR/](docs/ADR/) |
-| Runtime configuration | `config/`; inspect the responsible loader before changing values |
-| Specifications, manual decisions, baselines, and static inputs | `resources/`; preserve maintained state |
-| Runtime snapshots | `data/`; follow the owning domain's lifecycle |
-| Rebuildable runtime artifacts | [output/README.md](output/README.md) |
-| Operational/analysis commands and tests | `tools/`, `tests/`; scope execution to the task |
+| Agent entry, task-specific reading and iteration triggers | [AGENTS.md](AGENTS.md) |
+| Domain/submodule ownership, dependencies and scoped lookup | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| Business terminology, rules, algorithms and current designs | [references/index.md](references/index.md); `references/{domain,design}/<domain>/<submodule>/`; preserve project-owned knowledge |
+| Development requirements and implementation specifications | `docs/dev_docs/dev_spec/<domain>/<submodule>/`; retain authorized task descriptions |
+| Generated assessments and delivery evidence | `docs/dev_docs/generated/<domain>/<submodule>/`; state scope/date and distinguish proposals from verified behavior |
+| Architectural decisions and tradeoffs | `docs/ADR/`; durable accepted decisions and rationale |
+| Project issue, triage and domain-documentation procedures | `docs/agents/` |
+| Runtime configuration and resource locations | `config/global.yaml` owns resource paths; `config/domain/` and `config/products/` own business policy and product/sheet differences |
+| Specifications, manual decisions, baselines and reference inputs | `resources/<domain>/<submodule>/`; preserve maintained files, companions and historical extraction copies |
+| Source snapshots and maintained fact/history groups | `data/<domain>/<lifecycle-group>/`; follow the owning lifecycle and preserve existing groups |
+| Rebuildable runtime artifacts and temporary verification files | [output/README.md](output/README.md); screenshots/logs under `output/test-results/` or `output/tmp/` |
+| Operational/analysis commands and tests | `tools/`, `tests/`; scope execution to the affected capability |
+| Local PRDs, issues and task discussions | `.scratch/`; follow [issue-tracker conventions](docs/agents/issue-tracker.md), not an automatically disposable cache |
+| Optional persistent execution plans, findings and progress | `.planning/<task>/`; use one task identifier across requirements, plan and evidence; small tasks do not require duplicate work directories |
 | Independent delivery projects | `projects/`; inspect that project's instructions before working there |
+
+Promote verified durable knowledge into its owning `references` document and link to it; task notes and generated recommendations do not silently become policy. Folder indexes stay folder-only; `references/index.md` is the exception for file-level knowledge routes and filename rules.
 
 ## Hard Boundaries
 
@@ -33,6 +41,14 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 - Organize distinct business capabilities within a domain as `src/<domain>/<layer>/<submodule>/`, keeping the same business submodule name across `application`, `core`, and `infrastructure` where those layers contain implementation.
 - Put capability-specific presentation sections under `app/sections/<domain>/<submodule>/`. Domain composition roots assemble dependencies; genuinely shared components remain shared. Create only directories with actual responsibilities, and preserve existing example resources until their owning capability is developed.
 - Keep concrete ownership and dependency details in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+### Resource Path Configuration
+
+- Every maintained resource file and resource collection directory must be configurable under `config/global.yaml` -> `resources.<domain>.files` / `directories`. Full file paths are repository-relative or absolute; `.dir` identifies the domain root. Domain/product YAML must not introduce a second resource-location source of truth.
+- Resolve locations through `ConfigLoader.get_domain_resource_path()` / `get_domain_resource_directory()` and composition roots. Preserve configurable filenames and independent locations in readers, writers, uploads/downloads and cache signatures; deriving a fixed filename from the configured parent is insufficient.
+- `ConfigLoader.load_config()` hydrates Yield runtime file descriptors from the global registry while product configuration retains sheet selection. Directly injected descriptors, paths and ports remain caller-owned; tests must isolate them from maintained workbooks. An active global registry rejects missing or invalid entries instead of selecting a legacy default.
+- Keep backups and signature sidecars with their owning workbook; historical extraction copies remain archived within the owning module. New rebuildable decryption outputs belong under `output/`, not the maintained resource tree. Upload collections are configured directories; arbitrary uploaded filenames are resolved within those directories.
+- Relocation must preserve file bytes and maintained state, update all active consumers and cache identities, and verify source-snapshot preservation. A missing optional input remains missing until its owning use case supplies it; directory cleanup is not permission to delete user data.
 
 ### Product Availability
 
@@ -61,6 +77,18 @@ The default presentation mode applies when the URL does not set `admin=true`. Th
 - Still communicate loading failures, unavailable data, and applicable data-health limitations in safe business language. Keep technical causes in server-side logs; do not forward raw exceptions to the ordinary UI.
 - Before delivering presentation changes, check normal, empty, and failure branches in non-administrator mode, including column menus, hover content, and exports.
 
-## Maintenance
+## Maintenance and Document Ownership
 
-This file owns stable project context and business constraints. Technical dependency rules belong in `ARCHITECTURE.md`; document lifecycle rules belong in `HARNESS.md`. Update the owning source and link to it instead of maintaining competing copies. An explicit current request may authorize a behavior change; do not invent an additional approval step for already-authorized work.
+| Owner | Owns |
+|---|---|
+| `AGENTS.md` | Agent entry instructions, essential safety, task triggers and iteration routing |
+| `CONTEXT.md` | Purpose, operating assumptions, project-wide constraints, important routes and artifact lifecycle |
+| `ARCHITECTURE.md` | Canonical domain/submodule map, path grammar, ownership, dependency and verification routes |
+| `references/index.md` | Task-to-knowledge routes and knowledge-file naming rules |
+| The scoped `references` document | Feature behavior, domain rules, current design and implementation rationale |
+
+Load documents through task triggers: read the relevant context/map first, then only matched source, contracts, knowledge and tests. A route states its trigger and destination. If a route is missing or stale, inspect scoped evidence and correct it; a missing document does not prove a missing capability. Keep one authoritative owner per fact and link to it rather than maintaining competing copies.
+
+Root-document prose is English; preserve actual identifiers, filenames and Chinese business documents. Documentation changes need link/anchor, directory, trigger, ownership and conflicting-rule checks. Executable changes additionally need the affected runtime checks; `tools/smoke.py all` covers unit tests rather than all verification categories. Report commands, results and material omissions; a documentation check does not establish runtime correctness.
+
+Preserve unrelated edits and business assets. Add hooks, nested instructions or orchestration only when the current task authorizes them and repeated failures or scale justify them. An explicit current request may authorize a behavior change; do not invent an additional approval step for already-authorized work.

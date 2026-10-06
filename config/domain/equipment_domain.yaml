@@ -2,7 +2,6 @@ equipment:
   cvd:
     baseline_date: '2026-09-21'
   baseline:
-    source_excel_path: docs/project_files/北极星-关键备件/供应商关键备件寿命管控清单-0604.xlsx
     source_sheet_names:
       - Array规格表1
     csv_encoding: utf-8-sig
@@ -27,8 +26,3 @@ equipment:
     reset_ratio_range: [0.0, 0.30]
 
 # 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）
-resources:
-  dir: resources/equipment_domain
-  files:
-    critical_parts_baseline: critical_parts_baseline.csv
-    cvd_parts: 供应商关键备件寿命管控清单-0921-CVD.xlsx

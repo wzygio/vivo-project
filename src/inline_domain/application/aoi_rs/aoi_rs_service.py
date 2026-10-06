@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
-from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
+from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir, resolve_scope_decoration_path
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
@@ -110,6 +110,7 @@ def _build_chart_points(
         build_lot_point_df(rs_details_df, pass_through_df),
         build_sheet_point_df(rs_details_df),
         spec_df,
+        workbook_path=resolve_scope_decoration_path('aoi_rs'),
         product_dir=resolve_product_resource_dir(prod_code, scope="aoi_rs"),
         prod_code=prod_code,
         exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
@@ -132,6 +133,7 @@ def _build_chart_points(
             prod_code=prod_code,
             detail_df=build_aoi_rs_ooc_detail(),
             key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+            workbook_path=resolve_scope_decoration_path('aoi_rs', alarm_type="ooc"),
             product_dir=product_dir,
             coverage_start=coverage_start,
             coverage_end=coverage_end,
@@ -229,6 +231,7 @@ class AoiRsReportService:
                         prod_code=query_config.prod_code,
                         detail_df=build_aoi_rs_ooc_detail(),
                         key_columns=["prod_code", "step_id", "rs_code", "point_id"],
+                        workbook_path=resolve_scope_decoration_path('aoi_rs', alarm_type="ooc"),
                         product_dir=product_dir,
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,

@@ -175,6 +175,7 @@ def persist_sheet_oos_decoration_outcome(
     decision_signature: str | None = None,
     now: datetime | None = None,
     force: bool = False,
+    alarm_type: str | None = None,
 ) -> SheetOosPersistOutcome:
     """Merge decisions and atomically persist generated detail/metadata sheets."""
     product_dir.mkdir(parents=True, exist_ok=True)
@@ -184,7 +185,10 @@ def persist_sheet_oos_decoration_outcome(
     decision_sheet = get_decision_sheet_name(sheet)
     sheet_names = list_workbook_sheet_names(path)
     decisions = load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
-    if scope == "spc" and file_name == OOS_DECORATION_FILE_NAME:
+    # Alarm semantics are independent from a configurable workbook basename.
+    # Keep the filename inference only for legacy direct adapter callers.
+    is_oos = alarm_type == "oos" or (alarm_type is None and file_name == OOS_DECORATION_FILE_NAME)
+    if scope == "spc" and is_oos:
         decisions = normalize_spc_decisions(decisions)
     merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
     effective_now = now or datetime.now()

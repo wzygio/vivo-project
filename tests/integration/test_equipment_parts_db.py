@@ -26,6 +26,7 @@ from src.equipment_domain.infrastructure.data_loader import (
 )
 from src.equipment_domain.config import get_equipment_runtime_config
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.shared_kernel.config import ConfigLoader
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +38,7 @@ def db_manager() -> DatabaseManager:
 @pytest.fixture
 def baseline_path() -> Path:
     """指向项目实际的 CSV 基线文件。"""
-    return Path("resources/equipment_domain/critical_parts_baseline.csv")
+    return ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline")
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ from src.inline_domain.application.shared.decorated_data import (
     _preprocess_sheet_features_by_type,
     prepare_decorated_data,
     resolve_product_resource_dir,
+    resolve_scope_decoration_path,
 )
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
@@ -171,6 +172,7 @@ def fetch_decorated_features(
                 prod_code=prod_code,
                 detail_df=build_sheet_ooc_detail(pd.DataFrame()),
                 key_columns=OOC_KEY_COLUMNS,
+                workbook_path=resolve_scope_decoration_path(normalized_scope, alarm_type="ooc"),
                 product_dir=product_dir,
                 coverage_start=coverage_start,
                 coverage_end=coverage_end,
@@ -212,6 +214,7 @@ def fetch_decorated_features(
                     prod_code=prod_code,
                     detail_df=build_sheet_ooc_detail(pd.DataFrame()),
                     key_columns=OOC_KEY_COLUMNS,
+                    workbook_path=resolve_scope_decoration_path(normalized_scope, alarm_type="ooc"),
                     product_dir=product_dir,
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
@@ -266,6 +269,7 @@ def fetch_decorated_features(
                 else pd.DataFrame()
             ),
             key_columns=OOC_KEY_COLUMNS,
+            workbook_path=resolve_scope_decoration_path(normalized_scope, alarm_type="ooc"),
             product_dir=product_dir,
             coverage_start=coverage_start,
             coverage_end=coverage_end,

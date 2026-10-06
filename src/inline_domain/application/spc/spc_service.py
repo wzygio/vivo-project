@@ -196,7 +196,7 @@ class SpcReportService:
         product_revision: str = "",
         decision_signature: str = "",
         capability_exempt_param_name_contains: tuple[str, ...] = (),
-        capability_decoration_signature: tuple[int, int] = (0, 0),
+        capability_decoration_signature: tuple[object, ...] = (0, 0),
         date_exclusion: InlineDateExclusion | None = None,
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
@@ -266,6 +266,7 @@ class SpcReportService:
             cpk_decoration_result = prepare_capability_decoration(
                 period_capability_df=period_capability_df,
                 product_dir=product_resource_dir,
+                workbook_path=ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpk"),
                 metric="cpk",
                 reference_date=pd.Timestamp(query_config.end_date).date(),
@@ -274,6 +275,7 @@ class SpcReportService:
             cpm_decoration_result = prepare_capability_decoration(
                 period_capability_df=period_capability_df,
                 product_dir=product_resource_dir,
+                workbook_path=ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpm"),
                 metric="cpm",
                 reference_date=pd.Timestamp(query_config.end_date).date(),
@@ -342,9 +344,12 @@ class SpcReportService:
         except ValueError as exc:
             logger.exception("[SPC] invalid report date exclusion configuration")
             raise SpcReportBuildError("SPC report configuration is invalid.") from exc
-        capability_signature = get_capability_decoration_signature(
+        capability_path = ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx")
+        capability_stat = get_capability_decoration_signature(
             resolve_product_resource_dir(query.prod_code),
+            workbook_path=capability_path,
         )
+        capability_signature = (str(capability_path.resolve()), *capability_stat)
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,

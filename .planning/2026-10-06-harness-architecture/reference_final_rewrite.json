@@ -1,0 +1,25 @@
+{
+  "changed": [
+    "docs/ADR/0028-backend-health-and-ports-delivery.md",
+    "references/design/shared_kernel/shared/data-flow-infrastructure-refresh.md",
+    "references/design/shared_kernel/shared/overview-shared-kernel.md",
+    "references/domain/equipment_domain/parts/data-flow-critical-parts.md",
+    "references/domain/Inline_domain/monitor/architecture-alert-dashboard.md",
+    "references/domain/Inline_domain/shared/architecture-inline-infrastructure.md",
+    "references/domain/Inline_domain/shared/overview-inline.md",
+    "references/domain/Inline_domain/shared/rules-sheet-oos-decoration.md",
+    "references/domain/Inline_domain/spc/data-flow-spc.md",
+    "references/domain/Inline_domain/spc/rules-spc-capability.md",
+    "references/domain/yield_domain/shared/overview-yield.md"
+  ],
+  "unresolved": [
+    {
+      "file": "references/domain/yield_domain/shared/overview-yield.md",
+      "target": "../../src/yield_domain/core/trend_regulator.py"
+    },
+    {
+      "file": "references/domain/yield_domain/shared/overview-yield.md",
+      "target": "../../src/yield_domain/infrastructure/spc/data_loader.py"
+    }
+  ]
+}

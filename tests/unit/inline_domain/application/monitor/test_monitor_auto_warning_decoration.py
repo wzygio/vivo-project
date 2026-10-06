@@ -64,6 +64,9 @@ class FakeAutoWarningRepository:
 
 
 def test_auto_warning_dashboard_uses_decorated_spc_features(monkeypatch, tmp_path: Path) -> None:
+    from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
+
+    write_inline_resource_config(tmp_path)
     monkeypatch.setattr(
         decorated_data.ConfigLoader,
         "get_project_root",

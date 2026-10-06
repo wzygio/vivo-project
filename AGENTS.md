@@ -14,9 +14,9 @@ Use this file as the repository entry point. Load additional context by task; do
 | Locate code, understand runtime flow, or change ownership/dependencies | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Change UI, messages, downloads, or exports | [Non-administrator presentation boundary](CONTEXT.md#non-administrator-presentation-boundary) before editing |
 | Find business rules or project-specific designs | [Knowledge router](references/index.md); select only relevant entries |
-| Interpret manufacturing terminology | [Manufacturing glossary](references/domain/GLOSSARY.md) |
+| Interpret manufacturing terminology | [Manufacturing glossary](references/domain/shared_kernel/shared/GLOSSARY.md) |
 | Change an established architectural boundary | Relevant decisions under [docs/ADR/](docs/ADR/) |
-| Change agent instructions, document ownership, or knowledge routing | [HARNESS.md](HARNESS.md) |
+| Change agent instructions, document ownership, or knowledge routing | [Document ownership](CONTEXT.md#maintenance-and-document-ownership) and this file's Iteration Router |
 
 If `.codegraph/` exists, use CodeGraph before text search or source reads for code discovery. Otherwise, skip indexing and follow the scoped `rg` workflow in `ARCHITECTURE.md`. Verify actual paths rather than inventing missing files.
 
@@ -41,10 +41,10 @@ Use `$ecc-production-rules` for implementation, refactoring, debugging, testing,
 
 Update the owner of the changed fact:
 
-- Purpose, operating assumptions, or project-wide business constraints: `CONTEXT.md`.
-- Domain/layer/submodule ownership or runtime dependencies: `ARCHITECTURE.md`.
-- Agent entry instructions or task triggers: this file.
-- Harness topology, document ownership, or disclosure policy: `HARNESS.md`.
-- Domain rules and project designs: the relevant document selected through `references/index.md`; update its route when needed.
+- Project feature behavior or domain business rules: update the matching `references/{domain,design}/<domain>/<submodule>/` document; update `references/index.md` when its route or scope changes.
+- Project architecture, domain/submodule ownership, directory organization or runtime dependencies: update `ARCHITECTURE.md`, especially the canonical Domain Submodule Architecture and its path grammar. Update affected consumers/configuration when paths change.
+- Purpose, operating assumptions, project-wide constraints, resource configuration or artifact lifecycle: update `CONTEXT.md` and the owning configuration.
+- Agent entry instructions or task triggers: update this file.
+- Knowledge filenames or task-to-document routes: update `references/index.md`; retain one authoritative owner per fact.
 
-Keep Harness `index.md` files folder-only, except `references/index.md`, which owns file-level knowledge routes and naming rules. Do not expand root documents into file catalogs.
+Keep folder indexes folder-only, except `references/index.md`, which owns file-level knowledge routes and naming rules. Use the canonical domain/submodule map to find scoped files rather than expanding root documents into file catalogs.

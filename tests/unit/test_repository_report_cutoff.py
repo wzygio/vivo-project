@@ -153,7 +153,10 @@ def test_iqc_inspection_uses_inspection_timestamp(tmp_path, monkeypatch, report_
         "columns": ["报检日期", "检验时间"],
         "rows": [["2026-09-10", "2026-09-10 18:00:00"], ["2026-09-11", "2026-09-11 13:00:00"]],
     }), encoding="utf-8")
-    monkeypatch.setattr(demo_repository, "DEMO_DIR", tmp_path)
+    monkeypatch.setattr(
+        demo_repository.ConfigLoader, "get_domain_resource_path",
+        lambda domain, key, *args: tmp_path / "inspection.json",
+    )
     assert len(demo_repository.read_demo_report("inspection")) == 1
 
 

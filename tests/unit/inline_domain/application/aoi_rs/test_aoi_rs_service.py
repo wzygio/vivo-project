@@ -14,11 +14,13 @@ from src.inline_domain.application.aoi_rs.aoi_rs_service import (
 )
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.shared_kernel.config import ConfigLoader
+from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
 
 
 @pytest.fixture(autouse=True)
 def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
     """修饰工作簿重定向到 tmp_path，避免测试写入仓库 resources/。"""
+    write_inline_resource_config(tmp_path)
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
     (tmp_path / "resources" / "inline_domain").mkdir(parents=True, exist_ok=True)
     return tmp_path
