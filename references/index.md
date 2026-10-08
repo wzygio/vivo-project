@@ -12,6 +12,8 @@
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
+| SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-capability.md) |
+| 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/algorithm-spc-capability-summary.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |

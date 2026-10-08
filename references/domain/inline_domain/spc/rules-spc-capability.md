@@ -1,123 +1,302 @@
-# SPC 能力指标算法：Cpk 与两种 Cpm
+# SPC 能力指标计算规则：Cpk 与 Cpm
 
-当前项目采用：Cpk 最近规格距离公式，以及基于规格中点偏移的 `Cpm = Cp / (1 + |Ca|)`。Taguchi Cpm 仅在本文作为另一种算法介绍，不是当前执行算法。
+本文记录当前代码实际执行的统计口径、计算步骤和边界处理。核对日期：2026-10-08。
 
-## 1. 符号与统计口径
+当前 SPC 报表的核心口径是：**μ 取周期内 Sheet 明细的 `sheet_mean` 等权平均；σ 取同周期全部有效点位 `param_value` 的样本标准差（`ddof=1`）；Cpk 取最近规格距离除以 3σ；Cpm 取 `Cp / (1 + |Ca|)`。**
 
-| 符号 | 含义 |
-|---|---|
-| USL、LSL | 规格上限、规格下限 |
-| μ | 算术均值，不是中位数 |
-| s | 标准差 |
-| M | 规格中点，`(USL+LSL)/2` |
-| h | 半规格宽度，`(USL-LSL)/2` |
-| T | 工程目标，可以不等于 M |
-| Cp | 规格宽度与六倍标准差之比，`(USL-LSL)/(6s)` |
-| Ca | 带方向的偏移比例，`(μ-M)/h`；图片中的 K 等于 `abs(Ca)` |
+本文负责能力算法；测量清洗、Sheet 修饰和报表编排的完整链路见 [SPC 数据流](data-flow-spc.md)。以下公式描述计算器产出的能力值，报表后续还可能应用能力台账替换，见第 8 节。
 
-Ca 大于零表示均值偏高，小于零表示偏低；绝对值越小，越接近规格中点。Ca 可显示为百分比，代入公式时使用小数，例如 `33.33%` 对应 `0.3333`。
+## 1. 计算范围与输入
 
-项目保留“各 Sheet 均值等权平均＋全部点位样本标准差”的当前配置：
+### 1.1 当前报表计算上一完整 ISO 周
 
-$$
-\mu=\frac{1}{m}\sum_{i=1}^{m}\bar{x}_i,
-\qquad
-s=\sqrt{\frac{\sum_{j=1}^{N}(x_j-\bar{x}_{\mathrm{points}})^2}{N-1}}
-$$
+`SpcReportService.fetch_spc_report_payload()` 调用 `build_period_capability_report(..., previous_week_only=True)`，以查询截止日 `end_date` 所在周为参考，计算：
 
-其中 m 是 Sheet 数，N 是点数。可选 `sheet_mean` 模式将 s 改为 Sheet 均值序列的样本标准差。两种模式均使用 `ddof=1`，各 Sheet 点数不同时，等权 Sheet 均值通常不同于全部点位均值。本文公式中的 μ、s 均使用项目选定的统计口径。
+```text
+[上周一 00:00:00，本周一 00:00:00)
+```
 
-## 2. Cpk：当前算法
+包含上周一，不包含本周一；不是向前滚动 7 天，也不是最近有数据的一周。上周没有有效输入时返回空能力表，不回退到更早周。
 
-$$
-C_{pk}=\min\left(\frac{USL-\mu}{3s},\frac{\mu-LSL}{3s}\right)
-$$
+例如查询截止日为 2026-10-08，能力窗口为 `[2026-09-28 00:00:00, 2026-10-05 00:00:00)`，周期标签为 `2026-W40`。
 
-它衡量均值到最近规格边界的距离，相对于三倍标准差还有多少余量。均值位于边界时为零，超出边界时为负数。
+分组键为：
 
-当 `s>0`，使用前述规格中点定义的 Ca，可以等价写成：
+```text
+prod_code + factory + step_id + param_name
++ period_type + period_label + period_sort
+```
 
-$$
-C_{pk}=C_p(1-|Ca|)
-$$
+不同产品、厂别、站点、参数和周期分别计算。设备、腔室、Lot、点位名称不参与周期能力分组。
 
-核心表达式与 [NIST 的 Cpk 定义](https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm)一致。当前项目用整体点位标准差作为 s，并未估算组内标准差；与其他软件核对数值时，必须同时对齐统计口径，不能只比较指标名称。
+通用计算器保留 `previous_week_only=False` 的月周日模式：按月、ISO 周、日聚合统计，但只有月、周计算 Cpk/Cpm，日行的两项能力固定为 `NaN`。当前 SPC 服务使用上一完整周模式，不能将通用函数的默认行为当成当前报表的计算范围。
 
-## 3. Cpm：当前采用的规格中点偏移算法
+### 1.2 两张输入表的含义
 
-$$
-C_{pm}^{\mathrm{midpoint}}=\frac{C_p}{1+|Ca|}
-=\frac{USL-LSL}{6s}\cdot
-\frac{1}{1+\frac{|\mu-M|}{(USL-LSL)/2}}
-$$
-
-这就是提供图片中的双边公式。
-
-- 以规格中点 M 为参考，不使用工程目标 T。
-- 均值位于中点时，Cpm 等于 Cp；偏离中点时，按 `1+|Ca|` 折减。
-- 有效双边规格且 `s>0` 时，结果始终为正；即使均值已超出规格，也不会像 Cpk 一样变为负数。
-- 数据库 `target` 不参与当前 Cpm 运算；图中 Target 线仍可使用该字段，二者含义不同。
-
-项目使用 `CPM` 字段承载这个业务选定的指标。它不是下一节的标准 Taguchi Cpm，也不能与 Taguchi Cpm 不加区分地比较。
-
-## 4. Taguchi Cpm：用于对照的目标偏移算法
-
-$$
-C_{pm}^{\mathrm{Taguchi}}=
-\frac{USL-LSL}{6\sqrt{s^2+(\mu-T)^2}}
-$$
-
-当 `s>0`，可等价写为：
-
-$$
-C_{pm}^{\mathrm{Taguchi}}=
-\frac{C_p}{\sqrt{1+((\mu-T)/s)^2}}
-$$
-
-这是 [NIST Dataplot 给出的 Cpm 公式](https://www.itl.nist.gov/div898/software/dataplot/refman2/auxillar/cpm.htm)。它在波动之外，对偏离工程目标的程度进行惩罚。T 可以与规格中点不同；均值等于目标时，Cpm 等于 Cp。
-
-数学公式本身不要求目标缺失时使用规格中点。此前项目曾作此回退，现在该算法已退出当前计算路径，仅保留公式介绍。
-
-## 5. 三种算法对照
-
-| 项目 | Cpk | 当前 Cpm | Taguchi Cpm |
-|---|---|---|---|
-| 主要参考 | 最近规格边界 | 规格中点 M | 工程目标 T |
-| 计算方式 | `Cp × (1-abs(Ca))` | `Cp / (1+abs(Ca))` | `Cp / sqrt(1+((μ-T)/s)²)` |
-| 偏移的参照尺度 | 半规格宽度 | 半规格宽度 | 标准差 |
-| 需要数据库 target | 否 | 否 | 需要工程目标来源 |
-| 均值超出规格 | 负数 | 仍为正数 | 仍为正数 |
-
-在有效双边规格和正标准差下，当前 Cpm 不小于 Cpk；二者在均值等于规格中点时相等。但当前 Cpm 与 Taguchi Cpm 没有普遍的大小关系。
-
-以下均为构造例子，不代表产品实际能力：
-
-| USL | LSL | μ | s | T | Cpk | 当前 Cpm | Taguchi Cpm |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 16 | 4 | 10 | 1 | 10 | 2.0000 | 2.0000 | 2.0000 |
-| 16 | 4 | 12 | 1 | 10 | 1.3333 | 1.5000 | 0.8944 |
-| 16 | 4 | 10.1 | 1 | 10 | 1.9667 | 1.9672 | 1.9901 |
-| 36 | 21 | 22.5 | 0.5 | 22.5 | 1.0000 | 2.7778 | 5.0000 |
-
-第二行中，偏移 2 相当于两个标准差，但只占半规格宽度的三分之一：当前 Cpm 除以 `1+1/3`，Taguchi Cpm 除以 `sqrt(1+2²)`，因此当前算法结果更高。第三行的小偏移例子则出现相反关系。
-
-这些差异来自算法定义，不能把换公式产生的数值提高解释为过程本身改善。1.00、1.33、1.67 等业务分级也不是公式必然推导出的等级，比较时应明确适用算法与口径。
-
-## 6. 当前实现的适用条件与边界
-
-源码：[spc_calculator.py](../../../../src/inline_domain/core/spc/spc_calculator.py) 的 `calculate_cpk()`、`calculate_cpm()`。
-
-| 条件 | 当前 Cpk | 当前 Cpm |
+| 输入 | 关键字段 | 用途 |
 |---|---|---|
-| 均值、标准差或任一规格缺失 | NaN | NaN |
-| 标准差为负，或 `USL<=LSL` | NaN | NaN |
-| `LSL=0` | NaN | NaN |
-| `s=0`、均值在规格内 | 正无穷 | 正无穷 |
-| `s=0`、均值等于规格边界 | 0 | 正无穷 |
-| `s=0`、均值在规格外 | 负无穷 | 正无穷 |
+| Sheet 明细 `sheet_features` | `sheet_id`、`sheet_start_time`、`sheet_mean`、`usl`、`lsl` | 计算 μ、Sheet 均值备用标准差、Sheet 数、周期规格 |
+| 点位明细 `raw_measurements` | `sheet_id`、`sheet_start_time`、`param_value` | 当前配置下计算 σ 和点位数 |
 
-`LSL=0` 不计算能力是项目既有规则，不是上述数学公式对零下限的普遍限制。零标准差时的无穷值是实现对退化输入的处理，不代表可以据此断定实际过程能力无限好。
+当前服务传入共享特征管线输出的**修饰后 Sheet 特征及修饰后点位**。虽然参数名叫 `raw_measurements`，这里并非直接使用未经处理的数据库原始值；前面的源校正、清洗、最新点位去重、异常点过滤、Sheet OOS 修饰、日期排除等已经影响输入。完整规则由 [SPC 数据流](data-flow-spc.md) 和 [Sheet OOS 规则](../shared/rules-sheet-oos-decoration.md) 维护。
 
-图片还给出了 `(USL-μ)/(3s)` 和 `(μ-LSL)/(3s)` 两个单边式。按常见统计命名，它们分别为 Cpu 和 Cpl，见 [NIST 单边能力定义](https://www.itl.nist.gov/div898/handbook/pmc/section1/pmc16.htm)。本次只替换双边 Cpm，单边规格及零下限仍按表中规则处理。
+能力豁免在计算前同时作用于两张表。配置 `spc.spc_cpk.exempt_param_name_contains` 按参数名包含普通文本、不区分大小写匹配；当前配置包含 `PPA`，命中参数不计算 Cpk/Cpm，但其点位和 Sheet 明细仍可供其他报表输出使用。
 
-当前服务仅计算上一完整 ISO 周的能力，Lot 能力分支已移除。数据预处理、周期分组与报表后处理规则见 [SPC 数据流](data-flow-spc.md)，本文只负责算法及其差异。
+## 2. 每个指标的数据来源
+
+| 符号 / 字段 | 当前含义 | 计算或取值方法 |
+|---|---|---|
+| xᵢⱼ / `param_value` | 第 i 个 Sheet 的第 j 个有效点位值 | 取共享管线处理后的点位明细 |
+| nᵢ | 第 i 个 Sheet 参与均值计算的有效点数 | 对该 Sheet 有效点位计数 |
+| x̄ᵢ / `sheet_mean` | 单个 Sheet 的均值 | 该 Sheet 所有有效点位值的算术平均 |
+| m | 周期内参与 μ 计算的 Sheet 特征行数 | 排除 `sheet_mean`、`usl`、`lsl` 缺失行后计数；公式使用的行数，不是输出字段 |
+| μ / `mean_value` | 周期均值 | 对有效 Sheet 明细的 `sheet_mean` 等权求平均 |
+| N / `point_count` | 周期有效点位数 | 点位组内 `param_value.count()` |
+| x̄points | 周期全部有效点位的均值 | 点位标准差内部使用的中心值；不作为周期 `mean_value` 输出 |
+| σ / `std_value` | 当前配置下的周期样本标准差 | 全部有效点位 `param_value.std(ddof=1)` |
+| `sample_count` | 周期不同 Sheet 数 | 有效 Sheet 明细的 `sheet_id.nunique()`；不作为 σ 的分母 |
+| USL / `usl` | 规格上限 | 有效 Sheet 组内 `usl` 的首个值 |
+| LSL / `lsl` | 规格下限 | 有效 Sheet 组内 `lsl` 的首个值 |
+| W | 规格跨度 | `USL - LSL` |
+| M | 规格中点 | `(USL + LSL) / 2` |
+| h | 半规格宽度 | `(USL - LSL) / 2` |
+| Cp | 宽度能力基准 | `W / (6σ)`；Cpm 计算中的中间量，不单独输出 |
+| Ca | 均值相对规格中点的偏移比例 | 数学上可定义有符号值 `(μ-M)/h`；当前代码直接计算其绝对值 `abs(μ-M)/h` |
+| Cpu、Cpl | 上、下侧能力中间量 | 分别为 `(USL-μ)/(3σ)`、`(μ-LSL)/(3σ)`，不单独输出 |
+| `target` | 规格表的工程目标值 | 组内首个非缺失值；周期输出中若仍缺失，补为 M；不参与当前 Cpk/Cpm |
+| `ucl`、`lcl` | 控制上、下限 | 组内各自首个非缺失值；缺列补 `NaN`，不参与当前 Cpk/Cpm |
+
+本文 σ 表示代码使用的**样本标准差**，是数据统计量，并非已知的总体标准差。
+
+## 3. μ：从点位到 Sheet，再从 Sheet 到周期
+
+### 3.1 先生成单个 Sheet 的 `sheet_mean`
+
+`preprocess_sheet_features()` 默认按以下键识别同一个 Sheet 指标：
+
+```text
+factory + prod_code + sheet_id + step_id + param_name
+```
+
+计算前按上述键再加 `site_name` 识别重复点位，按 `sheet_start_time` 升序排列，每个点位保留最后一条，即最新记录。上游制备也有点位去重；这里说明特征计算器自身的去重步骤。
+
+随后对该 Sheet 所有保留的有效 `param_value` 求平均：
+
+$$
+\bar{x}_i = \frac{1}{n_i}\sum_{j=1}^{n_i}x_{ij}
+$$
+
+对应代码聚合为 `sheet_mean=('param_value', 'mean')`。缺失值不计入均值；没有有效值的 Sheet 均值为缺失。Sheet 特征的 `sheet_start_time` 取这些保留点位时间的最小值，用来决定该 Sheet 所属周期。
+
+若输入含 `data_type`，共享管线先按其拆开生成 Sheet 特征。当前 SPC 服务已限定为 SPC 范围。
+
+### 3.2 周期 μ 是 Sheet 明细均值的平均
+
+周期计算先排除以下任一字段缺失的 Sheet 特征行：
+
+```python
+valid_df = df.dropna(subset=['sheet_mean', 'usl', 'lsl'])
+```
+
+再在周期组内计算：
+
+$$
+\mu = \frac{1}{m}\sum_{i=1}^{m}\bar{x}_i
+$$
+
+对应 `float(values.mean())`，结果写入 `mean_value`。
+
+每条 Sheet 特征行权重相同，**不按 Sheet 点位数加权**，也不使用中位数。正常的一 Sheet 指标一行输入下，m 就是参与计算的 Sheet 数。
+
+周期函数本身不会再按 `sheet_id` 去重。如果调用者传入重复 Sheet 特征行，这些行会重复参与 μ，而 `sample_count` 仍按不同 `sheet_id` 计数，所以 m 不一定等于 `sample_count`。
+
+## 4. σ：当前使用全部点位的样本标准差
+
+### 4.1 当前配置与选择顺序
+
+[inline_domain.yaml](../../../../config/domain/inline_domain.yaml) 当前设置：
+
+```yaml
+spc:
+  spc_cpk:
+    period_sigma_source: "point_value"
+```
+
+服务调用时优先使用传入的非空 `period_sigma_source`，否则读取该配置。归一化函数接受 `point_value`、`sheet_mean`，忽略大小写和两端空白；其他值回退到 `sheet_mean`。配置缺失或读取失败也默认 `sheet_mean`；通用计算函数不指定 `sigma_source` 时默认同样是 `sheet_mean`。
+
+因此“当前使用点位标准差”来自当前配置，函数签名的默认值仍是 Sheet 均值标准差。`period_box_source` 是分布图样本来源，不决定能力 σ。
+
+### 4.2 点位 σ 的具体步骤
+
+`_build_period_measurement_stats()` 执行：
+
+1. 检查点位表是否有 `prod_code`、`factory`、`sheet_id`、`step_id`、`param_name`、`sheet_start_time`、`param_value`。输入为空或缺任一必要列时，返回空统计映射。
+2. 用 `pd.to_numeric(..., errors='coerce')` 转换 `param_value`；不能转换的值变成 `NaN`，并移除 `param_value` 缺失行。
+3. 用 `pd.to_datetime(..., errors='coerce')` 转换时间，移除时间缺失行，再按周期窗口筛选。
+4. 按 `prod_code + factory + step_id + param_name + period_type + period_label` 汇总全部点位。不会先求各 Sheet 标准差，也不会先给各点位名称分别求标准差。
+5. 对该组的点位序列调用 `float(values.std(ddof=1))`，写入 `std_value`；点位数写入 `point_count`。
+
+设该组点位值为 x₁、x₂、…、xN：
+
+$$
+\bar{x}_{\mathrm{points}} = \frac{1}{N}\sum_{k=1}^{N}x_k
+$$
+
+$$
+\sigma_{\mathrm{points}} =
+\sqrt{\frac{\sum_{k=1}^{N}(x_k-\bar{x}_{\mathrm{points}})^2}{N-1}}
+$$
+
+这里分母是 **N−1**，不是 N，也不是 Sheet 数减一。平方偏差以 **全部点位均值 x̄points** 为中心，不以能力公式中的 μ 为中心。
+
+该 σ 包含同一 Sheet 内点位差异及不同 Sheet 间差异；不使用极差/d₂、移动极差、各 Sheet 标准差的平均或组内合并标准差。实现保留 `Series.std(ddof=1)` 的浮点行为，未改用 pandas 原生 `groupby.std()`，避免近乎常量的数据因不同浮点计算顺序变成零标准差。
+
+### 4.3 μ 与 σ 的样本选择分别执行
+
+μ 从有效 Sheet 特征行生成，σ 从点位表独立生成，再按产品、厂别、站点、参数和周期匹配。点位统计不按照有效 Sheet 的 `sheet_id` 再做交集，也不检查点位对应的 USL/LSL 是否有效。
+
+Sheet 按聚合后的最早点位时间归入周期，点位按自身时间归入周期。因此如果同一 Sheet 的不同点位跨越周界，两者的时间归属可能不同。复算时应分别遵循两张输入表的筛选步骤，不能假设 σ 使用的点位一定恰好是 μ 中所有 Sheet 的全部点位。
+
+### 4.4 备用口径与回退
+
+`sheet_mean` 模式使用同一组有效 Sheet 明细的均值序列计算：
+
+$$
+\sigma_{\mathrm{sheet}} =
+\sqrt{\frac{\sum_{i=1}^{m}(\bar{x}_i-\mu)^2}{m-1}}
+$$
+
+对应 `sheet_mean.std(ddof=1)`，均值 μ 保持原算法不变。
+
+| 情况 | 实际 σ | 输出 `sigma_source` / `point_count` |
+|---|---|---|
+| 选择 `point_value`，找到该周期点位统计 | 采用点位统计的 `std_value` | `point_value` / 实际有效点数 |
+| 选择 `point_value`，找不到该周期点位统计 | 回退 Sheet 均值标准差 | `sheet_mean` / `NaN` |
+| 选择 `sheet_mean` | Sheet 均值标准差 | `sheet_mean` / `NaN`，即使另有点位输入也不统计 |
+
+**有点位统计但只有 1 个点**时，`std(ddof=1)` 为 `NaN`；代码仍采用该结果，不回退 Sheet 均值标准差，Cpk/Cpm 均为 `NaN`。回退条件是不存在点位统计项，不是点位标准差为缺失或零。
+
+只有 1 条有效 Sheet 特征时，Sheet 均值标准差也为 `NaN`；但如果选择点位口径且该 Sheet 有至少 2 个有效点，仍可得到点位 σ 和能力值。当前代码没有额外的最少 Sheet 数或最少样本数门槛。
+
+## 5. USL、LSL、规格中点与目标值
+
+规格最初由 `load_parameter_specs()` 从 `mdw.dwd_imp_dv_param_spec` 读取；USL、LSL、UCL、LCL、`target` 转为数值，不能转换的内容视为缺失。产品 `spc_spec_override` 可覆盖已匹配的规格字段，具体取数和覆盖机制见 [SPC 数据流](data-flow-spc.md)。
+
+Sheet 特征按 `prod_code + step_id + param_name` 左连接规格。周期聚合在有效 Sheet 行中分别取 `usl`、`lsl` 的 `first`，不会对规格求平均，不按设备/腔室或历史规格版本拆组，也不会逐条验证组内规格是否一致。
+
+派生量为：
+
+$$
+W = USL-LSL,\qquad M=\frac{USL+LSL}{2},\qquad h=\frac{W}{2}
+$$
+
+`target` 取周期组内首个非缺失值；若仍缺失，周期输出字段补为 M。**这个补值不参与能力公式**：`calculate_cpk()`、`calculate_cpm()` 都只接收 μ、σ、USL、LSL 四个参数。
+
+M 由上下规格现算，不能用数据库 `target` 替代。当前 Cpm 是规格中点偏移算法；不执行 Taguchi 公式 `W / (6√(σ² + (μ-target)²))`。图表 Target 线的取值规则由 [SPC 数据流](data-flow-spc.md) 维护，不能用周期表补值推断绘图行为。
+
+## 6. Cpk 与 Cpm 的逐步计算
+
+### 6.1 共同准入条件
+
+`has_valid_capability_inputs()` 要求：μ、σ、USL、LSL 均非缺失，σ ≥ 0，LSL ≠ 0，USL > LSL。任何条件不满足，两项能力均返回 `NaN`。
+
+LSL=0 是项目表示上限型规格时的既有排除规则，不是数学公式要求下限必须非零。当前函数不在单边规格下改算 Cpu 或 Cpl。UCL、LCL、`target` 不参与准入。
+
+实现使用 `pd.isna()` 和上述大小比较，未另行执行 `isfinite()` 检查；以下常规公式及大小关系以有限数值输入为前提。
+
+### 6.2 Cpk：最近规格边界的余量
+
+当 σ > 0：
+
+$$
+C_{pu}=\frac{USL-\mu}{3\sigma},\qquad
+C_{pl}=\frac{\mu-LSL}{3\sigma}
+$$
+
+$$
+C_{pk}=\min(C_{pu},C_{pl})
+=\frac{\min(USL-\mu,\mu-LSL)}{3\sigma}
+$$
+
+代码先计算 `nearest_distance = min(usl-mean_value, mean_value-lsl)`，再除以 `3*std_value`，结果写入 `cpk`。不对距离取绝对值：μ 严格位于规格内时 Cpk 为正，位于边界时为 0，越过任一边界时为负。
+
+### 6.3 Cpm：Cp 按规格中点偏移折减
+
+当 σ > 0，代码依次计算：
+
+$$
+C_p=\frac{W}{6\sigma}
+$$
+
+$$
+|Ca|=\frac{|\mu-M|}{h}
+$$
+
+$$
+C_{pm}=\frac{C_p}{1+|Ca|}
+=\frac{USL-LSL}{6\sigma\left(1+\frac{|\mu-(USL+LSL)/2|}{(USL-LSL)/2}\right)}
+$$
+
+代码中的局部变量 `ca` 已是绝对值，不保留偏高/偏低方向。代入的是比例小数，例如偏移占半规格宽度的 25%，使用 `0.25`。
+
+结果写入 `cpm`。μ=M 时 Cpm=Cp；偏离中点时按 `1+|Ca|` 折减。在有效双边规格、有限输入且 σ>0 时，Cpm 始终为正，即使 μ 已超出规格也不变为负数。
+
+同一 μ、σ 和规格下，Cpk 可等价写成 `Cp*(1-|Ca|)`；由此当前 Cpm ≥ Cpk，均值居中时二者相等。这是当前两项公式的性质，不表示可以把 Cpm 与其他软件的 Taguchi Cpm 直接比较。
+
+### 6.4 零标准差与缺失处理
+
+先检查共同准入条件，再执行零标准差分支：
+
+| 输入条件 | Cpk | Cpm |
+|---|---|---|
+| μ、σ、USL、LSL 任一缺失 | `NaN` | `NaN` |
+| σ<0，或 USL≤LSL，或 LSL=0 | `NaN` | `NaN` |
+| σ=0，LSL<μ<USL | `+inf` | `+inf` |
+| σ=0，μ 等于任一规格边界 | `0` | `+inf` |
+| σ=0，μ 在规格外 | `-inf` | `+inf` |
+
+Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷值是代码对退化数据的处理结果，不代表实际过程能力无限好。计算器没有给 μ、σ、Cp、Ca 或最终能力执行四舍五入；返回 Python 浮点值，显示格式由后续展示层决定。
+
+## 7. 从点位开始的完整复算示例
+
+以下是构造数据，假设同产品、同厂别、同站点、同参数、同一能力周，输入已完成清洗和修饰，规格为 USL=16、LSL=4。
+
+| Sheet | 有效点位值 | 点数 | `sheet_mean` |
+|---|---|---:|---:|
+| A | 8、10 | 2 | `(8+10)/2 = 9` |
+| B | 12、14、16 | 3 | `(12+14+16)/3 = 14` |
+
+逐步计算：
+
+1. `sample_count=2`，m=2；μ=`(9+14)/2=11.5`。
+2. `point_count=N=5`；全部点位均值 x̄points=`(8+10+12+14+16)/5=12`。它与 μ=11.5 不同，因为两片点数不同。
+3. 点位平方偏差和=`(8−12)²+(10−12)²+(12−12)²+(14−12)²+(16−12)²=40`。
+4. σ=`√(40/(5−1))=√10≈3.16227766`，`sigma_source=point_value`。
+5. W=`16−4=12`，M=`(16+4)/2=10`，h=`12/2=6`。
+6. Cp=`12/(6√10)≈0.63245553`。
+7. |Ca|=`|11.5−10|/6=0.25`。
+8. Cpk=`min(16−11.5, 11.5−4)/(3√10)=4.5/(3√10)≈0.47434165`。
+9. Cpm=`0.63245553/(1+0.25)≈0.50596443`。
+
+若同样的 Sheet 明细改用 `sheet_mean` 模式，则 σ=`√(((9−11.5)²+(14−11.5)²)/(2−1))=√12.5≈3.53553391`，μ 仍为 11.5，Cpk/Cpm 随新的 σ 重新计算。示例中的小数仅为阅读展示，计算器不按这些展示位数截断中间量。
+
+## 8. 公式结果与报表最终值
+
+`build_period_capability_report()` 输出 `mean_value`、`std_value`、`sigma_source`、`sample_count`、`point_count`、规格与 `cpk`、`cpm` 等字段。`period_start`、`period_end` 取有效 Sheet 组内最早/最晚时间，是实际样本时间，不是窗口的日历起止边界。
+
+服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、启用替换且有可用替换值时，覆盖对应的 `cpk` 或 `cpm`。这个步骤不重算 μ 或 σ，也不改变上述公式。
+
+因此按 Sheet 和点位复算得到的是计算器结果；核对服务最终能力值时，还需考虑后续能力替换。台账匹配与状态规则由 [SPC 数据流](data-flow-spc.md) 维护。
+
+## 9. 实现依据
+
+| 责任 | 源码与符号 |
+|---|---|
+| 能力准入、Cpk/Cpm 公式、周期 μ/σ 和回退 | [spc_calculator.py](../../../../src/inline_domain/core/spc/spc_calculator.py)：`has_valid_capability_inputs()`、`calculate_cpk()`、`calculate_cpm()`、`_period_frame()`、`_build_period_measurement_stats()`、`normalize_period_sigma_source()`、`build_period_capability_report()` |
+| 点位去重、单片均值、Sheet 时间与规格关联 | [monitor_calculator.py](../../../../src/inline_domain/core/monitor/monitor_calculator.py)：`preprocess_sheet_features()` |
+| 修饰后 Sheet 与点位输入的组装 | [decorated_data.py](../../../../src/inline_domain/application/shared/decorated_data.py)：`_preprocess_sheet_features_by_type()`、`prepare_decorated_data()` |
+| 上一完整周、能力豁免、配置选择和后处理编排 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)：`exclude_cpm_cpk_parameters()`、`SpcReportService.fetch_spc_report_payload()` |
+| 规格读取与覆盖 | [measurement_metadata_loader.py](../../../../src/inline_domain/infrastructure/shared/measurement_metadata_loader.py)：`load_parameter_specs()`；[measurement_preparation.py](../../../../src/inline_domain/infrastructure/shared/measurement_preparation.py)：`get_spec_limits()` |
+| 当前标准差口径 | [inline_domain.yaml](../../../../config/domain/inline_domain.yaml)：`spc.spc_cpk.period_sigma_source`；[config.py](../../../../src/shared_kernel/config.py)：`ConfigLoader.get_spc_period_sigma_source()` |
+| 能力值替换 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py)：`apply_capability_decoration()` |
+| 现有算法验证 | [test_spc_calculator.py](../../../../tests/unit/inline_domain/core/spc/test_spc_calculator.py) |
