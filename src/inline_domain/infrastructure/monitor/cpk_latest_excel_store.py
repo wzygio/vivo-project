@@ -8,6 +8,9 @@ from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cach
 
 
 class CpkLatestExcelStore:
+    metric = "cpk"
+    sheet_suffix = ""
+
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
 
@@ -31,6 +34,7 @@ class CpkLatestExcelStore:
         except FileNotFoundError:
             return None
         sheets = read_cached_alarm_workbook(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
-        if product not in sheets:
+        sheet_name = f"{product}{self.sheet_suffix}"
+        if sheet_name not in sheets:
             return None
-        return normalize_latest_cpk(sheets[product], product)
+        return normalize_latest_cpk(sheets[sheet_name], product, metric=self.metric)

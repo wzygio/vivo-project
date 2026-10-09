@@ -189,10 +189,10 @@ def test_new_cache_policy_preserves_native_payload_during_service_reload(inputs,
         module.__dict__.update(original_symbols)
 
 
-def test_maintained_cpk_periods_are_unavailable_without_removing_source_records(inputs):
+def test_maintained_cpk_months_ignore_detail_factory_filter_and_keep_excluded_month(inputs):
     _policy, _rows, _specs, _root = inputs
     records = normalize_cpk_records(pd.DataFrame([
-        {"产品": "M678", "监控类型": "SPC", "厂别": "OLED", "周期类型": "月度",
+        {"产品": "M678", "监控类型": "SPC", "厂别": "ALL", "周期类型": "月度",
          "时间标签": month, "显示标签": label, "CPK总项目数": 100, "Cpk≥1.33达标率": .8}
         for month, label in [("2026-09", "M9"), ("2026-10", "M10")]
     ]))
@@ -201,11 +201,11 @@ def test_maintained_cpk_periods_are_unavailable_without_removing_source_records(
         products=["M678"], factories=["OLED"], end_date="2026-10-06",
     )
     assert result.summary_df.M9.iloc[0] == 100
-    assert result.summary_df.M10.iloc[0] == "—"
+    assert result.summary_df.M10.iloc[0] == 100
     pd.testing.assert_frame_equal(records, before)
 
 
-def test_maintained_alarm_summary_has_no_false_zero_for_excluded_periods(inputs):
+def test_maintained_alarm_summary_preserves_months_when_current_week_is_excluded(inputs):
     _policy, _rows, _specs, _root = inputs
     records = pd.DataFrame([
         {"产品": "M678", "监控类型": "SPC", "厂别": "OLED", "周期类型": "月度",
@@ -214,14 +214,15 @@ def test_maintained_alarm_summary_has_no_false_zero_for_excluded_periods(inputs)
         for month in ["2026-09", "2026-10"]
     ])
     before = records.copy(deep=True)
-    def reject_update(*_args, **_kwargs):
-        pytest.fail("An excluded week must not overwrite maintained counts")
+    def reset_update(*_args, **kwargs):
+        assert kwargs["reset_current_week"] is True
+        return records.copy(deep=True), []
 
-    store = SimpleNamespace(refresh_current_week=reject_update, read=lambda: records)
+    store = SimpleNamespace(refresh_current_week=reset_update, read=lambda: records)
     result = MonitorSummaryWorkbookService(store).refresh_summary(
         products=["M678"], scopes=["spc"], factories=["OLED"],
         alerts_df=pd.DataFrame(), throughput_df=pd.DataFrame(), end_date=pd.Timestamp("2026-10-06"),
     )
     assert result.M9.iloc[0] == 100
-    assert result.M10.iloc[0] == "—"
+    assert result.M10.tolist() == [100, 0, 0, 5, 5]
     pd.testing.assert_frame_equal(records, before)

@@ -14,7 +14,7 @@ const LINKS = {
     ANALYSIS_FILES: "http://10.72.26.31:8503/专项资料-解析报告",
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
-    WARNING_SUMMARY: "http://10.72.26.31:8503/超规与CPK预警看板",
+    WARNING_SUMMARY: "http://10.72.26.31:8503/超规预警看板",
     CRITICAL_PARTS: "http://10.72.26.31:8503/关键备件报表",
     SPC_REPORT: "http://10.72.26.31:8503/SPC监控报表",
     CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",

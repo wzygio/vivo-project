@@ -151,6 +151,7 @@ def perform_hard_reset(
             or key_str == "alert_matrix_board_loaded"
             or key_str == "monitor_query_signature"
             or key_str == "cpk_monitor_query_signature"
+            or key_str == "cpm_monitor_query_signature"
         ):
             del st.session_state[key]
 

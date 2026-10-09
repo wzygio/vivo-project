@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import runpy
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -27,12 +28,15 @@ from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlar
 from src.inline_domain.infrastructure.monitor.summary_workbook_store import MonitorSummaryWorkbookStore
 from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+from src.inline_domain.infrastructure.monitor.cpm_summary_workbook_store import CpmSummaryWorkbookStore
+from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
 import src.inline_domain.composition as composition
 import src.shared_kernel.infrastructure.db_handler as db_handler
 
 if "fixture_directory" not in st.session_state:
     st.session_state["fixture_directory"] = str(
-        PROJECT_ROOT / "output" / "tmp" / "monitor-excel-e2e" / uuid.uuid4().hex
+        Path(os.environ.get("VIVO_MONITOR_FIXTURE_ROOT",
+                            str(PROJECT_ROOT / "output" / "tmp" / "monitor-excel-e2e"))) / uuid.uuid4().hex
     )
 fixture_root = Path(st.session_state["fixture_directory"])
 fixture_root.mkdir(parents=True, exist_ok=True)
@@ -48,7 +52,11 @@ def write_cpk_latest(decorated=False):
     rows = [dict(prod_code="M626", factory="ARRAY", step_id="1100", param_name="E2E_CPK",
                  period_type=kind, period_label=label, cpk_corrected=0.8, flag=decorated)
             for kind, label in (("month", today.strftime("%Y-%m")), ("week", f"{iso.year}-W{iso.week:02d}"))]
-    pd.DataFrame(rows).to_excel(cpk_latest_path, sheet_name="M626", index=False)
+    with pd.ExcelWriter(cpk_latest_path) as writer:
+        pd.DataFrame(rows).to_excel(writer, sheet_name="M626", index=False)
+        pd.DataFrame(rows).rename(columns={"cpk_corrected": "cpm_corrected"}).assign(
+            flag=st.session_state.get("fixture_cpm_decorated", False),
+        ).to_excel(writer, sheet_name="M626_cpm", index=False)
 paths = {alarm: {scope: fixture_root / f"{scope}_sheet_{alarm}_decoration.xlsx"
                  for scope in scopes} for alarm in ("oos", "ooc")}
 
@@ -98,6 +106,9 @@ if not summary_path.exists():
     with pd.ExcelWriter(summary_path) as writer:
         pd.DataFrame(rows).to_excel(writer, sheet_name="报警率", index=False)
         pd.DataFrame(cpk_rows).to_excel(writer, sheet_name="CPK", index=False)
+        pd.DataFrame(cpk_rows).rename(columns={
+            "CPK总项目数": "CPM总项目数", "Cpk≥1.33达标率": "Cpm≥1.33达标率",
+        }).to_excel(writer, sheet_name="CPM", index=False)
     for alarm in paths:
         for scope in scopes:
             write_details(alarm, scope)
@@ -113,10 +124,14 @@ service = ExcelAlarmReader(ExcelAlarmStore(paths["oos"]), "oos")
 ooc_service = ExcelAlarmReader(ExcelAlarmStore(paths["ooc"]), "ooc")
 summary_store = MonitorSummaryWorkbookStore(summary_path)
 cpk_store = CpkSummaryWorkbookStore(summary_path)
+cpm_store = CpmSummaryWorkbookStore(summary_path)
 composition.build_oos_history_service = lambda resource_dir=None: service
 composition.build_ooc_history_service = lambda resource_dir=None: ooc_service
 composition.build_monitor_summary_workbook_service = lambda resource_dir=None: MonitorSummaryWorkbookService(summary_store)
 composition.build_cpk_monitor_service = lambda: CpkWorkbookMonitorService(cpk_store, latest_reader=CpkLatestExcelStore(cpk_latest_path))
+composition.build_cpm_monitor_service = lambda: CpkWorkbookMonitorService(
+    cpm_store, latest_reader=CpmLatestExcelStore(cpk_latest_path), metric="cpm",
+)
 composition.build_live_throughput_reader = forbidden_raw
 composition.build_live_monitor_source = forbidden_raw
 composition.build_raw_measurement_repository = forbidden_raw
@@ -137,6 +152,9 @@ def fixture_header(**kwargs):
     if st.button("Fixture: decorate CPK Excel", key="fixture_edit_cpk"):
         write_cpk_latest(decorated=True)
         st.session_state["fixture_cpk_decorated"] = True
+    if st.button("Fixture: decorate CPM Excel", key="fixture_edit_cpm"):
+        st.session_state["fixture_cpm_decorated"] = True
+        write_cpk_latest(decorated=st.session_state.get("fixture_cpk_decorated", False))
 
 
 page_header.render_page_header = fixture_header
@@ -146,16 +164,22 @@ alert_matrix_cache.get_alert_matrix_cached_funcs = lambda: []
 SessionManager.AVAILABLE_PRODUCTS = ["M626"]
 SessionManager.get_active_config = staticmethod(lambda: {})
 
-runpy.run_path(str(PROJECT_ROOT / "app" / "pages" / "自动预警看板.py"), run_name="__main__")
+# The Excel-only reports moved out of the cross-domain matrix page.
+runpy.run_path(str(PROJECT_ROOT / "app" / "pages" / "超规预警看板.py"), run_name="__main__")
 records = summary_store.read()
-week = records.loc[records["周期类型"].eq("周度")].iloc[0]
+current_week_label = current_period_windows(today)[-1].time_label
+week = records.loc[
+    records["周期类型"].eq("周度") & records["时间标签"].eq(current_week_label)
+].iloc[0]
 year = records.loc[records["周期类型"].eq("年度")].iloc[0]
 closed = records.loc[records["周期类型"].eq("月度") & records["OOS报警片数"].eq(777)]
 st.caption(f"Fixture week OOS: {int(week['OOS报警片数'])}")
 st.caption(f"Fixture year OOS: {int(year['OOS报警片数'])}")
 st.caption(f"Fixture closed preserved: {len(closed) == 1}")
 st.caption(f"Fixture CPK warning total: {int(cpk_store.read()['预警项目数'].sum())}")
+st.caption(f"Fixture CPM warning total: {int(cpm_store.read()['预警项目数'].sum())}")
 cpk_records = cpk_store.read()
-st.caption(f"Fixture CPK history preserved: {cpk_records.loc[cpk_records['周期类型'].isin(['年度', '季度']), '预警项目数'].eq(2).all()}")
+maintained_labels = [str(today.year), f"{today.year}-Q{(today.month - 1) // 3 + 1}"]
+st.caption(f"Fixture CPK history preserved: {cpk_records.loc[cpk_records['时间标签'].isin(maintained_labels), '预警项目数'].eq(2).all()}")
 st.caption(f"Fixture Excel decorated: {st.session_state['fixture_decorated']}")
 st.caption(f"Fixture CPK Excel decorated: {st.session_state.get('fixture_cpk_decorated', False)}")

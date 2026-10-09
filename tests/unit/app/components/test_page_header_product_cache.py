@@ -339,6 +339,7 @@ def test_refresh_buttons_share_cache_code_config_sequence(monkeypatch, scope, in
             SessionManager.KEY_PRODUCT: "M626",
             "inline_view_model": object(),
             "cpk_monitor_query_signature": "old",
+            "cpm_monitor_query_signature": "old",
             "yield_snapshot_sig_M626": "old",
             "code_update_pending": True,
             "unrelated_key": 1,

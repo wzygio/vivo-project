@@ -1,6 +1,6 @@
 """自动预警矩阵与超规/CPK 独立页面的门控和组合回归测试。
 
-- 无统一页头，各看板拥有管理员专用刷新入口；
+- 超规/CPK 页面共享页头刷新缓存，各子看板保留独立刷新数据入口；
 - 「超规片自动预警」区查询门控：未点击「查询」不执行签名预算与数据加载，
   点击后才执行（monkeypatch 计数）；
 - 模块化结构：每个模块 = st.subheader 标题 + st.expander（默认展开）；
@@ -19,6 +19,7 @@ import runpy
 import sys
 import types
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pandas as pd
 import pytest
@@ -59,7 +60,7 @@ from src.inline_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 MATRIX_PAGE_PATH = Path(__file__).parents[4] / "app/pages/自动预警看板.py"
-PAGE_PATH = Path(__file__).parents[4] / "app/pages/超规与CPK预警看板.py"
+PAGE_PATH = Path(__file__).parents[4] / "app/pages/超规预警看板.py"
 QUERY_BUTTON_KEY = "btn_monitor_query_submit"
 MATRIX_FILTER_KEYS = (
     "alert_matrix_data_type",
@@ -270,14 +271,26 @@ def _run_page() -> None:
     runpy.run_path(str(PAGE_PATH), run_name="__main__")
 
 
+def _assert_warning_header(trackers: dict) -> None:
+    header = trackers["header_kwargs"]
+    assert header["title"] == "超规预警看板"
+    assert header["show_product_filter"] is False
+    assert header["show_data_refresh"] is False
+    assert {func.__name__ for func in header["cached_funcs"]} == {
+        "get_cached_query_window", "get_cached_oos_monitor_payload", "read_cached_alarm_workbook",
+    }
+
+
 def _assert_module_structure(trackers: dict) -> None:
-    """两个页面合计三个独立查询模块，未查询时不额外展示提示。"""
+    """两个页面合计四个独立查询模块，未查询时不额外展示提示。"""
     assert trackers["infos"] == []
-    assert trackers["subheaders"] == ["🚦 全指标预警看板", "⚠️ 超规片预警看板", "📊 CPK预警看板"]
+    assert trackers["subheaders"] == [
+        "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板",
+    ]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True
     ]
-    assert len(module_expanders) == 3
+    assert len(module_expanders) == 4
     # subheader 与 expander 文案不重复堆砌
     for item, title in zip(module_expanders, trackers["subheaders"]):
         assert item["label"] != title
@@ -337,7 +350,7 @@ def test_page_hides_header_product_filter_and_gates_data_loading(monkeypatch) ->
 
     _run_page()
 
-    assert trackers["header_kwargs"] == {}
+    _assert_warning_header(trackers)
     _assert_module_structure(trackers)
     # 未点击「查询」：签名预算与数据加载都不执行
     assert trackers["load_calls"] == []
@@ -382,7 +395,7 @@ def test_page_loads_data_after_query_submitted(monkeypatch) -> None:
 
     _run_page()
 
-    assert trackers["header_kwargs"] == {}
+    _assert_warning_header(trackers)
     _assert_module_structure(trackers)
     # 点击「查询」：直接读取四类共享 OOS 历史，不再执行旧决策签名预算/全量计算。
     assert trackers["decision_calls"] == []
@@ -424,23 +437,61 @@ def test_each_board_has_admin_only_refresh_controls(monkeypatch) -> None:
     finally:
         st.query_params.clear()
     buttons = {item["key"]: item["label"] for item in trackers["buttons"]}
-    for cache_key, data_key in (
-        ("matrix_refresh_cell", "matrix_refresh_data"),
-        ("oos_monitor_refresh_cache", "oos_monitor_refresh_data"),
-        ("cpk_monitor_refresh_cache", "cpk_monitor_refresh_data"),
-    ):
-        assert buttons[cache_key] == "刷新缓存"
-        assert buttons[data_key] == "刷新数据"
+    assert buttons["matrix_refresh_cell"] == "刷新缓存"
+    assert buttons["matrix_refresh_data"] == "刷新数据"
+    for board in ("oos_monitor", "cpk_monitor", "cpm_monitor"):
+        assert f"{board}_refresh_cache" not in buttons
+        assert buttons[f"{board}_refresh_data"] == "刷新数据"
 
 
-@pytest.mark.parametrize("action", ["cache", "data"])
-def test_oos_refresh_preserves_other_board_state(monkeypatch, action) -> None:
+@pytest.mark.parametrize("admin", [False, True])
+def test_shared_header_cache_refresh_clears_all_board_queries(monkeypatch, admin) -> None:
+    from app.utils import reloader
+    from src.inline_domain.infrastructure.monitor import excel_alarm_store
+
+    real_header = page_header.render_page_header
+    st.session_state.clear()
+    st.query_params.clear()
+    if admin:
+        st.query_params["admin"] = "true"
+    cache_key = "btn_clear_超规预警看板"
+    trackers = _stub_page_dependencies(monkeypatch, clicked_keys={cache_key} if admin else frozenset())
+    monkeypatch.setattr(page_header, "render_page_header", real_header)
+    monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
+    monkeypatch.setattr(reloader, "deep_reload_modules", lambda: None)
+    monkeypatch.setattr(SessionManager, "load_and_set_config", lambda product: None)
+    clear_workbooks = Mock()
+    monkeypatch.setattr(excel_alarm_store.read_cached_alarm_workbook, "clear", clear_workbooks)
+    if admin:
+        st.session_state["monitor_query_signature"] = "old-oos"
+        st.session_state["cpk_monitor_query_signature"] = "old-cpk"
+        st.session_state["cpm_monitor_query_signature"] = "old-cpm"
+    try:
+        runpy.run_path(str(PAGE_PATH), run_name="__main__")
+        cache_buttons = [button for button in trackers["buttons"] if "刷新缓存" in button["label"]]
+        assert len(cache_buttons) == int(admin)
+        assert not any(button["key"] in {
+            "oos_monitor_refresh_cache", "cpk_monitor_refresh_cache", "cpm_monitor_refresh_cache",
+        } for button in trackers["buttons"])
+        assert "monitor_query_signature" not in st.session_state
+        assert "cpk_monitor_query_signature" not in st.session_state
+        assert "cpm_monitor_query_signature" not in st.session_state
+        assert trackers["load_calls"] == []
+        assert trackers["source_signature_calls"] == []
+        assert trackers["db_calls"] == []
+        assert clear_workbooks.call_count == int(admin)
+    finally:
+        st.query_params.clear()
+        st.session_state.clear()
+
+
+def test_oos_data_refresh_preserves_other_board_state(monkeypatch) -> None:
     from app.sections.inline_domain.monitor import refresh_controls, cpk_monitor_dashboard
 
     st.session_state.clear()
     st.query_params["admin"] = "true"
     trackers = _stub_page_dependencies(
-        monkeypatch, clicked_keys={f"oos_monitor_refresh_{action}"},
+        monkeypatch, clicked_keys={"oos_monitor_refresh_data"},
     )
     cleared = []
     monkeypatch.setattr(refresh_controls, "clear_oos_source_cache", lambda scopes: cleared.append(scopes))
@@ -452,10 +503,8 @@ def test_oos_refresh_preserves_other_board_state(monkeypatch, action) -> None:
         _run_page()
         assert st.session_state["alert_matrix_board_loaded"] is True
         assert st.session_state["cpk_monitor_query_signature"] == "cpk-selection"
-        assert bool(trackers["load_calls"]) is (action == "data")
+        assert bool(trackers["load_calls"]) is True
         assert len(cleared) == 1
-        if action == "cache":
-            assert "monitor_query_signature" not in st.session_state
     finally:
         st.query_params.clear()
         st.session_state.clear()
@@ -471,7 +520,7 @@ def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
 
     _run_page()
 
-    assert trackers["header_kwargs"] == {}
+    _assert_warning_header(trackers)
     _assert_module_structure(trackers)
     # 筛选条只渲染一处（无 widget key 重复）
     assert _matrix_filter_keys(trackers) == list(MATRIX_FILTER_KEYS)

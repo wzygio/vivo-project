@@ -11,6 +11,7 @@ from src.inline_domain.core.shared.date_exclusion import exclude_inline_period_r
 from src.shared_kernel.config import ConfigLoader
 
 from src.inline_domain.core.monitor.period_summary import (
+    MONITOR_SUMMARY_COLUMNS,
     build_period_summary_from_records,
 )
 
@@ -25,6 +26,7 @@ class SummaryWorkbookStore(Protocol):
     def refresh_current_week(
         self, alerts: pd.DataFrame, *, products: Iterable[str], scope_key: str,
         factory_key: str, as_of: pd.Timestamp, available_types: dict[str, set[str]],
+        reset_current_week: bool = False,
     ) -> tuple[pd.DataFrame, list[str]]: ...
 
 
@@ -92,33 +94,34 @@ class MonitorSummaryWorkbookService:
             "factory": factory_key, "period_type": "week",
             "period_label": f"{iso.year}-W{iso.week:02d}",
         }])
+        reset_options = {}
         if exclude_inline_period_records(current_week, date_exclusion, as_of=end_date).empty:
-            # A filtered week must not overwrite maintained source counts with partial/zero counts.
-            persisted, warnings = self._store.read(), []
-        else:
-            persisted, warnings = self._store.refresh_current_week(
-                alerts_df,
-                products=selected_products,
-                scope_key=scope_key,
-                factory_key=factory_key,
-                as_of=end_date,
-                available_types=available_types,
-            )
+            reset_options["reset_current_week"] = True
+        # Completion and replacement share the store's locked read/merge/write.
+        persisted, warnings = self._store.refresh_current_week(
+            alerts_df,
+            products=selected_products,
+            scope_key=scope_key,
+            factory_key=factory_key,
+            as_of=end_date,
+            available_types=available_types,
+            **reset_options,
+        )
         self._warnings.set(tuple(warnings))
         selected = persisted[
             persisted["产品"].astype(str).isin(selected_products)
             & persisted["监控类型"].astype(str).eq(scope_key)
             & persisted["厂别"].astype(str).eq(factory_key)
         ]
-        selected = exclude_inline_period_records(
-            selected, date_exclusion, as_of=end_date,
-            factory_column="厂别", period_type_column="周期类型", period_label_column="时间标签",
-        )
-        return build_period_summary_from_records(
+        numeric_columns = [column for column in MONITOR_SUMMARY_COLUMNS[6:] if column in selected]
+        selected = selected.copy()
+        selected[numeric_columns] = selected[numeric_columns].fillna(0)
+        result = build_period_summary_from_records(
             selected,
             end_date=end_date,
             expected_products=selected_products,
         )
+        return result.where(result.ne("—"), 0)
 
 
 __all__ = ["MonitorSummaryWorkbookService"]

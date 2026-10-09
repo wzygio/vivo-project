@@ -62,7 +62,7 @@ def test_refresh_summary_keeps_partial_filter_identity_distinct() -> None:
 
     assert set(store.rows["监控类型"]) == {"CTQ,SPC"}
     assert set(store.rows["厂别"]) == {"ARRAY,OLED"}
-    assert result.set_index("报警类型").loc["过货量", "Q2"] == "—"
+    assert result.set_index("报警类型").loc["过货量", "Q2"] == 0
     assert service.source_signature() == "workbook-signature"
 
 

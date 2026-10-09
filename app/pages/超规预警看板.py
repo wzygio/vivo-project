@@ -20,6 +20,7 @@ import streamlit as st
 import pandas as pd
 
 from app.manager.session_manager import SessionManager
+from app.components.page_header import render_page_header
 from app.utils.app_setup import AppSetup
 from app.sections.inline_domain.monitor.oos_monitor_dashboard import (
     MONITOR_QUERY_SIGNATURE_KEY,
@@ -39,13 +40,16 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
     OosMonitorViewModel,
 )
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
+from app.sections.inline_domain.monitor.cpm_monitor_dashboard import render_cpm_monitor_section
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
     build_ooc_history_service,
     build_oos_history_service,
     build_cpk_monitor_service,
+    build_cpm_monitor_service,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 
 MONITOR_FACTORY_OPTIONS = ["ARRAY", "OLED", "TP"]
 
@@ -92,8 +96,18 @@ def get_cached_oos_monitor_payload(
     }
 
 
-st.set_page_config(page_title="超规与CPK预警看板", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="超规预警看板", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
+render_page_header(
+    title="超规预警看板",
+    show_product_filter=False,
+    show_data_refresh=False,
+    cached_funcs=[
+        get_cached_query_window,
+        get_cached_oos_monitor_payload,
+        read_cached_alarm_workbook,
+    ],
+)
 
 # [权限控制] 检测 URL 参数，控制管理员刷新入口与状态面板显示
 query_params = st.query_params
@@ -108,7 +122,7 @@ try:
         pd.Timestamp.today().date().isoformat()
     )
 except Exception:
-    logging.exception("超规与CPK预警看板初始化失败")
+    logging.exception("超规预警看板初始化失败")
     st.error("页面初始化失败，请稍后重试。")
     st.stop()
 
@@ -117,9 +131,9 @@ except Exception:
 # 页面打开不读取历史：未点击「查询」时 Expander 内只有控制台与查询
 # 按钮（无 info 文案，门控语义由按钮承担）；点击后普通 rerun 保持已提交
 # 状态；筛选 signature 变化静默回到未提交态；
-# 本看板刷新只清除自身缓存和查询状态。
+# 页头统一清理三个看板缓存；各看板刷新数据只清理自身缓存和查询状态。
 # --------------------------------------------------------------------------
-st.subheader("⚠️ 超规片预警看板")
+st.subheader("⚠️ 异常片预警看板")
 with st.expander("Inline超规预警", expanded=True):
     available_products = SessionManager.AVAILABLE_PRODUCTS
     available_factories = MONITOR_FACTORY_OPTIONS
@@ -182,12 +196,20 @@ with st.expander("Inline超规预警", expanded=True):
             if is_admin:
                 st.divider()
                 render_oos_refresh_status(view_model.refresh_status_df)
-                st.caption("请在各模块超规明细 Excel 的产品 sheet 中维护 Flag，随后点击刷新缓存。看板不再合并旧决策台账。")
+                st.caption("请在各模块超规明细 Excel 的产品 sheet 中维护 Flag，随后点击页头刷新缓存并重新查询。看板不再合并旧决策台账。")
 
 st.subheader("📊 CPK预警看板")
 with st.expander("SPC CPK超规预警", expanded=True):
     render_cpk_monitor_section(
         build_cpk_monitor_service(),
+        SessionManager.AVAILABLE_PRODUCTS,
+        MONITOR_FACTORY_OPTIONS,
+    )
+
+st.subheader("📊 CPM预警看板")
+with st.expander("SPC CPM超规预警", expanded=True):
+    render_cpm_monitor_section(
+        build_cpm_monitor_service(),
         SessionManager.AVAILABLE_PRODUCTS,
         MONITOR_FACTORY_OPTIONS,
     )

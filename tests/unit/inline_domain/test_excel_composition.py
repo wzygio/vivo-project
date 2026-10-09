@@ -16,6 +16,10 @@ def test_warning_builders_never_construct_live_source(monkeypatch, tmp_path):
     assert oos.read_product("spc", "M626").source == "missing"
     assert ooc.read_product("spc", "M626").source == "missing"
     assert isinstance(composition.build_cpk_monitor_service(tmp_path), CpkWorkbookMonitorService)
+    cpm = composition.build_cpm_monitor_service(tmp_path)
+    assert isinstance(cpm, CpkWorkbookMonitorService)
+    assert cpm._store.sheet_suffix == " CPM"
+    assert cpm._latest_reader.sheet_suffix == "_cpm"
 
 
 def test_raw_snapshot_builders_share_domain_module_paths(monkeypatch, tmp_path):
@@ -36,6 +40,8 @@ def test_warning_builders_share_configured_summary_workbook(monkeypatch, tmp_pat
 
     alarm = composition.build_monitor_summary_workbook_service()
     cpk = composition.build_cpk_monitor_service()
+    cpm = composition.build_cpm_monitor_service()
 
     assert alarm._store.workbook_path == configured
     assert cpk._store.workbook_path == configured
+    assert cpm._store.workbook_path == configured

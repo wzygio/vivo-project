@@ -26,36 +26,45 @@ CPK_DETAIL_COLUMNS = [
 PERIOD_NAMES = {"年度": "year", "季度": "quarter", "月度": "month", "周度": "week"}
 
 
-def normalize_cpk_records(frame: pd.DataFrame) -> pd.DataFrame:
+def capability_summary_columns(metric: str = "cpk") -> list[str]:
+    if metric not in {"cpk", "cpm"}:
+        raise ValueError(f"Unsupported capability metric: {metric}")
+    return [column.replace("CPK", metric.upper()).replace("Cpk", metric.capitalize())
+            for column in CPK_SUMMARY_COLUMNS]
+
+
+def normalize_cpk_records(frame: pd.DataFrame, *, metric: str = "cpk") -> pd.DataFrame:
     """Upgrade legacy rates without inventing rounded historical project counts."""
+    columns = capability_summary_columns(metric)
+    name, total_column, rate_column = metric.upper(), columns[6], columns[7]
     if frame.empty:
-        return pd.DataFrame(columns=CPK_SUMMARY_COLUMNS)
+        return pd.DataFrame(columns=columns)
     result = frame.copy()
-    required = {"产品", "周期类型", "时间标签", "显示标签", "CPK总项目数", "Cpk≥1.33达标率"}
+    required = {"产品", "周期类型", "时间标签", "显示标签", total_column, rate_column}
     missing = required - set(result.columns)
     if missing:
-        raise ValueError(f"CPK 汇总缺少列: {sorted(missing)}")
+        raise ValueError(f"{name} 汇总缺少列: {sorted(missing)}")
     for column, default in (("监控类型", "SPC"), ("厂别", "ALL")):
         if column not in result:
             result[column] = default
     for column in ("达标项目数", "预警项目数"):
         if column not in result:
             result[column] = pd.NA
-    for column in CPK_SUMMARY_COLUMNS[:6]:
+    for column in columns[:6]:
         result[column] = result[column].fillna("").astype(str).str.strip()
     if result[CPK_SUMMARY_KEYS].eq("").any().any():
-        raise ValueError("CPK 汇总业务键不得为空")
+        raise ValueError(f"{name} 汇总业务键不得为空")
     if result.duplicated(CPK_SUMMARY_KEYS).any():
-        raise ValueError("CPK 汇总存在重复业务键")
-    for column in CPK_SUMMARY_COLUMNS[6:]:
-        dtype = "Float64" if column == "Cpk≥1.33达标率" else "Int64"
+        raise ValueError(f"{name} 汇总存在重复业务键")
+    for column in columns[6:]:
+        dtype = "Float64" if column == rate_column else "Int64"
         numeric = pd.to_numeric(result[column], errors="coerce")
         if dtype == "Int64":
             present = numeric.dropna()
             if (present.isin([float("inf"), float("-inf")]) | present.mod(1).ne(0)).any():
-                raise ValueError(f"CPK 汇总 {column} 必须为有限整数")
+                raise ValueError(f"{name} 汇总 {column} 必须为有限整数")
         result[column] = numeric.astype(dtype)
-    return result[CPK_SUMMARY_COLUMNS].reset_index(drop=True)
+    return result[columns].reset_index(drop=True)
 
 
 def build_current_cpk_detail(
@@ -120,8 +129,10 @@ def build_cpk_summary_from_records(
     records: pd.DataFrame, *, end_date: pd.Timestamp,
     expected_products: Iterable[str] = (),
     week_count: int = 1,
+    metric: str = "cpk",
 ) -> pd.DataFrame:
-    rows_order = ["CPK总项目数", "达标项目数", "预警项目数", "Cpk≥1.33达标率"]
+    columns = capability_summary_columns(metric)
+    rows_order = [columns[6], "达标项目数", "预警项目数", columns[7]]
     result: dict[str, list[object]] = {"指标": rows_order}
     expected = set(expected_products)
     for window in _period_windows(end_date, week_count=week_count):
@@ -131,10 +142,15 @@ def build_cpk_summary_from_records(
         for column in rows_order[:3]:
             numeric = pd.to_numeric(rows[column], errors="coerce")
             values.append(int(numeric.sum()) if complete and numeric.notna().all() else "—")
-        counts = pd.to_numeric(rows["CPK总项目数"], errors="coerce")
-        rates = pd.to_numeric(rows["Cpk≥1.33达标率"], errors="coerce")
+        counts = pd.to_numeric(rows[columns[6]], errors="coerce")
+        rates = pd.to_numeric(rows[columns[7]], errors="coerce")
         valid = complete and counts.notna().all() and rates[counts.gt(0)].notna().all()
-        values.append(f"{(counts * rates).sum() / counts.sum():.2%}"
-                      if valid and counts.sum() > 0 else "—")
+        if valid and counts.sum() > 0:
+            rate = f"{(counts * rates).sum() / counts.sum():.2%}"
+        elif valid and counts.eq(0).all() and rates.notna().all() and rates.eq(0).all():
+            rate = "0.00%"
+        else:
+            rate = "—"
+        values.append(rate)
         result[window.display_label] = values
     return pd.DataFrame(result)

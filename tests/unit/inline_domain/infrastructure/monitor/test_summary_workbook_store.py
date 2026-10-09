@@ -168,9 +168,10 @@ def test_week_replacement_persists_contributions_and_is_idempotent(tmp_path) -> 
     kwargs = dict(products=["M626"], scope_key="ALL", factory_key="ALL",
                   as_of=pd.Timestamp("2026-09-07"), available_types={"M626": {"OOS"}})
     result, warnings = store.refresh_current_week(alerts, **kwargs)
-    assert result["OOS报警片数"].tolist() == [102, 82, 52, 4]
-    assert result["OOC报警片数"].tolist() == [1, 1, 1, 1]
-    assert result["本周OOS已计入片数"].tolist() == [4, 4, 4, 4]
+    current = result[result["时间标签"].isin(_current_rows()["时间标签"])]
+    assert current["OOS报警片数"].tolist() == [102, 82, 52, 4]
+    assert current["OOC报警片数"].tolist() == [1, 1, 1, 1]
+    assert current["本周OOS已计入片数"].tolist() == [4, 4, 4, 4]
     assert any("OOC" in warning for warning in warnings)
     signature = store.source_signature()
     repeated, _ = store.refresh_current_week(alerts, **kwargs)
@@ -234,3 +235,80 @@ def test_non_openpyxl_workbook_uses_preserving_com_writer(tmp_path, monkeypatch)
     )
 
     assert result == expected
+
+
+@pytest.mark.parametrize("factories, excluded", [(["ARRAY", "OLED", "TP"], True), (["ARRAY"], False)])
+def test_service_rollover_persists_zero_periods_and_preserves_history(
+    tmp_path, monkeypatch, factories, excluded
+) -> None:
+    from src.inline_domain.application.monitor.summary_workbook_service import MonitorSummaryWorkbookService
+    from src.shared_kernel.config import ConfigLoader
+
+    path = tmp_path / "summary.xlsx"
+    _write_product_workbook(path)
+    store = MonitorSummaryWorkbookStore(path)
+    before = store.read()
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: (("OLED", "TP"), "2026-10-01", "2026-10-06"))
+    service = MonitorSummaryWorkbookService(store)
+    kwargs = dict(
+        products=["M626"], scopes=["spc", "ctq", "aoi_tt", "aoi_rs"],
+        factories=factories, alerts_df=pd.DataFrame(), throughput_df=pd.DataFrame(),
+        end_date=pd.Timestamp("2026-10-09"),
+        source_status_df=pd.DataFrame([
+            dict(prod_code="M626", scope=scope, alarm_type=alarm, source="excel")
+            for scope in ("spc", "ctq", "aoi_tt", "aoi_rs") for alarm in ("OOS", "OOC")
+        ]),
+    )
+    result = service.refresh_summary(**kwargs)
+    assert result.W41.tolist() == [0] * 5
+    assert result.W38.tolist() == [0] * 5
+    after = store.read()
+    key = "ALL" if excluded else "ARRAY"
+    selected = after[after["产品"].eq("M626") & after["厂别"].eq(key)]
+    assert {"2026-W38", "2026-W39", "2026-W40", "2026-W41"}.issubset(set(selected["时间标签"]))
+    current = selected[selected["时间标签"].isin(["2026", "2026-Q4", "2026-10", "2026-W41"])]
+    assert len(current) == 4
+    numeric = [column for column in store.columns if column == "过货量" or "报警" in column or column.endswith("已计入片数")]
+    assert current[current["时间标签"].ne("2026")][numeric].eq(0).all().all()
+    historical = before
+    for _, row in historical.iterrows():
+        match = after[after["产品"].eq(row["产品"]) & after["时间标签"].eq(row["时间标签"]) & after["厂别"].eq(row["厂别"])]
+        pd.testing.assert_series_equal(match.iloc[0], row, check_names=False)
+    signature = store.source_signature()
+    service.refresh_summary(**kwargs)
+    assert store.source_signature() == signature
+    assert pd.read_excel(path, sheet_name="M626 CPK").to_dict("records") == [{"marker": "keep-cpk"}]
+
+
+def test_excluded_week_keeps_year_quarter_month_values_in_workbook_and_display(
+    tmp_path, monkeypatch
+) -> None:
+    from src.inline_domain.application.monitor.summary_workbook_service import MonitorSummaryWorkbookService
+    from src.shared_kernel.config import ConfigLoader
+
+    path = tmp_path / "summary.xlsx"
+    rows = _current_rows()
+    rows["时间标签"] = ["2026", "2026-Q4", "2026-10", "2026-W41"]
+    rows["显示标签"] = ["Y26", "Q4", "M10", "W41"]
+    rows["已计入周"] = "2026-W41"
+    rows["本周OOS已计入片数"] = 2
+    rows["本周OOC已计入片数"] = 1
+    rows["本周Total已计入片数"] = 3
+    rows.to_excel(path, sheet_name="M626报警率", index=False)
+    store = MonitorSummaryWorkbookStore(path)
+    before = store.read().set_index("时间标签")
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: (("OLED", "TP"), "2026-10-01", "2026-10-06"))
+    service = MonitorSummaryWorkbookService(store)
+    result = service.refresh_summary(
+        products=["M626"], scopes=["spc", "ctq", "aoi_tt", "aoi_rs"],
+        factories=["ARRAY", "OLED", "TP"],
+        alerts_df=pd.DataFrame([dict(prod_code="M626", factory="ARRAY", item_id="new", event_time="2026-10-08", alarm_type="OOS")]),
+        throughput_df=pd.DataFrame(), end_date=pd.Timestamp("2026-10-09"),
+    )
+    after = store.read().set_index("时间标签")
+    for label, display in [("2026", "Y26"), ("2026-Q4", "Q4"), ("2026-10", "M10")]:
+        pd.testing.assert_series_equal(after.loc[label], before.loc[label])
+        assert result[display].tolist() == [40, 1, 0, 2, 3]
+    numeric = [column for column in store.columns if column == "过货量" or "报警" in column or column.endswith("已计入片数")]
+    assert after.loc["2026-W41", numeric].eq(0).all()
+    assert result.W41.tolist() == [0] * 5

@@ -48,6 +48,18 @@ def test_legacy_counts_unknown_and_multi_product_rate_weighted():
     assert result.M9.tolist() == ["—"] * 4
 
 
+@pytest.mark.parametrize("rate, expected", [(0, "0.00%"), (None, "—")])
+def test_zero_denominator_displays_explicit_zero_rate_only_when_known(rate, expected):
+    rows = normalize_cpk_records(pd.DataFrame([
+        {"产品": "M626", "周期类型": "周度", "时间标签": "2026-W40", "显示标签": "W40",
+         "CPK总项目数": 0, "达标项目数": 0, "预警项目数": 0, "Cpk≥1.33达标率": rate}
+    ]))
+    result = build_cpk_summary_from_records(
+        rows, end_date=pd.Timestamp("2026-10-09"), expected_products=["M626"], week_count=4,
+    )
+    assert result.W40.tolist() == [0, 0, 0, expected]
+
+
 def test_cpk_threshold_and_invalid_inputs_have_distinct_counts():
     detail = pd.DataFrame({
         "prod_code": ["M626"] * 4, "period_label": ["2026"] * 4,

@@ -14,6 +14,7 @@ from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
     MonitorSummaryWorkbookStore,
 )
 from src.inline_domain.infrastructure.monitor import summary_workbook_store as store_module
+from src.inline_domain.infrastructure.monitor.summary_workbook_store import MonitorSummaryWorkbookError
 from src.shared_kernel.utils.excel_tools import WorkbookWriteResult
 from tests.unit.inline_domain.infrastructure.monitor.test_summary_workbook_store import (
     _current_rows,
@@ -26,6 +27,48 @@ def _cpk_row(time_label="2026-Q3", display_label="Q3") -> pd.DataFrame:
         "产品": "M626", "周期类型": "季度", "时间标签": time_label,
         "显示标签": display_label, "CPK总项目数": 7, "Cpk≥1.33达标率": 0.57,
     }])
+
+
+def test_missing_cpk_sheet_is_initialized_and_zero_completion_is_idempotent(tmp_path):
+    path = tmp_path / "summary.xlsx"
+    other = pd.DataFrame({"maintained": [123]})
+    other.to_excel(path, sheet_name="报警率", index=False)
+    store = CpkSummaryWorkbookStore(path)
+    kwargs = dict(products=["M626"], factories=["ARRAY", "OLED", "TP"],
+                  factory_key="ALL", as_of=pd.Timestamp("2026-10-09"))
+    records, _ = store.refresh_latest(pd.DataFrame(), **kwargs)
+    assert records.loc[records["时间标签"].eq("2026-W40")].iloc[:, 6:].eq(0).all().all()
+    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="报警率"), other)
+    before = path.read_bytes()
+    store.refresh_latest(pd.DataFrame(), **kwargs)
+    assert path.read_bytes() == before
+
+
+def test_date_exclusion_zero_values_are_written_to_workbook(tmp_path):
+    path = tmp_path / "summary.xlsx"
+    row = _cpk_row("2026-W40", "W40").assign(周期类型="周度", 厂别="ALL")
+    row.to_excel(path, sheet_name="CPK", index=False)
+    store = CpkSummaryWorkbookStore(path)
+    records, _ = store.refresh_latest(
+        pd.DataFrame(), products=["M626"], factories=["ARRAY", "OLED", "TP"],
+        factory_key="ALL", as_of=pd.Timestamp("2026-10-09"),
+        date_exclusion=(("OLED", "TP"), "2026-10-01", "2026-10-06"),
+    )
+    week = records.loc[records["时间标签"].eq("2026-W40")]
+    assert len(week) == 1
+    assert week.iloc[:, 6:].eq(0).all().all()
+    pd.testing.assert_frame_equal(store.read(), records)
+
+
+def test_malformed_existing_cpk_sheet_is_not_treated_as_missing_baseline(tmp_path):
+    path = tmp_path / "summary.xlsx"
+    pd.DataFrame({"unexpected": [123]}).to_excel(path, sheet_name="CPK", index=False)
+    before = path.read_bytes()
+    store = CpkSummaryWorkbookStore(path)
+    with pytest.raises(MonitorSummaryWorkbookError, match="CPK 汇总格式错误"):
+        store.refresh_latest(pd.DataFrame(), products=["M626"], factories=["ARRAY"],
+                             factory_key="ALL", as_of=pd.Timestamp("2026-10-09"))
+    assert path.read_bytes() == before
 
 
 @pytest.mark.parametrize("cpk_first", [False, True])

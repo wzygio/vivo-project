@@ -151,6 +151,7 @@ class MonitorSummaryWorkbookStore:
         self, alerts: pd.DataFrame, *, products: Iterable[str], scope_key: str,
         factory_key: str, as_of: pd.Timestamp,
         available_types: Mapping[str, set[str]],
+        reset_current_week: bool = False,
     ) -> tuple[pd.DataFrame, list[str]]:
         """Replace the open week's contribution using the locked persisted baseline."""
         with self._update_lock, _interprocess_lock(self._workbook_path):
@@ -158,6 +159,7 @@ class MonitorSummaryWorkbookStore:
             incoming, warnings = plan_weekly_replacement(
                 current, alerts, products=products, scope_key=scope_key,
                 factory_key=factory_key, as_of=as_of, available_types=available_types,
+                reset_current_week=reset_current_week,
             )
             if incoming.empty:
                 return current, warnings

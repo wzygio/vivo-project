@@ -44,7 +44,7 @@ def test_transaction_preserves_historical_rows_other_sheets_and_is_idempotent(tm
     kwargs = dict(products=["M626"], factories=["ARRAY"], factory_key="ARRAY", as_of=pd.Timestamp("2026-09-08"))
     updated, _ = store.refresh_latest(frame, **kwargs)
     preserved = old[old["时间标签"].ne("2026-W36")]
-    actual = updated[updated["时间标签"].ne("2026-W36")]
+    actual = updated[updated["时间标签"].isin(preserved["时间标签"])]
     pd.testing.assert_frame_equal(store._sort(preserved), store._sort(actual))
     pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="M626报警率"), other)
     assert updated.loc[updated["时间标签"].eq("2026-W36"), "Cpk≥1.33达标率"].iloc[0] == .9

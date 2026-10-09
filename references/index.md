@@ -15,6 +15,7 @@
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-capability.md) |
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/algorithm-spc-capability-summary.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
+| CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |

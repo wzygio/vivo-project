@@ -45,7 +45,7 @@ src
 | `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities |
 | `inline_domain` | `ctq` | Critical-to-quality measurement reports, indicator selection and chart-type rules; reuses the shared measurement/feature/decoration pipeline |
 | `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; supplies SPC capability inputs used by monitoring |
-| `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
+| `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK/CPM summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
 | `inline_domain` | `shared` | Domain-local measurement preparation and snapshots, parameter/specification metadata, OOS/OOC decisions and decoration, throughput/history, process tracing and shared date filtering; supports multiple Inline report modules |
 | `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
 | `indicator_domain` | `ijp` | IJP border-overflow analysis, Glass ratios, printer summaries and period summaries |
@@ -127,6 +127,7 @@ domain composition -> assembles application services and concrete adapters
 | `app/charts/<domain>/[<submodule>/]` | Chart adapters; Inline shared charts live in `app/charts/inline_domain/`, without a one-to-one directory for every backend submodule. AOI RS and SPC page rendering and PDF reports share UI-independent figure construction. Their presentation sections own administrator-only product/factory multiselects (all products and ARRAY by default), application data consumption, and separate generation/download actions; the generated PDF is retained in the session for explicit and repeat downloads. Their shared PDF adapter embeds three charts per indicator row and Chinese fonts, with temporary images cleaned on success and failure. Alert sections are excluded |
 | `app/components/` | Cross-page components and filter/refresh coordination |
 | `app/sections/inline_domain/monitor/` | Current cross-indicator matrix assembly; consumes results from their owning domains |
+| `app/pages/超规预警看板.py` | Independent abnormal-sheet, CPK and CPM query sections; the two capability boards reuse metric-parameterized period rules and presentation, with separate product summary sheets and query state |
 | `tools/` | Refresh, diagnostics, offline analysis, and scheduled entry points; independent offline tools need not become report-domain services |
 | `tests/` | Unit, architecture, integration, and browser evidence; both mirrored directories and flat test names exist |
 

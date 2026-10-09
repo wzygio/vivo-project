@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock
 
-import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.sections.inline_domain.monitor import cpk_monitor_dashboard, refresh_controls
@@ -23,23 +22,23 @@ def _cpk_app():
     render_cpk_monitor_section(Service(), ["M626"], ["ARRAY"])
 
 
-@pytest.mark.parametrize("action", ["cache", "data"])
-def test_cpk_refresh_is_independent(monkeypatch, action):
+def test_cpk_data_refresh_is_independent(monkeypatch):
     clear = Mock()
     monkeypatch.setattr(cpk_monitor_dashboard, "clear_cpk_source_cache", clear)
     monkeypatch.setattr(cpk_monitor_dashboard, "render_cpk_monitor_results", lambda view: None)
     app = AppTest.from_function(_cpk_app)
     app.query_params["admin"] = "true"
     app.run()
+    assert "cpk_monitor_refresh_cache" not in [button.key for button in app.button]
     app.button(key="cpk_monitor_query_submit").click().run()
     assert not app.exception
     assert app.session_state["cpk_loads"] == 1
 
-    app.button(key=f"cpk_monitor_refresh_{action}").click().run()
+    app.button(key="cpk_monitor_refresh_data").click().run()
 
     assert not app.exception
     clear.assert_called_once_with()
-    assert app.session_state["cpk_loads"] == (2 if action == "data" else 1)
+    assert app.session_state["cpk_loads"] == 2
     assert app.session_state["monitor_query_signature"] == "oos-query"
     assert app.session_state["alert_matrix_board_loaded"] is True
 

@@ -1,4 +1,4 @@
-"""Independent administrative refresh actions for warning dashboards."""
+"""Independent data-refresh actions; cache refresh belongs to the page header."""
 
 import logging
 from collections.abc import Callable, Sequence
@@ -30,15 +30,11 @@ def render_board_refresh_controls(
     if st.query_params.get("admin") != "true":
         return False
     with st.container(horizontal=True):
-        refresh_cache = st.button(
-            "刷新缓存", key=f"{key}_refresh_cache",
-            help="清理本看板缓存，随后点击查询重新加载。",
-        )
         refresh_data = st.button(
             "刷新数据", key=f"{key}_refresh_data", disabled=not selection_valid,
             help="重新读取当前源 Excel，按本看板筛选条件更新结果。",
         )
-    if not (refresh_cache or refresh_data):
+    if not refresh_data:
         return False
     try:
         clear_cache()
@@ -47,6 +43,4 @@ def render_board_refresh_controls(
         st.error("刷新失败，请检查源文件是否可访问后重试。")
         return False
     st.session_state.pop(query_state_key, None)
-    if refresh_cache:
-        st.toast("本看板缓存已清理，请点击查询。")
-    return refresh_data
+    return True
