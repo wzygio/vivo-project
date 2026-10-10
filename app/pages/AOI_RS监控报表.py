@@ -18,6 +18,8 @@ if project_root:
 
 import streamlit as st
 
+from src.shared_kernel.config import ConfigLoader
+
 from app.components.indicator_cache import (
     build_indicator_product_cache_signature,
     get_indicator_product_revision,

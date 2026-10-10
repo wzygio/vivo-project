@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.inline_domain.core.shared.throughput_facts import THROUGHPUT_COLUMNS
 from src.shared_kernel.snapshot_paths import snapshot_component
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 THROUGHPUT_SCOPES = {"spc", "ctq", "aoi_tt", "aoi_rs"}
 
@@ -37,6 +38,11 @@ class ThroughputHistoryStore:
         return self._snapshot_dir / normalized_scope / f"throughput_{snapshot_component(product)}.parquet"
 
     def read(self, scope: str, prod_code: str) -> pd.DataFrame:
+        return apply_inline_date_exclusion(
+            self._read_source(scope, prod_code), time_column="event_date",
+        )
+
+    def _read_source(self, scope: str, prod_code: str) -> pd.DataFrame:
         path = self.snapshot_path(scope, prod_code)
         if not path.exists():
             return pd.DataFrame(columns=THROUGHPUT_COLUMNS)
@@ -96,7 +102,7 @@ class ThroughputHistoryStore:
         path = self.snapshot_path(scope, prod_code)
         with self._lock_for(path):
             with self._process_lock(path):
-                current = self.read(scope, prod_code)
+                current = self._read_source(scope, prod_code)
                 if not current.empty:
                     current["event_date"] = pd.to_datetime(
                         current["event_date"]
@@ -121,7 +127,7 @@ class ThroughputHistoryStore:
                         .reset_index(drop=True)
                     )
                 self._write(path, merged)
-                return merged
+                return apply_inline_date_exclusion(merged, time_column="event_date")
 
     @staticmethod
     def _write(path: Path, frame: pd.DataFrame) -> None:

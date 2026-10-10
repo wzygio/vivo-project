@@ -4,11 +4,29 @@
 > 重点文件：`resources/inline_domain/spc_sheet_oos_decoration.xlsx`  
 > 核验日期：2026-09-03
 
+2026-10-10 起，厂别日期排除在 infrastructure 数据输出时执行，先于最新点位去重、修饰前特征和 OOS/OOC 判定。排除期间的点位不会进入新生成的异常明细或点位修饰；旧历史和 Excel 回退读取同样过滤，原始快照与人工决策保留。执行边界由 [Inline 日期排除规则](rules-inline-date-exclusion.md) 维护。
+
 ## SPC 当前规则（2026-09-21）
 
-SPC 已改为布尔决策：点位直接关联规格与 flag，True 修饰超规点，False 保留原值；旧 Delete 兼容为 False，新上传拒绝 Delete。完整历史点位仍供月周日分布图使用，SPC 报表仅计算上周一之后的完整 Sheet 特征及上一完整周能力。CTQ 等其他口径仍保留下述三态处理；SPC 具体链路见 [SPC 数据链路](../spc/data-flow-spc.md)。
+2026-10-10 补充：SPC 已启用可配置的中央规格区间修饰，默认显示日期 2026-10-05 至当天、中间50%。窗口内目标区间外的点即使未超出原 USL/LSL 也会修饰，False 保留；窗口外沿用传统 OOS。此专用规则由 [SPC 点位修饰规则](../spc/rules-spc-point-decoration.md) 维护。AOI_RS 的厂别日期与 Sheet→Lot→周期规则见 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md)。
+
+SPC 已改为布尔决策：点位直接关联规格与 flag，True 修饰目标区间外的点（窗口内采用中央区间，窗口外采用原规格区间），False 保留原值；旧 Delete 兼容为 False，新上传拒绝 Delete。完整历史点位仍供月周日分布图使用，SPC 报表仅计算上周一之后的完整 Sheet 特征及上一完整周能力。CTQ 等其他口径仍保留下述三态处理；SPC 具体链路见 [SPC 数据链路](../spc/data-flow-spc.md)。
 
 ## 1. 结论
+
+### AOI 参数豁免与有效明细状态（2026-10-09）
+
+`auto_decoration.exempt_param_name_contains` 作用于 AOI_TT 的 `tt_name` 和
+AOI_RS 的 `rs_code`，按普通文本、不区分大小写包含匹配。命中且未被显式
+`Delete` 的 OOS/OOC 产品明细在合并人工决策之后将有效 `flag` 设为 `False`，
+返回内存结果与保存到 Excel 的明细一致。报警读取器按明细 `flag=False`
+统计，无须在读取时重新判断参数豁免。
+
+此覆盖不回写人工 `<产品>__flags` 决策。取消豁免后，明细重新按原人工决策
+或默认 `True` 生成。配置内容进入报表缓存键和明细刷新签名，启停配置时
+及时刷新；显式 `Delete` 优先。该规则不扩展 SPC/CTQ 的 Sheet OOS 豁免范围。
+
+具体模块行为见 [Inline 当前规则](overview-inline.md#7-各子模块修饰逻辑)。
 
 Sheet OOS 修饰不是对源数据库或 Inline Parquet 快照的回写，而是在报表计算期间对内存中的点位测量值执行三态处理：
 

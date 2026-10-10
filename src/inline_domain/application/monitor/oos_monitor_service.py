@@ -9,7 +9,6 @@ import pandas as pd
 
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.core.monitor.period_summary import build_period_summary
-from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -111,9 +110,6 @@ class OosMonitorService:
             if throughput_frames
             else pd.DataFrame()
         )
-        date_exclusion = ConfigLoader.get_inline_data_exclusion()
-        detail = exclude_inline_factory_dates(detail, date_exclusion, time_column="event_time")
-        throughput = exclude_inline_factory_dates(throughput, date_exclusion, time_column="event_date")
         if not throughput.empty:
             throughput_dates = pd.to_datetime(throughput["event_date"], errors="coerce")
             throughput_mask = (throughput_dates >= start) & (throughput_dates < end)

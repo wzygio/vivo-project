@@ -40,7 +40,7 @@ def _capability_frame(cpk: float) -> pd.DataFrame:
                 "period_label": "2026-W30",
                 "period_sort": 320,
                 "period_start": "2026-07-20",
-                "period_end": "2026-07-20",
+                "period_end": "2026-07-22",
                 "cpk": cpk,
             }
         ]

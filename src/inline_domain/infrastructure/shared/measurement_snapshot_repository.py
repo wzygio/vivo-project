@@ -15,6 +15,7 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     load_raw_measurements,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
     snapshot_process_lock,
@@ -81,10 +82,7 @@ class InlineMeasurementSnapshotRepository:
         result = self._load_measurements(prod_code, end_date, force_refresh)
         if force_refresh:
             self.last_refresh_from_db = result.refreshed_from_db
-        return ConfigLoader.get_report_cutoff_policy().filter_frame(
-            self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
-            "start_time",
-        )
+        return self._report_projection(result.measurements)
 
     def refresh_measurements(
         self,
@@ -100,12 +98,14 @@ class InlineMeasurementSnapshotRepository:
         result = self._load_measurements(prod_code, end_date, force_refresh=True)
         self.last_refresh_from_db = result.refreshed_from_db
         return MeasurementRefreshResult(
-            ConfigLoader.get_report_cutoff_policy().filter_frame(
-                self.data_forward_policy.shift_frame(result.measurements, ("start_time",)),
-                "start_time",
-            ),
+            self._report_projection(result.measurements),
             result.refreshed_from_db,
         )
+
+    def _report_projection(self, measurements: pd.DataFrame) -> pd.DataFrame:
+        displayed = self.data_forward_policy.shift_frame(measurements, ("start_time",))
+        displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(displayed, "start_time")
+        return apply_inline_date_exclusion(displayed)
 
     def _load_measurements(
         self,

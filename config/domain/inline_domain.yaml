@@ -1,4 +1,11 @@
 spc:
+  # 在显示日期窗口内，将中间规格区间之外的点移入区间，保留 flag=False。
+  # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
+  point_decoration:
+    enabled: true
+    central_fraction: 0.5
+    start_date: "2026-10-05"
+    end_date: "today"
   spc_cpk:
     # sheet_mean: original mode, sigma uses period Sheet Mean std.
     # point_value: hidden comparison mode, sigma uses period point-level param_value std.
@@ -13,7 +20,8 @@ spc:
     line_param_name_contains:
       - "UNI"
 
-# Inline 共享自动修饰参数豁免：AOI_TT 与 AOI_RS 均消费该规则。匹配不区分大小写。
+# AOI_TT/AOI_RS 参数豁免：命中后 OOS/OOC 产品明细 flag=False，保留真实值。
+# 按普通文本、不区分大小写匹配；显式 Delete 优先，人工 __flags 决策保持原样。
 auto_decoration:
   exempt_param_name_contains:
     - "PPA"
@@ -33,6 +41,9 @@ aoi_rs:
   special_decoration:
     factories:
       - "OLED"
+    # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。
+    start_date: "2026-09-21"
+    end_date: "today"
 
 # AOI_TT Particle Size：默认按站点比例稳定生成；关闭后改读 ARRAY/TP 缺陷明细表。
 aoi_tt:

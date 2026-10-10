@@ -23,6 +23,9 @@ def _tmp_project_root(monkeypatch, tmp_path: Path) -> Path:
     write_inline_resource_config(tmp_path)
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
     (tmp_path / "resources" / "inline_domain").mkdir(parents=True, exist_ok=True)
+    # These tests exercise the existing sequential rules; window boundaries have
+    # their own tests with the production September 21 start date.
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_window", lambda: ("2026-01-01", "2026-12-31"))
     return tmp_path
 
 
@@ -468,3 +471,24 @@ def test_period_cap_reads_same_factory_configuration_for_page_and_pdf(monkeypatc
             for period_type in ["week", "day"]:
                 maximum = rows[rows.period_type.eq(period_type)].value.max()
                 assert maximum == (6.5 if factory in factories else 10)
+
+
+def test_special_window_changes_invalidate_report_cache(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    current = [("2026-07-15", "2026-08-10")]
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_window", lambda: current[0])
+    source = _details_df().iloc[[0]].copy()
+    calls = []
+    port = _data_port(source, source, _chart_spec_df())
+    port.get_rs_details = lambda _q: (calls.append(1) or source)
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    kwargs = dict(_data_port=port, query_config_json=_config_json(), snapshot_signature="same-window-source")
+    first = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert first.sheet_points_df.rs_qty.iloc[0] <= 1.
+    current[0] = ("2026-07-16", "2026-08-10")
+    second = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert second.sheet_points_df.rs_qty.iloc[0] > 1.
+    assert second.rs_details_df.code_qty.iloc[0] == 3.
+    current[0] = ("2026-07-01", "2026-07-14")
+    AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert len(calls) == 3

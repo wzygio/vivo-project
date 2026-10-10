@@ -33,6 +33,7 @@ from src.inline_domain.infrastructure.shared.outlier_filter_rules import (
     load_outlier_filter_rules,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 
 class InlineMeasurementPreparationRepository:
@@ -183,7 +184,12 @@ class InlineMeasurementPreparationRepository:
     ) -> pd.DataFrame:
         if raw.empty:
             return raw.copy()
-        prepared = raw.rename(columns={"start_time": "sheet_start_time"}).copy()
+        prepared = apply_inline_date_exclusion(
+            raw.rename(columns={"start_time": "sheet_start_time"}),
+            time_column="sheet_start_time",
+        )
+        if prepared.empty:
+            return prepared
         prepared["sheet_start_time"] = pd.to_datetime(
             prepared["sheet_start_time"], errors="coerce"
         )

@@ -25,6 +25,7 @@ from src.inline_domain.application.spc.capability_decoration_service import (
     prepare_capability_decoration,
 )
 from src.inline_domain.core.spc.cpk_decoration import (
+    CAPABILITY_ALERT_MIN_SPAN_HOURS,
     resolve_capability_decoration_sheet,
 )
 from src.inline_domain.application.shared.decorated_features import (
@@ -35,6 +36,7 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
+from src.inline_domain.core.shared.sheet_oos_decoration import SpcPointDecorationPolicy
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
@@ -198,6 +200,7 @@ class SpcReportService:
         capability_exempt_param_name_contains: tuple[str, ...] = (),
         capability_decoration_signature: tuple[object, ...] = (0, 0),
         date_exclusion: InlineDateExclusion | None = None,
+        spc_point_policy: SpcPointDecorationPolicy | None = None,
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
@@ -228,6 +231,7 @@ class SpcReportService:
                 decision_signature=decision_signature,
                 sheet_features_start_date=previous_week_start.strftime("%Y-%m-%d"),
                 date_exclusion=date_exclusion,
+                spc_point_policy=spc_point_policy,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
@@ -269,6 +273,7 @@ class SpcReportService:
                 workbook_path=ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpk"),
                 metric="cpk",
+                strict_persistence=True,
                 reference_date=pd.Timestamp(query_config.end_date).date(),
             )
             period_capability_df = cpk_decoration_result.period_capability_df
@@ -278,6 +283,7 @@ class SpcReportService:
                 workbook_path=ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpm"),
                 metric="cpm",
+                strict_persistence=True,
                 reference_date=pd.Timestamp(query_config.end_date).date(),
             )
             period_capability_df = cpm_decoration_result.period_capability_df
@@ -341,6 +347,7 @@ class SpcReportService:
             raise SpcReportBuildError("SPC query config is invalid.") from exc
         try:
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
+            spc_point_policy = ConfigLoader.get_spc_point_decoration_policy()
         except ValueError as exc:
             logger.exception("[SPC] invalid report date exclusion configuration")
             raise SpcReportBuildError("SPC report configuration is invalid.") from exc
@@ -349,7 +356,11 @@ class SpcReportService:
             resolve_product_resource_dir(query.prod_code),
             workbook_path=capability_path,
         )
-        capability_signature = (str(capability_path.resolve()), *capability_stat)
+        capability_signature = (
+            str(capability_path.resolve()), *capability_stat,
+            f"weekly_span_hours={CAPABILITY_ALERT_MIN_SPAN_HOURS}",
+            "alerts_from_saved_records_v1",
+        )
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
@@ -360,5 +371,6 @@ class SpcReportService:
             capability_exempt_param_name_contains=resolved_capability_exemptions,
             capability_decoration_signature=capability_signature,
             date_exclusion=date_exclusion,
+            spc_point_policy=spc_point_policy,
         )
         return SpcReportService._view_model_from_payload(payload)

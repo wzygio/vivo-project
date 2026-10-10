@@ -201,23 +201,36 @@ def build_cpm_monitor_service(resource_dir: Path | None = None):
 def _build_capability_monitor_service(resource_dir: Path | None, *, metric: str):
     from src.inline_domain.application.monitor.cpk_workbook_service import CpkWorkbookMonitorService
     from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
-    from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
     from src.inline_domain.infrastructure.monitor.cpm_summary_workbook_store import CpmSummaryWorkbookStore
-    from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
 
     summary_store = CpkSummaryWorkbookStore if metric == "cpk" else CpmSummaryWorkbookStore
-    latest_store = CpkLatestExcelStore if metric == "cpk" else CpmLatestExcelStore
 
     return CpkWorkbookMonitorService(
         summary_store(monitor_summary_workbook_path(resource_dir)),
-        latest_reader=latest_store(
-            Path(resource_dir) / "spc" / "spc_cpk_cpm_decoration.xlsx"
-            if resource_dir is not None else ConfigLoader.get_domain_resource_path(
-                "inline_domain", "spc_cpk_cpm_decoration", "spc/spc_cpk_cpm_decoration.xlsx",
-            )
-        ),
+        latest_reader=build_capability_latest_reader(metric, resource_dir),
         metric=metric,
     )
+
+
+def build_capability_latest_reader(metric: str, resource_dir: Path | None = None):
+    """Use one configured capability workbook reader for SPC and monitoring."""
+    from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+    from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
+
+    if metric not in {"cpk", "cpm"}:
+        raise ValueError(f"Unsupported capability metric: {metric}")
+    reader = CpkLatestExcelStore if metric == "cpk" else CpmLatestExcelStore
+    path = (Path(resource_dir) / "spc" / "spc_cpk_cpm_decoration.xlsx"
+            if resource_dir is not None else ConfigLoader.get_domain_resource_path(
+                "inline_domain", "spc_cpk_cpm_decoration", "spc/spc_cpk_cpm_decoration.xlsx",
+            ))
+    return reader(path)
+
+
+def build_spc_input_signature(prod_code: str) -> str:
+    from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
+
+    return spc_input_signature(ConfigLoader.get_project_root(), prod_code)
 
 
 def build_raw_measurement_repository(

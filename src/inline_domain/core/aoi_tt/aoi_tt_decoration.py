@@ -18,10 +18,6 @@ from collections.abc import Iterable
 import pandas as pd
 
 from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
-from src.inline_domain.core.shared.date_exclusion import (
-    InlineDateExclusion,
-    exclude_inline_factory_dates,
-)
 
 AOI_TT_OOS_DECORATION_FILE_NAME = "aoi_tt_sheet_oos_decoration.xlsx"
 AOI_TT_OOS_KEY_COLUMNS = ["prod_code", "step_id", "tt_name", "sheet_id"]
@@ -70,11 +66,9 @@ def apply_aoi_tt_decoration(
     spec_df: pd.DataFrame,
     decoration_df: pd.DataFrame,
     exempt_param_name_contains: Iterable[str] | None = None,
-    *,
-    date_exclusion: InlineDateExclusion | None = None,
 ) -> pd.DataFrame:
-    """Exclude configured event dates, then apply tri-state UCL decoration."""
-    decorated_df = exclude_inline_factory_dates(tt_details_df, date_exclusion)
+    """Apply tri-state UCL decoration to infrastructure-filtered measurements."""
+    decorated_df = tt_details_df.copy()
     if not decorated_df.empty:
         specs = _spec_map(spec_df, "ucl")
         if not specs.empty:

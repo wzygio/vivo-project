@@ -7,7 +7,8 @@ from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
 
 def source():
     return pd.DataFrame([dict(prod_code="M626", factory="ARRAY", step_id="100", param_name="CD",
-                             period_type="week", period_label="2026-W36", cpk_corrected=1.2, flag=False)])
+                             period_type="week", period_label="2026-W36", cpk_corrected=1.2, flag=False,
+                             period_start="2026-08-31", period_end="2026-09-02")])
 
 
 def test_product_sheet_only_and_signature_invalidates_cache(tmp_path):

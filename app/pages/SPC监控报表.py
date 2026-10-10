@@ -52,14 +52,17 @@ from src.inline_domain.application.spc import spc_service
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
-from src.inline_domain.composition import build_spc_repository, refresh_raw_measurements
+from src.inline_domain.composition import (
+    build_spc_repository, refresh_raw_measurements,
+    build_capability_latest_reader, build_spc_input_signature,
+)
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
 
-SPC_PAGE_CACHE_SIGNATURE = "spc_database_target_v4"
+SPC_PAGE_CACHE_SIGNATURE = "spc_saved_capability_alerts_v5"
 SpcReportService = spc_service.SpcReportService
 _spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
 _spc_report_build_error = getattr(spc_service, "SpcReportBuildError", None)
@@ -131,7 +134,7 @@ try:
         view_model = SpcReportService.get_spc_report_data(
             _data_port=spc_data_port,
             query_config_json=query_config.model_dump_json(),
-            snapshot_signature=product_cache_signature,
+            snapshot_signature=f"{product_cache_signature}:{build_spc_input_signature(current_product)}",
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
             product_revision=product_revision,
             decision_signature=decision_signature,
@@ -160,14 +163,16 @@ selected_factory, selected_params, selected_steps, should_render_report = render
     step_desc_map=step_desc_map,
 )
 
-cpk_alerts_df = build_weekly_cpk_alerts(
-    period_capability_df,
-    reference_date=default_end_dt.date(),
-)
-cpm_alerts_df = build_weekly_cpm_alerts(
-    period_capability_df,
-    reference_date=default_end_dt.date(),
-)
+try:
+    # Read committed records after the weekly calculation/persistence has completed.
+    cpk_detail_df = build_capability_latest_reader("cpk").read_product(current_product)
+    cpm_detail_df = build_capability_latest_reader("cpm").read_product(current_product)
+    cpk_alerts_df = build_weekly_cpk_alerts(cpk_detail_df, reference_date=default_end_dt.date())
+    cpm_alerts_df = build_weekly_cpm_alerts(cpm_detail_df, reference_date=default_end_dt.date())
+except Exception:
+    logging.getLogger(__name__).exception("SPC capability alert records could not be read")
+    st.error("CPK/CPM 预警数据读取失败，请稍后重试。")
+    st.stop()
 
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params

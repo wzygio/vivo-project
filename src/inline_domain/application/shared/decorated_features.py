@@ -35,7 +35,8 @@ from src.inline_domain.core.shared.sheet_ooc_decoration import (
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
-from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
+from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
+from src.inline_domain.core.shared.sheet_oos_decoration import SpcPointDecorationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +103,15 @@ def fetch_decorated_features(
     decision_signature: str = "",
     sheet_features_start_date: str = "",
     date_exclusion: InlineDateExclusion | None = None,
+    spc_point_policy: SpcPointDecorationPolicy | None = None,
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
     Cache key = (prod_code, scope, start_date, end_date, snapshot_signature,
-    product_revision, decision_signature, sheet_features_start_date); ``_features_source`` is
+    product_revision, decision_signature, sheet_features_start_date, date_exclusion,
+    spc_point_policy);
+    resolved date exclusion invalidates the projection cache; adapters enforce it
+    before this function receives measurements. ``_features_source`` is
     underscore-prefixed and therefore excluded from hashing (same pattern as
     the existing ``_db_manager``/``_data_port`` arguments). Identical windows
     share one cache entry across modules; different windows cache separately
@@ -235,9 +240,6 @@ def fetch_decorated_features(
 
     if normalized_scope == SCOPE_NONE:
         # 免修饰口径：只做 preprocess 特征计算（与 aoi_tt 一致）。
-        measurements_df = exclude_inline_factory_dates(
-            measurements_df, date_exclusion, time_column="sheet_start_time",
-        )
         features_df = _preprocess_sheet_features_by_type(measurements_df, spec_df)
         return {
             "sheet_features_df": features_df,
@@ -254,8 +256,8 @@ def fetch_decorated_features(
         persist=True,
         product_revision=product_revision,
         decision_signature=decision_signature,
-        **({"date_exclusion": date_exclusion} if date_exclusion is not None else {}),
         **({"sheet_features_start_date": sheet_features_start_date} if sheet_features_start_date else {}),
+        **({"spc_point_policy": spc_point_policy} if normalized_scope == SCOPE_SPC else {}),
     )
     decoration_result = decorated_data.sheet_oos_decoration_result
     product_dir = resolve_product_resource_dir(prod_code, scope=normalized_scope)

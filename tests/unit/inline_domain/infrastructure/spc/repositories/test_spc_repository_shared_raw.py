@@ -9,6 +9,7 @@ from src.inline_domain.infrastructure.shared.measurement_preparation import (
     InlineMeasurementPreparationRepository,
 )
 from inline_domain.infrastructure.spc.spc_repository import SpcRepository
+from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
 
 
 class FakeRawMeasurements:
@@ -47,6 +48,23 @@ class FakeRawMeasurements:
                 },
             ]
         )
+
+
+def test_spc_source_signature_tracks_only_selected_product_snapshot(tmp_path):
+    directory = tmp_path / "data" / "inline_domain" / "shared"
+    directory.mkdir(parents=True)
+    path = directory / "inline_measurements_M626.parquet"
+    empty = spc_input_signature(tmp_path, "M626")
+    path.write_bytes(b"v1")
+    first = spc_input_signature(tmp_path, "M626")
+    assert first != empty
+    (directory / "inline_measurements_M678.parquet").write_bytes(b"other")
+    assert spc_input_signature(tmp_path, "M626") == first
+    path.write_bytes(b"v2-new-data")
+    second = spc_input_signature(tmp_path, "M626")
+    assert second != first
+    path.with_suffix(".policy").write_text("updated coverage", encoding="utf-8")
+    assert spc_input_signature(tmp_path, "M626") != second
 
 
 class FakeMetadata:

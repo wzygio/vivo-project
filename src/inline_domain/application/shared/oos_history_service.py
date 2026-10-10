@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Iterable, Protocol
 
 import pandas as pd
-from src.inline_domain.core.shared.date_exclusion import exclude_inline_factory_dates
 from src.shared_kernel.config import ConfigLoader
 
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
@@ -110,10 +109,7 @@ class OosHistoryService:
     @classmethod
     def project_detail(cls, scope: str, frame: pd.DataFrame) -> pd.DataFrame:
         """Project already-decided detail without merging flags or computing facts."""
-        return exclude_inline_factory_dates(
-            cls._project(scope, frame), ConfigLoader.get_inline_data_exclusion(),
-            time_column="event_time",
-        )
+        return cls._project(scope, frame)
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
         return self._read_product_with_file(

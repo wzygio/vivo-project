@@ -10,7 +10,11 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 
 
 class MeasurementSnapshotPort(Protocol):
-    """Provide one product's normalized raw measurement fact set."""
+    """Provide display-time facts after cutoff and configured date exclusions.
+
+    The adapter preserves the complete source-time snapshot on disk. Returned
+    facts exclude configured factory/date rows before any report processing.
+    """
 
     def get_measurements(
         self,

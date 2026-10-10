@@ -78,6 +78,8 @@ def _capability_df(prod: str, cpk: float) -> pd.DataFrame:
                 "period_type": "week",
                 "period_label": PREV_WEEK_LABEL,
                 "cpk_corrected": cpk,
+                "period_start": "2026-08-24",
+                "period_end": "2026-08-26",
                 "flag": False,
             }
         ]

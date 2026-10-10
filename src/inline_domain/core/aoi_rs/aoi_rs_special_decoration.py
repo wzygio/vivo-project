@@ -3,6 +3,7 @@
 Sheet 超规值取 [0, 0.5 × spec] 的稳定随机值；重算后仍超规的 Lot
 及其 Sheet 归零。周/日密度最多为所属月份的 1.3 倍，不回写明细。
 沿用工作簿三态及参数豁免；规则只生成投影，不修改源事实。
+显式日期窗口内执行专用规则，窗口外沿用常规修饰；跨窗口 Lot 不专用归零。
 """
 
 from __future__ import annotations
@@ -18,7 +19,9 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
     build_lot_point_df,
     build_period_trend_df,
+    build_sheet_point_df,
 )
+from src.inline_domain.core.shared.decoration_window import DecorationWindow, decoration_window_mask
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
 )
@@ -28,7 +31,7 @@ from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     normalize_aoi_rs_points,
 )
 
-AOI_RS_DECORATION_POLICY_VERSION = "factory-scoped-sheet-half-lot-zero-period-1.3-v2"
+AOI_RS_DECORATION_POLICY_VERSION = "factory-scoped-sheet-half-lot-zero-period-1.3-window-v3"
 _INDICATOR_KEYS = ["factory", "step_id", "rs_code"]
 _SHEET_KEYS = [*_INDICATOR_KEYS, "sheet_id"]
 _LOT_KEYS = [*_INDICATOR_KEYS, "lot_id"]
@@ -121,7 +124,7 @@ def _rebuild_lots(
     lots = build_lot_point_df(details, pd.DataFrame()).drop(columns=["sheet_qty", "value"])
     lots = lots.merge(
         lot_points_df[[*_LOT_KEYS, "sheet_qty"]], on=_LOT_KEYS,
-        how="left", validate="one_to_one",
+        how="inner", validate="one_to_one",
     )
     lots["value"] = lots["rs_qty"].div(lots["sheet_qty"].where(lots["sheet_qty"].gt(0)))
     return lots
@@ -136,9 +139,17 @@ def apply_aoi_rs_decoration(
     exempt_param_name_contains: Iterable[str] | None = None,
     *,
     rs_details_df: pd.DataFrame | None = None,
+    decoration_window: DecorationWindow | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """先修饰 Sheet，再重算并修饰 Lot；明细用于跨图关联和分子重算。"""
     exemptions = tuple(exempt_param_name_contains or ())
+    if decoration_window is not None:
+        if rs_details_df is None:
+            raise ValueError("AOI_RS time-scoped decoration requires RS details")
+        return _apply_windowed_decoration(
+            lot_points_df, sheet_points_df, spec_df, prod_code, decoration_df,
+            exemptions, rs_details_df, decoration_window,
+        )
     sheet_decorated = _apply_chart_decoration(
         sheet_points_df,
         spec_df,
@@ -170,9 +181,36 @@ def apply_aoi_rs_decoration(
     return lot_decorated, sheet_decorated
 
 
+def _apply_windowed_decoration(
+    lots: pd.DataFrame, sheets: pd.DataFrame, specs: pd.DataFrame, product: str,
+    flags: pd.DataFrame, exemptions: tuple[str, ...], details: pd.DataFrame,
+    window: DecorationWindow,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    sheet_active = decoration_window_mask(sheets["first_start_time"], window)
+    # A mixed Lot uses standard rules so special zeroing cannot affect outside Sheets.
+    eligible = details.assign(_active=decoration_window_mask(details["start_time"], window))
+    eligible = eligible.groupby(_LOT_KEYS, as_index=False)["_active"].all()
+    lot_active = lots[_LOT_KEYS].merge(eligible, on=_LOT_KEYS, how="left", validate="one_to_one")["_active"].eq(True)
+    lot_active.index = lots.index
+    standard = apply_standard_decoration(
+        lots.loc[~lot_active], sheets.loc[~sheet_active], specs, product, flags, exemptions,
+    )
+    special = apply_aoi_rs_decoration(
+        lots.loc[lot_active], sheets.loc[sheet_active], specs, product, flags, exemptions,
+        rs_details_df=details,
+    )
+    return tuple(
+        pd.concat([normal, modified], ignore_index=True).sort_values(
+            [*_INDICATOR_KEYS, "first_start_time"], kind="stable",
+        ).reset_index(drop=True)
+        for normal, modified in zip(standard, special)
+    )
+
+
 def build_decorated_period_trend_df(
     rs_details_df: pd.DataFrame, pass_through_df: pd.DataFrame, end_date: date,
     *, special_factories: Iterable[str] | None = None,
+    decoration_window: DecorationWindow | None = None,
 ) -> pd.DataFrame:
     """周/日投影限于所属月密度的 1.3 倍；跨月周取截至报表日的周末所属月。"""
     trend = build_period_trend_df(rs_details_df, pass_through_df, end_date)
@@ -189,8 +227,15 @@ def build_decorated_period_trend_df(
         if row["period_type"] == "week":
             year, week = row["period_label"].split("-W")
             period_end = min(date.fromisocalendar(int(year), int(week), 7), end_date)
+            period_start = date.fromisocalendar(int(year), int(week), 1)
         else:
             period_end = date.fromisoformat(row["period_label"])
+            period_start = period_end
+        if decoration_window is not None and not (
+            date.fromisoformat(decoration_window[0]) <= period_start
+            and period_end <= date.fromisoformat(decoration_window[1])
+        ):
+            continue
         month_key = (*[row[key] for key in _INDICATOR_KEYS], period_end.strftime("%Y-%m"))
         month_value = monthly.get(month_key)
         if pd.isna(month_value) or month_value < 0 or pd.isna(row["value"]):
@@ -220,6 +265,7 @@ def apply_factory_scoped_decoration(
     *,
     rs_details_df: pd.DataFrame | None = None,
     special_factories: Iterable[str] = (),
+    decoration_window: DecorationWindow | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Route selected factories through special rules and all others through standard rules."""
     factories = tuple(special_factories)
@@ -238,6 +284,7 @@ def apply_factory_scoped_decoration(
         lot_points_df.loc[lot_mask], sheet_points_df.loc[sheet_mask],
         spec_df, prod_code, decoration_df, exemptions,
         rs_details_df=rs_details_df.loc[factory_mask(rs_details_df, factories)],
+        decoration_window=decoration_window,
     )
     return tuple(
         pd.concat([normal, modified], ignore_index=True).sort_values(
@@ -250,9 +297,18 @@ def apply_factory_scoped_decoration(
 def project_factory_scoped_details(
     rs_details_df: pd.DataFrame, sheet_points_df: pd.DataFrame,
     special_factories: Iterable[str],
+    *, decoration_window: DecorationWindow | None = None,
 ) -> pd.DataFrame:
     """Only special factories propagate Sheet/Lot adjustments into period numerators."""
     mask = factory_mask(rs_details_df, special_factories)
+    if decoration_window is not None and not rs_details_df.empty:
+        # Use source keys: Delete removes a point, but its details must still be projected out.
+        source_sheets = build_sheet_point_df(rs_details_df)
+        eligible_sheets = source_sheets.loc[
+            decoration_window_mask(source_sheets["first_start_time"], decoration_window), _SHEET_KEYS,
+        ].assign(_eligible=True)
+        matched = rs_details_df[_SHEET_KEYS].merge(eligible_sheets, on=_SHEET_KEYS, how="left", validate="many_to_one")
+        mask &= pd.Series(matched["_eligible"].eq(True).to_numpy(), index=rs_details_df.index)
     if not mask.any():
         return rs_details_df.copy()
     details = rs_details_df.assign(_row_order=range(len(rs_details_df)))

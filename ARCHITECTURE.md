@@ -44,7 +44,7 @@ src
 | `inline_domain` | `aoi_rs` | AOI RS defect counts/density, Sheet/Lot and month/week/day reports, and RS-specific decoration; owns independent RS facts while reusing domain-shared throughput and decision capabilities |
 | `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities |
 | `inline_domain` | `ctq` | Critical-to-quality measurement reports, indicator selection and chart-type rules; reuses the shared measurement/feature/decoration pipeline |
-| `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; supplies SPC capability inputs used by monitoring |
+| `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; publishes maintained capability records. SPC page alerts and monitoring share the configured capability workbook readers and normalized alert selection, while calculations remain the source for ordinary SPC charts |
 | `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK/CPM summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
 | `inline_domain` | `shared` | Domain-local measurement preparation and snapshots, parameter/specification metadata, OOS/OOC decisions and decoration, throughput/history, process tracing and shared date filtering; supports multiple Inline report modules |
 | `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
@@ -111,6 +111,7 @@ domain composition -> assembles application services and concrete adapters
 ```
 
 - Application services coordinate rules and outbound calls. Adapters manage SQL, workbooks, snapshots, and external resources; they may reuse pure Core rules, but Core must not import adapters.
+- Inline factory/date exclusions belong to infrastructure output projections after display-time mapping and before deduplication, feature aggregation, decoration and capability calculations. Fresh/cache/fallback/history/workbook outputs share this contract; source snapshots and maintained decisions are preserved. Core retains period-aggregate availability rules. See [Inline date exclusion](references/domain/inline_domain/shared/rules-inline-date-exclusion.md) and [ADR-0034](docs/ADR/0034-inline-date-exclusion-infrastructure-boundary.md).
 - Reuse public same-layer shared APIs rather than another business module's private implementation. Cross-domain collaboration uses public application contracts rather than another domain's repository.
 - Ports may live in a submodule's `ports.py`, a dedicated protocol file, a shared `ports/` package, or the layer root. Locate them by consumer scope rather than assuming a single naming pattern.
 - Controlled default resolvers preserve existing static entry points during migration. Exact legacy import exceptions are recorded in the [dependency guard](tests/architecture/test_backend_dependencies.py); they are not precedents for new outward dependencies. The guard checks static imports, not all dynamic calls or implicit I/O.

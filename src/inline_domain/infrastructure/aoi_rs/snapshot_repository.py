@@ -21,6 +21,7 @@ from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError, inline_snapshot_window_start, metadata_covers_start,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -176,6 +177,7 @@ class AoiRsSnapshotRepository:
     def _filter_window(self, details: pd.DataFrame, query: AoiRsQueryConfig) -> pd.DataFrame:
         displayed = self.data_forward_policy.shift_frame(details, ("start_time",))
         displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(displayed, "start_time")
+        displayed = apply_inline_date_exclusion(displayed)
         start = pd.Timestamp(query.start_date)
         end = pd.Timestamp(query.end_date) + pd.Timedelta(days=1)
         time = pd.to_datetime(displayed["start_time"], errors="coerce")

@@ -148,6 +148,7 @@ class AoiTtReportService:
         particle_ratio_jitter: float = 0.1,
         particle_ratio_signature: str = "",
         date_exclusion: InlineDateExclusion | None = None,
+        exempt_param_name_contains: tuple[str, ...] | None = None,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -164,6 +165,11 @@ class AoiTtReportService:
             raise AoiTtReportBuildError("AOI_TT query config is invalid.") from exc
 
         try:
+            exemptions = (
+                tuple(ConfigLoader.get_auto_decoration_param_exemptions())
+                if exempt_param_name_contains is None
+                else exempt_param_name_contains
+            )
             tt_details_df = _data_port.get_tt_details(query_config)
             persist_shared_history = bool(
                 getattr(_data_port, "supports_shared_history_persistence", False)
@@ -187,6 +193,7 @@ class AoiTtReportService:
                         coverage_end=coverage_end,
                         product_revision=product_revision,
                         decision_signature=decision_signature,
+                        exempt_param_name_contains=exemptions,
                     )
                     persist_throughput_facts(
                         scope="aoi_tt",
@@ -208,13 +215,10 @@ class AoiTtReportService:
                 workbook_path=resolve_scope_decoration_path('aoi_tt'),
                 product_dir=resolve_product_resource_dir(query_config.prod_code, scope="aoi_tt"),
                 prod_code=query_config.prod_code,
-                exempt_param_name_contains=(
-                    ConfigLoader.get_auto_decoration_param_exemptions()
-                ),
+                exempt_param_name_contains=exemptions,
                 scope="aoi_tt",
                 product_revision=product_revision,
                 decision_signature=decision_signature,
-                date_exclusion=date_exclusion,
             )
             coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                 query_config.start_date, query_config.end_date
@@ -239,6 +243,7 @@ class AoiTtReportService:
                     coverage_end=coverage_end,
                     product_revision=product_revision,
                     decision_signature=decision_signature,
+                    exempt_param_name_contains=exemptions,
                 )
             elif spec_df.empty:
                 logger.warning(
@@ -308,5 +313,6 @@ class AoiTtReportService:
             particle_ratio_jitter=jitter,
             particle_ratio_signature=ratio_signature,
             date_exclusion=date_exclusion,
+            exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
         )
         return AoiTtReportService._view_model_from_payload(payload)

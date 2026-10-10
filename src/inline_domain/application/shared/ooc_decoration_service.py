@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +14,7 @@ from src.inline_domain.application.shared.decoration_defaults import (
     persist_sheet_oos_decoration_outcome,
 )
 from src.inline_domain.application.shared.decoration_ports import SheetDecorationPort
+from src.shared_kernel.config import ConfigLoader
 
 
 def persist_ooc_facts(
@@ -28,6 +30,7 @@ def persist_ooc_facts(
     decision_signature: str = "",
     decoration_port: SheetDecorationPort | None = None,
     workbook_path: Path | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> pd.DataFrame:
     """Write the mutable ledger; intermediate alarm results stay in cache."""
     persist_outcome = (
@@ -35,6 +38,15 @@ def persist_ooc_facts(
         if decoration_port is not None
         else persist_sheet_oos_decoration_outcome
     )
+    exemption_kwargs = {}
+    if scope in {"aoi_tt", "aoi_rs"}:
+        exemption_kwargs = {
+            "parameter_column": "tt_name" if scope == "aoi_tt" else "rs_code",
+            "exempt_param_name_contains": (
+                ConfigLoader.get_auto_decoration_param_exemptions()
+                if exempt_param_name_contains is None else exempt_param_name_contains
+            ),
+        }
     outcome = persist_outcome(
         Path(workbook_path).parent if workbook_path is not None else product_dir,
         detail_df,
@@ -48,5 +60,6 @@ def persist_ooc_facts(
         # The repository computes the signature from this OOC workbook.
         decision_signature=None,
         alarm_type="ooc",
+        **exemption_kwargs,
     )
     return outcome.decoration_df

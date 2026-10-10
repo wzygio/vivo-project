@@ -2,12 +2,30 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 
 from src.inline_domain.application.ports.measurement_snapshot import (
     MeasurementPreparationPort,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.shared_kernel.snapshot_paths import inline_measurement_directory, snapshot_component
+
+
+def spc_input_signature(project_root: Path, prod_code: str) -> str:
+    """Detect updated product snapshots before cached Sheet/capability computations."""
+    path = inline_measurement_directory(project_root / "data") / (
+        f"inline_measurements_{snapshot_component(prod_code)}.parquet"
+    )
+    parts = []
+    for source in [path, path.with_suffix(".policy")]:
+        try:
+            stat = source.stat()
+            parts.append(f"{source.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")
+        except FileNotFoundError:
+            parts.append(f"{source.resolve()}:missing")
+    return "|".join(parts)
 
 
 class SpcRepository:

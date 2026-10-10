@@ -27,7 +27,9 @@ from src.shared_kernel.utils.excel_tools import (
     replace_workbook_sheets,
 )
 
-from src.inline_domain.application.shared.decoration_ports import CapabilityDecorationReadError
+from src.inline_domain.application.shared.decoration_ports import (
+    CapabilityDecorationReadError, CapabilityDecorationWriteError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +93,7 @@ def persist_capability_decoration(
     sheet_name: str | None = None,
     metric: str = CAPABILITY_METRIC_CPK,
     *, computed_detail_df: pd.DataFrame | None = None, workbook_path: Path | None = None,
+    raise_on_error: bool = False,
 ) -> pd.DataFrame:
     _validate_metric(metric)
     path = get_cpk_decoration_path(product_dir, workbook_path=workbook_path)
@@ -101,6 +104,8 @@ def persist_capability_decoration(
             product_dir, sheet_name, metric, raise_on_error=True, workbook_path=workbook_path,
         )
     except CapabilityDecorationReadError:
+        if raise_on_error:
+            raise
         # A read failure is not a successfully read empty sheet. Preserve the file.
         return merge_capability_detail_with_decoration_flags(
             detail_df, _empty_decoration_frame(metric), metric,
@@ -108,12 +113,14 @@ def persist_capability_decoration(
     current = merge_capability_detail_with_decoration_flags(detail_df, existing, metric)
     sheet_names = list_workbook_sheet_names(path)
     if sheet_names is None:
+        if raise_on_error:
+            raise CapabilityDecorationReadError("Cannot read capability workbook sheet inventory")
         return current
     sheet_exists = path.exists() and (
         sheet_name is None or sheet_names is None or sheet_name in sheet_names
     )
     persisted = current
-    should_write = not sheet_exists
+    should_write = not sheet_exists and not current.empty
     if sheet_exists and existing.empty:
         should_write = not current.empty
     if sheet_exists and not existing.empty:
@@ -125,9 +132,13 @@ def persist_capability_decoration(
         )
         should_write = not persisted.equals(existing)
     if should_write:
-        result = replace_workbook_sheets(path, {target_sheet: persisted})
+        # openpyxl cannot write pandas.NA/NaT objects into legacy missing fields.
+        excel_frame = persisted.astype(object).where(pd.notna(persisted), None)
+        result = replace_workbook_sheets(path, {target_sheet: excel_frame})
         if not result.written:
             logger.warning("SPC %s decoration write failed: %s", metric.upper(), result.error)
+            if raise_on_error:
+                raise CapabilityDecorationWriteError(f"Cannot persist {metric.upper()} capability records")
     return persisted
 
 

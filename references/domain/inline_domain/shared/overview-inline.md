@@ -255,6 +255,8 @@ OOC 工作簿存在或其中 `flag=True`，不代表测量值已经被拉回 UCL
 
 ### 7.2 SPC 与 CTQ：Sheet OOS 点位修饰
 
+SPC 采用布尔决策，旧 Delete 兼容为 False；当前新增的中央规格区间修饰默认在 2026-10-05 至当天生效，详见 [SPC 专用点位修饰](../spc/rules-spc-point-decoration.md)。以下三态动作描述 CTQ 等传统 Sheet 口径及传统截断算法；不能据此认定 SPC 窗口内仅修饰真正 OOS 点。
+
 1. 先从未做报表修饰的测量数据计算 Sheet 特征，筛选 `sheet_max > USL` 或
    `sheet_min < LSL` 的候选 Sheet；等于规格线不算越规。
 2. 按 `prod_code + step_id + param_name + sheet_id` 匹配三态决策：
@@ -302,7 +304,10 @@ OOS 点位修饰可能间接改变均值，但这不等于另有 OOC 自动修�
   `True` 执行截断。当前函数在有可匹配规格处理的路径上应用这些动作；完全无 UCL
   规格时直接返回原明细，不执行该路径的三态处理。
 - `auto_decoration.exempt_param_name_contains` 当前为 `PPA`，对 `tt_name` 做
-  大小写不敏感的包含匹配；命中则豁免截断，Delete 在三态处理内优先于豁免。
+  大小写不敏感的普通文本包含匹配。命中且非 `Delete` 的 OOS/OOC 产品明细
+  直接生成并保存 `flag=False`，使数值保留与报警读取一致；`Delete` 优先。
+  人工 `__flags` 台账保持原样，取消配置后重新依据人工决策生成明细。
+  豁免配置进入报表缓存键和明细刷新签名，配置变化不等待刷新 TTL。
 - OOC 台账记录 `tt_qty > UCL` 且未超过 USL 的原始明细，单独用于报警过滤。
   编辑 OOC flag 不会直接改变 TT 图表数值。
 
@@ -311,6 +316,8 @@ OOS 点位修饰可能间接改变均值，但这不等于另有 OOC 自动修�
 Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见第 4.4 节，不能视作 OOC 截断规则。
 
 ### 7.5 AOI_RS：按图表口径的单边 spec 截断
+
+指定厂别在专用日期窗口内改用 Sheet 半规格 → Lot 归零 → 周/日限幅，默认 OLED、2026-09-21 至当天；跨窗口 Lot 和部分周期有保护边界。当前规则由 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md) 维护，以下为普通单边规格口径。
 
 规格来自 `mdw.dwd_imp_rs_code_xishu_fo_tzsbjx`，按产品查询，再按
 `factory + step_id + rs_code` 匹配；同一图表口径有多条规格时取最大 `spec`。
@@ -325,7 +332,9 @@ Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见
 - 决策键为产品、厂别、站点、RS Code、`chart_kind`、`point_id`；
   Lot 图的 point_id 为 lot_id，Sheet 图为 sheet_id，两个口径独立应用。
 - `True` 或无匹配决策默认截断，`False` 保留真实值，`Delete` 删除图点。
-  `rs_code` 包含 `PPA` 时按当前共享配置豁免截断，Delete 优先。
+  `rs_code` 包含 `PPA` 时按当前共享配置豁免截断；对应 OOS/OOC 产品明细
+  的有效 `flag` 生成为 `False`，`Delete` 优先，人工 `__flags` 台账保持原样。
+  配置进入报表缓存键和明细刷新签名，启停时重建有效明细。
 - 数值修饰作用于服务构造的 Lot/Sheet 图点，不回写 RS 原始明细或快照。
   `MWD_RATIO` 是月周日趋势的规格类型，不属于这里的两个图点修饰入口。
 - 尚无真实 UCL/LCL 输入，`build_aoi_rs_ooc_detail()` 返回空表；
@@ -346,6 +355,8 @@ Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见
   不在读报警时重算原始测量，也不重新合并 `__flags`。生成明细时无已有决策默认填 `True`。
 - 读取器只保留 `flag=False` 的明细进入 `alerts_df`；`True`、`Delete` 和空 flag
   均不进入报警结果。这里是报警过滤，不是把工作簿中的观测值改写到规格以内。
+- AOI 参数豁免在明细生成/保存阶段落为 `flag=False`，读取器消费该有效状态；
+  不在读报警时另加豁免或改写工作簿。此规则不扩展 SPC/CTQ 的 Sheet OOS 豁免范围。
 - 汇总以用户工作簿为基线：本周计数由当前报警重算，年/季/月总量按
   “旧累计 − 已计入的本周贡献 + 新本周贡献”替换。缺少来源时保留已有汇总并报告缺口。
   缺失周期按零值自动补齐：按产品、监控类型、厂别分别补齐已有最早周期至当前周期之间的

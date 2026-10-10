@@ -10,7 +10,7 @@ from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 
 
 class AoiRsDataPort(Protocol):
-    """Provide the source facts and specifications consumed by AOI_RS."""
+    """Provide date-excluded display-time details/throughput and specifications."""
 
     def get_rs_details(self, query: AoiRsQueryConfig) -> pd.DataFrame: ...
 

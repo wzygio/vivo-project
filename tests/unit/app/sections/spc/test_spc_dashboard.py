@@ -3,6 +3,7 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
 
 from app.sections.inline_domain.spc import spc_dashboard
 from app.sections.inline_domain.spc.spc_dashboard import (
@@ -43,6 +44,13 @@ def _sample_report_df() -> pd.DataFrame:
             {"factory": "TP", "step_id": "41140", "param_name": "SE_L1T", "period_type": "month"},
         ]
     )
+
+
+def _saved_detail(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
+    records = frame.assign(prod_code="M673", flag=frame.get(f"{metric}_decorated", False)).rename(
+        columns={metric: f"{metric}_corrected"},
+    )
+    return normalize_latest_cpk(records, "M673", metric=metric)
 
 
 def test_build_weekly_cpk_alerts_returns_only_values_from_previous_week() -> None:
@@ -116,8 +124,11 @@ def test_build_weekly_cpk_alerts_returns_only_values_from_previous_week() -> Non
         ]
     )
 
+    period_capability_df = period_capability_df.assign(
+        period_start="2026-07-20", period_end="2026-07-22",
+    )
     alerts_df = build_weekly_cpk_alerts(
-        period_capability_df,
+        _saved_detail(period_capability_df, "cpk"),
         reference_date=date(2026, 7, 28),
     )
 
@@ -163,8 +174,11 @@ def test_build_weekly_cpk_alerts_excludes_decorated_records() -> None:
         ]
     )
 
+    period_capability_df = period_capability_df.assign(
+        period_start="2026-07-27", period_end="2026-07-29",
+    )
     alerts_df = build_weekly_cpk_alerts(
-        period_capability_df,
+        _saved_detail(period_capability_df, "cpk"),
         reference_date=date(2026, 8, 4),
     )
 
@@ -225,8 +239,11 @@ def test_build_weekly_cpm_alerts_returns_only_values_from_previous_week() -> Non
         ]
     )
 
+    period_capability_df = period_capability_df.assign(
+        period_start="2026-07-20", period_end="2026-07-22",
+    )
     alerts_df = build_weekly_cpm_alerts(
-        period_capability_df,
+        _saved_detail(period_capability_df, "cpm"),
         reference_date=date(2026, 7, 28),
     )
 
@@ -272,8 +289,11 @@ def test_build_weekly_cpm_alerts_excludes_decorated_rows() -> None:
         ]
     )
 
+    period_capability_df = period_capability_df.assign(
+        period_start="2026-07-20", period_end="2026-07-22",
+    )
     alerts_df = build_weekly_cpm_alerts(
-        period_capability_df,
+        _saved_detail(period_capability_df, "cpm"),
         reference_date=date(2026, 7, 28),
     )
 
@@ -451,7 +471,7 @@ def test_render_cpk_alert_section_shows_all_clear_when_weekly_cpk_is_normal(monk
     )
 
     assert expander_calls == [("CPK预警中心（CPK < 1.33）", True)]
-    assert success_messages == ["未发现低于 1.33 的 CPK。"]
+    assert success_messages == ["当前无满足预警条件的 CPK。"]
     assert info_messages == []
 
 

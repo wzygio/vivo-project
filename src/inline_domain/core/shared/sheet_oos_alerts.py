@@ -14,7 +14,6 @@ from __future__ import annotations
 from datetime import date
 
 import pandas as pd
-from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
 
 
 def previous_iso_week_range(reference_date: date | pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp]:
@@ -43,7 +42,6 @@ def build_sheet_oos_alerts(
     *,
     time_column: str,
     reference_date: date | pd.Timestamp | None = None,
-    date_exclusion: InlineDateExclusion | None = None,
 ) -> pd.DataFrame:
     """筛选上一 ISO 周内 flag == FALSE 的 OOS 明细，按时间倒序返回。
 
@@ -58,7 +56,7 @@ def build_sheet_oos_alerts(
         return detail_df.iloc[0:0].copy()
 
     start, end = previous_iso_week_range(reference_date or date.today())
-    result = exclude_inline_factory_dates(detail_df, date_exclusion, time_column=time_column)
+    result = detail_df.copy()
     result[time_column] = pd.to_datetime(result[time_column], errors="coerce")
     mask = (
         result["flag"].map(_is_false_flag)

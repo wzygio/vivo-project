@@ -9,7 +9,7 @@ entry now serves both (see ``references/domain/inline_domain/shared/``).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -21,8 +21,7 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
     AOI_TT_OOS_DECORATION_FILE_NAME,
 )
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
-from src.inline_domain.core.shared.sheet_oos_decoration import OOS_DECORATION_FILE_NAME
-from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_factory_dates
+from src.inline_domain.core.shared.sheet_oos_decoration import OOS_DECORATION_FILE_NAME, SpcPointDecorationPolicy
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
     prepare_sheet_oos_decoration,
@@ -125,7 +124,7 @@ def prepare_decorated_data(
     decoration_port: SheetDecorationPort | None = None,
     resource_port: DecorationResourcePort | None = None,
     sheet_features_start_date: str = "",
-    date_exclusion: InlineDateExclusion | None = None,
+    spc_point_policy: SpcPointDecorationPolicy | None = None,
 ) -> DecoratedData:
     """Apply scope-specific actions and compute features in the requested window.
 
@@ -136,6 +135,8 @@ def prepare_decorated_data(
     (``SCOPE_DECORATION_FILE_NAME``); the engine and flag semantics are shared.
 
     SPC uses boolean decisions directly on points (legacy Delete becomes False).
+    Its configured central specification band applies within its display-date
+    window; False remains authoritative and original specifications are retained.
     Its optional ``sheet_features_start_date`` bounds both feature passes; the
     full decorated point window remains available for the historical overview.
     Other scopes retain their tri-state Sheet action semantics.
@@ -145,6 +146,8 @@ def prepare_decorated_data(
     缺省为空字符串时 core 自行从决策台账计算签名，门控仍然生效。
     """
     normalized_scope = (scope or "").strip().lower()
+    if normalized_scope == "spc" and spc_point_policy is None:
+        spc_point_policy = ConfigLoader.get_spc_point_decoration_policy()
     if normalized_scope not in SCOPE_DECORATION_FILE_NAME:
         raise ValueError(f"unknown decoration scope: {scope!r}")
 
@@ -173,15 +176,9 @@ def prepare_decorated_data(
         decision_signature=decision_signature,
         decoration_port=decoration_port,
         point_spec_df=spec_df,
+        spc_point_policy=spc_point_policy,
     )
-    # Persist source decisions above; filter points before report feature aggregation.
-    decoration_result = replace(
-        decoration_result,
-        raw_measurements_df=exclude_inline_factory_dates(
-            decoration_result.raw_measurements_df, date_exclusion,
-            time_column="sheet_start_time",
-        ),
-    )
+    # Infrastructure has already excluded dates before either feature pass.
     decorated_features_df = _preprocess_sheet_features_by_type(
         feature_points(decoration_result.raw_measurements_df),
         spec_df,

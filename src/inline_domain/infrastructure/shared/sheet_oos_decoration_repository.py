@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Iterable
 
 import pandas as pd
 
+from src.inline_domain.core.shared.auto_decoration import release_exempt_parameter_flags
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     DECISION_FLAG_COLUMN,
     OOS_DECORATION_COLUMNS,
@@ -40,6 +42,7 @@ from src.inline_domain.application.shared.decoration_ports import (
     SheetOosDecorationWriteError,
     SheetOosPersistOutcome,
 )
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +84,9 @@ def load_sheet_oos_decoration(
     if frame.empty:
         return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
     frame = _normalize_key_columns(frame, key_columns)
+    frame = apply_inline_date_exclusion(
+        frame, time_column="start_time" if "start_time" in frame.columns else "sheet_start_time",
+    )
     return (
         _ordered_existing_columns(frame, OOS_DECORATION_COLUMNS)
         if key_columns is None
@@ -176,6 +182,8 @@ def persist_sheet_oos_decoration_outcome(
     now: datetime | None = None,
     force: bool = False,
     alarm_type: str | None = None,
+    parameter_column: str | None = None,
+    exempt_param_name_contains: Iterable[str] | None = None,
 ) -> SheetOosPersistOutcome:
     """Merge decisions and atomically persist generated detail/metadata sheets."""
     product_dir.mkdir(parents=True, exist_ok=True)
@@ -191,9 +199,21 @@ def persist_sheet_oos_decoration_outcome(
     if scope == "spc" and is_oos:
         decisions = normalize_spc_decisions(decisions)
     merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
+    exemptions = tuple(sorted({
+        str(value).strip().casefold()
+        for value in exempt_param_name_contains or ()
+        if value is not None and str(value).strip()
+    }))
+    merged = release_exempt_parameter_flags(merged, parameter_column, exemptions)
     effective_now = now or datetime.now()
     effective_revision = "" if product_revision is None else str(product_revision)
     effective_signature = decision_signature or compute_decision_signature(decisions, keys)
+    if parameter_column is not None:
+        # Exemptions affect the generated product sheet, not the manual __flags ledger.
+        # Config changes must rewrite it even before the detail refresh TTL expires.
+        effective_signature = hashlib.sha256(
+            repr((effective_signature, parameter_column, exemptions)).encode("utf-8")
+        ).hexdigest()
     meta = load_refresh_meta(product_dir, file_name, scope, prod_code or sheet) if scope else None
     refresh = should_regenerate_detail(
         current_sheet_exists=sheet_names is not None and sheet in sheet_names,

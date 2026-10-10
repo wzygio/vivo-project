@@ -290,9 +290,9 @@ def test_generic_key_columns_round_trip_for_non_spc_modules(tmp_path: Path) -> N
     detail_df = pd.DataFrame(
         [
             {"prod_code": "Z571", "step_id": "1A250", "tt_name": "TT1", "sheet_id": "S1",
-             "start_time": "2026-07-01", "tt_qty": 12.0, "usl": 10.0},
+             "factory": "OLED", "start_time": "2026-07-01", "tt_qty": 12.0, "usl": 10.0},
             {"prod_code": "Z571", "step_id": "1A250", "tt_name": "TT1", "sheet_id": "S2",
-             "start_time": "2026-07-02", "tt_qty": 15.0, "usl": 10.0},
+             "factory": "OLED", "start_time": "2026-07-02", "tt_qty": 15.0, "usl": 10.0},
         ]
     )
 

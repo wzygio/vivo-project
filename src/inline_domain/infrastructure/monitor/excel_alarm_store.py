@@ -12,6 +12,7 @@ import streamlit as st
 from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.monitor.excel_contract import ExcelAlarmReadError
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=32, show_spinner=False)
@@ -63,8 +64,18 @@ class ExcelAlarmStore:
         sheets = read_cached_alarm_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
         if product not in sheets:
             return None
+        frame = sheets[product].copy()
+        frame.columns = [str(column).strip() for column in frame.columns]
+        if not frame.empty and "prod_code" in frame and not frame["prod_code"].astype(str).str.strip().eq(product).all():
+            raise ExcelAlarmReadError(f"{scope}/{product}: product sheet contains another product")
+        try:
+            frame = apply_inline_date_exclusion(
+                frame, time_column="start_time" if scope == "aoi_tt" else "sheet_start_time",
+            )
+        except ValueError as exc:
+            raise ExcelAlarmReadError(f"{scope}/{product}: {exc}") from exc
         return {
-            "frame": sheets[product].copy(),
+            "frame": frame,
             "refresh_meta": sheets.get("__refresh_meta__", pd.DataFrame()).copy(),
         }
 

@@ -3,13 +3,12 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.aoi_rs.aoi_rs_decoration import filter_aoi_rs_report_data
 from src.inline_domain.core.aoi_tt.aoi_tt_decoration import apply_aoi_tt_decoration
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import (
-    exclude_inline_factory_dates,
     exclude_inline_period_records,
 )
+from src.inline_domain.infrastructure.shared.date_exclusion import exclude_inline_factory_dates
 
 
 EXCLUSION = (("OLED",), "2026-10-01", "2026-10-06")
@@ -30,16 +29,17 @@ def _details() -> pd.DataFrame:
 def test_rs_filters_details_and_throughput_with_inclusive_calendar_dates():
     source = _details()
     before = source.copy(deep=True)
-    details, throughput = filter_aoi_rs_report_data(source, source, EXCLUSION)
+    details = exclude_inline_factory_dates(source, EXCLUSION)
+    throughput = exclude_inline_factory_dates(source, EXCLUSION)
     assert details.sheet_id.tolist() == list("ADEFG")
     pd.testing.assert_frame_equal(details, throughput)
     pd.testing.assert_frame_equal(source, before)
 
 
-def test_tt_exclusion_applies_without_specs_or_decisions():
+def test_tt_decoration_consumes_filtered_input_without_specs_or_decisions():
     source = _details()
     result = apply_aoi_tt_decoration(
-        source, pd.DataFrame(), pd.DataFrame(), date_exclusion=EXCLUSION,
+        exclude_inline_factory_dates(source, EXCLUSION), pd.DataFrame(), pd.DataFrame(),
     )
     assert result.sheet_id.tolist() == list("ADEFG")
     assert source.sheet_id.tolist() == list("ABCDEFG")
@@ -50,14 +50,15 @@ def test_tt_date_exclusion_takes_precedence_over_false_and_exemptions():
     decisions = source.assign(flag=False)
     specs = pd.DataFrame([dict(step_id="1", tt_name="PPA", ucl=10)])
     result = apply_aoi_tt_decoration(
-        source, specs, decisions, ["PPA"], date_exclusion=EXCLUSION,
+        exclude_inline_factory_dates(source, EXCLUSION), specs, decisions, ["PPA"],
     )
     assert result.sheet_id.tolist() == list("ADEFG")
 
 
 def test_disabled_rule_preserves_inputs_and_empty_frames():
     source = pd.DataFrame({"tt_qty": [3.]})
-    details, throughput = filter_aoi_rs_report_data(source, pd.DataFrame(), None)
+    details = exclude_inline_factory_dates(source, None)
+    throughput = exclude_inline_factory_dates(pd.DataFrame(), None)
     pd.testing.assert_frame_equal(details, source)
     assert throughput.empty
     result = apply_aoi_tt_decoration(source, pd.DataFrame(), pd.DataFrame())
@@ -66,7 +67,7 @@ def test_disabled_rule_preserves_inputs_and_empty_frames():
 
 def test_active_rule_rejects_missing_time_instead_of_silently_showing_data():
     with pytest.raises(ValueError, match="start_time"):
-        filter_aoi_rs_report_data(pd.DataFrame({"factory": ["OLED"]}), pd.DataFrame(), EXCLUSION)
+        exclude_inline_factory_dates(pd.DataFrame({"factory": ["OLED"]}), EXCLUSION)
 
 
 def test_config_resolves_today_and_normalizes_factories(monkeypatch):

@@ -23,7 +23,7 @@ from src.inline_domain.core.monitor.cpk_summary import (
 from src.inline_domain.core.monitor.period_summary import current_period_windows
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import (
-    InlineDateExclusion, exclude_inline_factory_dates, exclude_inline_period_records,
+    InlineDateExclusion, exclude_inline_period_records,
 )
 
 
@@ -71,7 +71,6 @@ def _cached_cpk_inputs(
         if not isinstance(features, pd.DataFrame):
             raise ValueError(f"{product} 的 CPK 输入缺少 Sheet 特征")
         features = exclude_cpm_cpk_parameters(features, exemptions)
-        features = exclude_inline_factory_dates(features, date_exclusion, time_column="sheet_start_time")
         if not features.empty:
             features = features[features["factory"].isin(factories)].copy()
         detail = build_current_cpk_detail(features, end_date=as_of)

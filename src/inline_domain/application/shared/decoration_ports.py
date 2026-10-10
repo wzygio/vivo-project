@@ -30,6 +30,10 @@ class CapabilityDecorationReadError(RuntimeError):
     """Existing capability decisions could not be read safely."""
 
 
+class CapabilityDecorationWriteError(RuntimeError):
+    """Calculated capability records could not be durably persisted."""
+
+
 @dataclass(frozen=True)
 class SheetOosPersistOutcome:
     decoration_df: pd.DataFrame
@@ -51,6 +55,8 @@ class SheetDecorationPort(Protocol):
         decision_signature: str | None = None, now: datetime | None = None,
         force: bool = False,
         alarm_type: str | None = None,
+        parameter_column: str | None = None,
+        exempt_param_name_contains: Iterable[str] | None = None,
     ) -> SheetOosPersistOutcome: ...
 
 
@@ -65,6 +71,7 @@ class CapabilityDecorationPort(Protocol):
         self, product_dir: Path, detail_df: pd.DataFrame,
         sheet_name: str | None = None, metric: str = CAPABILITY_METRIC_CPK,
         *, computed_detail_df: pd.DataFrame | None = None, workbook_path: Path | None = None,
+        raise_on_error: bool = False,
     ) -> pd.DataFrame: ...
 
     def get_capability_decoration_signature(self, product_dir: Path, *, workbook_path: Path | None = None) -> tuple[int, int]: ...

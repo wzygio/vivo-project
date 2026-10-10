@@ -213,6 +213,19 @@ def _load_aoi_rs_sheet_oos_decoration(product_dir: Path, prod_code: str, file_na
 
 
 @st.cache_data(show_spinner=False, ttl=ConfigLoader.get_cache_ttl_seconds())
+def _load_cached_aoi_rs_sheet_oos_decoration(
+    file_mtime_ns: int,
+    file_size: int,
+    prod_code: str,
+    product_dir_str: str,
+    file_name: str = AOI_RS_OOS_DECORATION_FILE_NAME,
+    date_exclusion: tuple | None = None,
+) -> pd.DataFrame | None:
+    """按文件状态、产品与日期排除策略缓存，普通 rerun 不重复启动 COM。"""
+    del file_mtime_ns, file_size, date_exclusion  # 仅作为缓存键参与
+    return _load_aoi_rs_sheet_oos_decoration(Path(product_dir_str), prod_code, file_name)
+
+
 def load_cached_aoi_rs_sheet_oos_decoration(
     file_mtime_ns: int,
     file_size: int,
@@ -220,9 +233,11 @@ def load_cached_aoi_rs_sheet_oos_decoration(
     product_dir_str: str,
     file_name: str = AOI_RS_OOS_DECORATION_FILE_NAME,
 ) -> pd.DataFrame | None:
-    """按（文件 mtime_ns, size, 产品）缓存的工作簿只读加载，普通 rerun 不重复启动 COM。"""
-    del file_mtime_ns, file_size  # 仅作为缓存键参与
-    return _load_aoi_rs_sheet_oos_decoration(Path(product_dir_str), prod_code, file_name)
+    """Invalidate filtered workbook output when the exclusion policy changes."""
+    return _load_cached_aoi_rs_sheet_oos_decoration(
+        file_mtime_ns, file_size, prod_code, product_dir_str, file_name,
+        ConfigLoader.get_inline_data_exclusion(),
+    )
 
 
 def build_aoi_rs_sheet_oos_alerts(
@@ -241,7 +256,6 @@ def build_aoi_rs_sheet_oos_alerts(
         decoration_df,
         time_column="sheet_start_time",
         reference_date=reference_date,
-        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,

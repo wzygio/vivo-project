@@ -12,6 +12,7 @@ from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
 from src.inline_domain.application.monitor.oos_monitor_service import OosMonitorService
 from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
@@ -54,7 +55,7 @@ def test_shared_features_filter_before_deduplication_and_aggregation(inputs, sco
     raw = rows.copy()
     raw.loc[1, "sheet_id"] = "A"
     before = raw.copy(deep=True)
-    port = SimpleNamespace(get_spc_measurements=lambda _q: raw, get_spc_spec_limits=lambda _p: specs)
+    port = SimpleNamespace(get_spc_measurements=lambda _q: apply_inline_date_exclusion(raw, time_column="sheet_start_time"), get_spc_spec_limits=lambda _p: specs)
     payload = fetch_decorated_features(port, "M678", scope, "2026-09-01", "2026-10-06", date_exclusion=RULE)
     assert payload["raw_measurements_df"].sheet_id.tolist() == ["A", "C"]
     assert payload["sheet_features_df"].set_index("sheet_id").loc["A", "sheet_mean"] == 10.
@@ -68,7 +69,7 @@ def test_report_facades_pass_policy_into_both_cache_layers(inputs, kind):
 
     def read(_query):
         calls.append(1)
-        return rows
+        return apply_inline_date_exclusion(rows, time_column="sheet_start_time")
 
     port = SimpleNamespace(get_spc_measurements=read, get_spc_spec_limits=lambda _p: specs)
     service = SpcReportService if kind == "spc" else CtqReportService
@@ -96,11 +97,11 @@ def test_live_monitor_filters_all_scopes_and_changes_signature(inputs, scope):
         tt_name="TT", tt_qty=[3., 9., 2.], rs_code="RS", code_qty=[3., 9., 2.],
     )
     port = SimpleNamespace(
-        get_spc_measurements=lambda _q: rows, get_spc_spec_limits=lambda _p: specs,
-        get_tt_details=lambda _q: details, get_tt_spec_limits=lambda _p: pd.DataFrame([
+        get_spc_measurements=lambda _q: apply_inline_date_exclusion(rows, time_column="sheet_start_time"), get_spc_spec_limits=lambda _p: specs,
+        get_tt_details=lambda _q: apply_inline_date_exclusion(details), get_tt_spec_limits=lambda _p: pd.DataFrame([
             dict(step_id="1", tt_name="TT", usl=5., ucl=5.),
         ]),
-        get_rs_details=lambda _q: details, get_pass_through=lambda _q: details,
+        get_rs_details=lambda _q: apply_inline_date_exclusion(details), get_pass_through=lambda _q: apply_inline_date_exclusion(details),
         get_rs_spec_limits=lambda _p: pd.DataFrame([
             dict(factory=factory, step_id="1", rs_code="RS", type_flag=kind, spec=5.)
             for factory in ["OLED", "ARRAY"] for kind in ["SHEET_ID", "LOT_RATIO"]
@@ -126,7 +127,7 @@ def test_workbook_alarm_reader_filters_projection_and_keeps_source(inputs, alarm
     facts = rows.assign(flag=False, sheet_max=110., sheet_min=10., sheet_mean=60.,
                         usl=100., lsl=0., ucl=50., lcl=20., oos_type="USL", ooc_type="UCL")
     before = facts.copy(deep=True)
-    store = SimpleNamespace(read=lambda _s, _p: {"frame": facts, "refresh_meta": pd.DataFrame()},
+    store = SimpleNamespace(read=lambda _s, _p: {"frame": apply_inline_date_exclusion(facts, time_column="sheet_start_time"), "refresh_meta": pd.DataFrame()},
                             source_signature=lambda _p, _s: "unchanged-workbook")
     reader = ExcelAlarmReader(store, alarm_type)
     signature = reader.source_signature(["M678"], ["spc"])
@@ -141,20 +142,20 @@ def test_workbook_alarm_reader_filters_projection_and_keeps_source(inputs, alarm
 def test_shared_sheet_alerts_cannot_release_excluded_dates(inputs):
     _policy, rows, _specs, _root = inputs
     facts = rows.assign(flag=False)
-    alerts = build_sheet_oos_alerts(facts, time_column="sheet_start_time",
-                                   reference_date=pd.Timestamp("2026-10-06"), date_exclusion=RULE)
+    alerts = build_sheet_oos_alerts(apply_inline_date_exclusion(facts, time_column="sheet_start_time"), time_column="sheet_start_time",
+                                   reference_date=pd.Timestamp("2026-10-06"))
     assert set(alerts.sheet_id) == {"A", "C"}
 
 
-def test_oos_monitor_filters_both_counts_and_denominators_even_for_custom_readers(inputs):
+def test_oos_monitor_consumes_filtered_counts_and_denominators_from_readers(inputs):
     _policy, rows, _specs, _root = inputs
     facts = rows.rename(columns={"sheet_start_time": "event_time"}).assign(scope="spc", item_id=rows.sheet_id)
     throughput = facts.rename(columns={"event_time": "event_date"}).assign(sheet_qty=1)
     reader = SimpleNamespace(read_product=lambda _s, _p: SimpleNamespace(
-        alerts_df=facts, source="excel", refreshed_at=None,
+        alerts_df=apply_inline_date_exclusion(facts, time_column="event_time"), source="excel", refreshed_at=None,
     ))
     service = OosMonitorService(reader, throughput_reader=SimpleNamespace(
-        read_product=lambda _s, _p: throughput,
+        read_product=lambda _s, _p: apply_inline_date_exclusion(throughput, time_column="event_date"),
     ))
     result = service.build_dashboard(products=["M678"], scopes=["spc"], factories=["OLED", "ARRAY"],
                                      start_date="2026-09-01", end_date="2026-10-06")
@@ -173,7 +174,7 @@ def test_new_cache_policy_preserves_native_payload_during_service_reload(inputs,
 
     def read(_query):
         importlib.reload(module)
-        return rows
+        return apply_inline_date_exclusion(rows, time_column="sheet_start_time")
 
     port = SimpleNamespace(get_spc_measurements=read, get_spc_spec_limits=lambda _p: specs)
     query = SpcQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-06")

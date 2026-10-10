@@ -406,12 +406,14 @@ def _load_aoi_tt_oos_decoration_cached(
     file_mtime_ns: int,
     file_size: int,
     workbook_path: str = "",
+    date_exclusion: tuple | None = None,
 ) -> pd.DataFrame | None:
-    """只读加载当前产品的 Sheet OOS 修饰明细；缓存键含文件 (mtime_ns, size)。
+    """只读加载当前产品的 Sheet OOS 修饰明细；缓存键含文件状态与排除策略。
 
     读取失败（含企业加密文件 COM 回退失败）降级返回 None，绝不阻断页面、
     也绝不触发工作簿写入。
     """
+    del date_exclusion  # Resolved policy participates in the cache key.
     path = Path(workbook_path) if workbook_path else ConfigLoader.get_domain_resource_path("inline_domain", "aoi_tt_sheet_oos_decoration", AOI_TT_OOS_DECORATION_FILE_NAME)
     try:
         return load_sheet_oos_decoration(
@@ -441,7 +443,10 @@ def load_aoi_tt_oos_decoration(prod_code: str) -> pd.DataFrame | None:
         stat = decoration_path.stat()
     except OSError:
         return None
-    return _load_aoi_tt_oos_decoration_cached(prod_code, stat.st_mtime_ns, stat.st_size, str(decoration_path))
+    return _load_aoi_tt_oos_decoration_cached(
+        prod_code, stat.st_mtime_ns, stat.st_size, str(decoration_path),
+        ConfigLoader.get_inline_data_exclusion(),
+    )
 
 
 def build_aoi_tt_sheet_oos_alerts(
@@ -455,7 +460,6 @@ def build_aoi_tt_sheet_oos_alerts(
         decoration_df,
         time_column="start_time",
         reference_date=reference_date,
-        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display = build_sheet_oos_alert_display(
         alerts,

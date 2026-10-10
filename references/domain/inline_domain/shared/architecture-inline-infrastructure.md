@@ -2,6 +2,7 @@
 
 > **范围**: [`src/inline_domain/infrastructure/`](../../../../src/inline_domain/infrastructure/)
 > **最后更新**: 2026-08-13（段1重构定稿）
+> **边界补充**: 2026-10-10，日期排除迁移至基础设施输出，见 [日期排除规则](rules-inline-date-exclusion.md)。
 > **关联**: [ADR-0012](../../../../docs/ADR/0012-shared-inline-measurement-snapshot.md) · [overview-inline.md](overview-inline.md)
 
 ---
@@ -42,6 +43,7 @@
 | `main_process_trace.py` | 主制程追溯**纯函数**（路由 + 最近前序匹配，零 I/O） | `attach_main_process_spec` / `apply_main_process_history` |
 | `measurement_preprocessor.py` | 排除参数关键字过滤（`LOSS`），纯函数 | `filter_excluded_param_names` |
 | `measurement_preparation.py` | **共享制备管线**（见 §3）+ 规格线查询与 YAML 覆盖 | `InlineMeasurementPreparationRepository`（实现 `MeasurementPreparationPort`） |
+| `date_exclusion.py` | 显示日期与厂别排除；仓储对外输出过滤副本，Particle Size 聚合前拆分允许窗口 | `apply_inline_date_exclusion` / `exclude_inline_factory_dates` / `inline_report_windows` |
 
 快照稳定字段超集：`factory, prod_code, start_time, sheet_id, lot_id, step_id,
 param_name, site_name, unit_id, param_value`。**任何派生规则不回写原始快照。**
@@ -60,7 +62,9 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 ### 3.1 管线顺序（行为契约，变更视为口径变更）
 
 ```
-清洗（start_time→sheet_start_time、类型 coercion、dropna）
+日期前推、报表截止和厂别日期排除（快照输出；原始落盘不排除）
+  → 制备入口日期排除（先统一为 sheet_start_time，支持注入端口）
+  → 清洗（类型 coercion、dropna）
   → 排除参数过滤（LOSS 关键字）
   → 按 sheet_start_time 稳定升序排序去重（prod/step/param/sheet/site 五键 keep="last"，同时间保留输入末条）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤

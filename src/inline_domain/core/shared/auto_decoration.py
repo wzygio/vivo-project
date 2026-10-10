@@ -58,6 +58,22 @@ def _parameter_exemption_mask(
     return mask
 
 
+def release_exempt_parameter_flags(
+    decoration_df: pd.DataFrame,
+    parameter_column: str | None,
+    exempt_param_name_contains: Iterable[str] | None,
+) -> pd.DataFrame:
+    """Persist effective exemption as False; explicit Delete retains priority."""
+    result = decoration_df.copy()
+    if "flag" not in result:
+        return result
+    released = _parameter_exemption_mask(
+        result, parameter_column, exempt_param_name_contains,
+    ) & ~result["flag"].map(_is_delete_action)
+    result.loc[released, "flag"] = False
+    return result
+
+
 def _clip_value(value: float, upper: float, lower: float | None, seed_parts: list[object]) -> float:
     """把越规值截断到线内；未越规原样返回。"""
     if lower is not None and not pd.isna(lower) and upper <= lower:

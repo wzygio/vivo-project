@@ -109,6 +109,7 @@ def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
                 "step_id": "11620",
                 "particle_size": "O",
                 "particle_qty": 2,
+                "start_time": pd.Timestamp("2026-08-06"),
             }
         ]
     )
@@ -127,7 +128,7 @@ def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
     result = repository.get_particle_size_counts(query)
 
     assert captured == [query]
-    assert result is expected
+    pd.testing.assert_frame_equal(result, expected)
 
 
 def _tt_fact(**changes: object) -> dict[str, object]:

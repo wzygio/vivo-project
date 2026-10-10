@@ -6,6 +6,9 @@ import runpy
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
+from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
+from src.inline_domain import composition
 
 from app.components import page_header
 from app.sections.inline_domain.spc import spc_dashboard
@@ -16,7 +19,8 @@ from src.shared_kernel.infrastructure import db_handler
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
 
-def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch) -> None:
+@pytest.mark.parametrize("saved_value", [.9, 1.6, None, "unreadable"])
+def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch, saved_value) -> None:
     signature_module = importlib.import_module("src.inline_domain.application.shared.decision_signature")
     monkeypatch.setattr(signature_module, "get_scope_decision_signature", lambda *_args: "test-decisions")
     current_spc_service = importlib.import_module(
@@ -64,6 +68,26 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         raw_measurements_df=sheet_features_df.copy(),
         sheet_oos_decoration_result=None,
     )
+    saved = normalize_latest_cpk(pd.DataFrame([dict(
+        prod_code="M673", factory="TP", step_id="41260", param_name="4PP_Rs",
+        period_type="week", period_label="2026-W30", cpk_corrected=(
+            .9 if saved_value == "unreadable" else saved_value
+        ),
+        period_start="2026-07-20", period_end="2026-07-22", flag=False,
+    )]), "M673")
+    reads = []
+
+    def read_product(metric, product):
+        reads.append(metric)
+        assert load_count == 1 and product == "M673"
+        if saved_value == "unreadable":
+            raise OSError("private file diagnostic")
+        return saved if metric == "cpk" else None
+
+    monkeypatch.setattr(composition, "build_capability_latest_reader", lambda metric: SimpleNamespace(
+        read_product=lambda product: read_product(metric, product),
+    ))
+    monkeypatch.setattr(composition, "build_spc_input_signature", lambda product: "snapshot-v1")
 
     monkeypatch.setattr(spc_dashboard.st, "set_page_config", lambda **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "spinner", lambda *_args, **_kwargs: nullcontext())
@@ -136,21 +160,33 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     )
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "SPC监控报表.py"
+    if saved_value == "unreadable":
+        class PageStopped(Exception):
+            pass
+        errors = []
+        monkeypatch.setattr(spc_dashboard.st, "error", errors.append)
+        monkeypatch.setattr(spc_dashboard.st, "stop", lambda: (_ for _ in ()).throw(PageStopped()))
+        with pytest.raises(PageStopped):
+            runpy.run_path(str(page_path), run_name="__main__")
+        assert errors == ["CPK/CPM 预警数据读取失败，请稍后重试。"]
+        assert not rendered_alerts and not rendered_cpm_alerts
+        return
     runpy.run_path(str(page_path), run_name="__main__")
 
     assert load_count == 1
     assert loaded_signatures == [
-        "spc_database_target_v4|scoped=M673"
+        "spc_saved_capability_alerts_v5|scoped=M673:snapshot-v1"
     ]
     assert header_kwargs["product_cache_scope"] == "M673"
-    assert rendered_alerts[0].to_dict("records") == [
+    assert rendered_alerts[0].to_dict("records") == ([
         {
             "厂别": "TP",
             "站点": "41260",
             "参数名称": "4PP_Rs",
             "超规周次": "2026-W30",
-            "CPK值": 1.278,
+            "CPK值": .9,
         }
-    ]
+    ] if saved_value == .9 else [])
+    assert reads == ["cpk", "cpm"]
     assert events == ["header", "filters", "alerts", "cpm_alerts", "charts"]
     assert rendered_cpm_alerts[0].empty

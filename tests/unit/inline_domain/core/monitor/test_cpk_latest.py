@@ -57,7 +57,8 @@ def test_excluded_latest_week_is_zeroed_but_existing_month_is_preserved():
 
 def detail(**changes):
     row = dict(prod_code="M626", factory="ARRAY", step_id="100", param_name="CD",
-               period_type="week", period_label="2026-W36", cpk_corrected=1.2, flag=False)
+               period_type="week", period_label="2026-W36", cpk_corrected=1.2, flag=False,
+               period_start="2026-08-31", period_end="2026-09-02")
     return {**row, **changes}
 
 
@@ -135,4 +136,11 @@ def test_unclassifiable_latest_week_preserved_and_month_not_updated():
 
 def test_unrelated_invalid_value_does_not_block_latest_period():
     updates, _ = plan([baseline()], [detail(), detail(period_label="2026-W35", cpk_corrected=None)])
+    assert updates.loc[updates["时间标签"].eq("2026-W36"), "预警项目数"].tolist() == [1]
+
+
+def test_latest_week_omits_short_span_from_alert_count_without_discarding_metrics():
+    updates, _ = plan([baseline()], [detail(), detail(
+        param_name="SHORT", period_end="2026-09-01", cpk_corrected=0.4,
+    )])
     assert updates.loc[updates["时间标签"].eq("2026-W36"), "预警项目数"].tolist() == [1]

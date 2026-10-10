@@ -17,6 +17,7 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     get_decision_sheet_name,
 )
 from src.shared_kernel.utils.excel_tools import _read_all_sheets_via_com
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 
 class OosDecisionWorkbookRepository:
@@ -78,7 +79,9 @@ class OosDecisionWorkbookRepository:
         for column in key_columns:
             if column in result.columns:
                 result[column] = result[column].fillna("").astype(str)
-        return result
+        return apply_inline_date_exclusion(
+            result, time_column="start_time" if "start_time" in result.columns else "sheet_start_time",
+        )
 
     def load_refresh_time(
         self, file_name: str, scope: str, prod_code: str

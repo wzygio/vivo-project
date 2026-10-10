@@ -12,7 +12,8 @@ from src.shared_kernel.config import ConfigLoader
 def _source():
     return pd.DataFrame([
         dict(prod_code="M626", factory=factory, step_id="1", param_name="CD",
-             period_type="week", period_label="2026-W40", cpm_corrected=value, flag=False)
+             period_type="week", period_label="2026-W40", cpm_corrected=value, flag=False,
+             period_start="2026-09-28", period_end="2026-09-30")
         for factory, value in [("ARRAY", 1.2), ("OLED", 1.5)]
     ])
 

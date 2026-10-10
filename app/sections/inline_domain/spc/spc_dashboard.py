@@ -50,6 +50,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     CPK_KEY_COLUMNS,
     capability_decoration_columns,
 )
+from src.inline_domain.core.monitor.cpk_latest import latest_capability_alerts
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import (
@@ -91,45 +92,20 @@ def get_default_spc_start_date(end_date: date) -> date:
 
 
 def _build_weekly_capability_alerts(
-    period_capability_df: pd.DataFrame,
+    capability_detail_df: pd.DataFrame | None,
     *,
     metric_column: str,
     value_label: str,
     alert_columns: list[str],
     threshold: float,
-    decorated_column: str | None = None,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold weekly capability records from the previous full week."""
-    required_columns = {"factory", "step_id", "param_name", "period_type", "period_label", metric_column}
-    if period_capability_df.empty or not required_columns.issubset(period_capability_df.columns):
-        return pd.DataFrame(columns=alert_columns)
-
-    reference_day = pd.Timestamp(reference_date or date.today()).normalize()
-    current_week_start = reference_day - pd.Timedelta(days=reference_day.weekday())
-    previous_week_start = current_week_start - pd.Timedelta(days=7)
-    iso_week = previous_week_start.isocalendar()
-    target_week_label = f"{iso_week.year}-W{iso_week.week:02d}"
-
-    capability_df = period_capability_df[
-        period_capability_df["period_type"].astype(str).eq("week")
-    ].copy()
-    if capability_df.empty:
-        return pd.DataFrame(columns=alert_columns)
-
-    capability_df[metric_column] = pd.to_numeric(capability_df[metric_column], errors="coerce")
-    below_threshold = capability_df[metric_column].lt(threshold)
-    if decorated_column is not None:
-        is_decorated = (
-            capability_df[decorated_column].fillna(False).astype(bool)
-            if decorated_column in capability_df.columns
-            else pd.Series(False, index=capability_df.index, dtype=bool)
-        )
-        below_threshold &= ~is_decorated
-    alert_rows = capability_df[
-        below_threshold
-        & capability_df["period_label"].astype(str).eq(target_week_label)
-    ].copy()
+    """Format the same saved-record alert selection used by the monitor matrix."""
+    alert_rows = latest_capability_alerts(
+        capability_detail_df, reference_date or date.today(), metric=metric_column,
+        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
+    )
+    alert_rows = alert_rows.loc[alert_rows[metric_column].lt(threshold)]
     if alert_rows.empty:
         return pd.DataFrame(columns=alert_columns)
 
@@ -151,35 +127,33 @@ def _build_weekly_capability_alerts(
 
 
 def build_weekly_cpk_alerts(
-    period_capability_df: pd.DataFrame,
+    capability_detail_df: pd.DataFrame | None,
     threshold: float = CPK_ALERT_THRESHOLD,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold, undecorated CPK records from the previous full week."""
+    """Read the previous complete week's CPK alerts from normalized Excel records."""
     return _build_weekly_capability_alerts(
-        period_capability_df,
+        capability_detail_df,
         metric_column="cpk",
         value_label="CPK值",
         alert_columns=CPK_ALERT_COLUMNS,
         threshold=threshold,
-        decorated_column="cpk_decorated",
         reference_date=reference_date,
     )
 
 
 def build_weekly_cpm_alerts(
-    period_capability_df: pd.DataFrame,
+    capability_detail_df: pd.DataFrame | None,
     threshold: float = CPM_ALERT_THRESHOLD,
     reference_date: date | None = None,
 ) -> pd.DataFrame:
-    """Return below-threshold, undecorated CPM records from the previous full week."""
+    """Read the previous complete week's CPM alerts from normalized Excel records."""
     return _build_weekly_capability_alerts(
-        period_capability_df,
+        capability_detail_df,
         metric_column="cpm",
         value_label="CPM值",
         alert_columns=CPM_ALERT_COLUMNS,
         threshold=threshold,
-        decorated_column="cpm_decorated",
         reference_date=reference_date,
     )
 
@@ -225,7 +199,7 @@ def _render_capability_alert_section(
                 width="stretch",
             )
         elif has_capability_data:
-            st.success(f"未发现低于 {threshold:.2f} 的 {metric_label}。")
+            st.success(f"当前无满足预警条件的 {metric_label}。")
         else:
             st.info(f"当前产品暂无可计算的 {metric_label} 数据。")
 
@@ -362,7 +336,6 @@ def build_spc_sheet_oos_alerts(
         sheet_oos_decoration_result.decoration_df,
         time_column="sheet_start_time",
         reference_date=reference_date,
-        date_exclusion=ConfigLoader.get_inline_data_exclusion(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,

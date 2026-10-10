@@ -17,8 +17,8 @@ from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     build_sheet_point_df,
 )
 from src.inline_domain.application.aoi_rs.decoration_service import prepare_aoi_rs_decoration
-from src.inline_domain.core.aoi_rs.aoi_rs_decoration import filter_aoi_rs_report_data
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
+from src.inline_domain.core.shared.decoration_window import DecorationWindow
 from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
     AOI_RS_DECORATION_POLICY_VERSION,
     project_factory_scoped_details,
@@ -97,7 +97,8 @@ def _build_chart_points(
     coverage_end: pd.Timestamp | None = None,
     persist_shared_history: bool = False,
     special_factories: tuple[str, ...] = (),
-    date_exclusion: InlineDateExclusion | None = None,
+    exempt_param_name_contains: tuple[str, ...] | None = None,
+    decoration_window: DecorationWindow | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
@@ -113,14 +114,18 @@ def _build_chart_points(
         workbook_path=resolve_scope_decoration_path('aoi_rs'),
         product_dir=resolve_product_resource_dir(prod_code, scope="aoi_rs"),
         prod_code=prod_code,
-        exempt_param_name_contains=ConfigLoader.get_auto_decoration_param_exemptions(),
+        exempt_param_name_contains=(
+            ConfigLoader.get_auto_decoration_param_exemptions()
+            if exempt_param_name_contains is None
+            else exempt_param_name_contains
+        ),
         scope="aoi_rs",
         product_revision=product_revision,
         decision_signature=decision_signature,
         rs_details_df=rs_details_df,
         special_factories=special_factories,
         pass_through_df=pass_through_df,
-        date_exclusion=date_exclusion,
+        decoration_window=decoration_window,
     )
     if (
         persist_shared_history
@@ -139,6 +144,7 @@ def _build_chart_points(
             coverage_end=coverage_end,
             product_revision=product_revision,
             decision_signature=decision_signature,
+            exempt_param_name_contains=exempt_param_name_contains,
         )
         persist_throughput_facts(
             scope="aoi_rs",
@@ -197,6 +203,8 @@ class AoiRsReportService:
         decoration_policy_version: str = AOI_RS_DECORATION_POLICY_VERSION,
         special_factories: tuple[str, ...] = ("OLED",),
         date_exclusion: InlineDateExclusion | None = None,
+        exempt_param_name_contains: tuple[str, ...] | None = None,
+        decoration_window: DecorationWindow | None = None,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -205,6 +213,7 @@ class AoiRsReportService:
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         decoration_policy_version 与 special_factories 使规则或厂别配置变更后重建投影。
+        decoration_window 包含专用修饰的显示日期首尾，配置与当天变化后换 key。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
         """
         try:
@@ -214,6 +223,11 @@ class AoiRsReportService:
             raise AoiRsReportBuildError("AOI_RS query config is invalid.") from exc
 
         try:
+            exemptions = (
+                tuple(ConfigLoader.get_auto_decoration_param_exemptions())
+                if exempt_param_name_contains is None
+                else exempt_param_name_contains
+            )
             rs_details_df = _data_port.get_rs_details(query_config)
             persist_shared_history = bool(
                 getattr(_data_port, "supports_shared_history_persistence", False)
@@ -237,6 +251,7 @@ class AoiRsReportService:
                         coverage_end=coverage_end,
                         product_revision=product_revision,
                         decision_signature=decision_signature,
+                        exempt_param_name_contains=exemptions,
                     )
                     persist_throughput_facts(
                         scope="aoi_rs",
@@ -268,15 +283,14 @@ class AoiRsReportService:
                 coverage_end=(coverage_end if _covers_full_product(query_config) else None),
                 persist_shared_history=persist_shared_history,
                 special_factories=special_factories,
-                date_exclusion=date_exclusion,
-            )
-            rs_details_df, pass_through_df = filter_aoi_rs_report_data(
-                rs_details_df, pass_through_df, date_exclusion,
+                exempt_param_name_contains=exemptions,
+                decoration_window=decoration_window,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             return {
                 "rs_details_df": project_factory_scoped_details(
                     rs_details_df, sheet_points_df, special_factories,
+                    decoration_window=decoration_window,
                 ),
                 "pass_through_df": pass_through_df,
                 "spec_df": spec_df,
@@ -300,6 +314,7 @@ class AoiRsReportService:
         try:
             factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories())
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
+            decoration_window = ConfigLoader.get_aoi_rs_special_decoration_window()
         except ValueError as exc:
             logger.exception("[AOI_RS] invalid report decoration configuration")
             raise AoiRsReportBuildError("AOI_RS report configuration is invalid.") from exc
@@ -312,5 +327,7 @@ class AoiRsReportService:
             decoration_policy_version=AOI_RS_DECORATION_POLICY_VERSION,
             special_factories=factories,
             date_exclusion=date_exclusion,
+            exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
+            decoration_window=decoration_window,
         )
         return AoiRsReportService._view_model_from_payload(payload)

@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
+from src.inline_domain.core.spc.cpk_decoration import CAPABILITY_ALERT_MIN_SPAN_HOURS
 from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 
 
@@ -24,7 +25,10 @@ class CpkLatestExcelStore:
     def source_signature(self) -> str:
         try:
             stat = self.path.stat()
-            return f"{self.path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+            return (
+                f"{self.path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
+                f":weekly_span_hours={CAPABILITY_ALERT_MIN_SPAN_HOURS}"
+            )
         except FileNotFoundError:
             return f"{self.path.resolve()}:missing"
 

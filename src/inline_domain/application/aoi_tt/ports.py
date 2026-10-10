@@ -10,6 +10,7 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 
 
 class AoiTtDataPort(Protocol):
+    """Details/counts exclude configured display dates before decoration."""
     def get_tt_details(self, query: AoiTtQueryConfig) -> pd.DataFrame: ...
 
     def get_particle_size_counts(self, query: AoiTtQueryConfig) -> pd.DataFrame: ...

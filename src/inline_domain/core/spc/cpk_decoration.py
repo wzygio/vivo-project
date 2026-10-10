@@ -25,6 +25,7 @@ CAPABILITY_METRIC_CPM = "cpm"
 SUPPORTED_CAPABILITY_METRICS = (CAPABILITY_METRIC_CPK, CAPABILITY_METRIC_CPM)
 CPM_DECORATION_SHEET_SUFFIX = "_cpm"
 CAPABILITY_ALERT_THRESHOLD = 1.33
+CAPABILITY_ALERT_MIN_SPAN_HOURS = 48
 CAPABILITY_REPLACEMENT_UPPER_BOUND = 1.4
 
 
@@ -167,12 +168,25 @@ def build_capability_detail(
     ).reset_index(drop=True)
 
 
+def capability_alert_span_mask(frame: pd.DataFrame) -> pd.Series:
+    """Require 48h between first/last valid Sheet timestamps, not calendar bounds.
+
+    Missing, invalid or reversed bounds cannot establish sufficient coverage.
+    This gate affects alerts only; it never removes calculated capability rows.
+    """
+    if not {"period_start", "period_end"}.issubset(frame.columns):
+        return pd.Series(False, index=frame.index, dtype=bool)
+    start = pd.to_datetime(frame["period_start"], errors="coerce", format="mixed")
+    end = pd.to_datetime(frame["period_end"], errors="coerce", format="mixed")
+    return (end - start).ge(pd.Timedelta(hours=CAPABILITY_ALERT_MIN_SPAN_HOURS))
+
+
 def build_capability_anomaly_detail(
     period_capability_df: pd.DataFrame,
     metric: str,
     reference_date: date,
 ) -> pd.DataFrame:
-    """New ledger candidates are only failures from the previous complete ISO week."""
+    """Previous complete week failures need at least 48h of Sheet coverage."""
     detail = build_capability_detail(period_capability_df, metric)
     start, _ = previous_iso_week_range(reference_date)
     iso = start.isocalendar()
@@ -182,6 +196,7 @@ def build_capability_anomaly_detail(
         detail["period_type"].eq("week")
         & detail["period_label"].eq(label)
         & values.lt(CAPABILITY_ALERT_THRESHOLD)
+        & capability_alert_span_mask(detail)
     ].reset_index(drop=True)
 
 
@@ -217,20 +232,35 @@ def merge_capability_detail_with_decoration_flags(
 def refresh_existing_capability_values(
     existing: pd.DataFrame, computed: pd.DataFrame, metric: str,
 ) -> pd.DataFrame:
-    """Update calculated values for matching keys; retain history absent from this run."""
+    """Refresh values and their sample bounds; retain uncovered historical decisions."""
     if existing.empty or computed.empty:
         return existing.copy()
     column = capability_corrected_column(metric)
-    latest = _normalize_key_columns(computed)[[*CPK_KEY_COLUMNS, column]].drop_duplicates(
+    columns = [column, "period_start", "period_end"]
+    refreshed_columns = [name for name in columns if name in computed.columns]
+    renamed = {name: f"_computed_{name}" for name in refreshed_columns}
+    latest = _normalize_key_columns(computed)[[*CPK_KEY_COLUMNS, *refreshed_columns]].drop_duplicates(
         CPK_KEY_COLUMNS, keep="last",
-    ).rename(columns={column: "_computed_value"})
+    ).rename(columns=renamed)
     result = _normalize_key_columns(existing).merge(
         latest, on=CPK_KEY_COLUMNS, how="left", indicator="_computed_match",
         validate="many_to_one",
     )
     matched = result["_computed_match"].eq("both")
-    result.loc[matched, column] = result.loc[matched, "_computed_value"]
-    return result.drop(columns=["_computed_value", "_computed_match"])
+    for name in refreshed_columns:
+        if name not in result:
+            result[name] = pd.NA
+        # Excel can return strings while newly calculated bounds are Timestamps.
+        values = result.loc[matched, renamed[name]]
+        if name == column:
+            values = pd.to_numeric(values, errors="coerce")
+        if name in {"period_start", "period_end"}:
+            if pd.api.types.is_datetime64_any_dtype(result[name]):
+                values = pd.to_datetime(values, errors="coerce", format="mixed")
+            else:
+                result[name] = result[name].astype(object)
+        result.loc[matched, name] = values
+    return result.drop(columns=[*renamed.values(), "_computed_match"])
 
 
 def _append_missing_detail_rows(

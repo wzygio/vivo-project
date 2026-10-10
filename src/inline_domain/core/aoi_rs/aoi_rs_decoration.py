@@ -10,7 +10,7 @@
 - 无工作簿 / 缺产品 sheet 时按空修饰语义处理 —— 全部超规点默认截断，
   与引入工作簿前的 clip_over_spec_column 行为一致（向后兼容）。
 - 配置命中的参数豁免自动截断并保留真实值，Delete 仍优先。
-- 厂别日期排除由 filter_aoi_rs_report_data 在报表聚合前过滤明细与过货分母。
+- 厂别日期排除由基础设施仓储在返回明细与过货分母前执行。
 """
 
 from __future__ import annotations
@@ -21,10 +21,6 @@ import pandas as pd
 
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import attach_spec_values
 from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
-from src.inline_domain.core.shared.date_exclusion import (
-    InlineDateExclusion,
-    exclude_inline_factory_dates,
-)
 
 AOI_RS_OOS_DECORATION_FILE_NAME = "aoi_rs_sheet_oos_decoration.xlsx"
 AOI_RS_OOS_KEY_COLUMNS = [
@@ -42,18 +38,6 @@ _CHART_POINT_META = {
     "lot": ("lot_id", "value"),
     "sheet": ("sheet_id", "rs_qty"),
 }
-
-
-def filter_aoi_rs_report_data(
-    rs_details_df: pd.DataFrame,
-    pass_through_df: pd.DataFrame,
-    date_exclusion: InlineDateExclusion | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Exclude event dates before Sheet/Lot/period aggregation, including throughput."""
-    return (
-        exclude_inline_factory_dates(rs_details_df, date_exclusion),
-        exclude_inline_factory_dates(pass_through_df, date_exclusion),
-    )
 
 
 def normalize_aoi_rs_points(

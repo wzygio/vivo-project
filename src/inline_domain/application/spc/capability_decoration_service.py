@@ -41,6 +41,7 @@ def prepare_capability_decoration(
     *,
     decoration_port: CapabilityDecorationPort | None = None,
     workbook_path: Path | None = None,
+    strict_persistence: bool = False,
 ) -> CpkDecorationResult:
     detail = build_capability_anomaly_detail(
         period_capability_df, metric, reference_date or date.today(),
@@ -60,6 +61,7 @@ def prepare_capability_decoration(
         persist_decoration(
             product_dir, detail, sheet_name, metric,
             computed_detail_df=build_capability_detail(period_capability_df, metric),
+            **({"raise_on_error": True} if strict_persistence else {}),
             **path_kwargs,
         )
         if persist_files

@@ -13,21 +13,17 @@ from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     AOI_RS_OOS_DECORATION_FILE_NAME,
     AOI_RS_OOS_KEY_COLUMNS,
     build_aoi_rs_oos_detail,
-    filter_aoi_rs_report_data,
 )
-from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
-    build_lot_point_df,
-    build_sheet_point_df,
-)
-from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
     apply_factory_scoped_decoration,
     build_decorated_period_trend_df,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.shared.decoration_window import DecorationWindow
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
 )
+from src.inline_domain.core.shared.auto_decoration import release_exempt_parameter_flags
 from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
     persist_sheet_oos_decoration_outcome,
@@ -61,9 +57,10 @@ def prepare_aoi_rs_decoration(
     rs_details_df: pd.DataFrame | None = None,
     special_factories: Iterable[str] = (),
     pass_through_df: pd.DataFrame | None = None,
-    date_exclusion: InlineDateExclusion | None = None,
     workbook_path: Path | None = None,
+    decoration_window: DecorationWindow | None = None,
 ) -> AoiRsDecorationResult:
+    exempt_param_name_contains = tuple(exempt_param_name_contains or ())
     detail = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
     if workbook_path is not None:
         product_dir = Path(workbook_path).parent
@@ -85,6 +82,8 @@ def prepare_aoi_rs_decoration(
             product_revision=product_revision,
             decision_signature=decision_signature,
             now=now,
+            parameter_column="rs_code",
+            exempt_param_name_contains=exempt_param_name_contains,
         )
         decoration = outcome.decoration_df
     else:
@@ -104,15 +103,9 @@ def prepare_aoi_rs_decoration(
             decisions,
             AOI_RS_OOS_KEY_COLUMNS,
         )
-    # Keep source OOS decisions above; filter report facts before aggregation.
-    if date_exclusion is not None:
-        if rs_details_df is None or pass_through_df is None:
-            raise ValueError("AOI_RS date exclusion requires RS details and throughput")
-        rs_details_df, pass_through_df = filter_aoi_rs_report_data(
-            rs_details_df, pass_through_df, date_exclusion,
-        )
-        lot_points_df = build_lot_point_df(rs_details_df, pass_through_df)
-        sheet_points_df = build_sheet_point_df(rs_details_df)
+    decoration = release_exempt_parameter_flags(
+        decoration, "rs_code", exempt_param_name_contains,
+    )
     lot_decorated, sheet_decorated = apply_factory_scoped_decoration(
         lot_points_df,
         sheet_points_df,
@@ -122,6 +115,7 @@ def prepare_aoi_rs_decoration(
         exempt_param_name_contains,
         rs_details_df=rs_details_df,
         special_factories=special_factories,
+        decoration_window=decoration_window,
     )
     return AoiRsDecorationResult(
         lot_decorated,
@@ -139,4 +133,5 @@ def build_aoi_rs_period_trend(
     return build_decorated_period_trend_df(
         rs_details_df, pass_through_df, end_date,
         special_factories=ConfigLoader.get_aoi_rs_special_decoration_factories(),
+        decoration_window=ConfigLoader.get_aoi_rs_special_decoration_window(),
     )

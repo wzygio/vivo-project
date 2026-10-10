@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
+from datetime import date
 
 import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD, capability_summary_columns
 from src.inline_domain.core.monitor.period_summary import _period_windows
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_period_records
-from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS
+from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS, capability_alert_span_mask
+from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 
 def normalize_latest_cpk(frame: pd.DataFrame, product: str, *, metric: str = "cpk") -> pd.DataFrame:
@@ -40,10 +42,33 @@ def normalize_latest_cpk(frame: pd.DataFrame, product: str, *, metric: str = "cp
             raise ValueError(f"{product} {name} 明细重复项目存在冲突")
     result = result.drop_duplicates(CPK_KEY_COLUMNS).reset_index(drop=True)
     alert = result["flag"].isin(["false", "0", "0.0"]) & result[metric].lt(CPK_THRESHOLD)
+    insufficient_span = alert & result["period_type"].eq("week") & ~capability_alert_span_mask(result)
+    alert &= ~insufficient_span
     result["status"] = alert.map({True: "预警", False: "已修饰或达标"})
+    result.loc[insufficient_span, "status"] = "数据跨度不足"
     unknown = result["flag"].isin(["false", "0", "0.0"]) & result[metric].isna()
     result.loc[unknown, "status"] = "无法判定"
     return result
+
+
+def latest_capability_alerts(
+    detail: pd.DataFrame | None, reference_date: date, *, metric: str = "cpk",
+    date_exclusion: InlineDateExclusion | None = None,
+) -> pd.DataFrame:
+    """Select alerts from normalized saved records, never a computed capability report."""
+    capability_summary_columns(metric)
+    columns = ["factory", "step_id", "param_name", "period_label", metric]
+    required = {*columns, "period_type", "status"}
+    if detail is None or detail.empty or not required.issubset(detail.columns):
+        return pd.DataFrame(columns=columns)
+    frame = exclude_inline_period_records(detail, date_exclusion, as_of=pd.Timestamp(reference_date))
+    start, _ = previous_iso_week_range(reference_date)
+    iso = start.isocalendar()
+    mask = (frame["period_type"].eq("week")
+            & frame["period_label"].eq(f"{iso.year}-W{iso.week:02d}")
+            & frame["status"].eq("预警")
+            & capability_alert_span_mask(frame))
+    return frame.loc[mask, columns].reset_index(drop=True)
 
 
 def _complete_cpk_baselines(

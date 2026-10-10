@@ -8,6 +8,12 @@ from src.inline_domain.infrastructure.shared.measurement_snapshot_repository imp
 from src.shared_kernel.data_forward import DataForwardPolicy
 
 
+@pytest.fixture(autouse=True)
+def isolate_source_snapshot_tests(monkeypatch):
+    # These minimal loader frames test raw publication, not report exclusions.
+    monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_inline_data_exclusion", lambda: None)
+
+
 @pytest.mark.parametrize("metadata", [
     None,
     {"covered_from": "2026-06-01", "covered_through": "2026-06-03"},

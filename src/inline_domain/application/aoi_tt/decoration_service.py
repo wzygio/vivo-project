@@ -18,7 +18,7 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
 )
-from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
+from src.inline_domain.core.shared.auto_decoration import release_exempt_parameter_flags
 from src.inline_domain.application.shared.decoration_defaults import (
     load_sheet_oos_decisions,
     persist_sheet_oos_decoration_outcome,
@@ -47,9 +47,9 @@ def prepare_aoi_tt_decoration(
     decision_signature: str = "",
     now: datetime | None = None,
     decoration_port: SheetDecorationPort | None = None,
-    date_exclusion: InlineDateExclusion | None = None,
     workbook_path: Path | None = None,
 ) -> AoiTtDecorationResult:
+    exempt_param_name_contains = tuple(exempt_param_name_contains or ())
     detail = build_aoi_tt_oos_detail(tt_details_df, spec_df)
     if workbook_path is not None:
         product_dir = Path(workbook_path).parent
@@ -71,6 +71,8 @@ def prepare_aoi_tt_decoration(
             product_revision=product_revision,
             decision_signature=decision_signature,
             now=now,
+            parameter_column="tt_name",
+            exempt_param_name_contains=exempt_param_name_contains,
         )
         decoration = outcome.decoration_df
     else:
@@ -90,13 +92,15 @@ def prepare_aoi_tt_decoration(
             decisions,
             AOI_TT_OOS_KEY_COLUMNS,
         )
+    decoration = release_exempt_parameter_flags(
+        decoration, "tt_name", exempt_param_name_contains,
+    )
     return AoiTtDecorationResult(
         tt_details_df=apply_aoi_tt_decoration(
             tt_details_df,
             spec_df,
             decoration,
             exempt_param_name_contains,
-            date_exclusion=date_exclusion,
         ),
         decoration_df=decoration,
         decoration_path=product_dir / file_name,

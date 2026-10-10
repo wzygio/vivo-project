@@ -45,3 +45,14 @@ def test_warning_builders_share_configured_summary_workbook(monkeypatch, tmp_pat
     assert alarm._store.workbook_path == configured
     assert cpk._store.workbook_path == configured
     assert cpm._store.workbook_path == configured
+
+
+def test_spc_and_monitor_read_the_same_configured_capability_file(monkeypatch, tmp_path):
+    path = tmp_path / "external" / "custom.xlsx"
+    monkeypatch.setattr(composition.ConfigLoader, "get_domain_resource_path", lambda *args: path)
+    for metric in ["cpk", "cpm"]:
+        reader = composition.build_capability_latest_reader(metric)
+        monitor = (composition.build_cpk_monitor_service if metric == "cpk"
+                   else composition.build_cpm_monitor_service)()
+        assert reader.path == monitor._latest_reader.path == path
+        assert reader.metric == monitor._latest_reader.metric == metric

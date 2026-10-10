@@ -92,6 +92,7 @@ def _spy_fetch(recorded: list[tuple[str, str]]):
         product_revision: str = "",
         decision_signature: str = "",
         date_exclusion=None,
+        spc_point_policy=None,
     ) -> dict:
         recorded.append((prod_code, scope))
         measurements_df = _features_source.get_spc_measurements(None)
@@ -177,6 +178,7 @@ def test_dashboard_threads_product_revision_and_per_scope_decision_signature(
         product_revision: str = "",
         decision_signature: str = "",
         date_exclusion=None,
+        spc_point_policy=None,
     ) -> dict:
         recorded.append((prod_code, scope, product_revision, decision_signature))
         measurements_df = _features_source.get_spc_measurements(None)

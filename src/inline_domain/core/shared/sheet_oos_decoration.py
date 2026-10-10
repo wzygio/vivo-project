@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable
 
 import pandas as pd
+
+from src.inline_domain.core.shared.decoration_window import decoration_window_mask
+
+SpcPointDecorationPolicy = tuple[float, str, str]
 
 OOS_DECORATION_FILE_NAME = "spc_sheet_oos_decoration.xlsx"
 OOS_KEY_COLUMNS = ["prod_code", "step_id", "param_name", "sheet_id"]
@@ -113,7 +118,11 @@ def _clip_inside_spec(row: pd.Series, side: str) -> float:
     value = row.get("param_value")
     usl = row.get("_oos_usl")
     lsl = row.get("_oos_lsl")
-    if pd.isna(value) or pd.isna(usl) or pd.isna(lsl) or float(usl) <= float(lsl):
+    if (
+        pd.isna(value) or pd.isna(usl) or pd.isna(lsl)
+        or not math.isfinite(float(usl)) or not math.isfinite(float(lsl))
+        or float(usl) <= float(lsl)
+    ):
         return value
 
     span = float(usl) - float(lsl)
@@ -147,12 +156,15 @@ def normalize_spc_decisions(decisions: pd.DataFrame) -> pd.DataFrame:
 
 def apply_spc_point_decoration(
     measurements: pd.DataFrame, specs: pd.DataFrame, decisions: pd.DataFrame,
+    *, point_policy: SpcPointDecorationPolicy | None = None,
 ) -> pd.DataFrame:
     """Decorate SPC points directly, without Sheet aggregation or row deletion.
 
     Specifications remain available to the historical distribution chart even
     when an indicator has no recent Sheets. Decision keys retain their existing
-    normalization and last-record-wins semantics.
+    normalization and last-record-wins semantics. An explicit point policy uses
+    a central spec band in its inclusive display-date window; outside the
+    window, the original spec bounds apply. False always preserves the value.
     """
     if measurements.empty or specs.empty:
         return measurements.copy()
@@ -173,6 +185,15 @@ def apply_spc_point_decoration(
     df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
     df["_oos_usl"] = pd.to_numeric(df.get("usl"), errors="coerce")
     df["_oos_lsl"] = pd.to_numeric(df.get("lsl"), errors="coerce")
+    if point_policy is not None:
+        fraction, start_date, end_date = point_policy
+        if isinstance(fraction, bool) or not math.isfinite(fraction) or not 0 < fraction <= 1:
+            raise ValueError("SPC central_fraction must be in (0, 1]")
+        active_window = decoration_window_mask(df["sheet_start_time"], (start_date, end_date))
+        midpoint = (df["_oos_usl"] + df["_oos_lsl"]) / 2
+        half_span = (df["_oos_usl"] - df["_oos_lsl"]) * fraction / 2
+        df.loc[active_window, "_oos_usl"] = (midpoint + half_span).loc[active_window]
+        df.loc[active_window, "_oos_lsl"] = (midpoint - half_span).loc[active_window]
     for side, mask in [
         ("upper", df["param_value"] > df["_oos_usl"]),
         ("lower", df["param_value"] < df["_oos_lsl"]),

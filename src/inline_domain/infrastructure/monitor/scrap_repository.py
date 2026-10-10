@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 # [Phase 1] 调试追踪专用 Logger
 trace_logger = logging.getLogger("trace")
@@ -24,6 +25,8 @@ class InlineScrapRepository:
         注意：scrap_sheets.xlsx 是统一文件，内部已包含所有产品的数据，
               通过 '产品型号' 列进行过滤。
         """
+        # Invalid exclusion policy must fail before the legacy read fallback.
+        ConfigLoader.get_inline_data_exclusion()
         try:
             scrap_path = ConfigLoader.get_domain_resource_path("inline_domain", "scrap_sheets", "scrap_sheets.xlsx")
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L1] scrap_path={scrap_path}, exists={scrap_path.exists()}")
@@ -112,6 +115,7 @@ class InlineScrapRepository:
                 ("sheet_start_time",),
             )
             df = ConfigLoader.get_report_cutoff_policy().filter_frame(df, "sheet_start_time")
+            df = apply_inline_date_exclusion(df, time_column="sheet_start_time")
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L7] 最终返回: {len(df)} 条, columns={df.columns.tolist()}")
             return df
 

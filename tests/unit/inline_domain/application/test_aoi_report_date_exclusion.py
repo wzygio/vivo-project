@@ -12,6 +12,7 @@ from src.inline_domain.application.aoi_tt import aoi_tt_service, decoration_serv
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.core.shared.sheet_oos_decoration import merge_detail_with_decoration_flags
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ def _service_case(kind, rows):
 
     def read(_query):
         calls.append(1)
-        return source
+        return apply_inline_date_exclusion(source)
 
     if kind == "rs":
         module = aoi_rs_service
@@ -61,7 +62,7 @@ def _service_case(kind, rows):
             dict(factory="OLED", step_id="1", rs_code="RS", type_flag=kind, spec=value)
             for kind, value in [("LOT_RATIO", 4.), ("SHEET_ID", 10.)]
         ])
-        port = SimpleNamespace(get_rs_details=read, get_pass_through=lambda _q: rows,
+        port = SimpleNamespace(get_rs_details=read, get_pass_through=lambda _q: apply_inline_date_exclusion(rows),
                                get_rs_spec_limits=lambda _p: specs)
     else:
         module = aoi_tt_service
@@ -88,7 +89,7 @@ def test_report_filters_before_aggregation_and_config_changes_invalidate_cache(r
         details = getattr(result, f"{kind}_details_df")
         assert details.sheet_id.tolist() == ["A", "C", "D"]
         assert len(result.indicators_df) == 2
-        assert not ledgers[0].empty  # Excluded source OOS remains in the decision ledger.
+        assert ledgers[0].empty  # Excluded facts never reach OOS decoration or its ledger.
         if kind == "rs":
             lot = result.lot_points_df.set_index("lot_id").loc["L1"]
             assert (lot.rs_qty, lot.sheet_qty, lot.value) == (3., 1, 3.)
@@ -133,7 +134,7 @@ def test_native_payload_survives_service_reload_during_cache_fill(report_case, k
 
     def read(_query):
         importlib.reload(module)
-        return source
+        return apply_inline_date_exclusion(source)
 
     setattr(port, f"get_{kind}_details", read)
     try:

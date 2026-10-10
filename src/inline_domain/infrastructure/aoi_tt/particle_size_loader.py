@@ -17,6 +17,9 @@ from src.inline_domain.infrastructure.shared.tp_defect_data_loader import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
+from src.inline_domain.infrastructure.shared.date_exclusion import (
+    apply_inline_date_exclusion, inline_report_windows,
+)
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -47,22 +50,20 @@ def load_particle_size_counts(
         display_end,
         ConfigLoader.get_report_cutoff_policy().boundary() + pd.Timedelta(microseconds=1),
     )
-    source_start, source_end = policy.to_source_window(display_start, display_end)
     loaders = []
     if requested_factory in {None, "ARRAY"}:
-        loaders.append(array_data_loader)
+        loaders.append(("ARRAY", array_data_loader))
     if requested_factory in {None, "TP"}:
-        loaders.append(tp_data_loader)
-    frames = [
-        loader(
-            db_manager,
-            prod_code=query.prod_code,
-            start_time=source_start.to_pydatetime(),
-            end_time=source_end.to_pydatetime(),
-            step_id=query.step_id,
-        )
-        for loader in loaders
-    ]
+        loaders.append(("TP", tp_data_loader))
+    frames = []
+    for factory, loader in loaders:
+        for window_start, window_end in inline_report_windows(display_start, display_end, factory):
+            source_start, source_end = policy.to_source_window(window_start, window_end)
+            frames.append(loader(
+                db_manager, prod_code=query.prod_code,
+                start_time=source_start.to_pydatetime(), end_time=source_end.to_pydatetime(),
+                step_id=query.step_id,
+            ))
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if result.empty:
         return pd.DataFrame(columns=PARTICLE_SIZE_COUNT_COLUMNS)
@@ -74,6 +75,5 @@ def load_particle_size_counts(
     ).fillna(0)
     normalized = normalized.dropna(subset=["start_time"])
     displayed = policy.shift_frame(normalized, ("start_time",))
-    return ConfigLoader.get_report_cutoff_policy().filter_frame(
-        displayed, "start_time",
-    ).reset_index(drop=True)
+    displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(displayed, "start_time")
+    return apply_inline_date_exclusion(displayed).reset_index(drop=True)

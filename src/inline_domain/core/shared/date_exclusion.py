@@ -1,4 +1,8 @@
-"""Pure Inline projection exclusion by factory and inclusive event-date range."""
+"""Inline exclusion policy type and rules for maintained period aggregates.
+
+Point/fact filtering is owned by infrastructure/shared/date_exclusion.py and
+executes before report decoration. Period rules retain their separate policy.
+"""
 
 from __future__ import annotations
 
@@ -7,32 +11,6 @@ from datetime import date
 import pandas as pd
 
 InlineDateExclusion = tuple[tuple[str, ...], str, str]
-
-
-def exclude_inline_factory_dates(
-    details: pd.DataFrame, exclusion: InlineDateExclusion | None,
-    *, time_column: str = "start_time",
-) -> pd.DataFrame:
-    """Keep source values/order; missing event dates cannot match the exclusion."""
-    if exclusion is None or not exclusion[0] or details.empty:
-        return details.copy()
-    missing = {"factory", time_column} - set(details.columns)
-    if missing:
-        raise ValueError(f"Inline date exclusion requires columns: {sorted(missing)}")
-    factories, start_date, end_date = exclusion
-    start, end = pd.Timestamp(start_date), pd.Timestamp(end_date)
-    if start > end:
-        raise ValueError("Inline date exclusion start_date must not exceed end_date")
-    # Source adapters already supply display time; compare its local calendar date.
-    event_dates = (
-        pd.to_datetime(details[time_column], errors="coerce", format="mixed")
-        .dt.tz_localize(None).dt.normalize()
-    )
-    factory_matches = details["factory"].astype("string").str.strip().str.upper().isin(
-        {name.strip().upper() for name in factories},
-    )
-    excluded = factory_matches & event_dates.between(start, end, inclusive="both")
-    return details.loc[~excluded].copy()
 
 
 def exclude_inline_period_records(

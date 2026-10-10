@@ -14,6 +14,7 @@ from src.inline_domain.application.ports.measurement_snapshot import (
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     keep_latest_measurements,
 )
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 TT_DETAIL_COLUMNS = [
     "factory", "prod_code", "start_time", "sheet_id", "lot_id",
     "step_id", "tt_name", "tt_qty",
@@ -6028,7 +6029,9 @@ class AoiTtRepository:
         self.particle_size_ratio_loader = particle_size_ratio_loader
 
     def get_tt_details(self, query: AoiTtQueryConfig) -> pd.DataFrame:
-        raw = self.raw_measurements.get_measurements(query.prod_code, query.end_date)
+        raw = apply_inline_date_exclusion(
+            self.raw_measurements.get_measurements(query.prod_code, query.end_date),
+        )
         specs = self.metadata.get_parameter_specs(query.prod_code)
         param_set = _project_tt_param_set(specs)
         if raw.empty or param_set.empty:
@@ -6082,7 +6085,7 @@ class AoiTtRepository:
     def get_particle_size_counts(self, query: AoiTtQueryConfig) -> pd.DataFrame:
         if self.particle_size_loader is None:
             return pd.DataFrame()
-        return self.particle_size_loader(query)
+        return apply_inline_date_exclusion(self.particle_size_loader(query))
 
     def get_particle_size_ratios(self) -> pd.DataFrame:
         if self.particle_size_ratio_loader is None:

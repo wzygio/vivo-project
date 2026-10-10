@@ -400,11 +400,23 @@ def _cpk_row(period_label: str, cpk: float, decorated: bool = False) -> dict:
         "period_type": "week",
         "period_label": period_label,
         "cpk_corrected": cpk,
+        "period_start": "2026-08-24",
+        "period_end": "2026-08-26",
         "flag": decorated,
     }
 
 
 PREV_WEEK_LABEL = "2026-W35"  # 参考日 2026-09-02 的上一 ISO 周
+
+
+@pytest.mark.parametrize("end, expected", [
+    ("2026-08-25 23:59:59", CELL_STATE_OK),
+    ("2026-08-26 00:00:00", CELL_STATE_ALERT),
+])
+def test_spc_cpk_matrix_respects_sheet_span(end, expected):
+    row = {**_cpk_row(PREV_WEEK_LABEL, 1.1), "period_end": end}
+    context = _make_context(spc_cpk_loader=lambda prod: pd.DataFrame([row]))
+    assert _evaluate("spc_cpk_trend", context)["state"] == expected
 
 
 def test_spc_cpk_below_threshold_previous_week_is_alert() -> None:

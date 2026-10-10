@@ -397,6 +397,36 @@ class ConfigLoader:
             return "sheet_mean"
 
     @classmethod
+    def get_spc_point_decoration_policy(
+        cls, *, today: date | None = None,
+    ) -> tuple[float, str, str] | None:
+        """Resolve the optional central specification band and its display dates."""
+        report = cls.load_domain_config("inline_domain").get("spc", {})
+        if not isinstance(report, dict):
+            raise ValueError("spc must be a mapping")
+        section = report.get("point_decoration", {})
+        if not isinstance(section, dict):
+            raise ValueError("spc.point_decoration must be a mapping")
+        enabled = section.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ValueError("spc.point_decoration.enabled must be a boolean")
+        if not enabled:
+            return None
+        configured = section.get("central_fraction", .5)
+        if isinstance(configured, bool):
+            raise ValueError("spc.point_decoration.central_fraction must be in (0, 1]")
+        try:
+            fraction = float(configured)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("spc.point_decoration.central_fraction must be in (0, 1]") from exc
+        if not 0 < fraction <= 1:
+            raise ValueError("spc.point_decoration.central_fraction must be in (0, 1]")
+        start, end = cls._decoration_date_window(
+            section, default_start="2026-10-05", path="spc.point_decoration", today=today,
+        )
+        return fraction, start, end
+
+    @classmethod
     def get_spc_period_box_source(cls) -> str:
         """Read the SPC capability period boxplot sample source from the inline domain config."""
         try:
@@ -519,6 +549,35 @@ class ConfigLoader:
         ):
             raise ValueError("aoi_rs.special_decoration.factories must be a list of factory names")
         return list(dict.fromkeys(value.strip().upper() for value in factories))
+
+    @classmethod
+    def get_aoi_rs_special_decoration_window(
+        cls, *, today: date | None = None,
+    ) -> tuple[str, str]:
+        """Resolve the inclusive display dates for AOI_RS special rules."""
+        report = cls.load_domain_config("inline_domain").get("aoi_rs", {})
+        if not isinstance(report, dict):
+            raise ValueError("aoi_rs must be a mapping")
+        section = report.get("special_decoration", {})
+        if not isinstance(section, dict):
+            raise ValueError("aoi_rs.special_decoration must be a mapping")
+        return cls._decoration_date_window(
+            section, default_start="2026-09-21", path="aoi_rs.special_decoration", today=today,
+        )
+
+    @staticmethod
+    def _decoration_date_window(
+        section: dict, *, default_start: str, path: str, today: date | None = None,
+    ) -> tuple[str, str]:
+        try:
+            start = date.fromisoformat(str(section.get("start_date", default_start)))
+            configured_end = section.get("end_date", "today")
+            end = (today or date.today()) if configured_end == "today" else date.fromisoformat(str(configured_end))
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"{path} requires ISO start_date and ISO end_date or 'today'") from exc
+        if start > end:
+            raise ValueError(f"{path}.start_date must not exceed end_date")
+        return start.isoformat(), end.isoformat()
 
     @classmethod
     def get_aoi_tt_particle_size_generation_enabled(cls) -> bool:

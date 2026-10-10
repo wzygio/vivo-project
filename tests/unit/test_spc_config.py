@@ -1,6 +1,30 @@
 from pathlib import Path
+from datetime import date
+import pytest
 
 from src.shared_kernel.config import ConfigLoader
+
+
+def test_spc_point_policy_resolves_dates_and_ratio(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": {
+        "enabled": True, "central_fraction": .5, "start_date": "2026-10-05", "end_date": "today",
+    }}})
+    assert ConfigLoader.get_spc_point_decoration_policy(today=date(2026, 10, 10)) == (.5, "2026-10-05", "2026-10-10")
+
+
+@pytest.mark.parametrize("section", [{}, {"enabled": False}])
+def test_missing_or_disabled_point_policy_keeps_legacy_mode(monkeypatch, section):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": section}})
+    assert ConfigLoader.get_spc_point_decoration_policy() is None
+
+
+@pytest.mark.parametrize("ratio", [0, -1, 1.1, float("nan"), True])
+def test_invalid_point_fraction_is_rejected(monkeypatch, ratio):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": {
+        "enabled": True, "central_fraction": ratio, "start_date": "2026-10-05",
+    }}})
+    with pytest.raises(ValueError, match="central_fraction"):
+        ConfigLoader.get_spc_point_decoration_policy(today=date(2026, 10, 10))
 
 
 def test_get_spc_line_chart_param_name_contains_normalizes_config(

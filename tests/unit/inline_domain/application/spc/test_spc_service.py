@@ -466,6 +466,51 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     assert 1.33 < second.period_capability_df["cpm"].iloc[0] < 1.4
 
 
+def test_same_week_snapshot_change_refreshes_saved_values_through_both_caches(monkeypatch, tmp_path):
+    from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
+    from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+    from src.inline_domain.core.monitor.cpk_latest import latest_capability_alerts
+
+    SpcReportService.fetch_spc_report_payload.clear()
+    fetch_decorated_features.clear()
+    monkeypatch.setattr(spc_service.ConfigLoader, "get_project_root", lambda: tmp_path)
+
+    class ChangingSource(FakeSpcRepository):
+        values = [41., 59., 41., 59.]
+        calls = 0
+
+        def get_spc_measurements(self, config, force_refresh=False):
+            self.calls += 1
+            frame = super().get_spc_measurements(config, force_refresh)
+            frame["param_value"] = self.values
+            frame["sheet_start_time"] = frame["sheet_start_time"].replace({"2026-06-02": "2026-06-03"})
+            return frame
+
+    source = ChangingSource(tmp_path, True, None)
+    snapshot = tmp_path / "data/inline_domain/shared/inline_measurements_M626.parquet"
+    snapshot.parent.mkdir(parents=True)
+    snapshot.write_bytes(b"snapshot-v1")
+    query = SpcQueryConfig(prod_code="M626", start_date="2026-06-01", end_date="2026-06-08")
+    kwargs = dict(_data_port=source, query_config_json=query.model_dump_json(), period_sigma_source="point_value")
+    first = SpcReportService.get_spc_report_data(
+        **kwargs, snapshot_signature=spc_input_signature(tmp_path, "M626"),
+    )
+    assert first.period_capability_df["cpk"].iloc[0] < 1.33
+    path = first.cpk_decoration_result.decoration_path
+    reader = CpkLatestExcelStore(path)
+    assert len(latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8))) == 1
+    source.values = [49., 51., 49., 51.]
+    snapshot.write_bytes(b"snapshot-v2-more-data")
+    second = SpcReportService.get_spc_report_data(
+        **kwargs, snapshot_signature=spc_input_signature(tmp_path, "M626"),
+    )
+    assert source.calls == 2
+    assert second.period_capability_df["cpk"].iloc[0] >= 1.33
+    assert latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8)).empty
+    saved = pd.read_excel(path, sheet_name="M626")
+    assert len(saved) == 1 and saved["cpk_corrected"].iloc[0] >= 1.33
+
+
 def _decoration_payload_with_decisions() -> dict:
     return {
         "decoration_df": pd.DataFrame(),

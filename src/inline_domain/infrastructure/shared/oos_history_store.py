@@ -33,6 +33,7 @@ from src.inline_domain.core.shared.oos_history import (
     OosHistorySnapshot,
     OosScopeContract,
 )
+from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
 
 class OosHistoryError(RuntimeError):
@@ -90,6 +91,16 @@ class OosHistoryStore:
         return self._snapshot_dir / f"{normalized_scope}__{digest}.parquet"
 
     def read(self, scope: str, prod_code: str) -> OosHistorySnapshot | None:
+        snapshot = self._read_source(scope, prod_code)
+        if snapshot is None:
+            return None
+        frame = apply_inline_date_exclusion(
+            snapshot.frame, time_column=self.contract_for(scope).event_time_column,
+        )
+        # Metadata describes the preserved source file, not the filtered view.
+        return OosHistorySnapshot(frame=frame, metadata=snapshot.metadata)
+
+    def _read_source(self, scope: str, prod_code: str) -> OosHistorySnapshot | None:
         path = self.snapshot_path(scope, prod_code)
         if not path.exists():
             return None
@@ -137,7 +148,7 @@ class OosHistoryStore:
 
         path = self.snapshot_path(normalized_scope, prod_code)
         with self._lock_for(path):
-            current = self.read(normalized_scope, prod_code)
+            current = self._read_source(normalized_scope, prod_code)
             if current is None:
                 retained = pd.DataFrame(columns=contract.detail_columns)
             else:
@@ -172,7 +183,9 @@ class OosHistoryStore:
                 row_count=len(merged),
             )
             self._write(path, merged, metadata)
-            return OosHistorySnapshot(merged, metadata)
+            return OosHistorySnapshot(
+                apply_inline_date_exclusion(merged, time_column=contract.event_time_column), metadata,
+            )
 
     @staticmethod
     def _normalize_facts(
