@@ -19,7 +19,7 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
-from src.inline_domain.core.shared.sheet_oos_decoration import SpcPointDecorationPolicy
+from src.inline_domain.core.spc.spc_point_decoration import SpcPointDecorationPolicy
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
@@ -300,6 +300,7 @@ class MonitorAnalysisService:
         """
         [内部缓存层] 负责所有重负载的查询与计算，返回原生字典以完美规避 Pickle 序列化陷阱。
 
+        SPC 使用传统 OOS 修饰之后再执行中央区间修饰的同一批点位。
         ``product_revisions``/``decision_signatures`` 由页面按产品（及 scope）预算后
         传入：prod -> revision 字符串；prod -> {scope -> 决策签名}。二者进入缓存 key，
         用户编辑 __flags 或刷新缓存换 revision 时触发 L2 miss 与明细重建。

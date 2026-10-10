@@ -8,10 +8,6 @@ from typing import Iterable
 
 import pandas as pd
 
-from src.inline_domain.core.shared.decoration_window import decoration_window_mask
-
-SpcPointDecorationPolicy = tuple[float, str, str]
-
 OOS_DECORATION_FILE_NAME = "spc_sheet_oos_decoration.xlsx"
 OOS_KEY_COLUMNS = ["prod_code", "step_id", "param_name", "sheet_id"]
 OOS_DETAIL_COLUMNS = [
@@ -137,15 +133,15 @@ def _clip_inside_spec(row: pd.Series, side: str) -> float:
             value,
             side,
         ]
-)
+    )
     margin = (0.05 + fraction * 0.1) * span
     if side == "upper":
         return float(usl) - margin
     return float(lsl) + margin
 
 
-def normalize_spc_decisions(decisions: pd.DataFrame) -> pd.DataFrame:
-    """SPC supports boolean actions only; legacy Delete preserves source values."""
+def normalize_boolean_decisions(decisions: pd.DataFrame) -> pd.DataFrame:
+    """Normalize boolean-only actions; legacy Delete preserves source values."""
     result = decisions.copy()
     if "flag" in result.columns:
         result["flag"] = result["flag"].map(
@@ -154,18 +150,10 @@ def normalize_spc_decisions(decisions: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-def apply_spc_point_decoration(
+def prepare_point_decoration(
     measurements: pd.DataFrame, specs: pd.DataFrame, decisions: pd.DataFrame,
-    *, point_policy: SpcPointDecorationPolicy | None = None,
 ) -> pd.DataFrame:
-    """Decorate SPC points directly, without Sheet aggregation or row deletion.
-
-    Specifications remain available to the historical distribution chart even
-    when an indicator has no recent Sheets. Decision keys retain their existing
-    normalization and last-record-wins semantics. An explicit point policy uses
-    a central spec band in its inclusive display-date window; outside the
-    window, the original spec bounds apply. False always preserves the value.
-    """
+    """Attach original specs and a boolean _decorate mask without clipping values."""
     if measurements.empty or specs.empty:
         return measurements.copy()
     spec_keys = ["prod_code", "step_id", "param_name"]
@@ -173,7 +161,7 @@ def apply_spc_point_decoration(
     df = _normalize_key_columns(measurements).drop(columns=spec_columns, errors="ignore")
     limits = _normalize_key_columns(specs, spec_keys)[spec_keys + spec_columns]
     df = df.merge(limits, on=spec_keys, how="left", validate="many_to_one")
-    flags = normalize_spc_decisions(decisions)
+    flags = normalize_boolean_decisions(decisions)
     if flags.empty:
         df["_decorate"] = True
     else:
@@ -183,25 +171,28 @@ def apply_spc_point_decoration(
         # Flags were normalized before the join; unmatched points default to True.
         df["_decorate"] = df["_decorate"].ne(False)
     df["param_value"] = pd.to_numeric(df["param_value"], errors="coerce")
-    df["_oos_usl"] = pd.to_numeric(df.get("usl"), errors="coerce")
-    df["_oos_lsl"] = pd.to_numeric(df.get("lsl"), errors="coerce")
-    if point_policy is not None:
-        fraction, start_date, end_date = point_policy
-        if isinstance(fraction, bool) or not math.isfinite(fraction) or not 0 < fraction <= 1:
-            raise ValueError("SPC central_fraction must be in (0, 1]")
-        active_window = decoration_window_mask(df["sheet_start_time"], (start_date, end_date))
-        midpoint = (df["_oos_usl"] + df["_oos_lsl"]) / 2
-        half_span = (df["_oos_usl"] - df["_oos_lsl"]) * fraction / 2
-        df.loc[active_window, "_oos_usl"] = (midpoint + half_span).loc[active_window]
-        df.loc[active_window, "_oos_lsl"] = (midpoint - half_span).loc[active_window]
+    return df
+
+
+def clip_point_values_to_limits(
+    points: pd.DataFrame, lower: pd.Series, upper: pd.Series,
+    *, eligible: pd.Series | None = None,
+) -> pd.DataFrame:
+    """Clip allowed points inside supplied limits, preserving original specs and flags."""
+    df = points.copy()
+    df["_oos_usl"] = upper
+    df["_oos_lsl"] = lower
+    allowed = df["_decorate"]
+    if eligible is not None:
+        allowed = allowed & eligible
     for side, mask in [
         ("upper", df["param_value"] > df["_oos_usl"]),
         ("lower", df["param_value"] < df["_oos_lsl"]),
     ]:
-        active = mask & df["_decorate"]
+        active = mask & allowed
         if active.any():
             df.loc[active, "param_value"] = df.loc[active].apply(_clip_inside_spec, axis=1, side=side)
-    return df.drop(columns=["_decorate", "_oos_usl", "_oos_lsl"])
+    return df.drop(columns=["_oos_usl", "_oos_lsl"])
 
 
 def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:

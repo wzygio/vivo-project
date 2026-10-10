@@ -55,7 +55,7 @@ class LiveMonitorSource:
         scopes = tuple(scopes)
         policy = ConfigLoader.get_inline_data_exclusion()
         point_policy = ConfigLoader.get_spc_point_decoration_policy() if "spc" in scopes else None
-        return f"live-v4-point-band:{','.join(sorted(scopes))}:{self._signature_provider(products)}:{policy!r}:{point_policy!r}"
+        return f"live-v5-sequential-point-band:{','.join(sorted(scopes))}:{self._signature_provider(products)}:{policy!r}:{point_policy!r}"
 
     def read_payload(
         self, product: str, scope: str, start_date: str | None = None,

@@ -6,6 +6,7 @@ from src.inline_domain.application.shared import decorated_data
 from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
 from src.inline_domain.core.shared import sheet_oos_decoration as rules
 from src.inline_domain.core.spc.spc_calculator import build_period_capability_report
+from src.inline_domain.core.spc.spc_point_decoration import apply_spc_point_decoration
 from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
 
 
@@ -91,7 +92,7 @@ def test_spc_point_decoration_needs_no_sheet_statistics(flag):
     expected = rules.apply_sheet_oos_decoration(
         points, preprocess_sheet_features(points, specs()), expected_decisions,
     )
-    actual = rules.apply_spc_point_decoration(points, specs(), decisions)
+    actual = apply_spc_point_decoration(points, specs(), decisions)
     pd.testing.assert_frame_equal(actual[points.columns], expected[points.columns])
     assert len(actual) == len(points)
 

@@ -8,9 +8,9 @@
 
 ## SPC 当前规则（2026-09-21）
 
-2026-10-10 补充：SPC 已启用可配置的中央规格区间修饰，默认显示日期 2026-10-05 至当天、中间50%。窗口内目标区间外的点即使未超出原 USL/LSL 也会修饰，False 保留；窗口外沿用传统 OOS。此专用规则由 [SPC 点位修饰规则](../spc/rules-spc-point-decoration.md) 维护。AOI_RS 的厂别日期与 Sheet→Lot→周期规则见 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md)。
+2026-10-10 补充：SPC 已启用可配置的中央规格区间修饰，显示日期 2026-10-05 至当天、比例服从 `central_fraction`。窗口内目标区间外的点即使未超出原 USL/LSL 也会修饰，False 保留；窗口外沿用传统 OOS。此专用规则及当前比例由 [SPC 点位修饰规则](../spc/rules-spc-point-decoration.md) 维护。AOI_RS 的厂别日期与 Sheet→Lot→周期规则见 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md)。
 
-SPC 已改为布尔决策：点位直接关联规格与 flag，True 修饰目标区间外的点（窗口内采用中央区间，窗口外采用原规格区间），False 保留原值；旧 Delete 兼容为 False，新上传拒绝 Delete。完整历史点位仍供月周日分布图使用，SPC 报表仅计算上周一之后的完整 Sheet 特征及上一完整周能力。CTQ 等其他口径仍保留下述三态处理；SPC 具体链路见 [SPC 数据链路](../spc/data-flow-spc.md)。
+SPC 已改为布尔决策：点位直接关联规格与 flag，True 先按原规格执行传统修饰，再在日期窗口内按中央区间执行专用修饰；两个阶段均尊重 False 保留原值。SPC 执行顺序和专用规则归属 `core/spc/spc_point_decoration.py`，共享模块提供通用规格、决策和截回能力。旧 Delete 兼容为 False，新上传拒绝 Delete。完整历史点位仍供月周日分布图使用，SPC 报表仅计算上周一之后的完整 Sheet 特征及上一完整周能力。CTQ 等其他口径仍保留下述三态处理；SPC 具体链路见 [SPC 数据链路](../spc/data-flow-spc.md)。
 
 ## 1. 结论
 

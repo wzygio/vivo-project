@@ -50,12 +50,12 @@ prod_code + factory + step_id + param_name
 |---|---|---|
 | Sheet OOS 清单 | 修饰前 Sheet 的 `sheet_max > usl` 或 `sheet_min < lsl`。 | 生成异常明细；清单筛选本身不删除计算点位。 |
 | Sheet OOC 清单 | 修饰前 Sheet 的 `sheet_mean > ucl` 或 `sheet_mean < lcl`，且该 Sheet 没有点位越过 USL/LSL。 | 生成异常明细；不改写或剔除测量点位。 |
-| SPC 点位修饰 | 按产品、站点、参数、Sheet 匹配 OOS 决策，窗口内对比中央规格区间，窗口外对比原 USL/LSL。 | 启用修饰且规格有效时改写目标区间外点位的 `param_value`，再重算 Sheet 均值、最大值、最小值。 |
+| SPC 点位修饰 | 按产品、站点、参数、Sheet 匹配 OOS 决策，先按原 USL/LSL 执行传统修饰，再在专用窗口内按中央规格区间进一步修饰。 | 启用修饰且规格有效时串行改写点位的 `param_value`，再用最终点位重算 Sheet 均值、最大值、最小值。 |
 | CPK/CPM 计算 | 修饰后的 Sheet 特征和点位，经能力窗口、参数豁免及有效输入检查。 | 从这些输入计算 μ、σ 和能力值，不再按 OOS/OOC 状态筛除点位。 |
 
 `build_sheet_ooc_detail()` 中排除 OOS Sheet 是**报警分类优先级**：同一 Sheet 指标已按点位极值触发 OOS，就不重复登记为 OOC。函数操作输入副本并返回清单，既不修改 Sheet 极值或规格限，也不将 OOS Sheet 从能力样本中移除。这里的“修饰前”仍已完成源校正、基础设施日期排除、清洗和异常点过滤。
 
-实际改值由 `apply_spc_point_decoration()` 执行：`flag=True`、无决策或空值默认启用；`flag=False` 保留原值；旧 `Delete` 在 SPC 中兼容为 False，保留点位。当前显示日期 2026-10-05 至当天默认把目标设为规格跨度中间的50%，目标区间外的点移到该区间以内，原规格内的点也可能命中。窗口外沿用传统 OOS 修饰；目标区间内点不变，不删点，不改写原规格限，缺少有限有效双边范围时保留原值。完整动作及缓存规则见 [SPC 专用点位修饰](rules-spc-point-decoration.md)。
+实际改值由 `core/spc/spc_point_decoration.py` 的 `apply_spc_point_decoration()` 执行：先传统 OOS 修饰，再执行专用中央区间修饰；`flag=True`、无决策或空值默认启用，两个阶段均尊重 `flag=False`；旧 `Delete` 在 SPC 中兼容为 False，保留点位。显示日期 2026-10-05 至当天按配置比例派生专用目标，第一阶段输出仍在目标区间外的点进一步移到区间以内，原规格内的点也可能命中。窗口外只执行传统阶段；每阶段目标区间内输入不变，不删点，不改写原规格限，缺少有限有效双边范围时保留原值。当前比例、完整动作、margin 及缓存规则见 [SPC 专用点位修饰](rules-spc-point-decoration.md)。
 
 `prepare_decorated_data()` 使用修饰后的点位重新生成 `sheet_mean`、`sheet_max`、`sheet_min`；`SpcReportService` 将修饰后的两张表传入 `build_period_capability_report()`。当前 `point_value` 配置下，μ 来自重算后的 Sheet 均值，σ 来自修饰后的点位。改值因此可以同时影响 μ 和 σ，但不保证 CPK/CPM 达标。切换 `sheet_mean` 口径时，σ 也使用修饰后 Sheet 均值。
 
@@ -331,7 +331,7 @@ Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷
 | 能力准入、Cpk/Cpm 公式、周期 μ/σ 和回退 | [spc_calculator.py](../../../../src/inline_domain/core/spc/spc_calculator.py)：`has_valid_capability_inputs()`、`calculate_cpk()`、`calculate_cpm()`、`_period_frame()`、`_build_period_measurement_stats()`、`normalize_period_sigma_source()`、`build_period_capability_report()` |
 | 点位去重、单片均值、Sheet 时间与规格关联 | [monitor_calculator.py](../../../../src/inline_domain/core/monitor/monitor_calculator.py)：`preprocess_sheet_features()` |
 | 修饰后 Sheet 与点位输入的组装 | [decorated_data.py](../../../../src/inline_domain/application/shared/decorated_data.py)：`_preprocess_sheet_features_by_type()`、`prepare_decorated_data()` |
-| OOS/OOC 清单分类与 SPC 点位改值 | [sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)：`build_sheet_oos_detail()`、`normalize_spc_decisions()`、`apply_spc_point_decoration()`；[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py)：`build_sheet_ooc_detail()` |
+| OOS/OOC 清单分类与 SPC 点位改值 | [sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)：`build_sheet_oos_detail()`；[spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py)：`normalize_spc_decisions()`、`apply_spc_point_decoration()`；[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py)：`build_sheet_ooc_detail()` |
 | 上一完整周、能力豁免、配置选择和后处理编排 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)：`exclude_cpm_cpk_parameters()`、`SpcReportService.fetch_spc_report_payload()` |
 | 规格读取与覆盖 | [measurement_metadata_loader.py](../../../../src/inline_domain/infrastructure/shared/measurement_metadata_loader.py)：`load_parameter_specs()`；[measurement_preparation.py](../../../../src/inline_domain/infrastructure/shared/measurement_preparation.py)：`get_spec_limits()` |
 | 当前标准差口径 | [inline_domain.yaml](../../../../config/domain/inline_domain.yaml)：`spc.spc_cpk.period_sigma_source`；[config.py](../../../../src/shared_kernel/config.py)：`ConfigLoader.get_spc_period_sigma_source()` |

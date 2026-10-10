@@ -181,12 +181,12 @@ SPC 主服务严格检查能力工作簿读写结果：读取或保存失败时�
 
 | 决策 | 处理逻辑 |
 |---|---|
-| True | 窗口内将中央规格区间外的点移入中央区间，含原规格内的点；窗口外仅将真正 OOS 点移入原规格内。 |
+| True | 先将真正 OOS 点移入原规格内；再在专用窗口内将仍在中央规格区间外的点进一步移入中央区间，含原规格内的点。 |
 | False | 保留该 Sheet 指标当前的实际测量值。 |
 | 旧文件中的 Delete | 兼容为 False，保留原点位；SPC 上传不再接受 Delete。其他报表的三态规则不变。 |
 | 没有决策或空值 | 默认按 True 处理。 |
 
-True 修饰需要有限双边规格且 USL>LSL。当前 `spc.point_decoration` 默认在显示日期 2026-10-05 至当天，将目标设为规格跨度中间的50%；窗口外沿用原规格区间。越过目标边界的点移到该边界以内，距离为目标跨度的5%～15%，相同输入结果稳定；目标区间内点不变，规格限不改写。完整公式、配置与例子由 [SPC 专用点位修饰](rules-spc-point-decoration.md) 维护。
+True 修饰需要有限双边规格且 USL>LSL。`core/spc/spc_point_decoration.py` 先按原规格执行传统修饰，再以其输出执行专用规则。`spc.point_decoration` 在显示日期 2026-10-05 至当天，按 `central_fraction` 派生专用中央区间；窗口外只执行传统阶段。每阶段越过目标边界的点移到该边界以内，距离为该阶段目标跨度的5%～15%，哈希使用该阶段输入值，相同输入结果稳定；目标区间内输入不变，原规格限不改写。当前比例、完整公式、配置与例子由 [SPC 专用点位修饰](rules-spc-point-decoration.md) 维护。
 
 这里的点位修饰条件与能力计算条件分别判断：能力计算额外排除 LSL 为 0 的情况，不能把这项限制直接套用于本步骤。
 
@@ -437,7 +437,7 @@ By 过货时间图的标签仅显示日期，不显示小时；点线模式的�
 | infrastructure | 2.9 | [capability_decoration_repository.py](../../../../src/inline_domain/infrastructure/spc/capability_decoration_repository.py) |
 | core | 3.1 | [measurement_correction.py](../../../../src/inline_domain/core/shared/measurement_correction.py) |
 | core | 3.2 | [monitor_calculator.py](../../../../src/inline_domain/core/monitor/monitor_calculator.py) |
-| core | 3.3～3.4 | [sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)、[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py) |
+| core | 3.3～3.4 | [spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py)、[sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)、[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py) |
 | core | 3.5～3.6 | [spc_calculator.py](../../../../src/inline_domain/core/spc/spc_calculator.py) |
 | core | 3.7～3.8 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py) |
 | application | 4.1、4.4～4.6 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)、[capability_decoration_service.py](../../../../src/inline_domain/application/spc/capability_decoration_service.py) |

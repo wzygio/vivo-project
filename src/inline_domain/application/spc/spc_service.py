@@ -36,7 +36,7 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
-from src.inline_domain.core.shared.sheet_oos_decoration import SpcPointDecorationPolicy
+from src.inline_domain.core.spc.spc_point_decoration import SpcPointDecorationPolicy
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
@@ -204,6 +204,7 @@ class SpcReportService:
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
+        SPC point inputs use traditional OOS clipping followed by the central-band pass.
         max_entries=16：缓存为进程级共享，可覆盖已启用产品及短期 revision；
         TTL 由 config/global.yaml 的 application.cache_ttl_hours 统一配置：
         跨日日期窗口变化与"刷新缓存"换 key 产生的孤儿条目由 TTL 兜底回收，内存有界。

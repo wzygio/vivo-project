@@ -36,7 +36,7 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.spc.ports import SpcDataPort
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
-from src.inline_domain.core.shared.sheet_oos_decoration import SpcPointDecorationPolicy
+from src.inline_domain.core.spc.spc_point_decoration import SpcPointDecorationPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,7 @@ def fetch_decorated_features(
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
+    SPC points pass through traditional OOS clipping before the time-scoped central band.
     Cache key = (prod_code, scope, start_date, end_date, snapshot_signature,
     product_revision, decision_signature, sheet_features_start_date, date_exclusion,
     spc_point_policy);

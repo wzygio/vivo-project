@@ -27,9 +27,9 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     compute_decision_signature,
     get_decision_sheet_name,
     merge_detail_with_decoration_flags,
-    normalize_spc_decisions,
     should_regenerate_detail,
 )
+from src.inline_domain.core.spc.spc_point_decoration import normalize_spc_decisions
 from src.shared_kernel.utils.excel_tools import (
     _read_encrypted_xlsx_via_com,
     list_workbook_sheet_names,

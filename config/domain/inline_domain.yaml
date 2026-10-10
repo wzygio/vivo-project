@@ -1,9 +1,9 @@
 spc:
-  # 在显示日期窗口内，将中间规格区间之外的点移入区间，保留 flag=False。
+  # 先按原 USL/LSL 传统修饰，再在显示日期窗口内按中央区间专用修饰；两阶段保留 flag=False。
   # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
   point_decoration:
     enabled: true
-    central_fraction: 0.5
+    central_fraction: 0.7
     start_date: "2026-10-05"
     end_date: "today"
   spc_cpk:

@@ -1,9 +1,11 @@
 from datetime import date
+import hashlib
 
 import pandas as pd
 import pytest
 
-from src.inline_domain.core.shared.sheet_oos_decoration import apply_spc_point_decoration, OOS_KEY_COLUMNS
+from src.inline_domain.core.shared.sheet_oos_decoration import OOS_KEY_COLUMNS
+from src.inline_domain.core.spc.spc_point_decoration import apply_spc_point_decoration
 from src.inline_domain.application.shared.decorated_data import prepare_decorated_data
 from src.inline_domain.core.spc.spc_calculator import build_period_capability_report
 
@@ -44,6 +46,29 @@ def test_window_includes_end_day_and_outside_uses_legacy_clipping():
     assert values.iloc[[0, 3]].between(8.8, 9.6).all()
 
 
+def test_traditional_output_values_feed_the_special_margin_hash():
+    source = points([1., 3., 5., 9., 11.])
+    traditional = apply_spc_point_decoration(source, specs(), pd.DataFrame())
+    assert traditional.param_value.iloc[0] != 1.
+    assert traditional.param_value.iloc[-1] != 11.
+    expected = []
+    for row in traditional.itertuples(index=False):
+        value = row.param_value
+        if 4 <= value <= 8:
+            expected.append(value)
+            continue
+        side = "upper" if value > 8 else "lower"
+        seed = "|".join(str(part) for part in (
+            row.prod_code, row.step_id, row.param_name, row.sheet_id,
+            row.site_name, row.unit_id, value, side,
+        ))
+        h = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12], 16) / 0xFFFFFFFFFFFF
+        margin = (0.05 + h * 0.1) * 4
+        expected.append(8 - margin if side == "upper" else 4 + margin)
+    actual = apply_spc_point_decoration(source, specs(), pd.DataFrame(), point_policy=POLICY)
+    assert actual.param_value.tolist() == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("flag", [False, "Delete"])
 def test_manual_preservation_has_priority_over_band(flag):
     source = points([3., 11.])
@@ -57,6 +82,20 @@ def test_invalid_double_sided_spec_does_not_change_values(lower, upper):
     source = points([3., 11.])
     result = apply_spc_point_decoration(source, specs(lower, upper), pd.DataFrame(), point_policy=POLICY)
     assert result.param_value.tolist() == [3., 11.]
+
+
+@pytest.mark.parametrize("missing", ["usl", "lsl"])
+def test_missing_spec_column_preserves_points_in_both_stages(missing):
+    source = points([1., 11.])
+    result = apply_spc_point_decoration(source, specs().drop(columns=missing), pd.DataFrame(), point_policy=POLICY)
+    assert result.param_value.tolist() == [1., 11.]
+
+
+def test_full_width_special_band_keeps_traditional_output():
+    source = points([1., 3., 11.])
+    traditional = apply_spc_point_decoration(source, specs(), pd.DataFrame())
+    actual = apply_spc_point_decoration(source, specs(), pd.DataFrame(), point_policy=(1., *POLICY[1:]))
+    pd.testing.assert_frame_equal(actual, traditional)
 
 
 def test_features_and_capability_use_the_same_decorated_points(tmp_path):

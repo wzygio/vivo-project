@@ -255,7 +255,7 @@ OOC 工作簿存在或其中 `flag=True`，不代表测量值已经被拉回 UCL
 
 ### 7.2 SPC 与 CTQ：Sheet OOS 点位修饰
 
-SPC 采用布尔决策，旧 Delete 兼容为 False；当前新增的中央规格区间修饰默认在 2026-10-05 至当天生效，详见 [SPC 专用点位修饰](../spc/rules-spc-point-decoration.md)。以下三态动作描述 CTQ 等传统 Sheet 口径及传统截断算法；不能据此认定 SPC 窗口内仅修饰真正 OOS 点。
+SPC 采用布尔决策，旧 Delete 兼容为 False；`core/spc` 先编排传统 OOS 修饰，再执行默认于 2026-10-05 至当天生效的中央规格区间专用修饰，详见 [SPC 专用点位修饰](../spc/rules-spc-point-decoration.md)。以下三态动作描述 CTQ 等传统 Sheet 口径及传统截断算法；不能据此认定 SPC 窗口内仅修饰真正 OOS 点。
 
 1. 先从未做报表修饰的测量数据计算 Sheet 特征，筛选 `sheet_max > USL` 或
    `sheet_min < LSL` 的候选 Sheet；等于规格线不算越规。
