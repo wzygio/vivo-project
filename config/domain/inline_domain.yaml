@@ -36,9 +36,11 @@ data_exclusion:
   end_date: "2026-10-06"
 
 # AOI_RS 特殊顺序修饰：Sheet 半规格截断 → Lot 归零 → 周/日限幅。
-# 仅对列表中的厂别启用；[] 关闭特殊修饰，其他厂别沿用常规修饰。
+# 默认关闭；enabled=true 时仅对列表中的厂别启用，[] 也关闭特殊修饰。
+# 关闭时及其他厂别沿用常规修饰。
 aoi_rs:
   special_decoration:
+    enabled: false
     factories:
       - "OLED"
     # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。

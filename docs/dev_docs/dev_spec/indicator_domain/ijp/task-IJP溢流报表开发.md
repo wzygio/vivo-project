@@ -15,7 +15,7 @@
 其它你想要了解的专有名词可以参考：`references\domain\shared_kernel\shared\GLOSSARY.md`
 
 ### 报表样式
-1. 前端样式：开发界面（FineReport中的开发截图）参考`docs\dev_docs\dev_spec\indicator_domain\IJP溢流报表样式-开发界面.png`
+1. 前端样式：开发界面（FineReport中的开发截图）参考`docs\project_files\indicator_domain\ijp\IJP溢流报表样式-开发界面.png`
 2. 前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
 3. 后端架构：在`src`下新建一个domain，遵循DDD架构完成开发，具体架构可参考`ARCHITECTURE.md`
 

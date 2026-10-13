@@ -35,6 +35,8 @@ def test_read_uses_read_only_transaction_and_complete_columns(monkeypatch):
     assert commands[0] == 'SET TRANSACTION READ ONLY'
     assert 'statement_timeout' in commands[1]
     assert 'm3dwd.dwd_panel_eff_dec_enter' in commands[2]
+    selected_columns = commands[2].partition('FROM')[0].removeprefix('SELECT').split(',')
+    assert 'jncd' in [column.strip() for column in selected_columns]
     assert 'LIMIT' not in commands[2] and 'ext_user' not in commands[2]
 
 
@@ -101,6 +103,9 @@ def test_cache_contains_only_public_frame_and_failure_does_not_poison_retry(monk
         result.iloc[0, 0] = 'changed'
         assert dashboard.fetch_report_payload().iloc[0, 0] == 'M678'
         assert len(calls) == 2
+        dashboard.fetch_report_payload.clear()
+        assert dashboard.fetch_report_payload()['JNCD'].tolist()[:3] == [0.15, 0.75, 1.25]
+        assert len(calls) == 3
     finally:
         dashboard.fetch_report_payload.clear()
 

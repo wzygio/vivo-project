@@ -31,6 +31,8 @@ def _format_mixed_value(value: object, decimals: int = 2) -> str:
 def _prepare_parts_table(df: pd.DataFrame) -> pd.DataFrame:
     """在前端边界排除内部字段，混合列统一为文本以兼容 Arrow。"""
     result = df.loc[:, [col for col in PARTS_TABLE_COLUMN_ORDER if col in df.columns]].copy()
+    if "厂别" in result:
+        result["厂别"] = result["厂别"].astype("string").str.strip().str.upper()
     if "测量时间" in result:
         result["测量时间"] = pd.to_datetime(
             result["测量时间"], errors="coerce"

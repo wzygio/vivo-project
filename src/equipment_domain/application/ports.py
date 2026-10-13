@@ -5,8 +5,8 @@ import pandas as pd
 
 
 class PartsDataPort(Protocol):
-    def load_cvd(self, workbook_path: str) -> pd.DataFrame:
-        """Return the first CVD worksheet, including monthly increments."""
+    def load_cvd(self, workbook_path: str, *, as_of_date: str = "") -> pd.DataFrame:
+        """Return each factory's latest sheet; sheet date is the measurement origin."""
         ...
 
     def load_baseline(self, baseline_path: str) -> pd.DataFrame:

@@ -50,7 +50,7 @@ def test_parts_filters_are_multi_select_and_empty_by_default(monkeypatch) -> Non
     assert selected == (["Array"], ["PVD"], ["Target"])
     assert [call["label"] for call in calls] == ["厂别", "设备类型", "备件类型"]
     assert all(call["default"] == [] for call in calls)
-    assert calls[0]["options"] == ["Array", "TP"]
+    assert calls[0]["options"] == ["ARRAY", "TP"]
     assert calls[1]["options"] == ["ETCH", "PVD"]
     assert calls[2]["options"] == ["Mask", "Target"]
 
@@ -64,7 +64,7 @@ def test_cascading_filter_options_follow_factory_then_equipment() -> None:
         )
     )
 
-    assert factories == ["Array", "TP"]
+    assert factories == ["ARRAY", "TP"]
     assert equipment_types == ["ETCH", "PVD"]
     assert part_types == ["Mask", "Target"]
 
@@ -92,6 +92,29 @@ def test_empty_parts_filter_selection_keeps_all_rows() -> None:
 
     pd.testing.assert_frame_equal(filtered, report_df)
     assert filtered is not report_df
+
+
+def test_array_factory_casing_does_not_split_cvd_from_existing_parts():
+    source = pd.DataFrame({
+        "厂别": ["Array", "ARRAY", "OLED"],
+        "设备类型": ["PVD", "CVD", "CVD"],
+        "备件类型": ["Target", "Backplate", "Mask"],
+    })
+    original = source.copy(deep=True)
+    factories, equipment, parts = parts_filters.build_cascading_filter_options(
+        source, selected_factories=["ARRAY"], selected_equipment_types=[],
+    )
+    assert factories == ["ARRAY", "OLED"]
+    assert equipment == ["CVD", "PVD"]
+    assert parts == ["Backplate", "Target"]
+    for selected in (["ARRAY"], ["Array"]):
+        filtered = parts_filters.apply_parts_filters(
+            source, selected_factories=selected, selected_equipment_types=[],
+            selected_part_types=[],
+        )
+        assert filtered.index.tolist() == [0, 1]
+    assert parts_dashboard._prepare_parts_table(source)["厂别"].tolist() == ["ARRAY", "ARRAY", "OLED"]
+    pd.testing.assert_frame_equal(source, original)
 
 
 def test_trend_row_requires_an_explicit_table_selection() -> None:

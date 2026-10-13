@@ -1,3 +1,10 @@
+# Indicator 全域日期过滤：按前推后的报表显示日期排除，首尾日期均包含。
+# enabled: false 关闭；end_date 支持 "today"（服务器当天）。
+data_exclusion:
+  enabled: true
+  start_date: "2026-10-01"
+  end_date: "2026-10-06"
+
 qtime:
   constrain_display: true
   # 单腔停留时间规格（秒），同时用作点位图纵轴上限。

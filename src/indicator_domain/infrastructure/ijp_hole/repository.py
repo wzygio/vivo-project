@@ -10,6 +10,9 @@ from sqlalchemy import bindparam, text
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.core.ijp_hole.summary import COUNT_COLUMNS, HOLE_CODES, HOLE_PRINTERS
+from src.indicator_domain.infrastructure.shared.date_exclusion import (
+    apply_indicator_date_exclusion, indicator_source_date_predicate,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
@@ -28,6 +31,7 @@ WITH defects AS (
     FROM EDA.OLED_IJP_DEFECT_T
     WHERE STEP_ID = '21200' AND CODE IN :hole_codes
       AND UPDATE_TIME >= :start_time AND UPDATE_TIME <= :end_time
+      {date_exclusion}
       AND SUBSTR(split_part(SUBSTR(IMG_DIR, 4) || '/' || IMAGE_NAME, '/', 10), 17, 1)
           IN ('0','1','2','3','4')
 ), facts AS (
@@ -59,10 +63,15 @@ class IjpHoleRepository:
         self._engine = db_manager.engine
         self._time_policy = ConfigLoader.get_data_forward_policy()
 
+    def cache_signature(self) -> tuple:
+        return (self._time_policy.signature, ConfigLoader.get_indicator_data_exclusion())
+
     def fetch_counts(self, query: IjpQuery) -> pd.DataFrame:
         if not query.product_codes:
             return pd.DataFrame(columns=COUNT_COLUMNS)
         params = self._window(query)
+        exclusion_sql, exclusion_params = indicator_source_date_predicate('UPDATE_TIME', self._time_policy)
+        params.update(exclusion_params)
         params.update(hole_codes=HOLE_CODES, printers=HOLE_PRINTERS, products=query.product_codes)
         expanding = ['hole_codes', 'printers', 'products']
         filters = []
@@ -80,13 +89,13 @@ class IjpHoleRepository:
                            'WHERE T.GLASS_ID = D.GLASS_ID AND T.PICI IN :picis)')
             params['picis'] = query.picis
             expanding.append('picis')
-        frame = self._read(_FACTS.format(filters='\n'.join(filters)), params, expanding)
+        frame = self._read(_FACTS.format(filters='\n'.join(filters), date_exclusion=exclusion_sql), params, expanding)
         frame = frame.reindex(columns=COUNT_COLUMNS)
         if not frame.empty:
             frame['day'] = (pd.to_datetime(frame.day) + pd.Timedelta(
                 days=self._time_policy.effective_days,
             )).dt.strftime('%Y-%m-%d')
-        return frame
+        return apply_indicator_date_exclusion(frame, time_column='day')
 
     def list_picis(self, query: IjpQuery) -> tuple[str, ...]:
         if not query.product_codes:
@@ -97,8 +106,10 @@ class IjpHoleRepository:
                  else 'EVENT_TIME')
         sql = (f'SELECT DISTINCT PICI FROM EDA.DWD_GLASS_OLED_CYCLE_V3 WHERE '
                f'{event} >= :start_time AND {event} <= :end_time '
-               'AND PROD_CODE IN :products ORDER BY PICI')
-        frame = self._read(sql, {**self._window(query), 'products': query.product_codes}, ['products'])
+               'AND PROD_CODE IN :products')
+        exclusion_sql, exclusion_params = indicator_source_date_predicate(event, self._time_policy)
+        frame = self._read(sql + exclusion_sql + ' ORDER BY PICI',
+                           {**self._window(query), **exclusion_params, 'products': query.product_codes}, ['products'])
         return tuple(frame.pici.dropna().astype(str)) if not frame.empty else ()
 
     def _window(self, query: IjpQuery) -> dict[str, object]:

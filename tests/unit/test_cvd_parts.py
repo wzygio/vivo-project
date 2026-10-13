@@ -52,6 +52,69 @@ def test_excel_serial_replacement_date_and_calendar_leap_year():
     assert result.loc[0, "使用进度"] == pytest.approx(365 / 730 * 100)
 
 
+@pytest.mark.parametrize("replacement,day,expiry", [
+    ("2025-04-12", "2026-10-13", "2026-10-12"),
+    ("2024-02-29", "2025-08-29", "2025-08-29"),
+    ("2025-08-31", "2026-02-28", "2027-02-28"),
+    ("2026-10-12", "2026-10-11", "2028-04-12"),
+])
+def test_fractional_year_lifespan_uses_eighteen_calendar_months(replacement, day, expiry):
+    source = cvd_source().iloc[:1].copy()
+    source["厂别"] = "ARRAY"
+    source["寿命规格"] = "1.5年"
+    source["测量值"] = replacement
+    source["测量时间"] = "2026-10-12"
+    result = report(source, day=day).iloc[0]
+    elapsed = max((pd.Timestamp(day) - pd.Timestamp(replacement)).days, 0)
+    duration = (pd.Timestamp(expiry) - pd.Timestamp(replacement)).days
+    assert result["测量值"] == replacement
+    assert result["寿命规格"] == "1.5年"
+    assert result["使用进度"] == pytest.approx(elapsed / duration * 100)
+    assert result["厂别"] == "ARRAY"
+
+
+def test_fractional_year_excel_date_serial_and_missing_increment_are_supported():
+    source = cvd_source().iloc[:1].copy()
+    source["寿命规格"] = "1.5年"
+    source["测量值"] = 45351  # 2024-02-29
+    source["进度"] = None
+    result = report(source, day="2025-08-29").iloc[0]
+    assert result["测量值"] == "2024-02-29"
+    assert result["使用进度"] == 100
+    assert result["预警状态"] == "预警"
+    assert report(source, day="2025-08-30").iloc[0]["预警状态"] == "超规"
+
+
+def test_fractional_year_without_whole_month_duration_fails_explicitly():
+    source = cvd_source().iloc[:1].copy()
+    source["寿命规格"] = "1.01年"
+    with pytest.raises(ValueError, match="整数月"):
+        report(source)
+
+
+@pytest.mark.parametrize("sheet,day,expected", [
+    (" OLED-1012 ", "2026-10-13", "2026-10-12"),
+    ("ARRAY-1231", "2027-01-01", "2026-12-31"),
+    ("OLED-1013", "2026-10-13", "2026-10-13"),
+    ("OLED-0229", "2026-10-13", "2024-02-29"),
+])
+def test_sheet_update_date_is_most_recent_occurrence(sheet, day, expected):
+    from src.equipment_domain.core.cvd_parts import parse_cvd_sheet_name
+
+    factory, updated_at = parse_cvd_sheet_name(sheet, as_of_date=day)
+    assert factory == sheet.strip().split("-")[0]
+    assert updated_at == pd.Timestamp(expected)
+
+
+def test_new_version_replacement_date_is_used_without_numeric_growth():
+    source = cvd_source().iloc[:1].copy()
+    source["测量值"] = datetime(2026, 10, 12)
+    source["测量时间"] = "2026-10-12"
+    result = report(source, day="2026-10-13")
+    assert result.iloc[0]["测量值"] == "2026-10-12"
+    assert result.iloc[0]["使用进度"] == pytest.approx(1 / 731 * 100)
+
+
 def test_row_measurement_date_overrides_default_simulation_origin():
     source = cvd_source().iloc[1:].copy()
     source["测量时间"] = "2026-09-20"
@@ -86,10 +149,14 @@ def test_service_merges_cvd_after_existing_numeric_calculations():
         "param_name": ["LIFE"], "value": [1000.0],
         "glass_start_time": pd.to_datetime(["2026-09-21"]),
     })
+    def load_cvd(_, *, as_of_date):
+        assert as_of_date == "2026-09-22"
+        return cvd_source()
+
     port = SimpleNamespace(
         load_baseline=lambda _: spec,
         load_snapshots=lambda *args, **kwargs: (facts, pd.DataFrame()),
-        load_cvd=lambda _: cvd_source(),
+        load_cvd=load_cvd,
     )
     result = PartsReportService.get_report_data(
         None, "unused.csv", "cvd-test", as_of_date="2026-09-22",

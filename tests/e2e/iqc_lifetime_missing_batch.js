@@ -5,11 +5,12 @@ async page => {
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.goto('http://localhost:8521');
   const table = page.getByTestId('stDataFrame');
-  await table.waitFor({ timeout: 60000 });
+  await page.getByRole('combobox', { name: '批次号', exact: true }).waitFor({ timeout: 60000 });
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '未填写批次', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '查询', exact: true }).click();
+  await table.waitFor({ timeout: 60000 });
   await page.waitForFunction(() => {
     const labels = [...document.querySelectorAll('[data-testid="stExpander"]')]
       .filter(el => !el.parentElement.closest('[data-testid="stExpander"]'))
@@ -19,7 +20,12 @@ async page => {
   const charts = page.locator('.js-plotly-plot');
   await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length >= 2);
   const metrics = await charts.evaluateAll(elements => elements.map(el => el.layout.yaxis.title.text));
-  if (!metrics.includes('效率衰减') || !metrics.includes('亮度衰减')) throw new Error('Missing decay chart');
+  if (!['效率衰减', '亮度衰减'].every(metric => metrics.includes(metric))) throw new Error('Missing decay chart');
+  for (const group of await page.getByTestId('stExpander').all()) {
+    if (!(await group.locator('summary').first().innerText()).includes('JNCD')) continue;
+    const screens = await group.getByTestId('stText').allTextContents();
+    if (screens.some(screen => screen !== 'W') || await group.locator('.js-plotly-plot').count() > 1) throw new Error('JNCD must show only W');
+  }
   const alerts = await page.getByTestId('stAlert').allTextContents();
   if (alerts.some(text => /批次|无法读取/.test(text))) throw new Error('Unexpected batch warning or load failure');
   if (await page.getByTestId('stException').count() || errors.length) throw new Error('Page runtime error');

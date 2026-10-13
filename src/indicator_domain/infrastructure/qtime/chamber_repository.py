@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.infrastructure.qtime.chamber_workbook import read_chamber_workbook
+from src.indicator_domain.infrastructure.shared.date_exclusion import apply_indicator_date_exclusion
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.shared_kernel.report_cutoff import ReportCutoffPolicy
@@ -42,11 +43,18 @@ class ChamberQTimeRepository:
                 files.append((line, str(path.resolve()), stat.st_mtime_ns, stat.st_size))
             except OSError:
                 files.append((line, str(path.resolve()), None, None))
-        return (tuple(files), self._data_policy.signature, self._cutoff_policy.latest_day_time, id(self._engine))
+        return (tuple(files), self._data_policy.signature, self._cutoff_policy.latest_day_time,
+                ConfigLoader.get_indicator_data_exclusion(), id(self._engine))
 
-    def read(self, *, as_of: date) -> dict:
+    def read(self, *, as_of: date, start_date: date | None = None, end_date: date | None = None) -> dict:
         try:
-            return self._read(as_of)
+            payload = self._read(as_of)
+            measurements = payload['measurements']
+            if start_date is not None:
+                measurements = measurements.loc[measurements['entry_time'].ge(pd.Timestamp(start_date))]
+            if end_date is not None:
+                measurements = measurements.loc[measurements['entry_time'].lt(pd.Timestamp(end_date) + pd.Timedelta(days=1))]
+            return {**payload, 'measurements': measurements}
         except Exception as exc:
             # The browser receives a stable business message, never SQL, paths or IDs.
             logger.error('Chamber Q-Time source failed: %s', type(exc).__name__, exc_info=True)
@@ -61,6 +69,7 @@ class ChamberQTimeRepository:
         measurements = pd.concat([source['measurements'] for source in sources], ignore_index=True)
         displayed = self._data_policy.shift_frame(measurements, ['entry_time'])
         displayed = self._cutoff_policy.filter_frame(displayed, 'entry_time', now=as_of)
+        displayed = apply_indicator_date_exclusion(displayed, time_column='entry_time')
         # Match visible measurements using their unshifted source months.
         eligible = measurements.loc[measurements.index.isin(displayed.index)]
         products = self._load_products(eligible)

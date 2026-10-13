@@ -18,6 +18,7 @@ REPORT_COLUMNS = ("序号", *REPORT_FIELDS.values())
 
 
 RESULT_RULE_VERSION = "measurement-case-v1"
+PRODUCT_SCOPE_RULE_VERSION = "request-master-cycle-v3"
 
 
 def measurement_results(source: pd.DataFrame) -> pd.DataFrame:

@@ -7,9 +7,16 @@ from uuid import uuid4
 
 from src.indicator_domain.core.qtime.chamber import build_chamber_report
 
+MAX_QUERY_DAYS = 31
+
+
+def validate_chamber_dates(as_of: date, start_date: date, end_date: date) -> None:
+    if not 1 <= (end_date - start_date).days + 1 <= MAX_QUERY_DAYS or end_date > as_of:
+        raise ValueError('单次查询日期范围须在31天以内，结束日期不能晚于今天。')
+
 
 class ChamberQTimeSource(Protocol):
-    def read(self, *, as_of: date) -> dict: ...
+    def read(self, *, as_of: date, start_date: date | None = None, end_date: date | None = None) -> dict: ...
 
     def cache_signature(self) -> tuple: ...
 
@@ -34,8 +41,15 @@ class ChamberQTimeService:
     def cache_signature(self) -> tuple:
         return (self._cache_namespace, self.enabled_products, self._target_seconds, self._source.cache_signature())
 
-    def load(self, *, as_of: date) -> dict:
-        source = self._source.read(as_of=as_of)
+    def load(self, *, as_of: date, start_date: date | None = None, end_date: date | None = None) -> dict:
+        if start_date is not None or end_date is not None:
+            start_date = start_date or as_of.replace(day=1)
+            end_date = end_date or as_of
+            validate_chamber_dates(as_of, start_date, end_date)
+        dates = {} if start_date is None and end_date is None else {
+            'start_date': start_date, 'end_date': end_date,
+        }
+        source = self._source.read(as_of=as_of, **dates)
         targets = source['targets']
         if self._target_seconds is not None:
             targets = targets.assign(target_seconds=self._target_seconds)

@@ -25,6 +25,9 @@ from src.indicator_domain.core.ijp.overflow import (
     map_bottom_breakout,
     map_panel_location,
 )
+from src.indicator_domain.infrastructure.shared.date_exclusion import (
+    apply_indicator_date_exclusion, indicator_source_date_predicate,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
@@ -91,6 +94,9 @@ class IjpRepository:
         self._engine = db_manager.engine
         self._data_forward_policy = ConfigLoader.get_data_forward_policy()
 
+    def cache_signature(self) -> tuple:
+        return (self._data_forward_policy.signature, ConfigLoader.get_indicator_data_exclusion())
+
     def list_product_codes(self) -> tuple[str, ...]:
         frame = self._read_frame(
             text(
@@ -111,6 +117,10 @@ class IjpRepository:
             + self._event_time_filter()
         )
         params = self._window_params(start_time, end_time)
+        event = 'EVENT_TIME::TIMESTAMP' if self._dialect_name() == 'postgresql' else 'EVENT_TIME'
+        exclusion_sql, exclusion_params = indicator_source_date_predicate(event, self._data_forward_policy)
+        sql += exclusion_sql
+        params.update(exclusion_params)
         expanding: list[str] = []
         if product_codes:
             sql += " AND PROD_CODE IN :product_codes"
@@ -168,7 +178,7 @@ class IjpRepository:
             frame["day"] = (pd.to_datetime(frame["day"]) + pd.Timedelta(
                 days=self._data_forward_policy.effective_days,
             )).dt.strftime("%Y-%m-%d")
-        return frame
+        return apply_indicator_date_exclusion(frame, time_column="day")
 
     def fetch_details(self, query: IjpQuery) -> pd.DataFrame:
         select = (
@@ -204,6 +214,11 @@ class IjpRepository:
             "equip_whitelist": IJP_EQUIPMENTS,
             "code_whitelist": IJP_RS_CODES,
         }
+        exclusion_sql, exclusion_params = indicator_source_date_predicate(
+            'D.GLASS_START_TIME', self._data_forward_policy,
+        )
+        sql += exclusion_sql
+        params.update(exclusion_params)
         expanding = ["equip_whitelist", "code_whitelist"]
         for field, clause in _OPTIONAL_FILTERS:
             values = getattr(query, field)
@@ -276,7 +291,9 @@ class IjpRepository:
     def _shape_details(self, frame: pd.DataFrame, query: IjpQuery) -> pd.DataFrame:
         if frame.empty:
             return frame.reindex(columns=DETAIL_COLUMNS)
+        frame = frame.assign(print_time=pd.to_datetime(frame['print_time'], errors='coerce', format='mixed'))
         shaped = self._data_forward_policy.shift_frame(frame, ("print_time",))
+        shaped = apply_indicator_date_exclusion(shaped, time_column="print_time")
         shaped["panel_id"] = shaped["image_name"].map(extract_panel_id)
         shaped["image_url"] = shaped["image_name"].map(build_image_url)
         shaped["panel_location"] = [

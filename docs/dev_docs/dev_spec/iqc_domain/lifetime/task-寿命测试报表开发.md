@@ -41,8 +41,8 @@
 
 ### Frontend
 1. 前端样式：要求呈现“明细表”+“趋势图”（当前已经做出的样式报表已不再具有参考价值`app\pages\IQC寿命测试报表.py`）
-    - 明细表：请参考`docs\project_files\iqc_domain\ID寿命维护表V1.0.xlsx`（所需字段皆已在上面的sql语句中列出）
-    - 趋势图：请参考`docs\project_files\iqc_domain\IQC-寿命测试报表样式.png`
+    - 明细表：请参考`docs\project_files\iqc_domain\lifetime\ID寿命维护表V1.0.xlsx`（所需字段皆已在上面的sql语句中列出）
+    - 趋势图：请参考`docs\project_files\iqc_domain\lifetime\IQC-寿命测试报表样式.png`
         - x轴：测试时间
         - y轴：效率衰减
         - 曲线：panel_id
@@ -60,4 +60,4 @@
 3. 按照`development-flow`完成报表开发：如果信息缺失，或者有无法解决的业务问题可以寻求我的帮助；否则直接执行到底即可
 
 ## Goal
-不断迭代优化直至E2E测试通过   
+不断迭代优化直至E2E测试通过

@@ -14,6 +14,15 @@
 - 线体：蒸镀段工艺分为两条线体，分别为“3CEE001/3CEE002”
 - 其它你想要了解的专有名词可以参考：`references\domain\shared_kernel\shared\GLOSSARY.md`
 
+### Database
+- 你可以尝试探查数据库，相关程序可参考：
+    - `src\shared_kernel\infrastructure\db_handler.py`
+    - `src\yield_domain\infrastructure\data_loader.py`
+
+---
+
+## Task1：初版开发-基于本地Excel数据表
+
 ### Data Source
 1. 两条蒸镀线体的当月glass别蒸镀腔室Q-Time数据如下表所示（该表为加密文件，你需要先解密才能读取）：
     - 3CEE001：`resources\indicator_domain\qtime\V3蒸镀机QTime一级报表-3CEE01-0924.xlsx`
@@ -51,3 +60,20 @@ limit 10
 
 ## Goal
 不断迭代优化直至E2E测试通过
+
+---
+
+## Task2：完成版-基于数据库
+针对`app\pages\Q_Time监控报表.py`中的“蒸镀腔室QTime监控”模块，此前开发的报表是根据本地数据集的初级版，接下来请开发完整版
+
+### Data Source
+1. 蒸镀线体By腔室Q-Time监控报表：该报表为输出本地Excel数据集的报表，所以理应能够获取当前所需的所有数据
+  - SQL语句：`docs\project_files\indicator_domain\qtime\O091_Search_Evaporator_Q_Time-SQL语句.md`
+  - 截图：`docs\project_files\indicator_domain\qtime\O091_Search_Evaporator_Q_Time.png`
+
+### 
+1. 请分析“蒸镀线体By腔室Q-Time监控报表”，并确定每项所需数据的来源，并探查数据库确认所需数据对应的数据表是否有访问权限（如果没有请中断并告知我）。
+  - 完成后请输出一份数据源分析文档至`docs\dev_docs\generated\indicator_domain\qtime`
+2.  按照`development-flow`完成报表开发：
+    - Goal：不断迭代优化直至E2E测试通过
+    - 如果信息缺失，或者有无法解决的业务问题可以寻求我的帮助；否则直接执行到底即可

@@ -45,6 +45,7 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
     signature = (
         start, end, *values.values(), service.enabled_products, service.work_order_types,
         ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,
+        ConfigLoader.get_indicator_data_exclusion(),
     )
     if clicked:
         st.session_state.pop(RESULT_KEY, None)

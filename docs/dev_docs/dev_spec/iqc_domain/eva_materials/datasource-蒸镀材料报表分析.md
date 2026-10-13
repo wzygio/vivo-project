@@ -1,7 +1,9 @@
 # 蒸镀材料报表数据源与实现验收
 
+当前产品范围以 [Task2 产品关联分析与验收](datasource-蒸镀材料产品关联分析.md) 和 [产品范围规则](../../../../../references/domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md) 为准。下文产品筛选描述记录对应日期的历史版本；2026-09-22 的无产品筛选约定已于 2026-10-13 替代。
+
 日期：2026-09-15。需求：[task-蒸镀材料报表开发.md](task-蒸镀材料报表开发.md)。
-SQL 原件：[蒸镀材料体系报表-sql语句.txt](../../../../project_files/iqc_domain/蒸镀材料体系报表-sql语句.txt)。
+SQL 原件：[蒸镀材料体系报表-sql语句.txt](../../../../project_files/iqc_domain/eva_materials/蒸镀材料体系报表-sql语句.txt)。
 
 ## 1. 样式与功能范围
 
@@ -229,7 +231,7 @@ MATER_TYPE；txLotno 精确筛 LOTNO；cmcbExist 筛 ifexist。未选择参数�
 
 ### 2026-09-21 与用户导出的帆软 Excel 对账
 
-输入：`docs/project_files/iqc_domain/IQC来料检验特性数据明细报表.xlsx`（用户新提供的实际导出文件，不是原开发样例）。
+输入：`docs/project_files/iqc_domain/eva_materials/IQC来料检验特性数据明细报表.xlsx`（用户新提供的实际导出文件，不是原开发样例）。
 文件有企业加密，使用本机 Excel COM 只读读取，不修改源文件。sheet1 共 2757 行、49 列；第 15 行为字段标题。
 导出存在纵向合并单元格，检验单号等主记录字段按合并显示值展开后，共 **2741 条特性明细、1216 个检验单**，其中 **V3／有机 1039 条**。
 
@@ -283,7 +285,7 @@ Excel 中检查的结果单元格为静态值，没有保留帆软原始公式�
 
 - 真实浏览器 E2E 通过：660 行、27 列、1365/768 宽度，CSV 全部 IQC／COA 结果均为 OK 或 NG，无空白。此前 Excel 对账的 1039 条 V3／有机明细，按新规则计算后整体结果均与 Excel 的 OK/OK 一致。
 
-### 2026-09-22 固定有机范围、移除产品筛选（当前规则）
+### 2026-09-22 固定有机范围、移除产品筛选（历史产品范围，已被 Task2 替代）
 
 - 用户确认有机材料对应通用型号，因此基础查询只按物料业务范围限定，不再额外过滤型号。infrastructure 保留 `S.EATTRIBUTE12='有机'` 和 `Q.EATTRIBUTE5='V3'`，去掉产品字段排除条件，并将目录关联中的有机分支简化为描述匹配。
 - 删除页面产品多选、enabled_products 依赖、应用层产品参数与 core 产品过滤函数；缓存按日期、时间策略和判定版本分区，页面仅保留日期／查询。

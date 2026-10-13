@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=1, show_spinner=False)
 def fetch_report_payload() -> pd.DataFrame:
-    """Cache only anonymous public facts. Failed reads are never cached."""
+    """Cache anonymous public facts including JNCD. Failed reads are never cached."""
     return build_lifetime_service().get_report()
 
 
@@ -32,7 +32,7 @@ def _select(
 
 def _render_filters(
     frame: pd.DataFrame, enabled_products: list[str],
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str]] | None:
     with st.container(border=True):
         product_column, status_column, batch_column = st.columns(3)
         with product_column:
@@ -49,9 +49,11 @@ def _render_filters(
             batches = _select('批次号', sorted(scope['批次号'].unique().tolist()),
                               'iqc_lifetime_batches')
         submitted = st.button('查询', type='primary', key='iqc_lifetime_query')
-    applied_key = 'iqc_lifetime_applied_filters'
-    if submitted or applied_key not in st.session_state:
+    applied_key = 'iqc_lifetime_submitted_filters'
+    if submitted:
         st.session_state[applied_key] = (products, batches, statuses)
+    if applied_key not in st.session_state:
+        return None
     # Draft selectors remain linked, while results use the last submitted filters.
     products, batches, statuses = st.session_state[applied_key]
     products = [value for value in products if value in enabled_products]
@@ -69,14 +71,19 @@ def _render_trends(frame: pd.DataFrame) -> None:
         frame.groupby(['产品型号', '批次号'], sort=True)
     ):
         with st.expander(f'{product} · {batch}', expanded=True):
-            for metric in ('效率衰减', '亮度衰减'):
+            for metric in ('效率衰减', '亮度衰减', 'JNCD'):
                 _render_metric_charts(scope, metric, index)
 
 
 def _render_metric_charts(scope: pd.DataFrame, metric: str, group_index: int) -> None:
+    if metric == 'JNCD':
+        scope = scope.loc[scope['测试画面'].eq('W')]
     order = {'W': 0, 'R': 1, 'G': 2, 'B': 3}
     screens = sorted(scope['测试画面'].unique(), key=lambda x: (order.get(x, 4), x))
     with st.expander(metric, expanded=True):
+        if scope.empty:
+            st.info('该组暂无 W 画面测点。')
+            return
         for offset in range(0, len(screens), 4):
             for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
                 group = scope.loc[scope['测试画面'].eq(screen)]
@@ -115,7 +122,11 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
     enabled_products = list(dict.fromkeys(ConfigLoader.get_enabled_products()))
     # Apply the allowlist even when "all" is selected; never send disabled facts to UI.
     frame = frame.loc[frame['产品型号'].isin(enabled_products)].copy()
-    products, batches, statuses = _render_filters(frame, enabled_products)
+    filters = _render_filters(frame, enabled_products)
+    if filters is None:
+        st.info('请点击“查询”查看寿命测试数据。')
+        return
+    products, batches, statuses = filters
     selected = filter_report(frame, products, batches, statuses)
     if selected.empty:
         st.info('没有符合筛选条件的寿命测试记录，请调整筛选条件或稍后刷新。')

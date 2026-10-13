@@ -66,8 +66,8 @@ ${IF(LEN(cmbtshop)=0,"","AND SHOP IN ('"+cmbtshop+"')")}
 
 ### 报表样式
 1. 前端样式：
-    - 开发界面（FineReport中的开发截图）：`docs\dev_docs\dev_spec\indicator_domain\Q-Time报表样式-开发界面.png`
-    - 使用界面（其中展示了筛选条件）：`docs\dev_docs\dev_spec\indicator_domain\Q-Time报表样式-使用界面.png`
+    - 开发界面（FineReport中的开发截图）：`docs\project_files\indicator_domain\qtime\Q-Time报表样式-开发界面.png`
+    - 使用界面（其中展示了筛选条件）：`docs\project_files\indicator_domain\qtime\Q-Time报表样式-使用界面.png`
 2. 前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
 3. 后端架构：在`src`下新建一个domain，遵循DDD架构完成开发，具体架构可参考`ARCHITECTURE.md`
 

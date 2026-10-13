@@ -21,7 +21,7 @@ def test_yaml_target_controls_report_and_invalidates_cache(monkeypatch):
     }
     source = SimpleNamespace(cache_signature=lambda: ('settings-fixture',), read=lambda **_: payload)
     settings = {'qtime': {'chamber_target_seconds': 50}}
-    monkeypatch.setattr(composition, 'ChamberQTimeRepository', lambda *args: source)
+    monkeypatch.setattr(composition, 'DatabaseChamberQTimeRepository', lambda *args, **kwargs: source)
     monkeypatch.setattr(composition.ConfigLoader, 'load_domain_config', lambda domain: settings)
     monkeypatch.setattr(composition.ConfigLoader, 'get_enabled_products', lambda: ['M626'])
     monkeypatch.setattr(composition.ConfigLoader, 'get_domain_resource_path', lambda *args: Path('fixture.xlsx'))

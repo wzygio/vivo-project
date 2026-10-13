@@ -9,6 +9,7 @@ REPORT_FIELDS = {
     'bu': '测试画面', 'luminance': '亮度', 'lumi_decay': '亮度衰减',
     'cie_x': 'CIEx', 'cie_xy': 'CIEy', 'iss': 'Iss',
     'curr_decay': '电流衰减', 'efficiency': '效率', 'eff_decay': '效率衰减',
+    'jncd': 'JNCD',
 }
 GROUP_COLUMNS = ['产品型号', '批次号', '测试画面']
 MEASUREMENT_COLUMNS = list(REPORT_FIELDS.values())[7:]

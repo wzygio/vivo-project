@@ -1,19 +1,20 @@
 # AOI_RS 专用修饰：厂别、日期与顺序处理
 
-核验日期：2026-10-10。普通单边规格修饰由 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断) 介绍；本文负责指定厂别和日期内的专用规则。
+核验日期：2026-10-13。普通单边规格修饰由 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断) 介绍；本文负责指定厂别和日期内的专用规则。
 
 ## 1. 配置与日期范围
 
 ```yaml
 aoi_rs:
   special_decoration:
+    enabled: false
     factories:
       - "OLED"
     start_date: "2026-09-21"
     end_date: "today"
 ```
 
-厂别集合为空时关闭专用规则；未选厂别和窗口外图点沿用普通单边修饰。日期为报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。无效日期、反向区间和错误配置结构报错。
+`enabled` 默认 `false`（省略时也关闭），仅显式设置布尔值 `true` 才启用专用规则；厂别集合为空时也关闭。关闭时所有厂别沿用普通单边修饰，不执行专用明细投影与周/日限幅。开启时未选厂别和窗口外图点沿用普通单边修饰。日期为报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。无效日期、反向区间和错误配置结构报错。
 
 这是修饰窗口，不是数据排除窗口：区间外数据仍参与报表。全域 `data_exclusion` 先在基础设施排除命中的数据，见 [日期排除规则](../shared/rules-inline-date-exclusion.md)。
 
@@ -40,7 +41,7 @@ aoi_rs:
 
 ## 4. 调用、缓存与验证
 
-ConfigLoader 解析 `(start_date, resolved_end_date)`；`AoiRsReportService` 把日期元组、厂别集合及规则版本放入原生报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和纯 Core 规则。修改开始日、结束日或跨天后无需等待 TTL 重建。页面与 PDF 共用 `build_aoi_rs_period_trend()`，读取同一配置。
+ConfigLoader 解析 `(start_date, resolved_end_date)`，关闭时返回空厂别集合；`AoiRsReportService` 把日期元组、生效厂别集合及规则版本放入原生报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和纯 Core 规则。切换开关、修改生效厂别、开始日、结束日或跨天后无需等待 TTL 重建。页面与 PDF 共用 `build_aoi_rs_period_trend()`，读取同一配置。
 
 主要实现：`core/aoi_rs/aoi_rs_special_decoration.py`、`application/aoi_rs/decoration_service.py`、`application/aoi_rs/aoi_rs_service.py`。
 

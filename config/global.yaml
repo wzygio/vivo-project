@@ -197,7 +197,7 @@ resources:
     dir: resources/equipment_domain
     files:
       critical_parts_baseline: resources/equipment_domain/parts/critical_parts_baseline.csv
-      cvd_parts: resources/equipment_domain/parts/供应商关键备件寿命管控清单-0921-CVD.xlsx
+      cvd_parts: resources/equipment_domain/parts/供应商关键备件寿命管控清单-CVD.xlsx
       baseline_source_excel: resources/equipment_domain/parts/供应商关键备件寿命管控清单-0604.xlsx
   indicator_domain:
     dir: resources/indicator_domain

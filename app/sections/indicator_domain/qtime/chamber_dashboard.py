@@ -9,14 +9,13 @@ import streamlit as st
 from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.qtime.chamber_chart import build_chamber_figure
 from src.indicator_domain.application.qtime.chamber_cache import cached_chamber_report, clear_chamber_cache
-from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService
+from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService, MAX_QUERY_DAYS
 from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.core.qtime.chamber import CHAMBERS, exclude_chamber_outliers
+from src.shared_kernel.config import ConfigLoader
 
 RESULT_KEY = 'chamber_qtime_view_model'
 SIGNATURE_KEY = 'chamber_qtime_signature'
-# Temporary frontend cutoff requested for the chamber monitoring report.
-DISPLAY_CUTOFF = pd.Timestamp('2026-10-01')
 
 
 def clear_chamber_result() -> bool:
@@ -48,7 +47,17 @@ def _multiselect(
 @st.fragment
 def render_chamber_dashboard(service: ChamberQTimeService) -> None:
     st.subheader('蒸镀腔室QTime监控', anchor=False, text_alignment='center')
+    today = date.today()
+    st.session_state.setdefault('chamber_start_date', today.replace(day=1))
+    st.session_state.setdefault('chamber_end_date', today)
     with st.container(border=True):
+        date_columns = st.columns(2)
+        with date_columns[0]:
+            start_date = st.date_input('单腔开始日期', max_value=today,
+                                       key='chamber_start_date')
+        with date_columns[1]:
+            end_date = st.date_input('单腔结束日期', max_value=today,
+                                     key='chamber_end_date')
         columns = st.columns([1.4, 1.2, 2.4, 0.7], vertical_alignment='bottom')
         with columns[0]:
             products = _multiselect(
@@ -61,15 +70,21 @@ def render_chamber_dashboard(service: ChamberQTimeService) -> None:
             chambers = _multiselect('腔室', list(CHAMBERS), key='chamber_names', default=[CHAMBERS[0]])
         with columns[3]:
             query = st.button('查询单腔', type='primary', width='stretch', key='chamber_search')
-    signature = (service.cache_signature(), date.today().isoformat())
+    signature = (service.cache_signature(), today.isoformat(), start_date, end_date,
+                 ConfigLoader.get_indicator_data_exclusion())
     if st.session_state.get(SIGNATURE_KEY) != signature:
         clear_chamber_result()
     if query:
         clear_chamber_result()
+        if (start_date is None or end_date is None
+                or not 1 <= (end_date - start_date).days + 1 <= MAX_QUERY_DAYS
+                or end_date > today):
+            st.error('请选择先后有序且不超过31天的日期范围。')
+            return
         try:
             with st.spinner('正在读取单腔停留时间…'):
                 st.session_state[RESULT_KEY] = cached_chamber_report(
-                    service, as_of=date.today(),
+                    service, as_of=today, start_date=start_date, end_date=end_date,
                 )
             st.session_state[SIGNATURE_KEY] = signature
         except QTimeDataAccessError:
@@ -86,7 +101,6 @@ def render_chamber_dashboard(service: ChamberQTimeService) -> None:
         & details['prod_code'].isin(service.enabled_products)
         & details['line'].isin(lines or ['3CEE001', '3CEE002'])
         & details['chamber'].isin(chambers or CHAMBERS)
-        & details['entry_time'].lt(DISPLAY_CUTOFF)
     ].copy()
     selected = exclude_chamber_outliers(selected)
     if selected.empty:

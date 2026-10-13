@@ -19,10 +19,11 @@ class ConfigLoader:
     """
 
     @classmethod
-    def get_enabled_products(cls) -> List[str]:
+    def get_enabled_products(cls, *, strict: bool = False) -> List[str]:
         """
         [新增] 从 global.yaml 读取启用的产品列表。
         这成为了系统产品列表的唯一真理来源。
+        strict=True 保留空范围并拒绝缺失／错误配置，不使用兼容默认型号。
         """
         root_dir = cls.get_project_root()
         global_yaml_path = root_dir / "config" / "global.yaml"
@@ -32,6 +33,15 @@ class ConfigLoader:
             
             # 读取 product_registry.enabled_products
             registry = global_conf.get('product_registry', {})
+            if strict:
+                if not isinstance(registry, dict) or 'enabled_products' not in registry:
+                    raise ValueError("ENABLED_PRODUCT_SCOPE_INVALID")
+                configured = registry['enabled_products']
+                if not isinstance(configured, list) or any(
+                    not isinstance(code, str) or not code.strip() for code in configured
+                ):
+                    raise ValueError("ENABLED_PRODUCT_SCOPE_INVALID")
+                return list(dict.fromkeys(configured))
             products = registry.get('enabled_products', [])
             
             if not products:
@@ -40,6 +50,8 @@ class ConfigLoader:
             return products
             
         except Exception as e:
+            if strict:
+                raise ValueError("ENABLED_PRODUCT_SCOPE_INVALID") from None
             logging.error(f"❌ 读取全局产品列表失败: {e}")
             return ["M678"] # 最后的防线
 
@@ -495,6 +507,29 @@ class ConfigLoader:
             return []
 
     @classmethod
+    def get_indicator_data_exclusion(
+        cls, *, today: date | None = None,
+    ) -> tuple[str, str] | None:
+        """Resolve inclusive Indicator display dates; missing policy is disabled."""
+        section = cls.load_domain_config("indicator_domain").get("data_exclusion", {})
+        if not isinstance(section, dict):
+            raise ValueError("indicator_domain.data_exclusion must be a mapping")
+        enabled = section.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ValueError("indicator_domain.data_exclusion.enabled must be a boolean")
+        if not enabled:
+            return None
+        try:
+            start = date.fromisoformat(str(section["start_date"]))
+            configured_end = section["end_date"]
+            end = (today or date.today()) if configured_end == "today" else date.fromisoformat(str(configured_end))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("indicator_domain.data_exclusion requires ISO start_date and ISO end_date or 'today'") from exc
+        if start > end:
+            raise ValueError("indicator_domain.data_exclusion.start_date must not exceed end_date")
+        return start.isoformat(), end.isoformat()
+
+    @classmethod
     def get_inline_data_exclusion(
         cls, *, today: date | None = None,
     ) -> tuple[tuple[str, ...], str, str] | None:
@@ -536,13 +571,18 @@ class ConfigLoader:
 
     @classmethod
     def get_aoi_rs_special_decoration_factories(cls) -> list[str]:
-        """Read the AOI_RS special-rule allowlist; an empty list disables it."""
+        """Read the active AOI_RS allowlist; special rules are disabled by default."""
         report = cls.load_domain_config("inline_domain").get("aoi_rs", {})
         if not isinstance(report, dict):
             raise ValueError("aoi_rs must be a mapping")
         special = report.get("special_decoration", {})
         if not isinstance(special, dict):
             raise ValueError("aoi_rs.special_decoration must be a mapping")
+        enabled = special.get("enabled", False)
+        if not isinstance(enabled, bool):
+            raise ValueError("aoi_rs.special_decoration.enabled must be a boolean")
+        if not enabled:
+            return []
         factories = special.get("factories", ["OLED"])
         if not isinstance(factories, list) or any(
             not isinstance(value, str) or not value.strip() for value in factories

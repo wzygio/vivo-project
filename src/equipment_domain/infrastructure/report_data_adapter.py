@@ -13,8 +13,8 @@ class PartsReportDataAdapter:
     def load_baseline(self, baseline_path: str) -> pd.DataFrame:
         return load_spec_baseline(baseline_path)
 
-    def load_cvd(self, workbook_path: str) -> pd.DataFrame:
-        return load_cvd_parts(workbook_path)
+    def load_cvd(self, workbook_path: str, *, as_of_date: str = "") -> pd.DataFrame:
+        return load_cvd_parts(workbook_path, as_of_date=as_of_date)
 
     def load_snapshots(self, spec_df: pd.DataFrame, *, as_of: pd.Timestamp, max_age_days: int) -> tuple[pd.DataFrame, pd.DataFrame]:
         return load_report_part_life_snapshots(self.db_manager, spec_df, as_of=as_of, max_age_days=max_age_days)

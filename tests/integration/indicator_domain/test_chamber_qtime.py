@@ -176,7 +176,9 @@ def test_each_physical_column_keeps_its_own_chamber_and_target(report_source):
     assert first.loc[first.status.eq('超限')].index.tolist() == ['PT->OC1', 'OC9->OC10']
 
 
-def test_product_lookup_uses_source_month_across_display_month_boundary(report_source):
+def test_product_lookup_uses_source_month_across_display_month_boundary(report_source, monkeypatch):
+    from src.shared_kernel.config import ConfigLoader
+    monkeypatch.setattr(ConfigLoader, 'get_indicator_data_exclusion', lambda: None)
     engine, paths = report_source
     for path in paths.values():
         write_source(path, [('G1', datetime(2026, 9, 30, 11), 5)])

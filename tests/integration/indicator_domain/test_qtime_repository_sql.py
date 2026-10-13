@@ -10,6 +10,45 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
 
 
+@pytest.mark.parametrize("shop,f_step", [("ARRAY", "15500"), ("OLED", "25500"), ("TP", "35500")])
+def test_step_options_filter_source_timekey_strictly_after_20260101(
+    monkeypatch, shop: str, f_step: str,
+) -> None:
+    monkeypatch.setattr(
+        ConfigLoader, "get_data_forward_policy",
+        lambda: DataForwardPolicy(enabled=True, offset_days=4),
+    )
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("ATTACH DATABASE ':memory:' AS mdw"))
+            connection.execute(text(
+                "CREATE TABLE mdw.qtime_tzbjx "
+                "(step_desc TEXT, f_step TEXT, t_step TEXT, timekey TEXT)"
+            ))
+            connection.execute(
+                text("INSERT INTO mdw.qtime_tzbjx VALUES (:step_desc, :f_step, '15600', :timekey)"),
+                [
+                    {"step_desc": label, "f_step": f_step, "timekey": value}
+                    for label, value in (
+                        ("old", "20251231235959"),
+                        ("equal", "20260101"),
+                        ("missing", None),
+                        ("new", "20260101000000"),
+                        ("new", "20260102000000519922"),
+                    )
+                ],
+            )
+        repository = QTimeRepository(SimpleNamespace(engine=engine))
+        assert repository.list_step_options(shop) == (
+            QTimeStepOption(step_desc="new", f_step=f_step, t_step="15600"),
+        )
+        other_shop = "OLED" if shop == "ARRAY" else "ARRAY"
+        assert repository.list_step_options(other_shop) == ()
+    finally:
+        engine.dispose()
+
+
 @pytest.mark.parametrize("microseconds", ["", "519922"])
 @pytest.mark.parametrize("use_snapshot", [False, True])
 def test_qtime_repository_executes_the_full_filter_contract(

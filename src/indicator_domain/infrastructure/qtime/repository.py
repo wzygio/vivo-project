@@ -22,6 +22,7 @@ from src.indicator_domain.infrastructure.qtime.snapshot_store import (
     QTimeSnapshot,
     QTimeSnapshotStore,
 )
+from src.indicator_domain.infrastructure.shared.date_exclusion import apply_indicator_date_exclusion
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 
@@ -90,13 +91,16 @@ class QTimeRepository:
             "SELECT DISTINCT step_desc, f_step, t_step FROM ("
             "SELECT CASE WHEN f_step LIKE '1%' THEN 'ARRAY' "
             "WHEN f_step LIKE '2%' THEN 'OLED' ELSE 'TP' END AS shop, "
-            "step_desc, f_step, t_step FROM mdw.qtime_tzbjx"
+            "step_desc, f_step, t_step FROM mdw.qtime_tzbjx "
+            "WHERE timekey > :step_options_after"
             ") AS qtime_steps WHERE shop = :shop "
             "ORDER BY step_desc, f_step, t_step"
         )
         try:
             return self._step_options_from_frame(
-                self._read_frame(statement, params={"shop": shop})
+                self._read_frame(
+                    statement, params={"shop": shop, "step_options_after": "20260101"}
+                )
             )
         except QTimeDataAccessError:
             if snapshot is not None:
@@ -137,6 +141,7 @@ class QTimeRepository:
         signature = (
             QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature,
             ConfigLoader.get_report_cutoff_policy().signature,
+            ConfigLoader.get_indicator_data_exclusion(),
         )
         if self._snapshot_store is None:
             return signature
@@ -430,6 +435,9 @@ class QTimeRepository:
         displayed = self._data_forward_policy.shift_frame(source, ("timekey", "_source_event_time"))
         displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(
             displayed, "_source_event_time" if "_source_event_time" in displayed else "timekey",
+        )
+        displayed = apply_indicator_date_exclusion(
+            displayed, time_column="_source_event_time" if "_source_event_time" in displayed else "timekey",
         )
         display_time = pd.to_datetime(displayed["timekey"], errors="coerce")
         mask = display_time.ge(query.start_time) & display_time.lt(query.end_time)

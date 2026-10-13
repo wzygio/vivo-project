@@ -398,7 +398,7 @@ def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None
 
 
 @pytest.mark.parametrize("sheet_limit", [2., 10.])
-def test_default_oled_only_special_rules_and_factory_config_invalidates_cache(
+def test_enabled_special_rules_and_factory_config_invalidates_cache(
     _tmp_project_root, sheet_limit,
 ) -> None:
     import yaml
@@ -427,7 +427,7 @@ def test_default_oled_only_special_rules_and_factory_config_invalidates_cache(
 
     for factories in [["OLED"], ["ARRAY", "TP"], []]:
         config_path.write_text(yaml.safe_dump({
-            "aoi_rs": {"special_decoration": {"factories": factories}},
+            "aoi_rs": {"special_decoration": {"enabled": True, "factories": factories}},
         }), encoding="utf-8")
         report = AoiRsReportService.get_aoi_rs_report_data(
             _data_port=port, query_config_json=_config_json(), snapshot_signature="factory-toggle",
@@ -446,6 +446,54 @@ def test_default_oled_only_special_rules_and_factory_config_invalidates_cache(
                 assert (1.7 <= sheet <= 1.9) if sheet_limit == 2 else sheet == 8
                 assert detail == 8
     assert len(calls) == 3  # no explicit cache clear between configuration changes
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_special_enabled_toggle_controls_report_projection_period_cap_and_cache(_tmp_project_root) -> None:
+    from datetime import date
+    import yaml
+    from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
+
+    source = _details_df().iloc[[0]].assign(factory="OLED", code_qty=8)
+    original = source.copy(deep=True)
+    spec = _chart_spec_df().assign(factory="OLED")
+    calls = []
+    port = _data_port(source, source, spec)
+    port.get_rs_details = lambda _query: (calls.append(1) or source)
+    trend_source = pd.concat([
+        source.assign(code_qty=10, start_time=pd.Timestamp("2026-08-01")),
+        source.assign(code_qty=0, sheet_id="OTHER", start_time=pd.Timestamp("2026-08-09")),
+    ], ignore_index=True)
+    config_path = _tmp_project_root / "config/domain/inline_domain.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    for enabled in [None, False, True, False]:
+        section = {"factories": ["OLED"]}
+        if enabled is not None:
+            section["enabled"] = enabled
+        config_path.write_text(yaml.safe_dump({
+            "aoi_rs": {"special_decoration": section},
+        }), encoding="utf-8")
+        report = AoiRsReportService.get_aoi_rs_report_data(
+            _data_port=port, query_config_json=_config_json(), snapshot_signature="enabled-toggle",
+        )
+        sheet = report.sheet_points_df.rs_qty.iloc[0]
+        lot = report.lot_points_df.value.iloc[0]
+        detail = report.rs_details_df.code_qty.iloc[0]
+        if enabled:
+            assert 0 <= sheet <= 1
+            assert sheet == lot == detail
+        else:
+            assert 1.7 <= sheet <= 1.9
+            assert 1.7 <= lot <= 1.9
+            assert detail == 8
+        trend = build_aoi_rs_period_trend(trend_source, trend_source, date(2026, 8, 10))
+        assert trend.loc[trend.period_type.eq("month"), "value"].iloc[0] == 5
+        for period_type in ["week", "day"]:
+            assert trend.loc[trend.period_type.eq(period_type), "value"].max() == (6.5 if enabled else 10)
+
+    assert len(calls) == 2  # Switching on rebuilds; switching off reuses the correct cached projection.
     pd.testing.assert_frame_equal(source, original)
 
 

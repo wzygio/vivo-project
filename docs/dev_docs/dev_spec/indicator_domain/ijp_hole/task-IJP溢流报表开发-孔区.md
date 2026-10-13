@@ -17,8 +17,8 @@
 
 ### Frontend
 1. 图像样式：请参考以下图片（内部已开发的报表在FineReport中的截图）
-    - `docs\dev_docs\dev_spec\indicator_domain\IJP溢流报表-孔区-1.png`
-    - `docs\dev_docs\dev_spec\indicator_domain\IJP溢流报表-孔区-2.png`
+    - `docs\project_files\indicator_domain\ijp_hole\IJP溢流报表-孔区-1.png`
+    - `docs\project_files\indicator_domain\ijp_hole\IJP溢流报表-孔区-2.png`
 2. 其它样式：以上样式参考仅针对图片绘制，至于筛选器、排布方式（比如Expander，每行排布几幅图）等其它样式请请全部与现有报表保持一致：`app\pages\IJP溢流监控报表.py`
 3. 前端架构：在`app\pages`下新建一个page，具体架构可按照`visionox-dashboard-ui`
 

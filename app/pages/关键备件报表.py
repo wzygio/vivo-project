@@ -3,7 +3,7 @@
 📋 关键备件报表 — Streamlit 前端页面
 
 数据流:
-1. 加载关键备件规格基线及 CVD 工作簿首个 sheet
+1. 加载关键备件规格基线及 CVD 工作簿各厂别的最新日期 Sheet
 2. 查询 PostgreSQL eda.ARRAY_PDS_RESULT_T（最新实测值）→ Parquet 快照
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
 4. 渲染卡片：总备件数、超规、预警、正常、最后更新
@@ -58,8 +58,8 @@ from app.sections.equipment_domain.parts_dashboard import (
 # ==============================================================================
 
 BASELINE_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline", "critical_parts_baseline.csv")
-CVD_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "cvd_parts", "供应商关键备件寿命管控清单-0921-CVD.xlsx")
-PARTS_REPORT_CACHE_SIGNATURE = "parts_report_cvd_v3"
+CVD_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "cvd_parts", "供应商关键备件寿命管控清单-CVD.xlsx")
+PARTS_REPORT_CACHE_SIGNATURE = "parts_report_cvd_calendar_months_v5"
 logger = logging.getLogger(__name__)
 
 

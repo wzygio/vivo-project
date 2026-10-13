@@ -11,14 +11,14 @@ class MemorySource:
         self.frame = frame
         self.windows = []
 
-    def read_report(self, start, end):
+    def read_report(self, start, end, products):
         self.windows.append((start, end))
         return self.frame.copy(deep=True)
 
 
 def source_frame():
     return pd.DataFrame([{
-        'prod_code': '通用', 'materialtype': '量产',
+        'prod_code': 'M678', 'batch_no': '20260801', 'materialtype': '量产',
         'requestdate': pd.Timestamp('2026-08-20 17:03:07'),
         'checkeddate': pd.Timestamp('2026-08-27 12:56:26'),
         'mitemname': '100024720', 'mitemdesc': '有机材料_GP-RH1080',
@@ -36,9 +36,12 @@ def source_frame():
 def test_report_computes_results_preserves_measurement_blanks_and_pairs_specifications():
     source = MemorySource(source_frame())
     original = source.frame.copy(deep=True)
-    report = EvaporationReportService(source).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    report = EvaporationReportService(source, enabled_products=('M678',)).get_report(date(2026, 8, 1), date(2026, 8, 31))
     assert source.windows == [(date(2026, 8, 1), date(2026, 8, 31))]
     assert report.shape == (1, 27)
+    assert report.columns[:3].tolist() == ['序号', '产品型号', '量产/非量产']
+    assert report.loc[0, '产品型号'] == 'M678'
+    assert '蒸镀批次' not in report and 'batch_no' not in report
     assert report.loc[0, '规格样式1'] == '<='
     assert report.loc[0, '规格上限'] == 64
     assert report.loc[0, '规格样式2'] == '>='
@@ -56,16 +59,16 @@ def test_report_computes_results_preserves_measurement_blanks_and_pairs_specific
 def test_invalid_dates_do_not_read_source(start, end):
     source = MemorySource(source_frame())
     with pytest.raises(ValueError, match='IQC_DATE_WINDOW_INVALID'):
-        EvaporationReportService(source).get_report(start, end)
+        EvaporationReportService(source, enabled_products=('M678',)).get_report(start, end)
     assert not source.windows
 
 
 def test_empty_report_has_full_schema_and_missing_columns_fail():
     empty = source_frame().iloc[:0]
-    result = EvaporationReportService(MemorySource(empty)).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    result = EvaporationReportService(MemorySource(empty), enabled_products=('M678',)).get_report(date(2026, 8, 1), date(2026, 8, 31))
     assert result.shape == (0, 27)
     with pytest.raises(ValueError, match='IQC_REPORT_SCHEMA_INVALID'):
-        EvaporationReportService(MemorySource(pd.DataFrame())).get_report(date(2026, 8, 1), date(2026, 8, 31))
+        EvaporationReportService(MemorySource(pd.DataFrame()), enabled_products=('M678',)).get_report(date(2026, 8, 1), date(2026, 8, 31))
 
 
 @pytest.mark.parametrize('prefix', ['iqc', 'coa'])
@@ -73,7 +76,7 @@ def test_empty_report_has_full_schema_and_missing_columns_fail():
 def test_any_failing_point_sets_only_its_overall_result(prefix, point):
     frame = source_frame().assign(iqc_result='OK', coa_result='OK')
     frame.loc[0, f'{prefix}_{point}'] = 65
-    report = EvaporationReportService(MemorySource(frame)).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    report = EvaporationReportService(MemorySource(frame), enabled_products=('M678',)).get_report(date(2026, 8, 1), date(2026, 8, 31))
     assert report.loc[0, 'IQC结果'] == ('NG' if prefix == 'iqc' else 'OK')
     assert report.loc[0, 'COA结果'] == ('NG' if prefix == 'coa' else 'OK')
 
@@ -83,7 +86,7 @@ def test_missing_measurements_use_case_else_ok_without_filling_values():
     for prefix in ('iqc', 'coa'):
         for point in range(1, 6):
             frame[f'{prefix}_{point}'] = None
-    report = EvaporationReportService(MemorySource(frame)).get_report(date(2026, 8, 1), date(2026, 8, 31))
+    report = EvaporationReportService(MemorySource(frame), enabled_products=('M678',)).get_report(date(2026, 8, 1), date(2026, 8, 31))
     assert report[['IQC结果', 'COA结果']].iloc[0].tolist() == ['OK', 'OK']
     assert report[[f'{prefix}-{point}' for prefix in ('IQC', 'COA') for point in range(1, 6)]].isna().all(axis=None)
 
@@ -95,7 +98,7 @@ def test_measurement_decisions_match_original_sql_case_for_boundaries_and_nulls(
     import sqlite3
     from src.iqc_domain.core.eva_materials.evaporation import measurement_results
 
-    reference = (Path(__file__).resolve().parents[2] / 'docs/project_files/iqc_domain/蒸镀材料体系报表-sql语句.txt').read_text(encoding='utf-8')
+    reference = (Path(__file__).resolve().parents[2] / 'docs/project_files/iqc_domain/eva_materials/蒸镀材料体系报表-sql语句.txt').read_text(encoding='utf-8')
     cases = re.findall(r'CASE\s+-- 下限违规.*?END AS (?:IQC|COA)_[1-5]_RESULT', reference, flags=re.DOTALL)
     assert len(cases) == 10
     rows = []

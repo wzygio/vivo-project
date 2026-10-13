@@ -34,23 +34,14 @@ processing:
   defect_multipliers:
     # Array_Line
     'S向亮线': 0.7
-    'G向单亮线': 0.5
-    'G向单暗线': 0.8
     # Array_Pixel
-    '暗点': 0.5
-    '群暗点': 0.8
+    '暗点': 0.8
     'G3亮点': 0.2
-    '群亮点': 0.3
     '大面积亮点': 0
-    'HBM亮点': 0
     # Array_Mura
-    'S向ELA Mura': 0
-    'G向ELA Mura': 0
-    'G向带状Mura': 0
     # OLED_Mura
-    '彩斑Mura': 0.2
+    '彩斑Mura': 0.5
     # TP
-    'TP复测NG': 0.2
 
   sheet_hotspot_config: 
       enable: True

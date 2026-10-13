@@ -18,6 +18,7 @@ def source_frame():
                     luminance='123.15', lumi_decay='1.0084', cie_x='0.1376',
                     cie_xy='0.0472', iss='150.66', curr_decay='0.9972',
                     efficiency='8.027367', eff_decay=decay,
+                    jncd={'0': '0.15', '20': '0.75', '100': '1.25'}[time],
                 ))
     return pd.DataFrame(records)
 
@@ -36,11 +37,12 @@ def test_public_measurements_and_anonymous_numbers_are_stable():
     raw.attrs['internal'] = 'private-metadata'
     result = LifetimeReportService(MemorySource(raw)).get_report()
     assert len(result) == 24
-    assert len(result.columns) == 15
+    assert len(result.columns) == 16
     assert result['样品编号'].tolist()[:6] == [1, 1, 1, 2, 2, 2]
     assert result['测试时间'].tolist()[:3] == [0, 20, 100]
     assert result['效率衰减'].tolist()[:3] == [1.0, 0.99, 0.98]
     assert result['亮度衰减'].iloc[0] == 1.0084
+    assert result['JNCD'].tolist()[:3] == [0.15, 0.75, 1.25]
     assert 'private' not in result.to_json() and not result.attrs
     assert 'panel_id' not in result.columns
     shuffled = LifetimeReportService(MemorySource(raw.sample(frac=1, random_state=9))).get_report()
@@ -51,7 +53,7 @@ def test_public_measurements_and_anonymous_numbers_are_stable():
 def test_empty_missing_measurements_duplicates_and_more_than_five_samples():
     raw = source_frame()
     empty = LifetimeReportService(MemorySource(raw.iloc[:0])).get_report()
-    assert empty.empty and len(empty.columns) == 15
+    assert empty.empty and len(empty.columns) == 16
     raw.loc[0, 'eff_decay'] = '/'
     raw.loc[1, 'iss'] = None
     raw.loc[2, 'luminance'] = 'inf'
@@ -129,6 +131,7 @@ def test_different_empty_batch_forms_share_one_group_and_conflicts_still_fail():
 
 @pytest.mark.parametrize('metric,source_column', [
     ('效率衰减', 'eff_decay'), ('亮度衰减', 'lumi_decay'),
+    ('JNCD', 'jncd'),
 ])
 def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover(metric, source_column):
     from app.charts.iqc_domain.lifetime import build_lifetime_chart
@@ -150,3 +153,14 @@ def test_chart_keeps_numeric_time_missing_gaps_and_anonymous_hover(metric, sourc
     assert chart.layout.yaxis.title.text == metric
     assert metric in chart.data[0].hovertemplate
     assert chart.data[0].y[0] == group.iloc[0][metric]
+
+
+@pytest.mark.parametrize('value', [None, '/', '-', 'inf', '-inf', 'NaN'])
+def test_invalid_jncd_is_blank_without_changing_other_measurements(value):
+    raw = source_frame()
+    raw.loc[0, 'jncd'] = value
+    report = LifetimeReportService(MemorySource(raw)).get_report()
+    assert len(report) == len(raw)
+    assert report['JNCD'].isna().sum() == 1
+    assert report['效率衰减'].notna().all()
+    assert report['亮度衰减'].notna().all()

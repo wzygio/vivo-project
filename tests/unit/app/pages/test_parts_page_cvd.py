@@ -16,18 +16,18 @@ PAGE = Path(__file__).resolve().parents[4] / "app" / "pages" / "关键备件报�
 @pytest.mark.parametrize("mode", ["normal", "empty", "failure"])
 def test_parts_page_cvd_public_states(monkeypatch, mode):
     frame = pd.DataFrame({
-        "厂别": ["OLED", "Array"], "设备类型": ["CVD", "PVD"],
-        "备件类型": ["Diffuser", "Target"],
-        "测量值": ["2026-01-31", 30000.0], "寿命规格": ["2年", 41000.0],
-        "使用进度": [32.05, 73.17], "预警状态": ["正常", "正常"],
-        "测量时间": pd.to_datetime(["2026-09-22", "2026-09-22"]),
-        "进度": [None, 352], "原始测量值": [46053.5, 30000],
+        "厂别": ["OLED", "Array", "ARRAY"], "设备类型": ["CVD", "PVD", "CVD"],
+        "备件类型": ["Diffuser", "Target", "Backplate"],
+        "测量值": ["2026-01-31", 30000.0, "2024-02-29"], "寿命规格": ["2年", 41000.0, "1.5年"],
+        "使用进度": [32.05, 73.17, 180.0], "预警状态": ["正常", "正常", "超规"],
+        "测量时间": pd.to_datetime(["2026-09-22"] * 3),
+        "进度": [None, 352, None], "原始测量值": [46053.5, 30000, None],
     })
     if mode == "empty":
         frame = frame.iloc[:0]
 
     def get_report(**kwargs):
-        assert kwargs["cvd_path"].endswith("0921-CVD.xlsx")
+        assert kwargs["cvd_path"].endswith("供应商关键备件寿命管控清单-CVD.xlsx")
         assert kwargs["cvd_signature"]
         if mode == "failure":
             raise ValueError("internal admin=true configuration path")
@@ -50,8 +50,15 @@ def test_parts_page_cvd_public_states(monkeypatch, mode):
         assert "进度" not in app.dataframe[0].value
         assert "原始测量值" not in app.dataframe[0].value
         assert app.dataframe[0].value.iloc[0]["测量值"] == "2026-01-31"
+        assert app.multiselect[0].options == ["ARRAY", "OLED"]
         assert "CVD" in app.multiselect[1].options
         app.multiselect[1].select("CVD").run()
         assert not app.exception
+        assert len(app.dataframe[0].value) == 2
+        assert app.metric[0].value == "2"
+        app.multiselect[0].select("ARRAY").run()
+        assert not app.exception
         assert len(app.dataframe[0].value) == 1
         assert app.metric[0].value == "1"
+        assert app.dataframe[0].value.iloc[0]["寿命规格"] == "1.5年"
+        assert app.dataframe[0].value.iloc[0]["预警状态"] == "超规"

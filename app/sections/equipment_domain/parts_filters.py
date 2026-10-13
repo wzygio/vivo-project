@@ -11,7 +11,20 @@ def _sorted_values(dataframe: pd.DataFrame, column: str) -> list[str]:
     if column not in dataframe.columns:
         return []
     values = dataframe[column].dropna().astype(str).str.strip()
+    if column == "厂别":
+        values = values.str.upper()
     return sorted(values[values.ne("")].unique())
+
+
+def _selection_mask(
+    dataframe: pd.DataFrame, column: str, selected_values: Sequence[str],
+) -> pd.Series:
+    """厂别以统一编码匹配，避免 Array 与 ARRAY 分裂为不同筛选范围。"""
+    if column == "厂别":
+        values = dataframe[column].astype("string").str.strip().str.upper()
+        selected = {str(value).strip().upper() for value in selected_values}
+        return values.isin(selected)
+    return dataframe[column].isin(selected_values)
 
 
 def build_cascading_filter_options(
@@ -25,7 +38,7 @@ def build_cascading_filter_options(
     equipment_scope = report_df.copy()
     if selected_factories:
         equipment_scope = equipment_scope[
-            equipment_scope["厂别"].isin(selected_factories)
+            _selection_mask(equipment_scope, "厂别", selected_factories)
         ]
     available_equipment_types = _sorted_values(equipment_scope, "设备类型")
 
@@ -100,7 +113,7 @@ def apply_parts_filters(
     )
     for column, selected_values in filters:
         if selected_values and column in filtered_df.columns:
-            filtered_df = filtered_df[filtered_df[column].isin(selected_values)].copy()
+            filtered_df = filtered_df[_selection_mask(filtered_df, column, selected_values)].copy()
     return filtered_df
 
 

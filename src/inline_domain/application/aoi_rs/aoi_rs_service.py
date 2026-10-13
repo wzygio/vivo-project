@@ -201,7 +201,7 @@ class AoiRsReportService:
         product_revision: str = "",
         decision_signature: str = "",
         decoration_policy_version: str = AOI_RS_DECORATION_POLICY_VERSION,
-        special_factories: tuple[str, ...] = ("OLED",),
+        special_factories: tuple[str, ...] = (),
         date_exclusion: InlineDateExclusion | None = None,
         exempt_param_name_contains: tuple[str, ...] | None = None,
         decoration_window: DecorationWindow | None = None,

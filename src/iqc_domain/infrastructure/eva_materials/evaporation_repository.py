@@ -7,6 +7,9 @@ import pandas as pd
 from sqlalchemy import text
 
 from src.iqc_domain.application.eva_materials.evaporation import IqcSourceUnavailable, validate_dates
+from src.iqc_domain.infrastructure.eva_materials.product_scope import (
+    material_product_statement, project_material_scope,
+)
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.shared_kernel.report_cutoff import ReportCutoffPolicy
@@ -15,8 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Select only the page's business fields. In particular, no report URLs, internal
 # flags, remarks or unshifted timestamps cross the repository output boundary.
-# The report scope is organic material at V3; product is a source attribute,
-# not an additional filter or an enabled_products dependency.
+# WMS product is a source attribute (often 通用). Eligibility is determined
+# independently through material/cycle/product membership before output. That
+# membership also supplies the public product and evaporation-cycle columns.
 REPORT_SQL = """
 SELECT Q.EATTRIBUTE10 AS prod_code, Q.EATTRIBUTE15 AS materialtype,
        Q.REQUESTDATE AS requestdate, Q.CHECKEDDATE AS checkeddate,
@@ -57,13 +61,17 @@ class EvaporationRepository:
     def __init__(
         self, db_manager: DatabaseManager,
         forward_policy: DataForwardPolicy, cutoff_policy: ReportCutoffPolicy,
+        work_order_types: tuple[str, ...],
     ) -> None:
         self._db_manager = db_manager
         self._forward = forward_policy
         self._cutoff = cutoff_policy
+        self._work_orders = tuple(work_order_types)
 
-    def read_report(self, start: date, end: date) -> pd.DataFrame:
+    def read_report(self, start: date, end: date, products: tuple[str, ...]) -> pd.DataFrame:
         validate_dates(start, end)
+        if not products or not self._work_orders:
+            raise ValueError("IQC_PRODUCT_SCOPE_INVALID")
         display_start = pd.Timestamp(start)
         display_end = pd.Timestamp(end) + pd.Timedelta(days=1)
         source_start, source_end = self._forward.to_source_window(display_start, display_end)
@@ -78,6 +86,17 @@ class EvaporationRepository:
                     "start_time": source_start.to_pydatetime(),
                     "end_time": source_end.to_pydatetime(),
                 })
+                frame.columns = frame.columns.str.lower()
+                membership = pd.DataFrame(columns=["material_no", "prod_code", "batch_no"])
+                if not frame.empty:
+                    materials = tuple(frame.mitemname.dropna().unique())
+                    if materials:
+                        membership = pd.read_sql_query(material_product_statement(), connection, params={
+                            "materials": materials, "products": products,
+                            "work_orders": self._work_orders,
+                        })
+                        membership.columns = membership.columns.str.lower()
+                frame = project_material_scope(frame, membership, products)
             frame.columns = frame.columns.str.lower()
             for column in ("requestdate", "checkeddate"):
                 frame[column] = pd.to_datetime(frame[column], errors="raise")

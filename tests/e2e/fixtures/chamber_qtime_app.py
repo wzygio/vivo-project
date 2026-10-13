@@ -29,7 +29,7 @@ class FixtureSource:
     def cache_signature(self):
         return ('chamber-browser-fixture-v3', st.query_params.get('scenario', 'normal'))
 
-    def read(self, *, as_of):
+    def read(self, *, as_of, start_date=None, end_date=None):
         scenario = st.query_params.get('scenario', 'normal')
         if scenario == 'failure':
             raise QTimeDataAccessError('INTERNAL_SECRET_SQL_MUST_NOT_LEAK')

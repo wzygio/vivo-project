@@ -1,6 +1,8 @@
 # IQC 寿命测试报表：需求与数据源分析
 
-日期：2026-09-15。来源：[开发需求](task-寿命测试报表开发.md)、`docs/project_files/iqc_domain/ID寿命维护表V1.0.xlsx` 与同目录样式 PNG。
+日期：2026-09-15。来源：[开发需求](task-寿命测试报表开发.md)、`docs/project_files/iqc_domain/lifetime/ID寿命维护表V1.0.xlsx` 与同目录样式 PNG。
+
+本文保留原始数据源分析与历史验收记录；2026-10-13 增加 JNCD 后的当前监控维度和缓存边界见 [寿命监控与取数规则](../../../../../references/domain/iqc_domain/lifetime/rules-lifetime-monitoring.md)。
 
 ## 核验结果
 
@@ -32,7 +34,7 @@ Excel 企业加密，使用 enterprise-excel-markdown 的 Excel COM 只读单元
 
 ## 数据契约与边界
 
-- Excel 中 CIE-u/CIE-v/JNCD 在库中也有 cie_u/cie_v/jncd，但不在本次明确要求的 SQL 列中，暂不展示。内部 ext_user/ext_time 不展示。
+- 初始需求未展示 Excel 中 CIE-u/CIE-v/JNCD 对应的 cie_u/cie_v/jncd；后续 JNCD 扩展见上述当前规则。CIE-u/CIE-v 及内部 ext_user/ext_time 仍不展示。
 - 未解决资料项仅为测试时间和部分指标的物理单位，均不影响按原值展示；不推算寿命和判定阈值。
 - 空数值以及 /、- 等缺测标记保持空白，页面提示测量缺失，曲线保留断点；无效样品标识、无效时间或冲突重复测点使读取失败。完全重复测点去重。
 - 编号先在全组生成再筛选，五个样品不是限制；不跨批次/画面混线。同一数据集乱序、翻页、筛选不会改变编号；新样品加入排序更靠前的位置时可能重排，本期没有持久编号表。

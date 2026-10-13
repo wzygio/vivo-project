@@ -24,7 +24,8 @@ src
 |-- indicator_domain
 |   |-- qtime
 |   |-- ijp
-|   `-- ijp_hole
+|   |-- ijp_hole
+|   `-- shared
 |-- iqc_domain
 |   |-- eva_materials
 |   `-- lifetime
@@ -50,7 +51,8 @@ src
 | `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
 | `indicator_domain` | `ijp` | IJP border-overflow analysis, Glass ratios, printer summaries and period summaries |
 | `indicator_domain` | `ijp_hole` | IJP large-hole analysis and Glass/total/day ratios; independent counting rules from `ijp`, while reusing its query/filter contracts |
-| `iqc_domain` | `eva_materials` | Evaporation incoming-material measurements, specifications, per-point decisions and overall material results |
+| `indicator_domain` | `shared` | Infrastructure display-date exclusions shared by Q-Time station/chamber and IJP border/hole adapters; filters output copies and binds source-time SQL exclusions before aggregation |
+| `iqc_domain` | `eva_materials` | Evaporation incoming-material measurements, specifications, per-point decisions and overall material results; product eligibility uses material/cycle/product-request membership, including unwarehoused work orders, without multiplying inspection facts |
 | `iqc_domain` | `lifetime` | Lifetime-test measurement validation, group-local anonymous sample numbering, product/batch filtering and report projection; uses an independent M3 data source |
 | `yield_domain` | `mapping` | Panel coordinates, mapping layouts, defect distribution, hotspot modification and monthly scaling policies |
 | `yield_domain` | `mwd_trend` | Month/week/day defect-rate trends, Code/Group aggregation, daily generation and maintained monthly target overrides |
@@ -69,7 +71,7 @@ IQC retains example-report loading/filtering outside `eva_materials` and `lifeti
 
 Select a domain and named business submodule from this overview first, then use the path grammar below to find its actual implementation. Keep the same stable capability name wherever its implementation is present; add a submodule for a distinct business responsibility, and keep domain-local reuse in that domain's `shared` area. The overview records existing packages and explicitly marks ungrouped capabilities; it does not require creating empty or hypothetical packages.
 
-Within `qtime`, station monitoring uses [the documented decoration workflow](references/design/indicator_domain/qtime/algorithm-qtime-data-decoration.md); chamber monitoring uses independent residence rules. Sharing a submodule or page does not imply sharing an algorithm.
+Within `qtime`, station monitoring uses [the documented decoration workflow](references/design/indicator_domain/qtime/algorithm-qtime-data-decoration.md); chamber monitoring uses [independent database interval rules](references/domain/indicator_domain/qtime/rules-chamber-database.md). Its production adapter reads bounded chamber events and resolves the LL1 product specification through MES master data; the workbook adapter remains explicitly injectable for historical use. Sharing a submodule or page does not imply sharing an algorithm.
 
 ## Shared Path Grammar
 
@@ -79,6 +81,7 @@ Use the Domain Submodule Architecture as the sole maintained capability inventor
 src/<domain>/<layer>/<submodule>/
 app/{sections,charts}/<domain>/[<submodule>/]
 docs/dev_docs/{dev_spec,generated}/<domain>/<submodule>/
+docs/project_files/<domain>/<submodule>/
 references/{domain,design}/<domain>/<submodule>/
 resources/<domain>/<submodule>/
 data/<domain>/<lifecycle-group>/
@@ -112,6 +115,7 @@ domain composition -> assembles application services and concrete adapters
 
 - Application services coordinate rules and outbound calls. Adapters manage SQL, workbooks, snapshots, and external resources; they may reuse pure Core rules, but Core must not import adapters.
 - Inline factory/date exclusions belong to infrastructure output projections after display-time mapping and before deduplication, feature aggregation, decoration and capability calculations. Fresh/cache/fallback/history/workbook outputs share this contract; source snapshots and maintained decisions are preserved. Core retains period-aggregate availability rules. See [Inline date exclusion](references/domain/inline_domain/shared/rules-inline-date-exclusion.md) and [ADR-0034](docs/ADR/0034-inline-date-exclusion-infrastructure-boundary.md).
+- Indicator date exclusions belong to infrastructure after display-time mapping and before decoration/statistics. IJP SQL adapters translate the excluded display interval back to source time before aggregation and detail limits; Q-Time source snapshots remain complete. See [Indicator date exclusion](references/domain/indicator_domain/shared/rules-indicator-date-exclusion.md).
 - Reuse public same-layer shared APIs rather than another business module's private implementation. Cross-domain collaboration uses public application contracts rather than another domain's repository.
 - Ports may live in a submodule's `ports.py`, a dedicated protocol file, a shared `ports/` package, or the layer root. Locate them by consumer scope rather than assuming a single naming pattern.
 - Controlled default resolvers preserve existing static entry points during migration. Exact legacy import exceptions are recorded in the [dependency guard](tests/architecture/test_backend_dependencies.py); they are not precedents for new outward dependencies. The guard checks static imports, not all dynamic calls or implicit I/O.
@@ -123,8 +127,8 @@ domain composition -> assembles application services and concrete adapters
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
 | `app/sections/<domain>/[<submodule>/]` | Query gates, session state, page sections, and presentation coordination; small domains may omit the submodule directory |
-| `app/sections/iqc_domain/eva_materials/` | Evaporation material date query, native Streamlit dataframe and cached public payloads; the complete public result supports native sorting, search and CSV export |
-| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, linked product/status/batch selectors with query-applied filters, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency- and luminance-decay curves in child expanders within each product/batch expander, with four test screens per row |
+| `app/sections/iqc_domain/eva_materials/` | Evaporation material date and annotated enabled-product query, native Streamlit dataframe and cached public payloads; the owning IQC adapter filters membership and projects selected product codes before public projection/cache/export, while evaporation cycles remain internal; the complete public result supports native sorting, search and CSV export |
+| `app/sections/iqc_domain/lifetime/` | Enabled-product scope, linked product/status/batch selectors with results displayed only after an explicit query, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency-decay, luminance-decay and JNCD curves in child expanders within each product/batch expander, with four test screens per row for decay metrics and only the W screen for JNCD |
 | `app/charts/<domain>/[<submodule>/]` | Chart adapters; Inline shared charts live in `app/charts/inline_domain/`, without a one-to-one directory for every backend submodule. AOI RS and SPC page rendering and PDF reports share UI-independent figure construction. Their presentation sections own administrator-only product/factory multiselects (all products and ARRAY by default), application data consumption, and separate generation/download actions; the generated PDF is retained in the session for explicit and repeat downloads. Their shared PDF adapter embeds three charts per indicator row and Chinese fonts, with temporary images cleaned on success and failure. Alert sections are excluded |
 | `app/components/` | Cross-page components and filter/refresh coordination |
 | `app/sections/inline_domain/monitor/` | Current cross-indicator matrix assembly; consumes results from their owning domains |

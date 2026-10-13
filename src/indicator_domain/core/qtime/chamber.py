@@ -33,10 +33,15 @@ def build_chamber_report(
     mapping = mapping.loc[~mapping['glass_id'].isin(ambiguous)]
     mapping = mapping.loc[mapping['prod_code'].isin(enabled_products)]
     selected = measurements.merge(mapping, on='glass_id', how='inner', validate='many_to_one')
-    details = selected.melt(
-        id_vars=['prod_code', 'line', 'glass_id', 'entry_time'],
-        value_vars=list(CHAMBERS), var_name='chamber', value_name='duration_seconds',
-    ).merge(targets, on=['line', 'chamber'], how='left', validate='many_to_one')
+    if 'chamber' in selected.columns:
+        # Database intervals remain long-form: repeated transfers are real facts.
+        intervals = selected.loc[selected['chamber'].isin(CHAMBERS)].copy()
+    else:
+        intervals = selected.melt(
+            id_vars=['prod_code', 'line', 'glass_id', 'entry_time'],
+            value_vars=list(CHAMBERS), var_name='chamber', value_name='duration_seconds',
+        )
+    details = intervals.merge(targets, on=['line', 'chamber'], how='left', validate='many_to_one')
     durations = pd.to_numeric(details['duration_seconds'], errors='coerce')
     details['duration_seconds'] = durations.where(np.isfinite(durations) & durations.ge(0))
     details['status'] = np.select(

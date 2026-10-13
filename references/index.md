@@ -31,10 +31,12 @@
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/mwd_trend/algorithm-mwd-trend.md) |
 | Sheet / Lot 不良率、热点分配与覆盖率计算 | [Sheet / Lot 算法](domain/yield_domain/sheet_lot/algorithm-sheet-lot.md) |
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](design/shared_kernel/shared/overview-shared-kernel.md) |
-| QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)；腔室规则按 `qtime` 下对应开发说明定位 |
+| QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)、[腔室数据库规则](domain/indicator_domain/qtime/rules-chamber-database.md) |
+| Indicator data_exclusion、Q-Time/IJP 显示日期过滤、聚合前排除、缓存失效 | [Indicator 日期排除规则](domain/indicator_domain/shared/rules-indicator-date-exclusion.md) |
 | IJP 溢流数据源、站点与时间口径 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
-| IQC 蒸镀材料与寿命测试来源和报表要求 | 按 `docs/dev_docs/dev_spec/iqc_domain/{eva_materials,lifetime}/` 定位；已接受口径见 `docs/ADR/0029-*` 与 `0030-*` |
-| 关键备件规格、测量、快照与寿命报表 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
+| IQC 寿命测试 JNCD、衰减曲线、实时取数与快照/缓存边界 | [寿命监控与取数规则](domain/iqc_domain/lifetime/rules-lifetime-monitoring.md)；原始来源分析按 `docs/dev_docs/dev_spec/iqc_domain/lifetime/` 定位，匿名边界见 `docs/ADR/0030-*` |
+| IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
+| 关键备件规格、测量、快照与寿命报表；数据读取、通用仿造、CVD 特殊规则仿造、厂别-MMDD Sheet 更新、小数年限与自然月、95% 更换 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
 | 日期前推、offset_days、源日期与显示日期、跨模块报表时间链路 | [报表日期前推数据链路](domain/shared_kernel/shared/data-flow-report-date-forward.md) |
 
 ### 跨域范式与功能设计

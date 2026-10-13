@@ -11,7 +11,7 @@ from src.iqc_domain.application.lifetime.lifetime import LifetimeSourceUnavailab
 logger = logging.getLogger(__name__)
 REPORT_SQL = """
 SELECT product_group, product_id, wo_name, date_key, panel_id, test_time,
-       bu, luminance, lumi_decay, cie_x, cie_xy, iss, curr_decay, efficiency, eff_decay
+       bu, luminance, lumi_decay, cie_x, cie_xy, iss, curr_decay, efficiency, eff_decay, jncd
 FROM m3dwd.dwd_panel_eff_dec_enter
 """
 

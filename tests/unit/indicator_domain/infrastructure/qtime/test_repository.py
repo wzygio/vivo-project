@@ -14,6 +14,7 @@ from src.shared_kernel.data_forward import DataForwardPolicy
 
 @pytest.fixture(autouse=True)
 def explicit_forward_policy(monkeypatch):
+    monkeypatch.setattr(qtime_repository.ConfigLoader, 'get_indicator_data_exclusion', lambda: None)
     monkeypatch.setattr(
         qtime_repository.ConfigLoader,
         "get_data_forward_policy",
@@ -106,7 +107,8 @@ def test_list_step_options_include_original_codes_and_are_scoped_to_shop(
         QTimeStepOption(step_desc="A->B", f_step="21100", t_step="21200"),
         QTimeStepOption(step_desc="B->C", f_step="21200", t_step="21300"),
     )
-    assert captured["params"] == {"shop": "OLED"}
+    assert captured["params"] == {"shop": "OLED", "step_options_after": "20260101"}
+    assert "FROM mdw.qtime_tzbjx WHERE timekey > :step_options_after" in captured["statement"]
     assert "WHERE shop = :shop" in captured["statement"]
     assert "WHERE shop = 'OLED'" not in captured["statement"]
     assert "f_step" in captured["statement"]

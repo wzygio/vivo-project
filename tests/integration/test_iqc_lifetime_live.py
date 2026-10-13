@@ -19,7 +19,7 @@ def test_live_lifetime_public_report_matches_source():
         raw = pd.read_sql_query(text('''
             SELECT product_group, product_id, wo_name, date_key, panel_id,
                    test_time, bu, luminance, lumi_decay, cie_x, cie_xy,
-                   iss, curr_decay, efficiency, eff_decay
+                   iss, curr_decay, efficiency, eff_decay, jncd
             FROM m3dwd.dwd_panel_eff_dec_enter
         '''), connection)
     actual = build_lifetime_service().get_report()
@@ -29,7 +29,7 @@ def test_live_lifetime_public_report_matches_source():
     raw = raw.drop_duplicates()
     assert not actual.empty, 'Live acceptance requires actual measurements'
     assert len(actual) == len(raw.drop_duplicates())
-    assert len(actual.columns) == 15
+    assert len(actual.columns) == 16
     public_text = actual.to_json()
     assert all(value not in public_text for value in raw.panel_id.unique()), 'Identity leak'
     for identity, source in raw.groupby(['product_group', 'date_key', 'bu']):
@@ -47,7 +47,7 @@ def test_live_lifetime_public_report_matches_source():
             for column, label in [('luminance','亮度'), ('lumi_decay','亮度衰减'),
                                   ('cie_x','CIEx'), ('cie_xy','CIEy'), ('iss','Iss'),
                                   ('curr_decay','电流衰减'), ('efficiency','效率'),
-                                  ('eff_decay','效率衰减')]:
+                                  ('eff_decay','效率衰减'), ('jncd','JNCD')]:
                 values = pd.to_numeric(expected[column], errors='coerce').astype(float)
                 values = values.where(np.isfinite(values))
                 np.testing.assert_allclose(points[label], values,

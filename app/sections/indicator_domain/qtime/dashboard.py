@@ -32,6 +32,7 @@ from src.indicator_domain.application.qtime.service import (
     QTimeReportService,
 )
 from src.shared_kernel.data_health import attach_data_health
+from src.shared_kernel.config import ConfigLoader
 
 
 RESULT_STATE_KEY = "qtime_report_result"
@@ -267,4 +268,5 @@ def _filter_signature(
     step_options: list[QTimeStepOption],
     selected_products: list[str],
 ) -> tuple[object, ...]:
-    return (shop, tuple(step_options), tuple(selected_products), date.today().isoformat())
+    return (shop, tuple(step_options), tuple(selected_products), date.today().isoformat(),
+            ConfigLoader.get_indicator_data_exclusion())

@@ -187,12 +187,11 @@ class PartsReportService:
 
         # CVD 独立计算日期寿命和月增量，不进入数值修饰和数据库匹配链路。
         if cvd_path:
-            if not runtime_config.cvd_baseline_date:
-                raise ValueError("CVD 模拟缺少基准日期配置")
+            report_date = as_of_date or date.today().isoformat()
             cvd_report = build_cvd_report(
-                data_port.load_cvd(cvd_path),
-                as_of_date=as_of_date or date.today().isoformat(),
-                baseline_date=runtime_config.cvd_baseline_date,
+                data_port.load_cvd(cvd_path, as_of_date=report_date),
+                as_of_date=report_date,
+                baseline_date=runtime_config.cvd_baseline_date or report_date,
                 policy=alert_policy,
             )
             report_df = pd.concat([report_df, cvd_report], ignore_index=True)

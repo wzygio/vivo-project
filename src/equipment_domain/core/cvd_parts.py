@@ -1,6 +1,7 @@
 """CVD 备件日期寿命和月增量模拟规则；只处理内存数据，不执行 I/O。"""
 
 from datetime import date
+from decimal import Decimal
 import math
 from numbers import Real
 import re
@@ -22,6 +23,31 @@ CVD_REPORT_COLUMNS = (
     "站点", "机台号-腔室", "测量值", "测量时间", "使用进度", "预警状态",
 )
 DAYS_PER_MONTH = 30
+
+
+def parse_cvd_sheet_name(
+    sheet_name: str, *, as_of_date: str | date,
+) -> tuple[str, pd.Timestamp]:
+    """解析厂别-MMDD，日期取不晚于报告日的最近一次有效月日。"""
+    match = re.fullmatch(r"([^-]+)-(\d{4})", sheet_name.strip())
+    if match is None or not match[1].strip():
+        raise ValueError(f"CVD Sheet 名称须为厂别-MMDD: {sheet_name!r}")
+    factory = match[1].strip().upper()
+    month, day = int(match[2][:2]), int(match[2][2:])
+    try:
+        date(2000, month, day)  # 用闰年校验月日，允许 0229。
+    except ValueError as error:
+        raise ValueError(f"CVD Sheet 更新日期无效: {sheet_name!r}") from error
+    report_day = _date_value(as_of_date)
+    # 跨世纪时 2 月 29 日的相邻有效年份最多相隔 8 年。
+    for year in range(report_day.year, report_day.year - 9, -1):
+        try:
+            updated_at = pd.Timestamp(date(year, month, day))
+        except ValueError:
+            continue
+        if updated_at <= report_day:
+            return factory, updated_at
+    raise ValueError(f"CVD Sheet 无法确定更新日期: {sheet_name!r}")
 
 
 def _date_value(value: object) -> pd.Timestamp:
@@ -51,13 +77,15 @@ def _measurement(
     row: pd.Series, current_day: pd.Timestamp, baseline_day: pd.Timestamp,
 ) -> tuple[object, float]:
     spec = row["寿命规格"]
-    years = re.fullmatch(r"(\d+)\s*年", str(spec).strip())
+    years = re.fullmatch(r"(\d+(?:\.\d+)?)\s*年", str(spec).strip())
     if years:
         replacement = _date_value(row["测量值"])
-        lifespan = int(years[1])
-        if lifespan <= 0:
+        lifespan_months = Decimal(years[1]) * 12
+        if lifespan_months <= 0:
             raise ValueError("寿命规格必须大于零")
-        expiry = replacement + pd.DateOffset(years=lifespan)
+        if lifespan_months != lifespan_months.to_integral_value():
+            raise ValueError("年限寿命规格必须对应整数月")
+        expiry = replacement + pd.DateOffset(months=int(lifespan_months))
         elapsed_days = max((current_day - replacement).days, 0)
         progress = elapsed_days / (expiry - replacement).days * 100
         return replacement.strftime("%Y-%m-%d"), progress

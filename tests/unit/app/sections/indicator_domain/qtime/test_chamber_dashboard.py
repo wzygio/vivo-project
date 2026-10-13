@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+from datetime import date
 
 import pandas as pd
 from streamlit.testing.v1 import AppTest
@@ -80,7 +81,7 @@ def test_changed_enabled_products_clear_results_and_obsolete_selection():
     assert chart_products(app) == {'M678'}
 
 
-def test_chamber_frontend_excludes_october_even_from_existing_session_results():
+def test_chamber_frontend_keeps_october_seventh_from_infrastructure_results():
     clear_chamber_cache()
     app = AppTest.from_file(str(FIXTURE)).run()
     app.button(key='chamber_search').click().run()
@@ -93,8 +94,8 @@ def test_chamber_frontend_excludes_october_even_from_existing_session_results():
         sample.assign(entry_time=pd.Timestamp(timestamp), glass_id=glass)
         for timestamp, glass in [
             ('2026-09-30 23:59:59.999999', 'SEPTEMBER'),
-            ('2026-10-01 00:00:00', 'OCTOBER_BOUNDARY'),
-            ('2026-10-05 12:00:00', 'OCTOBER_LATER'),
+            ('2026-10-07 00:00:00', 'OCTOBER_BOUNDARY'),
+            ('2026-10-08 12:00:00', 'OCTOBER_LATER'),
         ]
     ], ignore_index=True)
     app.session_state['chamber_qtime_view_model'] = {**report, 'details': details}
@@ -104,13 +105,25 @@ def test_chamber_frontend_excludes_october_even_from_existing_session_results():
     charts = [json.loads(chart.proto.spec) for chart in app.get('plotly_chart')]
     assert len(charts) == 1
     assert [row[1] for chart in charts for trace in chart['data']
-            for row in trace['customdata']] == ['SEPTEMBER']
-    assert charts[0]['layout']['xaxis']['ticktext'] == ['09-30 23时']
+            for row in trace['customdata']] == ['SEPTEMBER', 'OCTOBER_BOUNDARY', 'OCTOBER_LATER']
+    assert charts[0]['layout']['xaxis']['ticktext'] == ['09-30 23时', '10-07 00时', '10-08 12时']
     pd.testing.assert_frame_equal(
         app.session_state['chamber_qtime_view_model']['details'], details,
     )
 
-    app.session_state['chamber_qtime_view_model'] = {**report, 'details': details.iloc[1:].copy()}
+    app.session_state['chamber_qtime_view_model'] = {**report, 'details': details.iloc[:0].copy()}
     app.run()
     assert not app.exception and not app.get('plotly_chart')
     assert any('暂无单腔' in item.value for item in app.info)
+
+
+def test_date_change_clears_prior_result_and_invalid_window_is_not_queried():
+    clear_chamber_cache()
+    app = AppTest.from_file(str(FIXTURE)).run()
+    app.button(key='chamber_search').click().run()
+    assert app.get('plotly_chart')
+    app.date_input(key='chamber_start_date').set_value(date(2026, 9, 1)).run()
+    assert not app.get('plotly_chart')
+    app.button(key='chamber_search').click().run()
+    assert app.error[0].value == '请选择先后有序且不超过31天的日期范围。'
+    assert not app.exception and not app.get('plotly_chart')

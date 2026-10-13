@@ -6,12 +6,18 @@ async page => {
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.goto('http://localhost:8521');
   const table = page.getByTestId('stDataFrame');
+  await page.getByText('请点击“查询”查看寿命测试数据。', { exact: true }).waitFor({ timeout: 90000 });
+  if (await table.count() || await page.locator('.js-plotly-plot').count()) throw new Error('Results shown before query');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
   await table.waitFor({ timeout: 90000 });
-  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 8);
+  await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 9);
   if (await page.getByRole('combobox').count() !== 3) throw new Error('Expected product, status and batch filters');
   if (await page.getByRole('button', { name: /刷新数据|刷新缓存/ }).count()) throw new Error('Normal view exposes maintenance controls');
   const expanders = page.getByTestId('stExpander');
-  if (await expanders.count() !== 3) throw new Error('Expected one product/batch expander and two metric children');
+  if (await expanders.count() !== 4) throw new Error('Expected one product/batch expander and three metric children');
+  const jncd = expanders.nth(3);
+  if (await jncd.locator('.js-plotly-plot').count() !== 1 ||
+      JSON.stringify(await jncd.getByTestId('stText').allTextContents()) !== JSON.stringify(['W'])) throw new Error('JNCD must show only W');
   const expander = expanders.nth(1);
   const boxes = await expander.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => {
     const r = el.getBoundingClientRect(); return { x: r.x, y: r.y };
@@ -33,7 +39,7 @@ async page => {
     dtick: el.layout.xaxis.dtick, tickformat: el.layout.xaxis.tickformat,
   })));
   for (const chart of charts) {
-    if (chart.traces.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
+    if (chart.traces.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减', 'JNCD'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
     if (chart.dtick !== 100 || chart.tickformat !== '.0f') throw new Error('Wrong time tick precision');
     for (const [index, trace] of chart.traces.entries()) {
       if (trace.name !== String(index + 1)) throw new Error('Non-numeric sample legend');
@@ -72,11 +78,12 @@ async page => {
   const download = await pending;
   await download.saveAs('native-lifetime-live.csv');
   await page.goto('http://localhost:8521/?admin=true');
+  await page.getByRole('button', { name: '查询', exact: true }).click();
   await table.waitFor({ timeout: 90000 });
   if (await page.getByRole('button', { name: /刷新数据/ }).count()) throw new Error('Snapshot control should be absent');
   await page.getByRole('button', { name: '🔄 刷新缓存', exact: true }).click();
   await page.getByText('🔄 缓存已刷新 · 代码与配置已重载', { exact: true }).waitFor();
   await table.waitFor({ timeout: 90000 });
   if (await page.locator('[data-testid="stException"]').count() || errors.length) throw new Error(errors.join('\n') || 'Streamlit exception');
-  return { status: 'passed', source: 'live M3', rows: 100, columns: 15, charts: 8, layout: 'four charts per metric expander row', filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
+  return { status: 'passed', source: 'live M3', rows: 100, columns: 16, charts: 9, layout: 'four decay charts per row; W only for JNCD', filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
 }

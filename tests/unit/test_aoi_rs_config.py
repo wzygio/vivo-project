@@ -4,10 +4,14 @@ from src.shared_kernel.config import ConfigLoader
 
 
 @pytest.mark.parametrize("section, expected", [
-    ({}, ["OLED"]),
-    ({"special_decoration": {}}, ["OLED"]),
+    ({}, []),
+    ({"special_decoration": {}}, []),
     ({"special_decoration": {"factories": []}}, []),
-    ({"special_decoration": {"factories": [" OLED ", "array", "OLED"]}}, ["OLED", "ARRAY"]),
+    ({"special_decoration": {"factories": ["OLED"]}}, []),
+    ({"special_decoration": {"enabled": False, "factories": ["OLED"]}}, []),
+    ({"special_decoration": {"enabled": True}}, ["OLED"]),
+    ({"special_decoration": {"enabled": True, "factories": []}}, []),
+    ({"special_decoration": {"enabled": True, "factories": [" OLED ", "array", "OLED"]}}, ["OLED", "ARRAY"]),
 ])
 def test_special_decoration_factories(monkeypatch, section, expected):
     monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"aoi_rs": section})
@@ -17,9 +21,18 @@ def test_special_decoration_factories(monkeypatch, section, expected):
 @pytest.mark.parametrize("factories", ["OLED", None, [None], [1], [""]])
 def test_invalid_factory_configuration_is_rejected(monkeypatch, factories):
     monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
-        "aoi_rs": {"special_decoration": {"factories": factories}},
+        "aoi_rs": {"special_decoration": {"enabled": True, "factories": factories}},
     })
     with pytest.raises(ValueError, match="factories"):
+        ConfigLoader.get_aoi_rs_special_decoration_factories()
+
+
+@pytest.mark.parametrize("enabled", ["false", "true", None, 0, 1])
+def test_special_decoration_enabled_requires_boolean(monkeypatch, enabled):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+        "aoi_rs": {"special_decoration": {"enabled": enabled}},
+    })
+    with pytest.raises(ValueError, match="enabled"):
         ConfigLoader.get_aoi_rs_special_decoration_factories()
 
 
