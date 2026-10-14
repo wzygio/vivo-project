@@ -65,31 +65,39 @@ function Assert-StreamlitPortOwner {
 
 function Stop-VerifiedStreamlit {
     param($Processes, [string]$Root, [int]$ServerPort, [int]$TimeoutSeconds)
-    foreach ($record in $Processes) {
-        $current = Get-CimInstance Win32_Process -Filter "ProcessId=$($record.ProcessId)" -ErrorAction Stop
-        if ($null -eq $current) { continue }
-        if ($current.CreationDate -ne $record.CreationDate -or -not (Test-ProjectStreamlit $current $Root $ServerPort)) {
-            throw "Process identity changed before shutdown (PID $($record.ProcessId))."
-        }
-        $handle = Get-Process -Id $record.ProcessId -ErrorAction SilentlyContinue
-        if ($null -eq $handle) { continue }
-        try {
-            # Capture a handle before stopping; WaitForExit verifies this instance.
+    $handles = @()
+    try {
+        # Validate and capture the WHOLE family before terminating any member.
+        # Stopping a venv redirector can tear down its child and erase its CIM
+        # CommandLine; re-validating that dying child incorrectly aborts restart.
+        foreach ($record in $Processes) {
+            $current = Get-CimInstance Win32_Process -Filter "ProcessId=$($record.ProcessId)" -ErrorAction Stop
+            if ($null -eq $current) { continue }
+            if ($current.CreationDate -ne $record.CreationDate -or -not (Test-ProjectStreamlit $current $Root $ServerPort)) {
+                throw "Process identity changed before shutdown (PID $($record.ProcessId))."
+            }
+            $handle = Get-Process -Id $record.ProcessId -ErrorAction SilentlyContinue
+            if ($null -eq $handle) { continue }
+            $handles += $handle
             $null = $handle.Handle
             if ([math]::Abs(($handle.StartTime - $current.CreationDate).TotalMilliseconds) -gt 1) {
                 throw "Process identity changed while opening PID $($record.ProcessId)."
             }
-            if (-not $handle.HasExited) { Stop-Process -InputObject $handle -Force -ErrorAction Stop }
-            if (-not $handle.WaitForExit($TimeoutSeconds * 1000)) {
-                throw "Process did not exit within the shutdown deadline (PID $($record.ProcessId))."
+        }
+        foreach ($handle in $handles) {
+            try {
+                if (-not $handle.HasExited) { Stop-Process -InputObject $handle -Force -ErrorAction Stop }
+                if (-not $handle.WaitForExit($TimeoutSeconds * 1000)) {
+                    throw "Process did not exit within the shutdown deadline (PID $($handle.Id))."
+                }
+            }
+            catch {
+                # A child may already have exited when its redirector stopped.
+                if (-not $handle.HasExited) { throw }
             }
         }
-        catch {
-            # A launcher can exit naturally when another process in its family stops.
-            if (-not $handle.HasExited) { throw }
-        }
-        finally { $handle.Dispose() }
     }
+    finally { foreach ($handle in $handles) { $handle.Dispose() } }
 }
 
 function Test-StreamlitDescendant {

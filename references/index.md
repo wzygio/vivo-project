@@ -44,7 +44,7 @@
 | 问题 / 关键词 | 首选文件 |
 |---|---|
 | 数据修饰统一语义、原始事实 / 决策台账 / 报表投影、分层职责 | [数据修饰架构范式](design/shared_kernel/shared/architecture-data-decoration.md) |
-| Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间 | [系统数据刷新机制](design/shared_kernel/shared/data-flow-infrastructure-refresh.md) |
+| Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间；Streamlit 定时启动/重启、Windows 计划任务及进程清理 | [系统数据刷新机制](design/shared_kernel/shared/data-flow-infrastructure-refresh.md) |
 | 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/shared_kernel/shared/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |

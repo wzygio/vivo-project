@@ -68,6 +68,52 @@ Describe 'Startup health must belong to the new process' {
 }
 
 Describe 'Shutdown identity validation' {
+    It 'validates the entire family before stopping a parent that tears down its child' {
+        $script:stoppedParent = $false
+        $created = [datetime]'2026-10-14T10:00:00'
+        $old = @(
+            [pscustomobject]@{ ProcessId = 100; CreationDate = $created },
+            [pscustomobject]@{ ProcessId = 200; CreationDate = $created }
+        )
+        Mock Get-CimInstance {
+            $processId = [int]($Filter -replace 'ProcessId=', '')
+            $command = 'python -m streamlit run "D:\project\app\Home.py" --server.port=18503'
+            if ($processId -eq 200 -and $script:stoppedParent) { $command = $null }
+            [pscustomobject]@{ ProcessId = $processId; CreationDate = [datetime]'2026-10-14T10:00:00'; Name = 'python.exe'; CommandLine = $command }
+        }
+        Mock Get-Process {
+            $handle = [System.Diagnostics.Process]::GetCurrentProcess()
+            $handle | Add-Member ScriptProperty StartTime { [datetime]'2026-10-14T10:00:00' } -Force
+            $handle | Add-Member ScriptMethod WaitForExit { param($timeout) return $true } -Force
+            $handle | Add-Member ScriptMethod Dispose {} -Force
+            $handle
+        }
+        Mock Stop-Process { $script:stoppedParent = $true }
+        { Stop-VerifiedStreamlit $old 'D:\project' 18503 1 } | Should Not Throw
+        Assert-MockCalled Stop-Process -Times 2 -Exactly -Scope It
+    }
+
+    It 'stops no process if a later family member fails identity validation' {
+        Mock Get-CimInstance {
+            $processId = [int]($Filter -replace 'ProcessId=', '')
+            [pscustomobject]@{ ProcessId = $processId; CreationDate = [datetime]'2026-10-14'; Name = 'python.exe'; CommandLine = 'python -m streamlit run "D:\project\app\Home.py" --server.port=18503' }
+        }
+        Mock Get-Process {
+            $handle = [System.Diagnostics.Process]::GetCurrentProcess()
+            $handle | Add-Member ScriptProperty StartTime { [datetime]'2026-10-14' } -Force
+            $handle | Add-Member ScriptMethod Dispose {} -Force
+            $handle | Add-Member ScriptMethod WaitForExit { param($timeout) return $true } -Force
+            $handle
+        }
+        Mock Stop-Process {}
+        $old = @(
+            [pscustomobject]@{ ProcessId = 100; CreationDate = [datetime]'2026-10-14' },
+            [pscustomobject]@{ ProcessId = 200; CreationDate = [datetime]'2026-10-13' }
+        )
+        { Stop-VerifiedStreamlit $old 'D:\project' 18503 1 } | Should Throw
+        Assert-MockCalled Stop-Process -Times 0 -Exactly -Scope It
+    }
+
     It 'refuses a reused PID before invoking Stop-Process' {
         Mock Get-CimInstance { [pscustomobject]@{ ProcessId = 123; CreationDate = [datetime]'2026-09-22' } }
         Mock Stop-Process { throw 'Must not run' }
