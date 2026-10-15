@@ -3,7 +3,7 @@ spc:
   # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
   point_decoration:
     enabled: true
-    central_fraction: 0.7
+    central_fraction: 0.5
     start_date: "2026-10-05"
     end_date: "today"
   spc_cpk:
