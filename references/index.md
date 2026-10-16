@@ -15,7 +15,7 @@
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
 | SPC 传统→专用点位修饰、中央规格区间、日期窗口、稳定哈希 margin、flag=False、修饰后能力输入 | [SPC 点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界；OOS 点位修饰、OOC 清单筛选与能力不达标的先后关系 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-cpk&cpm.md) |
-| SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、48h 门槛、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
+| SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |

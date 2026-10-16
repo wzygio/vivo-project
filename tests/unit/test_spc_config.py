@@ -5,6 +5,31 @@ import pytest
 from src.shared_kernel.config import ConfigLoader
 
 
+@pytest.mark.parametrize("value, expected", [(0, 0.0), (24, 24.0), (48, 48.0), (24.5, 24.5)])
+def test_capability_alert_span_reads_domain_yaml(tmp_path, monkeypatch, value, expected):
+    domain_dir = tmp_path / "config" / "domain"
+    domain_dir.mkdir(parents=True)
+    (domain_dir / "inline_domain.yaml").write_text(
+        f"spc:\n  spc_cpk:\n    alert_min_span_hours: {value}\n", encoding="utf-8",
+    )
+    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
+    assert ConfigLoader.get_spc_capability_alert_min_span_hours() == expected
+
+
+def test_capability_alert_span_defaults_to_48_hours(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {})
+    assert ConfigLoader.get_spc_capability_alert_min_span_hours() == 48
+
+
+@pytest.mark.parametrize("value", [-1, True, None, "bad", float("nan"), float("inf")])
+def test_invalid_capability_alert_span_is_rejected(monkeypatch, value):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+        "spc": {"spc_cpk": {"alert_min_span_hours": value}},
+    })
+    with pytest.raises(ValueError, match="alert_min_span_hours"):
+        ConfigLoader.get_spc_capability_alert_min_span_hours()
+
+
 def test_spc_point_policy_resolves_dates_and_ratio(monkeypatch):
     monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": {
         "enabled": True, "central_fraction": .5, "start_date": "2026-10-05", "end_date": "today",

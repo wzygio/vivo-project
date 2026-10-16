@@ -1,6 +1,7 @@
 # src\shared_kernel\config.py
 import yaml
 import logging
+from math import isfinite
 from pathlib import Path
 from datetime import date
 from typing import Dict, Any, Optional, List
@@ -396,6 +397,27 @@ class ConfigLoader:
     def get_compliance_config(cls) -> dict:
         """旧后台四维修饰已停用；新矩阵配置只由前端管理器读取。"""
         return {"rules": []}
+
+    @classmethod
+    def get_spc_capability_alert_min_span_hours(cls) -> float:
+        """Read the weekly alert coverage gate; capability calculations are unaffected."""
+        path = "spc.spc_cpk.alert_min_span_hours"
+        spc = cls.load_domain_config("inline_domain").get("spc", {})
+        if not isinstance(spc, dict):
+            raise ValueError("spc must be a mapping")
+        section = spc.get("spc_cpk", {})
+        if not isinstance(section, dict):
+            raise ValueError("spc.spc_cpk must be a mapping")
+        configured = section.get("alert_min_span_hours", 48)
+        if isinstance(configured, bool):
+            raise ValueError(f"{path} must be a finite non-negative number")
+        try:
+            hours = float(configured)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{path} must be a finite non-negative number") from exc
+        if not isfinite(hours) or hours < 0:
+            raise ValueError(f"{path} must be a finite non-negative number")
+        return hours
 
     @classmethod
     def get_spc_period_sigma_source(cls) -> str:

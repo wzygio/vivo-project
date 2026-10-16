@@ -8,6 +8,36 @@ from src.shared_kernel.config import ConfigLoader
 from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
 
 
+def test_alert_span_config_change_invalidates_report_cache(tmp_path, monkeypatch):
+    from src.inline_domain.application.spc import spc_service
+
+    write_inline_resource_config(tmp_path)
+    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
+    current = [48]
+    monkeypatch.setattr(ConfigLoader, "get_spc_capability_alert_min_span_hours", lambda: current[0])
+    calls = []
+
+    def fetch_features(**kwargs):
+        calls.append(1)
+        return {"sheet_features_df": pd.DataFrame(), "raw_measurements_df": pd.DataFrame(),
+                "spec_empty": True, "sheet_oos_decoration": None}
+
+    monkeypatch.setattr(spc_service, "fetch_decorated_features", fetch_features)
+    SpcReportService.fetch_spc_report_payload.clear()
+    kwargs = dict(_data_port=object(), query_config_json=SpcQueryConfig(
+        prod_code="P", start_date="2026-10-01", end_date="2026-10-12",
+    ).model_dump_json(), snapshot_signature="same-input")
+    try:
+        SpcReportService.get_spc_report_data(**kwargs)
+        SpcReportService.get_spc_report_data(**kwargs)
+        assert len(calls) == 1
+        current[0] = 24
+        SpcReportService.get_spc_report_data(**kwargs)
+        assert len(calls) == 2
+    finally:
+        SpcReportService.fetch_spc_report_payload.clear()
+
+
 def test_point_fraction_and_window_change_both_report_caches(tmp_path, monkeypatch):
     write_inline_resource_config(tmp_path)
     monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)

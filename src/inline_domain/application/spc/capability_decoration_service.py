@@ -21,6 +21,7 @@ from src.inline_domain.application.shared.decoration_defaults import (
     persist_capability_decoration,
 )
 from src.inline_domain.application.shared.decoration_ports import CapabilityDecorationPort
+from src.shared_kernel.config import ConfigLoader
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ def prepare_capability_decoration(
 ) -> CpkDecorationResult:
     detail = build_capability_anomaly_detail(
         period_capability_df, metric, reference_date or date.today(),
+        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
     )
     persist_decoration = (
         decoration_port.persist_capability_decoration

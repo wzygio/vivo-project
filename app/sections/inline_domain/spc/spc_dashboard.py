@@ -104,6 +104,7 @@ def _build_weekly_capability_alerts(
     alert_rows = latest_capability_alerts(
         capability_detail_df, reference_date or date.today(), metric=metric_column,
         date_exclusion=ConfigLoader.get_inline_data_exclusion(),
+        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
     )
     alert_rows = alert_rows.loc[alert_rows[metric_column].lt(threshold)]
     if alert_rows.empty:

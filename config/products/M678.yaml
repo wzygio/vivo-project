@@ -33,14 +33,10 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.7
+    # 'S向亮线': 0.7
     # Array_Pixel
-    '暗点': 0.8
-    'G3亮点': 0.2
-    '大面积亮点': 0
     # Array_Mura
     # OLED_Mura
-    '彩斑Mura': 0.5
     # TP
 
   sheet_hotspot_config: 

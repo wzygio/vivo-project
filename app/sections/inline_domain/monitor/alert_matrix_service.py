@@ -233,7 +233,10 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
     capability_df = context.spc_cpk_loader(prod_code)
     if capability_df is None or capability_df.empty:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无周期能力数据")
-    normalized = normalize_latest_cpk(capability_df, prod_code)
+    normalized = normalize_latest_cpk(
+        capability_df, prod_code,
+        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
+    )
     normalized = exclude_inline_period_records(
         normalized, ConfigLoader.get_inline_data_exclusion(), as_of=pd.Timestamp(context.reference_date),
     )
@@ -255,6 +258,7 @@ def build_latest_cpk_alerts(frame: pd.DataFrame, reference_date: date) -> pd.Dat
     """Read normalized local ledger records; never recalculate raw SPC capability."""
     return latest_capability_alerts(
         frame, reference_date, date_exclusion=ConfigLoader.get_inline_data_exclusion(),
+        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
     ).rename(
         columns={"factory": "厂别", "step_id": "站点", "param_name": "参数名称", "period_label": "超规周次", "cpk": "CPK值"}
     ).reset_index(drop=True)

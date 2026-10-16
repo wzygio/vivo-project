@@ -10,11 +10,16 @@ import pandas as pd
 from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD, capability_summary_columns
 from src.inline_domain.core.monitor.period_summary import _period_windows
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_period_records
-from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS, capability_alert_span_mask
+from src.inline_domain.core.spc.cpk_decoration import (
+    CAPABILITY_ALERT_MIN_SPAN_HOURS, CPK_KEY_COLUMNS, capability_alert_span_mask,
+)
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 
-def normalize_latest_cpk(frame: pd.DataFrame, product: str, *, metric: str = "cpk") -> pd.DataFrame:
+def normalize_latest_cpk(
+    frame: pd.DataFrame, product: str, *, metric: str = "cpk",
+    min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
+) -> pd.DataFrame:
     capability_summary_columns(metric)
     name, value_column = metric.upper(), f"{metric}_corrected"
     required = [*CPK_KEY_COLUMNS, value_column, "flag"]
@@ -42,7 +47,7 @@ def normalize_latest_cpk(frame: pd.DataFrame, product: str, *, metric: str = "cp
             raise ValueError(f"{product} {name} 明细重复项目存在冲突")
     result = result.drop_duplicates(CPK_KEY_COLUMNS).reset_index(drop=True)
     alert = result["flag"].isin(["false", "0", "0.0"]) & result[metric].lt(CPK_THRESHOLD)
-    insufficient_span = alert & result["period_type"].eq("week") & ~capability_alert_span_mask(result)
+    insufficient_span = alert & result["period_type"].eq("week") & ~capability_alert_span_mask(result, min_span_hours)
     alert &= ~insufficient_span
     result["status"] = alert.map({True: "预警", False: "已修饰或达标"})
     result.loc[insufficient_span, "status"] = "数据跨度不足"
@@ -54,6 +59,7 @@ def normalize_latest_cpk(frame: pd.DataFrame, product: str, *, metric: str = "cp
 def latest_capability_alerts(
     detail: pd.DataFrame | None, reference_date: date, *, metric: str = "cpk",
     date_exclusion: InlineDateExclusion | None = None,
+    min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
 ) -> pd.DataFrame:
     """Select alerts from normalized saved records, never a computed capability report."""
     capability_summary_columns(metric)
@@ -67,7 +73,7 @@ def latest_capability_alerts(
     mask = (frame["period_type"].eq("week")
             & frame["period_label"].eq(f"{iso.year}-W{iso.week:02d}")
             & frame["status"].eq("预警")
-            & capability_alert_span_mask(frame))
+            & capability_alert_span_mask(frame, min_span_hours))
     return frame.loc[mask, columns].reset_index(drop=True)
 
 

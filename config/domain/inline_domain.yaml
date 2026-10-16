@@ -7,6 +7,9 @@ spc:
     start_date: "2026-10-05"
     end_date: "today"
   spc_cpk:
+    # 周度预警的最小有效 Sheet 时间跨度（小时）；不影响 CPK/CPM 计算。
+    # 恰好达到门槛可预警；0 取消最小时长限制，但起止时间仍须有效且顺序正确。
+    alert_min_span_hours: 48
     # sheet_mean: original mode, sigma uses period Sheet Mean std.
     # point_value: hidden comparison mode, sigma uses period point-level param_value std.
     period_sigma_source: "point_value"

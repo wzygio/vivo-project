@@ -168,8 +168,10 @@ def build_capability_detail(
     ).reset_index(drop=True)
 
 
-def capability_alert_span_mask(frame: pd.DataFrame) -> pd.Series:
-    """Require 48h between first/last valid Sheet timestamps, not calendar bounds.
+def capability_alert_span_mask(
+    frame: pd.DataFrame, min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
+) -> pd.Series:
+    """Require the given span between valid Sheet timestamps, not calendar bounds.
 
     Missing, invalid or reversed bounds cannot establish sufficient coverage.
     This gate affects alerts only; it never removes calculated capability rows.
@@ -178,15 +180,17 @@ def capability_alert_span_mask(frame: pd.DataFrame) -> pd.Series:
         return pd.Series(False, index=frame.index, dtype=bool)
     start = pd.to_datetime(frame["period_start"], errors="coerce", format="mixed")
     end = pd.to_datetime(frame["period_end"], errors="coerce", format="mixed")
-    return (end - start).ge(pd.Timedelta(hours=CAPABILITY_ALERT_MIN_SPAN_HOURS))
+    return (end - start).ge(pd.Timedelta(hours=min_span_hours))
 
 
 def build_capability_anomaly_detail(
     period_capability_df: pd.DataFrame,
     metric: str,
     reference_date: date,
+    *,
+    min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
 ) -> pd.DataFrame:
-    """Previous complete week failures need at least 48h of Sheet coverage."""
+    """Select previous complete week failures with sufficient Sheet coverage."""
     detail = build_capability_detail(period_capability_df, metric)
     start, _ = previous_iso_week_range(reference_date)
     iso = start.isocalendar()
@@ -196,7 +200,7 @@ def build_capability_anomaly_detail(
         detail["period_type"].eq("week")
         & detail["period_label"].eq(label)
         & values.lt(CAPABILITY_ALERT_THRESHOLD)
-        & capability_alert_span_mask(detail)
+        & capability_alert_span_mask(detail, min_span_hours)
     ].reset_index(drop=True)
 
 

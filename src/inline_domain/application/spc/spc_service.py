@@ -25,7 +25,6 @@ from src.inline_domain.application.spc.capability_decoration_service import (
     prepare_capability_decoration,
 )
 from src.inline_domain.core.spc.cpk_decoration import (
-    CAPABILITY_ALERT_MIN_SPAN_HOURS,
     resolve_capability_decoration_sheet,
 )
 from src.inline_domain.application.shared.decorated_features import (
@@ -349,6 +348,7 @@ class SpcReportService:
         try:
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
             spc_point_policy = ConfigLoader.get_spc_point_decoration_policy()
+            alert_min_span_hours = ConfigLoader.get_spc_capability_alert_min_span_hours()
         except ValueError as exc:
             logger.exception("[SPC] invalid report date exclusion configuration")
             raise SpcReportBuildError("SPC report configuration is invalid.") from exc
@@ -359,7 +359,7 @@ class SpcReportService:
         )
         capability_signature = (
             str(capability_path.resolve()), *capability_stat,
-            f"weekly_span_hours={CAPABILITY_ALERT_MIN_SPAN_HOURS}",
+            f"weekly_span_hours={alert_min_span_hours}",
             "alerts_from_saved_records_v1",
         )
         payload = SpcReportService.fetch_spc_report_payload(

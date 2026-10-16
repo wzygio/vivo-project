@@ -25,21 +25,11 @@ processing:
   # 5. defect_code倍率调节
   defect_multipliers:
     # Array_Line
-    'S向亮线': 0.7
-    'G向单亮线': 0.5
-    'G向单暗线': 0.8
+    # 'S向亮线': 0.7
     # # Array_Pixel
-    '暗点': 0.8
     # Array_Mura
-    'S向ELA Mura': 0
-    'G向ELA Mura': 0
-    'G向带状Mura': 0
     # OLED_Mura
-    '彩斑Mura': 0.7
     # TP
-    'TP复测NG': 2
-    'Short Test NG': 0.2
-
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025

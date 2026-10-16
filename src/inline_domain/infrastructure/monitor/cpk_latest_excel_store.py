@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
-from src.inline_domain.core.spc.cpk_decoration import CAPABILITY_ALERT_MIN_SPAN_HOURS
+from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 
 
@@ -27,7 +27,7 @@ class CpkLatestExcelStore:
             stat = self.path.stat()
             return (
                 f"{self.path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}"
-                f":weekly_span_hours={CAPABILITY_ALERT_MIN_SPAN_HOURS}"
+                f":weekly_span_hours={ConfigLoader.get_spc_capability_alert_min_span_hours()}"
             )
         except FileNotFoundError:
             return f"{self.path.resolve()}:missing"
@@ -41,4 +41,7 @@ class CpkLatestExcelStore:
         sheet_name = f"{product}{self.sheet_suffix}"
         if sheet_name not in sheets:
             return None
-        return normalize_latest_cpk(sheets[sheet_name], product, metric=self.metric)
+        return normalize_latest_cpk(
+            sheets[sheet_name], product, metric=self.metric,
+            min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
+        )
