@@ -30,6 +30,8 @@ def build_period_trend_df(
     rs_details_df: pd.DataFrame,
     pass_through_df: pd.DataFrame,
     end_date: date,
+    *,
+    daily_end_date: date | None = None,
 ) -> pd.DataFrame:
     """按 period × 指标（厂别+站点+Code）计算 Σcode_qty ÷ 过货 distinct sheet 数。
 
@@ -56,6 +58,14 @@ def build_period_trend_df(
     # 复用 SPC 的"跳过空值向前补全"切分（其入参列名为 sheet_start_time）
     axis_input = details[["start_time"]].rename(columns={"start_time": "sheet_start_time"})
     axis = build_available_period_axis(axis_input, end_date)
+    if daily_end_date is not None:
+        # Warning days end yesterday; month/week baselines still end at the
+        # report date so overlapping daily values agree with the page/PDF.
+        daily_axis = build_available_period_axis(axis_input, daily_end_date)
+        axis = pd.concat([
+            axis.loc[~axis["period_type"].eq("day")],
+            daily_axis.loc[daily_axis["period_type"].eq("day")],
+        ], ignore_index=True)
 
     pass_df = pd.DataFrame(columns=["factory", "step_id", "sheet_id", "start_time"])
     if not pass_through_df.empty:

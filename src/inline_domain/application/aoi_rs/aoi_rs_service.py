@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -21,6 +21,7 @@ from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.core.shared.decoration_window import DecorationWindow
 from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
     AOI_RS_DECORATION_POLICY_VERSION,
+    build_decorated_period_trend_df,
     project_factory_scoped_details,
 )
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
@@ -29,6 +30,11 @@ from src.inline_domain.application.shared.throughput_persistence import (
 )
 from src.inline_domain.core.shared.sheet_ooc_decoration import build_aoi_rs_ooc_detail
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.aoi_rs.trend_alerts import (
+    AOI_RS_TREND_POLICY_VERSION,
+    EVALUATION_COLUMNS,
+    evaluate_aoi_rs_trends,
+)
 
 if TYPE_CHECKING:
     from src.inline_domain.application.aoi_rs.ports import AoiRsDataPort
@@ -58,6 +64,7 @@ class AoiRsReportViewModel:
     indicators_df: pd.DataFrame
     lot_points_df: pd.DataFrame
     sheet_points_df: pd.DataFrame
+    trend_evaluation_df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=EVALUATION_COLUMNS))
 
 
 def _build_indicators(
@@ -171,6 +178,7 @@ class AoiRsReportService:
             "indicators_df": pd.DataFrame(),
             "lot_points_df": pd.DataFrame(),
             "sheet_points_df": pd.DataFrame(),
+            "trend_evaluation_df": pd.DataFrame(columns=EVALUATION_COLUMNS),
         }
 
     @staticmethod
@@ -186,6 +194,7 @@ class AoiRsReportService:
             indicators_df=_df("indicators_df"),
             lot_points_df=_df("lot_points_df"),
             sheet_points_df=_df("sheet_points_df"),
+            trend_evaluation_df=_df("trend_evaluation_df"),
         )
 
     @staticmethod
@@ -205,6 +214,7 @@ class AoiRsReportService:
         date_exclusion: InlineDateExclusion | None = None,
         exempt_param_name_contains: tuple[str, ...] | None = None,
         decoration_window: DecorationWindow | None = None,
+        trend_policy_version: str = AOI_RS_TREND_POLICY_VERSION,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -215,6 +225,7 @@ class AoiRsReportService:
         decoration_policy_version 与 special_factories 使规则或厂别配置变更后重建投影。
         decoration_window 包含专用修饰的显示日期首尾，配置与当天变化后换 key。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
+        trend_policy_version 标识昨日两类趋势判定，规则变更后重建派生预警。
         """
         try:
             query_config = AoiRsQueryConfig.model_validate_json(query_config_json)
@@ -287,16 +298,28 @@ class AoiRsReportService:
                 decoration_window=decoration_window,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
+            projected_details = project_factory_scoped_details(
+                rs_details_df, sheet_points_df, special_factories,
+                decoration_window=decoration_window,
+            )
+            report_date = pd.Timestamp(query_config.end_date).date()
+            warning_trend = build_decorated_period_trend_df(
+                projected_details, pass_through_df, report_date,
+                special_factories=special_factories,
+                decoration_window=decoration_window,
+                daily_end_date=(pd.Timestamp(report_date) - pd.Timedelta(days=1)).date(),
+            )
+            evaluation = evaluate_aoi_rs_trends(
+                warning_trend, indicators_df, reference_date=report_date,
+            )
             return {
-                "rs_details_df": project_factory_scoped_details(
-                    rs_details_df, sheet_points_df, special_factories,
-                    decoration_window=decoration_window,
-                ),
+                "rs_details_df": projected_details,
                 "pass_through_df": pass_through_df,
                 "spec_df": spec_df,
                 "indicators_df": indicators_df,
                 "lot_points_df": lot_points_df,
                 "sheet_points_df": sheet_points_df,
+                "trend_evaluation_df": evaluation,
             }
         except Exception as exc:
             logger.error("[AOI_RS] report generation failed: %s", exc, exc_info=True)
@@ -329,5 +352,6 @@ class AoiRsReportService:
             date_exclusion=date_exclusion,
             exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
             decoration_window=decoration_window,
+            trend_policy_version=AOI_RS_TREND_POLICY_VERSION,
         )
         return AoiRsReportService._view_model_from_payload(payload)

@@ -42,6 +42,7 @@ from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
+from app.sections.inline_domain.aoi_rs.trend_alerts import render_aoi_rs_trend_alerts
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -181,6 +182,12 @@ render_aoi_rs_sheet_oos_alert_indicator_sections(
     lot_points_df=view_model.lot_points_df,
     sheet_points_df=view_model.sheet_points_df,
     end_date=default_end_dt.date(),
+    step_desc_map=step_desc_map,
+)
+
+render_aoi_rs_trend_alerts(
+    view_model,
+    reference_date=default_end_dt.date(),
     step_desc_map=step_desc_map,
 )
 

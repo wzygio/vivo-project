@@ -23,6 +23,7 @@
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |
 | AOI_RS 来源表、RS Code、分母与计数口径 | [AOI_RS 数据源](domain/inline_domain/aoi_rs/data-source-aoi-rs.md) |
+| AOI_RS 昨日趋势预警、当日超规、连续两日上升、1.2倍、缺测与自动图像 | [AOI_RS 趋势预警规则](domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md) |
 | AOI_RS 专用顺序修饰、厂别日期窗口、Sheet 半规格、Lot 归零、周日1.3倍限幅 | [AOI_RS 专用修饰规则](domain/inline_domain/aoi_rs/rules-aoi-rs-special-decoration.md) |
 | Inline Sheet OOS、三态修饰、人工台账与执行机制 | [Sheet OOS 规则](domain/inline_domain/shared/rules-sheet-oos-decoration.md) |
 | Step_ID → Data_Type、SPC / CTQ / AOI 站点分类 | [站点类型映射](domain/inline_domain/shared/mapping-step-id-data-type.json) |

@@ -101,6 +101,68 @@ def _config_json() -> str:
     ).model_dump_json()
 
 
+def test_yesterday_rules_include_oldest_baseline_day_even_with_today_data(monkeypatch) -> None:
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: [])
+    rows = [
+        dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code="A",
+             start_time=pd.Timestamp(f"2026-10-{day} 08:00"),
+             sheet_id=f"SH{day}", lot_id=f"LO{day}", code_qty=value)
+        for day, value in [(12, 10000), (13, 100), (14, 100), (15, 100),
+                           (16, 100), (17, 130), (18, 170), (19, 1)]
+    ]
+    details = pd.DataFrame(rows)
+    query = AoiRsQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-19")
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+
+    report = AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=_data_port(details, details.drop(columns=["rs_code", "code_qty"]), pd.DataFrame()),
+        query_config_json=query.model_dump_json(), snapshot_signature="eight-dates",
+    )
+
+    evaluation = report.trend_evaluation_df.iloc[0]
+    assert evaluation["target_date"] == "2026-10-18"
+    assert evaluation["target_density"] == 170
+    assert evaluation["baseline_density"] == 2080
+    assert evaluation["valid_days"] == 7
+    assert not evaluation["daily_alert"]
+    assert evaluation["rising_alert"]
+
+
+def test_warning_matches_chart_cap_and_cache_revision_and_next_day(monkeypatch) -> None:
+    from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
+
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    source = pd.DataFrame([
+        dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code="A",
+             start_time=pd.Timestamp(f"2026-10-{day} 08:00"), sheet_id=f"S{day}",
+             lot_id=f"L{day}", code_qty=value)
+        for day, value in zip(range(12, 20), [1, 1, 1, 1, 1, 2, 100, 0])
+    ])
+    calls = []
+    port = _data_port(source, source.drop(columns=["rs_code", "code_qty"]), pd.DataFrame())
+    port.get_rs_details = lambda _q: (calls.append(1) or source)
+    query = AoiRsQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-19")
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    kwargs = dict(_data_port=port, query_config_json=query.model_dump_json(),
+                  snapshot_signature="cap-warning", product_revision="r1", decision_signature="d1")
+    report = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    chart = build_aoi_rs_period_trend(report.rs_details_df, report.pass_through_df, pd.Timestamp(query.end_date).date())
+    target = chart.loc[chart.period_type.eq("day") & chart.period_label.eq("2026-10-18"), "value"].iloc[0]
+    assert target == pytest.approx(17.3875)  # Month includes today's 0, not only days through yesterday.
+    assert report.trend_evaluation_df.target_density.iloc[0] == target
+    assert len(chart.loc[chart.period_type.eq("day")]) == 7
+    assert "2026-10-19" in set(chart.period_label)
+    AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert len(calls) == 1
+    AoiRsReportService.get_aoi_rs_report_data(**{**kwargs, "product_revision": "r2"})
+    AoiRsReportService.get_aoi_rs_report_data(**{**kwargs, "decision_signature": "d2"})
+    assert len(calls) == 3
+    tomorrow = query.model_copy(update={"end_date": "2026-10-20"})
+    next_report = AoiRsReportService.get_aoi_rs_report_data(**{**kwargs, "query_config_json": tomorrow.model_dump_json()})
+    assert len(calls) == 4
+    assert next_report.trend_evaluation_df.target_date.iloc[0] == "2026-10-19"
+
+
 def test_service_reads_report_inputs_through_aoi_rs_data_port() -> None:
     data_port = SimpleNamespace(
         get_rs_details=lambda _query: _details_df(),
@@ -391,7 +453,10 @@ def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None
 
     monkeypatch.setattr(aoi_rs_charts, "create_aoi_rs_trend_chart", capture)
     groups = list(aoi_rs_charts.iter_aoi_rs_chart_groups(
-        **vars(report), end_date=date(2026, 8, 10),
+        **{name: getattr(report, name) for name in (
+            "rs_details_df", "pass_through_df", "spec_df", "indicators_df",
+            "lot_points_df", "sheet_points_df",
+        )}, end_date=date(2026, 8, 10),
     ))
     assert len(groups) == 1 and len(groups[0].figures) == 3
     assert trends[0].value.eq(.5).all()

@@ -211,9 +211,12 @@ def build_decorated_period_trend_df(
     rs_details_df: pd.DataFrame, pass_through_df: pd.DataFrame, end_date: date,
     *, special_factories: Iterable[str] | None = None,
     decoration_window: DecorationWindow | None = None,
+    daily_end_date: date | None = None,
 ) -> pd.DataFrame:
     """周/日投影限于所属月密度的 1.3 倍；跨月周取截至报表日的周末所属月。"""
-    trend = build_period_trend_df(rs_details_df, pass_through_df, end_date)
+    trend = build_period_trend_df(
+        rs_details_df, pass_through_df, end_date, daily_end_date=daily_end_date,
+    )
     if trend.empty:
         return trend
     trend["rs_qty"] = trend["rs_qty"].astype(float)
