@@ -30,6 +30,7 @@ processing:
     # Array_Mura
     # OLED_Mura
     # TP
+    
   sheet_hotspot_config: 
     enable: True
     random_seed: 2025
