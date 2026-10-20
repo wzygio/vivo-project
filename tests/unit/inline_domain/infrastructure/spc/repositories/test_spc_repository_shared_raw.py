@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -114,6 +116,39 @@ def test_spc_repository_derives_spc_view_from_shared_raw_port(monkeypatch) -> No
     assert result["param_name"].tolist() == ["SPC_PARAM"]
     assert result["data_type"].tolist() == ["SPC"]
     assert "sheet_start_time" in result.columns
+
+
+@pytest.mark.parametrize("raw_type", [None, "", "AOI", "CTQ", "SPC"])
+@pytest.mark.parametrize("scope", ["SPC", "CTQ", "AOI"])
+def test_ppa_is_exclusively_spc_even_when_catalog_type_is_missing_or_wrong(
+    monkeypatch, raw_type, scope: str,
+) -> None:
+    raw = FakeRawMeasurements().get_measurements("M678", "2026-08-10")
+    raw = raw.iloc[:1].assign(param_name="offset_ppa_y")
+    catalog = pd.DataFrame([{"ref_param_name": "OFFSET_PPA_Y", "data_type": raw_type}])
+    monkeypatch.setattr(
+        InlineMeasurementPreparationRepository, "_apply_outlier_filters",
+        lambda _self, frame, _product: frame,
+    )
+    repository = SpcRepository(InlineMeasurementPreparationRepository(
+        raw_measurements=SimpleNamespace(get_measurements=lambda *_args: raw),
+        metadata=SimpleNamespace(
+            get_parameter_catalog=lambda _product: catalog,
+            get_parameter_specs=lambda _product: pd.DataFrame(),
+        ),
+        main_process_history=FakeMainProcessHistory(),
+    ))
+
+    result = repository.get_spc_measurements(SpcQueryConfig(
+        prod_code="M678", start_date="2026-08-01", end_date="2026-08-10",
+        data_type_filter=scope,
+    ))
+
+    if scope == "SPC":
+        assert result.param_name.tolist() == ["offset_ppa_y"]
+        assert result.data_type.tolist() == ["SPC"]
+    else:
+        assert result.empty
 
 
 @pytest.mark.parametrize("scope", ["SPC", "CTQ"])

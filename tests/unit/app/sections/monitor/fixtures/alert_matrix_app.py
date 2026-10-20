@@ -1,6 +1,6 @@
 """自动预警矩阵 UI 的隔离 Streamlit harness（AppTest 用，不触 DB/文件）。
 
-- 直接构造含四态的假 payload（2 产品 × 8 行）；
+- 直接构造含四态的假 payload（2 产品 × 9 行）；
 - 详情 loader 由测试经 monkeypatch 替换
   ``alert_matrix_detail.build_default_detail_loaders`` 注入；
 - ``st.session_state["fixture_nonce"]`` 进入矩阵签名，隔离 st.cache_data
@@ -42,6 +42,7 @@ ALERT_CELLS = [
     ("qtime_sheet_oos", "M678", ["OLED"]),
     ("spc_sheet_oos", "M678", ["ARRAY", "TP"]),
     ("spc_cpk_trend", "M678", ["TP"]),
+    ("spc_cpm_trend", "M678", ["TP"]),
     ("yield_trend_fluctuation", "M678", []),
 ]
 NO_DATA_CELL = ("ctq_sheet_oos", "M678")

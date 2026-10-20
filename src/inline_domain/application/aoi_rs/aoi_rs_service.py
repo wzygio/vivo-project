@@ -241,6 +241,10 @@ class AoiRsReportService:
                 else exempt_param_name_contains
             )
             rs_details_df = _data_port.get_rs_details(query_config)
+            # Throughput and configured Codes remain meaningful when no RS defects
+            # were recorded. Weekly exports must distinguish zero from no passage.
+            pass_through_df = _data_port.get_pass_through(query_config)
+            spec_df = _data_port.get_rs_spec_limits(query_config.prod_code)
             persist_shared_history = bool(
                 getattr(_data_port, "supports_shared_history_persistence", False)
             )
@@ -268,16 +272,16 @@ class AoiRsReportService:
                     persist_throughput_facts(
                         scope="aoi_rs",
                         prod_code=query_config.prod_code,
-                        details=pd.DataFrame(),
+                        details=pass_through_df,
                         event_time_column="start_time",
                         item_id_column="sheet_id",
                         product_dir=product_dir,
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                     )
-                return AoiRsReportService._empty_payload()
-            pass_through_df = _data_port.get_pass_through(query_config)
-            spec_df = _data_port.get_rs_spec_limits(query_config.prod_code)
+                payload = AoiRsReportService._empty_payload()
+                payload.update(pass_through_df=pass_through_df, spec_df=spec_df)
+                return payload
             # 超规修饰在 service 层完成：By Lot 用 LOT_RATIO 规格、By Sheet 用
             # SHEET_ID/GLASS_ID 规格，分别产出图表就绪的修饰后点帧（D4）；
             # scope 门控决定是否真正落盘

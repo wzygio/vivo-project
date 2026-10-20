@@ -11,7 +11,8 @@ def test_yield_dashboard_keys_cache_by_window_and_manual_resource_revision() -> 
     source = YIELD_DASHBOARD_PATH.read_text(encoding="utf-8")
 
     assert "build_indicator_product_cache_signature(" in source
-    assert "snapshot_signature=lot_cache_signature" in source
+    assert "lot_signature=lot_cache_signature" in source
+    assert "trend_signature=product_cache_signature" in source
     assert "snapshot_signature=sheet_cache_signature" in source
     assert "analysis_start_date=" in source
     assert "analysis_end_date=" in source

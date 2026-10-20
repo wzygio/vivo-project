@@ -21,14 +21,13 @@ import streamlit as st
 from app.components.indicator_cache import (
     build_indicator_product_cache_signature,
 )
-
-PRODUCT_CACHE_INDICATORS = ("spc_sheet_oos", "spc_cpk_trend",)
-
 from app.components.page_header import (
     extract_cached_funcs,
     render_page_header,
 )
 from app.sections.inline_domain.spc.spc_dashboard import (
+    SPC_REPORT_CACHE_INDICATORS as PRODUCT_CACHE_INDICATORS,
+    SPC_REPORT_CACHE_SIGNATURE as SPC_PAGE_CACHE_SIGNATURE,
     build_spc_sheet_oos_alerts,
     build_weekly_cpk_alerts,
     build_weekly_cpm_alerts,
@@ -62,7 +61,6 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
     SheetOosDecorationReadError,
 )
 
-SPC_PAGE_CACHE_SIGNATURE = "spc_saved_capability_alerts_v5"
 SpcReportService = spc_service.SpcReportService
 _spc_decoration_file_error = getattr(spc_service, "SpcDecorationFileError", None)
 _spc_report_build_error = getattr(spc_service, "SpcReportBuildError", None)

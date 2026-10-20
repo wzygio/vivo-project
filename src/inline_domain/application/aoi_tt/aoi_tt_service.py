@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
+from src.inline_domain.core.monitor.monitor_param_classifier import (
+    PARAM_CLASSIFICATION_SIGNATURE,
+)
 from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir, resolve_scope_decoration_path
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
@@ -181,6 +184,8 @@ class AoiTtReportService:
                 else exempt_param_name_contains
             )
             tt_details_df = _data_port.get_tt_details(query_config)
+            # Keep configured projects even when there were no TT detections.
+            spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
             persist_shared_history = bool(
                 getattr(_data_port, "supports_shared_history_persistence", False)
             )
@@ -215,8 +220,9 @@ class AoiTtReportService:
                         coverage_start=coverage_start,
                         coverage_end=coverage_end,
                     )
-                return AoiTtReportService._empty_payload()
-            spec_df = _data_port.get_tt_spec_limits(query_config.prod_code)
+                payload = AoiTtReportService._empty_payload()
+                payload["spec_df"] = spec_df
+                return payload
             # 超规片修饰：工作簿三态 flag（Delete 删除 / False 释放 / True 默认截断），
             # 无工作簿时与引入前的自动截断行为一致；scope 门控决定是否真正落盘
             decoration_result = prepare_aoi_tt_decoration(
@@ -326,7 +332,7 @@ class AoiTtReportService:
         payload = AoiTtReportService.fetch_aoi_tt_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
-            snapshot_signature=snapshot_signature,
+            snapshot_signature=f"{PARAM_CLASSIFICATION_SIGNATURE}:{snapshot_signature}",
             product_revision=product_revision,
             decision_signature=decision_signature,
             generate_particle_sizes=generated,

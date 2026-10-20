@@ -8,8 +8,8 @@
   ``alert_matrix_service.build_alert_matrix_signature`` 对
   ``build_default_signature_components`` 的分量做确定性摘要；
 - ``build_cell_source_signature``：仅采集本指标输入，不混入其他指标 revision；
-- ``build_default_matrix_context``：生产依赖装配（inline 资源目录、SPC CPK
-  Excel、yield 只读入口、qtime 全产品监控）。所有服务对象经下划线前缀
+- ``build_default_matrix_context``：生产依赖装配（Inline/CPK/CPM 结果工作簿、
+  Yield 结果只读入口、Q-Time 全产品监控）。所有服务对象经下划线前缀
   参数或闭包进入缓存函数，不参与哈希。
 """
 
@@ -46,7 +46,11 @@ from src.indicator_domain.application.qtime.cached_monitoring import (
 )
 from src.indicator_domain.composition import build_qtime_service
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+from src.inline_domain.composition import build_capability_latest_reader
 from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+from src.inline_domain.core.monitor.monitor_param_classifier import (
+    PARAM_CLASSIFICATION_SIGNATURE,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -75,9 +79,11 @@ def build_default_signature_components(products: Sequence[str]) -> dict[str, Any
 
 
 def cpk_latest_store() -> CpkLatestExcelStore:
-    return CpkLatestExcelStore(
-        ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx")
-    )
+    return build_capability_latest_reader("cpk")
+
+
+def cpm_latest_store() -> CpkLatestExcelStore:
+    return build_capability_latest_reader("cpm")
 
 
 def _file_signature(path: Path) -> str:
@@ -88,24 +94,22 @@ def _file_signature(path: Path) -> str:
         return f"{path.resolve()}:missing"
 
 
-def build_cell_source_signature(row_key: str, product: str) -> str:
+def build_cell_source_signature(row_key: str, product: str, reference_date: date | None = None) -> str:
     """Only the selected indicator's real input signatures; no board/global revision."""
-    if row_key == "spc_cpk_trend":
+    if row_key in ("spc_cpk_trend", "spc_cpm_trend"):
         return cpk_latest_store().source_signature() + ":" + repr(ConfigLoader.get_inline_data_exclusion())
     if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
         scope = row_key.removesuffix("_sheet_oos")
-        return _file_signature(scope_decoration_path(scope)) + ":" + repr(
-            ConfigLoader.get_inline_data_exclusion(),
-        )
+        return ":".join([
+            PARAM_CLASSIFICATION_SIGNATURE,
+            _file_signature(scope_decoration_path(scope)),
+            repr(ConfigLoader.get_inline_data_exclusion()),
+        ])
     if row_key.startswith("yield_"):
-        from yield_domain.application.yield_service import YieldAnalysisService
+        from src.yield_domain.composition import build_yield_alert_results
 
-        config = ConfigLoader.load_config(product)
-        directory = ConfigLoader.get_domain_resource_dir("yield_domain") / product
-        context = YieldAnalysisService.build_cache_context(config, directory)
-        if row_key == "yield_trend_fluctuation":
-            context = {key: value for key, value in context.items() if key != "warning_signature"}
-        return build_alert_matrix_signature(products=(product,), components=context)
+        kind = "lot" if row_key == "yield_lot_oos" else "trend"
+        return build_yield_alert_results().source_signature(product, kind, reference_date or date.today())
     path = ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx")
     source_dir = ConfigLoader.get_project_root() / "data" / "indicator_domain" / "qtime"
     return build_alert_matrix_signature(products=(product,), components={
@@ -174,77 +178,27 @@ def build_default_matrix_context(
     reference_date: date,
 ) -> AlertMatrixContext:
     """生产装配：构建带真实数据源的 AlertMatrixContext（在缓存 miss 时调用一次）。"""
-    from yield_domain.application.yield_service import YieldAnalysisService
+    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
+    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
+    from src.yield_domain.composition import build_yield_alert_results
 
+    saved_yield_results = build_yield_alert_results()
+    inline_reader = ExcelAlarmReader(ExcelAlarmStore({
+        scope: scope_decoration_path(scope) for scope in MATRIX_INLINE_SCOPES
+    }))
     inline_resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
 
     def spc_cpk_loader(prod_code: str) -> pd.DataFrame | None:
         return cpk_latest_store().read_product(prod_code)
 
-    def _yield_product_resources(prod_code: str, indicator_key: str):
-        config = ConfigLoader.load_config(prod_code)
-        product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / prod_code
-        snapshot_signature = build_indicator_product_cache_signature(
-            YIELD_SNAPSHOT_SIGNATURE_BASE, prod_code, (indicator_key,)
-        )
-        cache_context = YieldAnalysisService.build_cache_context(config, product_dir)
-        return config, product_dir, snapshot_signature, cache_context
+    def spc_cpm_loader(prod_code: str) -> pd.DataFrame | None:
+        return cpm_latest_store().read_product(prod_code)
 
-    def yield_lot_loader(prod_code: str):
-        """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code, "yield_lot_oos")
-        lot_data = YieldAnalysisService.get_lot_defect_rates(
-            config,
-            product_dir,
-            _db_manager=DatabaseManager(),
-            snapshot_signature=snapshot_signature,
-            read_only=True,
-            **cache_context,
-        )
-        if not lot_data:
-            return None
-        warning_lines = YieldAnalysisService.load_static_warning_lines(
-            config,
-            product_dir,
-            snapshot_signature,
-            warning_signature=cache_context["warning_signature"],
-        )
-        return lot_data, warning_lines
+    def yield_result_loader(prod_code: str, kind: str):
+        return saved_yield_results.read(prod_code, kind, reference_date)
 
-    def yield_health_loader(prod_code: str, indicator_key: str):
-        config, _, snapshot_signature, cache_context = _yield_product_resources(prod_code, indicator_key)
-        return YieldAnalysisService.get_data_health(
-            config, _db_manager=DatabaseManager(), snapshot_signature=snapshot_signature,
-            analysis_start_date=cache_context["analysis_start_date"],
-            analysis_end_date=cache_context["analysis_end_date"],
-        )
-
-    def yield_trend_loader(prod_code: str):
-        """read_only=True：矩阵只读消费，不触发良损修饰表回写。"""
-        config, product_dir, snapshot_signature, cache_context = _yield_product_resources(prod_code, "yield_trend_fluctuation")
-        mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-            config,
-            product_dir,
-            _db_manager=DatabaseManager(),
-            snapshot_signature=snapshot_signature,
-            read_only=True,
-            analysis_start_date=cache_context["analysis_start_date"],
-            analysis_end_date=cache_context["analysis_end_date"],
-            modifier_signature=cache_context["modifier_signature"],
-        )
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            config,
-            product_dir,
-            _db_manager=DatabaseManager(),
-            snapshot_signature=snapshot_signature,
-            read_only=True,
-            analysis_start_date=cache_context["analysis_start_date"],
-            analysis_end_date=cache_context["analysis_end_date"],
-            modifier_signature=cache_context["modifier_signature"],
-        )
-        if not mwd_group_data and not mwd_code_data:
-            return None
-        return mwd_group_data, mwd_code_data
+    def oos_product_loader(scope: str, product: str, resource_dir: Path):
+        return inline_reader.read_product(scope, product)
 
     def qtime_monitoring_loader() -> tuple[pd.DataFrame, pd.DataFrame]:
         """全产品 Q-Time 监控（共享入口，与点击详情同一 L2 缓存）。"""
@@ -254,9 +208,9 @@ def build_default_matrix_context(
         reference_date=reference_date,
         inline_resource_dir=inline_resource_dir,
         spc_cpk_loader=spc_cpk_loader,
-        yield_lot_loader=yield_lot_loader,
-        yield_trend_loader=yield_trend_loader,
-        yield_health_loader=yield_health_loader,
+        spc_cpm_loader=spc_cpm_loader,
+        yield_result_loader=yield_result_loader,
+        oos_product_loader=oos_product_loader,
         qtime_monitoring_loader=qtime_monitoring_loader,
     )
 
@@ -302,7 +256,9 @@ def get_cached_alert_matrix(
     factory = _context_factory or (
         lambda: build_default_matrix_context(product_tuple, reference_date=reference)
     )
-    source_signature = _signature_provider or build_cell_source_signature
+    source_signature = _signature_provider or (
+        lambda row, product: build_cell_source_signature(row, product, reference)
+    )
     revision_provider = _revision_provider or get_indicator_product_revision
     context = factory()  # construction is lazy: no DB/SPC/Yield calculation here
     # Custom providers are isolated unless they explicitly inject a store.

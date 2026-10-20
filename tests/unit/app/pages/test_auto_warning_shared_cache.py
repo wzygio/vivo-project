@@ -19,7 +19,7 @@ from src.shared_kernel.infrastructure import db_handler
 
 PAGE_PATH = Path(__file__).parents[4] / "app/pages/自动预警看板.py"
 PRODUCTS = ("M626", "M678")
-INDICATORS = ("spc_sheet_oos", "spc_cpk_trend")
+INDICATORS = ("spc_sheet_oos", "spc_cpk_trend", "spc_cpm_trend")
 
 
 @pytest.fixture
@@ -115,7 +115,8 @@ def test_normal_and_admin_sessions_reuse_cells_and_targeted_refresh(matrix_sessi
     assert calls == expected
 
 
-def test_matrix_data_refresh_reloads_target_and_preserves_other_boards(matrix_sessions, monkeypatch):
+@pytest.mark.parametrize("indicator", ["spc_cpk_trend", "spc_cpm_trend"])
+def test_matrix_data_refresh_reloads_target_and_preserves_other_boards(matrix_sessions, monkeypatch, indicator):
     from app.sections.inline_domain.monitor import refresh_controls
 
     cleared = []
@@ -126,12 +127,12 @@ def test_matrix_data_refresh_reloads_target_and_preserves_other_boards(matrix_se
     before = calls.copy()
     admin.session_state["monitor_query_signature"] = "oos-selection"
     admin.session_state["cpk_monitor_query_signature"] = "cpk-selection"
-    admin.selectbox(key="matrix_refresh_indicator").select("spc_cpk_trend").run()
+    admin.selectbox(key="matrix_refresh_indicator").select(indicator).run()
 
     admin.button(key="matrix_refresh_data").click().run()
 
     assert not admin.exception
-    before["spc_cpk_trend", PRODUCTS[0]] += 1
+    before[indicator, PRODUCTS[0]] += 1
     assert calls == before
     assert cleared == ["cpk"]
     assert admin.session_state["monitor_query_signature"] == "oos-selection"

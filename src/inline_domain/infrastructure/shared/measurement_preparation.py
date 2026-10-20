@@ -211,7 +211,11 @@ class InlineMeasurementPreparationRepository:
             return prepared.iloc[0:0]
         else:
             typed = catalog.copy()
-            typed["data_type"] = typed["data_type"].apply(classify_param_type)
+            typed["data_type"] = [
+                classify_param_type(raw_type, param_name)
+                for raw_type, param_name in zip(typed["data_type"], typed["ref_param_name"])
+            ]
+            typed = typed.drop_duplicates()
             target = (config.data_type_filter or "ALL").upper()
             if target != "ALL":
                 typed = typed[typed["data_type"].eq(target)]

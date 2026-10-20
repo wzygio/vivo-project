@@ -5,13 +5,11 @@
 const LINKS = {
     // 1. 本地 Streamlit 系统路由
     PORTAL_HOME: "/", 
-    ANALYSIS_FILES: "/ANALYSIS_FILES",
 
     // 2. Streamlit
     YIELD_BY_LOT: "http://10.72.26.31:8503/入库不良率ByLot明细表",
     YIELD_BY_SHEET: "http://10.72.26.31:8503/入库不良率BySheet明细表",
     YIELD_TREND_MWD: "http://10.72.26.31:8503/入库不良率分析看板",
-    ANALYSIS_FILES: "http://10.72.26.31:8503/专项资料-解析报告",
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
     WARNING_SUMMARY: "http://10.72.26.31:8503/超规预警看板",
@@ -86,19 +84,13 @@ const APP_CONFIG = {
             ]
         },
         {
-            name: "解析资料",
-            children: [
-                { name: "解析资料", url: LINKS.ANALYSIS_FILES },
-            ]
-        },
-        {
             name: "专项资料",
             children: [
                 { name: "台账周报", url: LINKS.PROJECT_FILES },
             ]
         },
         {
-            name: "特殊指标",
+            name: "Inline指标",
             children: [
                 { name: "IQC", url: LINKS.IQC },
                 { name: "IJP", url: LINKS.IJP_OVERFLOW },
@@ -109,6 +101,11 @@ const APP_CONFIG = {
             children: [
                 // { name: "IQC", url: LINKS.IQC },
                 { name: "蒸镀材料", url: LINKS.IQC_INSPECTION_REPORT },
+            ]
+        },
+        {
+            name: "寿命测试",
+            children: [
                 { name: "寿命测试", url: LINKS.IQC_LIFETIME_REPORT },
             ]
         },
@@ -146,20 +143,12 @@ const APP_CONFIG = {
             ]
         },
         { 
-            id: '特殊指标', 
-            label: '特殊指标', 
+            id: 'Inline指标',
+            label: 'Inline指标',
             icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>', 
             subs: [ 
                 {l:'', v:'Q-time', url: LINKS.QTIME },          
                 {l:'', v:'IJP溢流', url: LINKS.IJP_OVERFLOW },          
-            ]
-        },
-        { 
-            id: '解析资料', 
-            label: '解析资料', 
-            icon: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line>', 
-            subs: [ 
-                {l:'', v:'解析报告', url: LINKS.ANALYSIS_FILES } 
             ]
         },
         { 
@@ -177,6 +166,13 @@ const APP_CONFIG = {
             subs: [ 
                 // {l:'', v:'IQC', url: LINKS.IQC },
                 {l:'', v:'蒸镀材料', url: LINKS.IQC_INSPECTION_REPORT },
+            ]
+        },
+        {
+            id: 'lifetime',
+            label: '寿命测试',
+            icon: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+            subs: [
                 {l:'', v:'寿命测试', url: LINKS.IQC_LIFETIME_REPORT },
             ]
         },

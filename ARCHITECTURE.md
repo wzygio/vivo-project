@@ -42,8 +42,8 @@ src
 
 | Domain | Submodule | Business responsibility and relationship |
 |---|---|---|
-| `inline_domain` | `aoi_rs` | AOI RS defect counts/density, Sheet/Lot and month/week/day reports, and RS-specific decoration; owns independent RS facts while reusing domain-shared throughput and decision capabilities |
-| `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities; owns TT/particle trend aggregation and reuses the domain-shared density trend detector |
+| `inline_domain` | `aoi_rs` | AOI RS defect counts/density, Sheet/Lot and month/week/day reports, weekly product-column PPT summaries, and RS-specific decoration; owns independent RS facts while reusing domain-shared throughput and decision capabilities. Weekly summaries consume the current chart projection, keep a fixed previous ISO week, and retain throughput/specification metadata even when no RS defects are recorded |
+| `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, weekly product-column PPT summaries, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities; owns TT/particle trend aggregation and reuses the domain-shared density trend detector. Weekly summaries use TT detection counts and keep Total and particle subsets separate |
 | `inline_domain` | `ctq` | Critical-to-quality measurement reports, indicator selection and chart-type rules; reuses the shared measurement/feature/decoration pipeline |
 | `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; owns SPC point decoration order (traditional OOS clipping, then the time-scoped central specification band) in `core/spc`, reusing public shared clipping and decision helpers. Publishes maintained capability records. SPC page alerts and monitoring share the configured capability workbook readers and normalized alert selection, while calculations remain the source for ordinary SPC charts |
 | `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK/CPM summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
@@ -62,6 +62,8 @@ src
 ### Capabilities Outside Named Submodule Packages
 
 Yield also keeps common Panel-data loading, defect processing, batch statistics, anomaly/alert handling, modifier persistence and exports outside its three named business packages. The three submodules use these common inputs and report coordination; `repositories` is a data-access grouping rather than another business capability.
+
+Yield's shared alert application coordinates original report calculations and independently publishes Lot/trend result workbooks through an application-owned store port. Infrastructure owns parsed-workbook caching and atomic publication; composition binds configured resource paths. The matrix consumes the public saved-result contract without triggering report analysis, while lazy detail charts retain their report-service path. Inline OOS matrix consumers likewise reuse the existing workbook-level reader. See [published alert result rules](references/domain/yield_domain/shared/rules-yield-alert-results.md) and [ADR-0035](docs/ADR/0035-published-alert-results-for-matrix.md).
 
 IQC retains example-report loading/filtering outside `eva_materials` and `lifetime`. These examples are not a third production business submodule. Inline's `ports` directory groups shared measurement contracts and is not a seventh business submodule. Domain composition/configuration files support module assembly and are likewise excluded from the inventory.
 
@@ -126,6 +128,7 @@ domain composition -> assembles application services and concrete adapters
 | Path | Responsibility |
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
+| `app/static/`, special-document pages | Portal navigation owns sidebar/tree labels and links. The ledger/weekly page also presents analysis reports from their independently configured resource directory; the former analysis page redirects to it. See [portal document interactions](references/design/shared_kernel/shared/interaction-portal-documents.md) |
 | `app/sections/<domain>/[<submodule>/]` | Query gates, session state, page sections, and presentation coordination; small domains may omit the submodule directory |
 | `app/sections/iqc_domain/eva_materials/` | Evaporation material date and annotated enabled-product query, native Streamlit dataframe and cached public payloads; the owning IQC adapter filters membership and projects selected product codes before public projection/cache/export, while evaporation cycles remain internal; the complete public result supports native sorting, search and CSV export |
 | `app/sections/iqc_domain/lifetime/` | Enabled-product scope, linked product/status/batch selectors with results displayed only after an explicit query, anonymous public cache and complete native dataframe details; page-header cache refresh invalidates the registered payload; `app/charts/iqc_domain/` builds efficiency-decay, luminance-decay and JNCD curves in child expanders within each product/batch expander, with four test screens per row for decay metrics and only the W screen for JNCD |
@@ -169,6 +172,8 @@ rg -n 'QTimeReportService|data_health' tests/unit tests/integration tests/archit
 
 
 ## Extension Rules
+
+AOI RS and TT weekly PowerPoint exports follow the existing presentation adapter boundary: each application builds per-factory product-column rows using its own measurement/throughput semantics and a shared weekly table model. A shared `app/charts/inline_domain/` adapter writes editable tables and preserves the configured template master, with up to eight products on each page. Their ordinary-mode presentation sections own independent product/factory/Array-station selections and generation/download actions; TT also owns particle-size selection. Each retains its last complete report in session state. The Inline shared infrastructure template reader normalizes enterprise-protected files through local PowerPoint, captures Open XML bytes before Office closes, cleans temporary copies, and preserves existing user Office sessions. Standard PPTX templates bypass Office. The shared presentation cache retains native template bytes by path/mtime/size. Template paths belong to the global resource registry; detailed rules are in [AOI RS weekly reports](references/domain/inline_domain/aoi_rs/rules-aoi-rs-weekly-report.md) and [AOI TT weekly reports](references/domain/inline_domain/aoi_tt/rules-aoi-tt-weekly-report.md).
 
 Add files to existing responsibility modules first. Create a submodule when a stable capability or reuse boundary warrants it; no empty symmetry or additional framework is required. Update this map when domains/submodules or ownership change. Keep per-program details and algorithms in code-adjacent or routed subject documents. Proposed structures must not be presented as existing implementation.
 

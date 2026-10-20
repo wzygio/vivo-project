@@ -54,7 +54,8 @@ def test_cpk_excel_changes_rebuild_only_cpk_and_default_detail(tmp_path, monkeyp
     store = CpkLatestExcelStore(path)
     def write(flag):
         pd.DataFrame([{"prod_code": "P1", "factory": "ARRAY", "step_id": "100", "param_name": "CD",
-                       "period_type": "week", "period_label": "2026-W36", "cpk_corrected": 0.8, "flag": flag}]).to_excel(path, sheet_name="P1", index=False)
+                       "period_type": "week", "period_label": "2026-W36", "cpk_corrected": 0.8, "flag": flag,
+                       "period_start": "2026-08-31", "period_end": "2026-09-02"}]).to_excel(path, sheet_name="P1", index=False)
     monkeypatch.setattr(service, "MATRIX_ROWS", (service.MATRIX_ROW_MAP["spc_cpk_trend"],))
     monkeypatch.setattr(detail, "cpk_latest_store", lambda: store)
     monkeypatch.setattr(detail, "_resolve_db_manager", lambda db: object())

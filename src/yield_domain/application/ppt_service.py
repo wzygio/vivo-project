@@ -35,7 +35,7 @@ class PPTService:
         if not ppt_path.exists():
             err_msg = f"错误：找不到 PPT 文件 -> {ppt_path}"
             logging.error(err_msg)
-            st.error(err_msg)
+            st.error("文件暂时无法读取，请刷新列表后重试。")
             return False
 
         # 3. 清理并重建输出目录
@@ -72,7 +72,7 @@ class PPTService:
         except Exception as e:
             err_msg = f"PPT 转换失败: {e}"
             logging.error(err_msg)
-            st.error(err_msg)
+            st.error("演示文稿预览生成失败，请确认文件可正常打开后重试。")
             return False
             
         finally:

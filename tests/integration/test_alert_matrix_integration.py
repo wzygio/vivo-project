@@ -12,15 +12,19 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from app.components.alert_center import compute_lot_oos_records
 from app.sections.inline_domain.monitor.alert_matrix_service import (
+    MATRIX_ROW_MAP,
     AlertMatrixContext,
     build_alert_matrix_payload,
 )
 from src.inline_domain.application.shared.decorated_data import (
     SCOPE_DECORATION_FILE_NAME,
 )
+from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
+from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
 from src.inline_domain.core.shared.sheet_oos_alerts import (
     build_sheet_oos_alerts,
     previous_iso_week_range,
@@ -267,3 +271,34 @@ def test_matrix_degrades_missing_product_without_blocking_others(tmp_path: Path)
         assert cells[(row["row_key"], "Z571")]["state"] in {"no_data", "ok"}, row["row_key"]
     assert cells[("spc_sheet_oos", "Z571")]["state"] == "no_data"
     assert len(cells) == len(payload["rows"]) * len(PRODUCTS)
+
+
+@pytest.mark.parametrize("mixed_tt", [False, True])
+def test_existing_ppa_workbooks_alert_only_in_spc_matrix_row(tmp_path, mixed_tt):
+    """Use the production Excel reader without querying manufacturing data."""
+    product = "M626"
+    spc_path, tt_path = tmp_path / "spc.xlsx", tmp_path / "tt.xlsx"
+    pd.DataFrame([dict(
+        factory="ARRAY", prod_code=product, step_id="100", param_name="PPA_B_X",
+        sheet_id="S1", sheet_start_time="2026-09-08", sheet_max=10,
+        sheet_min=10, usl=5, lsl=0, oos_type="USL", flag=False,
+    )]).to_excel(spc_path, sheet_name=product, index=False)
+    rows = [dict(
+        factory="ARRAY", prod_code=product, step_id="100", tt_name="PPA_B_X",
+        sheet_id="S1", start_time="2026-09-08", tt_qty=10, usl=5, flag=False,
+    )]
+    if mixed_tt:
+        rows.append({**rows[0], "tt_name": "TDSUM", "flag": True})
+    pd.DataFrame(rows).to_excel(tt_path, sheet_name=product, index=False)
+    before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in (spc_path, tt_path)}
+    reader = ExcelAlarmReader(ExcelAlarmStore({"spc": spc_path, "aoi_tt": tt_path}))
+    context = AlertMatrixContext(
+        reference_date=date(2026, 9, 14),
+        oos_product_loader=lambda scope, prod, _directory: reader.read_product(scope, prod),
+    )
+    spc = MATRIX_ROW_MAP["spc_sheet_oos"].evaluator(product, context)
+    tt = MATRIX_ROW_MAP["aoi_tt_sheet_oos"].evaluator(product, context)
+
+    assert spc["state"] == "alert"
+    assert tt["state"] == ("ok" if mixed_tt else "no_data")
+    assert before == {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in before}

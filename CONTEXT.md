@@ -8,6 +8,7 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 
 - Streamlit pages present reports; domain application services coordinate business rules and data adapters. The code ownership map is in [ARCHITECTURE.md](ARCHITECTURE.md).
 - PostgreSQL supplies manufacturing facts. Local Parquet snapshots support reuse and defined fallback behavior. Workbooks can contain user-maintained decisions and historical baselines, not merely disposable exports.
+- Yield publishes generated Lot/trend alert workbooks through its existing report workflow; matrix status consumers read these files without analysis fallback. Their lifecycle and validity are owned by [Yield alert result rules](references/domain/yield_domain/shared/rules-yield-alert-results.md); source snapshots and user-maintained decisions keep their existing lifecycle.
 - Global, domain, and product configuration controls runtime behavior. Resolve configuration and resource locations through the existing loaders and composition roots; do not assume every resource lives under a product-named directory.
 
 ## Important Routes

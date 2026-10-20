@@ -99,6 +99,8 @@ def test_modified_panel_cache_key_contains_explicit_analysis_window(
 
 def test_modifier_failure_is_not_cached(monkeypatch, mock_config) -> None:
     attempts = 0
+    # This branch must not depend on the user's current product policy being enabled.
+    mock_config.processing = {**mock_config.processing, "defect_multipliers": {"fixture-code": 0.5}}
 
     monkeypatch.setattr(
         YieldAnalysisService,

@@ -1,22 +1,23 @@
 # 全指标预警看板：By Domain / By 指标实现说明
 
-更新日期：2026-09-08。本次以指标 × 产品单元格缓存替代整张矩阵缓存，SPC CPK 改为结果 Excel 直读。范围仅为顶部全指标矩阵，不包含下方 Inline／CPK 历史汇总看板。
+更新日期：2026-10-20。顶部矩阵的 Inline 与 Yield 状态均读取已发布结果，整本 Excel 解析在内存中复用；Q-Time 保留共享监控管路，点击详情继续按需使用报表服务。范围不包含下方 Inline／CPK／CPM 历史汇总看板。
 
 ## 数据入口分类
 
 - **A：本地结果直读**：读取其他模块已产出的 Excel，做字段投影、时间筛选与预警存在性判断，不重新分析原始量测。
 - **B：application 管路复用**：调用报表已有服务和缓存；只有函数及参与哈希的参数一致，才共享同一缓存条目。
-- **C：独立分析管路**：另建原始数据分析引擎。当前八行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
+- **C：独立分析管路**：另建原始数据分析引擎。当前九行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
 
 | Domain | 指标键／显示名称 | 状态灯 | 红灯详情 |
 |---|---|---|---|
 | inline_domain | aoi_rs_sheet_oos／AOI_RS 单片异常 | A：AOI_RS OOS Excel | A：预警表；B：报表图像 |
 | inline_domain | aoi_tt_sheet_oos／AOI_TT 单片异常 | A：AOI_TT OOS Excel | A：预警表；B：报表图像 |
 | inline_domain | spc_sheet_oos／SPC 单片异常 | A：SPC OOS Excel | A：预警表；B：报表图像 |
-| inline_domain | spc_cpk_trend／SPC 趋势波动（CPK） | A：CPK Excel | A：同一 CPK Excel，无原始 SPC 查询 |
+| inline_domain | spc_cpk_trend／SPC 趋势波动（CPK） | A：CPK Excel | A：预警表；B：SPC 报表图像 |
+| inline_domain | spc_cpm_trend／SPC 趋势波动（CPM） | A：CPM Excel | A：预警表；B：同一 SPC 报表图像缓存 |
 | inline_domain | ctq_sheet_oos／CTQ 单片异常 | A：CTQ OOS Excel | A：预警表；B：报表图像 |
-| yield_domain | yield_lot_oos／Yield 单片异常（Lot 超规） | B：Lot 不良率＋共用判据 | B：Yield 详情 |
-| yield_domain | yield_trend_fluctuation／Yield 趋势波动 | B：Group/Code 趋势＋共用探测器 | B：Yield 详情 |
+| yield_domain | yield_lot_oos／Yield 单片异常（Lot 超规） | A：已发布 Lot 超规工作簿 | B：Yield 详情 |
+| yield_domain | yield_trend_fluctuation／Yield 趋势波动 | A：已发布趋势报警工作簿 | B：Yield 详情 |
 | indicator_domain | qtime_sheet_oos／Q-Time 单片异常 | B：共享厂别监控结果按产品筛选 | B：共享监控结果 |
 
 Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
@@ -25,7 +26,7 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
 ### AOI_RS、AOI_TT、SPC、CTQ：单片异常
 
-读取 resources/inline_domain/<scope>/<scope>_sheet_oos_decoration.xlsx 的产品同名 sheet。生产 composition 的 build_oos_history_service 返回 ExcelAlarmReader，不是旧原始快照重分析服务；缺明细不会回退运行原始分析。
+读取 resources/inline_domain/<scope>/<scope>_sheet_oos_decoration.xlsx 的产品同名 sheet。矩阵生产上下文注入已有的 ExcelAlarmReader / ExcelAlarmStore，先按路径、mtime_ns、大小缓存整本工作簿，再从其中选择产品；同一文件版本不为每个产品重复打开 Excel。缺明细不会回退运行原始分析。
 
 | scope | 时间字段 | 项目／指标 |
 |---|---|---|
@@ -35,29 +36,31 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
 统一投影后，以 [上周一 00:00, 本周一 00:00) 内 flag=False 的 OOS 记录判断是否预警。aoi_tt_sheet_ooc_decoration.xlsx 等 **OOC** 文件不是这四行输入；当前没有独立 OOC／IJP 行。
 
+TT 结果读取遵守 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配参数白名单与-spc-分类)：旧 AOI_TT Excel 中误收的 PPA 参数在 OOS/OOC 读取副本中排除，不修改工作簿或人工决策，不将 TT 数值拼装成 SPC 特征。SPC 预警仍读取自身结果文件。分类规则版本参与 Inline 单元格、跨进程矩阵快照及运行时计算的输入签名，避免复用修复前的结果。
+
 红灯预警表仍读结果 Excel；需要图像时再调用对应报表服务获取量测／特征。因此状态灯 Excel-only 不代表红灯图像不访问原始快照。接口复用也不保证不同查询参数命中同一顶层缓存。
 
-### SPC：趋势波动（CPK）
+### SPC：趋势波动（CPK / CPM）
 
-状态与默认详情均由 CpkLatestExcelStore 读取 resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx。读取产品 CPK sheet，不把 CPM sheet 当成 CPK 输入。
+状态与预警明细复用 `build_capability_latest_reader` 装配的 CpkLatestExcelStore / CpmLatestExcelStore，读取配置指定的能力工作簿（默认 resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx）。CPK 读取产品同名 sheet，CPM 读取 `<产品>_cpm` sheet；两者共用工作簿解析缓存，独立判定各自指标。
 
-统一使用 build_latest_cpk_alerts：规范化结果字段，筛选上一完整 ISO 周、flag=False、cpk_corrected < 1.33。详情展示厂别、站点、参数、超规周次和 CPK 值，不再获取 SPC 周期能力 payload，不为默认详情运行原始 SPC 分析。缺数据保留后台 no_data 语义，异常保留 error。
+统一使用 `build_latest_capability_alerts(metric=...)` 和已有 `latest_capability_alerts`：筛选上一完整 ISO 周、flag=False、对应 corrected 值 < 1.33，并遵守日期排除和可配置的最小 Sheet 数据跨度。状态不重新计算能力。详情展示厂别、站点、参数、超规周次和对应能力值；仅有预警时按厂别／站点／参数命中键筛选 SPC 三图。缺数据保留后台 no_data 语义，异常保留 error。
 
-这替代了旧设计“CPK 复用完整 SPC payload”的选择，不改变 SPC 主报表能力分析，也不修改下方独立 CPK 汇总看板的历史更新算法。
+图像加载调用 `SpcReportService.get_spc_report_data`，与 SPC 页面共用 `SPC_REPORT_CACHE_SIGNATURE`、`SPC_REPORT_CACHE_INDICATORS`、日期窗口、源输入签名、决策签名与 sigma 配置；相同输入命中同一 application payload 缓存，CPK / CPM 不分别计算。缓存缺失或真实输入变化时仍按已有服务构建。两种详情的图像 memo / chart key 分开，手动刷新可分别选中各指标／产品，不改变下方独立历史汇总算法。
 
 ## yield_domain
 
 ### Yield：单片异常（Lot 超规）
 
-实际对象是 Lot。复用 YieldAnalysisService.get_lot_defect_rates、load_static_warning_lines 和 compute_lot_oos_records，再将超规记录截取上一完整 ISO 周，没有另写良率判据。
+实际对象是 Lot。原 Yield 报表用既有判据生成结果，矩阵读取配置项 `lot_oos_results` 指定的工作簿，再截取上一完整 ISO 周；不再在状态读取路径调用完整 Lot 服务或查询源数据。
 
 ### Yield：趋势波动
 
-复用 get_mwd_trend_data、get_code_level_trend_data 和 AlertService.get_dashboard_alert_records。口径是月／周环比 period 制，不强行截成上一周事件。
+原报表通过 `AlertService.get_dashboard_alert_records` 生成月／周、Group／Code 结构化结果，发布到 `trend_alert_results` 指定的工作簿。矩阵直读当前有效产品结果，仍为 period 制，不强行截成上一周事件。
 
-两行分别传入本指标与产品的 revision。主报表的趋势／Lot／Sheet 分别生成签名，刷新 Lot 不会仅因同产品版本变化而使趋势缓存失效。红灯详情仍按需装配图像输入。
+两行分别保留本指标与产品的 revision，并跟踪结果文件版本、元数据有效性、策略与参考日。没有文件、过期、发布失败或覆盖不足时显示不可用，不回退分析；有效零报警与有效空来源分别保留 ok / no_data。红灯详情仍按需装配图像输入。
 
-矩阵保持 read_only=True 避免修饰表回写；主报表默认模式可能不同。因此复用 application 管路，但不承诺所有顶层条目完全相同。read_only 不等于零计算或禁止读取数据库。
+结果由原报表 application 独立发布，不受 Sheet/Mapping 或图像门控影响；文件解析缓存只负责加速读取。首次全产品补齐可用 `tools/publish_yield_alert_results.py` 调用同一生产用例，不新增调度机制。文件、元数据、生命周期和命令由 [Yield 结果规则](../../yield_domain/shared/rules-yield-alert-results.md) 唯一维护。详情的旧报表调用仍保持 `read_only=True`，不承诺图像读取零计算。
 
 ## indicator_domain：Q-Time 单片异常
 
@@ -80,7 +83,7 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
 **没有整张矩阵计算缓存**。app/components/indicator_cache.py 管理指标／产品 revision，保存于 output/tmp/indicator_product_cache_revisions/，哈希文件名并原子替换。没有 domain 键，也不通过全局 st.cache_data.clear 或整函数 clear 刷新矩阵。
 
-输入签名：四个 OOS 工作簿、CPK 工作簿、Yield 本产品上下文、Q-Time 来源／决策／配置。共享工作簿修改可能使该指标多个产品重新读取；手动推进某指标／产品 revision 则不会推进其他标识。
+输入签名：四个 OOS 工作簿、CPK / CPM 共用能力工作簿、Yield 两个结果工作簿及其读取有效性、Q-Time 来源／决策／配置。共享工作簿修改可能使多个依赖单元格重新读取；手动推进某指标／产品 revision 则不会推进其他标识。
 
 仅 ?admin=true 可见“指标缓存管理（管理员）”、定向刷新按钮、刷新标识和状态计算时间。聚合页关闭旧通用全量刷新入口。七个实际单产品 header 页面已迁移；多输出页显式声明其指标集合，刷新仅作用当前产品，图像 memo 同步跟踪新版本。见 [产品页面缓存审查](../../../../docs/dev_docs/generated/shared_kernel/shared/application-cache-design-audit-by-domain.md)。
 
@@ -95,9 +98,10 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 ## 源码与验证
 
 - app/sections/inline_domain/monitor/alert_matrix_cache.py：来源、单元格键、惰性装配。
-- 同目录 alert_matrix_service.py：八行判据与 CPK 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情。
+- 同目录 alert_matrix_service.py：九行判据与 CPK / CPM 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情。
 - app/components/indicator_cache.py／page_header.py：共享标识与产品页刷新。
 - tests/unit/app/sections/monitor/test_matrix_cell_isolation.py：跨指标／产品与 CPK 直读。
+- tests/unit/app/sections/monitor/test_cpm_matrix.py：CPM 周度判定、独立 sheet、三图及 SPC 页面 application 缓存复用。
 - tests/e2e/fixtures/indicator_product_cache_app.py、tests/e2e/indicator_product_cache.js：真实矩阵／缓存组件的隔离浏览器验收，使用临时 Excel 与计数器，不运行生产数据库查询。
 
 # 全指标预警矩阵定时预计算

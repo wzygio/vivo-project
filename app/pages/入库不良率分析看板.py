@@ -26,7 +26,9 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.components.indicator_cache import build_indicator_product_cache_signature
-from app.components.alert_center import compute_lot_oos_records, render_alert_center, build_trend_context
+from app.components.alert_center import render_alert_center, build_trend_context
+from src.yield_domain.application.alert_publication import generate_yield_alert_publications
+from src.yield_domain.composition import build_yield_alert_results
 from app.components.file_uploader import render_yield_config_uploader
 from app.charts.yield_domain.mwd_chart import (
     prepare_union_data_for_filter
@@ -88,12 +90,6 @@ query_params = st.query_params
 if query_params.get("admin") == "true":
     render_yield_config_uploader(active_config, product_dir)
 active_config = get_dashboard_resource_config(active_config, product_cache_signature)
-try:
-    code_rate_threshold = get_code_monthly_rate_threshold()
-except (ValueError, TypeError, AttributeError):
-    logging.exception("Invalid Yield code image threshold configuration")
-    st.error("图像筛选设置不可用，请检查报表设置后重试。")
-    st.stop()
 # Resource edits (including modifier-table writeback) must not invalidate this
 # page on widget reruns. The header's explicit revision controls synchronization.
 yield_cache_context = YieldAnalysisService.build_cache_context(
@@ -105,52 +101,50 @@ yield_cache_context = YieldAnalysisService.build_cache_context(
 # ==============================================================================
 #  数据加载
 # ==============================================================================
+# Publish prepared alerts before any Sheet/Mapping or chart-only gates.
+with st.spinner("正在加载预警分析数据..."):
+    alert_generation = generate_yield_alert_publications(
+        analysis=YieldAnalysisService,
+        publisher=build_yield_alert_results(),
+        config=active_config,
+        product_dir=product_dir,
+        cache_context=yield_cache_context,
+        trend_signature=product_cache_signature,
+        lot_signature=lot_cache_signature,
+        db_manager=db_manager,
+    )
+mwd_group_data = alert_generation["mwd_group_data"]
+mwd_code_data = alert_generation["mwd_code_data"]
+lot_data = alert_generation["lot_data"]
+warning_lines = alert_generation["warning_lines"]
 displayed_health = []
-for health_signature in dict.fromkeys(
-    (product_cache_signature, lot_cache_signature, sheet_cache_signature)
-):
+for health in alert_generation["health"].values():
+    if health not in displayed_health:
+        render_yield_data_health(health)
+        displayed_health.append(health)
+if alert_generation["publication_errors"]:
+    st.warning("预警结果保存失败，请稍后重试。")
+if alert_generation["errors"]:
+    st.error("Yield 报表数据加载失败，请稍后重试。")
+    st.stop()
+
+try:
+    code_rate_threshold = get_code_monthly_rate_threshold()
+except (ValueError, TypeError, AttributeError):
+    logging.exception("Invalid Yield code image threshold configuration")
+    st.error("图像筛选设置不可用，请检查报表设置后重试。")
+    st.stop()
+
+try:
     health = YieldAnalysisService.get_data_health(
-        active_config,
-        _db_manager=db_manager,
-        snapshot_signature=health_signature,
+        active_config, _db_manager=db_manager, snapshot_signature=sheet_cache_signature,
         analysis_start_date=yield_cache_context["analysis_start_date"],
         analysis_end_date=yield_cache_context["analysis_end_date"],
     )
     if health not in displayed_health:
         render_yield_data_health(health)
         displayed_health.append(health)
-
-try:
     with st.spinner("正在加载全维度分析数据..."):
-        mwd_group_data = YieldAnalysisService.get_mwd_trend_data(
-            active_config,
-            product_dir,
-            _db_manager=db_manager,
-            snapshot_signature=product_cache_signature,
-            analysis_start_date=yield_cache_context["analysis_start_date"],
-            analysis_end_date=yield_cache_context["analysis_end_date"],
-            modifier_signature=yield_cache_context["modifier_signature"],
-        )
-        mwd_code_data = YieldAnalysisService.get_code_level_trend_data(
-            active_config,
-            product_dir,
-            _db_manager=db_manager,
-            snapshot_signature=product_cache_signature,
-            analysis_start_date=yield_cache_context["analysis_start_date"],
-            analysis_end_date=yield_cache_context["analysis_end_date"],
-            modifier_signature=yield_cache_context["modifier_signature"],
-        )
-        lot_data = YieldAnalysisService.get_lot_defect_rates(
-            active_config,
-            product_dir,
-            _db_manager=db_manager,
-            snapshot_signature=lot_cache_signature,
-            analysis_start_date=yield_cache_context["analysis_start_date"],
-            analysis_end_date=yield_cache_context["analysis_end_date"],
-            modifier_signature=yield_cache_context["modifier_signature"],
-            warning_signature=yield_cache_context["warning_signature"],
-            rate_override_signature=yield_cache_context["rate_override_signature"],
-        )
         sheet_data = YieldAnalysisService.get_sheet_defect_rates(
             active_config,
             product_dir,
@@ -170,12 +164,6 @@ try:
             analysis_start_date=yield_cache_context["analysis_start_date"],
             analysis_end_date=yield_cache_context["analysis_end_date"],
             modifier_signature=yield_cache_context["modifier_signature"],
-        )
-        warning_lines = YieldAnalysisService.load_static_warning_lines(
-            active_config,
-            product_dir,
-            lot_cache_signature,
-            warning_signature=yield_cache_context["warning_signature"],
         )
 except (
     YieldDataLoadError,
@@ -213,11 +201,8 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
     )
 
     # 3. Lot 超规扫描
-    oos_records, total_recent_lots = compute_lot_oos_records(
-        lot_data=lot_data,
-        warning_lines=warning_lines,
-        time_period=30
-    )
+    oos_records = alert_generation["lot_records"]
+    total_recent_lots = alert_generation["total_recent_lots"]
 
     # 4. 统一渲染
     render_alert_center(
@@ -232,10 +217,7 @@ with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦
     )
 
     # 5. 自动预警缺陷图像：对趋势波动与 Lot 超规命中的 Defect Code 自动出图
-    alert_records = AlertService.get_dashboard_alert_records(
-        mwd_group_data=mwd_group_data,
-        mwd_code_data=mwd_code_data,
-    )
+    alert_records = alert_generation["trend_records"]
     render_alert_code_expanders(
         trend_records=alert_records,
         lot_oos_records=oos_records,

@@ -88,6 +88,19 @@ def test_build_alerts_excludes_true_delete_and_out_of_window() -> None:
     assert list(alerts["Sheet ID"]) == ["S6"]
 
 
+def test_old_tt_alert_details_exclude_spc_ppa_parameters() -> None:
+    frame = pd.DataFrame([
+        _decoration_row(tt_name="offset_ppa_y", sheet_id="PPA-SHEET"),
+        _decoration_row(),
+    ])
+    original = frame.copy(deep=True)
+
+    alerts = build_aoi_tt_sheet_oos_alerts(frame, reference_date=REF)
+
+    assert alerts["TT名称"].tolist() == ["TDSUM"]
+    pd.testing.assert_frame_equal(frame, original)
+
+
 def test_build_alerts_accepts_datetime_and_string_time_column() -> None:
     df = pd.DataFrame(
         [

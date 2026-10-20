@@ -59,6 +59,8 @@ from src.shared_kernel.utils.excel_tools import (
 )
 
 SPC_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
+SPC_REPORT_CACHE_SIGNATURE = "spc_saved_capability_alerts_v5"
+SPC_REPORT_CACHE_INDICATORS = ("spc_sheet_oos", "spc_cpk_trend", "spc_cpm_trend")
 CPK_ALERT_THRESHOLD = 1.33
 CPK_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "超规周次", "CPK值"]
 CPM_ALERT_THRESHOLD = 1.33

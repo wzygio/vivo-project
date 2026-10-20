@@ -94,6 +94,27 @@ def test_aoi_tt_repository_projects_only_step_parameter_pairs_from_shared_raw_da
     ]
 
 
+@pytest.mark.parametrize("parameter", ["PPA_B_X", "offset_ppa_y", " Ppa "])
+def test_ppa_with_missing_spec_type_never_enters_tt_details_or_limits(parameter: str) -> None:
+    raw = pd.DataFrame([
+        _tt_fact(param_name=parameter, param_value=20),
+        _tt_fact(param_name="TDSUM", param_value=10),
+    ])
+    specs = raw[["prod_code", "step_id", "param_name"]].assign(
+        param_type=None, usl=5, ucl=3,
+    )
+    repository = AoiTtRepository(
+        raw_measurements=SimpleNamespace(get_measurements=lambda *_args: raw),
+        metadata=SimpleNamespace(get_parameter_specs=lambda _product: specs),
+    )
+
+    details = repository.get_tt_details(_query())
+    limits = repository.get_tt_spec_limits("Z517")
+
+    assert details.tt_name.tolist() == ["TDSUM"]
+    assert limits.tt_name.tolist() == ["TDSUM"]
+
+
 def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
     query = AoiTtQueryConfig(
         prod_code="M678",

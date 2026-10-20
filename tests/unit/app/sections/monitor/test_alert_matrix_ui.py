@@ -31,7 +31,7 @@ from app.sections.yield_domain import yield_dashboard
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "alert_matrix_app.py"
 
 PRODUCTS = ["M678", "Z571"]
-ROW_COUNT = 8  # PRD §3.1 八行
+ROW_COUNT = 9  # 原八行 + CPM
 
 
 def _new_app(nonce: str) -> AppTest:
@@ -428,15 +428,17 @@ def test_click_error_cell_shows_message_without_loading(
     assert factory_calls == []
 
 
+@pytest.mark.parametrize("row_key", ["qtime_sheet_oos", "spc_cpm_trend"])
 def test_detail_loader_failure_degrades_without_breaking_matrix(
     monkeypatch: pytest.MonkeyPatch,
+    row_key: str,
 ) -> None:
     def raising_loader(prod_code: str, reference_date: date) -> dict:
         raise RuntimeError("数据库连接失败")
 
-    _inject_loaders(monkeypatch, {"qtime_sheet_oos": raising_loader})
-    app = _new_app("loader-error").run()
-    app.button(key=matrix_cell_button_key("qtime_sheet_oos", "M678")).click().run()
+    _inject_loaders(monkeypatch, {row_key: raising_loader})
+    app = _new_app(f"loader-error-{row_key}").run()
+    app.button(key=matrix_cell_button_key(row_key, "M678")).click().run()
 
     assert not app.exception
     assert any("预警详情加载失败" in e.value for e in app.error)
@@ -514,8 +516,10 @@ def test_spc_sheet_oos_detail_wires_alert_table_and_charts(
     assert kwargs["reference_date"] == date(2026, 8, 31)
 
 
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
 def test_spc_cpk_detail_wires_capability_alert_pipeline(
     monkeypatch: pytest.MonkeyPatch,
+    metric: str,
 ) -> None:
     rendered: list[dict] = []
     monkeypatch.setattr(
@@ -523,21 +527,22 @@ def test_spc_cpk_detail_wires_capability_alert_pipeline(
         "render_spc_indicator_sections",
         lambda **kwargs: rendered.append(kwargs),
     )
-    _inject_loaders(
-        monkeypatch, {"spc_cpk_trend": lambda prod_code, reference_date: _spc_cpk_bundle()}
-    )
-    app = _new_app("wiring-cpk")
-    app.session_state[MATRIX_SELECTION_STATE_KEY] = "spc_cpk_trend|M678"
+    bundle = _spc_cpk_bundle()
+    bundle["kind"] = f"spc_{metric}"
+    bundle["alerts_df"] = bundle["alerts_df"].rename(columns={"CPK值": f"{metric.upper()}值"})
+    _inject_loaders(monkeypatch, {f"spc_{metric}_trend": lambda *args: bundle})
+    app = _new_app(f"wiring-{metric}")
+    app.session_state[MATRIX_SELECTION_STATE_KEY] = f"spc_{metric}_trend|M678"
     app.run()
 
     assert not app.exception
-    assert any("CPK 预警明细" in e.label for e in app.expander)
-    assert any("检测到 1 条 CPK 预警" in e.value for e in app.error)
+    assert any(f"{metric.upper()} 预警明细" in e.label for e in app.expander)
+    assert any(f"检测到 1 条 {metric.upper()} 预警" in e.value for e in app.error)
     assert len(rendered) == 1
     kwargs = rendered[0]
-    assert kwargs["chart_key_prefix"] == "matrix_detail_spc_cpk"
-    assert kwargs["memo_state_key"] == "matrix_detail_cpk_charts_memo"
-    assert kwargs["memo_signature"].startswith("matrix_detail|spc_cpk_trend|M678|")
+    assert kwargs["chart_key_prefix"] == f"matrix_detail_spc_{metric}"
+    assert kwargs["memo_state_key"] == f"matrix_detail_{metric}_charts_memo"
+    assert kwargs["memo_signature"].startswith(f"matrix_detail|spc_{metric}_trend|M678|")
     assert kwargs["reference_date"] == date(2026, 8, 31)
 
 
@@ -677,6 +682,7 @@ def test_factory_filter_slices_alert_cell_state() -> None:
     assert buttons[matrix_cell_button_key("spc_sheet_oos", "M678")].label == "🔴"
     # spc_cpk M678 alert_factories=["TP"] → 🟢
     assert buttons[matrix_cell_button_key("spc_cpk_trend", "M678")].label == "🟢"
+    assert buttons[matrix_cell_button_key("spc_cpm_trend", "M678")].label == "🟢"
     # yield 趋势波动行不支持厂别细分 → 保持原状态 🔴
     assert (
         buttons[matrix_cell_button_key("yield_trend_fluctuation", "M678")].label == "🔴"

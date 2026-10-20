@@ -54,6 +54,7 @@ def test_row_registry_matches_prd_order() -> None:
         "aoi_tt_sheet_oos",
         "spc_sheet_oos",
         "spc_cpk_trend",
+        "spc_cpm_trend",
         "ctq_sheet_oos",
         "yield_lot_oos",
         "yield_trend_fluctuation",
@@ -413,7 +414,8 @@ PREV_WEEK_LABEL = "2026-W35"  # 参考日 2026-09-02 的上一 ISO 周
     ("2026-08-25 23:59:59", CELL_STATE_OK),
     ("2026-08-26 00:00:00", CELL_STATE_ALERT),
 ])
-def test_spc_cpk_matrix_respects_sheet_span(end, expected):
+def test_spc_cpk_matrix_respects_sheet_span(end, expected, monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "get_spc_capability_alert_min_span_hours", lambda: 48.0)
     row = {**_cpk_row(PREV_WEEK_LABEL, 1.1), "period_end": end}
     context = _make_context(spc_cpk_loader=lambda prod: pd.DataFrame([row]))
     assert _evaluate("spc_cpk_trend", context)["state"] == expected
@@ -792,7 +794,7 @@ def test_cache_ttl_is_read_from_global_config() -> None:
 
 
 def test_default_signature_components_cover_all_dimensions(monkeypatch) -> None:
-    monkeypatch.setattr(cache_module, "build_cell_source_signature", lambda row, prod: f"{row}-{prod}")
+    monkeypatch.setattr(cache_module, "build_cell_source_signature", lambda row, prod, *args: f"{row}-{prod}")
 
     components = cache_module.build_default_signature_components(["M678"])
 

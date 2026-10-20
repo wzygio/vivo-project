@@ -2,6 +2,7 @@
 
 - Status: Accepted (user-approved integration into master on 2026-09-24)
 - Date: 2026-09-24
+- Update (2026-10-20): [ADR-0035](0035-published-alert-results-for-matrix.md) supersedes the matrix-status cache-warming assumption below. Matrix status now reads published result files. The all-product board retains its read-only application cache, query gate, and fragments; matrix status no longer primes Group entries. The original verification below records the September implementation.
 - Scope: 自动预警页面的全产品 Group 月周日趋势
 
 ## Context

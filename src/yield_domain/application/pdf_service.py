@@ -35,7 +35,7 @@ class PDFService:
         if not pdf_path.exists():
             err_msg = f"错误：找不到 PDF 文件 -> {pdf_path}"
             logging.error(err_msg)
-            st.error(err_msg)
+            st.error("文件暂时无法读取，请刷新列表后重试。")
             return False
 
         # 3. 清理并重建输出目录
@@ -76,7 +76,7 @@ class PDFService:
         except Exception as e:
             err_msg = f"PDF 转换失败: {e}"
             logging.error(err_msg)
-            st.error(err_msg)
+            st.error("PDF 预览生成失败，请确认文件可正常打开后重试。")
             return False
         
         finally:

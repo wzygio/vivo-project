@@ -131,6 +131,15 @@ def test_exemption_configuration_invalidates_report_cache(
             return pd.DataFrame()
         get_rs_details = get_tt_details
 
+        def get_pass_through(self, query: object) -> pd.DataFrame:
+            return pd.DataFrame()
+
+        def get_rs_spec_limits(self, prod_code: str) -> pd.DataFrame:
+            return pd.DataFrame()
+
+        def get_tt_spec_limits(self, prod_code: str) -> pd.DataFrame:
+            return pd.DataFrame()
+
     if scope == "aoi_tt":
         service, query_type = AoiTtReportService, AoiTtQueryConfig
     else:

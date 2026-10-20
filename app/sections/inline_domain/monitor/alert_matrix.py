@@ -364,8 +364,12 @@ def _refresh_matrix(indicator: str, product: str, refresh_data: bool) -> None:
             from src.inline_domain.infrastructure.monitor.excel_alarm_store import clear_alarm_workbook_cache
             from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 
-            if indicator == "spc_cpk_trend":
+            if indicator in ("spc_cpk_trend", "spc_cpm_trend"):
                 clear_cpk_source_cache()
+            elif indicator in ("yield_lot_oos", "yield_trend_fluctuation"):
+                from src.yield_domain.infrastructure.alert_result_workbooks import clear_yield_alert_workbook
+                key = "lot_oos_results" if indicator == "yield_lot_oos" else "trend_alert_results"
+                clear_yield_alert_workbook(ConfigLoader.get_domain_resource_path("yield_domain", key))
             elif indicator.endswith("_sheet_oos") and indicator != "qtime_sheet_oos":
                 clear_alarm_workbook_cache(scope_decoration_path(indicator.removesuffix("_sheet_oos")))
         bump_indicator_product_revision(indicator, product)

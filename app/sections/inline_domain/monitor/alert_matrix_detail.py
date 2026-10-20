@@ -8,7 +8,7 @@
   详情额外跟踪规格、修饰与趋势/Lot/Sheet 版本，同一版输入再次打开命中缓存；
 - **ADR-0001**：详情数据包只含原生载荷（DataFrame / dict / list / 标量），
   各域 ViewModel 在缓存边界外即时消费，不进入缓存；
-- **图像复用**：CPK 按台账预警键加载 SPC 原图；与
+- **图像复用**：CPK / CPM 按台账预警键加载 SPC 原图；与
   SPC 单片异常一起走 ``render_spc_indicator_sections`` 的
   RenderGate ``collect_memoized``；CTQ 走 ``render_ctq_indicator_sections``
   （同款 memo 参数）；Yield 走 ``render_alert_code_expanders``
@@ -43,6 +43,7 @@ from app.sections.inline_domain.monitor.alert_matrix_cache import (
     YIELD_SNAPSHOT_SIGNATURE_BASE,
     load_all_product_qtime_monitoring,
     cpk_latest_store,
+    cpm_latest_store,
 )
 from app.sections.inline_domain.monitor.alert_matrix_service import (
     CELL_STATE_ALERT,
@@ -50,7 +51,7 @@ from app.sections.inline_domain.monitor.alert_matrix_service import (
     CELL_STATE_NO_DATA,
     CELL_STATE_OK,
     build_alert_matrix_signature,
-    build_latest_cpk_alerts,
+    build_latest_capability_alerts,
 )
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
@@ -195,13 +196,17 @@ def _load_sheet_oos_alerts_display(
 
 def _load_spc_view(db_manager: Any, prod_code: str):
     """SPC 报表 ViewModel（复用 SPC 页装配；payload 层 L2 缓存）。"""
-    from app.sections.inline_domain.spc.spc_dashboard import get_default_spc_start_date
+    from app.sections.inline_domain.spc.spc_dashboard import (
+        SPC_REPORT_CACHE_INDICATORS,
+        SPC_REPORT_CACHE_SIGNATURE,
+        get_default_spc_start_date,
+    )
     from src.inline_domain.application.shared.decision_signature import (
         get_scope_decision_signature,
     )
     from src.inline_domain.application.spc.dtos import SpcQueryConfig
     from src.inline_domain.application.spc.spc_service import SpcReportService
-    from src.inline_domain.composition import build_spc_repository
+    from src.inline_domain.composition import build_spc_input_signature, build_spc_repository
 
     end_date = _report_end_date()
     start_date = get_default_spc_start_date(end_date)
@@ -212,12 +217,12 @@ def _load_spc_view(db_manager: Any, prod_code: str):
         data_type_filter="SPC",
     )
     product_signature = build_indicator_product_cache_signature(
-        MATRIX_CACHE_BASE_SIGNATURE, prod_code, ("spc_sheet_oos", "spc_cpk_trend")
+        SPC_REPORT_CACHE_SIGNATURE, prod_code, SPC_REPORT_CACHE_INDICATORS,
     )
     return SpcReportService.get_spc_report_data(
         _data_port=build_spc_repository(db_manager, prod_code),
         query_config_json=query_config.model_dump_json(),
-        snapshot_signature=product_signature,
+        snapshot_signature=f"{product_signature}:{build_spc_input_signature(prod_code)}",
         period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
         product_revision=product_signature,
         decision_signature=get_scope_decision_signature("spc", prod_code),
@@ -377,11 +382,16 @@ def _make_sheet_oos_loader(scope: str, db_manager: Any) -> DetailLoader:
 
 
 def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
+    return _make_spc_capability_loader(db_manager, metric="cpk")
+
+
+def _make_spc_capability_loader(db_manager: Any, *, metric: str) -> DetailLoader:
     """保留台账预警判据，按命中指标加载 SPC 页面使用的三图数据。"""
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
-        frame = cpk_latest_store().read_product(prod_code)
-        alerts_df = (build_latest_cpk_alerts(frame, reference_date)
+        store = cpk_latest_store() if metric == "cpk" else cpm_latest_store()
+        frame = store.read_product(prod_code)
+        alerts_df = (build_latest_capability_alerts(frame, reference_date, metric=metric)
                      if frame is not None and not frame.empty else pd.DataFrame())
         frames = {
             name: pd.DataFrame()
@@ -398,7 +408,7 @@ def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
                 for name in frames
             }
         return {
-            "kind": "spc_cpk",
+            "kind": f"spc_{metric}",
             "alerts_df": alerts_df,
             "frames": frames,
             "end_date": _report_end_date().isoformat(),
@@ -409,6 +419,7 @@ def _make_spc_cpk_loader(db_manager: Any) -> DetailLoader:
 
 def _spc_detail_signature(prod_code: str, cell_signature: str) -> str:
     """三图数据跟踪 SPC 输入版本，独立于矩阵台账判据缓存。"""
+    from app.sections.inline_domain.spc.spc_dashboard import SPC_REPORT_CACHE_INDICATORS
     from src.inline_domain.application.shared.decision_signature import (
         get_scope_decision_signature,
     )
@@ -417,7 +428,7 @@ def _spc_detail_signature(prod_code: str, cell_signature: str) -> str:
         "cell": cell_signature,
         "revision": build_indicator_product_cache_signature(
             "spc_detail_indicator_charts_v1", prod_code,
-            ("spc_sheet_oos", "spc_cpk_trend"),
+            SPC_REPORT_CACHE_INDICATORS,
         ),
         "decision": get_scope_decision_signature("spc", prod_code),
         "end_date": _report_end_date().isoformat(),
@@ -591,6 +602,7 @@ def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoad
         "aoi_tt_sheet_oos": _make_sheet_oos_loader("aoi_tt", db_manager),
         "spc_sheet_oos": _make_sheet_oos_loader("spc", db_manager),
         "spc_cpk_trend": _make_spc_cpk_loader(db_manager),
+        "spc_cpm_trend": _make_spc_capability_loader(db_manager, metric="cpm"),
         "ctq_sheet_oos": _make_sheet_oos_loader("ctq", db_manager),
         "yield_lot_oos": _make_yield_loader(db_manager, "lot"),
         "yield_trend_fluctuation": _make_yield_loader(db_manager, "trend"),
@@ -729,7 +741,7 @@ def _render_sheet_oos_detail(
             )
 
 
-def _render_spc_cpk_detail(
+def _render_spc_capability_detail(
     bundle: Mapping[str, Any],
     *,
     row_key: str,
@@ -737,23 +749,27 @@ def _render_spc_cpk_detail(
     week_label: str,
     step_desc_map: dict[str, str] | None,
     memo_base: str,
+    metric: str = "cpk",
 ) -> None:
     from app.sections.inline_domain.spc.spc_dashboard import (
         CPK_ALERT_THRESHOLD,
+        CPM_ALERT_THRESHOLD,
         render_spc_indicator_sections,
     )
     from app.utils.step_labels import format_step_label
 
     alerts_df = bundle["alerts_df"]
     frames = bundle["frames"]
+    label = metric.upper()
+    threshold = CPK_ALERT_THRESHOLD if metric == "cpk" else CPM_ALERT_THRESHOLD
     with st.expander(
-        f"CPK 预警明细（上一周 {week_label}，CPK < {CPK_ALERT_THRESHOLD:.2f}）",
+        f"{label} 预警明细（上一周 {week_label}，{label} < {threshold:.2f}）",
         expanded=True,
     ):
         if alerts_df.empty:
-            st.caption("当前已无上一周 CPK 预警（数据可能已更新）。")
+            st.caption(f"当前已无上一周 {label} 预警（数据可能已更新）。")
             return
-        st.error(f"检测到 {len(alerts_df)} 条 CPK 预警，请关注。")
+        st.error(f"检测到 {len(alerts_df)} 条 {label} 预警，请关注。")
         display_df = alerts_df
         if step_desc_map and "站点" in alerts_df.columns:
             display_df = alerts_df.copy()
@@ -763,7 +779,7 @@ def _render_spc_cpk_detail(
         st.dataframe(
             display_df,
             column_config={
-                "CPK值": st.column_config.NumberColumn("CPK值", format="%.3f")
+                f"{label}值": st.column_config.NumberColumn(f"{label}值", format="%.3f")
             },
             hide_index=True,
             width="stretch",
@@ -773,15 +789,15 @@ def _render_spc_cpk_detail(
         st.warning("预警指标暂无可绘制的 Sheet 数据。")
         return
     count = _indicator_count(frames["sheet_features_df"], ["factory", "step_id", "param_name"])
-    with st.expander(f"🚨 CPK 自动预警指标图像（{count} 个指标）", expanded=True):
+    with st.expander(f"🚨 {label} 自动预警指标图像（{count} 个指标）", expanded=True):
         render_spc_indicator_sections(
             period_capability_df=frames["period_capability_df"],
             sheet_features_df=frames["sheet_features_df"],
             raw_measurements_df=frames["raw_measurements_df"],
             period_box_source=ConfigLoader.get_spc_period_box_source(),
             memo_signature=_detail_charts_signature(row_key, prod_code, alerts_df, memo_base),
-            memo_state_key="matrix_detail_cpk_charts_memo",
-            chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_spc_cpk",
+            memo_state_key=f"matrix_detail_{metric}_charts_memo",
+            chart_key_prefix=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_spc_{metric}",
             step_desc_map=step_desc_map,
             reference_date=date.fromisoformat(bundle["end_date"]),
         )
@@ -893,14 +909,15 @@ def _render_detail_bundle(
             step_desc_map=step_desc_map,
             memo_base=memo_base,
         )
-    elif kind == "spc_cpk":
-        _render_spc_cpk_detail(
+    elif kind in ("spc_cpk", "spc_cpm"):
+        _render_spc_capability_detail(
             bundle,
             row_key=row_key,
             prod_code=prod_code,
             week_label=week_label,
             step_desc_map=step_desc_map,
             memo_base=memo_base,
+            metric="cpm" if kind == "spc_cpm" else "cpk",
         )
     elif kind == "yield":
         _render_yield_detail(
@@ -983,7 +1000,7 @@ def render_alert_matrix_detail(
         try:
             if row_key.startswith("yield_"):
                 memo_base = _yield_detail_signature(prod_code, memo_base)
-            elif row_key in ("spc_cpk_trend", "spc_sheet_oos"):
+            elif row_key in ("spc_cpk_trend", "spc_cpm_trend", "spc_sheet_oos"):
                 memo_base = _spc_detail_signature(prod_code, memo_base)
             elif row_key == "qtime_sheet_oos":
                 memo_base = f"{memo_base}|qtime-indicator-charts-v1"

@@ -8,6 +8,10 @@ from typing import Protocol
 from src.inline_domain.application.shared.ooc_history_service import OocHistoryService
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService, OosProductRead
 from src.inline_domain.core.monitor.excel_contract import ExcelAlarmReadError
+from src.inline_domain.core.monitor.monitor_param_classifier import (
+    PARAM_CLASSIFICATION_SIGNATURE,
+    is_ppa_parameter,
+)
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -33,9 +37,13 @@ class ExcelAlarmReader:
         return True
 
     def source_signature(self, products: list[str], scopes: list[str]) -> str:
-        return self.alarm_type + ":" + self._store.source_signature(products, scopes) + ":" + repr(
-            ConfigLoader.get_inline_data_exclusion(),
-        )
+        parts = [
+            PARAM_CLASSIFICATION_SIGNATURE,
+            self.alarm_type,
+            self._store.source_signature(products, scopes),
+            repr(ConfigLoader.get_inline_data_exclusion()),
+        ]
+        return ":".join(parts)
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
         payload = self._store.read(scope, prod_code)
@@ -47,6 +55,10 @@ class ExcelAlarmReader:
         if "Flag" in frame.columns and "flag" not in frame.columns:
             frame = frame.rename(columns={"Flag": "flag"})
         self._validate(scope, prod_code, frame)
+        if scope == "aoi_tt" and "tt_name" in frame:
+            # Old generated sheets may still contain PPA facts. Keep persisted
+            # decisions intact and apply the same ownership rule on read.
+            frame = frame.loc[~frame["tt_name"].map(is_ppa_parameter)].copy()
         projected = self._projector.project_detail(scope, frame)
         if scope == "aoi_rs" and "chart_kind" in frame:
             projected["chart_kind"] = frame["chart_kind"].reindex(projected.index).to_numpy()

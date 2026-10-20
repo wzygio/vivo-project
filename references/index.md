@@ -22,13 +22,16 @@
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |
+| AOI_TT 上周平均每片 TT 个数、八产品 PPT、粒径及 Array 层别筛选 | [AOI_TT 周度报告](domain/inline_domain/aoi_tt/rules-aoi-tt-weekly-report.md) |
 | AOI_TT 昨日趋势预警、粒径独立判定、五天均值、七天跨日比较与精简预警中心 | [AOI_TT 趋势预警规则](domain/inline_domain/aoi_tt/rules-aoi-tt-trend-alerts.md) |
 | AOI_RS 来源表、RS Code、分母与计数口径 | [AOI_RS 数据源](domain/inline_domain/aoi_rs/data-source-aoi-rs.md) |
+| AOI_RS 上一周平均每片 RS 个数、PPT 模板、无过货、Array 层别及站点筛选 | [AOI_RS 周度报告](domain/inline_domain/aoi_rs/rules-aoi-rs-weekly-report.md) |
 | AOI_RS 昨日趋势预警、当日超规、连续两日上升、五天均值、七天跨日比较、1.2倍、缺测与自动图像 | [AOI_RS 趋势预警规则](domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md) |
 | AOI_RS 专用顺序修饰、厂别日期窗口、Sheet 半规格、Lot 归零、周日1.3倍限幅 | [AOI_RS 专用修饰规则](domain/inline_domain/aoi_rs/rules-aoi-rs-special-decoration.md) |
 | Inline Sheet OOS、三态修饰、人工台账与执行机制 | [Sheet OOS 规则](domain/inline_domain/shared/rules-sheet-oos-decoration.md) |
 | Step_ID → Data_Type、SPC / CTQ / AOI 站点分类 | [站点类型映射](domain/inline_domain/shared/mapping-step-id-data-type.json) |
 | Yield 良率分析职责与分层 | [Yield 概览](domain/yield_domain/shared/overview-yield.md) |
+| Yield Lot/趋势预警结果文件、原报表发布、空结果/失败元数据、矩阵直读与全产品补齐 | [Yield 预警结果规则](domain/yield_domain/shared/rules-yield-alert-results.md) |
 | Mapping 坐标、矩阵修饰、随机分布与守恒 | [Mapping 算法](domain/yield_domain/mapping/algorithm-mapping.md) |
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/mwd_trend/algorithm-mwd-trend.md) |
 | Sheet / Lot 不良率、热点分配与覆盖率计算 | [Sheet / Lot 算法](domain/yield_domain/sheet_lot/algorithm-sheet-lot.md) |
@@ -49,6 +52,7 @@
 | Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间；Streamlit 定时启动/重启、Windows 计划任务及进程清理 | [系统数据刷新机制](design/shared_kernel/shared/data-flow-infrastructure-refresh.md) |
 | 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/shared_kernel/shared/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
+| 门户节点、Inline指标、寿命测试入口、专项资料合并、台账周报与解析报告上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |
 
 共享工程标准按任务使用 `$ecc-production-rules`；文档职责与维护规则见 [CONTEXT.md](../CONTEXT.md#maintenance-and-document-ownership)。

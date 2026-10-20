@@ -107,3 +107,24 @@ def test_aoi_rs_point_projection_and_refresh_metadata(tmp_path):
     assert result.alerts_df.iloc[0]["item_id"] == "LOT1"
     assert result.alerts_df.iloc[0]["chart_kind"] == "lot"
     assert result.refreshed_at == pd.Timestamp("2026-09-08 07:00")
+
+
+@pytest.mark.parametrize("alarm", ["oos", "ooc"])
+@pytest.mark.parametrize("tt_names", [["PPA_B_X"], ["PPA_B_X", "TDSUM"]])
+def test_existing_tt_workbook_excludes_ppa_without_rewriting_decisions(tmp_path, alarm, tt_names):
+    path = tmp_path / "alarms.xlsx"
+    frame = pd.DataFrame([
+        dict(factory="ARRAY", prod_code="M626", step_id="100", tt_name=name,
+             sheet_id=f"S{index}", start_time="2026-09-08", tt_qty=10,
+             usl=5, ucl=3, ooc_type="UCL", flag=False)
+        for index, name in enumerate(tt_names)
+    ])
+    write_book(path, frame)
+    original = path.read_bytes()
+
+    result = reader(path, alarm, scope="aoi_tt").read_product("aoi_tt", "M626")
+
+    expected = [name for name in tt_names if name == "TDSUM"]
+    assert result.decorated_df.metric_name.tolist() == expected
+    assert result.alerts_df.metric_name.tolist() == expected
+    assert path.read_bytes() == original

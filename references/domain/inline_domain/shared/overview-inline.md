@@ -177,19 +177,7 @@ OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示
 
 ### 5.2 [`monitor_param_classifier.py`](../../../../src/inline_domain/core/monitor/monitor_param_classifier.py) — 参数类型分类器
 
-纯函数，无 I/O 依赖。将 `IMP_SPC_TZBJX` 表中的原始 `data_type` 值映射为标准分类标签。
-
-```python
-def classify_param_type(raw_data_type: Optional[str]) -> str:
-    # NULL / 空字符串 / 仅空白 → "AOI"
-    # 其他 → 去空白后转大写 (如 "spc" → "SPC")
-```
-
-| 输入 (DB raw) | 输出 (标准标签) |
-|---------------|----------------|
-| `None` / `""` / `"  "` | `AOI` |
-| `"SPC"` / `"spc"` | `SPC` |
-| `"CTQ"` / `"ctq"` | `CTQ` |
+纯函数，无 I/O 依赖。`classify_param_type(raw_data_type, param_name=None)` 根据参数名及 `IMP_SPC_TZBJX.data_type` 归类。分类优先级与 PPA 归属由 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配参数白名单与-spc-分类) 维护；AOI_TT 投影也复用同一 PPA 识别函数。
 
 ### 5.3 `core/shared/` — 共享修饰引擎
 
@@ -453,8 +441,8 @@ shared/measurement_preparation.py               ← 筛选在此层消费
   ├─ ① catalog = metadata.get_parameter_catalog(prod_code)
   │     └→ DAO: SELECT parmtername, data_type FROM IMP_SPC_TZBJX（裸查询）
   │
-  ├─ ② catalog["data_type"] = catalog["data_type"].apply(classify_param_type)
-  │     └→ Core: NULL/空 → "AOI", else → UPPER（纯函数，无 I/O）
+  ├─ ② 根据 data_type + ref_param_name 调用 classify_param_type，归类后去重
+  │     └→ Core: 按 §5.2 路由的参数分类规则执行（纯函数，无 I/O）
   │
   ├─ ③ if filter != "ALL": catalog = catalog[... == filter]
   │     └→ 制备层: 按 data_type_filter 内存筛选（不下沉到 DAO）

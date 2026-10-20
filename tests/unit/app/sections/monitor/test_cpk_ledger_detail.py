@@ -19,7 +19,8 @@ def ledger():
         ("TP", "2026-W01", 1.5, False),
     ]:
         rows.append(dict(prod_code="P1", factory=factory, step_id="100", param_name="CD",
-                         period_type="week", period_label=week, cpk_corrected=value, flag=flag))
+                         period_type="week", period_label=week, cpk_corrected=value, flag=flag,
+                         period_start="2025-12-29", period_end="2025-12-31"))
     return normalize_latest_cpk(pd.DataFrame(rows), "P1")
 
 

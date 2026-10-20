@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import streamlit as st
 
+from src.inline_domain.core.monitor.monitor_param_classifier import (
+    PARAM_CLASSIFICATION_SIGNATURE,
+)
 from src.inline_domain.core.spc.spc_calculator import (
     PERIOD_SIGMA_SOURCE_POINT_VALUE,
     build_period_capability_report,
@@ -365,7 +368,7 @@ class SpcReportService:
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
-            snapshot_signature=snapshot_signature,
+            snapshot_signature=f"{PARAM_CLASSIFICATION_SIGNATURE}:{snapshot_signature}",
             period_sigma_source=period_sigma_source,
             product_revision=product_revision,
             decision_signature=decision_signature,

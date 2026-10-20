@@ -13,7 +13,7 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 | 明细表 | `eda.spc_tzbjx_rs_{array,oled,tsp}` | `eda.spc_tzbjx_{array,oled,tsp}`（SPC 测量明细表） |
 | 测量值 | `code_qty`（RS Code 个数，加和） | `param_value`（AOI Total Defect 个数，整数计数） |
 | 指标粒度 | 厂别+站点+RS Code(rs_code) | 厂别+站点+TT(param_name) |
-| 指标识别 | 明细表 rs_code 全量 | **规格表 `param_type IS NULL` 的 (step,param) 组合即 TT 参数全集**（见 §1-A） |
+| 指标识别 | 明细表 rs_code 全量 | **规格表 `param_type IS NULL` 的 (step,param) 组合，并排除名称包含 PPA 的参数**（见 §1-A） |
 | 规格表 | `mdw.dwd_imp_rs_code_xishu_fo_tzsbjx`（type_flag 区分图类型） | `mdw.dwd_imp_dv_param_spec`（粒度 prod+step+param，取 **USL/UCL** 两条上限线，适用全部图） |
 | 趋势分母 | 过货视图 distinct sheet（按站点过滤） | **测量表自身 distinct sheet**（过货视图不含 AOI 站点记录，见 §2-2） |
 | 筛选框 | 厂别、站点、Code 名称 | 厂别、站点、Code 名称 + Particle Size（ARRAY/TP：Total/S/M/L/H；OLED：Total） |
@@ -54,7 +54,22 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 规格表 `mdw.dwd_imp_dv_param_spec` 中 `param_type IS NULL` 的 72 行全部是 AOI TT 参数
 （TDSUM/DSUM_L/DSUM_O/TOTAL_O_L × 8 产品 × 7 站点），与测量表中实际出现的 TT 参数
 （`%SUM%` 命名）完全对应。因此以规格表 `param_type IS NULL` 的 (prod_code, step_id, param_name)
-驱动 TT 明细查询。风险：若未来其它 `param_type IS NULL` 的非 TT 参数入表会混入，届时需收紧规则。
+驱动 TT 明细查询。这是 2026-08-10 探查时的事实，不保证后续空类型参数仍全部属于 TT。当前已收紧识别，PPA 归属 SPC，执行规则见 [TT 参数识别](data-flow-aoi-tt.md#43-tt-参数识别)。
+
+#### SPC 与 AOI_TT 的分类字段及重复归属原因
+
+修复前，两条链路使用不同来源的分类字段，彼此没有互斥判断：
+
+| 链路 | 分类依据 | 修复前的判定方式 |
+| --- | --- | --- |
+| SPC | 产品参数白名单 `eda.IMP_SPC_TZBJX.data_type` | 按产品取得白名单，将类型去首尾空白并转大写；SPC 请求只接收类型为 `SPC` 的参数，不检查名称是否包含 PPA |
+| AOI_TT | 参数规格 `mdw.dwd_imp_dv_param_spec.param_type` | 将类型为 NULL 的产品、站点、参数组合纳入 TT，不核对该参数在 SPC 白名单中的类型 |
+
+因此，**若某个 PPA 参数的白名单 `data_type='SPC'`，同时规格 `param_type IS NULL`，它会同时进入 SPC 和 AOI_TT**。在 AOI_TT 中出现 PPA，不表示它被从 SPC 转移到了 AOI_TT，也不能据此认定 SPC 漏收了它。
+
+原分类器遇到白名单类型为空时返回 `AOI` 标签；这个标签不等于已经通过 AOI_TT 的规格筛选。以上是代码条件推导，本次修复未查询生产库中的实际白名单与规格，不能据此断言具体产品的 PPA 当时满足哪组条件。
+
+修复后，PPA 的优先归属按 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配参数白名单与-spc-分类) 执行；AOI_TT 的明细、规格及旧结果预警读取均排除 PPA。旧 TT 结果不会直接转换成 SPC 特征，SPC 预警仍使用自身链路生成的结果。
 
 ### B. By Lot 维度 ✅
 
@@ -76,7 +91,7 @@ AOI_TT 报表与 AOI_RS 报表同构（样式完全一致），差异在于：
 | `usl` | 规格上限（如 M626 12620 TDSUM usl=770） |
 | `ucl` | 管控上限（如 ucl=500） |
 | `lsl`/`lcl`/`target`/`cl`/`sigma_*` | TT 为越小越好型，不用 |
-| `param_type` | TT 参数恒为 NULL（即 §1-A 的识别规则） |
+| `param_type` | NULL 是 TT 候选条件，仍须执行 §1-A 的 PPA 排除规则；不能单凭 NULL 断言参数属于 TT |
 
 样例（M626）：`11620 TDSUM usl=618 ucl=468`、`12620 TDSUM usl=770 ucl=500`、`13620 TDSUM usl=1308 ucl=600`、`21320 DSUM_L/DSUM_O/TOTAL_O_L usl=1700 ucl=1300`、`43620 TDSUM usl=4999 ucl=4500`。
 8 个产品（M626/M673/M678/Z517/Z553/Z559/Z571/Z576）× 7 站点均有规格行。

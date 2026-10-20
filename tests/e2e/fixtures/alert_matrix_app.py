@@ -2,7 +2,7 @@
 
 两种模式（st.query_params["mode"]）：
 
-- 默认（矩阵交互）：直接构造含四态的假 payload（2 产品 × 8 行），详情 loader
+- 默认（矩阵交互）：直接构造含四态的假 payload（2 产品 × 9 行），详情 loader
   经 ``render_alert_matrix_detail(loaders=...)`` 注入假实现，避免触库；
   覆盖四态渲染、点击 🔴 懒加载详情、点击非 🔴 说明文案。
 - ``?mode=cache``：真实单元格缓存 + 假 context，展示首个单元格的计算令牌；

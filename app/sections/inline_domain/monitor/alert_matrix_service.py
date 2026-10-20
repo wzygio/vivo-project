@@ -69,7 +69,7 @@ class AlertMatrixContext:
 
     - ``inline_resource_dir``：4 个 sheet OOS 修饰工作簿所在目录；
       None 时按 ``ConfigLoader.get_domain_resource_dir("inline_domain")`` 解析；
-    - ``spc_cpk_loader``：(prod_code) -> period_capability_df | None；
+    - ``spc_cpk_loader`` / ``spc_cpm_loader``：读取各自已保存的能力明细；
     - ``yield_lot_loader``：(prod_code) -> (lot_data, warning_lines) | None；
     - ``yield_trend_loader``：(prod_code) -> (mwd_group_data, mwd_code_data) | None；
     - ``qtime_monitoring_loader``：() -> (details_df, alerts_df)，全产品一次拉取，
@@ -84,6 +84,8 @@ class AlertMatrixContext:
     yield_health_loader: Callable[[str, str], Mapping[str, str]] | None = None
     qtime_monitoring_loader: Callable[[], tuple[pd.DataFrame, pd.DataFrame]] | None = None
     oos_product_loader: Callable[[str, str, Path], Any] | None = None
+    spc_cpm_loader: Callable[[str], pd.DataFrame | None] | None = None
+    yield_result_loader: Callable[[str, str], Any] | None = None
     _qtime_monitoring_memo: Any = field(default=_UNSET, repr=False)
 
     def get_qtime_monitoring(self) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -224,17 +226,28 @@ def _sheet_oos_evaluator(
 
 
 # ---------------------------------------------------------------------------
-# spc 趋势波动行：既有 CPK 周度预警（cpk < 1.33 且未被修饰）
+# SPC 趋势波动行：复用 CPK / CPM 已保存的周度预警
 # ---------------------------------------------------------------------------
 def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
-    row_key = "spc_cpk_trend"
-    if context.spc_cpk_loader is None:
-        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "未配置 CPK 数据源")
-    capability_df = context.spc_cpk_loader(prod_code)
+    return _evaluate_spc_capability(prod_code, context, metric="cpk")
+
+
+def _evaluate_spc_cpm_trend(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
+    return _evaluate_spc_capability(prod_code, context, metric="cpm")
+
+
+def _evaluate_spc_capability(
+    prod_code: str, context: AlertMatrixContext, *, metric: str,
+) -> dict[str, str]:
+    row_key, label = f"spc_{metric}_trend", metric.upper()
+    loader = context.spc_cpk_loader if metric == "cpk" else context.spc_cpm_loader
+    if loader is None:
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, f"未配置 {label} 数据源")
+    capability_df = loader(prod_code)
     if capability_df is None or capability_df.empty:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无周期能力数据")
     normalized = normalize_latest_cpk(
-        capability_df, prod_code,
+        capability_df, prod_code, metric=metric,
         min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
     )
     normalized = exclude_inline_period_records(
@@ -244,23 +257,28 @@ def _evaluate_spc_cpk_trend(prod_code: str, context: AlertMatrixContext) -> dict
     iso = week_start.isocalendar()
     weekly = normalized.loc[normalized["period_type"].eq("week") & normalized["period_label"].eq(f"{iso.year}-W{iso.week:02d}")]
     if weekly.empty:
-        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "无上一完整周 CPK 明细")
-    alerts_df = build_latest_cpk_alerts(normalized, context.reference_date)
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, f"无上一完整周 {label} 明细")
+    alerts_df = build_latest_capability_alerts(normalized, context.reference_date, metric=metric)
     if alerts_df.empty and weekly["status"].eq("无法判定").any():
-        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "上一完整周存在无法判定的 CPK")
-    # CPK 预警记录为中文列（厂别/站点/参数名称/超规周次/CPK值）
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, f"上一完整周存在无法判定的 {label}")
     return _alerts_cell(
         row_key, prod_code, not alerts_df.empty, _extract_factories(alerts_df, "厂别")
     )
 
 
 def build_latest_cpk_alerts(frame: pd.DataFrame, reference_date: date) -> pd.DataFrame:
+    return build_latest_capability_alerts(frame, reference_date, metric="cpk")
+
+
+def build_latest_capability_alerts(
+    frame: pd.DataFrame, reference_date: date, *, metric: str,
+) -> pd.DataFrame:
     """Read normalized local ledger records; never recalculate raw SPC capability."""
     return latest_capability_alerts(
-        frame, reference_date, date_exclusion=ConfigLoader.get_inline_data_exclusion(),
+        frame, reference_date, metric=metric, date_exclusion=ConfigLoader.get_inline_data_exclusion(),
         min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
     ).rename(
-        columns={"factory": "厂别", "step_id": "站点", "param_name": "参数名称", "period_label": "超规周次", "cpk": "CPK值"}
+        columns={"factory": "厂别", "step_id": "站点", "param_name": "参数名称", "period_label": "超规周次", metric: f"{metric.upper()}值"}
     ).reset_index(drop=True)
 
 
@@ -273,6 +291,8 @@ def _parse_display_date(value: object) -> pd.Timestamp:
 
 def _evaluate_yield_lot_oos(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
     row_key = "yield_lot_oos"
+    if context.yield_result_loader is not None:
+        return _evaluate_yield_result(row_key, prod_code, context, "lot")
     if context.yield_lot_loader is None:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "未配置 Yield 数据源")
     if context.yield_health_loader is not None:
@@ -298,6 +318,8 @@ def _evaluate_yield_lot_oos(prod_code: str, context: AlertMatrixContext) -> dict
 # ---------------------------------------------------------------------------
 def _evaluate_yield_trend(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
     row_key = "yield_trend_fluctuation"
+    if context.yield_result_loader is not None:
+        return _evaluate_yield_result(row_key, prod_code, context, "trend")
     if context.yield_trend_loader is None:
         return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "未配置 Yield 数据源")
     if context.yield_health_loader is not None:
@@ -315,6 +337,18 @@ def _evaluate_yield_trend(prod_code: str, context: AlertMatrixContext) -> dict[s
         mwd_code_data or {},
     )
     return _alerts_cell(row_key, prod_code, bool(records))
+
+
+def _evaluate_yield_result(
+    row_key: str, prod_code: str, context: AlertMatrixContext, kind: str,
+) -> dict[str, Any]:
+    result = context.yield_result_loader(prod_code, kind)
+    if result.status == "ready":
+        return _alerts_cell(row_key, prod_code, not result.records.empty)
+    if result.status == "no_data":
+        return _cell(row_key, prod_code, CELL_STATE_NO_DATA, "当前周期无可用入库数据")
+    # Missing/stale/failed publication is unknown, never a green no-alert result.
+    return _cell(row_key, prod_code, CELL_STATE_ERROR, "预警结果暂不可用，请稍后重试。")
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +484,13 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
         module_group="spc",
         time_scope=_PREVIOUS_WEEK_SCOPE,
         evaluator=_guarded_evaluator("spc_cpk_trend", _evaluate_spc_cpk_trend),
+    ),
+    AlertMatrixRow(
+        row_key="spc_cpm_trend",
+        display_name="SPC 趋势波动（CPM）",
+        module_group="spc",
+        time_scope=_PREVIOUS_WEEK_SCOPE,
+        evaluator=_guarded_evaluator("spc_cpm_trend", _evaluate_spc_cpm_trend),
     ),
     AlertMatrixRow(
         row_key="ctq_sheet_oos",

@@ -42,6 +42,7 @@ from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
+from app.sections.inline_domain.aoi_rs.aoi_rs_weekly_export import render_aoi_rs_weekly_export
 from app.sections.inline_domain.aoi_rs.trend_alerts import render_aoi_rs_trend_alerts
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
@@ -100,6 +101,14 @@ render_page_header(
 )
 
 render_aoi_rs_export(
+    current_product=current_product,
+    start_date=default_start_dt,
+    end_date=default_end_dt.date(),
+    db_manager=db_manager,
+    step_desc_map=step_desc_map,
+)
+
+render_aoi_rs_weekly_export(
     current_product=current_product,
     start_date=default_start_dt,
     end_date=default_end_dt.date(),

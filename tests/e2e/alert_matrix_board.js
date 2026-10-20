@@ -22,6 +22,7 @@ async page => {
     "aoi_tt_sheet_oos",
     "spc_sheet_oos",
     "spc_cpk_trend",
+    "spc_cpm_trend",
     "ctq_sheet_oos",
     "yield_lot_oos",
     "yield_trend_fluctuation",
@@ -33,6 +34,7 @@ async page => {
     "AOI_TT 单片异常",
     "SPC 单片异常",
     "SPC 趋势波动（CPK）",
+    "SPC 趋势波动（CPM）",
     "CTQ 单片异常",
     "Yield 单片异常（Lot 超规）",
     "Yield 趋势波动",
@@ -45,7 +47,7 @@ async page => {
     }
   }
 
-  // ---- 2. 四态单元格分布（fixture：🔴×4 ⚪×1 ⬜×1 🟢×10）----
+  // ---- 2. 单元格分布（无数据按达标展示：🔴×4 ⚪×0 ⬜×1 🟢×13）----
   const cellStates = await page.evaluate(
     ({ rowKeys, products }) => {
       const states = {};
@@ -76,7 +78,7 @@ async page => {
     error: tally("⬜"),
     ok: tally("🟢"),
   };
-  const expected = { alert: 4, noData: 1, error: 1, ok: 10 };
+  const expected = { alert: 4, noData: 0, error: 1, ok: 13 };
   for (const [key, want] of Object.entries(expected)) {
     if (counts[key] !== want) {
       throw new Error(
