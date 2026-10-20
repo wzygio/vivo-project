@@ -14,26 +14,30 @@ from src.shared_kernel.config import ConfigLoader
 
 st.set_page_config(page_title="AOI RS 趋势验证", layout="wide")
 st.title("AOI RS 趋势预警验证")
-scenario = st.selectbox("场景", ["有预警", "无预警", "数据不足", "加载失败"])
+scenario = st.selectbox("场景", ["有预警", "跨日预警", "无预警", "数据不足", "加载失败"])
 reference = date(2026, 10, 19)
 
 try:
     if scenario == "加载失败":
         raise AoiRsReportBuildError("fixture failure")
     dates = ["2026-10-16", "2026-10-17", "2026-10-18"]
-    values = [10, 13, 17] if scenario == "有预警" else [10, 10, 10]
+    values = [10, 13, 17] if scenario in ("有预警", "跨日预警") else [10, 10, 10]
     rows = [
         dict(prod_code="M678", factory="ARRAY", step_id="11629", rs_code=code,
              start_time=pd.Timestamp(day), sheet_id=f"S{day}", lot_id=f"L{day}", code_qty=value)
         for code, quantities in [("A1PPS", values), ("B1", [10, 10, 10])]
-        for day, value in zip(dates, quantities)
+        for day, value in zip(
+            ["2026-10-12", "2026-10-15", "2026-10-18"]
+            if scenario == "跨日预警" and code == "A1PPS" else dates,
+            quantities,
+        )
     ]
     details = pd.DataFrame(rows)
     if scenario == "数据不足":
         details = details.loc[details.start_time.eq(pd.Timestamp("2026-10-18"))].copy()
     throughput = pd.DataFrame([
         dict(factory="ARRAY", step_id="11629", sheet_id=f"S{i}-{day}", start_time=pd.Timestamp(day))
-        for day in dates for i in range(100)
+        for day in sorted(details.start_time.dt.strftime("%Y-%m-%d").unique()) for i in range(100)
     ])
     indicators = details[["prod_code", "factory", "step_id", "rs_code"]].drop_duplicates()
     indicators["code_desc"] = indicators.rs_code.map({"A1PPS": "趋势样例", "B1": "稳定样例"})

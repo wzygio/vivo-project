@@ -163,6 +163,38 @@ def test_warning_matches_chart_cap_and_cache_revision_and_next_day(monkeypatch) 
     assert next_report.trend_evaluation_df.target_date.iloc[0] == "2026-10-19"
 
 
+def test_warning_loads_oldest_comparison_day_beyond_compact_chart_axis(monkeypatch) -> None:
+    from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
+
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: [])
+    source = pd.DataFrame([
+        dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code=code,
+             start_time=pd.Timestamp(f"2026-10-{day} 08:00"), sheet_id=f"S{day}",
+             lot_id=f"L{day}", code_qty=value)
+        for day, code, value in [(12, "A", 100), (13, "B", 0), (14, "B", 0),
+                                 (15, "A", 130), (16, "B", 0), (17, "B", 0),
+                                 (18, "B", 0), (19, "A", 170), (20, "B", 1)]
+    ])
+    port = _data_port(source, source.drop(columns=["rs_code", "code_qty"]), pd.DataFrame())
+    query = AoiRsQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-20")
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    report = AoiRsReportService.get_aoi_rs_report_data(
+        _data_port=port, query_config_json=query.model_dump_json(), snapshot_signature="oldest-seven-day-comparison",
+    )
+    row = report.trend_evaluation_df.set_index("rs_code").loc["A"]
+    assert row.target_date == "2026-10-19"
+    assert row.baseline_density == 130
+    assert row.baseline_days == 1
+    assert row.valid_days == 3
+    assert row.previous_date == "2026-10-15"
+    assert row.two_days_before_date == "2026-10-12"
+    assert row.rising_alert and row.daily_alert
+    chart = build_aoi_rs_period_trend(report.rs_details_df, report.pass_through_df, pd.Timestamp(query.end_date).date())
+    days = chart.loc[chart.period_type.eq("day")]
+    assert days.period_label.nunique() == 7
+    assert "2026-10-12" not in set(days.period_label)
+
+
 def test_service_reads_report_inputs_through_aoi_rs_data_port() -> None:
     data_port = SimpleNamespace(
         get_rs_details=lambda _query: _details_df(),

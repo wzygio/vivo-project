@@ -1,5 +1,7 @@
 # AOI_RS 日密度趋势预警方案
 
+> 2026-10-20 修订已获用户直接授权：均值保留原五天窗口，新增跳过缺测及零密度；比较允许跨日、最多回溯七天，目标日仍固定为昨天。下方为初次交付规格的历史记录，变更后的权威规则及完整实现程序见 [当前领域规则](../../../../../references/domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md)。
+
 状态：已批准实施；用户确认以昨天为目标日、增加连续两日上升，要求修改方案后直接开发。工单见 `.scratch/aoi-rs-trend-alert/issues/01-trend-alert.md`。
 
 日期：2026-10-19。development-flow 模式：`general`。

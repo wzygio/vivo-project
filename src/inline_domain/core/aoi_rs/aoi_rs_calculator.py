@@ -32,6 +32,7 @@ def build_period_trend_df(
     end_date: date,
     *,
     daily_end_date: date | None = None,
+    daily_start_date: date | None = None,
 ) -> pd.DataFrame:
     """按 period × 指标（厂别+站点+Code）计算 Σcode_qty ÷ 过货 distinct sheet 数。
 
@@ -58,7 +59,20 @@ def build_period_trend_df(
     # 复用 SPC 的"跳过空值向前补全"切分（其入参列名为 sheet_start_time）
     axis_input = details[["start_time"]].rename(columns={"start_time": "sheet_start_time"})
     axis = build_available_period_axis(axis_input, end_date)
-    if daily_end_date is not None:
+    if daily_start_date is not None:
+        daily_end = pd.Timestamp(daily_end_date or end_date)
+        daily_start = pd.Timestamp(daily_start_date)
+        if daily_start > daily_end or daily_end > pd.Timestamp(end_date):
+            raise ValueError("AOI_RS daily range must be ordered and end within the report range")
+        # Warnings need the complete calendar range, not the chart's seven
+        # most recent observed dates. Month/week rows keep the report cutoff.
+        daily_axis = pd.DataFrame([
+            {"period_type": "day", "period_label": day.date().isoformat(),
+             "period_sort": 300 + index, "period_start": day, "period_end": day}
+            for index, day in enumerate(pd.date_range(daily_start, daily_end), start=1)
+        ])
+        axis = pd.concat([axis.loc[~axis["period_type"].eq("day")], daily_axis], ignore_index=True)
+    elif daily_end_date is not None:
         # Warning days end yesterday; month/week baselines still end at the
         # report date so overlapping daily values agree with the page/PDF.
         daily_axis = build_available_period_axis(axis_input, daily_end_date)

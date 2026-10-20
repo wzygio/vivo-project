@@ -33,6 +33,7 @@ from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.aoi_rs.trend_alerts import (
     AOI_RS_TREND_POLICY_VERSION,
     EVALUATION_COLUMNS,
+    HISTORY_LOOKBACK_DAYS,
     evaluate_aoi_rs_trends,
 )
 
@@ -303,11 +304,13 @@ class AoiRsReportService:
                 decoration_window=decoration_window,
             )
             report_date = pd.Timestamp(query_config.end_date).date()
+            target_day = pd.Timestamp(report_date) - pd.Timedelta(days=1)
             warning_trend = build_decorated_period_trend_df(
                 projected_details, pass_through_df, report_date,
                 special_factories=special_factories,
                 decoration_window=decoration_window,
-                daily_end_date=(pd.Timestamp(report_date) - pd.Timedelta(days=1)).date(),
+                daily_end_date=target_day.date(),
+                daily_start_date=(target_day - pd.Timedelta(days=HISTORY_LOOKBACK_DAYS)).date(),
             )
             evaluation = evaluate_aoi_rs_trends(
                 warning_trend, indicators_df, reference_date=report_date,

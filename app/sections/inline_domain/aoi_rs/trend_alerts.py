@@ -22,9 +22,10 @@ if TYPE_CHECKING:
 _DISPLAY_COLUMNS = {
     "factory": "厂别", "step_id": "站点", "rs_code": "RS Code",
     "target_date": "目标日", "target_density": "目标日密度",
-    "previous_density": "前一天密度", "two_days_before_density": "两天前密度",
-    "baseline_density": "前5日均值", "target_sheet_qty": "目标日过货量",
-    "valid_days": "近7日有效天数", "baseline_days": "基线有效天数",
+    "previous_date": "上次有效日", "previous_density": "上次密度",
+    "two_days_before_date": "再前有效日", "two_days_before_density": "再前密度",
+    "baseline_density": "基线5日均值", "target_sheet_qty": "目标日过货量",
+    "valid_days": "计算窗有效天数", "baseline_days": "基线有效天数",
 }
 
 
@@ -55,8 +56,10 @@ def render_aoi_rs_trend_alerts(
     alerts = evaluation.loc[evaluation["is_alert"].eq(True)] if not evaluation.empty else evaluation
     with st.expander(f"趋势预警中心（目标日 {target.isoformat()}）", expanded=not alerts.empty):
         st.caption(
-            "目标日为昨天，密度单位为 RS/片。当日超规：目标日密度同时大于前一天及前5日均值的1.2倍；"
-            "连续两日上升：目标日大于前一天的1.2倍，且前一天大于两天前的1.2倍。任一规则命中即预警。"
+            "目标日为昨天，密度单位为 RS/片。比较记录从目标日前7天内选取最近两次有效数据，允许跨日；"
+            "基线取目标日前第2至第6天的正密度均值，跳过缺测和零值。"
+            "当日超规：目标日密度同时大于上次密度及基线的1.2倍；"
+            "连续两日上升：目标日大于上次密度的1.2倍，且上次大于再前密度的1.2倍。任一规则命中即预警。"
         )
         if evaluation.empty:
             st.info("当前产品暂无可评估的 AOI RS 趋势数据。")
@@ -74,7 +77,7 @@ def render_aoi_rs_trend_alerts(
                 hide_index=True, width="stretch",
                 column_config={
                     name: st.column_config.NumberColumn(format="%.4f")
-                    for name in ("目标日密度", "前一天密度", "两天前密度", "前5日均值")
+                    for name in ("目标日密度", "上次密度", "再前密度", "基线5日均值")
                 },
             )
         elif daily_count or rising_count:

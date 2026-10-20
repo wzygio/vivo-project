@@ -43,3 +43,22 @@
 未连接生产数据库，未测试生产数据规模性能，也未运行整个仓库所有领域的完整测试。回归范围为本次 AOI_RS 能力、相关缓存及架构守卫。工作区存在其他正在进行的周报和门户等改动；保留其文件及状态，不纳入本次提交。
 
 开发分支：`codex/aoi-rs-trend-alert`。本次只创建本地提交，未推送或合并其他分支。
+
+## 2026-10-20：五天正值均值与七天内跨日比较
+
+用户最终指令取消将均值改成七天：保留 `[T−6,T−2]` 五个自然日，仅平均正密度；相邻比较从 `[T−7,T)` 取最近两条有效记录 P/Q，允许跨日，真实零值仍可作为比较记录。T 继续固定为昨天。P/Q 共用同一下界，不逐次延长回溯。
+
+- Core 增加实际比较日期；应用取得 `[T−7,T]` 的完整八天日轴，主图/PDF 仍使用原紧凑日期轴，月基准截止保持一致。
+- 页面显示“上次有效日”“再前有效日”“基线5日均值”，共有 14 项业务列。策略版本升级使旧评估缓存失效。
+- 领域规则第 8 节包含完整实际 Core 程序，工具已确认代码段与源文件精确一致，并完成 Python 语法与文档链接检查。
+- 相关 AOI_RS、架构及 payload TTL 回归：**246 passed，25 warnings**；新增跨日 UI 和 14 列白名单断言单独复验：**6 passed**。没有生产数据库查询。
+- Standards / Spec 增量双轴评审均无阻断发现。
+- 真实浏览器验证：目标 10月18日，P=10月15日、Q=10月12日，仅命中 Code 的 3 张图；列菜单不含内部字段；无警、数据不足、失败状态无残留图像；390px 窄屏无页面横向溢出。
+- 证据：`output/test-results/aoi_rs_trend_sparse_*`。浏览器已关闭；Windows Job Object 管理的本次服务进程树已退出，**18529 端口释放已核实**。
+- 用户并行周报、门户及其他修改保留，不纳入本次增量提交。
+
+本轮回归命令：
+
+```powershell
+.venv/Scripts/python.exe -m pytest tests/unit/inline_domain/core/aoi_rs tests/unit/inline_domain/application/aoi_rs/test_aoi_rs_service.py tests/unit/inline_domain/infrastructure/aoi_rs tests/unit/app/sections/aoi_rs/test_aoi_rs_dashboard.py tests/unit/app/sections/aoi_rs/test_aoi_rs_export.py tests/unit/app/sections/aoi_rs/test_aoi_rs_sheet_oos_alerts.py tests/unit/app/sections/aoi_rs/test_aoi_rs_trend_warning_ui.py tests/unit/app/pages/test_aoi_rs_page.py tests/unit/test_aoi_rs_config.py tests/architecture tests/unit/inline_domain/application/test_payload_cache_ttl.py -q --tb=short --disable-warnings
+```
