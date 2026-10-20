@@ -17,6 +17,7 @@ TT 业务差异：USL/UCL 双上限规格线（虚线/点线）与检测片数�
 from __future__ import annotations
 
 import logging
+import hashlib
 from datetime import date
 from pathlib import Path
 
@@ -261,6 +262,7 @@ def _render_particle_size_charts(
     sheet_df: pd.DataFrame,
     usl: float | None,
     ucl: float | None,
+    chart_key_prefix: str,
 ) -> None:
     """Render the three AOI TT charts for one particle-size slice."""
     st.markdown(f"**Particle Size：{particle_size}**")
@@ -276,6 +278,7 @@ def _render_particle_size_charts(
         (sheet_df["tt_name"].astype(str) == code)
         & (sheet_df["particle_size"].astype(str) == particle_size)
     ]
+    digest = hashlib.sha256(f"{chart_key_prefix}|{code}|{particle_size}".encode("utf-8")).hexdigest()[:16]
 
     c_trend, c_lot, c_sheet = st.columns(3)
     with c_trend:
@@ -289,6 +292,7 @@ def _render_particle_size_charts(
                 title="月周天趋势（平均每片 TT 个数）",
             ),
             width="stretch",
+            key=f"{chart_key_prefix}_{digest}_trend",
             config={"scrollZoom": False},
         )
     with c_lot:
@@ -302,6 +306,7 @@ def _render_particle_size_charts(
                 y_col="value",
             ),
             width="stretch",
+            key=f"{chart_key_prefix}_{digest}_lot",
             config={"scrollZoom": False},
         )
     with c_sheet:
@@ -314,6 +319,7 @@ def _render_particle_size_charts(
                 y_title="TT 个数",
             ),
             width="stretch",
+            key=f"{chart_key_prefix}_{digest}_sheet",
             config={"scrollZoom": False},
         )
 
@@ -325,16 +331,22 @@ def render_aoi_tt_indicator_sections(
     indicators_df: pd.DataFrame,
     end_date: date,
     step_desc_map: dict[str, str] | None = None,
+    chart_key_prefix: str = "aoi_tt_report",
+    aggregation_details_df: pd.DataFrame | None = None,
 ) -> None:
     """按（厂别+站点）分组，组内每个 TT 一个默认展开的 Expander，并列渲染三张图。"""
     if tt_details_df.empty or indicators_df.empty:
         st.info("当前筛选条件下暂无 AOI TT 数据。")
         return
 
-    trend_df = build_period_trend_df(tt_details_df, end_date)
-    throughput_df = build_period_throughput_df(tt_details_df, end_date)
-    lot_df = build_lot_point_df(tt_details_df)
-    sheet_df = build_sheet_point_df(tt_details_df)
+    if "particle_size" not in tt_details_df.columns:
+        tt_details_df = tt_details_df.assign(particle_size="Total")
+    # Alert selection must not shrink station denominators or its date axis.
+    source = tt_details_df if aggregation_details_df is None else aggregation_details_df
+    trend_df = build_period_trend_df(source, end_date)
+    throughput_df = build_period_throughput_df(source, end_date)
+    lot_df = build_lot_point_df(source)
+    sheet_df = build_sheet_point_df(source)
 
     groups = (
         indicators_df[["factory", "step_id"]]
@@ -372,8 +384,10 @@ def render_aoi_tt_indicator_sections(
             usl, ucl = code_specs.get(code, (None, None))
             with st.expander(f"{code} | 站点 {format_step_label(step_id, step_desc_map)}", expanded=True):
                 available_sizes = set(
-                    step_trend.loc[
-                        step_trend["tt_name"].astype(str) == code,
+                    tt_details_df.loc[
+                        tt_details_df["factory"].astype(str).eq(factory)
+                        & tt_details_df["step_id"].astype(str).eq(step_id)
+                        & tt_details_df["tt_name"].astype(str).eq(code),
                         "particle_size",
                     ].astype(str)
                 )
@@ -388,6 +402,7 @@ def render_aoi_tt_indicator_sections(
                         sheet_df=step_sheet,
                         usl=usl,
                         ucl=ucl,
+                        chart_key_prefix=f"{chart_key_prefix}_{factory}_{step_id}",
                     )
 
 
@@ -507,4 +522,5 @@ def render_aoi_tt_sheet_oos_alert_indicator_sections(
             indicators_df=alert_indicators_df,
             end_date=end_date,
             step_desc_map=step_desc_map,
+            chart_key_prefix="aoi_tt_oos_alert",
         )

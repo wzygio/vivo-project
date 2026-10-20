@@ -43,7 +43,7 @@ src
 | Domain | Submodule | Business responsibility and relationship |
 |---|---|---|
 | `inline_domain` | `aoi_rs` | AOI RS defect counts/density, Sheet/Lot and month/week/day reports, and RS-specific decoration; owns independent RS facts while reusing domain-shared throughput and decision capabilities |
-| `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities |
+| `inline_domain` | `aoi_tt` | AOI TT reports, Sheet/Lot and period statistics, TT decoration and Particle Size breakdown; reuses shared measurement and decoration capabilities; owns TT/particle trend aggregation and reuses the domain-shared density trend detector |
 | `inline_domain` | `ctq` | Critical-to-quality measurement reports, indicator selection and chart-type rules; reuses the shared measurement/feature/decoration pipeline |
 | `inline_domain` | `spc` | Statistical process control, measurement features, CPK/CPM calculation and capability decoration; owns SPC point decoration order (traditional OOS clipping, then the time-scoped central specification band) in `core/spc`, reusing public shared clipping and decision helpers. Publishes maintained capability records. SPC page alerts and monitoring share the configured capability workbook readers and normalized alert selection, while calculations remain the source for ordinary SPC charts |
 | `inline_domain` | `monitor` | Inline warning analysis, OOS/OOC and CPK/CPM summaries, current/history inputs, period statistics and summary workbooks; aggregates results for the relevant indicator scopes |
@@ -171,3 +171,5 @@ rg -n 'QTimeReportService|data_health' tests/unit tests/integration tests/archit
 ## Extension Rules
 
 Add files to existing responsibility modules first. Create a submodule when a stable capability or reuse boundary warrants it; no empty symmetry or additional framework is required. Update this map when domains/submodules or ownership change. Keep per-program details and algorithms in code-adjacent or routed subject documents. Proposed structures must not be presented as existing implementation.
+
+AOI RS and AOI TT trend warnings share the pure detector in `inline_domain/core/shared/density_trend_alerts.py` and the compact presentation center in `app/sections/inline_domain/shared/trend_alert_center.py`. Each submodule owns its indicator keys, current report density aggregation, denominator, and exact alert-chart filtering. TT retains measurement-sheet denominators and evaluates each Particle Size independently; RS retains throughput denominators and RS-specific decoration. Application services cache the evaluation DataFrame in native payloads. See [TT trend warnings](references/domain/inline_domain/aoi_tt/rules-aoi-tt-trend-alerts.md).

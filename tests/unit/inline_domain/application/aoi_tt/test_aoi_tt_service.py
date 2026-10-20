@@ -108,6 +108,53 @@ def _config_json() -> str:
     ).model_dump_json()
 
 
+def test_trend_alerts_use_current_tt_density_and_keep_particle_sizes_separate():
+    details = pd.DataFrame([
+        dict(factory="ARRAY", prod_code="M678", step_id="11620", tt_name="TDSUM",
+             sheet_id=f"S{day}", lot_id=f"L{day}", start_time=pd.Timestamp(f"2026-10-{day}"), tt_qty=20)
+        for day in (12, 15, 18)
+    ])
+    particles = pd.DataFrame([
+        dict(factory="ARRAY", prod_code="M678", step_id="11620", sheet_id=f"S{day}",
+             particle_size="S", particle_qty=quantity)
+        for day, quantity in [(12, 1), (15, 2), (18, 3)]
+    ])
+    query = AoiTtQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-19")
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+    report = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(details, pd.DataFrame(), particles),
+        query_config_json=query.model_dump_json(), snapshot_signature="tt-trend-particle",
+    )
+    evaluation = report.trend_evaluation_df.set_index("particle_size")
+    assert not evaluation.loc["Total", "is_alert"]
+    assert evaluation.loc["S", "daily_alert"] and evaluation.loc["S", "rising_alert"]
+    assert evaluation.loc["S", "target_date"] == "2026-10-18"
+    assert evaluation.loc["S", "previous_date"] == "2026-10-15"
+    assert evaluation.loc["S", "target_density"] == 3
+
+
+def test_tt_warning_cache_tracks_revision_decisions_and_reference_date():
+    calls = []
+    details = _details_df().iloc[[0]].assign(start_time=pd.Timestamp("2026-10-18"))
+    port = FakeAoiTtPort(details, pd.DataFrame(), pd.DataFrame())
+    port.get_tt_details = lambda _q: (calls.append(1) or details)
+    query = AoiTtQueryConfig(prod_code="M678", start_date="2026-09-01", end_date="2026-10-19")
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+    kwargs = dict(_data_port=port, query_config_json=query.model_dump_json(), snapshot_signature="tt-warning-cache",
+                  product_revision="r1", decision_signature="d1")
+    first = AoiTtReportService.get_aoi_tt_report_data(**kwargs)
+    assert first.trend_evaluation_df.target_date.eq("2026-10-18").all()
+    AoiTtReportService.get_aoi_tt_report_data(**kwargs)
+    assert len(calls) == 1
+    AoiTtReportService.get_aoi_tt_report_data(**{**kwargs, "product_revision": "r2"})
+    AoiTtReportService.get_aoi_tt_report_data(**{**kwargs, "decision_signature": "d2"})
+    next_query = query.model_copy(update={"end_date": "2026-10-20"})
+    latest = AoiTtReportService.get_aoi_tt_report_data(**{**kwargs, "query_config_json": next_query.model_dump_json()})
+    assert len(calls) == 4
+    assert latest.trend_evaluation_df.target_date.eq("2026-10-19").all()
+    assert not latest.trend_evaluation_df.is_alert.any()  # yesterday is missing; no target fallback
+
+
 def test_service_builds_view_model_with_indicators(monkeypatch) -> None:
     AoiTtReportService.fetch_aoi_tt_report_payload.clear()
 

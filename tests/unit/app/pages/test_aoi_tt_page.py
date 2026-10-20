@@ -7,9 +7,12 @@ import runpy
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
+from streamlit.runtime.scriptrunner import StopException
 
 from app.components import page_header
 from app.sections.inline_domain.aoi_tt import aoi_tt_dashboard
+from app.sections.inline_domain.aoi_tt import trend_alerts as trend_alert_section
 from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
@@ -19,7 +22,8 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.shared_kernel.infrastructure import db_handler
 
 
-def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch) -> None:
+@pytest.mark.parametrize("queried", [True, False])
+def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch, queried) -> None:
     events: list[str] = []
     loaded_queries: list[AoiTtQueryConfig] = []
     loaded_signatures: list[str] = []
@@ -106,7 +110,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         aoi_tt_dashboard,
         "render_aoi_tt_filters",
         lambda **_kwargs: events.append("filters")
-        or ("ARRAY", ["TDSUM"], ["11620"], ["S"], True),
+        or ("ARRAY", ["TDSUM"], ["11620"], ["S"], queried),
     )
 
     def fake_render_sections(**kwargs):
@@ -120,7 +124,15 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     )
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "AOI_TT监控报表.py"
-    runpy.run_path(str(page_path), run_name="__main__")
+    monkeypatch.setattr(trend_alert_section, "render_aoi_tt_trend_alerts", lambda *_a, **_kw: events.append("trend"))
+    def stop():
+        raise StopException()
+    monkeypatch.setattr(aoi_tt_dashboard.st, "stop", stop)
+    if queried:
+        runpy.run_path(str(page_path), run_name="__main__")
+    else:
+        with pytest.raises(StopException):
+            runpy.run_path(str(page_path), run_name="__main__")
 
     assert [q.prod_code for q in loaded_queries] == ["M678"]
     # 固定窗口：上一自然月 1 日 ~ 当前日期（含当天）
@@ -128,8 +140,8 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     assert loaded_queries[0].end_date == "2026-08-10"
     assert loaded_signatures == ["aoi_tt_report_v4_integer_particle_quantities|scoped=M678"]
     assert header_kwargs["product_cache_scope"] == "M678"
-    assert events == ["filters", "charts"]
-    assert rendered_particle_sizes == ["S"]
+    assert events == (["filters", "trend", "charts"] if queried else ["filters", "trend"])
+    assert rendered_particle_sizes == (["S"] if queried else [])
 
 
 def test_portal_navigation_points_aoi_tt_to_the_streamlit_page() -> None:

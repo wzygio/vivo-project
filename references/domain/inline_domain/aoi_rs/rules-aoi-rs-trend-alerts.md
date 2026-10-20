@@ -87,13 +87,15 @@
 
 ## 8. 实现程序与接入位置
 
-业务实现以 [Core 程序](../../../../src/inline_domain/core/aoi_rs/trend_alerts.py) 为准。下方代码为本次核验时该文件的完整内容，不另建第二套运行逻辑；规则变更时同步此代码段。
+业务判定由 `src/inline_domain/core/shared/density_trend_alerts.py` 统一实现，RS 由 `core/aoi_rs/trend_alerts.py` 绑定指标键；TT 使用独立四键适配器，分子、分母聚合各归原模块。下方依次为共享判定和 RS 适配器的完整内容，不另建第二套运行逻辑；规则变更时同步此代码段。
 
 应用接入位于 `application/aoi_rs/aoi_rs_service.py`：以报表结束日减一天得到 T，将 `daily_start_date=T−HISTORY_LOOKBACK_DAYS`、`daily_end_date=T` 传给 `build_decorated_period_trend_df()`，再调用 `evaluate_aoi_rs_trends()`。`HISTORY_LOOKBACK_DAYS=max(7, 5+2−1)=7`，同时覆盖比较和均值所需日期。
 
 聚合接入位于 `core/aoi_rs/aoi_rs_calculator.py:build_period_trend_df()` 与 `aoi_rs_special_decoration.py:build_decorated_period_trend_df()`。显式日轴与原月/周轴组合，保留现有分子、分母、专用厂别和月基准处理。展示接入位于 `app/sections/inline_domain/aoi_rs/trend_alerts.py`，仅映射业务列和输出实际比较日期。
 
 <!-- AOI_RS_TREND_IMPLEMENTATION_START -->
+
+共享判定 `core/shared/density_trend_alerts.py`：
 
 ```python
 """Yesterday-density warnings with bounded sparse-date comparisons (no I/O)."""
@@ -102,19 +104,19 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from math import isclose
+from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 
-AOI_RS_TREND_POLICY_VERSION = "yesterday-sparse-seven-day-five-day-mean-v2"
+DENSITY_TREND_POLICY_VERSION = "density-sparse-seven-day-five-day-mean-v3"
 RISE_FACTOR = 1.2
 LOOKBACK_DAYS = 7
 BASELINE_DAYS = 5
 BASELINE_LAG_DAYS = 2
 HISTORY_LOOKBACK_DAYS = max(LOOKBACK_DAYS, BASELINE_DAYS + BASELINE_LAG_DAYS - 1)
-INDICATOR_KEYS = ["factory", "step_id", "rs_code"]
-EVALUATION_COLUMNS = [
-    "prod_code", *INDICATOR_KEYS, "target_date", "target_density",
+EVALUATION_VALUE_COLUMNS = [
+    "target_date", "target_density",
     "previous_date", "previous_density", "two_days_before_date",
     "two_days_before_density", "baseline_density",
     "target_sheet_qty", "valid_days", "baseline_days", "daily_evaluable",
@@ -179,11 +181,12 @@ def _evaluate_series(series: pd.DataFrame, target: pd.Timestamp) -> dict[str, ob
     }
 
 
-def evaluate_aoi_rs_trends(
+def evaluate_density_trends(
     trend_df: pd.DataFrame,
     indicators_df: pd.DataFrame,
     *,
     reference_date: date,
+    indicator_keys: Sequence[str],
 ) -> pd.DataFrame:
     """Evaluate yesterday, not the latest observed date, for every scoped indicator.
 
@@ -192,20 +195,22 @@ def evaluate_aoi_rs_trends(
     with at least three valid observations in the calculation window. Rising:
     D(T)>1.2*D(P) AND D(P)>1.2*D(Q). Missing days never become zero; T is fixed.
     """
+    keys = list(indicator_keys)
+    columns = ["prod_code", *keys, *EVALUATION_VALUE_COLUMNS]
     if indicators_df.empty:
-        return pd.DataFrame(columns=EVALUATION_COLUMNS)
+        return pd.DataFrame(columns=columns)
     target = pd.Timestamp(reference_date - timedelta(days=1)).normalize()
     start = target - pd.Timedelta(days=HISTORY_LOOKBACK_DAYS)
-    daily = pd.DataFrame(columns=[*INDICATOR_KEYS, "day", "value", "sheet_qty"])
+    daily = pd.DataFrame(columns=[*keys, "day", "value", "sheet_qty"])
     if not trend_df.empty:
-        required = {*INDICATOR_KEYS, "period_type", "period_label", "value", "sheet_qty"}
+        required = {*keys, "period_type", "period_label", "value", "sheet_qty"}
         if not required.issubset(trend_df.columns):
-            raise ValueError("AOI_RS trend input is missing required columns")
+            raise ValueError("AOI density trend input is missing required columns")
         daily = trend_df.loc[trend_df["period_type"].eq("day")].copy()
         daily["day"] = pd.to_datetime(daily["period_label"], errors="coerce").dt.normalize()
         daily = daily.loc[daily["day"].between(start, target)].copy()
-        if daily.duplicated([*INDICATOR_KEYS, "day"]).any():
-            raise ValueError("AOI_RS trend input has duplicate indicator dates")
+        if daily.duplicated([*keys, "day"]).any():
+            raise ValueError("AOI density trend input has duplicate indicator dates")
         for column in ("value", "sheet_qty"):
             daily[column] = pd.to_numeric(daily[column], errors="coerce")
         daily = daily.loc[
@@ -214,18 +219,47 @@ def evaluate_aoi_rs_trends(
         ]
     groups = {
         tuple(str(value) for value in key): group
-        for key, group in daily.groupby(INDICATOR_KEYS)
+        for key, group in daily.groupby(keys)
     }
     records = []
-    for indicator in indicators_df.drop_duplicates(INDICATOR_KEYS).to_dict("records"):
-        key = tuple(str(indicator[name]) for name in INDICATOR_KEYS)
+    for indicator in indicators_df.drop_duplicates(keys).to_dict("records"):
+        key = tuple(str(indicator[name]) for name in keys)
         series = groups.get(key, daily.iloc[0:0])
         records.append({
             "prod_code": indicator.get("prod_code", ""),
-            **{name: indicator[name] for name in INDICATOR_KEYS},
+            **{name: indicator[name] for name in keys},
             **_evaluate_series(series, target),
         })
-    return pd.DataFrame(records, columns=EVALUATION_COLUMNS)
+    return pd.DataFrame(records, columns=columns)
+```
+
+RS 适配器 `core/aoi_rs/trend_alerts.py`：
+
+```python
+"""RS adapter for the shared AOI density-trend rules."""
+from __future__ import annotations
+
+from datetime import date
+import pandas as pd
+
+from src.inline_domain.core.shared.density_trend_alerts import (
+    BASELINE_DAYS, BASELINE_LAG_DAYS, DENSITY_TREND_POLICY_VERSION,
+    EVALUATION_VALUE_COLUMNS, HISTORY_LOOKBACK_DAYS, LOOKBACK_DAYS, RISE_FACTOR,
+    evaluate_density_trends,
+)
+
+AOI_RS_TREND_POLICY_VERSION = DENSITY_TREND_POLICY_VERSION
+INDICATOR_KEYS = ["factory", "step_id", "rs_code"]
+EVALUATION_COLUMNS = ["prod_code", *INDICATOR_KEYS, *EVALUATION_VALUE_COLUMNS]
+
+
+def evaluate_aoi_rs_trends(
+    trend_df: pd.DataFrame, indicators_df: pd.DataFrame, *, reference_date: date,
+) -> pd.DataFrame:
+    """Keep the RS public schema while sharing calendar and threshold rules."""
+    return evaluate_density_trends(
+        trend_df, indicators_df, reference_date=reference_date, indicator_keys=INDICATOR_KEYS,
+    )
 ```
 
 <!-- AOI_RS_TREND_IMPLEMENTATION_END -->

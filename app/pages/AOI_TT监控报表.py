@@ -39,6 +39,7 @@ from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
     render_aoi_tt_sheet_oos_alert_indicator_sections,
 )
 from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
+from app.sections.inline_domain.aoi_tt.trend_alerts import render_aoi_tt_trend_alerts
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -151,6 +152,10 @@ render_aoi_tt_sheet_oos_alert_indicator_sections(
     indicators_df=indicator_df,
     end_date=default_end_dt.date(),
     step_desc_map=step_desc_map,
+)
+
+render_aoi_tt_trend_alerts(
+    view_model, reference_date=default_end_dt.date(), step_desc_map=step_desc_map,
 )
 
 if not should_render_report:

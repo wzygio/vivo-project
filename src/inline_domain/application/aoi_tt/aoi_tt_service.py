@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -25,6 +25,11 @@ from src.inline_domain.core.shared.sheet_ooc_decoration import (
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
     build_generated_particle_size_details,
     build_particle_size_details,
+    build_period_trend_df,
+)
+from src.inline_domain.core.aoi_tt.trend_alerts import (
+    AOI_TT_TREND_POLICY_VERSION, EVALUATION_COLUMNS, HISTORY_LOOKBACK_DAYS,
+    INDICATOR_KEYS, evaluate_aoi_tt_trends,
 )
 from src.shared_kernel.config import ConfigLoader
 
@@ -93,6 +98,7 @@ class AoiTtReportViewModel:
     tt_details_df: pd.DataFrame
     spec_df: pd.DataFrame
     indicators_df: pd.DataFrame
+    trend_evaluation_df: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=EVALUATION_COLUMNS))
 
 
 def _build_indicators(tt_details_df: pd.DataFrame) -> pd.DataFrame:
@@ -118,6 +124,7 @@ class AoiTtReportService:
             "tt_details_df": pd.DataFrame(),
             "spec_df": pd.DataFrame(),
             "indicators_df": pd.DataFrame(),
+            "trend_evaluation_df": pd.DataFrame(columns=EVALUATION_COLUMNS),
         }
 
     @staticmethod
@@ -130,6 +137,7 @@ class AoiTtReportService:
             tt_details_df=_df("tt_details_df"),
             spec_df=_df("spec_df"),
             indicators_df=_df("indicators_df"),
+            trend_evaluation_df=_df("trend_evaluation_df"),
         )
 
     @staticmethod
@@ -149,6 +157,7 @@ class AoiTtReportService:
         particle_ratio_signature: str = "",
         date_exclusion: InlineDateExclusion | None = None,
         exempt_param_name_contains: tuple[str, ...] | None = None,
+        trend_policy_version: str = AOI_TT_TREND_POLICY_VERSION,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -157,6 +166,7 @@ class AoiTtReportService:
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
+        trend_policy_version 对共享趋势规则变更失效；评估按粒径独立计算。
         """
         try:
             query_config = AoiTtQueryConfig.model_validate_json(query_config_json)
@@ -279,10 +289,20 @@ class AoiTtReportService:
                 else:
                     tt_details_df = build_particle_size_details(tt_details_df, particle_counts_df)
             indicators_df = _build_indicators(tt_details_df)
+            report_date = pd.Timestamp(query_config.end_date).date()
+            target_day = pd.Timestamp(report_date) - pd.Timedelta(days=1)
+            trend = build_period_trend_df(
+                tt_details_df, report_date,
+                daily_start_date=(target_day - pd.Timedelta(days=HISTORY_LOOKBACK_DAYS)).date(),
+                daily_end_date=target_day.date(),
+            )
+            trend_indicators = tt_details_df[["prod_code", *INDICATOR_KEYS]].drop_duplicates()
+            evaluation = evaluate_aoi_tt_trends(trend, trend_indicators, reference_date=report_date)
             return {
                 "tt_details_df": tt_details_df,
                 "spec_df": spec_df,
                 "indicators_df": indicators_df,
+                "trend_evaluation_df": evaluation,
             }
         except Exception as exc:
             logger.error("[AOI_TT] report generation failed: %s", exc, exc_info=True)
@@ -314,5 +334,6 @@ class AoiTtReportService:
             particle_ratio_signature=ratio_signature,
             date_exclusion=date_exclusion,
             exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
+            trend_policy_version=AOI_TT_TREND_POLICY_VERSION,
         )
         return AoiTtReportService._view_model_from_payload(payload)
