@@ -69,11 +69,23 @@ def _read_sql(
     sql: str,
     error_message: str,
     params: dict[str, object] | None = None,
+    *, strict: bool = False,
 ) -> pd.DataFrame:
     try:
         if db_manager.engine is None:
             raise ValueError("数据库引擎未初始化。")
-        df = pd.read_sql(text(sql), db_manager.engine, params=params)
+        if strict:
+            # The history writer must distinguish a successful empty window from failure.
+            with db_manager.engine.begin() as connection:
+                if connection.dialect.name == "postgresql":
+                    connection.execute(text("SET LOCAL statement_timeout = 120000"))
+                chunks = list(pd.read_sql(
+                    text(sql), connection.execution_options(stream_results=True),
+                    params=params, chunksize=50000,
+                ))
+                df = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+        else:
+            df = pd.read_sql(text(sql), db_manager.engine, params=params)
         df.columns = df.columns.str.lower()
         return df
     except Exception as exc:  # noqa: BLE001 - DAO 层容错，返回空表由上层降级
@@ -83,21 +95,26 @@ def _read_sql(
             type(exc).__name__,
             uuid4().hex,
         )
+        if strict:
+            raise RuntimeError("AOI_RS source query failed") from exc
         return pd.DataFrame()
 
 
 def load_rs_details(
     db_manager: "DatabaseManager",
     query_config: AoiRsQueryConfig,
+    *, strict: bool = False,
 ) -> pd.DataFrame:
     """加载三厂 RS Code 明细并抹平列名差异（UNION ALL + 产品字典 join）。"""
     logger.info("==> [DAO] 抽取产品 %s 的 AOI RS 明细...", query_config.prod_code)
 
     start_time_fmt = f"{query_config.start_date} 00:00:00"
-    end_time_fmt = f"{query_config.end_date} 23:59:59"
+    end_time_fmt = str(pd.Timestamp(query_config.end_date) + pd.Timedelta(days=1))
 
     sql_queries = []
     for fac, (table_name, id_col, time_col) in RS_FACTORY_META.items():
+        if strict and query_config.factory and fac != query_config.factory:
+            continue
         q = f"""
         SELECT
             '{fac}' AS factory,
@@ -111,7 +128,7 @@ def load_rs_details(
         FROM eda.{table_name} T
         JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
         WHERE T.{time_col} >= :start_time
-          AND T.{time_col} <= :end_time
+          AND T.{time_col} < :end_time
           AND P.productcode = :prod_code
         """
         sql_queries.append(q)
@@ -126,6 +143,7 @@ def load_rs_details(
             "end_time": end_time_fmt,
             "prod_code": query_config.prod_code,
         },
+        **({"strict": True} if strict else {}),
     )
     if df.empty:
         return pd.DataFrame(columns=RS_DETAIL_COLUMNS)
@@ -140,15 +158,23 @@ def load_rs_details(
 def load_pass_through(
     db_manager: "DatabaseManager",
     query_config: AoiRsQueryConfig,
+    *, strict: bool = False, step_ids: tuple[str, ...] | None = None,
 ) -> pd.DataFrame:
     """加载三厂过货明细（月周天趋势图分母），列名抹平后与 RS 明细同构。"""
     logger.info("==> [DAO] 抽取产品 %s 的过货明细（分母）...", query_config.prod_code)
 
     start_time_fmt = f"{query_config.start_date} 00:00:00"
-    end_time_fmt = f"{query_config.end_date} 23:59:59"
+    end_time_fmt = str(pd.Timestamp(query_config.end_date) + pd.Timedelta(days=1))
+
+    if step_ids == ():
+        return pd.DataFrame(columns=PASS_THROUGH_COLUMNS)
+    step_params = {f"step_{index}": step for index, step in enumerate(step_ids or ())}
+    step_filter = " AND T.step_id IN (" + ",".join(f":{key}" for key in step_params) + ")" if step_params else ""
 
     sql_queries = []
     for fac, (view_name, id_col, time_col) in PASS_FACTORY_META.items():
+        if strict and query_config.factory and fac != query_config.factory:
+            continue
         q = f"""
         SELECT
             '{fac}' AS factory,
@@ -160,8 +186,9 @@ def load_pass_through(
         FROM eda.{view_name} T
         JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname
         WHERE T.{time_col} >= :start_time
-          AND T.{time_col} <= :end_time
+          AND T.{time_col} < :end_time
           AND P.productcode = :prod_code
+          {step_filter}
         """
         sql_queries.append(q)
 
@@ -174,7 +201,9 @@ def load_pass_through(
             "start_time": start_time_fmt,
             "end_time": end_time_fmt,
             "prod_code": query_config.prod_code,
+            **step_params,
         },
+        **({"strict": True} if strict else {}),
     )
     if df.empty:
         return pd.DataFrame(columns=PASS_THROUGH_COLUMNS)
@@ -188,6 +217,7 @@ def load_pass_through(
 def load_rs_spec_limits(
     db_manager: "DatabaseManager",
     prod_code: str,
+    *, strict: bool = False,
 ) -> pd.DataFrame:
     """加载 RS Code 规格线（按 type_flag 区分适用图类型，spec 为单边上限）。"""
     sql_query = f"""
@@ -207,6 +237,7 @@ def load_rs_spec_limits(
         sql_query,
         "[DAO] 提取 RS 规格基准失败",
         params={"prod_code": prod_code},
+        **({"strict": True} if strict else {}),
     )
     if df.empty:
         return pd.DataFrame(

@@ -81,6 +81,24 @@ def _config() -> AoiRsQueryConfig:
     )
 
 
+def test_strict_monitor_reads_one_factory_including_fractional_last_second():
+    manager = _fake_db_manager()
+    with manager.engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO eda.spc_tzbjx_rs_array VALUES"
+            " ('SPEC-M678', '11629', 'L2', 'END', '2026-08-10 23:59:59.500', 'A1', 1)"
+        ))
+    query = _config().model_copy(update={"factory": "ARRAY"})
+    frame = load_rs_details(manager, query, strict=True)
+    assert set(frame["factory"]) == {"ARRAY"}
+    assert "END" in set(frame["sheet_id"])
+
+
+def test_strict_monitor_read_raises_instead_of_returning_empty():
+    with pytest.raises(RuntimeError, match="source query failed"):
+        load_rs_details(SimpleNamespace(engine=None), _config(), strict=True)
+
+
 def test_load_rs_details_unifies_three_factories_with_product_join() -> None:
     db_manager = _fake_db_manager()
 

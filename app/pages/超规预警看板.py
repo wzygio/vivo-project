@@ -41,12 +41,14 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
 )
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
 from app.sections.inline_domain.monitor.cpm_monitor_dashboard import render_cpm_monitor_section
+from app.sections.inline_domain.monitor.aoi_rs_monitor_dashboard import render_aoi_rs_monitor_section
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
     build_ooc_history_service,
     build_oos_history_service,
     build_cpk_monitor_service,
     build_cpm_monitor_service,
+    build_aoi_rs_monitor_service,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
@@ -212,4 +214,10 @@ with st.expander("SPC CPM超规预警", expanded=True):
         build_cpm_monitor_service(),
         SessionManager.AVAILABLE_PRODUCTS,
         MONITOR_FACTORY_OPTIONS,
+    )
+
+st.subheader("📋 AOI_RS监控看板")
+with st.expander("AOI_RS 周期密度", expanded=True):
+    render_aoi_rs_monitor_section(
+        build_aoi_rs_monitor_service(), ConfigLoader.get_enabled_products(),
     )

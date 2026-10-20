@@ -21,7 +21,7 @@ def isolated_pages(monkeypatch):
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)
 
 
-def test_summary_route_shows_three_boards_without_loading_matrix(isolated_pages, monkeypatch):
+def test_summary_route_shows_four_boards_without_loading_matrix(isolated_pages, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("Summary route must not load the matrix or query before clicking")
 
@@ -30,10 +30,11 @@ def test_summary_route_shows_three_boards_without_loading_matrix(isolated_pages,
     monkeypatch.setattr(OosMonitorService, "build_dashboard", forbidden)
     app = AppTest.from_file(str(PAGES / "超规预警看板.py")).run()
     assert not app.exception
-    assert [item.value for item in app.subheader] == ["⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板"]
+    assert [item.value for item in app.subheader] == ["⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板", "📋 AOI_RS监控看板"]
     assert app.button(key="btn_monitor_query_submit")
     assert app.button(key="cpk_monitor_query_submit")
     assert app.button(key="cpm_monitor_query_submit")
+    assert app.button(key="aoi_rs_monitor_query_submit")
     assert not any(button.key == "btn_load_alert_matrix" for button in app.button)
 
 

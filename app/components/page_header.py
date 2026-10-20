@@ -152,6 +152,8 @@ def perform_hard_reset(
             or key_str == "monitor_query_signature"
             or key_str == "cpk_monitor_query_signature"
             or key_str == "cpm_monitor_query_signature"
+            or key_str == "aoi_rs_monitor_query_signature"
+            or key_str == "aoi_rs_monitor_payload"
         ):
             del st.session_state[key]
 

@@ -81,6 +81,40 @@ def build_period_trend_df(
             daily_axis.loc[daily_axis["period_type"].eq("day")],
         ], ignore_index=True)
 
+    return build_period_density_df(details, pass_through_df, axis)
+
+
+def build_period_density_df(
+    rs_details_df: pd.DataFrame,
+    pass_through_df: pd.DataFrame,
+    axis: pd.DataFrame,
+    *,
+    indicators: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Calculate density using distinct throughput Sheets within each entire window.
+
+    Inputs belong to one product. Supplying ``indicators`` creates a complete
+    period × indicator grid, with zero defects and unavailable density where
+    throughput is zero. Without it, preserve the report's sparse defect rows.
+    """
+    columns = [
+        "period_type", "period_label", "period_sort", *_INDICATOR_KEYS,
+        "rs_qty", "sheet_qty", "value",
+    ]
+    details = pd.DataFrame(columns=[*_INDICATOR_KEYS, "code_qty", "start_time"])
+    if not rs_details_df.empty:
+        details = rs_details_df.copy()
+        details["start_time"] = pd.to_datetime(details["start_time"], errors="coerce")
+        details = details.dropna(subset=["start_time"])
+    universe = None
+    if indicators is not None:
+        universe = (
+            pd.DataFrame(columns=_INDICATOR_KEYS)
+            if indicators.empty else indicators[_INDICATOR_KEYS].drop_duplicates()
+        )
+    if axis.empty or (universe is not None and universe.empty):
+        return pd.DataFrame(columns=columns)
+
     pass_df = pd.DataFrame(columns=["factory", "step_id", "sheet_id", "start_time"])
     if not pass_through_df.empty:
         pass_df = pass_through_df.copy()
@@ -95,14 +129,19 @@ def build_period_trend_df(
         period_details = details[
             (details["start_time"] >= window_start) & (details["start_time"] < window_end)
         ]
-        if period_details.empty:
+        if period_details.empty and universe is None:
             continue
 
-        numerator = (
-            period_details.groupby(_INDICATOR_KEYS, as_index=False)["code_qty"]
-            .sum()
-            .rename(columns={"code_qty": "rs_qty"})
-        )
+        numerator = pd.DataFrame(columns=[*_INDICATOR_KEYS, "rs_qty"])
+        if not period_details.empty:
+            numerator = (
+                period_details.groupby(_INDICATOR_KEYS, as_index=False)["code_qty"]
+                .sum()
+                .rename(columns={"code_qty": "rs_qty"})
+            )
+        if universe is not None:
+            numerator = universe.merge(numerator, on=_INDICATOR_KEYS, how="left", validate="one_to_one")
+            numerator["rs_qty"] = pd.to_numeric(numerator["rs_qty"], errors="coerce").fillna(0)
 
         if pass_df.empty:
             denominator = pd.DataFrame(columns=["factory", "step_id", "sheet_qty"])
@@ -117,11 +156,8 @@ def build_period_trend_df(
             )
 
         merged = numerator.merge(denominator, on=["factory", "step_id"], how="left")
-        merged["sheet_qty"] = merged["sheet_qty"].fillna(0).astype(int)
-        merged["value"] = merged.apply(
-            lambda row: row["rs_qty"] / row["sheet_qty"] if row["sheet_qty"] > 0 else pd.NA,
-            axis=1,
-        )
+        merged["sheet_qty"] = pd.to_numeric(merged["sheet_qty"], errors="coerce").fillna(0).astype(int)
+        merged["value"] = merged["rs_qty"].div(merged["sheet_qty"].where(merged["sheet_qty"].gt(0)))
         merged["value"] = pd.to_numeric(merged["value"], errors="coerce")
         merged.insert(0, "period_sort", period.period_sort)
         merged.insert(0, "period_label", period.period_label)

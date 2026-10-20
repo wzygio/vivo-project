@@ -298,6 +298,21 @@ def build_aoi_rs_repository(
     )
 
 
+def build_aoi_rs_monitor_service():
+    """Independent period aggregates; no raw L1 snapshots or shared alarm writes."""
+    from src.inline_domain.application.monitor.aoi_rs_monitor_service import AoiRsMonitorService
+    from src.inline_domain.infrastructure.monitor.aoi_rs_monitor_source import AoiRsMonitorSource
+    from src.inline_domain.infrastructure.monitor.aoi_rs_period_store import AoiRsPeriodStore
+
+    return AoiRsMonitorService(
+        AoiRsMonitorSource(DatabaseManager),
+        AoiRsPeriodStore(ConfigLoader.get_domain_resource_path("inline_domain", "aoi_rs_monitor_history")),
+        enabled_products=ConfigLoader.get_enabled_products(),
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
+        cutoff=ConfigLoader.get_report_cutoff_policy().latest_day_time,
+    )
+
+
 def refresh_aoi_rs_snapshots(
     db_manager: DatabaseManager,
     prod_code: str,

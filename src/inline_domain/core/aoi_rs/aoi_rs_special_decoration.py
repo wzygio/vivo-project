@@ -18,6 +18,7 @@ import pandas as pd
 from src.inline_domain.core.aoi_rs.aoi_rs_calculator import (
     attach_spec_values,
     build_lot_point_df,
+    build_period_density_df,
     build_period_trend_df,
     build_sheet_point_df,
 )
@@ -213,16 +214,23 @@ def build_decorated_period_trend_df(
     decoration_window: DecorationWindow | None = None,
     daily_end_date: date | None = None,
     daily_start_date: date | None = None,
+    period_axis: pd.DataFrame | None = None,
+    indicators: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """周/日投影限于所属月密度的 1.3 倍；跨月周取截至报表日的周末所属月。"""
-    trend = build_period_trend_df(
-        rs_details_df, pass_through_df, end_date, daily_end_date=daily_end_date,
-        daily_start_date=daily_start_date,
+    trend = (
+        build_period_density_df(rs_details_df, pass_through_df, period_axis, indicators=indicators)
+        if period_axis is not None else build_period_trend_df(
+            rs_details_df, pass_through_df, end_date, daily_end_date=daily_end_date,
+            daily_start_date=daily_start_date,
+        )
     )
     if trend.empty:
         return trend
     trend["rs_qty"] = trend["rs_qty"].astype(float)
-    monthly = trend.loc[trend["period_type"].eq("month")].set_index(
+    month_rows = trend.loc[trend["period_type"].eq("month")].copy()
+    month_rows["period_label"] = month_rows["period_label"].str.replace("-M", "-", regex=False)
+    monthly = month_rows.set_index(
         [*_INDICATOR_KEYS, "period_label"],
     )["value"]
     eligible = trend["period_type"].isin(["week", "day"])

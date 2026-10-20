@@ -282,15 +282,16 @@ def _assert_warning_header(trackers: dict) -> None:
 
 
 def _assert_module_structure(trackers: dict) -> None:
-    """两个页面合计四个独立查询模块，未查询时不额外展示提示。"""
+    """两个页面合计五个独立查询模块，未查询时不额外展示提示。"""
     assert trackers["infos"] == []
     assert trackers["subheaders"] == [
         "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板",
+        "📋 AOI_RS监控看板",
     ]
     module_expanders = [
         item for item in trackers["expanders"] if item.get("expanded") is True
     ]
-    assert len(module_expanders) == 4
+    assert len(module_expanders) == 5
     # subheader 与 expander 文案不重复堆砌
     for item, title in zip(module_expanders, trackers["subheaders"]):
         assert item["label"] != title
@@ -301,7 +302,7 @@ def _assert_row_layout(trackers: dict, matrix_button_key: str) -> None:
     four_col_rows = [
         c
         for c in trackers["columns"]
-        if isinstance(c["spec"], (list, tuple)) and len(c["spec"]) == 4
+        if c["spec"] == [1.0, 2.6, 1.6, 0.8]
     ]
     assert len(four_col_rows) == 2, trackers["columns"]
     assert all(c.get("vertical_alignment") == "bottom" for c in four_col_rows)
@@ -439,7 +440,7 @@ def test_each_board_has_admin_only_refresh_controls(monkeypatch) -> None:
     buttons = {item["key"]: item["label"] for item in trackers["buttons"]}
     assert buttons["matrix_refresh_cell"] == "刷新缓存"
     assert buttons["matrix_refresh_data"] == "刷新数据"
-    for board in ("oos_monitor", "cpk_monitor", "cpm_monitor"):
+    for board in ("oos_monitor", "cpk_monitor", "cpm_monitor", "aoi_rs_monitor"):
         assert f"{board}_refresh_cache" not in buttons
         assert buttons[f"{board}_refresh_data"] == "刷新数据"
 
@@ -466,6 +467,8 @@ def test_shared_header_cache_refresh_clears_all_board_queries(monkeypatch, admin
         st.session_state["monitor_query_signature"] = "old-oos"
         st.session_state["cpk_monitor_query_signature"] = "old-cpk"
         st.session_state["cpm_monitor_query_signature"] = "old-cpm"
+        st.session_state["aoi_rs_monitor_query_signature"] = "old-rs"
+        st.session_state["aoi_rs_monitor_payload"] = {"tables": {}}
     try:
         runpy.run_path(str(PAGE_PATH), run_name="__main__")
         cache_buttons = [button for button in trackers["buttons"] if "刷新缓存" in button["label"]]
@@ -476,6 +479,8 @@ def test_shared_header_cache_refresh_clears_all_board_queries(monkeypatch, admin
         assert "monitor_query_signature" not in st.session_state
         assert "cpk_monitor_query_signature" not in st.session_state
         assert "cpm_monitor_query_signature" not in st.session_state
+        assert "aoi_rs_monitor_query_signature" not in st.session_state
+        assert "aoi_rs_monitor_payload" not in st.session_state
         assert trackers["load_calls"] == []
         assert trackers["source_signature_calls"] == []
         assert trackers["db_calls"] == []
