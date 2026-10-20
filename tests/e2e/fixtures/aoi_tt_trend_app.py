@@ -14,7 +14,7 @@ from src.inline_domain.core.aoi_tt.trend_alerts import INDICATOR_KEYS, HISTORY_L
 
 st.set_page_config(page_title="AOI TT 趋势验证", layout="wide")
 st.title("AOI TT 趋势预警验证")
-scenario = st.selectbox("场景", ["有预警", "跨日预警", "无预警", "数据不足", "加载失败"])
+scenario = st.selectbox("场景", ["有预警", "跨日预警", "无预警", "仅粒径预警", "数据不足", "加载失败"])
 show_manual = st.checkbox("同时展示其他报表区域")
 reference = date(2026, 10, 20)
 target = date(2026, 10, 19)
@@ -24,18 +24,21 @@ if scenario == "加载失败":
 else:
     dates = ["2026-10-13", "2026-10-16", "2026-10-19"] if scenario == "跨日预警" else ["2026-10-17", "2026-10-18", "2026-10-19"]
     quantities = [1, 2, 3] if scenario in ("有预警", "跨日预警") else [1, 1, 1]
+    total_quantities = [10 * value for value in quantities]
+    if scenario == "仅粒径预警":
+        quantities = [1, 2, 3]
     details = pd.DataFrame([
         dict(prod_code="M678", factory="ARRAY", step_id="11620", tt_name=name,
              particle_size=size, start_time=pd.Timestamp(day), sheet_id=f"S{day}",
              lot_id=f"L{day}", tt_qty=qty)
-        for name, size, values in [("TDSUM", "Total", [20, 20, 20]),
+        for name, size, values in [("TDSUM", "Total", total_quantities),
                                    ("TDSUM", "S", quantities), ("OTHER", "Total", [10, 10, 10])]
         for day, qty in zip(dates, values)
     ])
     if scenario == "数据不足":
         details = details.loc[details.start_time.eq(pd.Timestamp(target))].copy()
     candidates = details[["prod_code", *INDICATOR_KEYS]].drop_duplicates()
-    indicators = candidates.drop(columns="particle_size").drop_duplicates()
+    indicators = candidates
     trend = build_period_trend_df(
         details, reference, daily_start_date=(pd.Timestamp(target) - pd.Timedelta(days=HISTORY_LOOKBACK_DAYS)).date(),
         daily_end_date=target,

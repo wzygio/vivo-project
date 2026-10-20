@@ -169,7 +169,7 @@ class AoiTtReportService:
         decision_signature 进入缓存 key 并透传到 core 刷新门控：页头刷新
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
-        trend_policy_version 对共享趋势规则变更失效；评估按粒径独立计算。
+        trend_policy_version 对趋势规则变更失效；仅评估 Total。
         """
         try:
             query_config = AoiTtQueryConfig.model_validate_json(query_config_json)
@@ -302,7 +302,9 @@ class AoiTtReportService:
                 daily_start_date=(target_day - pd.Timedelta(days=HISTORY_LOOKBACK_DAYS)).date(),
                 daily_end_date=target_day.date(),
             )
-            trend_indicators = tt_details_df[["prod_code", *INDICATOR_KEYS]].drop_duplicates()
+            trend_indicators = tt_details_df.loc[
+                tt_details_df["particle_size"].eq("Total"), ["prod_code", *INDICATOR_KEYS]
+            ].drop_duplicates()
             evaluation = evaluate_aoi_tt_trends(trend, trend_indicators, reference_date=report_date)
             return {
                 "tt_details_df": tt_details_df,

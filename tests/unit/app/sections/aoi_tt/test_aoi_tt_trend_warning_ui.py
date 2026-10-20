@@ -1,4 +1,4 @@
-"""TT warnings use the compact labels and select exact particle charts."""
+"""TT warnings evaluate Total and retain the existing chart breakdown."""
 from pathlib import Path
 
 import pytest
@@ -8,8 +8,9 @@ FIXTURE = Path(__file__).resolve().parents[4] / "e2e/fixtures/aoi_tt_trend_app.p
 
 
 @pytest.mark.parametrize("scenario,charts,success,info,error", [
-    ("有预警", 3, False, False, False), ("跨日预警", 3, False, False, False),
+    ("有预警", 6, False, False, False), ("跨日预警", 6, False, False, False),
     ("无预警", 0, True, False, False), ("数据不足", 0, False, True, False),
+    ("仅粒径预警", 0, True, False, False),
     ("加载失败", 0, False, False, True),
 ])
 def test_compact_tt_warning_states_and_particle_chart_scope(scenario, charts, success, info, error):
@@ -21,15 +22,17 @@ def test_compact_tt_warning_states_and_particle_chart_scope(scenario, charts, su
     assert not app.caption
     if charts:
         table = app.dataframe[0].value
-        assert table.columns.tolist() == ["厂别", "站点", "TT名称", "Particle Size", "当日", "当日密度",
+        assert table.columns.tolist() == ["厂别", "站点", "TT名称", "当日", "当日密度",
             "T-1有效日", "T-1密度", "T-2有效日", "T-2密度", "基线5日均值", "预警原因"]
         assert table["TT名称"].tolist() == ["TDSUM"]
-        assert table["Particle Size"].tolist() == ["S"]
+        assert table["当日密度"].tolist() == [30]
         assert table["预警原因"].tolist() == ["当日超规；连续两日上升"]
         if scenario == "跨日预警":
             assert table["T-1有效日"].tolist() == ["2026-10-16"]
             assert table["T-2有效日"].tolist() == ["2026-10-13"]
         assert not any("OTHER" in expander.label for expander in app.expander)
+        sizes = [item.value for item in app.markdown if "Particle Size" in item.value]
+        assert sizes == ["**Particle Size：Total**", "**Particle Size：S**"]
 
 
 def test_same_tt_particle_can_render_in_all_three_areas_without_duplicate_chart_ids():
@@ -37,10 +40,10 @@ def test_same_tt_particle_can_render_in_all_three_areas_without_duplicate_chart_
     app.checkbox[0].check().run()
     assert not app.exception
     charts = app.get("plotly_chart")
-    assert len(charts) == 12
+    assert len(charts) == 15
     ids = [chart.proto.id for chart in charts]
-    assert len(set(ids)) == 12
-    assert sum("aoi_tt_trend_alert" in key for key in ids) == 3
+    assert len(set(ids)) == 15
+    assert sum("aoi_tt_trend_alert" in key for key in ids) == 6
     assert sum("aoi_tt_oos_alert" in key for key in ids) == 6
 
 
@@ -75,7 +78,7 @@ def test_automatic_charts_preserve_station_denominator_with_different_tt_sheet_s
     rendered = []
     monkeypatch.setattr(dashboard, "_render_particle_size_charts", lambda **kw: rendered.append(kw))
     ui.render_aoi_tt_trend_alerts(AoiTtReportViewModel(
-        details, pd.DataFrame(), candidates.drop(columns="particle_size"), evaluation), reference_date=reference)
+        details, pd.DataFrame(), candidates, evaluation), reference_date=reference)
     assert len(rendered) == 1
     daily = rendered[0]["trend_df"].query("period_type == 'day' and tt_name == 'DSUM_L'")
     assert daily.sheet_qty.tolist() == [4, 3, 2]

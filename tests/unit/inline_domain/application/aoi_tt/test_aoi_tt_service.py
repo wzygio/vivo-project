@@ -108,7 +108,7 @@ def _config_json() -> str:
     ).model_dump_json()
 
 
-def test_trend_alerts_use_current_tt_density_and_keep_particle_sizes_separate():
+def test_trend_alerts_ignore_particle_rises_when_total_is_stable():
     details = pd.DataFrame([
         dict(factory="ARRAY", prod_code="M678", step_id="11620", tt_name="TDSUM",
              sheet_id=f"S{day}", lot_id=f"L{day}", start_time=pd.Timestamp(f"2026-10-{day}"), tt_qty=20)
@@ -125,12 +125,14 @@ def test_trend_alerts_use_current_tt_density_and_keep_particle_sizes_separate():
         _data_port=FakeAoiTtPort(details, pd.DataFrame(), particles),
         query_config_json=query.model_dump_json(), snapshot_signature="tt-trend-particle",
     )
-    evaluation = report.trend_evaluation_df.set_index("particle_size")
-    assert not evaluation.loc["Total", "is_alert"]
-    assert evaluation.loc["S", "daily_alert"] and evaluation.loc["S", "rising_alert"]
-    assert evaluation.loc["S", "target_date"] == "2026-10-18"
-    assert evaluation.loc["S", "previous_date"] == "2026-10-15"
-    assert evaluation.loc["S", "target_density"] == 3
+    evaluation = report.trend_evaluation_df
+    assert len(evaluation) == 1
+    assert "particle_size" not in evaluation.columns
+    assert not evaluation.iloc[0].is_alert
+    assert evaluation.iloc[0].target_date == "2026-10-18"
+    assert evaluation.iloc[0].previous_date == "2026-10-15"
+    assert evaluation.iloc[0].target_density == 20
+    assert set(report.tt_details_df.particle_size) >= {"Total", "S"}
 
 
 def test_tt_warning_cache_tracks_revision_decisions_and_reference_date():

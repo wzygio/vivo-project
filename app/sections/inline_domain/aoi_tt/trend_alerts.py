@@ -1,4 +1,4 @@
-"""TT trend warning display and exact TT/particle chart selection."""
+"""Total-only TT warnings with the existing particle-size chart breakdown."""
 from __future__ import annotations
 
 from datetime import date
@@ -16,9 +16,8 @@ if TYPE_CHECKING:
     from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportViewModel
 
 _INDICATOR_COLUMNS = {
-    "factory": "厂别", "step_id": "站点", "tt_name": "TT名称", "particle_size": "Particle Size",
+    "factory": "厂别", "step_id": "站点", "tt_name": "TT名称",
 }
-_PARTICLE_KEY_MAP = {**AOI_TT_ALERT_KEY_MAP, "Particle Size": "particle_size"}
 
 
 def render_aoi_tt_trend_alerts(
@@ -32,7 +31,7 @@ def render_aoi_tt_trend_alerts(
     if alerts.empty:
         return
     keys = alerts[list(_INDICATOR_COLUMNS)].rename(columns=_INDICATOR_COLUMNS)
-    details = filter_report_by_alert_keys(report.tt_details_df, keys, _PARTICLE_KEY_MAP)
+    details = filter_report_by_alert_keys(report.tt_details_df, keys, AOI_TT_ALERT_KEY_MAP)
     indicators = filter_report_by_alert_keys(report.indicators_df, keys, AOI_TT_ALERT_KEY_MAP)
     if details.empty or indicators.empty:
         st.info("暂无图像。")

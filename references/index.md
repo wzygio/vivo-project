@@ -23,7 +23,7 @@
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |
 | AOI_TT 上周平均每片 TT 个数、八产品 PPT、粒径及 Array 层别筛选 | [AOI_TT 周度报告](domain/inline_domain/aoi_tt/rules-aoi-tt-weekly-report.md) |
-| AOI_TT 昨日趋势预警、粒径独立判定、五天均值、七天跨日比较与精简预警中心 | [AOI_TT 趋势预警规则](domain/inline_domain/aoi_tt/rules-aoi-tt-trend-alerts.md) |
+| AOI_TT 仅 Total 昨日趋势预警、五天均值、七天跨日比较与精简预警中心 | [AOI_TT 趋势预警规则](domain/inline_domain/aoi_tt/rules-aoi-tt-trend-alerts.md) |
 | AOI_RS 来源表、RS Code、分母与计数口径 | [AOI_RS 数据源](domain/inline_domain/aoi_rs/data-source-aoi-rs.md) |
 | AOI_RS 上一周平均每片 RS 个数、PPT 模板、无过货、Array 层别及站点筛选 | [AOI_RS 周度报告](domain/inline_domain/aoi_rs/rules-aoi-rs-weekly-report.md) |
 | AOI_RS 昨日趋势预警、当日超规、连续两日上升、五天均值、七天跨日比较、1.2倍、缺测与自动图像 | [AOI_RS 趋势预警规则](domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md) |
