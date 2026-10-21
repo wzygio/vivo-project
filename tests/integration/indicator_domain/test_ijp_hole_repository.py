@@ -43,8 +43,11 @@ def test_sql_excludes_small_holes_and_deduplicates_all_join_fanout(repository):
 def test_service_keeps_denominator_and_disabled_selections_never_read_everything(repository):
     service = IjpHoleReportService(repository, ('M626',), today_provider=lambda: date(2026, 9, 10))
     result = service.get_report(query(codes=('C3RA2',)))
-    assert result['total'].ratio.tolist() == [0.5]
-    assert len(result['day']) == 2
+    assert set(result) == {'day'}
+    assert len(result['day']) == 10
+    observed = result['day'][result['day'].has_data]
+    assert len(observed) == 4 and observed.ratio.between(0.085, 0.095).all()
+    assert not {'raw_ratio', 'code_num', 'in_window'} & set(result['day'])
     disabled = query().model_copy(update={'product_codes': ('DISABLED',)})
     assert all(frame.empty for frame in service.get_report(disabled).values())
     assert all(frame.empty for frame in IjpHoleReportService(repository, ()).get_report(query()).values())
@@ -70,6 +73,17 @@ def test_time_shift_and_latest_day_cutoff(repository, monkeypatch):
     assert repository.fetch_counts(q).empty
 
 
+def test_service_moves_overflow_to_c3ra2_even_without_original_c3ra2(repository):
+    with repository._engine.begin() as connection:
+        connection.execute(text("DELETE FROM eda.oled_ijp_defect_t WHERE code='C3RA2'"))
+    service = IjpHoleReportService(repository, ('M626',), today_provider=lambda: date(2026, 9, 10))
+    frame = service.get_report(query())['day']
+    observed = frame[frame.has_data]
+    assert observed[observed.rs_code.eq('C3RA2')].ratio.between(0.085, 0.095).all()
+    assert observed[observed.rs_code.eq('C3RA1')].ratio.between(0.905, 0.915).all()
+    assert frame[frame.rs_code.eq('C3RA3')].ratio.eq(0).all()
+
+
 def test_failures_are_safe(repository):
     repository._engine = None
     with pytest.raises(IjpDataAccessError, match='暂时无法读取'):
@@ -80,6 +94,7 @@ def test_options_preserve_enabled_order_and_reject_border_codes(repository):
     service = IjpHoleReportService(repository, ('M678', 'M626'),
                                    today_provider=lambda: date(2026, 9, 10))
     assert service.get_filter_options()['product_codes'] == ('M678', 'M626')
+    assert service.get_filter_options()['codes'] == ('C3RA1', 'C3RA2', 'C3RA3')
     assert service.get_filter_options(('DISABLED',))['picis'] == ()
     with pytest.raises(ValueError, match='孔区 CODE'):
         service.get_report(query(codes=('C3DM1',)))

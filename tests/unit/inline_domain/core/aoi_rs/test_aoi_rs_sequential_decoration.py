@@ -24,20 +24,46 @@ def _details() -> pd.DataFrame:
     ])
 
 
-def _specs(lot_limit=6) -> pd.DataFrame:
+def _specs(lot_limit=6, sheet_limit=20) -> pd.DataFrame:
     return pd.DataFrame([
         dict(factory="ARRAY", step_id="100", rs_code="RS", type_flag=kind, spec=value)
-        for kind, value in [("SHEET_ID", 10), ("LOT_RATIO", lot_limit)]
+        for kind, value in [("SHEET_ID", sheet_limit), ("LOT_RATIO", lot_limit)]
     ])
 
 
-def _decorate(details, specs=None, flags=None, exemptions=None):
+def _decorate(details, specs=None, flags=None, exemptions=None, **kwargs):
     return rules.apply_aoi_rs_decoration(
         build_lot_point_df(details, details), build_sheet_point_df(details),
         _specs() if specs is None else specs, "P",
         pd.DataFrame() if flags is None else flags, exemptions,
-        rs_details_df=details,
+        rs_details_df=details, **kwargs,
     )
+
+
+@pytest.mark.parametrize("type_flag", ["SHEET_ID", "GLASS_ID"])
+def test_sheet_half_spec_trigger_and_quarter_spec_replacement(type_flag):
+    source = pd.concat([
+        _details().iloc[[0]].assign(sheet_id=sheet, lot_id=sheet, code_qty=value)
+        for sheet, value in [("BELOW", 4.9), ("EXACT", 5.0), ("ABOVE", 5.1), ("OVER", 11.)]
+    ], ignore_index=True)
+    specs = _specs(lot_limit=100, sheet_limit=10).replace({"type_flag": {"SHEET_ID": type_flag}})
+    _, sheets = _decorate(source, specs=specs)
+    values = sheets.set_index("sheet_id").rs_qty
+    assert values.BELOW == 4.9
+    assert values.EXACT == 5.0
+    assert 0 <= values.ABOVE <= 2.5
+    assert 0 <= values.OVER <= 2.5
+
+
+def test_sheet_ratios_change_trigger_and_scale_stable_hash():
+    source = _details().iloc[[0]].assign(code_qty=6.)
+    specs = _specs(lot_limit=100, sheet_limit=10)
+    _, first = _decorate(source, specs=specs)
+    _, scaled = _decorate(source, specs=specs, sheet_spec_ratios=(0.5, 0.1))
+    _, unchanged = _decorate(source, specs=specs, sheet_spec_ratios=(0.6, 0.1))
+    assert first.rs_qty.iloc[0] > 0
+    assert scaled.rs_qty.iloc[0] == pytest.approx(first.rs_qty.iloc[0] * 0.4)
+    assert unchanged.rs_qty.iloc[0] == 6.
 
 
 def test_sheet_then_lot_zeroing_and_detail_projection():
@@ -134,7 +160,7 @@ def test_zero_specs_and_all_deleted_sheets():
     assert rules.project_aoi_rs_details(source, sheets).empty
 
 
-def test_exact_spec_values_and_missing_denominator():
+def test_exact_sheet_threshold_and_lot_spec_values_and_missing_denominator():
     source = _details().iloc[[0]].assign(code_qty=10)
     lots, sheets = _decorate(source, specs=_specs(lot_limit=10))
     assert sheets.rs_qty.iloc[0] == lots.value.iloc[0] == 10

@@ -10,6 +10,9 @@ import pandas as pd
 
 from src.equipment_domain.core.parts_calculator import (
     PartsAlertPolicy,
+    REPLACEMENT_PROGRESS_THRESHOLD,
+    STATUS_REPLACED,
+    apply_replacement_measurement_dates,
     calculate_warning_status,
 )
 
@@ -23,6 +26,23 @@ CVD_REPORT_COLUMNS = (
     "站点", "机台号-腔室", "测量值", "测量时间", "使用进度", "预警状态",
 )
 DAYS_PER_MONTH = 30
+
+
+def _calendar_cycle(
+    replacement: pd.Timestamp, current_day: pd.Timestamp, lifespan_months: int,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """以源更换日为日历锚点，定位当前寿命周期，支持跨越多个周期。"""
+    elapsed_months = (
+        (current_day.year - replacement.year) * 12
+        + current_day.month - replacement.month
+    )
+    cycle = max(elapsed_months // lifespan_months, 0)
+    cycle_start = replacement + pd.DateOffset(months=cycle * lifespan_months)
+    if cycle > 0 and cycle_start > current_day:
+        cycle -= 1
+        cycle_start = replacement + pd.DateOffset(months=cycle * lifespan_months)
+    expiry = replacement + pd.DateOffset(months=(cycle + 1) * lifespan_months)
+    return cycle_start, expiry
 
 
 def parse_cvd_sheet_name(
@@ -85,7 +105,9 @@ def _measurement(
             raise ValueError("寿命规格必须大于零")
         if lifespan_months != lifespan_months.to_integral_value():
             raise ValueError("年限寿命规格必须对应整数月")
-        expiry = replacement + pd.DateOffset(months=int(lifespan_months))
+        replacement, expiry = _calendar_cycle(
+            replacement, current_day, int(lifespan_months),
+        )
         elapsed_days = max((current_day - replacement).days, 0)
         progress = elapsed_days / (expiry - replacement).days * 100
         return replacement.strftime("%Y-%m-%d"), progress
@@ -99,6 +121,11 @@ def _measurement(
     origin = baseline_day if pd.isna(measured_at) or measured_at == "" else _date_value(measured_at)
     elapsed_days = max((current_day - origin).days, 0)
     measurement = value + monthly_increment / DAYS_PER_MONTH * elapsed_days
+    if not math.isfinite(measurement):
+        raise ValueError("推算测量值必须为有限非负数")
+    # 从源值按自身月增量重算并保留溢出量；不使用常规仿造的TTL增长参数。
+    if measurement >= limit:
+        measurement %= limit
     return measurement, measurement / limit * 100
 
 
@@ -109,7 +136,7 @@ def build_cvd_report(
     baseline_date: str | date,
     policy: PartsAlertPolicy,
 ) -> pd.DataFrame:
-    """按报告日期重算，重复刷新不累加；日期值保留为更换日期。"""
+    """按报告日期重算寿命周期，重复刷新不累加，来源数据不改写。"""
     missing = set(CVD_SOURCE_COLUMNS) - set(source.columns)
     if missing:
         raise ValueError(f"CVD 数据缺少字段: {sorted(missing)}")
@@ -121,6 +148,11 @@ def build_cvd_report(
             measurement, progress = _measurement(row, current_day, baseline_day)
         except (ValueError, TypeError, OverflowError) as error:
             raise ValueError(f"CVD 行 {index}: {error}") from error
+        if progress > REPLACEMENT_PROGRESS_THRESHOLD:
+            # 更换后的报告进度为0，测量值在计算结束后统一投影为更换日期。
+            progress, status = 0.0, STATUS_REPLACED
+        else:
+            status = calculate_warning_status(progress, policy)
         record = {column: row[column] for column in CVD_SOURCE_COLUMNS[:7]}
         station = str(row["站点"]).strip()
         record.update({
@@ -129,7 +161,9 @@ def build_cvd_report(
             "测量值": measurement,
             "测量时间": current_day,
             "使用进度": progress,
-            "预警状态": calculate_warning_status(progress, policy),
+            "预警状态": status,
         })
         records.append(record)
-    return pd.DataFrame(records, columns=CVD_REPORT_COLUMNS)
+    return apply_replacement_measurement_dates(
+        pd.DataFrame(records, columns=CVD_REPORT_COLUMNS), as_of_date=current_day.date(),
+    )

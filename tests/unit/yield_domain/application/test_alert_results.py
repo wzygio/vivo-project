@@ -81,6 +81,24 @@ def test_source_age_is_not_reset_by_republishing(tmp_path):
     assert service.read("P1", "lot", DAY).status == "stale"
 
 
+def test_source_health_naive_time_uses_local_timezone(tmp_path):
+    service = results(tmp_path)
+    health = {**HEALTH, "refreshed_at": "2026-10-20T09:00:00"}
+    service.publish("P1", "lot", [], reference_date=DAY, coverage_start="2026-08-01",
+        coverage_end=str(DAY), has_data=True, health=health, calculation_signature="local")
+    assert service.read("P1", "lot", DAY).status == "ready"
+
+
+def test_historical_trend_rows_do_not_turn_current_status_red(tmp_path):
+    service = results(tmp_path)
+    row = {"level": "group", "defect_group": "G", "defect_desc": None,
+        "time_period": "2026-08", "curr_rate": .02, "prev_rate": .001,
+        "rules": ["环比翻倍"], "period_scope": "monthly", "is_current": False}
+    publish(service, kind="trend", records=[row])
+    assert pd.read_excel(tmp_path/"trends.xlsx", sheet_name="P1").shape[0] == 1
+    assert service.read("P1", "trend", DAY).records.empty
+
+
 def test_write_failure_keeps_previous_bytes(tmp_path, monkeypatch):
     from src.yield_domain.infrastructure import alert_result_workbooks as module
     service = results(tmp_path)

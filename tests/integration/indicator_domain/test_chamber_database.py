@@ -152,6 +152,49 @@ def test_different_date_windows_do_not_reuse_cached_payload(database):
         clear_chamber_cache()
 
 
+def test_chamber_excludes_before_product_matching_and_invalidates_cache(database, monkeypatch):
+    from src.indicator_domain.application.qtime.chamber_cache import cached_chamber_report, clear_chamber_cache
+
+    for number, when in enumerate(('2026-09-26 23:59:59', '2026-09-27 00:00:00',
+                                  '2026-10-02 23:59:59', '2026-10-03 00:00:00'), start=1):
+        glass = f'G{number}'
+        passage(database, glass, when, seconds=number)
+        # Excluded passages have no product master: they must disappear before matching.
+        if number in (1, 4):
+            product(database, glass)
+    source_query = text('''
+        SELECT glass_id, eqp_id, unit_id, sub_unit_id, factory, prod_type,
+               inout_type, date_timekey, event_timekey, oper_in_time, oper_out_time, prod_id
+        FROM mdw.dwt_inout_sub_unit_gls
+        ORDER BY glass_id, event_timekey, sub_unit_id, inout_type
+        LIMIT 17
+    ''')
+    with database.connect() as connection:
+        before = pd.read_sql(source_query, connection)
+    assert len(before) == 16
+    state = {'value': ('2026-10-01', '2026-10-06')}
+    monkeypatch.setattr(ConfigLoader, 'get_indicator_data_exclusion', lambda: state['value'])
+    svc = service(database, forward=4)
+    signature = svc.cache_signature()
+    dates = {'as_of': date(2026, 10, 13), 'start_date': date(2026, 9, 30),
+             'end_date': date(2026, 10, 7)}
+    clear_chamber_cache()
+    try:
+        first = cached_chamber_report(svc, **dates)
+        assert first['details'].duration_seconds.tolist() == pytest.approx([1, 4], abs=0.001)
+        assert first['unmatched_glasses'] == 0
+        state['value'] = None
+        assert svc.cache_signature() != signature
+        second = cached_chamber_report(svc, **dates)
+        assert second['unmatched_glasses'] == 2
+        assert second['details'].duration_seconds.tolist() == pytest.approx([1, 4], abs=0.001)
+        with database.connect() as connection:
+            after = pd.read_sql(source_query, connection)
+        pd.testing.assert_frame_equal(before, after)
+    finally:
+        clear_chamber_cache()
+
+
 def test_result_limit_rejects_partial_results_and_missing_master_is_a_safe_failure(database, monkeypatch):
     from src.indicator_domain.infrastructure.qtime import chamber_database
     product(database, 'G')

@@ -110,8 +110,12 @@ def test_aoi_rs_point_projection_and_refresh_metadata(tmp_path):
 
 
 @pytest.mark.parametrize("alarm", ["oos", "ooc"])
-@pytest.mark.parametrize("tt_names", [["PPA_B_X"], ["PPA_B_X", "TDSUM"]])
-def test_existing_tt_workbook_excludes_ppa_without_rewriting_decisions(tmp_path, alarm, tt_names):
+@pytest.mark.parametrize("tt_names", [
+    ["PPA_B_X", "CD1", "OVL1_X", "SE_L1T", "4PP_Rs", "TPPOS_X_DIFF"],
+    ["PPA_B_X", "CD1", "OVL1_X", "SE_L1T", "4PP_Rs", "TPPOS_X_DIFF",
+     "TDSUM", "DSUM_L", "DSUM_O", "TOTAL_O_L"],
+])
+def test_existing_tt_workbook_keeps_only_tt_names_without_rewriting_decisions(tmp_path, alarm, tt_names):
     path = tmp_path / "alarms.xlsx"
     frame = pd.DataFrame([
         dict(factory="ARRAY", prod_code="M626", step_id="100", tt_name=name,
@@ -124,7 +128,7 @@ def test_existing_tt_workbook_excludes_ppa_without_rewriting_decisions(tmp_path,
 
     result = reader(path, alarm, scope="aoi_tt").read_product("aoi_tt", "M626")
 
-    expected = [name for name in tt_names if name == "TDSUM"]
+    expected = [name for name in tt_names if name in {"TDSUM", "DSUM_L", "DSUM_O", "TOTAL_O_L"}]
     assert result.decorated_df.metric_name.tolist() == expected
     assert result.alerts_df.metric_name.tolist() == expected
     assert path.read_bytes() == original

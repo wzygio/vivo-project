@@ -1,5 +1,9 @@
 # 蒸镀单腔停留时间监控：开发与验证记录
 
+> 历史交付记录：已由[数据库方案](qtime-chamber-database-delivery.md)替代。
+> 2026-10-21已删除旧Excel适配器、对应两项配置、两份九月工作簿及工作簿专用测试。
+> 下文换月配置、Excel结构和旧验证命令仅记录历史，不适用于当前实现。
+
 - 日期：2026-09-24
 - 模式：development-flow general
 - 分支：`feat/qtime-chamber-residence`

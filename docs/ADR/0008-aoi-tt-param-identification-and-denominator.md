@@ -14,6 +14,8 @@
 
 ## Decision
 
+以下保留 2026-08-10 的原始决定。第 2 项的参数识别条件已由本文 2026-10-21 后续收紧说明补充；当前完整业务规则由 [TT 参数识别](../../references/domain/inline_domain/aoi_tt/data-flow-aoi-tt.md#43-tt-参数识别) 维护。
+
 1. AOI_TT 镜像 AOI_RS 五层子模块链路：`infrastructure/aoi_tt/data_loader.py` → `application/aoi_tt/aoi_tt_service.py`（缓存 payload → ViewModel，ADR-0001）→ `core/aoi_tt/aoi_tt_calculator.py` → `app/sections/aoi_tt/aoi_tt_dashboard.py` → `app/pages/AOI_TT监控报表.py`。
 2. **TT 参数识别规则**：以规格表 `mdw.dwd_imp_dv_param_spec` 中 `param_type IS NULL` 的 (step_id, param_name) 组合为 TT 参数全集，先查参数集、再按组合过滤明细查询。该规则与测量表实际出现的 `%SUM%` 参数交叉验证一致（探查 §1-A）。
 3. 三厂明细以三元组 `(表名, ID列, 时间列)` 抹平 sheet/glass 差异后 UNION ALL，统一逻辑列为 `factory, prod_code, start_time, sheet_id, lot_id, step_id, tt_name, tt_qty`；产品过滤统一 `product_spec` JOIN `mdw.dwr_mes_productspec`（同 ADR-0007）。
@@ -30,6 +32,16 @@ AOI_TT 的 infrastructure 投影现按产品、厂别、站点、TT 参数、She
 在有效报表窗口内保留检测时间最新的一条，再交由原有领域聚合计算。
 检测片数仍使用 distinct Sheet，参数识别和分母来源保持本 ADR 的既有决定。
 完整口径见 [AOI_TT 数据链路](../../references/domain/inline_domain/aoi_tt/data-flow-aoi-tt.md#44-tt-明细标准化)。
+
+## 后续收紧：固定 TT 名称准入（2026-10-21）
+
+用户发现 AOI_TT 报表的 Code 名称中混入 CD、OVL、SE、4PP 等参数。对照初始实现 `d1983354`，原规则只有当前产品的 `param_type IS NULL` 规格及站点/参数匹配；探查中记录的四个 TT 名称并非当时的代码白名单。因此，本 ADR 原先列出的“其它空类型参数可能混入报表”风险需要收紧处理。
+
+此前针对 PPA 的修复增加了 PPA 排除，并未扩大来源集合，也没有限制其它非 TT 名称；重复函数清理亦未删除更严格的名称准入定义。本次未查询生产库中的实际参数类型，不能据此断言规格表何时、为何变化。
+
+决定在原规格匹配条件上增加固定 TT 名称正向准入，名称按首尾空白和大小写归一后完整匹配。具体名称、匹配条件及历史结果消费规则统一由 [TT 参数识别](../../references/domain/inline_domain/aoi_tt/data-flow-aoi-tt.md#43-tt-参数识别) 维护。明细与规格采用同一规则，历史预警和周报读取也过滤不合格名称；派生数据分类签名升级为 v3，使旧分类缓存失效。
+
+该补充改变原决定中“新增 TT 参数零代码接入”的适用范围：新参数名必须明确纳入业务集合；已有名称对应的新产品或站点仍由规格匹配确定。新增规格不会单独产生报表指标，实际测量明细仍是筛选项与图像的来源。原始数据快照与人工决策保留。
 
 ## Alternatives considered
 

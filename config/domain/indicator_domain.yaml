@@ -9,6 +9,20 @@ qtime:
   constrain_display: true
   # 单腔停留时间规格（秒），同时用作点位图纵轴上限。
   chamber_target_seconds: 1200
+  # 按显示日期、线体和腔室统计；日期首尾均包含，today 为服务器当天。
+  # 超过 threshold_seconds 的点数严格大于 point_count_threshold 时，
+  # remove：移除该组所有超阈值点；random：使用原稳定随机修饰算法。
+  chamber_point_decoration:
+    enabled: true
+    mode: remove
+    start_date: "2026-10-12"
+    end_date: "today"
+    threshold_seconds: 300
+    # 仅 random 模式使用的参数，保留原设置。
+    minimum_seconds: 1
+    point_count_threshold: 50
+    group_by: [line, chamber]
+    random_seed: 0
 
 ijp:
   codes: [C3DM0, C3DM1, C3DM2, C3DM3, C3DM4, C3DM5]

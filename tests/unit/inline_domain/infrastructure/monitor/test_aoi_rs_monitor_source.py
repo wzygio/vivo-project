@@ -58,3 +58,17 @@ def test_each_explicit_query_signature_detects_specification_changes(monkeypatch
     first = source.history_signature("M626")
     spec["value"] = 2.0
     assert source.history_signature("M626") != first
+
+
+def test_monitor_policy_signature_detects_both_sheet_ratio_changes(monkeypatch):
+    section = {"sheet_threshold_ratio": 0.5, "sheet_replacement_ratio": 0.25}
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+        "aoi_rs": {"special_decoration": section},
+    })
+    monkeypatch.setattr(module, "get_scope_decision_signature", lambda *args: "fixture")
+    source = module.AoiRsMonitorSource(lambda: SimpleNamespace())
+    first = source.policy_signature("M626")
+    section["sheet_threshold_ratio"] = 0.8
+    second = source.policy_signature("M626")
+    section["sheet_replacement_ratio"] = 0.1
+    assert len({first, second, source.policy_signature("M626")}) == 3

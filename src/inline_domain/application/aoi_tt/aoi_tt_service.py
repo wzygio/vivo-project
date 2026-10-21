@@ -17,6 +17,11 @@ from src.inline_domain.application.shared.decorated_data import resolve_product_
 from src.inline_domain.application.shared.oos_history_service import OosHistoryService
 from src.inline_domain.application.aoi_tt.decoration_service import prepare_aoi_tt_decoration
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
+from src.inline_domain.core.shared.decoration_window import DecorationWindow
+from src.inline_domain.core.aoi_tt.aoi_tt_special_decoration import (
+    AOI_TT_DECORATION_POLICY_VERSION,
+    DEFAULT_SHEET_SPEC_RATIOS,
+)
 from src.inline_domain.application.shared.ooc_decoration_service import persist_ooc_facts
 from src.inline_domain.application.shared.throughput_persistence import (
     persist_throughput_facts,
@@ -161,6 +166,10 @@ class AoiTtReportService:
         date_exclusion: InlineDateExclusion | None = None,
         exempt_param_name_contains: tuple[str, ...] | None = None,
         trend_policy_version: str = AOI_TT_TREND_POLICY_VERSION,
+        decoration_policy_version: str = AOI_TT_DECORATION_POLICY_VERSION,
+        special_factories: tuple[str, ...] = (),
+        decoration_window: DecorationWindow | None = None,
+        sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -170,6 +179,7 @@ class AoiTtReportService:
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
         trend_policy_version 对趋势规则变更失效；仅评估 Total。
+        厂别、日期窗口、Sheet 比例和专用修饰版本进入缓存身份。
         """
         try:
             query_config = AoiTtQueryConfig.model_validate_json(query_config_json)
@@ -235,6 +245,9 @@ class AoiTtReportService:
                 scope="aoi_tt",
                 product_revision=product_revision,
                 decision_signature=decision_signature,
+                special_factories=special_factories,
+                decoration_window=decoration_window,
+                sheet_spec_ratios=sheet_spec_ratios,
             )
             coverage_start, coverage_end = OosHistoryService.inclusive_date_window(
                 query_config.start_date, query_config.end_date
@@ -327,6 +340,9 @@ class AoiTtReportService:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         try:
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
+            special_factories = tuple(ConfigLoader.get_aoi_tt_special_decoration_factories())
+            decoration_window = ConfigLoader.get_aoi_tt_special_decoration_window()
+            sheet_spec_ratios = ConfigLoader.get_aoi_tt_special_decoration_sheet_ratios()
         except ValueError as exc:
             logger.exception("[AOI_TT] invalid report decoration configuration")
             raise AoiTtReportBuildError("AOI_TT report configuration is invalid.") from exc
@@ -343,5 +359,9 @@ class AoiTtReportService:
             date_exclusion=date_exclusion,
             exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
             trend_policy_version=AOI_TT_TREND_POLICY_VERSION,
+            decoration_policy_version=AOI_TT_DECORATION_POLICY_VERSION,
+            special_factories=special_factories,
+            decoration_window=decoration_window,
+            sheet_spec_ratios=sheet_spec_ratios,
         )
         return AoiTtReportService._view_model_from_payload(payload)

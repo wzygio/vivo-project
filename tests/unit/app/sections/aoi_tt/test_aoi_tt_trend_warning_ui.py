@@ -26,7 +26,7 @@ def test_compact_tt_warning_states_and_particle_chart_scope(scenario, charts, su
             "T-1有效日", "T-1密度", "T-2有效日", "T-2密度", "基线5日均值", "预警原因"]
         assert table["TT名称"].tolist() == ["TDSUM"]
         assert table["当日密度"].tolist() == [30]
-        assert table["预警原因"].tolist() == ["当日超规；连续两日上升"]
+        assert table["预警原因"].tolist() == ["当日超规"]
         if scenario == "跨日预警":
             assert table["T-1有效日"].tolist() == ["2026-10-16"]
             assert table["T-2有效日"].tolist() == ["2026-10-13"]

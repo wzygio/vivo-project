@@ -1,6 +1,6 @@
 # AOI_RS 专用修饰：厂别、日期与顺序处理
 
-核验日期：2026-10-13。普通单边规格修饰由 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断) 介绍；本文负责指定厂别和日期内的专用规则。
+核验日期：2026-10-21。普通单边规格修饰由 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断) 介绍；本文负责指定厂别和日期内的专用规则。
 
 ## 1. 配置与日期范围
 
@@ -8,6 +8,8 @@
 aoi_rs:
   special_decoration:
     enabled: false
+    sheet_threshold_ratio: 0.5
+    sheet_replacement_ratio: 0.25
     factories:
       - "OLED"
     start_date: "2026-09-21"
@@ -16,13 +18,15 @@ aoi_rs:
 
 `enabled` 默认 `false`（省略时也关闭），仅显式设置布尔值 `true` 才启用专用规则；厂别集合为空时也关闭。关闭时所有厂别沿用普通单边修饰，不执行专用明细投影与周/日限幅。开启时未选厂别和窗口外图点沿用普通单边修饰。日期为报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。无效日期、反向区间和错误配置结构报错。
 
+两个比例位于 `config/domain/inline_domain.yaml` 的 `aoi_rs.special_decoration` 下：`sheet_threshold_ratio` 为 Sheet 触发阈值相对于规格的倍数，默认 `0.5`；`sheet_replacement_ratio` 为稳定哈希值上限相对于规格的倍数，默认 `0.25`。省略时采用默认值；两项都必须是有限非负数，不接受布尔值、字符串、空值、负数或非有限数。触发条件为严格大于阈值，恰好等于阈值时保留原值。哈希种子沿用产品、厂别、站点、RS Code、图类型与图点 ID，改变上限比例只缩放相同图点的哈希值。
+
 这是修饰窗口，不是数据排除窗口：区间外数据仍参与报表。全域 `data_exclusion` 先在基础设施排除命中的数据，见 [日期排除规则](../shared/rules-inline-date-exclusion.md)。
 
 ## 2. 专用处理顺序
 
 | 阶段 | 规则 |
 |---|---|
-| Sheet | 以聚合图点的 `first_start_time` 判定日期。超出 `SHEET_ID` / `GLASS_ID` 规格的值修饰为 `[0, 0.5 × spec]` 内的稳定哈希值；仅支持非负有效规格。没有越过原规格的 Sheet 不执行这一步。 |
+| Sheet | 以聚合图点的 `first_start_time` 判定日期。超出 `SHEET_ID` / `GLASS_ID` 规格 0.5 倍的值修饰为 `[0, 0.25 × spec]` 内的稳定哈希值；两个倍数分别由 `sheet_threshold_ratio`、`sheet_replacement_ratio` 配置。仅支持非负有效规格，没有越过配置阈值的 Sheet 不执行这一步。 |
 | 明细投影 | 按各 Sheet 原始明细计数占比分配修饰后总量，不修改源快照。 |
 | Lot | 使用 Sheet 修饰后的计数重算 Lot，保留原过货分母；仍超过 `LOT_RATIO` 的 Lot 归零，其对应 Sheet 同步归零。 |
 | 周/日趋势 | 使用专用修饰后的明细计算月基准，再将符合日期窗口的周/日密度限制在所属月份密度的1.3倍，同时令周期 `rs_qty = value × sheet_qty`。月密度不执行限幅。 |
@@ -41,8 +45,8 @@ aoi_rs:
 
 ## 4. 调用、缓存与验证
 
-ConfigLoader 解析 `(start_date, resolved_end_date)`，关闭时返回空厂别集合；`AoiRsReportService` 把日期元组、生效厂别集合及规则版本放入原生报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和纯 Core 规则。切换开关、修改生效厂别、开始日、结束日或跨天后无需等待 TTL 重建。页面与 PDF 共用 `build_aoi_rs_period_trend()`，读取同一配置。
+ConfigLoader 解析 `(start_date, resolved_end_date)` 和 `(sheet_threshold_ratio, sheet_replacement_ratio)`，关闭时返回空厂别集合；`AoiRsReportService` 把日期元组、比例元组、生效厂别集合及规则版本放入原生报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和纯 Core 规则。切换开关、修改生效厂别、任一比例、开始日、结束日或跨天后无需等待 TTL 重建。AOI_RS 周期监控也复用此配置，其策略签名包含整个专用修饰配置及规则版本。页面与 PDF 共用 `build_aoi_rs_period_trend()`，读取同一配置。
 
 主要实现：`core/aoi_rs/aoi_rs_special_decoration.py`、`application/aoi_rs/decoration_service.py`、`application/aoi_rs/aoi_rs_service.py`。
 
-`test_aoi_rs_special_window.py` 覆盖日期首尾、区间外常规处理、源数据保留、窗口内 Delete 明细剔除、跨窗口 Lot 及部分周期；应用服务测试验证窗口变化触发缓存失效，原顺序修饰测试继续验证 Sheet→Lot→周期关系。
+`test_aoi_rs_config.py` 验证比例默认值与非法配置；`test_aoi_rs_sequential_decoration.py` 验证 SHEET_ID/GLASS_ID 的半规格边界、四分之一规格哈希上限、可配比例及 Sheet→Lot→周期关系。`test_aoi_rs_special_window.py` 覆盖日期首尾、区间外常规处理、源数据保留、窗口内 Delete 明细剔除、跨窗口 Lot 及部分周期；应用服务测试验证窗口和任一比例变化触发缓存失效。

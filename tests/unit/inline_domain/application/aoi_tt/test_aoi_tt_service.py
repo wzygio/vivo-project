@@ -108,6 +108,68 @@ def _config_json() -> str:
     ).model_dump_json()
 
 
+def test_special_config_changes_rebuild_cached_report_and_keep_integer_bounds(_tmp_project_root):
+    import yaml
+
+    source = _details_df().iloc[[0]].assign(factory="OLED", tt_qty=120)
+    original = source.copy(deep=True)
+    specs = _spec_df().assign(usl=200., ucl=100.)
+    calls = []
+    port = FakeAoiTtPort(source, specs, particles=pd.DataFrame())
+    port.get_tt_details = lambda _q: (calls.append(1) or source)
+    path = _tmp_project_root / "config/domain/inline_domain.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    section = dict(enabled=True, factories=["OLED"], start_date="2026-07-01", end_date="2026-08-10",
+                   sheet_threshold_ratio=0.5, sheet_replacement_ratio=0.25)
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+
+    def read(**changes):
+        section.update(changes)
+        path.write_text(yaml.safe_dump({"aoi_tt": {"special_decoration": section}}), encoding="utf-8")
+        report = AoiTtReportService.get_aoi_tt_report_data(
+            _data_port=port, query_config_json=_config_json(), snapshot_signature="same-special-source",
+        )
+        assert report.tt_details_df.tt_qty.mod(1).eq(0).all()
+        return report.tt_details_df.tt_qty.iloc[0]
+
+    assert 0 <= read() <= 25
+    assert read(sheet_replacement_ratio=0) == 0
+    assert read(sheet_threshold_ratio=2) == 120
+    assert 85 <= read(start_date="2026-07-16") <= 95
+    assert 85 <= read(start_date="2026-07-01", factories=["TP"]) <= 95
+    assert 85 <= read(factories=["OLED"], enabled=False) <= 95
+    assert len(calls) == 6
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_generated_particles_use_special_decorated_total(monkeypatch, _tmp_project_root):
+    import yaml
+
+    source = _details_df().iloc[[0]].assign(tt_qty=120)
+    specs = _spec_df().assign(usl=200., ucl=100.)
+    ratios = pd.DataFrame([
+        dict(step_id="11620", particle_size=size, ratio=0.25) for size in ("S", "M", "L", "H")
+    ])
+    path = _tmp_project_root / "config/domain/inline_domain.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump({"aoi_tt": {
+        "special_decoration": dict(enabled=True, factories=["ARRAY"], start_date="2026-07-01",
+                                   end_date="2026-08-10"),
+        "particle_size": dict(ratio_jitter=0),
+    }}), encoding="utf-8")
+    monkeypatch.setattr(ConfigLoader, "get_aoi_tt_particle_size_generation_enabled", lambda: True)
+    AoiTtReportService.fetch_aoi_tt_report_payload.clear()
+    report = AoiTtReportService.get_aoi_tt_report_data(
+        _data_port=FakeAoiTtPort(source, specs, ratios=ratios), query_config_json=_config_json(),
+        snapshot_signature="special-before-particles",
+    )
+    quantities = report.tt_details_df.set_index("particle_size").tt_qty
+    assert 0 <= quantities.Total <= 25
+    assert quantities.loc[["S", "M", "L", "H"]].eq(round(quantities.Total / 4)).all()
+    assert quantities.mod(1).eq(0).all()
+    assert source.tt_qty.iloc[0] == 120
+
+
 def test_trend_alerts_ignore_particle_rises_when_total_is_stable():
     details = pd.DataFrame([
         dict(factory="ARRAY", prod_code="M678", step_id="11620", tt_name="TDSUM",

@@ -4,6 +4,29 @@ from src.shared_kernel.config import ConfigLoader
 
 
 @pytest.mark.parametrize("section, expected", [
+    ({}, (0.5, 0.25)),
+    ({"sheet_threshold_ratio": 0.8}, (0.8, 0.25)),
+    ({"sheet_replacement_ratio": 0}, (0.5, 0.0)),
+    ({"sheet_threshold_ratio": 1, "sheet_replacement_ratio": 0.4}, (1.0, 0.4)),
+])
+def test_special_sheet_ratios(monkeypatch, section, expected):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+        "aoi_rs": {"special_decoration": section},
+    })
+    assert ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios() == expected
+
+
+@pytest.mark.parametrize("key", ["sheet_threshold_ratio", "sheet_replacement_ratio"])
+@pytest.mark.parametrize("value", [None, True, False, "0.5", -0.1, float("nan"), float("inf"), [], {}])
+def test_invalid_special_sheet_ratios_are_rejected(monkeypatch, key, value):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+        "aoi_rs": {"special_decoration": {key: value}},
+    })
+    with pytest.raises(ValueError, match=key):
+        ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios()
+
+
+@pytest.mark.parametrize("section, expected", [
     ({}, []),
     ({"special_decoration": {}}, []),
     ({"special_decoration": {"factories": []}}, []),

@@ -1,6 +1,6 @@
 # AOI_RS 趋势预警规则
 
-核验日期：2026-10-20。本文负责 AOI_RS 页面新增的两类日密度预警。按用户最新修订，均值保留五天、跳过缺测及零密度；相邻比较允许跨日、向前最多追溯七天。既有上一 ISO 周单片异常规则继续独立运行；本功能不写入报警历史、周报警率或全指标矩阵。
+核验日期：2026-10-20。本文负责 AOI_RS 页面的“当日超规”日密度预警。按用户最新修订，目标日必须超过上次密度的 1.2 倍，且上次密度必须超过五天均值的 1.2 倍；删除独立的连续两日上升判定。均值仍为算术平均、跳过缺测及零密度；相邻比较允许跨日、向前最多追溯七天。既有上一 ISO 周单片异常规则继续独立运行；本功能不写入报警历史、周报警率或全指标矩阵。
 
 ## 1. 日期、指标与密度
 
@@ -10,22 +10,21 @@
 - 密度单位为 RS/片：`SUM(code_qty) / 同厂别同站点同日 distinct sheet/glass 过货量`，允许大于 1，不是百分比。
 - 判定使用当前报表投影的日密度。日期前推、厂别日期排除在基础设施输出时已经执行；Core 不重复变换日期。
 
-## 2. 两类独立规则，任一命中即报警
+## 2. 当日超规：两个条件同时满足
 
-用 `D(t)` 表示日期 t 的有效日密度。定义 P 为 `[T−7,T)` 内最近的有效日期，Q 为同一区间内 P 之前最近的有效日期；P、Q 都可以跨过缺测日期，且都不能早于 T−7。真实零密度仍可作为比较记录，不因数值为零而跳过。
+用 `D(t)` 表示日期 t 的有效日密度。定义 P 为 `[T−7,T)` 内最近的有效日期，Q 为同一区间内 P 之前最近的有效日期。P 是判定中的“前一天”，允许跨过缺测日期，不能早于 T−7；Q 仅保留供表格 T-2 展示，不再参与另一条判定。真实零密度仍可作为比较记录，不因数值为零而跳过。
 
 所有倍数比较都严格使用 `>`，恰好 1.2 倍不触发。实现用 1e-12 相对容差消除浮点边界误差，例如 `1/5` 对 `1/6` 的密度正好上涨 20%，不能因二进制舍入误报；不设置绝对密度下限。
 
 | 规则名称 | 条件 | 数据门槛 |
 |---|---|---|
-| 当日超规 | `D(T) > 1.2 × D(P)` **且** `D(T) > 1.2 × M` | T 和 P 均有效；计算窗 `[T−7,T]` 至少 3 个有效日；五天基线至少 1 个正密度 |
-| 连续两日上升 | `D(T) > 1.2 × D(P)` **且** `D(P) > 1.2 × D(Q)` | T、P、Q 均有效；不附加第一类规则的均值条件 |
+| 当日超规 | `D(T) > 1.2 × D(P)` **且** `D(P) > 1.2 × M` | T 和 P 均有效；计算窗 `[T−7,T]` 至少 3 个有效日；五天基线至少 1 个正密度 |
 
-其中 M 是固定窗口 `[T−6,T−2]` 中正密度的**算术平均**，仍是原来的五个自然日。缺测、零密度及无效数值均跳过；不是补足五条有效记录，也不延长窗口寻找正值。五天均无正密度时 M 不可用，第一条规则不可评估，第二条仍独立判断。
+其中 M 是固定窗口 `[T−6,T−2]` 中正密度的**算术平均**，各有效日权重相同，不按过货量加权；仍是原来的五个自然日。缺测、零密度及无效数值均跳过；不是补足五条有效记录，也不延长窗口寻找正值。五天均无正密度时 M 不可用，本规则不可评估，不再由另一条规则单独报警。
 
 均值窗口不随跨日选出的 P 移动；因此 P 落在此五天内时，也属于均值候选。保留原窗口位置，避免跨日后额外引入另一套基线窗口。
 
-总预警为 `当日超规 OR 连续两日上升`。同一指标同时命中时只显示一条记录，并列两个原因。
+只有上述两条不等式同时满足才报警；不再使用目标日直接与均值比较，也不再使用 P 与 Q 的连续上升独立判定。每个命中指标只显示一条记录，预警原因统一为“当日超规”。
 
 “当日超规”是用户对原双比较逻辑指定的名称，并不增加 `D(T) > spec` 的要求。即使未超过 MWD_RATIO 规格、甚至缺少规格，也可以触发本功能。单片规格异常的原规则不受此命名影响。
 
@@ -33,13 +32,14 @@
 
 | 场景 | 数据 | 结果 |
 |---|---|---|
-| 仅当日超规 | M=0.10，T−2=0.10，T−1=0.08，T=0.15 | 第一类命中；前一天下降，第二类不命中 |
-| 仅连续两日上升 | 更早基线很高，T−2=0.10，T−1=0.13，T=0.17 | 第二类命中，即使第一类基线条件未通过 |
-| 两类均命中 | M=0.10，T−2=0.10，T−1=0.13，T=0.17 | 一条指标预警、两个原因 |
-| 前一天缺失 | T=10月19日，18日缺测，17日为0.13，14日为0.10，T为0.17 | P=17日、Q=14日；允许跨日比较，第二类命中 |
+| 上次尚未超过基线 | M=0.10，P=0.08，T=0.15 | 目标日虽大幅反弹，第二个条件不满足，不报警 |
+| 连续上涨但基线过高 | M=10，Q=0.10，P=0.13，T=0.17 | P 未超过均值的 1.2 倍，不报警 |
+| 两条件均满足 | M=0.10，P=0.13，T=0.17 | 一条指标预警，原因为“当日超规” |
+| 前一天缺失 | T=10月19日，18日缺测，17日为0.20，14日为0.10，T为0.30 | P=17日、Q=14日，固定五天均值 M=0.15；两个条件均满足 |
 | 回溯界限 | T=10月19日，历史记录最早可用12日，11日及更早不能作为P/Q | 包含恰好七天前；同一界限约束P和Q，不能逐次向前各追七天 |
-| 基线全零 | 五天内只有有效零值，P=0.13，T=0.17 | 零值不参与均值，M为空；第二类仍可独立命中 |
-| 严格边界 | T−1=0.125，T=0.15 | 恰好 1.2 倍，不触发任一规则 |
+| 基线全零 | 五天内只有有效零值，P=0.13，T=0.17 | 零值不参与均值，M为空；数据不足，不报警 |
+| 当日严格边界 | M=0.10，P=0.125，T=0.15 | T 恰好为 P 的 1.2 倍，不报警 |
+| 基线严格边界 | M=0.10，P=0.12，T=0.20 | P 恰好为 M 的 1.2 倍，不报警 |
 
 ## 3. 有效数据与缺测
 
@@ -61,19 +61,19 @@
 
 ## 5. 分层、缓存和页面行为
 
-- Core 的 `evaluate_aoi_rs_trends()` 接收趋势帧、指标帧和明确参考日期，返回每指标一行评估结果：实际 P/Q 日期、比较密度、目标日过货量、有效天数、两类可评估状态和命中状态；不访问数据库、配置或工作簿。
+- Core 的 `evaluate_aoi_rs_trends()` 接收趋势帧、指标帧和明确参考日期，返回每指标一行评估结果：实际 P/Q 日期、比较密度、目标日过货量、有效天数、当日超规可评估状态和命中状态；不访问数据库、配置或工作簿。输出不再含 `rising_evaluable` 或 `rising_alert`。
 - Application 在现有 ReportService 中完成投影、共享趋势计算及规则评估；`trend_evaluation_df` 作为 DataFrame 进入原生 payload，在缓存外构造 ViewModel，遵循 ADR-0001。
 - 查询结束日、产品 revision、决策签名、日期排除、专用厂别/窗口及新增趋势策略版本参与缓存身份。跨天或上述输入变化后重新评估。
 - 页面保留既有单片异常区，新增趋势预警中心及命中指标的三图区域，均在手动查询门控前运行。趋势区使用独立图表 key 前缀 `aoi_rs_trend_alert`。
-- 自动图像按厂别、站点、RS Code 精确匹配；过货量仅按厂别、站点匹配。两个原因不重复出图。
+- 自动图像按厂别、站点、RS Code 精确匹配；过货量仅按厂别、站点匹配，每个命中指标只输出一组图像。
 - 按用户的展示精简要求，命中时仅显示预警明细，移除规则说明、可评估数量、数据不足数量、命中数量提示及自动图像说明。无数据、全部不足或可评估规则无命中时保留简短状态，不把全部不足显示为正常。
 - 前端表格在进入 Streamlit 前只保留业务字段，站点描述复用既有映射，不传递内部决策字段、源值对比或原始异常详情。
-- 表格采用“当日／当日密度”“T-1有效日／T-1密度”“T-2有效日／T-2密度”“基线5日均值”标签。前端实际数据共 11 列，不含过货量、计算窗有效天数和基线有效天数，不通过隐藏列保留这些字段。T-1/T-2 展示 P/Q，名称简化不改变跨日规则；“当日”仍展示 T（昨天）。接口字段 `previous_density`、`two_days_before_density`、`previous_date`、`two_days_before_date` 及后端规则不变。
+- 表格采用“当日／当日密度”“T-1有效日／T-1密度”“T-2有效日／T-2密度”“基线5日均值”标签。前端实际数据共 11 列，不含过货量、计算窗有效天数和基线有效天数，不通过隐藏列保留这些字段。T-1/T-2 展示 P/Q，名称简化不改变跨日规则；“当日”仍展示 T（昨天）。接口字段 `previous_density`、`two_days_before_density`、`previous_date`、`two_days_before_date` 保留，Q 仅用于展示。
 - 读取或计算失败沿用报表加载失败提示，技术原因保留在服务端日志。
 
 ## 6. 与提供的参考程序的关系
 
-保留其 1.2 倍双比较思路和五天内仅平均正密度的规则，按用户要求命名为“当日超规”。新增的“连续两日上升”采用连续两次有效记录比较，不再要求相邻自然日，但七天回溯上限明确约束 P 和 Q。未复制参考程序的窗口偏移和缺日当零行为；真实零值只从均值中跳过，不从比较序列中跳过。
+保留其 1.2 倍双比较思路和五天内仅平均正密度的规则，按用户最新要求将第二个条件改为“上次密度超过均值的 1.2 倍”，统一命名为“当日超规”。独立的连续两日上升规则已删除。未复制参考程序的窗口偏移和缺日当零行为；真实零值只从均值中跳过，不从比较序列中跳过。P 仍可在七天内跨日选取，Q 仅供展示。
 
 本项目分子继续使用 `SUM(code_qty)`，没有照搬参考程序的缺陷行数，也没有照搬 Yield 的百分点阈值或引入跨域检测器依赖。
 
@@ -87,7 +87,7 @@
 
 ## 8. 实现程序与接入位置
 
-业务判定由 `src/inline_domain/core/shared/density_trend_alerts.py` 统一实现，RS 由 `core/aoi_rs/trend_alerts.py` 绑定指标键；TT 使用独立四键适配器，分子、分母聚合各归原模块。下方依次为共享判定和 RS 适配器的完整内容，不另建第二套运行逻辑；规则变更时同步此代码段。
+业务判定由 `src/inline_domain/core/shared/density_trend_alerts.py` 统一实现，RS 由 `core/aoi_rs/trend_alerts.py` 绑定指标键；TT 使用仅 Total 的三键适配器，分子、分母聚合各归原模块。共享策略版本 `density-previous-over-five-day-mean-v4` 同时使 RS/TT 原判定缓存失效。下方依次为共享判定和 RS 适配器的完整内容，不另建第二套运行逻辑；规则变更时同步此代码段。
 
 应用接入位于 `application/aoi_rs/aoi_rs_service.py`：以报表结束日减一天得到 T，将 `daily_start_date=T−HISTORY_LOOKBACK_DAYS`、`daily_end_date=T` 传给 `build_decorated_period_trend_df()`，再调用 `evaluate_aoi_rs_trends()`。`HISTORY_LOOKBACK_DAYS=max(7, 5+2−1)=7`，同时覆盖比较和均值所需日期。
 
@@ -109,7 +109,7 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
-DENSITY_TREND_POLICY_VERSION = "density-sparse-seven-day-five-day-mean-v3"
+DENSITY_TREND_POLICY_VERSION = "density-previous-over-five-day-mean-v4"
 RISE_FACTOR = 1.2
 LOOKBACK_DAYS = 7
 BASELINE_DAYS = 5
@@ -120,7 +120,7 @@ EVALUATION_VALUE_COLUMNS = [
     "previous_date", "previous_density", "two_days_before_date",
     "two_days_before_density", "baseline_density",
     "target_sheet_qty", "valid_days", "baseline_days", "daily_evaluable",
-    "rising_evaluable", "daily_alert", "rising_alert", "is_alert",
+    "daily_alert", "is_alert",
 ]
 
 
@@ -150,16 +150,10 @@ def _evaluate_series(series: pd.DataFrame, target: pd.Timestamp) -> dict[str, ob
     baseline_mean = float(baseline.mean()) if not baseline.empty else np.nan
     has_pair = target in values.index and not comparisons.empty
     daily_evaluable = has_pair and len(values) >= 3 and baseline_mean > 0
-    rising_evaluable = has_pair and len(comparisons) >= 2
     daily_alert = bool(
         daily_evaluable
         and _exceeds_rise(current_value, previous_value)
-        and _exceeds_rise(current_value, baseline_mean)
-    )
-    rising_alert = bool(
-        rising_evaluable
-        and _exceeds_rise(current_value, previous_value)
-        and _exceeds_rise(previous_value, two_before_value)
+        and _exceeds_rise(previous_value, baseline_mean)
     )
     target_rows = series.loc[series["day"].eq(target)] if not series.empty else series
     return {
@@ -174,10 +168,8 @@ def _evaluate_series(series: pd.DataFrame, target: pd.Timestamp) -> dict[str, ob
         "valid_days": len(values),
         "baseline_days": len(baseline),
         "daily_evaluable": bool(daily_evaluable),
-        "rising_evaluable": bool(rising_evaluable),
         "daily_alert": daily_alert,
-        "rising_alert": rising_alert,
-        "is_alert": daily_alert or rising_alert,
+        "is_alert": daily_alert,
     }
 
 
@@ -191,9 +183,9 @@ def evaluate_density_trends(
     """Evaluate yesterday, not the latest observed date, for every scoped indicator.
 
     P and Q are the latest two valid dates in [T-7, T), including real zero
-    densities. Daily: D(T)>1.2*D(P) AND D(T)>1.2*positive_mean(T-6..T-2),
-    with at least three valid observations in the calculation window. Rising:
-    D(T)>1.2*D(P) AND D(P)>1.2*D(Q). Missing days never become zero; T is fixed.
+    densities. Daily: D(T)>1.2*D(P) AND D(P)>1.2*positive_mean(T-6..T-2),
+    with at least three valid observations in the calculation window. Q is
+    retained for display only. Missing days never become zero; T is fixed.
     """
     keys = list(indicator_keys)
     columns = ["prod_code", *keys, *EVALUATION_VALUE_COLUMNS]

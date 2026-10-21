@@ -4,7 +4,7 @@
 测试范围:
 1. 规格基线文件可加载
 2. DB/Parquet 快照链路返回稳定结构
-3. 规格匹配、超规修饰、进度状态计算完整执行
+3. 规格匹配、寿命更换、进度状态计算完整执行
 """
 
 from pathlib import Path
@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 
 from src.equipment_domain.core.parts_calculator import (
-    apply_over_spec_alert_and_decoration,
+    apply_lifetime_replacement,
     batch_calculate_progress_and_status,
 )
 from src.equipment_domain.core.parts_matcher import (
@@ -124,13 +124,11 @@ class TestPartsPipeline:
         db_manager: DatabaseManager,
         spec_df: pd.DataFrame,
     ) -> None:
-        """规格加载 -> 快照 -> 匹配 -> 修饰 -> 计算完整执行。"""
+        """规格加载 -> 快照 -> 匹配 -> 更换判定 -> 计算完整执行。"""
         snapshot_df = load_part_life_snapshot(db_manager, spec_df)
         report_df = build_and_match_all(spec_df, snapshot_df)
-        report_df = apply_over_spec_alert_and_decoration(
+        report_df = apply_lifetime_replacement(
             report_df,
-            group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
-            policy=get_equipment_runtime_config().alert_policy,
         )
         report_df = batch_calculate_progress_and_status(
             report_df,

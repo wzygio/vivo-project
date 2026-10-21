@@ -7,12 +7,16 @@ import pandas as pd
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.infrastructure.repositories.yield_repository import PanelRepository, build_yield_snapshot_path
 from src.yield_domain.infrastructure.rate_override_repository import load_rate_overrides
+from src.yield_domain.infrastructure.warning_workbook_reader import read_warning_matrix
 
 
 class YieldReportDataAdapter:
     def __init__(self, db_manager=None, data_dir: Path = Path("data")):
         self.db_manager = db_manager
         self.data_dir = data_dir
+
+    def read_warning_matrix(self, path: Path, sheet_name: str) -> pd.DataFrame:
+        return read_warning_matrix(path, sheet_name)
 
     def read_panel(self, query: YieldQueryConfig, policy: YieldDataPolicy, *, force_refresh: bool = False) -> pd.DataFrame:
         repo = PanelRepository(

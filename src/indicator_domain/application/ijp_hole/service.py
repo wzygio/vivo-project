@@ -8,7 +8,9 @@ import pandas as pd
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.service import IjpFilterOptions, build_reporting_window
 from src.indicator_domain.application.ijp_hole.ports import IjpHoleDataPort
-from src.indicator_domain.core.ijp_hole.summary import HOLE_CODES, summarize_holes
+from src.indicator_domain.core.ijp_hole.summary import (
+    HOLE_CODES, HOLE_DISPLAY_CODES, summarize_hole_periods,
+)
 
 
 class IjpHoleReportService:
@@ -30,7 +32,7 @@ class IjpHoleReportService:
         query = self._scope(IjpQuery(start_time=start, end_time=end, product_codes=products))
         return {
             'product_codes': self.enabled_products,
-            'lines': ('3CEE01', '3CEE02'), 'codes': HOLE_CODES,
+            'lines': ('3CEE01', '3CEE02'), 'codes': HOLE_DISPLAY_CODES,
             'picis': self._data_port.list_picis(query) if query.product_codes else (),
         }
 
@@ -40,7 +42,7 @@ class IjpHoleReportService:
         # Defensive public boundary also protects injected adapters.
         if not counts.empty:
             counts = counts[counts.productcode.isin(scoped.product_codes)]
-        return summarize_holes(counts, scoped.codes)
+        return {'day': summarize_hole_periods(counts, scoped.end_time.date(), scoped.codes)}
 
     def _scope(self, query: IjpQuery) -> IjpQuery:
         if set(query.codes) - set(HOLE_CODES):

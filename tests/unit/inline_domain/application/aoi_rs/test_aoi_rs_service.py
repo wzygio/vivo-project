@@ -125,7 +125,8 @@ def test_yesterday_rules_include_oldest_baseline_day_even_with_today_data(monkey
     assert evaluation["baseline_density"] == 2080
     assert evaluation["valid_days"] == 7
     assert not evaluation["daily_alert"]
-    assert evaluation["rising_alert"]
+    assert not evaluation["is_alert"]
+    assert "rising_alert" not in report.trend_evaluation_df.columns
 
 
 def test_warning_matches_chart_cap_and_cache_revision_and_next_day(monkeypatch) -> None:
@@ -188,7 +189,7 @@ def test_warning_loads_oldest_comparison_day_beyond_compact_chart_axis(monkeypat
     assert row.valid_days == 3
     assert row.previous_date == "2026-10-15"
     assert row.two_days_before_date == "2026-10-12"
-    assert row.rising_alert and row.daily_alert
+    assert not row.is_alert  # P equals the only positive five-day baseline; Q cannot trigger another rule.
     chart = build_aoi_rs_period_trend(report.rs_details_df, report.pass_through_df, pd.Timestamp(query.end_date).date())
     days = chart.loc[chart.period_type.eq("day")]
     assert days.period_label.nunique() == 7
@@ -466,7 +467,8 @@ def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None
     source = pd.concat([source, companion], ignore_index=True)
     throughput = source.drop(columns=["rs_code", "code_qty"])
     spec = _chart_spec_df()
-    spec.loc[spec.type_flag.eq("SHEET_ID"), "spec"] = 10
+    # Keep the 8-count Sheet below the new trigger so Lot zeroing is exercised.
+    spec.loc[spec.type_flag.eq("SHEET_ID"), "spec"] = 20
     AoiRsReportService.fetch_aoi_rs_report_payload.clear()
     report = AoiRsReportService.get_aoi_rs_report_data(
         _data_port=_data_port(source, throughput, spec),
@@ -494,7 +496,7 @@ def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None
     assert trends[0].value.eq(.5).all()
 
 
-@pytest.mark.parametrize("sheet_limit", [2., 10.])
+@pytest.mark.parametrize("sheet_limit", [2., 20.])
 def test_enabled_special_rules_and_factory_config_invalidates_cache(
     _tmp_project_root, sheet_limit,
 ) -> None:
@@ -536,7 +538,7 @@ def test_enabled_special_rules_and_factory_config_invalidates_cache(
             if factory in factories:
                 assert 0 <= sheet <= 1
                 assert lot == sheet == detail
-                if sheet_limit == 10:
+                if sheet_limit == 20:
                     assert lot == 0
             else:
                 assert 1.7 <= lot <= 1.9
@@ -616,6 +618,31 @@ def test_period_cap_reads_same_factory_configuration_for_page_and_pdf(monkeypatc
             for period_type in ["week", "day"]:
                 maximum = rows[rows.period_type.eq(period_type)].value.max()
                 assert maximum == (6.5 if factory in factories else 10)
+
+
+def test_special_sheet_ratio_changes_invalidate_report_cache(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    current = [(0.5, 0.25)]
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_sheet_ratios", lambda: current[0])
+    source = _details_df().iloc[[0]].assign(code_qty=1.5)
+    specs = _chart_spec_df()
+    specs.loc[specs.type_flag.eq("LOT_RATIO"), "spec"] = 100.
+    calls = []
+    port = _data_port(source, source, specs)
+    port.get_rs_details = lambda _q: (calls.append(1) or source)
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    kwargs = dict(_data_port=port, query_config_json=_config_json(), snapshot_signature="same-ratio-source")
+    first = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    value = first.sheet_points_df.rs_qty.iloc[0]
+    assert 0 < value <= 0.5
+    current[0] = (0.5, 0.1)
+    second = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert second.sheet_points_df.rs_qty.iloc[0] == pytest.approx(value * 0.4)
+    assert second.rs_details_df.code_qty.iloc[0] == pytest.approx(value * 0.4)
+    current[0] = (1., 0.1)
+    third = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+    assert third.sheet_points_df.rs_qty.iloc[0] == 1.5
+    assert len(calls) == 3
 
 
 def test_special_window_changes_invalidate_report_cache(monkeypatch):

@@ -33,6 +33,16 @@ def _digest(value: object) -> str:
                                      allow_nan=False).encode()).hexdigest()
 
 
+def _utc_timestamp(value: object) -> pd.Timestamp:
+    """Legacy source health uses naive server-local (Asia/Shanghai) timestamps."""
+    timestamp = pd.to_datetime(value, errors="coerce")
+    if pd.isna(timestamp):
+        return pd.NaT
+    if timestamp.tz is None:
+        timestamp = timestamp.tz_localize("Asia/Shanghai")
+    return timestamp.tz_convert("UTC")
+
+
 class YieldAlertResults:
     def __init__(self, store: YieldAlertStore, *, policy_signature: Callable[[str], str],
                  ttl_seconds: int, clock: Callable[[], datetime] | None = None) -> None:
@@ -44,12 +54,17 @@ class YieldAlertResults:
     def publish(self, product: str, kind: str, records: Sequence[Mapping], *,
                 reference_date: date, coverage_start: str, coverage_end: str,
                 has_data: bool, health: Mapping, calculation_signature: str) -> bool:
-        columns = RESULT_COLUMNS[kind]
+        required_columns = RESULT_COLUMNS[kind]
+        columns = required_columns + (["is_current"] if kind == "trend" else [])
         rows = []
         for record in records:
-            if missing := set(columns) - record.keys():
+            if missing := set(required_columns) - record.keys():
                 raise ValueError(f"Yield result columns missing: {sorted(missing)}")
-            row = {key: record[key] for key in columns}
+            row = {key: record[key] for key in required_columns}
+            if kind == "trend":
+                if record.get("is_current", True) not in (True, False):
+                    raise ValueError("Invalid current trend marker")
+                row["is_current"] = bool(record.get("is_current", True))
             if isinstance(row.get("rules"), (list, tuple)):
                 row["rules"] = json.dumps(row["rules"], ensure_ascii=False)
             rows.append(row)
@@ -73,7 +88,7 @@ class YieldAlertResults:
         }
         if metadata["source_status"] != "fresh":
             return self.mark_failed(product, kind, reference_date, "YIELD_SOURCE_NOT_CURRENT")
-        if pd.isna(pd.to_datetime(metadata["source_refreshed_at"], utc=True, errors="coerce")):
+        if pd.isna(_utc_timestamp(metadata["source_refreshed_at"])):
             raise ValueError("Yield source refresh time is required")
         metadata["fingerprint"] = _digest({"metadata": metadata, "records": rows})
         metadata["generated_at"] = self.clock().isoformat()
@@ -109,7 +124,7 @@ class YieldAlertResults:
         if now.tz is None:
             now = now.tz_localize("Asia/Shanghai")
         for key in ("generated_at", "source_refreshed_at"):
-            timestamp = pd.to_datetime(meta[key], utc=True, errors="coerce")
+            timestamp = _utc_timestamp(meta[key])
             age = (now.tz_convert("UTC") - timestamp).total_seconds() if pd.notna(timestamp) else -1
             stale |= age < 0 or age > self.ttl_seconds
         if stale:
@@ -126,6 +141,10 @@ class YieldAlertResults:
                 raise ValueError("Invalid published Lot event date")
             frame = frame.loc[(times >= pd.Timestamp(monday-timedelta(days=7)))
                               & (times < pd.Timestamp(monday))].reset_index(drop=True)
+        if kind == "trend" and "is_current" in frame:
+            if not frame["is_current"].isin([True, False]).all():
+                raise ValueError("Invalid published current trend marker")
+            frame = frame.loc[frame["is_current"].eq(True)].reset_index(drop=True)
         return PublishedYieldAlerts("ready" if bool(meta["has_data"]) else "no_data", frame, meta)
 
     def source_signature(self, product: str, kind: str, reference_date: date) -> str:

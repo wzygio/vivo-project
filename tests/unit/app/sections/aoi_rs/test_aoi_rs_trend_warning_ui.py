@@ -6,7 +6,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 
-def test_center_shows_both_rule_names_and_strips_internal_columns() -> None:
+def test_center_shows_only_daily_rule_name_and_strips_internal_columns() -> None:
     app = AppTest.from_string('''
 from datetime import date
 from types import SimpleNamespace
@@ -16,8 +16,8 @@ evaluation = pd.DataFrame([dict(
     prod_code="M678", factory="ARRAY", step_id="S", rs_code="A",
     target_date="2026-10-18", target_density=.17, previous_date="2026-10-16", previous_density=.13,
     two_days_before_date="2026-10-13", two_days_before_density=.10, baseline_density=.10, target_sheet_qty=100,
-    valid_days=3, baseline_days=1, daily_evaluable=True, rising_evaluable=True,
-    daily_alert=True, rising_alert=True, is_alert=True, flag="private",
+    valid_days=3, baseline_days=1, daily_evaluable=True,
+    daily_alert=True, is_alert=True, flag="private",
     raw_value="private",
 )])
 report = SimpleNamespace(trend_evaluation_df=evaluation, indicators_df=pd.DataFrame())
@@ -31,7 +31,7 @@ render_aoi_rs_trend_alerts(report, reference_date=date(2026,10,19), step_desc_ma
         "T-2有效日", "T-2密度", "基线5日均值", "预警原因",
     ]
     assert "flag" not in table and "raw_value" not in table and "prod_code" not in table
-    assert table["预警原因"].tolist() == ["当日超规；连续两日上升"]
+    assert table["预警原因"].tolist() == ["当日超规"]
     assert table["站点"].tolist() == ["S 检测站"]
     assert table["当日"].tolist() == ["2026-10-18"]
     assert table["T-1有效日"].tolist() == ["2026-10-16"]

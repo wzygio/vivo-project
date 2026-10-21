@@ -175,6 +175,12 @@ def _load_sheet_oos_alerts_display(
     )
     if decoration_df.empty:
         return pd.DataFrame(columns=output_columns)
+    if scope == "aoi_tt":
+        from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
+            build_aoi_tt_sheet_oos_alerts,
+        )
+
+        return build_aoi_tt_sheet_oos_alerts(decoration_df, reference_date)
     alerts_df = build_sheet_oos_alerts(
         decoration_df,
         time_column=time_column,

@@ -26,11 +26,12 @@ def specs():
     ])
 
 
-def decorate(source, flags=None):
+def decorate(source, flags=None, **kwargs):
     return rules.apply_factory_scoped_decoration(
         build_lot_point_df(source, source), build_sheet_point_df(source), specs(), "P",
         pd.DataFrame() if flags is None else flags,
         rs_details_df=source, special_factories=("OLED",), decoration_window=WINDOW,
+        **kwargs,
     )
 
 
@@ -39,8 +40,8 @@ def test_special_sheet_values_are_limited_to_inclusive_display_dates():
     before = source.copy(deep=True)
     _, sheets = decorate(source)
     values = sheets.set_index("sheet_id").rs_qty
-    assert 0 <= values.START <= 5
-    assert 0 <= values.END <= 5
+    assert 0 <= values.START <= 2.5
+    assert 0 <= values.END <= 2.5
     assert 8.5 <= values.BEFORE <= 9.5
     assert 8.5 <= values.AFTER <= 9.5
     projected = rules.project_factory_scoped_details(
@@ -50,11 +51,23 @@ def test_special_sheet_values_are_limited_to_inclusive_display_dates():
     pd.testing.assert_frame_equal(source, before)
 
 
+def test_configured_ratios_reach_windowed_sheet_decoration():
+    source = details().iloc[[1]].assign(code_qty=6.)
+    _, first = decorate(source)
+    _, scaled = decorate(source, sheet_spec_ratios=(0.5, 0.1))
+    _, unchanged = decorate(source, sheet_spec_ratios=(0.6, 0.1))
+    assert 0 < first.rs_qty.iloc[0] <= 2.5
+    assert scaled.rs_qty.iloc[0] == pytest.approx(first.rs_qty.iloc[0] * 0.4)
+    assert unchanged.rs_qty.iloc[0] == 6.
+
+
 def test_cross_window_lot_does_not_zero_outside_sheets():
     source = details().iloc[[0, 1]].assign(lot_id="MIXED", code_qty=8.)
     lots, sheets = decorate(source)
     assert lots.value.iloc[0] > 0
-    assert sheets.rs_qty.tolist() == [8., 8.]
+    values = sheets.set_index("sheet_id").rs_qty
+    assert values.BEFORE == 8.
+    assert 0 <= values.START <= 2.5
 
 
 @pytest.mark.parametrize("delete_all", [False, True])
@@ -73,7 +86,7 @@ def test_deleted_window_sheets_do_not_return_in_projected_details(delete_all):
     assert not projected.sheet_id.isin(deleted).any()
     assert projected.set_index("sheet_id").loc[["BEFORE", "AFTER"], "code_qty"].tolist() == [100., 100.]
     if not delete_all:
-        assert 0 <= projected.set_index("sheet_id").loc["END", "code_qty"] <= 5
+        assert 0 <= projected.set_index("sheet_id").loc["END", "code_qty"] <= 2.5
 
 
 def test_special_period_cap_leaves_outside_days_and_partial_weeks_unchanged():

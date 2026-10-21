@@ -23,11 +23,12 @@
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |
+| AOI_TT 专用 Sheet 修饰、厂别日期窗口、UCL 半规格触发、四分之一上限整数哈希、可配置比例 | [AOI_TT 专用修饰规则](domain/inline_domain/aoi_tt/rules-aoi-tt-special-decoration.md) |
 | AOI_TT 上周平均每片 TT 个数、八产品 PPT、粒径及 Array 层别筛选 | [AOI_TT 周度报告](domain/inline_domain/aoi_tt/rules-aoi-tt-weekly-report.md) |
 | AOI_TT 仅 Total 昨日趋势预警、五天均值、七天跨日比较与精简预警中心 | [AOI_TT 趋势预警规则](domain/inline_domain/aoi_tt/rules-aoi-tt-trend-alerts.md) |
 | AOI_RS 来源表、RS Code、分母与计数口径 | [AOI_RS 数据源](domain/inline_domain/aoi_rs/data-source-aoi-rs.md) |
 | AOI_RS 上一周平均每片 RS 个数、PPT 模板、无过货、Array 层别及站点筛选 | [AOI_RS 周度报告](domain/inline_domain/aoi_rs/rules-aoi-rs-weekly-report.md) |
-| AOI_RS 昨日趋势预警、当日超规、连续两日上升、五天均值、七天跨日比较、1.2倍、缺测与自动图像 | [AOI_RS 趋势预警规则](domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md) |
+| AOI_RS 昨日趋势预警、当日超规双条件、上次密度与五天均值、七天跨日比较、1.2倍、缺测与自动图像 | [AOI_RS 趋势预警规则](domain/inline_domain/aoi_rs/rules-aoi-rs-trend-alerts.md) |
 | AOI_RS 专用顺序修饰、厂别日期窗口、Sheet 半规格、Lot 归零、周日1.3倍限幅 | [AOI_RS 专用修饰规则](domain/inline_domain/aoi_rs/rules-aoi-rs-special-decoration.md) |
 | Inline Sheet OOS、三态修饰、人工台账与执行机制 | [Sheet OOS 规则](domain/inline_domain/shared/rules-sheet-oos-decoration.md) |
 | Step_ID → Data_Type、SPC / CTQ / AOI 站点分类 | [站点类型映射](domain/inline_domain/shared/mapping-step-id-data-type.json) |
@@ -39,7 +40,7 @@
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](design/shared_kernel/shared/overview-shared-kernel.md) |
 | QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)、[腔室数据库规则](domain/indicator_domain/qtime/rules-chamber-database.md) |
 | Indicator data_exclusion、Q-Time/IJP 显示日期过滤、聚合前排除、缓存失效 | [Indicator 日期排除规则](domain/indicator_domain/shared/rules-indicator-date-exclusion.md) |
-| IJP 溢流数据源、站点与时间口径 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
+| IJP 溢流数据源、站点与时间口径 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；[孔区月周汇总与占比规则](domain/indicator_domain/ijp_hole/rules-hole-period-report.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
 | IQC 寿命测试 JNCD、衰减曲线、实时取数与快照/缓存边界 | [寿命监控与取数规则](domain/iqc_domain/lifetime/rules-lifetime-monitoring.md)；原始来源分析按 `docs/dev_docs/dev_spec/iqc_domain/lifetime/` 定位，匿名边界见 `docs/ADR/0030-*` |
 | IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
 | 关键备件规格、测量、快照与寿命报表；数据读取、通用仿造、CVD 特殊规则仿造、厂别-MMDD Sheet 更新、小数年限与自然月、95% 更换 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
@@ -55,6 +56,7 @@
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
 | 门户节点、Inline指标、寿命测试入口、专项资料合并、台账周报与解析报告上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
 | Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |
+| Inline 周度 PPT 输出设计、density 规格判定、红绿字体、八产品分页与共用数据契约 | [周度 PPT 输出设计规范](design/inline_domain/shared/architecture-weekly-summary-ppt.md) |
 
 共享工程标准按任务使用 `$ecc-production-rules`；文档职责与维护规则见 [CONTEXT.md](../CONTEXT.md#maintenance-and-document-ownership)。
 

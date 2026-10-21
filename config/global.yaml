@@ -210,8 +210,6 @@ resources:
     dir: resources/indicator_domain
     files:
       qtime_oos_decoration: resources/indicator_domain/qtime/qtime_oos_decoration.xlsx
-      qtime_chamber_3cee001: resources/indicator_domain/qtime/V3蒸镀机QTime一级报表-3CEE01-0924.xlsx
-      qtime_chamber_3cee002: resources/indicator_domain/qtime/V3蒸镀机QTime一级报表-3CEE02-0924.xlsx
       qtime_spec: resources/indicator_domain/qtime/Q-Time规格表.xlsx
   iqc_domain:
     dir: resources/iqc_domain

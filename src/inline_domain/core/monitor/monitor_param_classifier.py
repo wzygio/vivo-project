@@ -7,7 +7,7 @@ SPC 参数类型分类器 (Core Domain)
 
 from typing import Optional
 
-PARAM_CLASSIFICATION_SIGNATURE = "inline-param-type-v2-ppa-spc"
+PARAM_CLASSIFICATION_SIGNATURE = "inline-param-type-v3-tt-allowlist"
 
 
 def is_ppa_parameter(param_name: object) -> bool:

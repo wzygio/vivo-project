@@ -65,6 +65,46 @@ def test_oled_station_denominator_matches_chart_across_parameters():
     assert [r.values for r in oled.rows] == [("3",), ("5",)]
 
 
+def test_non_tt_measurements_do_not_add_rows_or_inflate_tt_denominator():
+    rows = [detail(qty=6)] + [
+        detail(name=name, qty=900, sheet=f"NON-TT-{index}")
+        for index, name in enumerate(("CD1", "OVL1_X", "SE_L1T", "4PP_Rs", "PPA_X", "TPPOS_X_DIFF"))
+    ]
+    source = report(rows)
+    before = source.tt_details_df.copy(deep=True)
+
+    result = tables({"M626": source})[0]
+
+    assert [row.label for row in result.rows] == ["TDSUM（Total）"]
+    assert [row.values for row in result.rows] == [("6",)]
+    pd.testing.assert_frame_equal(source.tt_details_df, before)
+
+
+def test_spec_only_projects_keep_supported_tt_names_and_exclude_other_parameters():
+    specs = [dict(step_id="11620", tt_name=name) for name in (
+        "TDSUM", "DSUM_L", "DSUM_O", "TOTAL_O_L", "CD1", "OVL1_X", "SE_L1T", "4PP_Rs", "PPA_X",
+    )]
+    source = report(specs=specs)
+    before = source.spec_df.copy(deep=True)
+
+    result = tables({"M626": source})[0]
+
+    assert {row.label for row in result.rows} == {
+        "TDSUM（Total）", "DSUM_L（Total）", "DSUM_O（Total）", "TOTAL_O_L（Total）",
+    }
+    assert all(row.values == ("无过货",) for row in result.rows)
+    pd.testing.assert_frame_equal(source.spec_df, before)
+
+
+def test_report_with_only_non_tt_details_and_specs_has_no_weekly_rows():
+    result = tables({"M626": report(
+        [detail(name="CD1")],
+        [dict(step_id="11620", tt_name="OVL1_X")],
+    )})
+
+    assert all(not table.rows for table in result)
+
+
 def test_specs_survive_empty_real_service_for_no_throughput_projects():
     specs = pd.DataFrame([dict(step_id="11620", tt_name="TDSUM", prod_code="M626")])
     port = SimpleNamespace(get_tt_details=lambda query: pd.DataFrame(), get_tt_spec_limits=lambda p: specs)

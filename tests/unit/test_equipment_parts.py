@@ -4,7 +4,7 @@
 覆盖范围:
 1. 规格基线 CSV 加载
 2. 规格行与快照数据匹配
-3. 使用进度、预警状态、超规数据修饰
+3. 使用进度、预警状态、寿命到期更换
 """
 
 from pathlib import Path
@@ -22,9 +22,8 @@ from src.equipment_domain.core.parts_calculator import (
     STATUS_OVER,
     STATUS_REPLACED,
     STATUS_WARNING,
-    apply_over_spec_alert_and_decoration,
+    apply_lifetime_replacement,
     batch_calculate_progress_and_status,
-    calculate_decorated_over_spec_value,
     calculate_usage_progress,
     calculate_warning_status,
     is_over_spec,
@@ -278,10 +277,6 @@ equipment:
   alert:
     warning_threshold: 85
     over_threshold: 110
-    decoration_growth_ratio: 1.02
-    decoration_min_ratio: 0.88
-    decoration_max_ratio: 0.94
-    display_progress_max_ratio: 0.95
   fabrication:
     random_seed: 7
     initial_value_ratio_range: [0.0, 1.0]
@@ -456,7 +451,7 @@ class TestPartsMatcher:
 
 
 class TestPartsCalculator:
-    """测试进度、状态、修饰逻辑。"""
+    """测试进度、状态、寿命到期更换逻辑。"""
 
     def test_usage_status_thresholds(self) -> None:
         """使用进度按 90/100 阈值判定正常、预警、超规。"""
@@ -473,34 +468,8 @@ class TestPartsCalculator:
         assert is_over_spec(np.nan, 100.0) is False
         assert is_over_spec(101.0, 0.0) is False
 
-    def test_decorate_over_spec_value_uses_previous_and_spec_range(self) -> None:
-        """超规值修饰为 max(上一个值*1.01, [0.9, 0.95]*规格线)。"""
-        decorated = calculate_decorated_over_spec_value(
-            actual_value=150.0,
-            spec_limit=100.0,
-            previous_value=94.0,
-            policy=_alert_policy(),
-            spec_ratio=0.93,
-        )
-
-        assert decorated == pytest.approx(94.0 * 1.01)
-
-    def test_decorate_over_spec_value_without_previous_uses_spec_range(self) -> None:
-        """没有上一个值时，超规值落在规格线 90%-95% 区间。"""
-        decorated = calculate_decorated_over_spec_value(
-            actual_value=150.0,
-            spec_limit=100.0,
-            previous_value=None,
-            policy=_alert_policy(),
-            spec_ratio=0.99,
-        )
-
-        policy = _alert_policy()
-        assert decorated == pytest.approx(policy.decoration_max_ratio * 100.0)
-        assert policy.decoration_min_ratio * 100.0 <= decorated <= policy.decoration_max_ratio * 100.0
-
-    def test_progress_above_95_percent_is_reset_and_marked_replaced(self) -> None:
-        """超过 95% 时测量值和进度归零，并在预警状态标记已更换。"""
+    def test_progress_above_98_percent_is_reset_and_marked_replaced(self) -> None:
+        """严格超过 98% 才归零，恰好 98% 保留。"""
         df = pd.DataFrame({
             "厂别": ["Array", "Array", "Array"],
             "备件类型": ["Target", "Target", "Target"],
@@ -508,20 +477,16 @@ class TestPartsCalculator:
             "膜层": ["MO", "MO", "MO"],
             "制程": ["Mo DEPO", "Mo DEPO", "Mo DEPO"],
             "寿命规格": [100.0, 100.0, 100.0],
-            "测量值": [95.0, 95.01, 105.0],
+            "测量值": [98.0, 98.01, 105.0],
         })
 
-        decorated = apply_over_spec_alert_and_decoration(
-            df,
-            group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
-            policy=_alert_policy(),
-        )
+        decorated = apply_lifetime_replacement(df)
         calculated = batch_calculate_progress_and_status(decorated, policy=_alert_policy())
 
         assert decorated[OVER_SPEC_COLUMN].tolist() == [False, False, True]
-        assert decorated[RAW_VALUE_COLUMN].tolist() == [95.0, 95.01, 105.0]
-        assert decorated["测量值"].tolist() == [95.0, 0.0, 0.0]
-        assert calculated["使用进度"].tolist() == [95.0, 0.0, 0.0]
+        assert decorated[RAW_VALUE_COLUMN].tolist() == [98.0, 98.01, 105.0]
+        assert decorated["测量值"].tolist() == [98.0, 0.0, 0.0]
+        assert calculated["使用进度"].tolist() == [98.0, 0.0, 0.0]
         assert calculated["预警状态"].tolist() == [
             STATUS_WARNING,
             STATUS_REPLACED,
@@ -529,7 +494,7 @@ class TestPartsCalculator:
         ]
 
     def test_frontend_high_progress_is_reset_for_every_part(self) -> None:
-        """高于 95% 的所有备件都应归零并标记已更换。"""
+        """高于 98% 的所有备件都应归零并标记已更换。"""
         row_count = 400
         df = pd.DataFrame({
             "厂别": ["Array"] * row_count,
@@ -542,13 +507,7 @@ class TestPartsCalculator:
             "寿命规格": [100.0] * row_count,
             "测量值": [99.8] * row_count,
         })
-        group_cols = ["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"]
-
-        replaced = apply_over_spec_alert_and_decoration(
-            df,
-            group_cols=group_cols,
-            policy=_alert_policy(),
-        )
+        replaced = apply_lifetime_replacement(df)
         calculated = batch_calculate_progress_and_status(
             replaced,
             policy=_alert_policy(),
@@ -559,13 +518,29 @@ class TestPartsCalculator:
         assert set(calculated["预警状态"]) == {STATUS_REPLACED}
 
     def test_frontend_progress_at_or_below_replacement_threshold_is_not_modified(self) -> None:
-        """未超过 95% 更换阈值的测量值必须保留原值。"""
-        policy = _alert_policy()
+        """原95%阈值至98%之间保留原值，不执行旧截断或归零。"""
         df = pd.DataFrame({
-            "寿命规格": [100.0, 100.0],
-            "测量值": [94.99, 95.0],
+            "寿命规格": [100.0] * 4,
+            "测量值": [94.99, 95.0, 97.0, 98.0],
         })
 
-        decorated = apply_over_spec_alert_and_decoration(df, policy=policy)
+        decorated = apply_lifetime_replacement(df)
 
-        assert decorated["测量值"].tolist() == [94.99, 95.0]
+        assert decorated["测量值"].tolist() == [94.99, 95.0, 97.0, 98.0]
+
+    def test_replaced_status_is_recomputed_from_source_not_consumed_by_refresh(self) -> None:
+        source = pd.DataFrame({"寿命规格": [100.0], "测量值": [99.0]})
+        original = source.copy(deep=True)
+        policy = _alert_policy()
+        for _ in range(2):
+            result = batch_calculate_progress_and_status(
+                apply_lifetime_replacement(source), policy=policy,
+            )
+            assert result.loc[0, "预警状态"] == STATUS_REPLACED
+        pd.testing.assert_frame_equal(source, original)
+        source.loc[0, "测量值"] = 12.0
+        result = batch_calculate_progress_and_status(
+            apply_lifetime_replacement(source), policy=policy,
+        )
+        assert result.loc[0, "预警状态"] == STATUS_NORMAL
+        assert result.loc[0, "测量值"] == 12.0

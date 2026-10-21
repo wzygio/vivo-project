@@ -9,7 +9,7 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
-DENSITY_TREND_POLICY_VERSION = "density-sparse-seven-day-five-day-mean-v3"
+DENSITY_TREND_POLICY_VERSION = "density-previous-over-five-day-mean-v4"
 RISE_FACTOR = 1.2
 LOOKBACK_DAYS = 7
 BASELINE_DAYS = 5
@@ -20,7 +20,7 @@ EVALUATION_VALUE_COLUMNS = [
     "previous_date", "previous_density", "two_days_before_date",
     "two_days_before_density", "baseline_density",
     "target_sheet_qty", "valid_days", "baseline_days", "daily_evaluable",
-    "rising_evaluable", "daily_alert", "rising_alert", "is_alert",
+    "daily_alert", "is_alert",
 ]
 
 
@@ -50,16 +50,10 @@ def _evaluate_series(series: pd.DataFrame, target: pd.Timestamp) -> dict[str, ob
     baseline_mean = float(baseline.mean()) if not baseline.empty else np.nan
     has_pair = target in values.index and not comparisons.empty
     daily_evaluable = has_pair and len(values) >= 3 and baseline_mean > 0
-    rising_evaluable = has_pair and len(comparisons) >= 2
     daily_alert = bool(
         daily_evaluable
         and _exceeds_rise(current_value, previous_value)
-        and _exceeds_rise(current_value, baseline_mean)
-    )
-    rising_alert = bool(
-        rising_evaluable
-        and _exceeds_rise(current_value, previous_value)
-        and _exceeds_rise(previous_value, two_before_value)
+        and _exceeds_rise(previous_value, baseline_mean)
     )
     target_rows = series.loc[series["day"].eq(target)] if not series.empty else series
     return {
@@ -74,10 +68,8 @@ def _evaluate_series(series: pd.DataFrame, target: pd.Timestamp) -> dict[str, ob
         "valid_days": len(values),
         "baseline_days": len(baseline),
         "daily_evaluable": bool(daily_evaluable),
-        "rising_evaluable": bool(rising_evaluable),
         "daily_alert": daily_alert,
-        "rising_alert": rising_alert,
-        "is_alert": daily_alert or rising_alert,
+        "is_alert": daily_alert,
     }
 
 
@@ -91,9 +83,9 @@ def evaluate_density_trends(
     """Evaluate yesterday, not the latest observed date, for every scoped indicator.
 
     P and Q are the latest two valid dates in [T-7, T), including real zero
-    densities. Daily: D(T)>1.2*D(P) AND D(T)>1.2*positive_mean(T-6..T-2),
-    with at least three valid observations in the calculation window. Rising:
-    D(T)>1.2*D(P) AND D(P)>1.2*D(Q). Missing days never become zero; T is fixed.
+    densities. Daily: D(T)>1.2*D(P) AND D(P)>1.2*positive_mean(T-6..T-2),
+    with at least three valid observations in the calculation window. Q is
+    retained for display only. Missing days never become zero; T is fixed.
     """
     keys = list(indicator_keys)
     columns = ["prod_code", *keys, *EVALUATION_VALUE_COLUMNS]

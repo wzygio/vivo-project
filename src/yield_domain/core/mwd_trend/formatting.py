@@ -22,9 +22,11 @@ def format_group_results(
         "monthly": _format_group_table(
             monthly_prepared, target_defects, "%Y-%m月", 3
         ),
+        "monthly_full": _format_group_table(monthly_prepared, target_defects, "%Y-%m月", None),
         "weekly": _format_group_table(
             weekly_prepared, target_defects, "ISO", 3
         ),
+        "weekly_full": _format_group_table(weekly_prepared, target_defects, "ISO", None),
         "daily_full": _format_group_table(
             daily_prepared, target_defects, "%Y-%m-%d", None
         ),
@@ -47,6 +49,7 @@ def format_code_results(
 
     return {
         "monthly": _format_code_table(monthly_prepared, "%Y-%m月", 3),
+        "monthly_full": _format_code_table(monthly_prepared, "%Y-%m月", None),
         "weekly": _format_code_table(weekly_prepared, "ISO", 3),
         "weekly_full": _format_code_table(weekly_prepared, "ISO", None),
         "daily_full": _format_code_table(daily_prepared, "%Y-%m-%d", None),

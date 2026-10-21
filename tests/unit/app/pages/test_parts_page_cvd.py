@@ -18,8 +18,8 @@ def test_parts_page_cvd_public_states(monkeypatch, mode):
     frame = pd.DataFrame({
         "厂别": ["OLED", "Array", "ARRAY"], "设备类型": ["CVD", "PVD", "CVD"],
         "备件类型": ["Diffuser", "Target", "Backplate"],
-        "测量值": ["2026-01-31", 30000.0, "2024-02-29"], "寿命规格": ["2年", 41000.0, "1.5年"],
-        "使用进度": [32.05, 73.17, 180.0], "预警状态": ["正常", "正常", "超规"],
+        "测量值": ["2026-01-31", 30000.0, "2026-09-22"], "寿命规格": ["2年", 41000.0, "1.5年"],
+        "使用进度": [32.05, 73.17, 0.0], "预警状态": ["正常", "正常", "已更换"],
         "测量时间": pd.to_datetime(["2026-09-22"] * 3),
         "进度": [None, 352, None], "原始测量值": [46053.5, 30000, None],
     })
@@ -61,4 +61,6 @@ def test_parts_page_cvd_public_states(monkeypatch, mode):
         assert len(app.dataframe[0].value) == 1
         assert app.metric[0].value == "1"
         assert app.dataframe[0].value.iloc[0]["寿命规格"] == "1.5年"
-        assert app.dataframe[0].value.iloc[0]["预警状态"] == "超规"
+        assert app.dataframe[0].value.iloc[0]["预警状态"] == "已更换"
+        assert app.dataframe[0].value.iloc[0]["测量值"] == "2026-09-22"
+        assert app.dataframe[0].value.iloc[0]["使用进度"] == 0

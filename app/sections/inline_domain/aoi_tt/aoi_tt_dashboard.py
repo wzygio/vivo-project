@@ -57,7 +57,7 @@ from src.inline_domain.core.aoi_tt.aoi_tt_decoration import (
     AOI_TT_OOS_KEY_COLUMNS,
 )
 from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
-from src.inline_domain.core.monitor.monitor_param_classifier import is_ppa_parameter
+from src.inline_domain.core.aoi_tt.parameters import is_aoi_tt_parameter
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
     load_sheet_oos_decoration,
@@ -473,7 +473,7 @@ def build_aoi_tt_sheet_oos_alerts(
     if decoration_df is None or decoration_df.empty:
         return pd.DataFrame(columns=AOI_TT_ALERT_OUTPUT_COLUMNS)
     alerts = build_sheet_oos_alerts(
-        decoration_df.loc[~decoration_df["tt_name"].map(is_ppa_parameter)],
+        decoration_df.loc[decoration_df["tt_name"].map(is_aoi_tt_parameter)],
         time_column="start_time",
         reference_date=reference_date,
     )

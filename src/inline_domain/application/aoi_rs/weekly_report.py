@@ -21,7 +21,9 @@ from src.inline_domain.application.shared.weekly_summary import (
     WeeklySummaryRow as WeeklyRsRow,
     WeeklySummaryTable as WeeklyRsTable,
     format_weekly_average,
+    judge_weekly_density,
 )
+from src.inline_domain.core.aoi_rs.aoi_rs_calculator import attach_spec_values
 
 _KEY_COLUMNS = ("factory", "step_id", "rs_code")
 _ARRAY_LAYERS = {
@@ -43,6 +45,7 @@ class _ProductWeek:
     values: dict[_IndicatorKey, object]
     throughput: dict[tuple[str, str], int]
     detail_keys: frozenset[_IndicatorKey]
+    upper_limits: dict[_IndicatorKey, object]
 
 
 def _prepare_frame(frame: pd.DataFrame, name: str, product: str) -> pd.DataFrame:
@@ -107,15 +110,28 @@ def _prepare_product_week(
     throughput = weekly_passes.groupby(["factory", "step_id"])["sheet_id"].nunique().to_dict()
     weekly_details = details.loc[details["start_time"].ge(week_start) & details["start_time"].lt(week_end)]
     detail_keys = frozenset(weekly_details[list(_KEY_COLUMNS)].itertuples(index=False, name=None))
-    return _ProductWeek(_indicator_descriptions(frames), values, throughput, detail_keys)
+    descriptions = _indicator_descriptions(frames)
+    specs = attach_spec_values(
+        pd.DataFrame(list(descriptions), columns=list(_KEY_COLUMNS)),
+        frames["spec_df"].reindex(columns=[*_KEY_COLUMNS, "type_flag", "spec"]),
+        chart_kind="mwd",
+    )
+    limits = {(row.factory, row.step_id, row.rs_code): row.spec for row in specs.itertuples(index=False)}
+    return _ProductWeek(descriptions, values, throughput, detail_keys, limits)
+
+
+def _cell_density(product: _ProductWeek, key: _IndicatorKey) -> object:
+    if product.throughput.get(key[:2], 0) <= 0:
+        return None
+    if key not in product.values:
+        return None if key in product.detail_keys else 0
+    return product.values[key]
 
 
 def _cell_value(product: _ProductWeek, key: _IndicatorKey) -> str:
     if product.throughput.get(key[:2], 0) <= 0:
         return "无过货"
-    if key not in product.values:
-        return "数据不足" if key in product.detail_keys else "0"
-    return format_weekly_average(product.values[key])
+    return format_weekly_average(_cell_density(product, key))
 
 
 def build_weekly_rs_tables(
@@ -161,6 +177,8 @@ def build_weekly_rs_tables(
                 step_id=key[1], layer=_ARRAY_LAYERS.get(key[1], key[1]) if factory == "ARRAY" else "",
                 code=key[2], label=label(key),
                 values=tuple(_cell_value(product, key) for product in product_weeks),
+                within_spec=tuple(judge_weekly_density(_cell_density(product, key), product.upper_limits.get(key))
+                                  for product in product_weeks),
             )
             for key in keys
         )

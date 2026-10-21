@@ -9,10 +9,12 @@ import pandas as pd
 
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportViewModel
 from src.inline_domain.application.shared.weekly_summary import (
-    WeeklySummaryRow, WeeklySummaryTable, format_weekly_average,
+    WeeklySummaryRow, WeeklySummaryTable, format_weekly_average, judge_weekly_density,
 )
-from src.inline_domain.core.aoi_tt.aoi_tt_calculator import PARTICLE_SIZE_OPTIONS, build_period_trend_df
-from src.inline_domain.core.monitor.monitor_param_classifier import is_ppa_parameter
+from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
+    PARTICLE_SIZE_OPTIONS, build_period_trend_df, attach_spec_values,
+)
+from src.inline_domain.core.aoi_tt.parameters import is_aoi_tt_parameter
 from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 ARRAY_TT_LAYERS = {"11620": "3layer", "12620": "M1", "13620": "M2", "15620": "M3", "18620": "M4"}
@@ -36,7 +38,7 @@ def _prepare(frame: pd.DataFrame, product: str, *, details: bool) -> pd.DataFram
         if result[key].isna().any() or result[key].astype(str).str.strip().eq("").any():
             raise ValueError(f"TT report input contains an empty {key}")
         result[key] = result[key].astype(str).str.strip()
-    result = result.loc[~result["tt_name"].map(is_ppa_parameter)].copy()
+    result = result.loc[result["tt_name"].map(is_aoi_tt_parameter)].copy()
     if details:
         result["factory"] = result["factory"].str.upper()
         result["start_time"] = pd.to_datetime(result["start_time"], errors="coerce")
@@ -85,13 +87,18 @@ def build_weekly_tt_tables(
         prepared.append((details, specs))
 
     candidates = set()
-    all_values, all_counts = [], []
+    all_values, all_counts, all_limits = [], [], []
     for details, specs in prepared:
         candidates.update(details[["factory", "step_id", "tt_name"]].itertuples(index=False, name=None))
         for row in specs.itertuples(index=False):
             factory = factory_by_step.get(row.step_id)
             if factory is not None:
                 candidates.add((factory, row.step_id, row.tt_name))
+        spec_rows = attach_spec_values(
+            specs[["step_id", "tt_name"]].drop_duplicates(),
+            specs.reindex(columns=["step_id", "tt_name", "usl", "ucl"]),
+        )
+        all_limits.append({(row.step_id, row.tt_name): row.usl for row in spec_rows.itertuples(index=False)})
         # Use the same unfiltered station/particle frame as the default line chart.
         trend = build_period_trend_df(details, reference_date)
         weekly = trend.loc[trend["period_type"].eq("week") & trend["period_label"].eq(week_label)]
@@ -119,7 +126,11 @@ def build_weekly_tt_tables(
                 label = f"{key[2]}（{size}）"
                 if factory != "ARRAY" and name_counts[key[2]] > 1:
                     label += f" · {key[1]}"
+                verdicts = tuple(judge_weekly_density(
+                    data.get((*key, size)) if counts.get(key[:2], 0) > 0 else None,
+                    limits.get(key[1:]),
+                ) for data, counts, limits in zip(all_values, all_counts, all_limits))
                 rows.append(WeeklySummaryRow(key[1], ARRAY_TT_LAYERS.get(key[1], key[1]) if factory == "ARRAY" else "",
-                                              f"{key[2]}|{size}", label, values))
+                                              f"{key[2]}|{size}", label, values, within_spec=verdicts))
         tables.append(WeeklySummaryTable(factory, products, tuple(rows), start.date(), end.date()))
     return tables

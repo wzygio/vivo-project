@@ -50,7 +50,7 @@ src
 | `inline_domain` | `shared` | Domain-local measurement preparation and snapshots, parameter/specification metadata, OOS/OOC decisions and decoration, throughput/history, process tracing and shared date filtering; supports multiple Inline report modules |
 | `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
 | `indicator_domain` | `ijp` | IJP border-overflow analysis, Glass ratios, printer summaries and period summaries |
-| `indicator_domain` | `ijp_hole` | IJP large-hole analysis and Glass/total/day ratios; independent counting rules from `ijp`, while reusing its query/filter contracts |
+| `indicator_domain` | `ijp_hole` | IJP large-hole analysis with two-month/three-week count-weighted ratios and Core decoration; reuses `ijp` query/filter contracts and calendar periods while retaining independent counting rules |
 | `indicator_domain` | `shared` | Infrastructure display-date exclusions shared by Q-Time station/chamber and IJP border/hole adapters; filters output copies and binds source-time SQL exclusions before aggregation |
 | `iqc_domain` | `eva_materials` | Evaporation incoming-material measurements, specifications, per-point decisions and overall material results; product eligibility uses material/cycle/product-request membership, including unwarehoused work orders, without multiplying inspection facts |
 | `iqc_domain` | `lifetime` | Lifetime-test measurement validation, group-local anonymous sample numbering, product/batch filtering and report projection; uses an independent M3 data source |
@@ -73,7 +73,7 @@ IQC retains example-report loading/filtering outside `eva_materials` and `lifeti
 
 Select a domain and named business submodule from this overview first, then use the path grammar below to find its actual implementation. Keep the same stable capability name wherever its implementation is present; add a submodule for a distinct business responsibility, and keep domain-local reuse in that domain's `shared` area. The overview records existing packages and explicitly marks ungrouped capabilities; it does not require creating empty or hypothetical packages.
 
-Within `qtime`, station monitoring uses [the documented decoration workflow](references/design/indicator_domain/qtime/algorithm-qtime-data-decoration.md); chamber monitoring uses [independent database interval rules](references/domain/indicator_domain/qtime/rules-chamber-database.md). Its production adapter reads bounded chamber events and resolves the LL1 product specification through MES master data; the workbook adapter remains explicitly injectable for historical use. Sharing a submodule or page does not imply sharing an algorithm.
+Within `qtime`, station monitoring uses [the documented decoration workflow](references/design/indicator_domain/qtime/algorithm-qtime-data-decoration.md); chamber monitoring uses [independent database interval rules](references/domain/indicator_domain/qtime/rules-chamber-database.md). Its adapter reads bounded chamber events and resolves the LL1 product specification through MES master data. Chamber monitoring has no workbook source or month-specific source selection. Its application service applies configurable daily point decoration through Core after infrastructure date policies and enabled-product matching, before presentation filters. Sharing a submodule or page does not imply sharing an algorithm.
 
 ## Shared Path Grammar
 

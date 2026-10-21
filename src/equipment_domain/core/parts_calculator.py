@@ -9,9 +9,10 @@
 4. 纯业务逻辑，不依赖外部 I/O
 """
 
-import hashlib
+import math
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from datetime import date
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -21,39 +22,25 @@ STATUS_OVER = "超规"
 STATUS_WARNING = "预警"
 STATUS_NORMAL = "正常"
 STATUS_REPLACED = "已更换"
-REPLACEMENT_PROGRESS_THRESHOLD = 95.0
-DISPLAY_CAP_POWER = 2.0
+REPLACEMENT_PROGRESS_THRESHOLD = 98.0
 
 
 @dataclass(frozen=True)
 class PartsAlertPolicy:
-    """Alert and display-decoration parameters injected by the application layer."""
+    """Application-injected warning thresholds for critical parts."""
 
     warning_threshold: float
     over_threshold: float
-    decoration_growth_ratio: float
-    decoration_min_ratio: float
-    decoration_max_ratio: float
-    display_progress_max_ratio: float
 
     def __post_init__(self) -> None:
         if self.warning_threshold >= self.over_threshold:
             raise ValueError("warning_threshold must be lower than over_threshold")
-        if self.decoration_min_ratio > self.decoration_max_ratio:
-            raise ValueError("decoration_min_ratio must not exceed decoration_max_ratio")
-        if not 0 < self.display_progress_max_ratio < 1:
-            raise ValueError("display_progress_max_ratio must be between 0 and 1")
-        if self.decoration_min_ratio >= self.display_progress_max_ratio:
-            raise ValueError(
-                "decoration_min_ratio must be lower than display_progress_max_ratio"
-            )
+
 
 RAW_VALUE_COLUMN = "原始测量值"
 OVER_SPEC_COLUMN = "是否超规"
 DECORATION_COLUMN = "数据修饰"
 DECORATION_STATUS_ORIGINAL = "原始"
-DECORATION_STATUS_DECORATED = "超规修饰"
-DECORATION_STATUS_DISPLAY_CAPPED = "进度上限修饰"
 DECORATION_STATUS_REPLACED = "寿命到期更换"
 
 
@@ -63,7 +50,7 @@ def _coerce_float(value: object) -> Optional[float]:
         numeric_value = float(value)
     except (TypeError, ValueError):
         return None
-    if pd.isna(numeric_value):
+    if not math.isfinite(numeric_value):
         return None
     return numeric_value
 
@@ -112,161 +99,23 @@ def is_over_spec(
     return numeric_actual > numeric_spec
 
 
-def calculate_decorated_over_spec_value(
-    actual_value: Optional[float],
-    spec_limit: Optional[float],
-    previous_value: Optional[float],
-    policy: PartsAlertPolicy,
-    spec_ratio: Optional[float] = None,
-) -> float:
-    """
-    对超规测量值进行修饰。
-
-    规则:
-    - 未超规时返回原始测量值
-    - 超规时返回 max(上一个有效值 * 配置增长比例, ratio * 规格线)
-    - ratio 会被约束在配置的修饰比例范围内
-
-    Args:
-        actual_value: 原始测量值
-        spec_limit: 寿命规格
-        previous_value: 上一个已输出的有效值
-        spec_ratio: 规格线修饰比例
-
-    Returns:
-        float: 修饰后的测量值；无效输入返回 0.0
-    """
-    numeric_actual = _coerce_float(actual_value)
-    numeric_spec = _coerce_float(spec_limit)
-    if numeric_actual is None:
-        return 0.0
-    if numeric_spec is None or numeric_spec <= 0:
-        return numeric_actual
-    if numeric_actual <= numeric_spec:
-        return numeric_actual
-
-    effective_ratio = policy.decoration_min_ratio if spec_ratio is None else spec_ratio
-    bounded_ratio = min(
-        max(effective_ratio, policy.decoration_min_ratio),
-        policy.decoration_max_ratio,
-    )
-    spec_candidate = numeric_spec * bounded_ratio
-    numeric_previous = _coerce_float(previous_value)
-    if numeric_previous is None:
-        return spec_candidate
-    return max(numeric_previous * policy.decoration_growth_ratio, spec_candidate)
-
-
-def cap_display_value_below_visible_100(
-    actual_value: Optional[float],
-    spec_limit: Optional[float],
-    policy: PartsAlertPolicy,
-    seed_value: object,
-) -> float:
-    """
-    将超过展示上限的测量值稳定截断到低值偏置的修饰区间。
-
-    Args:
-        actual_value: 待展示测量值
-        spec_limit: 寿命规格
-        policy: 预警与展示修饰策略
-        seed_value: 用于生成可复现截断值的业务种子
-
-    Returns:
-        float: 若进度过高则映射到修饰下限和展示上限之间
-    """
-    numeric_actual = _coerce_float(actual_value)
-    numeric_spec = _coerce_float(spec_limit)
-    if numeric_actual is None:
-        return 0.0
-    if numeric_spec is None or numeric_spec <= 0:
-        return numeric_actual
-    display_upper = numeric_spec * policy.display_progress_max_ratio
-    if numeric_actual <= display_upper:
-        return numeric_actual
-    cap_ratio = _stable_display_cap_ratio(seed_value, policy)
-    return numeric_spec * cap_ratio
-
-
-def _stable_unit_fraction(seed_value: object) -> float:
-    """将业务种子稳定映射到 ``[0, 1)``。"""
-    digest = hashlib.md5(str(seed_value).encode("utf-8")).hexdigest()
-    return int(digest[:8], 16) / 2**32
-
-
-def _stable_spec_ratio(seed_value: object, policy: PartsAlertPolicy) -> float:
-    """根据行标识稳定生成配置修饰比例区间内的值。"""
-    normalized = _stable_unit_fraction(seed_value)
-    return policy.decoration_min_ratio + (
-        normalized * (policy.decoration_max_ratio - policy.decoration_min_ratio)
-    )
-
-
-def _stable_display_cap_ratio(
-    seed_value: object,
-    policy: PartsAlertPolicy,
-) -> float:
-    """生成越接近展示上限概率越低的稳定截断比例。"""
-    normalized = _stable_unit_fraction(f"display-cap|{seed_value}")
-    weighted = normalized**DISPLAY_CAP_POWER
-    return policy.decoration_min_ratio + weighted * (
-        policy.display_progress_max_ratio - policy.decoration_min_ratio
-    )
-
-
-def _build_seed(row: pd.Series, row_index: object) -> str:
-    """构造稳定修饰比例使用的业务种子。"""
-    seed_parts = [
-        str(row_index),
-        str(row.get("厂别", "")),
-        str(row.get("备件类型", "")),
-        str(row.get("设备类型", "")),
-        str(row.get("膜层", "")),
-        str(row.get("制程", "")),
-        str(row.get("站点", "")),
-        str(row.get("机台号-腔室", "")),
-        str(row.get("参数名称", "")),
-        str(row.get("日期", "")),
-        str(row.get("测量时间", "")),
-    ]
-    return "|".join(seed_parts)
-
-
-def apply_over_spec_alert_and_decoration(
+def apply_lifetime_replacement(
     report_df: pd.DataFrame,
+    *,
     value_col: str = "测量值",
     spec_col: str = "寿命规格",
     raw_value_col: str = RAW_VALUE_COLUMN,
     over_spec_col: str = OVER_SPEC_COLUMN,
     decoration_col: str = DECORATION_COLUMN,
-    group_cols: Optional[Sequence[str]] = None,
-    sort_col: Optional[str] = None,
-    policy: Optional[PartsAlertPolicy] = None,
 ) -> pd.DataFrame:
+    """保留源值；进度严格超过98%时计算用测量值归零，输入和来源不改写。
+
+    每次以调用方提供的源值重新判断，不把标记当作持久更换事件。
+    各行独立处理，不执行旧超规修饰、前值增长或98%截断。
+    最终测量值由进度计算完成后的更换日期投影生成。
     """
-    先记录原始超规状态；原始进度超过 95% 时归零并标记已更换，
-    其余超过规格线的数据沿用修饰逻辑。
-
-    Args:
-        report_df: 备件报表或趋势 DataFrame
-        value_col: 测量值列名
-        spec_col: 规格线列名
-        raw_value_col: 原始测量值落地列名
-        over_spec_col: 原始值是否超规的落地列名
-        decoration_col: 数据修饰状态列名
-        group_cols: 需要独立计算“上一个值”的分组列
-        sort_col: 组内排序列，适用于趋势数据
-
-    Returns:
-        pd.DataFrame: 增加原始值、超规标记，并修饰 value_col 后的新 DataFrame
-    """
-    if policy is None:
-        raise ValueError("policy is required for equipment alert calculation")
-    if report_df.empty:
+    if report_df.empty or value_col not in report_df or spec_col not in report_df:
         return report_df.copy()
-    if value_col not in report_df.columns or spec_col not in report_df.columns:
-        return report_df.copy()
-
     result = report_df.copy()
     result[raw_value_col] = result[value_col]
     result[over_spec_col] = [
@@ -274,68 +123,14 @@ def apply_over_spec_alert_and_decoration(
         for value, spec in zip(result[value_col], result[spec_col])
     ]
     result[decoration_col] = DECORATION_STATUS_ORIGINAL
-
-    work_df = result
-    if sort_col and sort_col in result.columns:
-        work_df = result.sort_values(sort_col, kind="mergesort")
-
-    valid_group_cols = [
-        col for col in (group_cols or [])
-        if col in work_df.columns
-    ]
-    if valid_group_cols:
-        group_iter = work_df.groupby(valid_group_cols, sort=False, dropna=False)
-        groups = [group for _, group in group_iter]
-    else:
-        groups = [work_df]
-
-    for group in groups:
-        previous_value: Optional[float] = None
-        for row_index, row in group.iterrows():
-            actual_value = _coerce_float(row[value_col])
-            spec_limit = _coerce_float(row[spec_col])
-            seed_value = _build_seed(row, row_index)
-            replacement_due = (
-                actual_value is not None
-                and spec_limit is not None
-                and spec_limit > 0
-                and calculate_usage_progress(actual_value, spec_limit)
-                > REPLACEMENT_PROGRESS_THRESHOLD
-            )
-            if replacement_due:
-                result.at[row_index, value_col] = 0.0
-                result.at[row_index, decoration_col] = DECORATION_STATUS_REPLACED
-                previous_value = 0.0
-            elif bool(row[over_spec_col]):
-                ratio = _stable_spec_ratio(seed_value, policy)
-                decorated_value = calculate_decorated_over_spec_value(
-                    actual_value=actual_value,
-                    spec_limit=spec_limit,
-                    previous_value=previous_value,
-                    policy=policy,
-                    spec_ratio=ratio,
-                )
-                capped_value = cap_display_value_below_visible_100(
-                    actual_value=decorated_value,
-                    spec_limit=spec_limit,
-                    policy=policy,
-                    seed_value=seed_value,
-                )
-                result.at[row_index, value_col] = capped_value
-                result.at[row_index, decoration_col] = DECORATION_STATUS_DECORATED
-                previous_value = capped_value
-            elif actual_value is not None:
-                capped_value = cap_display_value_below_visible_100(
-                    actual_value=actual_value,
-                    spec_limit=spec_limit,
-                    policy=policy,
-                    seed_value=seed_value,
-                )
-                if capped_value != actual_value:
-                    result.at[row_index, value_col] = capped_value
-                    result.at[row_index, decoration_col] = DECORATION_STATUS_DISPLAY_CAPPED
-                previous_value = capped_value
-
+    values = pd.to_numeric(result[value_col], errors="coerce")
+    specs = pd.to_numeric(result[spec_col], errors="coerce")
+    replacement_due = (
+        np.isfinite(values) & np.isfinite(specs) & specs.gt(0)
+        & (values / specs * 100).gt(REPLACEMENT_PROGRESS_THRESHOLD)
+    )
+    result.loc[replacement_due, value_col] = 0.0
+    result.loc[replacement_due, decoration_col] = DECORATION_STATUS_REPLACED
     return result
 
 
@@ -362,6 +157,22 @@ def calculate_warning_status(
     if usage_progress > policy.warning_threshold:
         return STATUS_WARNING
     return STATUS_NORMAL
+
+
+def apply_replacement_measurement_dates(
+    report_df: pd.DataFrame, *, as_of_date: str | date,
+) -> pd.DataFrame:
+    """完成进度计算后，已更换行的测量值统一显示本次报告更换日期。"""
+    result = report_df.copy()
+    if result.empty or "预警状态" not in result or "测量值" not in result:
+        return result
+    replaced = result["预警状态"].eq(STATUS_REPLACED)
+    if replaced.any():
+        replacement_date = pd.Timestamp(as_of_date).strftime("%Y-%m-%d")
+        # 数值列显式转为object，容纳日期文本；使用进度已经完成计算。
+        result["测量值"] = result["测量值"].astype(object)
+        result.loc[replaced, "测量值"] = replacement_date
+    return result
 
 
 def batch_calculate_progress_and_status(

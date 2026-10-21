@@ -1,6 +1,6 @@
 """AOI_RS 报表投影：Sheet 截断 → Lot 归零 → 周/日密度限幅。
 
-Sheet 超规值取 [0, 0.5 × spec] 的稳定随机值；重算后仍超规的 Lot
+Sheet 默认超过 0.5 × spec 时取 [0, 0.25 × spec] 的稳定哈希值，两比例可配置；重算后仍超规的 Lot
 及其 Sheet 归零。周/日密度最多为所属月份的 1.3 倍，不回写明细。
 沿用工作簿三态及参数豁免；规则只生成投影，不修改源事实。
 显式日期窗口内执行专用规则，窗口外沿用常规修饰；跨窗口 Lot 不专用归零。
@@ -32,11 +32,11 @@ from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
     normalize_aoi_rs_points,
 )
 
-AOI_RS_DECORATION_POLICY_VERSION = "factory-scoped-sheet-half-lot-zero-period-1.3-window-v3"
+AOI_RS_DECORATION_POLICY_VERSION = "factory-scoped-sheet-ratios-lot-zero-period-1.3-window-v4"
+DEFAULT_SHEET_SPEC_RATIOS = (0.5, 0.25)
 _INDICATOR_KEYS = ["factory", "step_id", "rs_code"]
 _SHEET_KEYS = [*_INDICATOR_KEYS, "sheet_id"]
 _LOT_KEYS = [*_INDICATOR_KEYS, "lot_id"]
-_SHEET_SPEC_RATIO = 0.5
 _PERIOD_MONTH_RATIO = 1.3
 _CHART_POINT_META = {"lot": ("lot_id", "value"), "sheet": ("sheet_id", "rs_qty")}
 
@@ -48,6 +48,7 @@ def _apply_chart_decoration(
     chart_kind: str,
     prod_code: str,
     exempt_param_name_contains: Iterable[str] | None = None,
+    *, sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> pd.DataFrame:
     """应用三态 flag：Delete 剔除、False 保留、True 按图类型修饰。"""
     _, value_col = _CHART_POINT_META[chart_kind]
@@ -66,10 +67,12 @@ def _apply_chart_decoration(
         normalized, chart_flags, AOI_RS_OOS_KEY_COLUMNS,
     )
     decorated = decorated.loc[decorated["flag"].ne("Delete")].copy()
+    threshold_ratio, replacement_ratio = sheet_spec_ratios
+    trigger_ratio = threshold_ratio if chart_kind == "sheet" else 1.0
     over = (
         decorated["flag"].eq(True)
         & decorated["spec"].ge(0)
-        & decorated["value"].gt(decorated["spec"])
+        & decorated["value"].gt(decorated["spec"] * trigger_ratio)
     ).fillna(False)
     for token in exempt_param_name_contains or ():
         if token is not None and str(token).strip():
@@ -79,7 +82,7 @@ def _apply_chart_decoration(
     if over.any():
         if chart_kind == "sheet":
             decorated.loc[over, "value"] = decorated.loc[over].apply(
-                _sheet_replacement_value, axis=1,
+                _sheet_replacement_value, axis=1, replacement_ratio=replacement_ratio,
             )
         else:
             decorated.loc[over, ["value", "rs_qty"]] = 0.0
@@ -89,12 +92,12 @@ def _apply_chart_decoration(
     return decorated.drop(columns=["spec", "chart_kind", "point_id", "sheet_start_time", "flag"])
 
 
-def _sheet_replacement_value(row: pd.Series) -> float:
+def _sheet_replacement_value(row: pd.Series, replacement_ratio: float) -> float:
     seed = json.dumps(
         [str(row[key]) for key in AOI_RS_OOS_KEY_COLUMNS], ensure_ascii=False,
     )
     fraction = int.from_bytes(hashlib.sha256(seed.encode("utf-8")).digest()[:8], "big") / 2**64
-    return float(row["spec"]) * _SHEET_SPEC_RATIO * fraction
+    return float(row["spec"]) * replacement_ratio * fraction
 
 
 def project_aoi_rs_details(
@@ -141,6 +144,7 @@ def apply_aoi_rs_decoration(
     *,
     rs_details_df: pd.DataFrame | None = None,
     decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """先修饰 Sheet，再重算并修饰 Lot；明细用于跨图关联和分子重算。"""
     exemptions = tuple(exempt_param_name_contains or ())
@@ -149,7 +153,7 @@ def apply_aoi_rs_decoration(
             raise ValueError("AOI_RS time-scoped decoration requires RS details")
         return _apply_windowed_decoration(
             lot_points_df, sheet_points_df, spec_df, prod_code, decoration_df,
-            exemptions, rs_details_df, decoration_window,
+            exemptions, rs_details_df, decoration_window, sheet_spec_ratios,
         )
     sheet_decorated = _apply_chart_decoration(
         sheet_points_df,
@@ -158,6 +162,7 @@ def apply_aoi_rs_decoration(
         "sheet",
         prod_code,
         exemptions,
+        sheet_spec_ratios=sheet_spec_ratios,
     )
     if rs_details_df is not None:
         projected = project_aoi_rs_details(rs_details_df, sheet_decorated)
@@ -185,7 +190,7 @@ def apply_aoi_rs_decoration(
 def _apply_windowed_decoration(
     lots: pd.DataFrame, sheets: pd.DataFrame, specs: pd.DataFrame, product: str,
     flags: pd.DataFrame, exemptions: tuple[str, ...], details: pd.DataFrame,
-    window: DecorationWindow,
+    window: DecorationWindow, sheet_spec_ratios: tuple[float, float],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     sheet_active = decoration_window_mask(sheets["first_start_time"], window)
     # A mixed Lot uses standard rules so special zeroing cannot affect outside Sheets.
@@ -199,6 +204,7 @@ def _apply_windowed_decoration(
     special = apply_aoi_rs_decoration(
         lots.loc[lot_active], sheets.loc[sheet_active], specs, product, flags, exemptions,
         rs_details_df=details,
+        sheet_spec_ratios=sheet_spec_ratios,
     )
     return tuple(
         pd.concat([normal, modified], ignore_index=True).sort_values(
@@ -279,6 +285,7 @@ def apply_factory_scoped_decoration(
     rs_details_df: pd.DataFrame | None = None,
     special_factories: Iterable[str] = (),
     decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Route selected factories through special rules and all others through standard rules."""
     factories = tuple(special_factories)
@@ -298,6 +305,7 @@ def apply_factory_scoped_decoration(
         spec_df, prod_code, decoration_df, exemptions,
         rs_details_df=rs_details_df.loc[factory_mask(rs_details_df, factories)],
         decoration_window=decoration_window,
+        sheet_spec_ratios=sheet_spec_ratios,
     )
     return tuple(
         pd.concat([normal, modified], ignore_index=True).sort_values(

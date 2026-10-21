@@ -115,6 +115,50 @@ def test_ppa_with_missing_spec_type_never_enters_tt_details_or_limits(parameter:
     assert limits.tt_name.tolist() == ["TDSUM"]
 
 
+@pytest.mark.parametrize("factory", ["ARRAY", "OLED", "TP"])
+def test_null_spec_types_do_not_turn_spc_parameters_into_tt(factory: str) -> None:
+    tt_names = ["TDSUM", "DSUM_L", "DSUM_O", "TOTAL_O_L"]
+    other_names = [
+        "4PP_Rs", "4PP_UNI", "CD1", "CD2", "CD3", "OVL1_X_X", "OVL1_Y_Y",
+        "SE_L1T", "SE_L1T_UNI", "SE_L2T", "SE_L2T_UNI", "TPPOS_X_DIFF",
+        "TPPOS_Y_DIFF", "PPA_B_X", "OTHER_SUM",
+    ]
+    raw = pd.DataFrame([
+        _tt_fact(factory=factory, param_name=name)
+        for name in [*tt_names, *other_names]
+    ])
+    original = raw.copy(deep=True)
+    specs = raw[["prod_code", "step_id", "param_name"]].assign(
+        param_type=None, usl=5, ucl=3,
+    )
+    repository = AoiTtRepository(
+        raw_measurements=SimpleNamespace(get_measurements=lambda *_args: raw),
+        metadata=SimpleNamespace(get_parameter_specs=lambda _product: specs),
+    )
+
+    details = repository.get_tt_details(_query())
+    limits = repository.get_tt_spec_limits("Z517")
+
+    assert details.tt_name.tolist() == tt_names
+    assert limits.tt_name.tolist() == tt_names
+    pd.testing.assert_frame_equal(raw, original)
+
+
+@pytest.mark.parametrize("param_type", ["SPC", "CTQ", ""])
+def test_tt_names_still_require_the_original_null_spec_type(param_type: str) -> None:
+    raw = pd.DataFrame([_tt_fact()])
+    specs = raw[["prod_code", "step_id", "param_name"]].assign(
+        param_type=param_type, usl=5, ucl=3,
+    )
+    repository = AoiTtRepository(
+        raw_measurements=SimpleNamespace(get_measurements=lambda *_args: raw),
+        metadata=SimpleNamespace(get_parameter_specs=lambda _product: specs),
+    )
+
+    assert repository.get_tt_details(_query()).empty
+    assert repository.get_tt_spec_limits("Z517").empty
+
+
 def test_aoi_tt_repository_exposes_injected_particle_size_counts() -> None:
     query = AoiTtQueryConfig(
         prod_code="M678",
@@ -192,7 +236,7 @@ def test_latest_inspection_replaces_older_value_before_sheet_aggregation(reverse
 
 @pytest.mark.parametrize("dimension,value", [
     ("prod_code", "OTHER"), ("factory", "TP"), ("step_id", "21320"),
-    ("param_name", "DSUM"), ("sheet_id", "ANOTHER-SHEET"),
+    ("param_name", "DSUM_L"), ("sheet_id", "ANOTHER-SHEET"),
 ])
 def test_latest_inspection_is_scoped_to_all_five_business_dimensions(dimension: str, value: str) -> None:
     raw = pd.DataFrame([

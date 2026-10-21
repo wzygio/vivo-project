@@ -24,12 +24,7 @@ def build_density_trend_alert_display(
     columns = {**indicator_columns, **_VALUE_COLUMNS}
     display = alerts[list(columns)].rename(columns=columns).copy()
     display["站点"] = display["站点"].map(lambda step: format_step_label(str(step), step_desc_map))
-    display["预警原因"] = [
-        "；".join(name for enabled, name in (
-            (row.daily_alert, "当日超规"), (row.rising_alert, "连续两日上升"),
-        ) if enabled)
-        for row in alerts.itertuples(index=False)
-    ]
+    display["预警原因"] = "当日超规"
     return display
 
 
@@ -50,7 +45,7 @@ def render_density_trend_alert_center(
                 column_config={name: st.column_config.NumberColumn(format="%.4f")
                                for name in ("当日密度", "T-1密度", "T-2密度", "基线5日均值")},
             )
-        elif evaluation["daily_evaluable"].any() or evaluation["rising_evaluable"].any():
+        elif evaluation["daily_evaluable"].any():
             st.success("可评估项暂无预警。")
         else:
             st.info("数据不足。")

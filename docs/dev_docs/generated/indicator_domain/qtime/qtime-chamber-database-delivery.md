@@ -1,6 +1,10 @@
 # Task2 蒸镀腔室数据库版交付与验证
 
 日期：2026-10-13。development-flow general；分支 `feat/qtime-chamber-database`。
+
+> 2026-10-21清理更新：旧Excel适配器、两项资源配置、两份九月工作簿和工作簿专用
+> 集成测试已删除；日期排除及缓存覆盖已迁至数据库/应用测试。下文“保留”说明和测试
+> 命令为2026-10-13历史记录；当前来源规则见[腔室数据库规则](../../../../../references/domain/indicator_domain/qtime/rules-chamber-database.md)。
 范围：[Task2](../../../dev_spec/indicator_domain/qtime/task-Q_Time单腔停留时间.md)。
 需求与执行记录：[PRD/票据](../../../../../.scratch/qtime-chamber-database/PRD.md)。
 数据源：[实际权限、字段和样本分析](datasource-qtime-chamber-database.md)。

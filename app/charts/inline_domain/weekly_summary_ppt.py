@@ -4,7 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import timedelta
 from io import BytesIO
-from math import ceil
+from math import ceil, isfinite
 from typing import TYPE_CHECKING
 from unicodedata import east_asian_width
 
@@ -22,6 +22,9 @@ ROW_COLORS = ("CDCEFF", "E8E8FF")
 PRODUCTS_PER_PAGE = 8
 BODY_TOP = 106
 BODY_HEIGHT = 394
+WITHIN_SPEC_COLOR = "008000"
+EXCEEDS_SPEC_COLOR = "FF0000"
+DEFAULT_TEXT_COLOR = "000000"
 
 
 def _text(shape, text: str, size: float, *, color: str = "000000", bold: bool = False) -> None:
@@ -35,6 +38,7 @@ def _text(shape, text: str, size: float, *, color: str = "000000", bold: bool = 
 
 def _cell(
     cell, text: str, *, header: bool = False, fill: str = "FFFFFF", font_size: float | None = None,
+    color: str = DEFAULT_TEXT_COLOR,
 ) -> None:
     cell.text = text
     cell.margin_left = cell.margin_right = Pt(5)
@@ -47,7 +51,7 @@ def _cell(
         p.font.name = "Microsoft YaHei"
         p.font.size = Pt(font_size if font_size is not None else (15 if header else 13))
         p.font.bold = header
-        p.font.color.rgb = RGBColor.from_string("FFFFFF" if header else "000000")
+        p.font.color.rgb = RGBColor.from_string("FFFFFF" if header else color)
     cell.text_frame.word_wrap = True
     # python-pptx has no public table-cell border API.
     properties = cell._tc.get_or_add_tcPr()
@@ -108,6 +112,20 @@ def _clone_template_slide(deck, source):
     return slide
 
 
+def _density_color(text: str, within_spec: bool | None) -> str:
+    # Textual states stay black even if a caller supplies an inconsistent verdict.
+    try:
+        if not isfinite(float(text)):
+            return DEFAULT_TEXT_COLOR
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_TEXT_COLOR
+    if within_spec is True:
+        return WITHIN_SPEC_COLOR
+    if within_spec is False:
+        return EXCEEDS_SPEC_COLOR
+    return DEFAULT_TEXT_COLOR
+
+
 def _draw_table(slide, table, rows, product_start: int, width: float, category: str) -> None:
     array = table.factory == "ARRAY"
     products = table.products[product_start:product_start + PRODUCTS_PER_PAGE]
@@ -128,10 +146,16 @@ def _draw_table(slide, table, rows, product_start: int, width: float, category: 
         grid.rows[index].height = Pt(row_height)
         values = [category, row.layer, row.label] if array else [category, row.label]
         values += list(row.values[product_start:product_start + len(products)])
+        verdicts = getattr(row, "within_spec", ())
+        if verdicts and len(verdicts) != len(table.products):
+            raise ValueError("周报规格判定与产品列数量不一致。")
         for col, value in enumerate(values):
             is_product = col >= (3 if array else 2)
+            product_index = product_start + col - (3 if array else 2)
+            verdict = verdicts[product_index] if is_product and verdicts else None
             _cell(grid.cell(index, col), value, fill=ROW_COLORS[(index - 1) % 2],
-                  font_size=12 if compact and is_product else 13)
+                  font_size=12 if compact and is_product else 13,
+                  color=_density_color(value, verdict) if is_product else DEFAULT_TEXT_COLOR)
     if len(rows) > 1:
         grid.cell(1, 0).merge(grid.cell(len(rows), 0))
         _cell(grid.cell(1, 0), category, fill=ROW_COLORS[1])

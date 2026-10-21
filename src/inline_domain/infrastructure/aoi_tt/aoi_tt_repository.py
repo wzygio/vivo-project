@@ -11,7 +11,7 @@ from src.inline_domain.application.ports.measurement_snapshot import (
     MeasurementMetadataPort,
     MeasurementSnapshotPort,
 )
-from src.inline_domain.core.monitor.monitor_param_classifier import is_ppa_parameter
+from src.inline_domain.core.aoi_tt.parameters import is_aoi_tt_parameter
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     keep_latest_measurements,
@@ -27,9 +27,9 @@ ParticleSizeRatioLoader = Callable[[], pd.DataFrame]
 
 
 def _tt_specs(specs: pd.DataFrame) -> pd.DataFrame:
-    """Keep TT specification pairs, excluding PPA measurements owned by SPC."""
+    """Require both a TT parameter name and the original null-type spec contract."""
     return specs.loc[
-        specs["param_type"].isna() & ~specs["param_name"].map(is_ppa_parameter)
+        specs["param_type"].isna() & specs["param_name"].map(is_aoi_tt_parameter)
     ]
 
 

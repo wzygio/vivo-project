@@ -59,7 +59,7 @@ from app.sections.equipment_domain.parts_dashboard import (
 
 BASELINE_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "critical_parts_baseline", "critical_parts_baseline.csv")
 CVD_PATH = ConfigLoader.get_domain_resource_path("equipment_domain", "cvd_parts", "供应商关键备件寿命管控清单-CVD.xlsx")
-PARTS_REPORT_CACHE_SIGNATURE = "parts_report_cvd_calendar_months_v5"
+PARTS_REPORT_CACHE_SIGNATURE = "parts_report_replacement_dates_v7"
 logger = logging.getLogger(__name__)
 
 

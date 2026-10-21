@@ -10,8 +10,8 @@ from src.inline_domain.application.shared.oos_history_service import OosHistoryS
 from src.inline_domain.core.monitor.excel_contract import ExcelAlarmReadError
 from src.inline_domain.core.monitor.monitor_param_classifier import (
     PARAM_CLASSIFICATION_SIGNATURE,
-    is_ppa_parameter,
 )
+from src.inline_domain.core.aoi_tt.parameters import is_aoi_tt_parameter
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -56,9 +56,9 @@ class ExcelAlarmReader:
             frame = frame.rename(columns={"Flag": "flag"})
         self._validate(scope, prod_code, frame)
         if scope == "aoi_tt" and "tt_name" in frame:
-            # Old generated sheets may still contain PPA facts. Keep persisted
-            # decisions intact and apply the same ownership rule on read.
-            frame = frame.loc[~frame["tt_name"].map(is_ppa_parameter)].copy()
+            # Old generated sheets may contain non-TT facts with null spec types.
+            # Apply current ownership on a copy without rewriting decisions.
+            frame = frame.loc[frame["tt_name"].map(is_aoi_tt_parameter)].copy()
         projected = self._projector.project_detail(scope, frame)
         if scope == "aoi_rs" and "chart_kind" in frame:
             projected["chart_kind"] = frame["chart_kind"].reindex(projected.index).to_numpy()

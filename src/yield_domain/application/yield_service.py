@@ -760,9 +760,7 @@ class YieldAnalysisService:
                 return {}
 
             # --- 步骤 1: 读取 Excel 并“降维”为 CSV ---
-            df_raw = pd.read_excel(
-                file_path, header=None, dtype=str, engine='openpyxl', sheet_name=sheet_name
-            )
+            df_raw = _resolve_data_port().read_warning_matrix(file_path, sheet_name)
             csv_buffer = io.StringIO()
             df_raw.to_csv(csv_buffer, index=False, header=False)
             csv_buffer.seek(0)
@@ -835,7 +833,7 @@ class YieldAnalysisService:
             return warning_lines
 
         except Exception as e:
-            logging.error(f"读取警戒线配置失败: {e}", exc_info=True)
+            logging.error("YIELD_WARNING_LINES_READ_FAILED type=%s", type(e).__name__)
             raise YieldWarningLinesReadError("Yield 警戒线配置读取失败。") from e
         
     @staticmethod

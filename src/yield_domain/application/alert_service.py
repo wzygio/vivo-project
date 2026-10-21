@@ -9,6 +9,38 @@ from src.yield_domain.core.abnormal_detector import AbnormalDetector
 
 class AlertService:
     @staticmethod
+    def get_dashboard_alert_history(
+        mwd_group_data: Dict[str, pd.DataFrame], mwd_code_data: Dict[str, pd.DataFrame],
+    ) -> List[Dict[str, Any]]:
+        """Publish each available period using the existing pairwise detector.
+
+        Current markers preserve the dashboard's latest-per-series semantics.
+        No baseline is invented for a series with fewer than two observations.
+        """
+        def identity(record):
+            return tuple("" if pd.isna(record.get(key)) else str(record[key]) for key in
+                         ("level", "defect_group", "defect_desc", "time_period", "period_scope"))
+
+        current = {identity(record) for record in AlertService.get_dashboard_alert_records(
+            mwd_group_data, mwd_code_data)}
+        history = []
+        for scope in ("monthly", "weekly"):
+            group = mwd_group_data.get(f"{scope}_full", mwd_group_data.get(scope))
+            code = mwd_code_data.get(f"{scope}_full", mwd_code_data.get(scope))
+            frames = [frame for frame in (group, code) if frame is not None and not frame.empty]
+            periods = sorted({str(value) for frame in frames for value in frame["time_period"].dropna()})
+            for period in periods:
+                prefixes = [frame.loc[frame["time_period"].astype(str).le(period)]
+                            if frame is not None and not frame.empty else pd.DataFrame()
+                            for frame in (group, code)]
+                for record in AbnormalDetector.detect_system_trend_records(*prefixes):
+                    if str(record["time_period"]) != period:
+                        continue
+                    record = {**record, "period_scope": scope}
+                    history.append({**record, "is_current": identity(record) in current})
+        return history
+
+    @staticmethod
     def get_dashboard_alerts(
         mwd_group_data: Dict[str, pd.DataFrame],
         mwd_code_data: Dict[str, pd.DataFrame],

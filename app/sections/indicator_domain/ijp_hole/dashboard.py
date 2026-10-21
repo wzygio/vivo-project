@@ -13,7 +13,7 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 RESULT_KEY = 'ijp_hole_result'
-VIEW_LABELS = {'玻璃': 'glass', 'Total': 'total', '按天': 'day'}
+REPORT_VERSION = 'hole-periods-v4'
 
 
 def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
@@ -43,7 +43,7 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
                 ))
         clicked = st.button('查询', type='primary', width='stretch', key='ijp_hole_search')
     signature = (
-        start, end, *values.values(), service.enabled_products, service.work_order_types,
+        REPORT_VERSION, start, end, *values.values(), service.enabled_products, service.work_order_types,
         ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,
         ConfigLoader.get_indicator_data_exclusion(),
     )
@@ -62,16 +62,14 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
     if not stored or stored['signature'] != signature:
         st.info('请选择筛选条件并点击“查询”。')
         return
-    view_label = st.radio('统计视图', list(VIEW_LABELS), horizontal=True, key='ijp_hole_view')
-    view = VIEW_LABELS[view_label]
-    frame = stored['report'][view]
+    frame = stored['report']['day']
     if frame.empty:
         st.info('当前筛选条件下暂无 IJP 溢流数据。')
         return
-    render_hole_charts(frame, view)
+    render_hole_charts(frame)
 
 
-def render_hole_charts(frame: pd.DataFrame, view: str) -> None:
+def render_hole_charts(frame: pd.DataFrame) -> None:
     for product, product_frame in frame.groupby('productcode', sort=False):
         with st.expander(f'产品：{product}', expanded=True):
             for line, line_frame in product_frame.groupby('line', sort=True):
@@ -83,6 +81,6 @@ def render_hole_charts(frame: pd.DataFrame, view: str) -> None:
                             with column:
                                 st.plotly_chart(
                                     build_hole_figure(line_frame[line_frame.printer.eq(printer)],
-                                                      title=str(printer), view=view),
-                                    width='stretch', key=f'ijp_hole_{view}_{product}_{line}_{printer}',
+                                                      title=str(printer)),
+                                    width='stretch', key=f'ijp_hole_period_{product}_{line}_{printer}',
                                 )

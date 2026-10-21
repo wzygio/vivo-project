@@ -9,6 +9,8 @@
 - 配置命中的参数豁免自动截断并保留真实值，Delete 仍优先；
 - 截断算法与 flag 机制均来自 core/shared（单一算法来源）。
 - 可配置的厂别日期排除先于三态修饰执行，不受 False 或参数豁免影响。
+- 专用厂别/显示日期窗口内，以可配置的 UCL 比例触发并生成区间内稳定整数哈希值；
+  窗口外及其他厂别沿用上述常规 UCL 修饰，专用规则见 aoi_tt_special_decoration。
 """
 
 from __future__ import annotations
@@ -18,6 +20,11 @@ from collections.abc import Iterable
 import pandas as pd
 
 from src.inline_domain.core.shared.auto_decoration import apply_tri_state_decoration
+from src.inline_domain.core.shared.decoration_window import DecorationWindow, decoration_window_mask
+from src.inline_domain.core.aoi_tt.aoi_tt_special_decoration import (
+    DEFAULT_SHEET_SPEC_RATIOS,
+    apply_aoi_tt_special_decoration,
+)
 
 AOI_TT_OOS_DECORATION_FILE_NAME = "aoi_tt_sheet_oos_decoration.xlsx"
 AOI_TT_OOS_KEY_COLUMNS = ["prod_code", "step_id", "tt_name", "sheet_id"]
@@ -66,9 +73,15 @@ def apply_aoi_tt_decoration(
     spec_df: pd.DataFrame,
     decoration_df: pd.DataFrame,
     exempt_param_name_contains: Iterable[str] | None = None,
+    *,
+    special_factories: Iterable[str] = (),
+    decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> pd.DataFrame:
-    """Apply tri-state UCL decoration to infrastructure-filtered measurements."""
+    """Apply factory/date-scoped or standard tri-state UCL decoration."""
     decorated_df = tt_details_df.copy()
+    exemptions = tuple(exempt_param_name_contains or ())
+    factories = {name.strip().upper() for name in special_factories}
     if not decorated_df.empty:
         specs = _spec_map(spec_df, "ucl")
         if not specs.empty:
@@ -77,14 +90,30 @@ def apply_aoi_tt_decoration(
                 on=["step_id", "tt_name"],
                 how="left",
             )
-            decorated_df = apply_tri_state_decoration(
-                attached,
+            active = pd.Series(False, index=attached.index)
+            if factories:
+                active = (
+                    attached["factory"].astype("string").str.strip().str.upper().isin(factories)
+                    & decoration_window_mask(attached["start_time"], decoration_window)
+                )
+            attached["_decoration_order"] = range(len(attached))
+            standard = apply_tri_state_decoration(
+                attached.loc[~active],
                 decoration_df,
                 key_columns=AOI_TT_OOS_KEY_COLUMNS,
                 value_col="tt_qty",
                 spec_col="_ooc_ucl",
                 parameter_col="tt_name",
-                exempt_param_name_contains=exempt_param_name_contains,
-            ).drop(columns=["_ooc_ucl"])
+                exempt_param_name_contains=exemptions,
+            )
+            special = apply_aoi_tt_special_decoration(
+                attached.loc[active], decoration_df,
+                key_columns=AOI_TT_OOS_KEY_COLUMNS,
+                exempt_param_name_contains=exemptions,
+                sheet_spec_ratios=sheet_spec_ratios,
+            )
+            decorated_df = pd.concat([standard, special], ignore_index=True).sort_values(
+                "_decoration_order", kind="stable",
+            ).drop(columns=["_ooc_ucl", "_decoration_order"]).reset_index(drop=True)
 
     return decorated_df

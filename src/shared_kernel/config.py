@@ -594,37 +594,80 @@ class ConfigLoader:
     @classmethod
     def get_aoi_rs_special_decoration_factories(cls) -> list[str]:
         """Read the active AOI_RS allowlist; special rules are disabled by default."""
-        report = cls.load_domain_config("inline_domain").get("aoi_rs", {})
+        return cls._aoi_special_decoration_factories("aoi_rs")
+
+    @classmethod
+    def _aoi_special_decoration_section(cls, report_name: str) -> dict:
+        report = cls.load_domain_config("inline_domain").get(report_name, {})
         if not isinstance(report, dict):
-            raise ValueError("aoi_rs must be a mapping")
+            raise ValueError(f"{report_name} must be a mapping")
         special = report.get("special_decoration", {})
         if not isinstance(special, dict):
-            raise ValueError("aoi_rs.special_decoration must be a mapping")
+            raise ValueError(f"{report_name}.special_decoration must be a mapping")
+        return special
+
+    @classmethod
+    def _aoi_special_decoration_factories(cls, report_name: str) -> list[str]:
+        special = cls._aoi_special_decoration_section(report_name)
         enabled = special.get("enabled", False)
         if not isinstance(enabled, bool):
-            raise ValueError("aoi_rs.special_decoration.enabled must be a boolean")
+            raise ValueError(f"{report_name}.special_decoration.enabled must be a boolean")
         if not enabled:
             return []
         factories = special.get("factories", ["OLED"])
         if not isinstance(factories, list) or any(
             not isinstance(value, str) or not value.strip() for value in factories
         ):
-            raise ValueError("aoi_rs.special_decoration.factories must be a list of factory names")
+            raise ValueError(f"{report_name}.special_decoration.factories must be a list of factory names")
         return list(dict.fromkeys(value.strip().upper() for value in factories))
+
+    @classmethod
+    def get_aoi_rs_special_decoration_sheet_ratios(cls) -> tuple[float, float]:
+        """Return the Sheet trigger and stable-hash upper-bound ratios."""
+        return cls._aoi_special_decoration_sheet_ratios("aoi_rs")
+
+    @classmethod
+    def _aoi_special_decoration_sheet_ratios(cls, report_name: str) -> tuple[float, float]:
+        section = cls._aoi_special_decoration_section(report_name)
+        ratios = []
+        for key, default in (("sheet_threshold_ratio", 0.5), ("sheet_replacement_ratio", 0.25)):
+            value = section.get(key, default)
+            if (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not isfinite(value) or value < 0
+            ):
+                raise ValueError(f"{report_name}.special_decoration.{key} must be a finite non-negative number")
+            ratios.append(float(value))
+        return ratios[0], ratios[1]
 
     @classmethod
     def get_aoi_rs_special_decoration_window(
         cls, *, today: date | None = None,
     ) -> tuple[str, str]:
         """Resolve the inclusive display dates for AOI_RS special rules."""
-        report = cls.load_domain_config("inline_domain").get("aoi_rs", {})
-        if not isinstance(report, dict):
-            raise ValueError("aoi_rs must be a mapping")
-        section = report.get("special_decoration", {})
-        if not isinstance(section, dict):
-            raise ValueError("aoi_rs.special_decoration must be a mapping")
+        section = cls._aoi_special_decoration_section("aoi_rs")
         return cls._decoration_date_window(
             section, default_start="2026-09-21", path="aoi_rs.special_decoration", today=today,
+        )
+
+    @classmethod
+    def get_aoi_tt_special_decoration_factories(cls) -> list[str]:
+        """Read the independent AOI_TT special-rule factory allowlist."""
+        return cls._aoi_special_decoration_factories("aoi_tt")
+
+    @classmethod
+    def get_aoi_tt_special_decoration_sheet_ratios(cls) -> tuple[float, float]:
+        """Return AOI_TT UCL trigger and stable-hash upper-bound ratios."""
+        return cls._aoi_special_decoration_sheet_ratios("aoi_tt")
+
+    @classmethod
+    def get_aoi_tt_special_decoration_window(
+        cls, *, today: date | None = None,
+    ) -> tuple[str, str]:
+        """Resolve inclusive display dates for AOI_TT special rules."""
+        return cls._decoration_date_window(
+            cls._aoi_special_decoration_section("aoi_tt"),
+            default_start="2026-09-21", path="aoi_tt.special_decoration", today=today,
         )
 
     @staticmethod

@@ -32,9 +32,9 @@ def test_dates_preserved_and_monthly_increment_is_linear_and_repeatable():
     source = cvd_source()
     original = source.copy(deep=True)
     result = report(source)
-    assert result.loc[0, "测量值"] == "2024-09-21"
+    assert result.loc[0, "测量值"] == "2026-09-21"
     assert result.loc[0, "寿命规格"] == "2年"
-    assert result.loc[0, "预警状态"] == "超规"
+    assert result.loc[0, "预警状态"] == "正常"
     assert result.loc[1, "测量值"] == pytest.approx(2477 + 352 / 30)
     assert report(day="2026-10-21").loc[1, "测量值"] == 2829
     assert report(day="2026-09-20").loc[1, "测量值"] == 2477
@@ -52,22 +52,22 @@ def test_excel_serial_replacement_date_and_calendar_leap_year():
     assert result.loc[0, "使用进度"] == pytest.approx(365 / 730 * 100)
 
 
-@pytest.mark.parametrize("replacement,day,expiry", [
-    ("2025-04-12", "2026-10-13", "2026-10-12"),
-    ("2024-02-29", "2025-08-29", "2025-08-29"),
-    ("2025-08-31", "2026-02-28", "2027-02-28"),
-    ("2026-10-12", "2026-10-11", "2028-04-12"),
+@pytest.mark.parametrize("replacement,day,cycle_start,expiry", [
+    ("2025-04-12", "2026-10-13", "2026-10-12", "2028-04-12"),
+    ("2024-02-29", "2025-08-29", "2025-08-29", "2027-02-28"),
+    ("2025-08-31", "2026-02-28", "2025-08-31", "2027-02-28"),
+    ("2026-10-12", "2026-10-11", "2026-10-12", "2028-04-12"),
 ])
-def test_fractional_year_lifespan_uses_eighteen_calendar_months(replacement, day, expiry):
+def test_fractional_year_lifespan_uses_eighteen_calendar_months(replacement, day, cycle_start, expiry):
     source = cvd_source().iloc[:1].copy()
     source["厂别"] = "ARRAY"
     source["寿命规格"] = "1.5年"
     source["测量值"] = replacement
     source["测量时间"] = "2026-10-12"
     result = report(source, day=day).iloc[0]
-    elapsed = max((pd.Timestamp(day) - pd.Timestamp(replacement)).days, 0)
-    duration = (pd.Timestamp(expiry) - pd.Timestamp(replacement)).days
-    assert result["测量值"] == replacement
+    elapsed = max((pd.Timestamp(day) - pd.Timestamp(cycle_start)).days, 0)
+    duration = (pd.Timestamp(expiry) - pd.Timestamp(cycle_start)).days
+    assert result["测量值"] == cycle_start
     assert result["寿命规格"] == "1.5年"
     assert result["使用进度"] == pytest.approx(elapsed / duration * 100)
     assert result["厂别"] == "ARRAY"
@@ -79,10 +79,14 @@ def test_fractional_year_excel_date_serial_and_missing_increment_are_supported()
     source["测量值"] = 45351  # 2024-02-29
     source["进度"] = None
     result = report(source, day="2025-08-29").iloc[0]
-    assert result["测量值"] == "2024-02-29"
-    assert result["使用进度"] == 100
-    assert result["预警状态"] == "预警"
-    assert report(source, day="2025-08-30").iloc[0]["预警状态"] == "超规"
+    assert result["测量值"] == "2025-08-29"
+    assert result["使用进度"] == 0
+    assert result["预警状态"] == "正常"
+    next_day = report(source, day="2025-08-30").iloc[0]
+    assert next_day["使用进度"] == pytest.approx(
+        100 / (pd.Timestamp("2027-02-28") - pd.Timestamp("2025-08-29")).days,
+    )
+    assert next_day["预警状态"] == "正常"
 
 
 def test_fractional_year_without_whole_month_duration_fails_explicitly():
@@ -119,6 +123,99 @@ def test_row_measurement_date_overrides_default_simulation_origin():
     source = cvd_source().iloc[1:].copy()
     source["测量时间"] = "2026-09-20"
     assert report(source).iloc[0]["测量值"] == pytest.approx(2477 + 2 * 352 / 30)
+
+
+@pytest.mark.parametrize("value,expected,status", [
+    (97, 97, "预警"), (98, 98, "预警"),
+    (98.01, 0, "已更换"), (99, 0, "已更换"),
+    (100, 0, "正常"), (105, 5, "正常"), (250, 50, "正常"),
+])
+def test_numeric_cvd_wraps_at_full_lifetime_before_report_replacement(value, expected, status):
+    source = cvd_source().iloc[1:].copy().reset_index(drop=True)
+    source["寿命规格"] = 100
+    source["测量值"] = value
+    source["进度"] = 0
+    row = report(source, day="2026-09-21").iloc[0]
+    if status == "已更换":
+        assert row["测量值"] == "2026-09-21"
+    else:
+        assert row["测量值"] == pytest.approx(expected)
+    assert row["使用进度"] == pytest.approx(expected)
+    assert row["预警状态"] == status
+
+
+def test_cvd_after_wrap_keeps_its_monthly_increment_and_does_not_accumulate_on_refresh():
+    source = cvd_source().iloc[1:].copy().reset_index(drop=True)
+    source["寿命规格"] = 100
+    source["测量值"] = 97
+    source["进度"] = 30  # 每日 +1，与常规备件约15%的TTL增量独立。
+    original = source.copy(deep=True)
+    expected = [
+        ("2026-09-22", 98, "预警"),
+        ("2026-09-23", 0, "已更换"),
+        ("2026-09-24", 0, "正常"),
+        ("2026-09-25", 1, "正常"),
+        ("2027-01-03", 1, "正常"),  # 104天，跨越两个周期。
+    ]
+    for day, value, status in expected:
+        first = report(source, day=day)
+        pd.testing.assert_frame_equal(first, report(source, day=day))
+        if status == "已更换":
+            assert first.loc[0, "测量值"] == day
+        else:
+            assert first.loc[0, "测量值"] == pytest.approx(value)
+        assert first.loc[0, "使用进度"] == pytest.approx(value)
+        assert first.loc[0, "预警状态"] == status
+    pd.testing.assert_frame_equal(source, original)
+
+
+@pytest.mark.parametrize("day,replacement,progress,status", [
+    ("2025-12-24", "2025-01-01", 357 / 365 * 100, "预警"),
+    ("2025-12-25", "2025-12-25", 0, "已更换"),
+    ("2026-01-01", "2026-01-01", 0, "正常"),
+    ("2026-01-02", "2026-01-01", 1 / 365 * 100, "正常"),
+    ("2030-01-02", "2030-01-01", 1 / 365 * 100, "正常"),
+])
+def test_year_lifetime_replacement_and_multiple_calendar_cycles(day, replacement, progress, status):
+    source = cvd_source().iloc[:1].copy()
+    source["寿命规格"] = "1年"
+    source["测量值"] = "2025-01-01"
+    original = source.copy(deep=True)
+    row = report(source, day=day).iloc[0]
+    assert row["测量值"] == replacement
+    assert row["使用进度"] == pytest.approx(progress)
+    assert row["预警状态"] == status
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_calendar_cycle_keeps_source_anniversary_anchor_across_leap_years():
+    source = cvd_source().iloc[:1].copy()
+    source["寿命规格"] = "1年"
+    source["测量值"] = "2024-02-29"
+    row = report(source, day="2028-02-29").iloc[0]
+    assert row["测量值"] == "2028-02-29"
+    assert row["使用进度"] == 0
+    assert row["预警状态"] == "正常"
+
+
+def test_replaced_cvd_year_rows_display_report_replacement_date_instead_of_old_date():
+    source = pd.concat([cvd_source().iloc[:1]] * 3, ignore_index=True)
+    source["寿命规格"] = "1.5年"
+    source["测量值"] = ["2025-04-26", "2025-04-24", "2025-04-22"]
+    original = source.copy(deep=True)
+    result = report(source, day="2026-10-21")
+    assert result["预警状态"].tolist() == ["已更换"] * 3
+    assert result["使用进度"].eq(0).all()
+    assert result["测量值"].tolist() == ["2026-10-21"] * 3
+    pd.testing.assert_frame_equal(source, original)
+
+
+def test_numeric_cvd_arithmetic_overflow_fails_instead_of_producing_nan():
+    source = cvd_source().iloc[1:].copy()
+    source["测量值"] = 1e308
+    source["进度"] = 1e308
+    with pytest.raises(ValueError, match="有限"):
+        report(source, day="2030-01-01")
 
 
 def test_invalid_numeric_progress_fails_instead_of_silent_normal_status():
@@ -163,8 +260,8 @@ def test_service_merges_cvd_after_existing_numeric_calculations():
         cvd_path="unused.xlsx", _data_port=port,
     )
     assert result.total_count == 3
-    assert result.over_count == 1
-    assert result.normal_count == 2
+    assert result.over_count == 0
+    assert result.normal_count == 3
     assert result.last_update == "2026-09-22"
     assert result.report_df.iloc[0]["测量值"] == 1000
     assert "进度" not in result.report_df
@@ -186,3 +283,57 @@ def test_cvd_workbook_changes_invalidate_report_cache_context(tmp_path):
     second = build_parts_report_cache_context(tmp_path / "baseline.csv", path)
     assert first["cvd_signature"] != second["cvd_signature"]
     assert first["baseline_signature"] == second["baseline_signature"]
+
+
+def test_service_recomputes_replacement_across_cvd_cycles_and_keeps_public_projection():
+    from io import StringIO
+    from types import SimpleNamespace
+    from app.sections.equipment_domain.parts_dashboard import _prepare_parts_table
+    from src.equipment_domain.application.parts_service import PartsReportService
+
+    spec = pd.DataFrame([{
+        "厂别": "ARRAY", "备件类型": "Target", "设备类型": "PVD",
+        "膜层": "MO", "制程": "DEPO", "寿命规格": 100,
+        "站点": "S1", "机台号-腔室": "EQ1", "参数名称": "%LIFE%",
+    }])
+    facts = pd.DataFrame({
+        "step_id": ["S1"], "sub_equip_id": ["EQ1"], "param_name": ["LIFE"],
+        "value": [99.0], "glass_start_time": pd.to_datetime(["2025-12-31"]),
+    })
+    cvd = cvd_source()
+    cvd["寿命规格"] = ["1年", 100]
+    cvd["测量值"] = ["2025-01-01", 99]
+    cvd["进度"] = [None, 30]
+    cvd["测量时间"] = "2025-12-31"
+    original = cvd.copy(deep=True)
+    port = SimpleNamespace(
+        load_baseline=lambda _: spec,
+        load_snapshots=lambda *args, **kwargs: (facts, pd.DataFrame()),
+        load_cvd=lambda *args, **kwargs: cvd,
+    )
+    PartsReportService.fetch_report_payload.clear()
+    try:
+        before = PartsReportService.get_report_data(
+            None, "lifecycle-test.csv", "lifecycle-test", as_of_date="2025-12-31",
+            cvd_path="lifecycle-test.xlsx", _data_port=port,
+        )
+        assert before.report_df["预警状态"].tolist() == ["已更换"] * 3
+        assert before.report_df["测量值"].tolist() == ["2025-12-31"] * 3
+        after = PartsReportService.get_report_data(
+            None, "lifecycle-test.csv", "lifecycle-test", as_of_date="2026-01-02",
+            cvd_path="lifecycle-test.xlsx", _data_port=port,
+        )
+        assert after.report_df["预警状态"].tolist() == ["已更换", "正常", "正常"]
+        assert after.report_df["测量值"].tolist() == ["2026-01-02", "2026-01-01", 1]
+        assert after.total_count == 3 and after.normal_count == 2
+        public = _prepare_parts_table(after.report_df)
+        assert public["测量值"].tolist() == ["2026-01-02", "2026-01-01", "1"]
+        assert public["使用进度"].iloc[0] == 0
+        assert public["预警状态"].tolist() == ["已更换", "正常", "正常"]
+        assert not {"原始测量值", "是否超规", "数据修饰", "进度", "匹配参数名"} & set(public)
+        exported = pd.read_csv(StringIO(public.to_csv(index=False)), dtype=str)
+        assert exported["测量值"].tolist() == ["2026-01-02", "2026-01-01", "1"]
+        assert set(exported) == set(public)
+        pd.testing.assert_frame_equal(cvd, original)
+    finally:
+        PartsReportService.fetch_report_payload.clear()

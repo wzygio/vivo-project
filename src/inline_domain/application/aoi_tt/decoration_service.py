@@ -24,6 +24,8 @@ from src.inline_domain.application.shared.decoration_defaults import (
     persist_sheet_oos_decoration_outcome,
 )
 from src.inline_domain.application.shared.decoration_ports import SheetDecorationPort
+from src.inline_domain.core.aoi_tt.aoi_tt_special_decoration import DEFAULT_SHEET_SPEC_RATIOS
+from src.inline_domain.core.shared.decoration_window import DecorationWindow
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,9 @@ def prepare_aoi_tt_decoration(
     now: datetime | None = None,
     decoration_port: SheetDecorationPort | None = None,
     workbook_path: Path | None = None,
+    special_factories: Iterable[str] = (),
+    decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> AoiTtDecorationResult:
     exempt_param_name_contains = tuple(exempt_param_name_contains or ())
     detail = build_aoi_tt_oos_detail(tt_details_df, spec_df)
@@ -101,6 +106,9 @@ def prepare_aoi_tt_decoration(
             spec_df,
             decoration,
             exempt_param_name_contains,
+            special_factories=special_factories,
+            decoration_window=decoration_window,
+            sheet_spec_ratios=sheet_spec_ratios,
         ),
         decoration_df=decoration,
         decoration_path=product_dir / file_name,

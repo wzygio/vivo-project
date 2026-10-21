@@ -47,9 +47,11 @@ class FixtureService:
                 'codes': ('C3RA1',), 'picis': ()}
     def get_report(self, query):
         frame = pd.DataFrame({'productcode': ['M626'], 'line': ['3CEE01'],
-                              'printer': ['3CEE01-IK2-PR1'], 'glass_id': ['G1'],
-                              'rs_code': ['C3RA1'], 'code_num': [1], 'ratio': [1.0]})
-        return {'glass': frame, 'total': frame, 'day': frame.assign(day='2026-09-01')}
+                              'printer': ['3CEE01-IK2-PR1'], 'rs_code': ['C3RA1'],
+                              'ratio': [1.0], 'has_data': [True],
+                              'period': ['2026-09（月）'],
+                              'period_start': ['2026-09-01'], 'period_end': ['2026-09-10']})
+        return {'day': frame}
 
 render_ijp_hole_dashboard(FixtureService())
 ''').run()

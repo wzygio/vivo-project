@@ -13,6 +13,7 @@ class WeeklySummaryRow:
     code: str
     label: str
     values: tuple[str, ...]
+    within_spec: tuple[bool | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -31,3 +32,12 @@ def format_weekly_average(value: object) -> str:
     numeric = float(value)
     rounded = f"{numeric:.4f}".rstrip("0").rstrip(".")
     return f"{numeric:.4g}" if numeric != 0 and float(rounded) == 0 else rounded
+
+
+def judge_weekly_density(value: object, upper_limit: object) -> bool | None:
+    """Judge full-precision values; missing or nonfinite inputs are unclassified."""
+    try:
+        density, limit = float(value), float(upper_limit)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return density <= limit if isfinite(density) and isfinite(limit) else None

@@ -18,6 +18,7 @@ from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard
 from app.sections.indicator_domain.qtime.chamber_dashboard import render_chamber_dashboard, clear_chamber_result
 from src.indicator_domain.application.qtime.chamber_cache import clear_chamber_cache
 from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService
+from src.indicator_domain.application.qtime.chamber_settings import ChamberDecorationSettings
 from src.indicator_domain.application.qtime.decoration_service import parse_qtime_decision_upload
 from src.indicator_domain.application.qtime.errors import QTimeDataAccessError
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
@@ -35,12 +36,23 @@ class FixtureSource:
             raise QTimeDataAccessError('INTERNAL_SECRET_SQL_MUST_NOT_LEAK')
         records = [
             {'line': line, 'glass_id': glass, 'entry_time': pd.Timestamp('2026-09-23'),
-             **dict.fromkeys(CHAMBERS, value)}
+             'chamber': chamber, 'duration_seconds': value}
             for line, glass, value in [('3CEE001', 'GLASS_A', 1000), ('3CEE002', 'GLASS_B', 120),
                                       ('3CEE002', 'GLASS_C', None), ('3CEE001', 'DISABLED_GLASS', 10),
                                       ('3CEE002', 'OUTLIER_GLASS', 1000.01)]
+            for chamber in CHAMBERS
         ]
         measurements = pd.DataFrame(records)
+        if scenario in ('decoration', 'remove', 'remove_all'):
+            measurements = pd.DataFrame([{
+                'line': '3CEE001', 'glass_id': 'GLASS_A', 'chamber': 'PT->OC1',
+                'entry_time': pd.Timestamp('2026-10-12') + pd.Timedelta(seconds=i),
+                'duration_seconds': 400 if i < 50 else 1200,
+            } for i in range(51)])
+            if scenario == 'remove':
+                retained = measurements.iloc[:2].copy()
+                retained['duration_seconds'] = [200, 300]
+                measurements = pd.concat([measurements, retained], ignore_index=True)
         if scenario == 'empty':
             measurements = measurements.iloc[:0]
         return {
@@ -102,4 +114,8 @@ render_qtime_dashboard(CountingStationService())
 render_chamber_dashboard(CountingChamberService(
     FixtureSource(), enabled_products=('M678',) if st.query_params.get('restricted') else ('M626', 'M678'),
     cache_namespace='isolated-browser-fixture',
+    decoration_settings=ChamberDecorationSettings(
+        enabled=st.query_params.get('scenario') in ('decoration', 'remove', 'remove_all'),
+        mode='random' if st.query_params.get('scenario') == 'decoration' else 'remove',
+    ),
 ))

@@ -8,6 +8,10 @@ from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 
 
 class YieldDataPort(Protocol):
+    def read_warning_matrix(self, path: Path, sheet_name: str) -> pd.DataFrame:
+        """Read raw warning cells including the header; never rewrite maintained input."""
+        ...
+
     def read_panel(
         self, query: YieldQueryConfig, policy: YieldDataPolicy,
         *, force_refresh: bool = False,

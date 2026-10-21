@@ -102,6 +102,22 @@ def test_twelve_hour_ttl_advances_measurement_time_by_twelve_hours() -> None:
     )
 
 
+def test_regular_parts_keep_ttl_increment_after_wrap() -> None:
+    policy = replace(_policy(), snapshot_ttl_hours=12)
+    original = generate_fabricated_snapshot(
+        _specs(), policy, as_of=pd.Timestamp("2026-09-08 08:00:00"),
+    ).snapshot_df
+    original["value"] = 97.0
+    wrapped = update_fabricated_snapshot(original, _specs(), policy).snapshot_df
+    advanced = update_fabricated_snapshot(wrapped, _specs(), policy).snapshot_df
+    assert wrapped["value"].between(11.25, 12.75).all()
+    assert (advanced["value"] - wrapped["value"]).between(14.25, 15.75).all()
+    assert advanced["glass_start_time"].equals(
+        original["glass_start_time"] + pd.Timedelta(hours=24),
+    )
+    assert original["value"].eq(97.0).all()
+
+
 def test_fresh_future_snapshot_is_repaired_without_changing_values(tmp_path) -> None:
     now = pd.Timestamp.now().floor("s")
     original = generate_fabricated_snapshot(

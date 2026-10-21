@@ -22,6 +22,8 @@ try:
         raise AoiRsReportBuildError("fixture failure")
     dates = ["2026-10-16", "2026-10-17", "2026-10-18"]
     values = [10, 13, 17] if scenario in ("有预警", "跨日预警") else [10, 10, 10]
+    if scenario == "跨日预警":
+        values = [10, 20, 30]
     rows = [
         dict(prod_code="M678", factory="ARRAY", step_id="11629", rs_code=code,
              start_time=pd.Timestamp(day), sheet_id=f"S{day}", lot_id=f"L{day}", code_qty=value)

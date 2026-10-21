@@ -6,6 +6,7 @@ from src.indicator_domain.application.ijp_hole.service import IjpHoleReportServi
 from src.indicator_domain.infrastructure.ijp_hole.repository import IjpHoleRepository
 from src.indicator_domain.application.qtime.service import QTimeReportService
 from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService
+from src.indicator_domain.application.qtime.chamber_settings import ChamberDecorationSettings
 from src.indicator_domain.infrastructure.qtime.chamber_database import DatabaseChamberQTimeRepository
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
 from src.indicator_domain.infrastructure.qtime.decoration_repository import (
@@ -48,6 +49,9 @@ def build_chamber_qtime_service(db_manager: DatabaseManager) -> ChamberQTimeServ
         enabled_products=tuple(ConfigLoader.get_enabled_products()),
         target_seconds=settings['chamber_target_seconds'],
         cache_namespace='qtime-chamber-production',
+        decoration_settings=ChamberDecorationSettings.model_validate(
+            settings.get('chamber_point_decoration', {}),
+        ),
     )
 
 

@@ -134,8 +134,12 @@ def test_warning_workbook_failure_is_not_cached(
     tmp_path: Path,
 ) -> None:
     warning_resource = mock_config.paths["static_warning_lines"]
+    # Global resource hydration supplies an absolute maintained path. Rebind it
+    # before writing fixture bytes; joining tmp_path to an absolute path is unsafe.
+    warning_resource.file_name = str(tmp_path / "warning-fixture.xlsx")
     product_dir = tmp_path / "M678"
     warning_path = product_dir.parent / warning_resource.file_name
+    assert warning_path.resolve().is_relative_to(tmp_path.resolve())
     warning_path.write_bytes(b"not-an-excel-file")
     attempts = 0
 

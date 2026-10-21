@@ -23,7 +23,8 @@ from src.equipment_domain.application.ports import PartsDataPort
 from src.equipment_domain.core.cvd_parts import build_cvd_report
 from src.equipment_domain.core.parts_matcher import build_and_match_all
 from src.equipment_domain.core.parts_calculator import (
-    apply_over_spec_alert_and_decoration,
+    apply_lifetime_replacement,
+    apply_replacement_measurement_dates,
     batch_calculate_progress_and_status,
 )
 from src.equipment_domain.config import get_equipment_runtime_config
@@ -175,19 +176,16 @@ class PartsReportService:
         )
         alert_policy = runtime_config.alert_policy
 
-        # 4. 先保留原始超规判断，再对展示测量值做修饰
-        report_df = apply_over_spec_alert_and_decoration(
-            report_df,
-            group_cols=["厂别", "备件类型", "设备类型", "膜层", "制程", "寿命规格"],
-            policy=alert_policy,
-        )
+        # 4. 保留源值；严格超过98%时计算用值归零并标记更换。
+        report_df = apply_lifetime_replacement(report_df)
 
         # 5. 计算使用进度和预警状态
         report_df = batch_calculate_progress_and_status(report_df, policy=alert_policy)
+        report_date = as_of_date or date.today().isoformat()
+        report_df = apply_replacement_measurement_dates(report_df, as_of_date=report_date)
 
-        # CVD 独立计算日期寿命和月增量，不进入数值修饰和数据库匹配链路。
+        # CVD 使用自身日龄/月增量，独立回绕及判定更换，不参与来源匹配。
         if cvd_path:
-            report_date = as_of_date or date.today().isoformat()
             cvd_report = build_cvd_report(
                 data_port.load_cvd(cvd_path, as_of_date=report_date),
                 as_of_date=report_date,

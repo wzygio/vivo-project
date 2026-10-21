@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from types import SimpleNamespace
 
 import pandas as pd
@@ -7,17 +7,13 @@ from sqlalchemy import text
 
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.qtime.dtos import QTimeQuery
-from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeService
-from src.indicator_domain.application.qtime.chamber_cache import cached_chamber_report, clear_chamber_cache
 from src.indicator_domain.infrastructure.qtime.repository import QTimeRepository, DETAIL_COLUMNS
-from src.indicator_domain.infrastructure.qtime.chamber_repository import ChamberQTimeRepository
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
 from src.indicator_domain.infrastructure.ijp_hole.repository import IjpHoleRepository
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.shared_kernel.report_cutoff import ReportCutoffPolicy
 from tests.integration.indicator_domain.test_ijp_repository_sql import _build_engine
-from tests.integration.indicator_domain.test_chamber_qtime import report_source, write_source
 from tests.e2e.fixtures.ijp_hole_data import build_hole_engine
 
 
@@ -66,30 +62,6 @@ def test_qtime_projects_filtered_display_facts_and_preserves_source(tmp_path, mo
     policy['value'] = None
     assert repo.cache_signature('OLED') != first_signature
     assert set(repo.fetch_details(query).lot_id) == {'BEFORE', 'START', 'END', 'AFTER'}
-
-
-def test_chamber_excludes_before_product_matching_and_invalidates_cache(report_source, policy):
-    engine, paths = report_source
-    for path in paths.values():
-        write_source(path, [('G1', datetime(2026, 9, 26, 23, 59, 59), 1),
-                            ('G1', datetime(2026, 9, 27), 2),
-                            ('G1', datetime(2026, 10, 2, 23, 59, 59), 3),
-                            ('G1', datetime(2026, 10, 3), 4)])
-    before = {line: path.read_bytes() for line, path in paths.items()}
-    repo = ChamberQTimeRepository(SimpleNamespace(engine=engine), paths)
-    signature = repo.cache_signature()
-    first = repo.read(as_of=date(2026, 10, 13))
-    assert set(first['measurements']['PT->OC1']) == {1, 4}
-    assert set(first['products'].prod_code) == {'M626'}
-    clear_chamber_cache()
-    service = ChamberQTimeService(repo, enabled_products=('M626',))
-    assert set(cached_chamber_report(service, as_of=date(2026, 10, 13))['details'].duration_seconds) == {1, 4}
-    policy['value'] = None
-    assert repo.cache_signature() != signature
-    assert set(repo.read(as_of=date(2026, 10, 13))['measurements']['PT->OC1']) == {1, 2, 3, 4}
-    assert set(cached_chamber_report(service, as_of=date(2026, 10, 13))['details'].duration_seconds) == {1, 2, 3, 4}
-    clear_chamber_cache()
-    assert {line: path.read_bytes() for line, path in paths.items()} == before
 
 
 def test_border_sql_excludes_before_counts_ratios_limit_and_options(policy):

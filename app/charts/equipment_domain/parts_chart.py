@@ -16,7 +16,7 @@ import plotly.graph_objects as go
 
 from src.equipment_domain.core.parts_calculator import (
     OVER_SPEC_COLUMN,
-    apply_over_spec_alert_and_decoration,
+    apply_lifetime_replacement,
 )
 from src.equipment_domain.config import get_equipment_runtime_config
 
@@ -150,13 +150,11 @@ def generate_trend_data(
     # 添加规格线和预警线
     daily["寿命规格"] = spec_limit
     daily["预警线"] = warn_line
-    daily = apply_over_spec_alert_and_decoration(
+    daily = apply_lifetime_replacement(
         daily,
         value_col="实际数据",
         spec_col="寿命规格",
         raw_value_col="原始实际数据",
-        sort_col="日期",
-        policy=runtime_config.alert_policy,
     )
 
     # 格式化日期为字符串

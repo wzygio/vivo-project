@@ -3,7 +3,7 @@ import pandas as pd
 
 
 def compute_lot_oos_records(
-    lot_data: dict | None, warning_lines: dict, time_period: int = 30,
+    lot_data: dict | None, warning_lines: dict, time_period: int | None = 30,
 ) -> tuple[list[dict], int]:
     """扫描 Lot 超规记录。纯计算，无渲染。"""
     total_recent_lots = 0
@@ -23,7 +23,8 @@ def compute_lot_oos_records(
             max_date = combined_df["warehousing_time"].max()
 
             if pd.notna(max_date):
-                threshold_date = max_date - pd.Timedelta(days=time_period)
+                threshold_date = (max_date - pd.Timedelta(days=time_period)
+                                  if time_period is not None else combined_df["warehousing_time"].min())
                 recent_df = combined_df[combined_df["warehousing_time"] >= threshold_date].copy()
                 total_recent_lots = recent_df["lot_id"].nunique()
 

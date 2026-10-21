@@ -9,8 +9,9 @@ from src.inline_domain.core.aoi_tt.trend_alerts import evaluate_aoi_tt_trends
 
 @pytest.mark.parametrize("total_values,particle_values,expected_alert", [
     ([.1, .1, .1], [.1, .13, .17], False),
-    ([.1, .13, .17], [.1, .1, .1], True),
-    ([.1, .13, .17], [.1, .13, .17], True),
+    ([.1, .2, .3], [.1, .1, .1], True),
+    ([.1, .2, .3], [.1, .13, .17], True),
+    ([.1, .13, .17], [.1, .13, .17], False),
 ])
 def test_sparse_tt_rise_evaluates_only_total(total_values, particle_values, expected_alert):
     indicators = pd.DataFrame([
@@ -27,7 +28,7 @@ def test_sparse_tt_rise_evaluates_only_total(total_values, particle_values, expe
     assert len(result) == 1
     assert "particle_size" not in result.columns
     assert bool(result.iloc[0].daily_alert) == expected_alert
-    assert bool(result.iloc[0].rising_alert) == expected_alert
+    assert "rising_alert" not in result.columns and "rising_evaluable" not in result.columns
     assert result.iloc[0].target_density == total_values[-1]
     assert result.iloc[0].previous_date == "2026-10-15"
     assert result.iloc[0].two_days_before_date == "2026-10-12"

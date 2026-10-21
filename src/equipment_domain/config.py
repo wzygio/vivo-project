@@ -89,10 +89,6 @@ def get_equipment_runtime_config() -> EquipmentRuntimeConfig:
         alert_policy=PartsAlertPolicy(
             warning_threshold=float(alert["warning_threshold"]),
             over_threshold=float(alert["over_threshold"]),
-            decoration_growth_ratio=float(alert["decoration_growth_ratio"]),
-            decoration_min_ratio=float(alert["decoration_min_ratio"]),
-            decoration_max_ratio=float(alert["decoration_max_ratio"]),
-            display_progress_max_ratio=float(alert["display_progress_max_ratio"]),
         ),
         fabrication_policy=FabricationPolicy(
             random_seed=int(fabrication["random_seed"]),

@@ -1,6 +1,6 @@
 # Yield 预警结果发布与文件读取规则
 
-更新日期：2026-10-20。适用：入库不良率分析看板、自动预警矩阵及矩阵预计算。结果以文件发布并跨进程共享，内存仅缓存文件解析结果。
+更新日期：2026-10-21。适用：入库不良率分析看板、自动预警矩阵及矩阵预计算。结果以文件发布并跨进程共享，内存仅缓存文件解析结果。
 
 ## 1. 资源与所有权
 
@@ -9,7 +9,7 @@
 | 配置键 | 默认位置 | 内容 |
 |---|---|---|
 | `lot_oos_results` | `resources/yield_domain/sheet_lot/yield_lot_oos_results.xlsx` | Lot 超规记录 |
-| `trend_alert_results` | `resources/yield_domain/mwd_trend/yield_trend_alert_results.xlsx` | Group/Code 月度、周度结构化趋势报警 |
+| `trend_alert_results` | `resources/yield_domain/mwd_trend/yield_trend_alert_results.xlsx` | 分析期间全部 Group/Code 月度、周度结构化趋势报警及当前判定标记 |
 
 路径通过 `ConfigLoader.get_domain_resource_path` 和 Yield composition 解析；不根据产品重新拼固定文件名。首次成功生成时才创建文件，不以空模板伪装已经计算。每份工作簿的 `<产品>` sheet 保存当前结果，`<产品>__meta` sheet 保存该产品的发布元数据。
 
@@ -17,8 +17,9 @@
 
 ## 2. 生产规则与时机
 
-- Lot 复用 `core/sheet_lot/lot_alerts.compute_lot_oos_records`，按数据最大入库日回看 30 天，使用报表已计算的 Lot 不良率与已读取警戒线。原 `app.components.alert_center` 保留同名导入兼容。
-- 趋势复用 `AlertService.get_dashboard_alert_records`，保存 monthly/weekly、group/code、周期、当前/前期值及命中规则。外部基准报表比较的文本报警不进入这份结果。
+- Lot 复用 `core/sheet_lot/lot_alerts.compute_lot_oos_records`，使用报表已计算的 Lot 不良率与已读取警戒线。文件发布传入 `time_period=None`，保留所选期间内原 Lot 计算输出的全部超规；页面仍按数据最大入库日回看 30 天展示。原 `app.components.alert_center` 保留同名导入兼容。
+- 趋势使用 `AlertService.get_dashboard_alert_history`，逐月/逐周复用原 `AbnormalDetector.detect_system_trend_records` 判定，保存分析期间全部 monthly/weekly、group/code、周期、当前/前期值及命中规则。没有两个有效观察点时不虚构前期基线。`is_current` 由原 `get_dashboard_alert_records` 的最新逐序列判定生成，是程序计算的当前状态标记，不是人工决策字段。页面继续消费原最新预警；外部基准报表比较的文本报警不进入这份结果。
+- 聚合输出的 `monthly_full`、`weekly_full` 供历史发布使用，保留完整计算序列；`monthly`、`weekly` 继续保持原最近 3 个图表周期。月标签保留原 `%Y-%m月`，窗口解析兼容该业务标签，不改写展示格式。仅重发某类结果时，生产用例的 `kinds` 参数限制对应分支，其他结果文件不变。
 - 入库分析页先生成并发布两类预警，之后才加载 Sheet/Mapping 与图像筛选设置。Lot 和趋势分别捕获失败，一种失败不阻止另一种发布；两者所需的原有计算缓存与资源手动刷新参数保持不变。
 - 发布在计算缓存外调用。计算命中内存但结果文件缺失时仍能落盘；指纹和记录内容相同则不重写，不延长旧来源的刷新时间。计算过程中配置版本变化时不发布为成功。
 - 工作簿属于生成结果，不增加人工 flag 决策规则。每次成功替换当前产品的结果及元数据，保留其他产品与 sheet，不把历史报警累加进当前结果。
@@ -29,7 +30,7 @@
 
 策略签名跟踪全局配置、产品配置、Yield 域配置和结果 schema 版本；计算签名跟踪实际传入报表的指标版本及 cache context。报表采用的手动资源刷新语义继续保留：规格/修饰表如何进入报表由原流程控制，不在矩阵重新加载这些输入后另算一次。
 
-读取要求参考日一致，策略版本一致，来源为 fresh，发布时间和来源刷新时间均处于全局 TTL 内。重写结果不能让旧来源重新变 fresh。Lot 的扫描覆盖必须包含上一完整 ISO 周；趋势覆盖必须包含参考日。Lot 读取后筛选 `[上周一, 本周一)`；趋势保持当前发布结果的 period 制。
+读取要求参考日一致，策略版本一致，来源为 fresh，发布时间和来源刷新时间均处于全局 TTL 内。源快照的无时区时间按服务器本地 `Asia/Shanghai` 解释，再与 UTC 比较；带时区时间保留其含义。重写结果不能让旧来源重新变 fresh。Lot 的扫描覆盖必须包含上一完整 ISO 周；趋势覆盖必须包含参考日。Lot 读取后筛选 `[上周一, 本周一)`；趋势文件保留全部历史记录，但矩阵只读取 `is_current=True` 的记录，历史预警不改变当前红绿灯。旧格式没有该列时按原“全部为最新结果”的契约读取。
 
 | 读取状态 | 含义 | 矩阵行为 |
 |---|---|---|
@@ -66,9 +67,14 @@
 
 # 仅更新指定启用产品
 .venv/Scripts/python.exe tools/publish_yield_alert_results.py --products M678 Z571
+
+# 明确指定包含首尾日的分析窗口（2026-10-21 的补齐范围）
+.venv/Scripts/python.exe tools/publish_yield_alert_results.py --start-date 2026-08-01 --end-date 2026-10-21
 ```
 
-CLI 沿用页面配置装配、手动资源版本和原报表服务，不新增任务计划或常驻服务；输出仅含产品、成功/部分失败和安全错误类型。某产品失败不阻止其他产品，任一失败退出 1；全部成功退出 0。`--check` 不能证明真实数据已经生成。
+CLI 沿用页面配置装配、手动资源版本和原报表服务，不新增任务计划或常驻服务；日期参数必须成对且起日不晚于止日，不改写服务全局时间或持久配置。明确指定窗口时向前读取一个自然月作为月/周比较基线，例如发布 8 月 1 日起的记录时从 7 月 1 日开始计算；基线月记录不写入发布期间，跨起日的周按周期区间相交保留。输出含产品、窗口、基线起日、成功/部分失败、可读状态和安全错误类型，发布后再次验证读取状态，不能把过期/覆盖不足称为成功。某产品失败不阻止其他产品，任一失败退出 1；全部成功退出 0。`--check` 不能证明真实数据已经生成。
+
+警戒线 XLSX 由 `infrastructure/warning_workbook_reader.py` 读取：普通文件沿用 `header=None` 解析；`BadZipFile` 时走现有只读 COM，恢复首行后继续同一业务解析。不能因读取失败返回空规格；不改写维护文件。写入测试数据前必须把真实配置派生出的绝对路径重绑定到临时目录，并核实路径归属。
 
 ## 6. 验证入口
 

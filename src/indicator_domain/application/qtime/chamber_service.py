@@ -6,6 +6,8 @@ from typing import Protocol
 from uuid import uuid4
 
 from src.indicator_domain.core.qtime.chamber import build_chamber_report
+from src.indicator_domain.core.qtime.chamber_decoration import decorate_chamber_points
+from src.indicator_domain.application.qtime.chamber_settings import ChamberDecorationSettings
 
 MAX_QUERY_DAYS = 31
 
@@ -26,8 +28,10 @@ class ChamberQTimeService:
         self, source: ChamberQTimeSource, *, enabled_products: tuple[str, ...],
         cache_namespace: str | None = None,
         target_seconds: float | None = None,
+        decoration_settings: ChamberDecorationSettings | None = None,
     ) -> None:
         self._source = source
+        self._decoration_settings = decoration_settings or ChamberDecorationSettings()
         self.enabled_products = tuple(enabled_products)
         self._target_seconds = float(target_seconds) if target_seconds is not None else None
         if self._target_seconds is not None and (
@@ -35,11 +39,12 @@ class ChamberQTimeService:
         ):
             raise ValueError('Chamber target_seconds must be finite and positive')
         # Explicit adapters are isolated by default; the production composition
-        # opts into a stable namespace and includes engine/file identities below.
+        # opts into a stable namespace and includes the database engine identity.
         self._cache_namespace = cache_namespace or uuid4().hex
 
     def cache_signature(self) -> tuple:
-        return (self._cache_namespace, self.enabled_products, self._target_seconds, self._source.cache_signature())
+        return (self._cache_namespace, self.enabled_products, self._target_seconds,
+                self._decoration_settings.model_dump_json(), self._source.cache_signature())
 
     def load(self, *, as_of: date, start_date: date | None = None, end_date: date | None = None) -> dict:
         if start_date is not None or end_date is not None:
@@ -56,4 +61,13 @@ class ChamberQTimeService:
         report = build_chamber_report(
             source['measurements'], source['products'], targets, self.enabled_products,
         )
+        settings = self._decoration_settings
+        if settings.enabled:
+            report['details'] = decorate_chamber_points(
+                report['details'], start_date=settings.start_date,
+                end_date=settings.window_end(as_of), threshold_seconds=settings.threshold_seconds,
+                minimum_seconds=settings.minimum_seconds,
+                point_count_threshold=settings.point_count_threshold,
+                group_by=settings.group_by, random_seed=settings.random_seed, mode=settings.mode,
+            )
         return {**report, 'invalid_rows': source['invalid_rows']}

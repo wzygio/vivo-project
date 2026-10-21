@@ -21,6 +21,7 @@ from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
 from src.inline_domain.core.shared.decoration_window import DecorationWindow
 from src.inline_domain.core.aoi_rs.aoi_rs_special_decoration import (
     AOI_RS_DECORATION_POLICY_VERSION,
+    DEFAULT_SHEET_SPEC_RATIOS,
     build_decorated_period_trend_df,
     project_factory_scoped_details,
 )
@@ -107,6 +108,7 @@ def _build_chart_points(
     special_factories: tuple[str, ...] = (),
     exempt_param_name_contains: tuple[str, ...] | None = None,
     decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build chart-ready lot/sheet point frames after tri-state workbook decoration.
 
@@ -134,6 +136,7 @@ def _build_chart_points(
         special_factories=special_factories,
         pass_through_df=pass_through_df,
         decoration_window=decoration_window,
+        sheet_spec_ratios=sheet_spec_ratios,
     )
     if (
         persist_shared_history
@@ -216,6 +219,7 @@ class AoiRsReportService:
         exempt_param_name_contains: tuple[str, ...] | None = None,
         decoration_window: DecorationWindow | None = None,
         trend_policy_version: str = AOI_RS_TREND_POLICY_VERSION,
+        sheet_spec_ratios: tuple[float, float] = DEFAULT_SHEET_SPEC_RATIOS,
     ) -> dict[str, object]:
         """缓存仅含 DataFrame 的原生 payload；构建失败向上抛出。
 
@@ -225,6 +229,7 @@ class AoiRsReportService:
         或用户编辑决策台账会换 key 立即重建，不受周期 TTL 遮挡。
         decoration_policy_version 与 special_factories 使规则或厂别配置变更后重建投影。
         decoration_window 包含专用修饰的显示日期首尾，配置与当天变化后换 key。
+        sheet_spec_ratios 包含 Sheet 触发阈值与哈希上限比例，配置变化后换 key。
         date_exclusion 包含解析后的结束日期，配置或当天变化后重建报表。
         trend_policy_version 标识昨日两类趋势判定，规则变更后重建派生预警。
         """
@@ -301,6 +306,7 @@ class AoiRsReportService:
                 special_factories=special_factories,
                 exempt_param_name_contains=exemptions,
                 decoration_window=decoration_window,
+                sheet_spec_ratios=sheet_spec_ratios,
             )
             indicators_df = _build_indicators(rs_details_df, spec_df)
             projected_details = project_factory_scoped_details(
@@ -345,6 +351,7 @@ class AoiRsReportService:
             factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories())
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
             decoration_window = ConfigLoader.get_aoi_rs_special_decoration_window()
+            sheet_spec_ratios = ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios()
         except ValueError as exc:
             logger.exception("[AOI_RS] invalid report decoration configuration")
             raise AoiRsReportBuildError("AOI_RS report configuration is invalid.") from exc
@@ -360,5 +367,6 @@ class AoiRsReportService:
             exempt_param_name_contains=tuple(ConfigLoader.get_auto_decoration_param_exemptions()),
             decoration_window=decoration_window,
             trend_policy_version=AOI_RS_TREND_POLICY_VERSION,
+            sheet_spec_ratios=sheet_spec_ratios,
         )
         return AoiRsReportService._view_model_from_payload(payload)

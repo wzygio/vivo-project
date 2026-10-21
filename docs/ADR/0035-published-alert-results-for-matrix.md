@@ -18,6 +18,7 @@ The user approved three P0 changes in the revised [performance report](../dev_do
 4. Production matrix and warmup consume public application result reads. Missing, invalid, failed or stale files never initiate analysis or SQL. Memory caches only parsed workbook frames; file results are sufficient in a new process.
 5. Default Inline OOS readers consume the existing `ExcelAlarmReader`/`ExcelAlarmStore`, sharing workbook parsing across products. Actual file changes invalidate parsing.
 6. A CLI calls the same Yield producer for all/selected enabled products; it does not register a new scheduler or introduce a separate calculation engine.
+7. On 2026-10-21 the user requested a backfill from August 1 through today and confirmed that all historical monthly/weekly alarms should be retained. The file stores full-window Lot alerts and trend history; generated current markers keep the matrix's existing latest-series semantics. CLI date arguments select the calculation window without changing global service state. Legacy naive source-health times mean Asia/Shanghai local time.
 
 ## Consequences
 

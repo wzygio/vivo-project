@@ -59,6 +59,7 @@ def prepare_aoi_rs_decoration(
     pass_through_df: pd.DataFrame | None = None,
     workbook_path: Path | None = None,
     decoration_window: DecorationWindow | None = None,
+    sheet_spec_ratios: tuple[float, float] | None = None,
 ) -> AoiRsDecorationResult:
     exempt_param_name_contains = tuple(exempt_param_name_contains or ())
     detail = build_aoi_rs_oos_detail(lot_points_df, sheet_points_df, spec_df, prod_code)
@@ -116,6 +117,10 @@ def prepare_aoi_rs_decoration(
         rs_details_df=rs_details_df,
         special_factories=special_factories,
         decoration_window=decoration_window,
+        sheet_spec_ratios=(
+            ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios()
+            if sheet_spec_ratios is None else sheet_spec_ratios
+        ),
     )
     return AoiRsDecorationResult(
         lot_decorated,

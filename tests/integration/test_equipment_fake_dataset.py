@@ -16,6 +16,7 @@ from src.equipment_domain.infrastructure.fake_data import (
     materialize_param_name,
     write_fabricated_snapshot,
 )
+from src.equipment_domain.core.parts_calculator import REPLACEMENT_PROGRESS_THRESHOLD
 
 
 class _OfflineDatabase:
@@ -150,7 +151,7 @@ def test_report_service_prefers_real_snapshot_and_fills_its_gaps_from_fabricatio
     assert not view_model.report_df["测量时间"].isna().any()
     assert view_model.report_df.loc[0, "原始测量值"] == real_value
     assert measured["原始测量值"].notna().all()
-    assert measured["使用进度"].max() <= runtime.alert_policy.display_progress_max_ratio * 100
+    assert measured["使用进度"].max() <= REPLACEMENT_PROGRESS_THRESHOLD
     assert view_model.last_update == as_of.strftime("%Y-%m-%d")
     assert pd.to_datetime(measured["测量时间"]).le(as_of).all()
     assert view_model.normal_count > 0

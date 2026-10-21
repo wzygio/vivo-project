@@ -88,9 +88,12 @@ def test_build_alerts_excludes_true_delete_and_out_of_window() -> None:
     assert list(alerts["Sheet ID"]) == ["S6"]
 
 
-def test_old_tt_alert_details_exclude_spc_ppa_parameters() -> None:
+@pytest.mark.parametrize("unrelated_name", [
+    "offset_ppa_y", "CD1", "OVL1_X", "SE_L1T", "4PP_Rs", "TPPOS_X_DIFF",
+])
+def test_old_tt_alert_details_exclude_non_tt_parameters(unrelated_name) -> None:
     frame = pd.DataFrame([
-        _decoration_row(tt_name="offset_ppa_y", sheet_id="PPA-SHEET"),
+        _decoration_row(tt_name=unrelated_name, sheet_id="NON-TT-SHEET"),
         _decoration_row(),
     ])
     original = frame.copy(deep=True)
@@ -99,6 +102,15 @@ def test_old_tt_alert_details_exclude_spc_ppa_parameters() -> None:
 
     assert alerts["TT名称"].tolist() == ["TDSUM"]
     pd.testing.assert_frame_equal(frame, original)
+
+
+@pytest.mark.parametrize("tt_name", ["TDSUM", "DSUM_L", "DSUM_O", "TOTAL_O_L"])
+def test_old_tt_alert_details_keep_each_supported_tt_parameter(tt_name) -> None:
+    frame = pd.DataFrame([_decoration_row(tt_name=tt_name)])
+
+    alerts = build_aoi_tt_sheet_oos_alerts(frame, reference_date=REF)
+
+    assert alerts["TT名称"].tolist() == [tt_name]
 
 
 def test_build_alerts_accepts_datetime_and_string_time_column() -> None:

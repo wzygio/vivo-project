@@ -10,6 +10,42 @@ from src.indicator_domain.application.qtime.chamber_cache import clear_chamber_c
 FIXTURE = Path(__file__).resolve().parents[6] / 'tests/e2e/fixtures/chamber_qtime_app.py'
 
 
+def test_daily_decoration_reaches_charts_hover_and_remains_stable_after_filtering():
+    clear_chamber_cache()
+    app = AppTest.from_file(str(FIXTURE))
+    app.query_params['scenario'] = 'decoration'
+    app.run()
+    app.button(key='chamber_search').click().run()
+    assert not app.exception
+    charts = [json.loads(chart.proto.spec) for chart in app.get('plotly_chart')]
+    assert len(charts) == 1
+    values = charts[0]['data'][0]['y']
+    assert len(values) == 51 and all(200 <= value < 300 for value in values)
+    assert {row[2] for row in charts[0]['data'][0]['customdata']} == {'正常'}
+    app.multiselect(key='chamber_products').set_value(['M626']).run()
+    assert json.loads(app.get('plotly_chart')[0].proto.spec)['data'][0]['y'] == values
+    public_payload = json.dumps(charts, ensure_ascii=False)
+    assert not any(word in public_payload for word in ('raw_duration', '修饰', 'chamber_point_decoration'))
+
+
+def test_daily_removal_leaves_only_retained_points_and_handles_all_removed():
+    clear_chamber_cache()
+    app = AppTest.from_file(str(FIXTURE))
+    app.query_params['scenario'] = 'remove'
+    app.run()
+    app.button(key='chamber_search').click().run()
+    assert not app.exception
+    charts = [json.loads(chart.proto.spec) for chart in app.get('plotly_chart')]
+    assert len(charts) == 1 and sorted(charts[0]['data'][0]['y']) == [200, 300]
+    assert len(app.session_state['chamber_qtime_view_model']['details']) == 2
+    app.query_params['scenario'] = 'remove_all'
+    app.run()
+    assert not app.get('plotly_chart')
+    app.button(key='chamber_search').click().run()
+    assert not app.exception and not app.get('plotly_chart')
+    assert any('暂无单腔' in item.value for item in app.info)
+
+
 def chart_products(app):
     return {trace['name'] for chart in app.get('plotly_chart')
             for trace in json.loads(chart.proto.spec)['data']}
