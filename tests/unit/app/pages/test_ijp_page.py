@@ -7,6 +7,7 @@ from app.components import page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.ijp import dashboard as ijp_dashboard
 from app.sections.indicator_domain.ijp import filters as ijp_filters
+from app.sections.indicator_domain.ijp.alert_center import load_ijp_alert_report
 from app.sections.indicator_domain.ijp_hole import dashboard as hole_dashboard
 from app.utils.app_setup import AppSetup
 from src.indicator_domain import composition
@@ -66,7 +67,7 @@ def test_ijp_page_is_a_thin_composition_layer(monkeypatch, region) -> None:
             {
                 "title": "IJP溢流监控报表",
                 "config": active_config,
-                "cached_funcs": [],
+                "cached_funcs": [load_ijp_alert_report],
                 "show_product_filter": False,
             },
         ),

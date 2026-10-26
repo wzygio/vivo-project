@@ -8,7 +8,11 @@ import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
 from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
-from src.iqc_domain.composition import build_evaporation_service
+from src.iqc_domain.application.eva_materials.alerts import (
+    EvaporationAlertStore, publish_evaporation_alerts,
+)
+from src.iqc_domain.composition import build_evaporation_service, build_evaporation_alert_store
+from src.iqc_domain.core.eva_materials.alerts import previous_week_window
 from src.iqc_domain.core.eva_materials.evaporation import (
     PRODUCT_SCOPE_RULE_VERSION, REPORT_COLUMNS, RESULT_RULE_VERSION,
 )
@@ -36,9 +40,13 @@ def _render_results(frame: pd.DataFrame) -> None:
         st.info("没有符合筛选条件的记录，请调整筛选条件。")
         return
     st.caption("IQC／COA结果按测点判定：任一测点为NG则为NG，否则为OK；缺失测点按OK处理。")
+    _render_report_table(frame)
+
+
+def _render_report_table(frame: pd.DataFrame, *, height: int = 600) -> None:
     numeric_columns = ["规格上限", "规格下限", *[f"IQC-{i}" for i in range(1, 6)], *[f"COA-{i}" for i in range(1, 6)]]
     st.dataframe(
-        frame.loc[:, list(REPORT_COLUMNS)], hide_index=True, width="stretch", height=600, placeholder="",
+        frame.loc[:, list(REPORT_COLUMNS)], hide_index=True, width="stretch", height=height, placeholder="",
         column_config={
             "序号": st.column_config.NumberColumn(format="%d", pinned=True),
             "报检日期": st.column_config.DatetimeColumn(format="YYYY-MM-DD HH:mm:ss"),
@@ -48,7 +56,53 @@ def _render_results(frame: pd.DataFrame) -> None:
     )
 
 
-def render_evaporation_dashboard(service: EvaporationReportService | None = None) -> None:
+def _load_report(service: EvaporationReportService | None, signature: tuple) -> pd.DataFrame:
+    if service is not None:
+        return service.get_report(signature[0], signature[1], signature[4])
+    return fetch_report_payload(
+        *signature, result_rule_version=RESULT_RULE_VERSION,
+        product_scope_rule_version=PRODUCT_SCOPE_RULE_VERSION,
+    )
+
+
+def _render_automatic_alerts(
+    service: EvaporationReportService | None, *, today: date,
+    enabled: tuple[str, ...], work_orders: tuple[str, ...],
+    alert_store: EvaporationAlertStore | None,
+) -> None:
+    start, end = previous_week_window(today)
+    week = start.isocalendar()
+    title = f'蒸镀材料超规预警中心（上一周 {week.year}-W{week.week:02d}）'
+    try:
+        signature = (
+            start, end, ConfigLoader.get_data_forward_policy().signature,
+            ConfigLoader.get_report_cutoff_policy().signature, enabled, enabled, work_orders,
+        )
+        frame = _load_report(service, signature)
+        alerts = publish_evaporation_alerts(
+            frame, store=alert_store if alert_store is not None else build_evaporation_alert_store(),
+            start=start, end=end, products=enabled,
+        )
+    except Exception as exc:
+        logger.error('IQC_ALERT_UPDATE_UNAVAILABLE exception_type=%s', type(exc).__name__)
+        with st.expander(title, expanded=True):
+            st.error('蒸镀材料预警数据暂时无法更新，请稍后重试。')
+        return
+    with st.expander(title, expanded=not alerts.empty):
+        st.caption(f'检验日期：{start:%Y-%m-%d} 至 {end:%Y-%m-%d} · 全部已启用产品')
+        if not alerts.empty:
+            st.error(f'检测到 {len(alerts)} 条蒸镀材料超规预警（IQC或COA结果为NG），请关注。')
+            _render_report_table(alerts, height=400)
+        elif frame.empty:
+            st.info('上一周暂无蒸镀材料检验数据。')
+        else:
+            st.success('上一周未发现 IQC 或 COA 结果为 NG 的记录。')
+
+
+def render_evaporation_dashboard(
+    service: EvaporationReportService | None = None, *,
+    alert_store: EvaporationAlertStore | None = None,
+) -> None:
     """Injected services bypass the shared production cache entirely."""
     today = date.today()
     previous_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
@@ -82,6 +136,9 @@ def render_evaporation_dashboard(service: EvaporationReportService | None = None
             )
         with query_column:
             query = st.button("查询", type="primary", key="iqc_evap_query", width="stretch")
+    _render_automatic_alerts(
+        service, today=today, enabled=enabled, work_orders=work_orders, alert_store=alert_store,
+    )
     if len(dates) != 2:
         st.session_state.pop("iqc_evap_active", None)
         st.info("请选择完整的开始和结束日期。")
@@ -98,16 +155,11 @@ def render_evaporation_dashboard(service: EvaporationReportService | None = None
         return
     try:
         with st.spinner("正在读取蒸镀材料检验数据…"):
-            frame = (
-                service.get_report(*dates, signature[4]) if service is not None
-                else fetch_report_payload(
-                    *signature, result_rule_version=RESULT_RULE_VERSION,
-                    product_scope_rule_version=PRODUCT_SCOPE_RULE_VERSION,
-                )
-            )
+            frame = _load_report(service, signature)
     except Exception as exc:
         logger.error("IQC_REPORT_UNAVAILABLE exception_type=%s", type(exc).__name__)
         st.session_state.pop("iqc_evap_active", None)
         st.error("蒸镀材料检验数据暂时无法读取，请稍后重新查询。")
         return
-    _render_results(frame)
+    with st.container(key='iqc_evap_manual_results'):
+        _render_results(frame)

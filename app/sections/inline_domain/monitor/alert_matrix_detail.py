@@ -68,6 +68,9 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 
+from app.sections.inline_domain.monitor.published_alert_snapshots import (
+    PUBLISHED_ALERT_ROWS, load_published_detail, published_alert_signature,
+)
 logger = logging.getLogger(__name__)
 
 MATRIX_DETAIL_CHART_KEY_PREFIX = "matrix_detail"
@@ -602,7 +605,7 @@ def _make_qtime_loader(db_manager: Any) -> DetailLoader:
 
 
 def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoader]:
-    """生产装配：8 行详情 loader。仅在点击 🔴 单元格后调用（懒加载边界）。"""
+    """Legacy chart loaders plus file-only published-alert detail readers."""
     return {
         "aoi_rs_sheet_oos": _make_sheet_oos_loader("aoi_rs", db_manager),
         "aoi_tt_sheet_oos": _make_sheet_oos_loader("aoi_tt", db_manager),
@@ -613,6 +616,7 @@ def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoad
         "yield_lot_oos": _make_yield_loader(db_manager, "lot"),
         "yield_trend_fluctuation": _make_yield_loader(db_manager, "trend"),
         "qtime_sheet_oos": _make_qtime_loader(db_manager),
+        **{key: partial(load_published_detail, key) for key in PUBLISHED_ALERT_ROWS},
     }
 
 
@@ -906,7 +910,35 @@ def _render_detail_bundle(
     memo_base: str,
 ) -> None:
     kind = bundle.get("kind")
-    if kind == "sheet_oos":
+    if kind == 'published_snapshot':
+        if bundle.get('state') == 'error':
+            st.error('预警详情暂时无法读取，请更新对应报表后重试。')
+            return
+        alerts = bundle['alerts']
+        if row_key == 'parts_oos':
+            st.caption('该项为全厂共用备件状态，不按产品区分。')
+            selected = st.session_state.get('alert_matrix_factories')
+            if selected is not None:
+                alerts = alerts.loc[alerts['厂别'].isin(selected)]
+        if alerts.empty:
+            st.success('当前范围未发现预警。')
+        else:
+            st.error(f'检测到 {len(alerts)} 条预警，请关注。')
+            display = alerts.copy()
+            if row_key.startswith('ijp_'):
+                display['ratio'] = display['ratio'].map(lambda value: f'{value:.2%}')
+                display['minimum'] = display['minimum'].map(lambda value: f'≥ {value:.0%}')
+                display = display.rename(columns={
+                    'region': '监控区域', 'productcode': '产品型号', 'line': '线体',
+                    'printer': 'Printer', 'rs_code': 'CODE', 'period_start': '开始日期',
+                    'period_end': '结束日期', 'ratio': '占比', 'minimum': '规格',
+                })
+            if row_key == 'parts_oos':
+                for column in ('测量值', '寿命规格'):
+                    if not pd.api.types.is_numeric_dtype(display[column]):
+                        display[column] = display[column].astype('string')
+            st.dataframe(display, hide_index=True, width='stretch')
+    elif kind == "sheet_oos":
         _render_sheet_oos_detail(
             bundle,
             row_key=row_key,
@@ -995,15 +1027,20 @@ def render_alert_matrix_detail(
             return
 
         # 仅 🔴 单元格进入懒加载：loader 注册表在此才构建。
-        active_loaders = (
-            dict(loaders) if loaders is not None else build_default_detail_loaders(db_manager)
-        )
+        if loaders is not None:
+            active_loaders = dict(loaders)
+        elif row_key in PUBLISHED_ALERT_ROWS:
+            active_loaders = {row_key: partial(load_published_detail, row_key)}
+        else:
+            active_loaders = build_default_detail_loaders(db_manager)
         loader = active_loaders.get(row_key)
         if loader is None:
             st.caption("该行暂不支持详情查看。")
             return
 
         try:
+            if row_key in PUBLISHED_ALERT_ROWS:
+                memo_base += published_alert_signature(row_key, prod_code, reference_date)
             if row_key.startswith("yield_"):
                 memo_base = _yield_detail_signature(prod_code, memo_base)
             elif row_key in ("spc_cpk_trend", "spc_cpm_trend", "spc_sheet_oos"):

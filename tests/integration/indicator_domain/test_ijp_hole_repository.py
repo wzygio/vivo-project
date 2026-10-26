@@ -94,7 +94,18 @@ def test_options_preserve_enabled_order_and_reject_border_codes(repository):
     service = IjpHoleReportService(repository, ('M678', 'M626'),
                                    today_provider=lambda: date(2026, 9, 10))
     assert service.get_filter_options()['product_codes'] == ('M678', 'M626')
-    assert service.get_filter_options()['codes'] == ('C3RA1', 'C3RA2', 'C3RA3')
+    assert service.get_filter_options()['codes'] == ('C3RA0', 'C3RA1', 'C3RA2', 'C3RA3')
     assert service.get_filter_options(('DISABLED',))['picis'] == ()
     with pytest.raises(ValueError, match='孔区 CODE'):
         service.get_report(query(codes=('C3DM1',)))
+
+
+def test_c3ra0_without_facts_is_zero_and_sql_accepts_future_facts(repository):
+    service = IjpHoleReportService(repository, ('M626',), today_provider=lambda: date(2026, 9, 10))
+    report = service.get_report(query(codes=('C3RA0',)))['day']
+    assert len(report) == 10 and report.ratio.eq(0).all()
+    with repository._engine.begin() as connection:
+        connection.execute(text("UPDATE eda.oled_ijp_defect_t SET code='C3RA0' WHERE code='C3RA1'"))
+    assert 'C3RA0' in set(repository.fetch_counts(query()).rs_code)
+    report = service.get_report(query(codes=('C3RA0',)))['day']
+    assert report.loc[report.has_data, 'ratio'].gt(0).all()

@@ -2,6 +2,7 @@
 
 from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
 from src.iqc_domain.infrastructure.eva_materials.evaporation_repository import EvaporationRepository
+from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EvaporationAlertWorkbook
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
@@ -24,3 +25,9 @@ def build_evaporation_service(
 
 def build_lifetime_service() -> LifetimeReportService:
     return LifetimeReportService(LifetimeRepository(get_m3_engine()))
+
+
+def build_evaporation_alert_store() -> EvaporationAlertWorkbook:
+    return EvaporationAlertWorkbook(ConfigLoader.get_domain_resource_path(
+        'iqc_domain', 'evaporation_alerts', 'eva_materials/evaporation_alerts.xlsx',
+    ))

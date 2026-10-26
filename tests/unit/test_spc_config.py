@@ -5,6 +5,18 @@ import pytest
 from src.shared_kernel.config import ConfigLoader
 
 
+def test_spc_sheet_alert_exclusions_are_independent_of_decoration_exemptions(monkeypatch):
+    config = {
+        "spc": {"sheet_oos_alerts": {"excluded_param_name_contains": [" PPA ", "", None]}},
+        "auto_decoration": {"exempt_param_name_contains": ["THK"]},
+    }
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: config)
+    assert ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() == ["PPA"]
+    assert ConfigLoader.get_auto_decoration_param_exemptions() == ["THK"]
+    config["spc"] = {}
+    assert ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() == []
+
+
 @pytest.mark.parametrize("value, expected", [(0, 0.0), (24, 24.0), (48, 48.0), (24.5, 24.5)])
 def test_capability_alert_span_reads_domain_yaml(tmp_path, monkeypatch, value, expected):
     domain_dir = tmp_path / "config" / "domain"

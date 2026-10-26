@@ -18,6 +18,8 @@ for import_path in (project_root, project_root / "src"):
 from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.settings import IjpSettings
+from src.indicator_domain.application.ijp.dtos import IjpQuery
+from src.indicator_domain.core.ijp.alerts import build_weekly_alerts
 from src.indicator_domain.core.ijp.printer_summary import summarize_printers
 from src.indicator_domain.core.ijp.period_summary import summarize_periods
 from src.indicator_domain.core.ijp.overflow import (
@@ -104,6 +106,11 @@ class FixtureIjpService:
     """正常/空/错误三分支：M678 触发错误，CODE=C3BH2 触发空结果。"""
 
     settings = IjpSettings()
+
+    def get_alert_report(self):
+        start, end = self.get_reporting_window()
+        frame = self.get_period_ratios(IjpQuery(start_time=start, end_time=end))
+        return {'alerts': build_weekly_alerts(frame, 'AA区', end.date()), 'ratios': frame}
 
     def get_reporting_window(self) -> tuple[datetime, datetime]:
         return (

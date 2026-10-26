@@ -17,6 +17,7 @@ from app.components.page_header import render_page_header
 from app.sections.iqc_domain.eva_materials.evaporation_dashboard import render_evaporation_dashboard
 from app.utils.app_setup import AppSetup
 from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService, IqcSourceUnavailable
+from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EvaporationAlertWorkbook
 from src.iqc_domain.infrastructure.eva_materials.product_scope import project_material_scope
 from src.shared_kernel.config import ConfigLoader
 from tests.unit.test_iqc_evaporation import source_frame
@@ -44,4 +45,4 @@ AppSetup.initialize_app()
 render_page_header(title="IQC-蒸镀材料", show_product_filter=False)
 render_evaporation_dashboard(EvaporationReportService(
     ScenarioSource(), enabled_products=ConfigLoader.get_enabled_products(),
-))
+), alert_store=EvaporationAlertWorkbook(ROOT / 'output/test-results/iqc_evaporation/alerts.xlsx'))

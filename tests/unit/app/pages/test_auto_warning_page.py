@@ -515,13 +515,18 @@ def test_oos_data_refresh_preserves_other_board_state(monkeypatch) -> None:
         st.session_state.clear()
 
 
+@pytest.mark.parametrize('selected_row,expected_db_calls', [
+    ('', 0), ('ijp_aa_oos', 0), ('ijp_hole_oos', 0), ('parts_oos', 0),
+    ('iqc_evaporation_ng', 0), ('spc_sheet_oos', 1),
+])
 def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
-    monkeypatch,
+    monkeypatch, selected_row, expected_db_calls,
 ) -> None:
     """矩阵已加载：筛选条仍只由页面渲染一处，选择经 filter_selection 透传给矩阵。"""
     trackers = _stub_page_dependencies(monkeypatch)
     st.session_state.pop("monitor_query_signature", None)
     st.session_state["alert_matrix_board_loaded"] = True
+    st.session_state['alert_matrix_selected_cell'] = f'{selected_row}|M678' if selected_row else ''
 
     _run_page()
 
@@ -531,7 +536,7 @@ def test_page_renders_filter_bar_once_and_passes_selection_when_matrix_loaded(
     assert _matrix_filter_keys(trackers) == list(MATRIX_FILTER_KEYS)
     # 矩阵本体被调用，且拿到当前筛选选择（监控类型/产品/厂别三元组）
     assert len(trackers["matrix_board_calls"]) == 1
-    assert len(trackers["db_calls"]) == 1
+    assert len(trackers["db_calls"]) == expected_db_calls
     selection = trackers["matrix_board_calls"][0]["filter_selection"]
     assert selection is not None
     monitor_type, selected_products, selected_factories = selection

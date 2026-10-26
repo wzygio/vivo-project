@@ -20,6 +20,7 @@ import streamlit as st
 from app.components.page_header import render_page_header
 from app.manager.session_manager import SessionManager
 from app.sections.indicator_domain.ijp.dashboard import render_ijp_dashboard
+from app.sections.indicator_domain.ijp.alert_center import load_ijp_alert_report
 from app.sections.indicator_domain.ijp.filters import get_ijp_region
 from app.utils.app_setup import AppSetup
 from src.indicator_domain.composition import build_ijp_service
@@ -39,7 +40,7 @@ active_config = SessionManager.get_active_config()
 render_page_header(
     title="IJP溢流监控报表",
     config=active_config,
-    cached_funcs=[],
+    cached_funcs=[load_ijp_alert_report],
     show_product_filter=False,
 )
 if get_ijp_region() == '孔区':

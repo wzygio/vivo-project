@@ -112,14 +112,15 @@ def test_ijp_dashboard_gates_results_until_the_user_queries() -> None:
     assert len(app.get("plotly_chart")) == 4
     chart_columns = app.get("column")[5:]
     assert [column.weight for column in chart_columns] == [0.5, 0.5, 1.0, 1.0]
-    assert [expander.label for expander in app.expander] == [
+    report_expanders = [expander for expander in app.expander if not expander.label.startswith('超规预警中心')]
+    assert [expander.label for expander in report_expanders] == [
         "产品：M626",
         "线体：3CEE01",
         "线体：3CEE02",
         "产品：M678",
         "线体：3CEE04",
     ]
-    assert all(expander.proto.expanded for expander in app.expander)
+    assert all(expander.proto.expanded for expander in report_expanders)
 
 
 def test_chunked_limits_each_chart_row_to_three_items() -> None:

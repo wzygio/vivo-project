@@ -28,6 +28,7 @@ from app.sections.inline_domain.monitor.alert_matrix import (
     render_matrix_refresh_controls,
 )
 from app.sections.inline_domain.monitor.alert_matrix_snapshot import has_daily_matrix_snapshot
+from app.sections.inline_domain.monitor.published_alert_snapshots import PUBLISHED_ALERT_ROWS
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
@@ -39,7 +40,8 @@ AppSetup.initialize_app()
 # 型号/厂别）在 Expander 内常驻渲染，未加载时也可先选条件；默认只渲染
 # 「加载预警矩阵」按钮（无 info 文案，门控语义由按钮承担，UI 优化轮次），
 # 点击后读取状态缓存并按当前筛选切片；Inline / Yield 缺缓存时只读已发布
-# 预警文件，Q-Time 沿用共享监控管路，详情图像仅在选中红灯后加载。
+# 预警文件，Q-Time 沿用共享监控管路。IJP、关键备件、IQC 蒸镀材料的
+# 状态与详情均只读本地 Excel 快照；其他详情图像仅在选中红灯后加载。
 # 已加载状态存 session_state，普通 rerun 保持可见；刷新只影响本看板。
 # --------------------------------------------------------------------------
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
@@ -95,10 +97,12 @@ def render_alert_matrix_panel() -> None:
         # 管理入口不依赖本会话是否查询过；查询仍使用跨会话共享的单元格缓存。
         render_matrix_refresh_controls()
         if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
-            db_manager = DatabaseManager()
+            selected_row = str(st.session_state.get(MATRIX_SELECTION_STATE_KEY, '')).partition('|')[0]
+            # Only legacy detail charts need station descriptions from the DB.
+            db_manager = DatabaseManager() if selected_row and selected_row not in PUBLISHED_ALERT_ROWS else None
             render_alert_matrix_board(
                 db_manager=db_manager,
-                step_desc_map=get_cached_step_description_map(db_manager),
+                step_desc_map=get_cached_step_description_map(db_manager) if db_manager is not None else None,
                 filter_selection=matrix_filter_selection,
                 show_refresh_controls=False,
             )

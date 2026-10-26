@@ -9,7 +9,8 @@ from typing import TypedDict
 import pandas as pd
 
 from src.indicator_domain.application.ijp.dtos import IjpQuery
-from src.indicator_domain.application.ijp.ports import IjpDataPort
+from src.indicator_domain.application.ijp.ports import IjpDataPort, IjpAlertStore, IjpAlertReport
+from src.indicator_domain.core.ijp.alerts import build_weekly_alerts
 from src.indicator_domain.application.ijp.settings import IjpSettings
 from src.indicator_domain.core.ijp.printer_summary import summarize_printers
 from src.indicator_domain.core.ijp.period_summary import summarize_periods
@@ -33,12 +34,29 @@ class IjpReportService:
         work_order_types: tuple[str, ...] = (),
         today_provider: Callable[[], date] | None = None,
         settings: IjpSettings | None = None,
+        alert_store: IjpAlertStore | None = None,
     ) -> None:
         self._data_port = data_port
         self._enabled_product_codes = tuple(dict.fromkeys(enabled_product_codes))
         self._work_order_types = tuple(dict.fromkeys(work_order_types))
         self._today_provider = today_provider or date.today
         self.settings = settings or IjpSettings()
+        self._alert_store = alert_store
+
+    def get_alert_report(self) -> IjpAlertReport:
+        start, end = self.get_reporting_window()
+        # Always evaluate the full enabled scope, independent of page selectors.
+        frame = self.get_period_ratios(IjpQuery(start_time=start, end_time=end))
+        if self._enabled_product_codes and not frame.empty:
+            frame = frame.loc[frame.productcode.isin(self._enabled_product_codes)]
+        alerts = build_weekly_alerts(frame, 'AA区', end.date())
+        if self._alert_store is not None:
+            self._alert_store.save('AA区', alerts, end.date())
+        public = frame.reindex(columns=[
+            'productcode', 'line', 'printer', 'rs_code', 'period',
+            'period_start', 'period_end', 'has_data', 'display_ratio',
+        ]).copy()
+        return {'alerts': alerts, 'ratios': public}
 
     def get_reporting_window(self) -> tuple[datetime, datetime]:
         return build_reporting_window(self._today_provider())

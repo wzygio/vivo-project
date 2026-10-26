@@ -6,8 +6,9 @@
 1. 加载关键备件规格基线及 CVD 工作簿各厂别的最新日期 Sheet
 2. 查询 PostgreSQL eda.ARRAY_PDS_RESULT_T（最新实测值）→ Parquet 快照
 3. 自动匹配备件类型并计算使用进度、预警状态（超规/预警/正常）
-4. 渲染卡片：总备件数、超规、预警、正常、最后更新
-5. 中部渲染明细表，支持厂别、设备类型、备件类型多选筛选
+4. 自动检查完整报表中使用进度 >100% 的备件并发布 Excel 快照
+5. 渲染卡片：总备件数、超规、预警、正常、最后更新
+6. 中部渲染明细表，支持厂别、设备类型、备件类型多选筛选
 """
 
 import logging
@@ -52,6 +53,8 @@ from app.sections.equipment_domain.parts_dashboard import (
     render_parts_metrics,
     render_parts_table,
 )
+from app.sections.equipment_domain.parts_alerts import render_parts_alerts
+from src.equipment_domain.composition import create_parts_alert_store
 
 # ==============================================================================
 #  配置常量
@@ -112,6 +115,17 @@ with st.spinner("正在加载备件寿命数据..."):
         st.error("备件寿命数据暂时无法加载，请稍后重试。")
         st.stop()
 
+
+# ==============================================================================
+#  自动预警与快照
+# ==============================================================================
+
+render_parts_alerts(
+    view_model.report_df,
+    store_factory=create_parts_alert_store,
+    as_of_date=parts_report_cache_context['as_of_date'],
+    last_update=view_model.last_update,
+)
 
 # ==============================================================================
 #  多维筛选

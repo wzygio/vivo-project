@@ -27,6 +27,7 @@ async page => {
     "yield_lot_oos",
     "yield_trend_fluctuation",
     "qtime_sheet_oos",
+    'ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng',
   ];
   const products = ["M678", "Z571"];
   const rowLabels = [
@@ -39,6 +40,7 @@ async page => {
     "Yield 单片异常（Lot 超规）",
     "Yield 趋势波动",
     "Q-Time 单片异常",
+    'IJP AA区超规', 'IJP 孔区超规', '关键备件超规（全厂共用）', 'IQC 蒸镀材料NG',
   ];
   const bodyText = await page.evaluate(() => document.body.innerText);
   for (const label of [...rowLabels, "M678", "Z571", "监控参数"]) {
@@ -78,7 +80,7 @@ async page => {
     error: tally("⬜"),
     ok: tally("🟢"),
   };
-  const expected = { alert: 4, noData: 0, error: 1, ok: 13 };
+  const expected = { alert: 4, noData: 0, error: 1, ok: rowKeys.length * products.length - 5 };
   for (const [key, want] of Object.entries(expected)) {
     if (counts[key] !== want) {
       throw new Error(

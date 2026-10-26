@@ -8,6 +8,8 @@ import pandas as pd
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.service import IjpFilterOptions, build_reporting_window
 from src.indicator_domain.application.ijp_hole.ports import IjpHoleDataPort
+from src.indicator_domain.application.ijp.ports import IjpAlertStore, IjpAlertReport
+from src.indicator_domain.core.ijp.alerts import build_weekly_alerts
 from src.indicator_domain.core.ijp_hole.summary import (
     HOLE_CODES, HOLE_DISPLAY_CODES, summarize_hole_periods,
 )
@@ -18,11 +20,21 @@ class IjpHoleReportService:
         self, data_port: IjpHoleDataPort, enabled_products: tuple[str, ...],
         work_order_types: tuple[str, ...] = (),
         today_provider: Callable[[], date] = date.today,
+        alert_store: IjpAlertStore | None = None,
     ) -> None:
         self._data_port = data_port
         self.enabled_products = tuple(dict.fromkeys(enabled_products))
         self.work_order_types = work_order_types
         self._today_provider = today_provider
+        self._alert_store = alert_store
+
+    def get_alert_report(self) -> IjpAlertReport:
+        start, end = self.get_reporting_window()
+        frame = self.get_report(IjpQuery(start_time=start, end_time=end))['day']
+        alerts = build_weekly_alerts(frame, '孔区', end.date())
+        if self._alert_store is not None:
+            self._alert_store.save('孔区', alerts, end.date())
+        return {'alerts': alerts, 'ratios': frame}
 
     def get_reporting_window(self) -> tuple[datetime, datetime]:
         return build_reporting_window(self._today_provider())

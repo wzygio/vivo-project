@@ -9,6 +9,7 @@ from src.indicator_domain.application.qtime.chamber_service import ChamberQTimeS
 from src.indicator_domain.application.qtime.chamber_settings import ChamberDecorationSettings
 from src.indicator_domain.infrastructure.qtime.chamber_database import DatabaseChamberQTimeRepository
 from src.indicator_domain.infrastructure.ijp.repository import IjpRepository
+from src.indicator_domain.infrastructure.ijp.alert_workbook import IjpAlertWorkbook
 from src.indicator_domain.infrastructure.qtime.decoration_repository import (
     QTimeDecorationRepository,
 )
@@ -67,6 +68,7 @@ def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
         settings=IjpSettings.model_validate(
             ConfigLoader.load_domain_config("indicator_domain").get("ijp", {})
         ),
+        alert_store=build_ijp_alert_store(),
     )
 
 
@@ -75,4 +77,11 @@ def build_ijp_hole_service(db_manager: DatabaseManager) -> IjpHoleReportService:
         IjpHoleRepository(db_manager),
         enabled_products=tuple(ConfigLoader.get_enabled_products()),
         work_order_types=tuple(ConfigLoader.get_work_order_types()),
+        alert_store=build_ijp_alert_store(),
     )
+
+
+def build_ijp_alert_store() -> IjpAlertWorkbook:
+    return IjpAlertWorkbook(ConfigLoader.get_domain_resource_path(
+        'indicator_domain', 'ijp_alerts', 'ijp/ijp_alerts.xlsx',
+    ))

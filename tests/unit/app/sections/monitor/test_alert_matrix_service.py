@@ -59,6 +59,7 @@ def test_row_registry_matches_prd_order() -> None:
         "yield_lot_oos",
         "yield_trend_fluctuation",
         "qtime_sheet_oos",
+        'ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng',
     ]
     for row in MATRIX_ROWS:
         assert row.display_name
@@ -885,7 +886,9 @@ def test_yield_rows_do_not_support_factory_filter() -> None:
     assert row_flags["yield_lot_oos"] is False
     assert row_flags["yield_trend_fluctuation"] is False
     for row_key, flag in row_flags.items():
-        if not row_key.startswith("yield_"):
+        if row_key in ('ijp_aa_oos', 'ijp_hole_oos', 'iqc_evaporation_ng'):
+            assert flag is False
+        elif not row_key.startswith("yield_"):
             assert flag is True, row_key
 
     assert payload["cells"][("yield_lot_oos", PROD)]["state"] == CELL_STATE_ALERT

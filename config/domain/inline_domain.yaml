@@ -18,6 +18,12 @@ spc:
     exempt_param_name_contains:
       - "PPA"
 
+  # SPC 页面单片预警过滤：仅排除预警明细及对应自动预警图，不改变修饰决策或常规查询。
+  # 独立于参数修饰豁免；按参数名普通文本包含关系匹配，不区分大小写；[] 关闭。
+  sheet_oos_alerts:
+    excluded_param_name_contains:
+      - "PPA"
+
   # Sheet 点位图样式：使用折线图而非箱线图；匹配不区分大小写，按普通文本处理
   chart:
     line_param_name_contains:
@@ -45,8 +51,8 @@ aoi_rs:
   special_decoration:
     enabled: true
     # 严格超过 sheet_threshold_ratio × spec 时触发，哈希值位于 [0, sheet_replacement_ratio × spec]。
-    sheet_threshold_ratio: 0.1
-    sheet_replacement_ratio: 0.05
+    sheet_threshold_ratio: 0.4
+    sheet_replacement_ratio: 0.2
     factories:
       - "OLED"
     # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。

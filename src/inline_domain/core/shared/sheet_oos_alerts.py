@@ -11,6 +11,7 @@ Alert semantics (see docs/PRD/PRD-2026-08-25-Inline自动预警中心.md):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 import pandas as pd
@@ -42,6 +43,7 @@ def build_sheet_oos_alerts(
     *,
     time_column: str,
     reference_date: date | pd.Timestamp | None = None,
+    excluded_param_name_contains: Sequence[str] = (),
 ) -> pd.DataFrame:
     """筛选上一 ISO 周内 flag == FALSE 的 OOS 明细，按时间倒序返回。
 
@@ -49,6 +51,7 @@ def build_sheet_oos_alerts(
     - ``time_column`` 经 ``pd.to_datetime(errors="coerce")`` 归一化，
       解析失败或缺失的行不参与；
     - 输入为空或缺少必要列时返回空 DataFrame（保留原列结构）。
+    - 独立预警排除项按参数名作不区分大小写的普通文本匹配，不改写 flag。
     """
     if detail_df is None or detail_df.empty:
         return detail_df.copy() if isinstance(detail_df, pd.DataFrame) else pd.DataFrame()
@@ -64,4 +67,9 @@ def build_sheet_oos_alerts(
         & (result[time_column] >= start)
         & (result[time_column] < end)
     )
+    if excluded_param_name_contains and "param_name" in result.columns:
+        parameter_names = result["param_name"].fillna("").astype(str)
+        for token in excluded_param_name_contains:
+            if token.strip():
+                mask &= ~parameter_names.str.contains(token.strip(), case=False, regex=False)
     return result.loc[mask].sort_values(time_column, ascending=False).reset_index(drop=True)

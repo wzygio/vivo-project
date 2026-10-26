@@ -26,7 +26,11 @@ class Source(MemorySource):
         return super().read_report(start, end, products)
 
 frame = source_frame()
-render_evaporation_dashboard(EvaporationReportService(Source(frame), enabled_products=('M678', 'M626')))
+class MemoryAlertStore:
+    def save(self, alerts, **scope):
+        pass
+render_evaporation_dashboard(EvaporationReportService(Source(frame), enabled_products=('M678', 'M626')),
+                             alert_store=MemoryAlertStore())
 '''
 
 
@@ -56,10 +60,10 @@ def test_date_query_empty_failure_and_retry(monkeypatch):
         app.button(key='iqc_evap_query').click().run()
         assert not app.exception
         if mode == 'failure':
-            assert len(app.error) == 1 and 'secret' not in app.error[0].value
+            assert len(app.error) == 2 and all('secret' not in error.value for error in app.error)
             assert not app.dataframe
         elif mode == 'empty':
-            assert '没有符合' in app.info[0].value
+            assert any('没有符合' in info.value for info in app.info)
             assert not app.dataframe
         else:
             assert len(app.dataframe) == 1
@@ -74,7 +78,7 @@ def test_product_query_gate_empty_selection_and_registry_change(monkeypatch):
     app.multiselect[0].set_value(['M626']).run()
     assert not app.exception and not app.dataframe
     app.button(key='iqc_evap_query').click().run()
-    assert not app.dataframe and '没有符合' in app.info[0].value
+    assert not app.dataframe and any('没有符合' in info.value for info in app.info)
     app.multiselect[0].set_value([]).run()
     app.button(key='iqc_evap_query').click().run()
     assert len(app.dataframe[0].value) == 1

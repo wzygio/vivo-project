@@ -25,7 +25,7 @@ def test_missing_code_is_zero_and_empty_input_has_public_schema():
     frame = pd.DataFrame([dict(productcode='M1', line='L1', printer='P1',
         glass_id='G1', day='2026-09-01', rs_code='C3RA1', code_num=2, in_window=1)])
     result = summarize_holes(frame)
-    assert result['total'].ratio.tolist() == [1.0, 0.0, 0.0]
+    assert result['total'].ratio.tolist() == [0.0, 1.0, 0.0, 0.0]
     assert all(f.empty and 'ratio' in f for f in summarize_holes(frame.iloc[:0]).values())
 
 
@@ -40,11 +40,12 @@ def test_hole_periods_match_aa_and_complete_empty_weeks(today):
     original = frame.copy(deep=True)
     result = summarize_hole_periods(frame, today)
     assert list(result.period.unique()) == [p[0] for p in reporting_periods(today)]
-    assert len(result) == 15
-    assert set(result.rs_code) == {'C3RA1', 'C3RA2', 'C3RA3'}
+    assert len(result) == 20
+    assert set(result.rs_code) == {'C3RA0', 'C3RA1', 'C3RA2', 'C3RA3'}
+    assert result[result.rs_code.eq('C3RA0')].ratio.eq(0).all()
     assert result[result.rs_code.eq('C3RA3')].ratio.eq(0).all()
     month = result[result.period.eq(result.period.iloc[0])]
-    assert 0.905 <= month.ratio.iloc[0] <= 0.915
+    assert 0.905 <= month.loc[month.rs_code.eq('C3RA1'), 'ratio'].item() <= 0.915
     assert month.ratio.sum() == pytest.approx(1.0)
     missing = result[~result.has_data]
     assert not missing.empty and missing.ratio.eq(0).all()
@@ -99,7 +100,7 @@ def test_c3ra3_only_selection_keeps_five_zero_bars_and_legend():
     assert set(result.rs_code) == {'C3RA3'}
     assert result.ratio.eq(0).all()
     figure = build_hole_figure(result, title='P1')
-    assert [trace.name for trace in figure.data] == ['C3RA3']
+    assert [trace.name for trace in figure.data] == ['C3RA3：溢流']
     assert list(figure.data[0].y) == [0.0] * 5
     assert len(figure.data[0].x) == 5
 
@@ -120,11 +121,11 @@ def test_move_c3ra3_into_c3ra2_before_enforcing_c3ra1_minimum(counts, expected):
     result = summarize_hole_periods(frame, date(2026, 10, 21))
     month = result[result.period_start.eq('2026-10-01')]
     if expected is None:
-        assert 0.905 <= month.ratio.iloc[0] <= 0.915
+        assert 0.905 <= month.loc[month.rs_code.eq('C3RA1'), 'ratio'].item() <= 0.915
         assert month.ratio.sum() == pytest.approx(1.0)
-        assert month.ratio.iloc[2] == 0
+        assert month.loc[month.rs_code.eq('C3RA3'), 'ratio'].item() == 0
     else:
-        assert month.ratio.tolist() == pytest.approx(expected)
+        assert month.set_index('rs_code').loc[['C3RA1', 'C3RA2', 'C3RA3'], 'ratio'].tolist() == pytest.approx(expected)
     pd.testing.assert_frame_equal(frame, original)
 
 
@@ -151,3 +152,20 @@ def test_random_thresholds_vary_by_printer_and_period_but_stay_stable():
     alone = summarize_hole_periods(frame[frame.printer.eq('P0')], date(2026, 10, 21))
     pd.testing.assert_frame_equal(result[result.printer.eq('P0')].reset_index(drop=True), alone)
     assert random.getstate() == state
+
+
+@pytest.mark.parametrize('zero_count', [0, 5, 40])
+def test_c3ra0_is_in_denominator_and_stacks_remain_normalized(zero_count):
+    frame = pd.DataFrame([
+        dict(productcode='M1', line='L1', printer='P1', day='2026-10-21',
+             rs_code=code, code_num=count)
+        for code, count in [('C3RA0', zero_count), ('C3RA1', 95), ('C3RA3', 5)]
+    ])
+    result = summarize_hole_periods(frame, date(2026, 10, 21))
+    observed = result.loc[result.has_data]
+    assert observed.groupby('period').ratio.sum().tolist() == pytest.approx([1] * 2)
+    assert observed.loc[observed.rs_code.eq('C3RA1'), 'ratio'].gt(.9).all()
+    zero = observed.loc[observed.rs_code.eq('C3RA0'), 'ratio']
+    assert zero.eq(0).all() if zero_count == 0 else zero.gt(0).all()
+    selected = summarize_hole_periods(frame, date(2026, 10, 21), ('C3RA0',))
+    pd.testing.assert_frame_equal(result.loc[result.rs_code.eq('C3RA0')].reset_index(drop=True), selected)

@@ -1635,6 +1635,33 @@ def test_build_spc_sheet_oos_alerts_excludes_true_and_delete_flags(tmp_path: Pat
     assert alerts_df["Sheet ID"].tolist() == ["S3"]
 
 
+def test_spc_sheet_alert_exclusions_do_not_change_source_or_manual_queries(tmp_path, monkeypatch):
+    config = {
+        "spc": {"sheet_oos_alerts": {"excluded_param_name_contains": ["PPA"]}},
+        "auto_decoration": {"exempt_param_name_contains": ["4PP"]},
+    }
+    monkeypatch.setattr(spc_dashboard.ConfigLoader, "load_domain_config", lambda _: config)
+    detail = pd.DataFrame([
+        _sheet_oos_decoration_row("PPA", "2026-08-18 10:00:00", False, param_name="test_pPa_X"),
+        _sheet_oos_decoration_row("KEEP", "2026-08-19 10:00:00", False),
+    ])
+    result = _sample_sheet_oos_decoration_result(tmp_path, detail)
+    alerts = build_spc_sheet_oos_alerts(result, reference_date=date(2026, 8, 25))
+    assert alerts["Sheet ID"].tolist() == ["KEEP"]
+    assert detail["flag"].eq(False).all()
+    assert filter_spc_report(
+        detail, selected_factory="ARRAY", selected_params=["test_pPa_X"], selected_steps=["15260"],
+    )["sheet_id"].tolist() == ["PPA"]
+
+    only_ppa = _sample_sheet_oos_decoration_result(tmp_path, detail.iloc[:1])
+    empty = build_spc_sheet_oos_alerts(only_ppa, reference_date=date(2026, 8, 25))
+    assert empty.empty
+    assert empty.columns.tolist() == spc_dashboard.SPC_OOS_ALERT_COLUMNS
+
+    config["spc"]["sheet_oos_alerts"]["excluded_param_name_contains"] = []
+    assert len(build_spc_sheet_oos_alerts(result, reference_date=date(2026, 8, 25))) == 2
+
+
 def test_build_spc_sheet_oos_alerts_excludes_records_outside_previous_week(tmp_path: Path) -> None:
     decoration_df = pd.DataFrame(
         [

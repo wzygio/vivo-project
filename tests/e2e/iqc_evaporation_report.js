@@ -18,7 +18,7 @@ async page => {
   await page.getByRole('combobox', {name:'产品型号'}).waitFor();
   if (await page.getByTestId('stMultiSelect').count() !== 1 || await page.getByTestId('stSelectbox').count()) throw new Error('Wrong product selector');
   await page.getByRole('button', { name: '查询', exact: true }).click();
-  const table = page.getByTestId('stDataFrame');
+  const table = page.locator('.st-key-iqc_evap_manual_results').getByTestId('stDataFrame');
   await table.waitFor({ timeout: 60000 });
   if (await page.getByRole('spinbutton', { name: '页码', exact: true }).count()) throw new Error('Manual pagination remains');
   for (const width of [1365, 768]) {
@@ -28,7 +28,7 @@ async page => {
     if (!a || !b || Math.abs(a.y - b.y) > 5) throw new Error('Filters not on one row');
     if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error('Page overflows');
     await page.getByRole('heading', {name:'IQC-蒸镀材料',exact:true}).scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `native-table-${width}.png`, fullPage: true });
+    await page.screenshot({ path: `output/test-results/iqc_evaporation/native-table-${width}.png`, fullPage: true });
   }
   await table.hover();
   await table.getByRole('button', { name: 'Download as CSV', exact: true }).click();

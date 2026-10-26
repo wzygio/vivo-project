@@ -13,11 +13,11 @@
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
 | Inline data_exclusion、厂别日期排除、去重与修饰之前过滤、快照与历史保留 | [Inline 日期排除规则](domain/inline_domain/shared/rules-inline-date-exclusion.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
-| SPC 传统→专用点位修饰、中央规格区间、日期窗口、稳定哈希 margin、flag=False、修饰后能力输入 | [SPC 点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
+| SPC 超规片判定、人工决策台账、传统→专用点位修饰、中央规格区间、稳定哈希 margin、修饰与参数豁免/预警过滤的边界 | [SPC 超规片与点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界；OOS 点位修饰、OOC 清单筛选与能力不达标的先后关系 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-cpk&cpm.md) |
 | SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
-| 全指标预警矩阵、计划任务、跨进程预计算快照 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
+| 全指标预警矩阵、计划任务、跨进程预计算快照、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
@@ -41,10 +41,10 @@
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](design/shared_kernel/shared/overview-shared-kernel.md) |
 | QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)、[腔室数据库规则](domain/indicator_domain/qtime/rules-chamber-database.md) |
 | Indicator data_exclusion、Q-Time/IJP 显示日期过滤、聚合前排除、缓存失效 | [Indicator 日期排除规则](domain/indicator_domain/shared/rules-indicator-date-exclusion.md) |
-| IJP 溢流数据源、站点与时间口径 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；[孔区月周汇总与占比规则](domain/indicator_domain/ijp_hole/rules-hole-period-report.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
+| IJP 溢流数据源、站点与时间口径、CODE 注释、上一周自动预警与 Excel 快照 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；[孔区月周汇总与占比规则](domain/indicator_domain/ijp_hole/rules-hole-period-report.md)；[IJP CODE 注释与自动预警](domain/indicator_domain/ijp/rules-ijp-alerts.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
 | IQC 寿命测试 JNCD、衰减曲线、实时取数与快照/缓存边界 | [寿命监控与取数规则](domain/iqc_domain/lifetime/rules-lifetime-monitoring.md)；原始来源分析按 `docs/dev_docs/dev_spec/iqc_domain/lifetime/` 定位，匿名边界见 `docs/ADR/0030-*` |
-| IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
-| 关键备件规格、测量、快照与寿命报表；数据读取、通用仿造、CVD 特殊规则仿造、厂别-MMDD Sheet 更新、小数年限与自然月、95% 更换 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
+| IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围、IQC/COA NG 上一周自动预警与 Excel 快照 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
+| 关键备件规格、测量、快照与寿命报表；数据读取、通用仿造、CVD 特殊规则仿造、厂别-MMDD Sheet 更新、小数年限与自然月、98% 更换、使用进度 >100% 自动预警与 Excel 快照 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
 | 日期前推、offset_days、源日期与显示日期、跨模块报表时间链路 | [报表日期前推数据链路](domain/shared_kernel/shared/data-flow-report-date-forward.md) |
 
 ### 跨域范式与功能设计

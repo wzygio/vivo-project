@@ -1,7 +1,7 @@
 """Outbound data contract owned by the IJP overflow application layer."""
 
-from datetime import datetime
-from typing import Protocol
+from datetime import date, datetime
+from typing import Protocol, TypedDict
 
 import pandas as pd
 
@@ -23,3 +23,18 @@ class IjpDataPort(Protocol):
     def fetch_daily_counts(self, query: IjpQuery) -> pd.DataFrame: ...
 
     def fetch_details(self, query: IjpQuery) -> pd.DataFrame: ...
+
+
+class IjpAlertStore(Protocol):
+    def save(self, region: str, alerts: pd.DataFrame, reference_date: date) -> None: ...
+
+
+class IjpAlertReport(TypedDict):
+    alerts: pd.DataFrame
+    ratios: pd.DataFrame
+
+
+class IjpAlertSource(Protocol):
+    def get_reporting_window(self) -> tuple[datetime, datetime]: ...
+
+    def get_alert_report(self) -> IjpAlertReport: ...

@@ -1,12 +1,12 @@
 # 全指标预警看板：By Domain / By 指标实现说明
 
-更新日期：2026-10-20。顶部矩阵的 Inline 与 Yield 状态均读取已发布结果，整本 Excel 解析在内存中复用；Q-Time 保留共享监控管路，点击详情继续按需使用报表服务。范围不包含下方 Inline／CPK／CPM 历史汇总看板。
+更新日期：2026-10-26。顶部矩阵的 Inline 与 Yield 状态读取已发布结果；新增 IJP、关键备件、IQC 蒸镀材料的状态和详情均直接读取本地 Excel 快照，绝不调用对应报表 application 或通过报表缓存补齐。整本 Excel 解析在内存中复用；Q-Time 保留共享监控管路。其他原有行的图像详情继续按需使用报表服务。范围不包含下方 Inline／CPK／CPM 历史汇总看板。
 
 ## 数据入口分类
 
 - **A：本地结果直读**：读取其他模块已产出的 Excel，做字段投影、时间筛选与预警存在性判断，不重新分析原始量测。
 - **B：application 管路复用**：调用报表已有服务和缓存；只有函数及参与哈希的参数一致，才共享同一缓存条目。
-- **C：独立分析管路**：另建原始数据分析引擎。当前九行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
+- **C：独立分析管路**：另建原始数据分析引擎。当前十三行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
 
 | Domain | 指标键／显示名称 | 状态灯 | 红灯详情 |
 |---|---|---|---|
@@ -19,6 +19,10 @@
 | yield_domain | yield_lot_oos／Yield 单片异常（Lot 超规） | A：已发布 Lot 超规工作簿 | B：Yield 详情 |
 | yield_domain | yield_trend_fluctuation／Yield 趋势波动 | A：已发布趋势报警工作簿 | B：Yield 详情 |
 | indicator_domain | qtime_sheet_oos／Q-Time 单片异常 | B：共享厂别监控结果按产品筛选 | B：共享监控结果 |
+| indicator_domain | ijp_aa_oos／IJP AA区超规 | A：IJP Excel 的 AA区 sheet | A：同一快照公开明细，无 application 图像加载 |
+| indicator_domain | ijp_hole_oos／IJP 孔区超规 | A：IJP Excel 的 孔区 sheet | A：同一快照公开明细，无 application 图像加载 |
+| equipment_domain | parts_oos／关键备件超规（全厂共用） | A：备件 Excel | A：同一快照公开明细 |
+| iqc_domain | iqc_evaporation_ng／IQC 蒸镀材料NG | A：蒸镀材料 Excel | A：同一快照公开明细 |
 
 Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
@@ -34,7 +38,7 @@ Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 | aoi_tt | start_time | sheet_id／tt_name |
 | spc、ctq | sheet_start_time | sheet_id／param_name |
 
-统一投影后，以 [上周一 00:00, 本周一 00:00) 内 flag=False 的 OOS 记录判断是否预警。aoi_tt_sheet_ooc_decoration.xlsx 等 **OOC** 文件不是这四行输入；当前没有独立 OOC／IJP 行。
+统一投影后，以 [上周一 00:00, 本周一 00:00) 内 flag=False 的 OOS 记录判断是否预警。aoi_tt_sheet_ooc_decoration.xlsx 等 **OOC** 文件不是这四行输入；IJP 使用下述独立快照行，不使用 Inline OOS/OOC 工作簿。
 
 TT 结果读取遵守 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配参数白名单与-spc-分类)：旧 AOI_TT Excel 中误收的 PPA 参数在 OOS/OOC 读取副本中排除，不修改工作簿或人工决策，不将 TT 数值拼装成 SPC 特征。SPC 预警仍读取自身结果文件。分类规则版本参与 Inline 单元格、跨进程矩阵快照及运行时计算的输入签名，避免复用修复前的结果。
 
@@ -70,6 +74,26 @@ TT 结果读取遵守 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配
 
 定向刷新 Q-Time／M626 只推进该单元格标识，重新筛选共享结果，**不是强制重建所有厂别原始快照**。数据库来源更新仍用 Q-Time 原有工作流。共享底层文件真正改变后，多个依赖产品重新读取属于正常依赖失效。
 
+## IJP、关键备件与 IQC 蒸镀材料：只读已发布快照
+
+`published_alert_snapshots.py` 归聚合页所有，直接通过共享 Excel 工具读取各报表已发布结果，不导入其 application 计算/查询函数，不查询数据库、不发布或修改快照。默认路径均通过全局资源注册解析：
+
+| 指标 | 配置键 | 默认位置 / sheet |
+|---|---|---|
+| IJP AA／孔区 | `resources.indicator_domain.files.ijp_alerts` | `resources/indicator_domain/ijp/ijp_alerts.xlsx` 的 `AA区` / `孔区` |
+| 关键备件 | `resources.equipment_domain.files.parts_alerts` | `resources/equipment_domain/parts/parts_alerts.xlsx` 的 `超规备件` |
+| IQC 蒸镀材料 | `resources.iqc_domain.files.evaporation_alerts` | `resources/iqc_domain/eva_materials/evaporation_alerts.xlsx` 的 `超规材料` |
+
+- 每个读取版本以绝对路径、mtime_ns 和大小缓存整本 Excel，最多 16 项；IJP 两区及多个产品复用一次解析。该缓存只缓存文件解析，不是业务 application 缓存。
+- 校验 `__meta__` 的成功状态、条数与公开 schema；发布时间必须为当前参考日，且距当前时刻不超过全局缓存 TTL，不接受未来时间。IJP 和 IQC 校验上一完整周范围，备件校验报告日；IQC 另校验该产品在发布范围内。
+- 有效空清单为 `ok`；文件/sheet/元数据缺失、读取失败、陈旧、周期不符或发布不完整均为 `error`，避免 `no_data` 被已有显示规则误当成达标。不回退运行应用服务、不修补源文件，不将旧快照当作本期结果。
+- IJP 按 `productcode` 精确匹配；IQC 按“产品型号”中以“、”分隔的产品代码精确匹配，支持一条检验关联多个产品，避免 `M67` 误匹配 `M678`。
+- 备件快照没有产品归属；此行明确标为全厂共用，各产品列复用同一全厂状态和明细，不虚构产品映射。按真实“厂别”支持筛选，详情也按当前厂别切片。IJP/IQC 不将线体或 WMS 工厂编码擅自映射为矩阵 ARRAY/OLED/TP，行声明不支持厂别细分。
+- 来源签名包含文件版本、参考日和即时有效性；即使文件未改写，过期也会使单元格及跨进程快照失效。点击详情再次检查文件有效性，详情只展示公开白名单；不构建旧报表图像 loader，不传递原始测量值、flag 或其他内部字段。
+- 管理员定向刷新只清除对应文件版本的解析条目并推进所选单元格 revision，不触发报表计算。页面只在原有报表图像详情需要时才获取数据库对象和站点说明；新增四行详情不需要这些依赖。
+
+结果发布规则由 [IJP 预警规则](../../indicator_domain/ijp/rules-ijp-alerts.md)、[关键备件数据流](../../equipment_domain/parts/data-flow-critical-parts.md#53-自动超规预警与-excel-快照)、[蒸镀材料规则](../../iqc_domain/eva_materials/rules-evaporation-product-scope.md#自动-ng-预警与本地快照) 分别拥有；矩阵只消费这些结果。
+
 ## 缓存与刷新机制
 
 查询 → 读取各指标／产品的输入签名和 revision → 单元格缓存 → 组合后台状态 → compliance 显示副本 → 前端展示 → 红灯按需加载详情。
@@ -98,9 +122,10 @@ TT 结果读取遵守 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配
 ## 源码与验证
 
 - app/sections/inline_domain/monitor/alert_matrix_cache.py：来源、单元格键、惰性装配。
-- 同目录 alert_matrix_service.py：九行判据与 CPK / CPM 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情。
+- 同目录 alert_matrix_service.py：十三行声明与 CPK / CPM 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情；published_alert_snapshots.py：IJP/备件/IQC 本地快照直读及有效性检查。
 - app/components/indicator_cache.py／page_header.py：共享标识与产品页刷新。
 - tests/unit/app/sections/monitor/test_matrix_cell_isolation.py：跨指标／产品与 CPK 直读。
+- tests/unit/app/sections/monitor/test_published_alert_snapshots.py：三本 Excel、四个新行的精确产品匹配、全厂共用、公开详情、缺失/陈旧/损坏及签名失效；用禁止调用的替身验证 application 与 SQL 不会执行，文件内容保持不变。
 - tests/unit/app/sections/monitor/test_cpm_matrix.py：CPM 周度判定、独立 sheet、三图及 SPC 页面 application 缓存复用。
 - tests/e2e/fixtures/indicator_product_cache_app.py、tests/e2e/indicator_product_cache.js：真实矩阵／缓存组件的隔离浏览器验收，使用临时 Excel 与计数器，不运行生产数据库查询。
 

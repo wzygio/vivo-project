@@ -6,6 +6,8 @@ import streamlit as st
 from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.ijp_hole.chart import build_hole_figure
 from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
+from app.sections.indicator_domain.ijp.alert_center import render_ijp_alert_center
+from app.utils.ijp_labels import format_ijp_code, get_ijp_code_descriptions
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp_hole.service import IjpHoleReportService
@@ -13,11 +15,12 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 
 RESULT_KEY = 'ijp_hole_result'
-REPORT_VERSION = 'hole-periods-v4'
+REPORT_VERSION = 'hole-periods-v5'
 
 
 def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
     start, end = service.get_reporting_window()
+    descriptions = get_ijp_code_descriptions('孔区')
     with st.container(border=True):
         filter_columns = render_ijp_filter_columns()
         try:
@@ -36,12 +39,18 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
             retained = [item for item in current if item in available]
             if current != retained:
                 st.session_state[widget_key] = retained
+            formatter = str
+            if key == 'products':
+                formatter = get_product_label_formatter()
+            elif key == 'codes':
+                formatter = lambda code: format_ijp_code(code, descriptions)
             with column:
                 values[key] = tuple(st.multiselect(
                     label, available, key=widget_key,
-                    format_func=get_product_label_formatter() if key == 'products' else str,
+                    format_func=formatter,
                 ))
         clicked = st.button('查询', type='primary', width='stretch', key='ijp_hole_search')
+    render_ijp_alert_center(service, '孔区')
     signature = (
         REPORT_VERSION, start, end, *values.values(), service.enabled_products, service.work_order_types,
         ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,

@@ -22,12 +22,13 @@ async page => {
       x: el.data[0].x, values: el.data.map(t => Array.from(t.y)),
       hover: el.data.map(t => t.hovertemplate),
     }));
-    if (chart.mode !== 'stack' || chart.names.join() !== 'C3RA1,C3RA2,C3RA3' || chart.x.length !== 5 ||
+    if (chart.mode !== 'stack' || chart.names.map(name => name.split('：')[0]).join() !== 'C3RA0,C3RA1,C3RA2,C3RA3' || chart.x.length !== 5 ||
         chart.x.slice(0, 2).join() !== '2026-08（月）,2026-09（月）')
       throw Error(JSON.stringify(chart));
-    if (chart.values[2].some(value => value !== 0)) throw Error('C3RA3 must remain zero');
-    chart.values[0].forEach((value, index) => {
-      if (value > 0 && (value <= 0.9 || Math.abs(value + chart.values[1][index] - 1) > 1e-9))
+    if (chart.values[0].some(value => value !== 0)) throw Error('Missing C3RA0 must be zero');
+    if (chart.values[3].some(value => value !== 0)) throw Error('C3RA3 must remain zero');
+    chart.values[1].forEach((value, index) => {
+      if (value > 0 && (value <= 0.9 || Math.abs(value + chart.values[2][index] - 1) > 1e-9))
         throw Error(`Unexpected stack: ${chart.values}`);
     });
   };
@@ -38,13 +39,13 @@ async page => {
     throw Error('Horizontal overflow');
   const codes = page.locator('[role="combobox"][aria-label*="CODE"]');
   await codes.click();
-  await page.getByRole('option', {name: 'C3RA2', exact: true}).click();
+  await page.getByRole('option', {name: 'C3RA2：Ink溢流出DAM', exact: true}).click();
   await page.keyboard.press('Escape');
   await page.getByText('请选择筛选条件并点击“查询”。').waitFor();
   await page.getByRole('button', {name: '查询', exact: true}).click();
   await page.waitForFunction(() => {
     const el = document.querySelector('.js-plotly-plot');
-    return el?.data.length === 1 && el.data[0].name === 'C3RA2';
+    return el?.data.length === 1 && el.data[0].name === 'C3RA2：Ink溢流出DAM';
   });
   const ratio = await page.locator('.js-plotly-plot').first().evaluate(el => el.data[0].y[1]);
   if (ratio < 0.085 - 1e-9 || ratio > 0.095 + 1e-9)

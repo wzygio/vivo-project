@@ -86,6 +86,7 @@ class AlertMatrixContext:
     oos_product_loader: Callable[[str, str, Path], Any] | None = None
     spc_cpm_loader: Callable[[str], pd.DataFrame | None] | None = None
     yield_result_loader: Callable[[str, str], Any] | None = None
+    published_alert_loader: Callable[[str, str, date], dict] | None = None
     _qtime_monitoring_memo: Any = field(default=_UNSET, repr=False)
 
     def get_qtime_monitoring(self) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -433,6 +434,16 @@ def _guarded_evaluator(
 # ---------------------------------------------------------------------------
 # 行注册表（PRD §3.1 顺序）
 # ---------------------------------------------------------------------------
+def _published_evaluator(row_key: str) -> Callable:
+    def evaluate(product: str, context: AlertMatrixContext) -> dict:
+        if context.published_alert_loader is None:
+            return _cell(row_key, product, CELL_STATE_ERROR, '预警结果暂不可用。')
+        result = context.published_alert_loader(row_key, product, context.reference_date)
+        return _cell(row_key, product, result['state'], result.get('message', ''),
+                     result.get('alert_factories', ()))
+    return _guarded_evaluator(row_key, evaluate)
+
+
 MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
     AlertMatrixRow(
         row_key="aoi_rs_sheet_oos",
@@ -531,6 +542,14 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
         time_scope=_PREVIOUS_WEEK_SCOPE,
         evaluator=_guarded_evaluator("qtime_sheet_oos", _evaluate_qtime_sheet_oos),
     ),
+    AlertMatrixRow('ijp_aa_oos', 'IJP AA区超规', 'ijp', _PREVIOUS_WEEK_SCOPE,
+                   _published_evaluator('ijp_aa_oos'), supports_factory_filter=False),
+    AlertMatrixRow('ijp_hole_oos', 'IJP 孔区超规', 'ijp', _PREVIOUS_WEEK_SCOPE,
+                   _published_evaluator('ijp_hole_oos'), supports_factory_filter=False),
+    AlertMatrixRow('parts_oos', '关键备件超规（全厂共用）', 'parts', '当前备件状态（全厂共用）',
+                   _published_evaluator('parts_oos')),
+    AlertMatrixRow('iqc_evaporation_ng', 'IQC 蒸镀材料NG', 'iqc', _PREVIOUS_WEEK_SCOPE,
+                   _published_evaluator('iqc_evaporation_ng'), supports_factory_filter=False),
 )
 
 MATRIX_ROW_MAP: dict[str, AlertMatrixRow] = {row.row_key: row for row in MATRIX_ROWS}

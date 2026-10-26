@@ -3,7 +3,8 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from src.indicator_domain.core.ijp.period_summary import reporting_periods, summarize_periods, CODE_DESCRIPTIONS
+from src.indicator_domain.core.ijp.period_summary import reporting_periods, summarize_periods
+from app.utils.ijp_labels import get_ijp_code_descriptions
 from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
 
 
@@ -38,7 +39,7 @@ def test_period_counts_empty_periods_decoration_and_chart_contract():
     assert figure.layout.barmode == "stack"
     assert len(figure.data) == 6
     assert all(len(trace.x) == 5 for trace in figure.data)
-    assert all(description in trace.name for description, trace in zip(CODE_DESCRIPTIONS.values(), figure.data))
+    assert all(description in trace.name for description, trace in zip(get_ijp_code_descriptions('AA区').values(), figure.data))
     assert len(figure.layout.annotations) == 2
 
 

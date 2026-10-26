@@ -9,7 +9,7 @@
   ``build_default_signature_components`` 的分量做确定性摘要；
 - ``build_cell_source_signature``：仅采集本指标输入，不混入其他指标 revision；
 - ``build_default_matrix_context``：生产依赖装配（Inline/CPK/CPM 结果工作簿、
-  Yield 结果只读入口、Q-Time 全产品监控）。所有服务对象经下划线前缀
+  Yield 结果只读入口、Q-Time 全产品监控、IJP/备件/IQC 已发布快照）。所有服务对象经下划线前缀
   参数或闭包进入缓存函数，不参与哈希。
 """
 
@@ -54,6 +54,9 @@ from src.inline_domain.core.monitor.monitor_param_classifier import (
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from app.sections.inline_domain.monitor.published_alert_snapshots import (
+    PUBLISHED_ALERT_ROWS, read_published_alerts, published_alert_signature,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +99,8 @@ def _file_signature(path: Path) -> str:
 
 def build_cell_source_signature(row_key: str, product: str, reference_date: date | None = None) -> str:
     """Only the selected indicator's real input signatures; no board/global revision."""
+    if row_key in PUBLISHED_ALERT_ROWS:
+        return published_alert_signature(row_key, product, reference_date or date.today())
     if row_key in ("spc_cpk_trend", "spc_cpm_trend"):
         return cpk_latest_store().source_signature() + ":" + repr(ConfigLoader.get_inline_data_exclusion())
     if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
@@ -212,6 +217,7 @@ def build_default_matrix_context(
         yield_result_loader=yield_result_loader,
         oos_product_loader=oos_product_loader,
         qtime_monitoring_loader=qtime_monitoring_loader,
+        published_alert_loader=read_published_alerts,
     )
 
 

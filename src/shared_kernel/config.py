@@ -491,6 +491,16 @@ class ConfigLoader:
             return []
 
     @classmethod
+    def get_spc_sheet_oos_alert_param_exclusions(cls) -> list[str]:
+        """Read SPC Sheet alert exclusions independently of decoration exemptions."""
+        spc = cls.load_domain_config("inline_domain").get("spc", {})
+        section = spc.get("sheet_oos_alerts", {})
+        values = section.get("excluded_param_name_contains", [])
+        if not isinstance(values, list):
+            raise ValueError("spc.sheet_oos_alerts.excluded_param_name_contains must be a list")
+        return [str(value).strip() for value in values if value is not None and str(value).strip()]
+
+    @classmethod
     def get_spc_line_chart_param_name_contains(cls) -> list[str]:
         """Read parameter-name tokens rendered as SPC Sheet point line charts."""
         try:

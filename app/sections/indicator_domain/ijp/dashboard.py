@@ -13,7 +13,8 @@ from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
 from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
 from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
-from src.indicator_domain.core.ijp.period_summary import CODE_DESCRIPTIONS
+from app.utils.ijp_labels import format_ijp_code, get_ijp_code_descriptions
+from app.sections.indicator_domain.ijp.alert_center import render_ijp_alert_center
 from src.indicator_domain.application.ijp.dtos import IjpQuery
 from src.indicator_domain.application.ijp.errors import IjpDataAccessError
 from src.indicator_domain.application.ijp.service import IjpReportService
@@ -57,6 +58,7 @@ def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
 def render_ijp_dashboard(service: IjpReportService) -> None:
     """Render filters, gated query results, and explicit operational states."""
     start_time, end_time = service.get_reporting_window()
+    descriptions = get_ijp_code_descriptions('AA区')
 
     with st.container(border=True):
         product_column, line_column, code_column, pici_column = render_ijp_filter_columns()
@@ -84,7 +86,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             _retain_available_multiselect_values("ijp_codes", options["codes"])
             codes = st.multiselect(
                 "CODE", options=options["codes"], key="ijp_codes",
-                format_func=lambda code: f"{code}：{CODE_DESCRIPTIONS.get(code, '')}",
+                format_func=lambda code: format_ijp_code(code, descriptions),
             )
 
         with pici_column:
@@ -97,6 +99,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             key="ijp_search",
         )
 
+    render_ijp_alert_center(service, 'AA区')
     signature = _filter_signature(
         start_time,
         end_time,
@@ -172,7 +175,10 @@ def _run_query(
             picis=tuple(picis),
             detail_limit=DETAIL_LIMIT,
         )
-        ratios = service.get_period_ratios(query)
+        ratios = service.get_period_ratios(query).reindex(columns=[
+            'productcode', 'line', 'printer', 'rs_code', 'period',
+            'period_start', 'period_end', 'has_data', 'display_ratio',
+        ])
     except ValidationError as exc:
         message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
         st.error(str(message).removeprefix("Value error, "))

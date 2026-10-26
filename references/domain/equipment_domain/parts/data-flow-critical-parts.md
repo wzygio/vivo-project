@@ -1,6 +1,6 @@
 # 关键备件报表数据流与处理逻辑
 
-> 核对日期：2026-10-21。依据 `app/pages/关键备件报表.py` 及其调用的服务、适配器、计算器和当前配置整理。本文描述现有实现；本次未查询生产数据库或重新统计维护工作簿行数。
+> 核对日期：2026-10-26。依据 `app/pages/关键备件报表.py` 及其调用的服务、适配器、计算器和当前配置整理。本文描述现有实现；本次未查询生产数据库或重新统计维护工作簿行数。
 
 ## 1. 逻辑分类与执行关系
 
@@ -238,6 +238,20 @@ Core 仍为直接注入的旧格式源数据保留 `baseline_date` 空时间回�
 - `_prepare_parts_table()` 在传给 `st.dataframe` 前只选公开列。原始值、超规标记、修饰标记、匹配参数名、参数名称等内部字段不进入表格及原生导出。
 - 混合日期/数值的“测量值”和混合年限/数值的“寿命规格”转为文本以兼容 Arrow；纯数值列保留数值类型。测量时间按日期展示，站点按文本展示。
 
+### 5.3 自动超规预警与 Excel 快照
+
+2026-10-26 用户确认：自动预警当前使用进度严格大于 100% 的备件，并在 `resources/equipment_domain/parts/` 保存本地 Excel 快照。
+
+- 页面成功取得完整报表后，自动检查全部厂别、设备类型和备件类型，包括已追加的 CVD 行；无需额外查询操作，不受页面的手动筛选影响。备件预警反映当前状态，不是上一周历史统计。
+- Core `build_parts_alerts()` 以最终报表“使用进度”为唯一判据，数值为百分数（110 表示 110%）。严格大于 100 且为有限数才触发，恰好 100、缺失和无效值不触发；非空报表缺少使用进度列时显式失败。预警项状态统一显示为“超规”，不使用内部“是否超规”或源测量值回推。
+- 原有 >98% 更换与归零逻辑继续生效，因此当前正常生成的报表通常不会出现 >100% 项。零进度“已更换”不因内部原始超规标记产生预警；源快照和更换规则不变。
+- “超规备件预警中心”有异常时自动展开并展示公开明细，进度按数值百分比显示完整的 >100% 值；正常、无监控数据、预警计算或快照写入失败使用独立业务提示。预警写入失败不影响已有普通报表展示；报表加载失败时不计算预警、不发布快照。
+- Application `publish_parts_alerts()` 只依赖应用拥有的 `PartsAlertStore`；composition 注入 Infrastructure 的 `PartsAlertWorkbook`。复用已经加载的报表与既有 L2 缓存，预警不增加数据库读取；每次页面执行在缓存外重新判定并发布，确保刷新或配置路径更改后更新本地文件。
+- 快照路径的唯一配置来源为 `config/global.yaml` → `resources.equipment_domain.files.parts_alerts`，默认 `resources/equipment_domain/parts/parts_alerts.xlsx`；第一次成功发布时自动创建，无需预置业务记录。
+- `超规备件` sheet 保存最新完整超规清单，字段与公开明细一致；`__meta__` 保存报告日期、源最后更新日期、发布时间、超规条数和成功状态。它是最新结果快照，不是追加型历史台账，不作为取数失败时的当前数据回退。
+- 成功的空结果清除旧预警；写入使用 OS 文件锁、内存 Excel 核验和同目录临时文件原子替换，失败保留原文件并清理本次临时文件，保留工作簿其他 sheet。快照、预警表和原生下载均不包含原始测量值、内部超规/修饰标记、参数名或数据来源说明。
+- `tests/unit/test_parts_alerts.py` 覆盖阈值边界、无效值、内部字段剔除及发布失败；`tests/integration/test_parts_alert_workbook.py` 覆盖快照更新、空结果清除、其他 sheet 保留和原子替换失败；`tests/unit/app/pages/test_parts_page_alerts.py` 使用合成数据验证实际页面、完整范围、筛选独立性、普通模式字段边界与失败保留。
+
 ## 6. 配置、缓存与刷新
 
 ### 6.1 路径和运行参数
@@ -247,6 +261,7 @@ Core 仍为直接注入的旧格式源数据保留 `baseline_date` 空时间回�
 | `config/global.yaml` | `resources.equipment_domain.files.critical_parts_baseline` | `resources/equipment_domain/parts/critical_parts_baseline.csv` |
 | `config/global.yaml` | `resources.equipment_domain.files.baseline_source_excel` | `resources/equipment_domain/parts/供应商关键备件寿命管控清单-0604.xlsx` |
 | `config/global.yaml` | `resources.equipment_domain.files.cvd_parts` | `resources/equipment_domain/parts/供应商关键备件寿命管控清单-CVD.xlsx` |
+| `config/global.yaml` | `resources.equipment_domain.files.parts_alerts` | `resources/equipment_domain/parts/parts_alerts.xlsx` |
 | `config/global.yaml` | `application.cache_ttl_hours` | 12；同时控制真实、仿造快照和页面 L2 TTL |
 | `config/global.yaml` | `report_cutoff.latest_day_time` | `12:00:00`，含边界 |
 | `config/domain/equipment_domain.yaml` | `equipment.snapshot.directory` | `data/equipment_domain/parts` |

@@ -331,7 +331,7 @@ def build_spc_sheet_oos_alerts(
     sheet_oos_decoration_result: SheetOosDecorationResult | None,
     reference_date: date | pd.Timestamp | None = None,
 ) -> pd.DataFrame:
-    """Return last-ISO-week Sheet OOS alerts (flag=FALSE) as a Chinese display table."""
+    """Return last-week flag=FALSE alerts after independent parameter exclusions."""
     if sheet_oos_decoration_result is None:
         return pd.DataFrame(columns=SPC_OOS_ALERT_COLUMNS)
 
@@ -339,6 +339,7 @@ def build_spc_sheet_oos_alerts(
         sheet_oos_decoration_result.decoration_df,
         time_column="sheet_start_time",
         reference_date=reference_date,
+        excluded_param_name_contains=ConfigLoader.get_spc_sheet_oos_alert_param_exclusions(),
     )
     display_df = build_sheet_oos_alert_display(
         alerts_df,

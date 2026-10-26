@@ -207,14 +207,17 @@ resources:
       critical_parts_baseline: resources/equipment_domain/parts/critical_parts_baseline.csv
       cvd_parts: resources/equipment_domain/parts/供应商关键备件寿命管控清单-CVD.xlsx
       baseline_source_excel: resources/equipment_domain/parts/供应商关键备件寿命管控清单-0604.xlsx
+      parts_alerts: resources/equipment_domain/parts/parts_alerts.xlsx
   indicator_domain:
     dir: resources/indicator_domain
     files:
       qtime_oos_decoration: resources/indicator_domain/qtime/qtime_oos_decoration.xlsx
       qtime_spec: resources/indicator_domain/qtime/Q-Time规格表.xlsx
+      ijp_alerts: resources/indicator_domain/ijp/ijp_alerts.xlsx
   iqc_domain:
     dir: resources/iqc_domain
     files:
+      evaporation_alerts: resources/iqc_domain/eva_materials/evaporation_alerts.xlsx
       demo_inspection: resources/iqc_domain/shared/demo/inspection.json
       demo_lifetime: resources/iqc_domain/shared/demo/lifetime.json
       asset_iqc_1_xlsx_30f1a66b: resources/iqc_domain/eva_materials/decrypted_files/IQC来料检验特性数据明细报表 (1).xlsx

@@ -22,3 +22,7 @@ class PartsDataPort(Protocol):
     def refresh(self, baseline_path: str) -> pd.DataFrame:
         """Force the existing source refresh and return its usable snapshot."""
         ...
+
+
+class PartsAlertStore(Protocol):
+    def save(self, alerts: pd.DataFrame, *, as_of_date: str, last_update: str) -> None: ...

@@ -4,25 +4,27 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from src.indicator_domain.core.ijp_hole.summary import HOLE_DISPLAY_CODES
+from app.utils.ijp_labels import format_ijp_code, get_ijp_code_descriptions
 
-COLORS = ('#75DF99', '#64C8FA', '#FFDA83')
+COLORS = ('#B8BBC4', '#75DF99', '#64C8FA', '#FFDA83')
 
 
 def build_hole_figure(frame: pd.DataFrame, *, title: str) -> go.Figure:
     periods = list(dict.fromkeys(frame.period))
     figure = go.Figure()
+    descriptions = get_ijp_code_descriptions('孔区')
     for code, color in zip(HOLE_DISPLAY_CODES, COLORS, strict=True):
         selected = frame[frame.rs_code.eq(code)]
         if selected.empty:
             continue
         selected = selected.set_index('period').reindex(periods)
         figure.add_bar(
-            name=code, x=periods, y=selected.ratio,
+            name=format_ijp_code(code, descriptions), x=periods, y=selected.ratio,
             marker_color=color, text=selected.ratio, texttemplate='%{y:.1%}',
             textposition='auto',
             customdata=selected[['period_start', 'period_end']].to_numpy(),
             hovertemplate=('%{x}<br>%{customdata[0]} 至 %{customdata[1]}<br>'
-                           + code + '：%{y:.1%}<extra></extra>'),
+                           + format_ijp_code(code, descriptions) + '：%{y:.1%}<extra></extra>'),
         )
     for period in periods:
         if not frame[frame.period.eq(period)].has_data.any():

@@ -26,6 +26,20 @@ qtime:
 
 ijp:
   codes: [C3DM0, C3DM1, C3DM2, C3DM3, C3DM4, C3DM5]
+  code_descriptions:
+    C3DM0: Ink未到DAM1
+    C3DM1: Ink到DAM1
+    C3DM2: Ink溢出DAM1未到DAM2
+    C3DM3: Ink到DAM2
+    C3DM4: Ink溢出DAM2
+    C3DM5: 拍图异常（例如模糊/偏移等无法判定的情况）
   # 稳定随机显示修饰范围；实际统计值保留，不改写数据库。
   c3dm1_minimum: 0.90
   c3dm1_maximum: 0.92
+
+ijp_hole:
+  code_descriptions:
+    C3RA0: Ink未到DAM
+    C3RA1: Ink到DAM
+    C3RA2: Ink溢流出DAM
+    C3RA3: 溢流

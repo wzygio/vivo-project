@@ -8,16 +8,6 @@ from src.indicator_domain.core.ijp.printer_summary import (
     PRINTER_CODES, PRINTER_DIMENSIONS, SUMMARY_COLUMNS, summarize_printers,
 )
 
-CODE_DESCRIPTIONS = {
-    "C3DM0": "Ink未到DAM1",
-    "C3DM1": "Ink到DAM1",
-    "C3DM2": "Ink溢出DAM1未到DAM2",
-    "C3DM3": "Ink到DAM2",
-    "C3DM4": "Ink溢出DAM2",
-    "C3DM5": "拍图异常（例如模糊/偏移等无法判定的情况）",
-}
-
-
 def reporting_periods(today: date) -> list[tuple[str, date, date]]:
     month = today.replace(day=1)
     previous_end = month - timedelta(days=1)

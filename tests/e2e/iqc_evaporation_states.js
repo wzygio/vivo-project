@@ -18,11 +18,11 @@ async page => {
   if (/private SQL|connection details|Traceback|管理员|admin=true/.test(body)) throw new Error('Failure leaks internals');
   await page.goto('http://localhost:8518/');
   await page.getByRole('button', { name: '查询', exact: true }).click();
-  const table = page.getByTestId('stDataFrame');
+  const table = page.locator('.st-key-iqc_evap_manual_results').getByTestId('stDataFrame');
   await table.waitFor();
   await page.getByText('共 205 条记录 · 左右滚动查看全部测点和检验结果', { exact: true }).waitFor();
   if (await page.getByRole('spinbutton', { name: '页码', exact: true }).count()) throw new Error('Manual pagination remains');
-  await page.screenshot({ path: 'native-controlled-full-result.png', fullPage: true });
+  await page.screenshot({ path: 'output/test-results/iqc_evaporation/native-controlled-full-result.png', fullPage: true });
   const exportCsv = async () => {
     await page.evaluate(() => { window.iqcExport = null; });
     await table.hover();
@@ -56,7 +56,7 @@ async page => {
     await page.setViewportSize({width,height:900});
     await page.getByRole('heading', {name:'IQC-蒸镀材料',exact:true}).scrollIntoViewIfNeeded();
     if (await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)) throw new Error('Page overflows');
-    await page.screenshot({path:`product-filter-${width}.png`,fullPage:true});
+    await page.screenshot({path:`output/test-results/iqc_evaporation/product-filter-${width}.png`,fullPage:true});
   }
   await page.goto('http://localhost:8518/?scenario=empty');
   await page.getByRole('button', { name: '查询', exact: true }).click();

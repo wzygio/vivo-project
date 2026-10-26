@@ -58,6 +58,22 @@ REF = date(2026, 8, 25)
 
 
 class TestBuildSheetOosAlerts:
+    def test_parameter_alert_exclusions_are_literal_and_preserve_source(self):
+        df = pd.DataFrame([
+            _detail_row(sheet, False, "2026-08-20 10:00:00", param_name=parameter)
+            for sheet, parameter in [
+                ("PPA", "test_pPa_X"), ("DOT", "A.B"),
+                ("KEEP", "A0B"), ("MISSING", None),
+            ]
+        ])
+        original = df.copy(deep=True)
+        result = build_sheet_oos_alerts(
+            df, time_column="sheet_start_time", reference_date=REF,
+            excluded_param_name_contains=[" PPA ", "A.B", ""],
+        )
+        assert set(result["sheet_id"]) == {"KEEP", "MISSING"}
+        pd.testing.assert_frame_equal(df, original)
+
     def test_keeps_flag_false_rows_within_previous_week(self):
         df = pd.DataFrame([
             _detail_row("S1", False, "2026-08-20 10:00:00"),

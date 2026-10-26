@@ -31,7 +31,9 @@ def test_actual_hole_page_periods_filters_empty_and_failure(monkeypatch):
     app = AppTest.from_file(str(fixture)).run()
     app.selectbox(key='ijp_region').select('孔区').run()
     assert not app.exception and not app.get('plotly_chart')
-    assert app.multiselect(key='ijp_hole_codes').options == ['C3RA1', 'C3RA2', 'C3RA3']
+    assert app.multiselect(key='ijp_hole_codes').options == [
+        'C3RA0：Ink未到DAM', 'C3RA1：Ink到DAM', 'C3RA2：Ink溢流出DAM', 'C3RA3：溢流',
+    ]
     app.session_state['ijp_hole_view'] = 'Total'  # Older sessions cannot restore removed modes.
     app.button(key='ijp_hole_search').click().run()
     assert not app.exception and not app.radio
@@ -39,7 +41,7 @@ def test_actual_hole_page_periods_filters_empty_and_failure(monkeypatch):
     assert len(charts) == 2
     for chart in charts:
         spec = json.loads(chart.proto.spec)
-        assert [trace['name'] for trace in spec['data']] == ['C3RA1', 'C3RA2', 'C3RA3']
+        assert [trace['name'] for trace in spec['data']] == app.multiselect(key='ijp_hole_codes').options
         assert len(spec['data'][0]['x']) == 5
         assert spec['data'][0]['x'][:2] == ['2026-08（月）', '2026-09（月）']
         assert spec['layout']['barmode'] == 'stack'
@@ -47,13 +49,13 @@ def test_actual_hole_page_periods_filters_empty_and_failure(monkeypatch):
     app.multiselect(key='ijp_hole_codes').select('C3RA3').run()
     app.button(key='ijp_hole_search').click().run()
     assert not app.exception and len(app.get('plotly_chart')) == 2
-    assert all([t['name'] for t in json.loads(c.proto.spec)['data']] == ['C3RA3']
+    assert all([t['name'] for t in json.loads(c.proto.spec)['data']] == ['C3RA3：溢流']
                for c in app.get('plotly_chart'))
     app.multiselect(key='ijp_hole_codes').unselect('C3RA3').run()
     app.multiselect(key='ijp_hole_codes').select('C3RA2').run()
     assert not app.get('plotly_chart')
     app.button(key='ijp_hole_search').click().run()
-    assert all([t['name'] for t in json.loads(c.proto.spec)['data']] == ['C3RA2']
+    assert all([t['name'] for t in json.loads(c.proto.spec)['data']] == ['C3RA2：Ink溢流出DAM']
                for c in app.get('plotly_chart'))
     app.multiselect(key='ijp_hole_lines').select('3CEE02').run()
     app.button(key='ijp_hole_search').click().run()

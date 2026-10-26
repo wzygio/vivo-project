@@ -8,13 +8,15 @@ from app.components import page_header
 from app.manager.session_manager import SessionManager
 from src.equipment_domain.application.parts_service import PartsReportService, PartsReportViewModel
 from src.shared_kernel.infrastructure import db_handler
+from src.equipment_domain import composition
+from src.equipment_domain.infrastructure.parts_alert_workbook import PartsAlertWorkbook
 
 
 PAGE = Path(__file__).resolve().parents[4] / "app" / "pages" / "关键备件报表.py"
 
 
 @pytest.mark.parametrize("mode", ["normal", "empty", "failure"])
-def test_parts_page_cvd_public_states(monkeypatch, mode):
+def test_parts_page_cvd_public_states(monkeypatch, tmp_path, mode):
     frame = pd.DataFrame({
         "厂别": ["OLED", "Array", "ARRAY"], "设备类型": ["CVD", "PVD", "CVD"],
         "备件类型": ["Diffuser", "Target", "Backplate"],
@@ -37,6 +39,8 @@ def test_parts_page_cvd_public_states(monkeypatch, mode):
     monkeypatch.setattr(SessionManager, "get_active_config", staticmethod(lambda: {}))
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(page_header, "render_page_header", lambda *args, **kwargs: None)
+    monkeypatch.setattr(composition, 'create_parts_alert_store',
+                        lambda: PartsAlertWorkbook(tmp_path / 'parts_alerts.xlsx'))
 
     app = AppTest.from_file(str(PAGE)).run()
     assert not app.exception
@@ -44,7 +48,8 @@ def test_parts_page_cvd_public_states(monkeypatch, mode):
         assert app.error[0].value == "备件寿命数据暂时无法加载，请稍后重试。"
         assert not app.dataframe
     elif mode == "empty":
-        assert app.info[0].value == "当前筛选条件下没有数据。"
+        assert '当前筛选条件下没有数据。' in [message.value for message in app.info]
+        assert '当前暂无备件监控数据。' in [message.value for message in app.info]
         assert not app.dataframe
     else:
         assert "进度" not in app.dataframe[0].value

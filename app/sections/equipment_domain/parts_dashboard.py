@@ -8,13 +8,26 @@ import pandas as pd
 from datetime import date, datetime
 from numbers import Real
 from typing import List
+from src.equipment_domain.core.parts_alerts import PARTS_PUBLIC_COLUMNS
 
 
-PARTS_TABLE_COLUMN_ORDER = (
-    "厂别", "备件类型", "设备类型", "膜层", "制程",
-    "寿命规格", "站点", "机台号-腔室",
-    "测量值", "使用进度", "预警状态", "测量时间",
-)
+PARTS_TABLE_COLUMN_ORDER = PARTS_PUBLIC_COLUMNS
+
+
+def render_parts_alert_center(alerts: pd.DataFrame, *, has_source_data: bool) -> None:
+    with st.expander('超规备件预警中心（使用进度 > 100%）', expanded=not alerts.empty):
+        if not alerts.empty:
+            st.error(f'检测到 {len(alerts)} 项超规备件，请关注。')
+            public = _prepare_parts_table(alerts)
+            st.dataframe(public, hide_index=True, width='stretch', column_config={
+                '使用进度': st.column_config.NumberColumn('使用进度 (%)', format='%.2f%%'),
+                '测量时间': st.column_config.TextColumn('测量时间'),
+                '站点': st.column_config.TextColumn('站点'),
+            })
+        elif has_source_data:
+            st.success('当前未发现使用进度超过 100% 的备件。')
+        else:
+            st.info('当前暂无备件监控数据。')
 
 
 def _format_mixed_value(value: object, decimals: int = 2) -> str:

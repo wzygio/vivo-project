@@ -9,7 +9,7 @@ import pandas as pd
 
 from src.indicator_domain.core.ijp.period_summary import reporting_periods
 
-HOLE_CODES = ('C3RA1', 'C3RA2', 'C3RA3')
+HOLE_CODES = ('C3RA0', 'C3RA1', 'C3RA2', 'C3RA3')
 HOLE_DISPLAY_CODES = HOLE_CODES
 C3RA1_TARGET_MINIMUM = 0.905
 C3RA1_TARGET_MAXIMUM = 0.915
@@ -52,6 +52,10 @@ def summarize_hole_periods(
         totals = result.groupby(DIMENSIONS).code_num.transform('sum')
         result['has_data'] = totals.gt(0)
         result['ratio'] = (result.code_num / totals.where(totals.gt(0))).fillna(0)
+        original_zero = result.loc[result.rs_code.eq('C3RA0'), [*DIMENSIONS, 'ratio']].rename(
+            columns={'ratio': 'zero_ratio'},
+        )
+        result = result.merge(original_zero, on=DIMENSIONS, how='left')
         second = (
             result[result.rs_code.isin(('C3RA2', 'C3RA3'))]
             .groupby(DIMENSIONS, as_index=False).ratio.sum()
@@ -60,10 +64,13 @@ def summarize_hole_periods(
         result = result.merge(second, on=DIMENSIONS, how='left')
         caps = _period_ratio_caps(result, label, start, end)
         result = result.merge(caps, on=DIMENSIONS, how='left')
-        remaining = result.second_ratio.clip(upper=result.ratio_cap)
+        other_ratio = result.second_ratio + result.zero_ratio
+        remaining = other_ratio.clip(upper=result.ratio_cap)
+        scale = (remaining / other_ratio.where(other_ratio.gt(0))).fillna(0)
         result['ratio'] = 0.0
+        result.loc[result.has_data & result.rs_code.eq('C3RA0'), 'ratio'] = result.zero_ratio * scale
         result.loc[result.has_data & result.rs_code.eq('C3RA1'), 'ratio'] = 1 - remaining
-        result.loc[result.has_data & result.rs_code.eq('C3RA2'), 'ratio'] = remaining
+        result.loc[result.has_data & result.rs_code.eq('C3RA2'), 'ratio'] = result.second_ratio * scale
         result['period'], result['period_start'], result['period_end'] = label, str(start), str(end)
         visible = result.rs_code.isin(codes or HOLE_DISPLAY_CODES) & result.rs_code.isin(HOLE_DISPLAY_CODES)
         outputs.append(result.loc[visible, PERIOD_COLUMNS])

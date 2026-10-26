@@ -62,6 +62,9 @@ MODULE_GROUP_LABELS = {
     "ctq": "CTQ",
     "yield": "Yield",
     "qtime": "Q-Time",
+    'ijp': 'IJP',
+    'parts': '关键备件',
+    'iqc': 'IQC',
 }
 
 # 矩阵区筛选条（与下方 render_monitor_control_panel 相同观感，widget key 独立前缀）。
@@ -75,6 +78,9 @@ _MATRIX_TYPE_GROUP_MAP: dict[str, tuple[str, ...] | None] = {
     "AOI": ("aoi_rs", "aoi_tt"),
     "Yield": ("yield",),
     "Q-Time": ("qtime",),
+    'IJP': ('ijp',),
+    '关键备件': ('parts',),
+    'IQC': ('iqc',),
 }
 
 _MATRIX_BUTTON_KEY_PREFIX = "matrix_cell"
@@ -364,7 +370,12 @@ def _refresh_matrix(indicator: str, product: str, refresh_data: bool) -> None:
             from src.inline_domain.infrastructure.monitor.excel_alarm_store import clear_alarm_workbook_cache
             from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 
-            if indicator in ("spc_cpk_trend", "spc_cpm_trend"):
+            from app.sections.inline_domain.monitor.published_alert_snapshots import (
+                PUBLISHED_ALERT_ROWS, clear_published_snapshot,
+            )
+            if indicator in PUBLISHED_ALERT_ROWS:
+                clear_published_snapshot(indicator)
+            elif indicator in ("spc_cpk_trend", "spc_cpm_trend"):
                 clear_cpk_source_cache()
             elif indicator in ("yield_lot_oos", "yield_trend_fluctuation"):
                 from src.yield_domain.infrastructure.alert_result_workbooks import clear_yield_alert_workbook

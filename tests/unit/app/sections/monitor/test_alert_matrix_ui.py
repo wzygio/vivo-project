@@ -31,7 +31,8 @@ from app.sections.yield_domain import yield_dashboard
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "alert_matrix_app.py"
 
 PRODUCTS = ["M678", "Z571"]
-ROW_COUNT = 9  # 原八行 + CPM
+from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROWS
+ROW_COUNT = len(MATRIX_ROWS)
 
 
 def _new_app(nonce: str) -> AppTest:

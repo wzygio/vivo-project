@@ -9,6 +9,7 @@ class IjpSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     codes: tuple[str, ...] = PRINTER_CODES
+    code_descriptions: dict[str, str] = Field(default_factory=dict)
     c3dm1_minimum: float = Field(default=0.9, ge=0.9, le=1.0)
     c3dm1_maximum: float = Field(default=0.92, ge=0.9, le=1.0)
 
