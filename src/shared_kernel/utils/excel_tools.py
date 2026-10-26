@@ -211,6 +211,16 @@ class WorkbookWriteResult:
 _workbook_write_lock = threading.Lock()
 
 
+def read_workbook_sheets(xlsx_path: Path) -> dict[str, pd.DataFrame]:
+    """Read a complete bounded local workbook, including enterprise protection."""
+    if not xlsx_path.exists():
+        return {}
+    try:
+        return pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
+    except (BadZipFile, OSError, ValueError):
+        return _read_all_sheets_via_com(xlsx_path)
+
+
 def replace_workbook_sheets(
     xlsx_path: Path,
     sheets: Mapping[str, pd.DataFrame],

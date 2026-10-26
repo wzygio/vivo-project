@@ -36,6 +36,7 @@
 | Yield Lot/趋势预警结果文件、原报表发布、空结果/失败元数据、矩阵直读与全产品补齐 | [Yield 预警结果规则](domain/yield_domain/shared/rules-yield-alert-results.md) |
 | Mapping 坐标、矩阵修饰、随机分布与守恒 | [Mapping 算法](domain/yield_domain/mapping/algorithm-mapping.md) |
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/mwd_trend/algorithm-mwd-trend.md) |
+| 全产品半年／季度／月度不良率、独立过货数、Excel历史快照、Code筛选及季报Top5 | [年度趋势历史规则](domain/yield_domain/mwd_trend/rules-period-trend-history.md) |
 | Sheet / Lot 不良率、热点分配与覆盖率计算 | [Sheet / Lot 算法](domain/yield_domain/sheet_lot/algorithm-sheet-lot.md) |
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](design/shared_kernel/shared/overview-shared-kernel.md) |
 | QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)、[腔室数据库规则](domain/indicator_domain/qtime/rules-chamber-database.md) |

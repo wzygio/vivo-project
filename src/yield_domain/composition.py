@@ -9,6 +9,20 @@ def create_yield_data_port(db_manager=None, data_dir: Path = Path("data")) -> Yi
     return YieldReportDataAdapter(db_manager, data_dir)
 
 
+def build_period_trend_service(db_manager=None):
+    from src.shared_kernel.config import ConfigLoader
+    from src.yield_domain.application.period_trend import PeriodTrendService
+    from src.yield_domain.infrastructure.period_trend_source import PeriodTrendDatabaseSource
+    from src.yield_domain.infrastructure.period_trend_workbook import PeriodTrendWorkbook
+
+    modifier = ConfigLoader.get_domain_resource_path('yield_domain', 'yield_modifier_table')
+    history = ConfigLoader.get_domain_resource_path('yield_domain', 'period_trend_history')
+    policy = ConfigLoader.load_domain_config('yield_domain').get('period_trend', {})
+    return PeriodTrendService(PeriodTrendDatabaseSource(modifier, db_manager=db_manager),
+        PeriodTrendWorkbook(history), maintained_start=policy['maintained_rate_start'],
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds())
+
+
 def yield_alert_policy_signature(product: str) -> str:
     """Policy identity only; do not load Panel facts to validate saved alerts."""
     import hashlib

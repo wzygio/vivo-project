@@ -12,7 +12,7 @@ from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
 from src.shared_kernel.utils.excel_tools import WorkbookWriteResult
 
 
-def _write_legacy_workbook(path: Path) -> None:
+def _write_historical_product_workbook(path: Path) -> None:
     alarm = pd.DataFrame(
         [
             {
@@ -33,7 +33,7 @@ def _write_legacy_workbook(path: Path) -> None:
         ]
     )
     with pd.ExcelWriter(path) as writer:
-        alarm.to_excel(writer, sheet_name="报警率", index=False)
+        alarm.to_excel(writer, sheet_name="M626报警率", index=False)
         pd.DataFrame([{"marker": "keep-cpk"}]).to_excel(writer, sheet_name="CPK", index=False)
 
 
@@ -87,7 +87,7 @@ def _current_rows() -> pd.DataFrame:
 
 def test_upsert_updates_only_open_periods_and_preserves_other_sheet(tmp_path) -> None:
     path = tmp_path / "summary.xlsx"
-    _write_legacy_workbook(path)
+    _write_historical_product_workbook(path)
     store = MonitorSummaryWorkbookStore(path)
 
     result = store.upsert_current_periods(
@@ -119,6 +119,24 @@ def test_read_aggregates_product_alarm_sheets(tmp_path) -> None:
     assert len(result) == 10
 
 
+@pytest.mark.parametrize("with_product_sheets", [False, True])
+def test_retired_alarm_sheet_is_never_read(tmp_path, with_product_sheets) -> None:
+    path = tmp_path / "summary.xlsx"
+    if with_product_sheets:
+        _write_product_workbook(path)
+    with pd.ExcelWriter(
+        path, engine="openpyxl", mode="a" if path.exists() else "w"
+    ) as writer:
+        # Invalid old data must not be read, even if product sheets are absent.
+        pd.DataFrame({"retired": [123]}).to_excel(writer, sheet_name="报警率", index=False)
+    before = path.read_bytes()
+
+    result = MonitorSummaryWorkbookStore(path).read()
+
+    assert len(result) == (10 if with_product_sheets else 0)
+    assert path.read_bytes() == before
+
+
 def test_upsert_writes_each_product_to_its_own_alarm_sheet(tmp_path) -> None:
     path = tmp_path / "summary.xlsx"
     _write_product_workbook(path)
@@ -144,7 +162,7 @@ def test_upsert_writes_each_product_to_its_own_alarm_sheet(tmp_path) -> None:
 
 def test_upsert_rejects_closed_period_update(tmp_path) -> None:
     path = tmp_path / "summary.xlsx"
-    _write_legacy_workbook(path)
+    _write_historical_product_workbook(path)
     store = MonitorSummaryWorkbookStore(path)
     closed = _current_rows().iloc[[0]].assign(
         周期类型="季度", 时间标签="2026-Q2", 显示标签="Q2"
@@ -158,7 +176,7 @@ def test_week_replacement_persists_contributions_and_is_idempotent(tmp_path) -> 
     path = tmp_path / "summary.xlsx"
     rows = _current_rows()
     rows["OOS报警片数"] = [100, 80, 50, 2]
-    rows.to_excel(path, sheet_name="报警率", index=False)
+    rows.to_excel(path, sheet_name="M626报警率", index=False)
     store = MonitorSummaryWorkbookStore(path)
     alerts = pd.DataFrame([
         {"prod_code": "M626", "factory": "ARRAY", "item_id": str(i),
@@ -201,13 +219,13 @@ def test_identical_upsert_does_not_rewrite_or_change_signature(
     assert store.source_signature() == signature
 
 
-def test_legacy_initialization_rounds_half_up_but_preserves_missing_history(tmp_path):
+def test_historical_product_counts_round_half_up_and_preserve_missing_history(tmp_path):
     path = tmp_path / "summary.xlsx"
-    _write_legacy_workbook(path)
-    rows = pd.read_excel(path, sheet_name="报警率")
+    _write_historical_product_workbook(path)
+    rows = pd.read_excel(path, sheet_name="M626报警率")
     rows.loc[0, "OOS报警率"] = 0.025
     rows.loc[1, "OOS报警率"] = None
-    rows.to_excel(path, sheet_name="报警率", index=False)
+    rows.to_excel(path, sheet_name="M626报警率", index=False)
     result = MonitorSummaryWorkbookStore(path).read()
     assert result.iloc[0]["OOS报警片数"] == 3
     assert pd.isna(result.iloc[1]["OOS报警片数"])

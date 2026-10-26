@@ -42,6 +42,12 @@ class MWDTrendProcessor:
     """Facade used by the Yield application service."""
 
     @staticmethod
+    def create_period_monthly_rates(counts, total_panels, month, multipliers=None):
+        """Historical period board: fixed physical input, distinct Panel counts."""
+        from src.yield_domain.core.mwd_trend.period_trend import rates_from_counts
+        return rates_from_counts(counts, total_panels, month, multipliers)
+
+    @staticmethod
     def create_mwd_trend_data(
         panel_details_df: pd.DataFrame,
         config: AppConfig,

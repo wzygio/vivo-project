@@ -3,3 +3,6 @@ dashboard:
   # 月均不良率图像门槛，两处共用：手动 Code 筛选、自动预警缺陷图像。
   # 使用小数比例：0.0001 = 0.01%；自动图像还必须命中预警。
   code_monthly_rate_threshold: 0.0001
+
+period_trend:
+  maintained_rate_start: '2026-06'

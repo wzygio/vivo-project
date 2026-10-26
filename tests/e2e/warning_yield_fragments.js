@@ -9,7 +9,7 @@ async page => {
   await visible("Matrix runs: 1");
   await button("all_product_yield_query").click();
   await visible("Yield loads: 1");
-  await page.waitForFunction(() => document.querySelectorAll(".js-plotly-plot").length === 3);
+  await page.waitForFunction(() => document.querySelectorAll(".js-plotly-plot").length === 1);
   const before = await page.locator("body").innerText();
   const initialFullRuns = before.match(/Full runs: (\d+)/)[1];
   await button("matrix_cell_spc_cpk_trend_M678").click();

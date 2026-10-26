@@ -47,7 +47,7 @@ def test_missing_cpk_sheet_is_initialized_and_zero_completion_is_idempotent(tmp_
 def test_date_exclusion_zero_values_are_written_to_workbook(tmp_path):
     path = tmp_path / "summary.xlsx"
     row = _cpk_row("2026-W40", "W40").assign(周期类型="周度", 厂别="ALL")
-    row.to_excel(path, sheet_name="CPK", index=False)
+    row.to_excel(path, sheet_name="M626 CPK", index=False)
     store = CpkSummaryWorkbookStore(path)
     records, _ = store.refresh_latest(
         pd.DataFrame(), products=["M626"], factories=["ARRAY", "OLED", "TP"],
@@ -62,12 +62,27 @@ def test_date_exclusion_zero_values_are_written_to_workbook(tmp_path):
 
 def test_malformed_existing_cpk_sheet_is_not_treated_as_missing_baseline(tmp_path):
     path = tmp_path / "summary.xlsx"
-    pd.DataFrame({"unexpected": [123]}).to_excel(path, sheet_name="CPK", index=False)
+    pd.DataFrame({"unexpected": [123]}).to_excel(path, sheet_name="M626 CPK", index=False)
     before = path.read_bytes()
     store = CpkSummaryWorkbookStore(path)
     with pytest.raises(MonitorSummaryWorkbookError, match="CPK 汇总格式错误"):
         store.refresh_latest(pd.DataFrame(), products=["M626"], factories=["ARRAY"],
                              factory_key="ALL", as_of=pd.Timestamp("2026-10-09"))
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("with_product_sheets", [False, True])
+def test_retired_cpk_sheet_is_never_read(tmp_path, with_product_sheets):
+    path = tmp_path / "summary.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame({"retired": [123]}).to_excel(writer, sheet_name="CPK", index=False)
+        if with_product_sheets:
+            _cpk_row().to_excel(writer, sheet_name="M626 CPK", index=False)
+    before = path.read_bytes()
+
+    result = CpkSummaryWorkbookStore(path).read()
+
+    assert len(result) == (1 if with_product_sheets else 0)
     assert path.read_bytes() == before
 
 

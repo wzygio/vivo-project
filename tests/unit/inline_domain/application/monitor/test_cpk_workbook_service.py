@@ -13,7 +13,8 @@ def test_factory_selection_changes_detail_only_and_excluded_summary_is_shown_as_
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: rule)
     source = normalize_latest_cpk(pd.DataFrame([
         dict(prod_code="M626", factory=factory, step_id="1", param_name="CD",
-             period_type="week", period_label="2026-W40", cpk_corrected=1.2, flag=False)
+             period_type="week", period_label="2026-W40", cpk_corrected=1.2, flag=False,
+             period_start="2026-09-28", period_end="2026-09-30")
         for factory in ["ARRAY", "OLED"]
     ]), "M626")
     store = CpkSummaryWorkbookStore(tmp_path / "summary.xlsx")
@@ -44,10 +45,11 @@ def test_summary_counts_all_factories_and_exclusion_preserves_existing_year_quar
         for kind, label in [("年度", "2026"), ("季度", "2026-Q4"),
                             ("月度", "2026-10"), ("周度", "2026-W40"), ("周度", "2026-W39")]
     ])
-    baseline.to_excel(path, sheet_name="CPK", index=False)
+    baseline.to_excel(path, sheet_name="M626 CPK", index=False)
     source = normalize_latest_cpk(pd.DataFrame([
         dict(prod_code="M626", factory=factory, step_id="1", param_name="CD",
-             period_type="week", period_label="2026-W40", cpk_corrected=1.2, flag=False)
+             period_type="week", period_label="2026-W40", cpk_corrected=1.2, flag=False,
+             period_start="2026-09-28", period_end="2026-09-30")
         for factory in ["ARRAY", "OLED"]
     ]), "M626")
     class Latest:

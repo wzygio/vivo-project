@@ -17,43 +17,15 @@ from src.inline_domain.infrastructure.monitor.summary_workbook_store import (
     MonitorSummaryWorkbookStore,
     _interprocess_lock,
 )
-from src.shared_kernel.utils.excel_tools import list_workbook_sheet_names, read_workbook_sheet
 
 
 class CpkSummaryWorkbookStore(MonitorSummaryWorkbookStore):
     """Update CPK under the same file lock as the alarm-rate sheet."""
 
     sheet_name = "CPK"
-    legacy_sheet_name = "CPK"
     sheet_suffix = " CPK"
     columns = CPK_SUMMARY_COLUMNS
     metric = "cpk"
-
-    def read(self) -> pd.DataFrame:
-        """A missing CPK sheet has no baselines; malformed existing sheets still fail."""
-        if not self.workbook_path.exists():
-            return self._normalize(pd.DataFrame())
-        try:
-            names = list_workbook_sheet_names(self.workbook_path)
-            if names is None:
-                raise MonitorSummaryWorkbookError(f"无法枚举 {self.metric.upper()} 汇总工作簿的 sheet")
-            product_sheets = sorted(
-                name for name in names
-                if name != self.legacy_sheet_name and name.endswith(self.sheet_suffix)
-            )
-            if product_sheets:
-                source = pd.concat(
-                    [self._read_product_sheet(name) for name in product_sheets], ignore_index=True,
-                )
-            elif self.legacy_sheet_name in names:
-                source = read_workbook_sheet(self.workbook_path, self.legacy_sheet_name)
-            else:
-                source = pd.DataFrame()
-            return self._normalize(source)
-        except MonitorSummaryWorkbookError:
-            raise
-        except Exception as exc:
-            raise MonitorSummaryWorkbookError(f"无法读取 {self.metric.upper()} 汇总工作簿：{exc}") from exc
 
     def refresh_latest(
         self, detail: pd.DataFrame, *, products: Iterable[str],

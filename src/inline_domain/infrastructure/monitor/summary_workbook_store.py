@@ -60,7 +60,6 @@ class MonitorSummaryWorkbookStore:
 
     _update_lock = threading.Lock()
     sheet_name = SUMMARY_SHEET
-    legacy_sheet_name = SUMMARY_SHEET
     sheet_suffix = ALARM_SHEET_SUFFIX
     columns = MONITOR_SUMMARY_COLUMNS + WEEK_TRACKING_COLUMNS
 
@@ -87,13 +86,8 @@ class MonitorSummaryWorkbookStore:
             product_sheets = sorted(
                 name
                 for name in sheet_names
-                if name != self.legacy_sheet_name and name.endswith(self.sheet_suffix)
+                if name != self.sheet_name and name.endswith(self.sheet_suffix)
             )
-            if not product_sheets:
-                source = read_workbook_sheet(
-                    self._workbook_path, self.legacy_sheet_name
-                )
-                return self._normalize(source)
             frames = [self._read_product_sheet(name) for name in product_sheets]
             source = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         except Exception as exc:

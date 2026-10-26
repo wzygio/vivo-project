@@ -42,6 +42,7 @@ from src.inline_domain.application.monitor.oos_monitor_service import (
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import render_cpk_monitor_section
 from app.sections.inline_domain.monitor.cpm_monitor_dashboard import render_cpm_monitor_section
 from app.sections.inline_domain.monitor.aoi_rs_monitor_dashboard import render_aoi_rs_monitor_section
+from app.sections.yield_domain.all_product_board import render_all_product_yield_board
 from src.inline_domain.composition import (
     build_monitor_summary_workbook_service,
     build_ooc_history_service,
@@ -221,3 +222,5 @@ with st.expander("AOI_RS 周期密度", expanded=True):
     render_aoi_rs_monitor_section(
         build_aoi_rs_monitor_service(), ConfigLoader.get_enabled_products(),
     )
+
+render_all_product_yield_board()

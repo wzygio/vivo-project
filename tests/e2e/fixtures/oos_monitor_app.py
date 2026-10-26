@@ -104,8 +104,8 @@ if not summary_path.exists():
     cpk_previous.update({"时间标签": f"{iso.year}-W{iso.week:02d}", "显示标签": f"W{iso.week}"})
     cpk_rows.append(cpk_previous)
     with pd.ExcelWriter(summary_path) as writer:
-        pd.DataFrame(rows).to_excel(writer, sheet_name="报警率", index=False)
-        pd.DataFrame(cpk_rows).to_excel(writer, sheet_name="CPK", index=False)
+        pd.DataFrame(rows).to_excel(writer, sheet_name="M626报警率", index=False)
+        pd.DataFrame(cpk_rows).to_excel(writer, sheet_name="M626 CPK", index=False)
         pd.DataFrame(cpk_rows).rename(columns={
             "CPK总项目数": "CPM总项目数", "Cpk≥1.33达标率": "Cpm≥1.33达标率",
         }).to_excel(writer, sheet_name="CPM", index=False)

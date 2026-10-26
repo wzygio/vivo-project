@@ -98,9 +98,11 @@ PNL 指标规格的版本/产品收严离线分析工具已于 2026-09-24 按维
 汇总表以查询截止日构建当年、截至当前季度、
 最近三个月和当前 ISO 周的重叠列，行固定为过货量、OOC、SOOS=0、OOS 和 Total；
 OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示。
-报警率与 CPK 共用的持久化工作簿路径由 `inline_domain.yaml` 的
-`resources.files.monitor_summary_workbook` 注入；工作簿使用 `<产品>报警率` 与
+报警率与 CPK 共用的持久化工作簿路径由 `config/global.yaml` 的
+`resources.inline_domain.files.monitor_summary_workbook` 注入；工作簿使用 `<产品>报警率` 与
 `<产品> CPK` 分页，基础设施读取器聚合各产品页后再交给应用服务筛选。
+2026-10-23 起，统一 `报警率`、`CPK` sheet 及其读取回退已移除；即使产品分表缺失，
+也不会读取旧统一页。缺失产品基线沿用现有的补零初始化规则，已有产品分表不变。
 
 ### 4.2 `spc/spc_service.py` — SPC 能力报表
 

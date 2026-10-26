@@ -153,6 +153,7 @@ resources:
       override_rates: resources/yield_domain/sheet_lot/override_rates.xlsx
       static_warning_lines: resources/yield_domain/shared/入库不良率规格.xlsx
       yield_modifier_table: resources/yield_domain/mwd_trend/入库良率修饰表.xlsx
+      period_trend_history: resources/yield_domain/mwd_trend/yield_period_history.xlsx
       lot_oos_results: resources/yield_domain/sheet_lot/yield_lot_oos_results.xlsx
       trend_alert_results: resources/yield_domain/mwd_trend/yield_trend_alert_results.xlsx
       lot_oos_results_backup: resources/yield_domain/sheet_lot/yield_lot_oos_results.xlsx.bak

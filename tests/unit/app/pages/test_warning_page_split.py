@@ -6,6 +6,7 @@ from streamlit.testing.v1 import AppTest
 
 from app.manager.session_manager import SessionManager
 from app.sections.inline_domain.monitor import alert_matrix, alert_matrix_snapshot
+from app.sections.yield_domain import all_product_board
 from app.utils.app_setup import AppSetup
 from src.inline_domain import composition
 from src.inline_domain.application.monitor.oos_monitor_service import OosMonitorService
@@ -18,23 +19,26 @@ PAGES = Path(__file__).parents[4] / "app/pages"
 def isolated_pages(monkeypatch):
     monkeypatch.setattr(AppSetup, "initialize_app", lambda: None)
     monkeypatch.setattr(SessionManager, "AVAILABLE_PRODUCTS", ["M626"])
+    monkeypatch.setattr(all_product_board.ConfigLoader, "get_enabled_products", lambda: ["M626"])
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)
 
 
-def test_summary_route_shows_four_boards_without_loading_matrix(isolated_pages, monkeypatch):
+def test_summary_route_shows_five_boards_without_loading_matrix(isolated_pages, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError("Summary route must not load the matrix or query before clicking")
 
     monkeypatch.setattr(alert_matrix, "render_alert_matrix_board", forbidden)
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", forbidden)
     monkeypatch.setattr(OosMonitorService, "build_dashboard", forbidden)
+    monkeypatch.setattr(all_product_board, "load_product_period_trends", forbidden)
     app = AppTest.from_file(str(PAGES / "超规预警看板.py")).run()
     assert not app.exception
-    assert [item.value for item in app.subheader] == ["⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板", "📋 AOI_RS监控看板"]
+    assert [item.value for item in app.subheader] == ["⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板", "📋 AOI_RS监控看板", "全产品良率看板"]
     assert app.button(key="btn_monitor_query_submit")
     assert app.button(key="cpk_monitor_query_submit")
     assert app.button(key="cpm_monitor_query_submit")
     assert app.button(key="aoi_rs_monitor_query_submit")
+    assert app.button(key="all_product_yield_query")
     assert not any(button.key == "btn_load_alert_matrix" for button in app.button)
 
 
@@ -45,10 +49,12 @@ def test_matrix_route_has_no_summary_service_dependency(isolated_pages, monkeypa
     monkeypatch.setattr(composition, "build_cpk_monitor_service", forbidden)
     monkeypatch.setattr(composition, "build_cpm_monitor_service", forbidden)
     monkeypatch.setattr(composition, "build_oos_history_service", forbidden)
+    monkeypatch.setattr(all_product_board, "render_all_product_yield_board", forbidden)
     app = AppTest.from_file(str(PAGES / "自动预警看板.py")).run()
     assert not app.exception
-    assert [item.value for item in app.subheader] == ["🚦 全指标预警看板", "全产品良率看板"]
+    assert [item.value for item in app.subheader] == ["🚦 全指标预警看板"]
     assert app.button(key="btn_load_alert_matrix")
+    assert not any(button.key == "all_product_yield_query" for button in app.button)
     assert not any(button.key in {"btn_monitor_query_submit", "cpk_monitor_query_submit", "cpm_monitor_query_submit"} for button in app.button)
 
 

@@ -1,4 +1,4 @@
-"""Real warning page with a slow synthetic detail loader and no external I/O."""
+"""Matrix/Yield fragment isolation harness with synthetic data and no external I/O."""
 
 import runpy
 import sys
@@ -22,6 +22,8 @@ from app.utils import step_labels
 from app.utils.app_setup import AppSetup
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
+sys.path.insert(0, str(Path(__file__).parent))
+from period_trend_payload import period_payload
 
 
 def initialize():
@@ -54,10 +56,7 @@ def slow_detail(product, reference_date):
 def yield_data(product):
     st.session_state["fixture_yield_loads"] = st.session_state.get("fixture_yield_loads", 0) + 1
     st.caption(f"Yield loads: {st.session_state.fixture_yield_loads}")
-    frame = pd.DataFrame({"time_period": ["2026-09"], "defect_group": ["Array_Line"],
-                          "defect_rate": [.01], "total_panels": [1000]})
-    return {"data_health": {"status": "fresh"},
-            "trends": {period: frame for period in ("monthly", "weekly", "daily")}}
+    return period_payload()
 
 
 # This fixture runs in its own Streamlit process; patches must also persist for
@@ -73,6 +72,8 @@ compliance_manager.load_matrix_config = lambda: None
 compliance_manager.apply_matrix_compliance = lambda payload, config: payload
 alert_matrix_detail._spc_detail_signature = lambda product, signature: signature
 alert_matrix_detail.build_default_detail_loaders = lambda db=None: {"spc_cpk_trend": slow_detail}
-all_product_board.load_product_group_trends = yield_data
+all_product_board.load_product_period_trends = yield_data
 
 runpy.run_path(str(ROOT / "app/pages/自动预警看板.py"), run_name="__main__")
+# Keep both fragments in this isolation harness after Yield moved to the summary page.
+all_product_board.render_all_product_yield_board()

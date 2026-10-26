@@ -28,7 +28,6 @@ from app.sections.inline_domain.monitor.alert_matrix import (
     render_matrix_refresh_controls,
 )
 from app.sections.inline_domain.monitor.alert_matrix_snapshot import has_daily_matrix_snapshot
-from app.sections.yield_domain.all_product_board import render_all_product_yield_board
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 st.set_page_config(page_title="自动预警看板", layout="wide", initial_sidebar_state="collapsed")
@@ -76,7 +75,7 @@ def _render_matrix_action_button() -> None:
 
 @st.fragment
 def render_alert_matrix_panel() -> None:
-    """Keep matrix controls and slow details in one sibling of the Yield fragment."""
+    """Keep matrix controls and slow details in one independently rerun section."""
     today_label = pd.Timestamp.today().date().isoformat()
     if (
         not st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY)
@@ -106,4 +105,3 @@ def render_alert_matrix_panel() -> None:
 
 
 render_alert_matrix_panel()
-render_all_product_yield_board()
