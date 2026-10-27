@@ -24,6 +24,10 @@ from src.shared_kernel.infrastructure import db_handler
 
 @pytest.mark.parametrize("queried", [True, False])
 def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch, queried) -> None:
+    from app.sections.shared import alert_results
+    monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
+        "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(), "evaluation": pd.DataFrame(),
+    })
     events: list[str] = []
     loaded_queries: list[AoiTtQueryConfig] = []
     loaded_signatures: list[str] = []

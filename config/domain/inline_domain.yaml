@@ -74,5 +74,4 @@ aoi_tt:
     generate_from_ratios: true
     # 各 Sheet 相对规格比例的最大扰动幅度；0.10 表示 ±10%，随后归一化。
     ratio_jitter: 0.10
-
 # 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）

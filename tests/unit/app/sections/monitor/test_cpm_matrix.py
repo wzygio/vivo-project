@@ -10,6 +10,8 @@ from streamlit.testing.v1 import AppTest
 from app.sections.inline_domain.monitor import alert_matrix_cache as cache
 from app.sections.inline_domain.monitor import alert_matrix_detail as detail
 from app.sections.inline_domain.monitor import alert_matrix_service as service
+from app.sections.shared import alert_results
+from src.inline_domain.infrastructure.monitor import excel_alarm_store
 from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
 from src.shared_kernel.config import ConfigLoader
 
@@ -75,13 +77,27 @@ def test_cpm_matrix_and_detail_share_saved_workbook_without_loading_spc(tmp_path
     original = ConfigLoader.get_domain_resource_path
     monkeypatch.setattr(ConfigLoader, "get_domain_resource_path", lambda domain, key, default=None:
                         path if key == "spc_cpk_cpm_decoration" else original(domain, key, default))
+    excel_alarm_store.read_cached_alarm_workbook.clear()
+    alert_results._cached_alert_result.clear()
+    parses = []
+    original_read = pd.read_excel
+    def tracked_read(*args, **kwargs):
+        parses.append(args[0])
+        return original_read(*args, **kwargs)
+    monkeypatch.setattr(pd, "read_excel", tracked_read)
     monkeypatch.setattr(detail, "_load_spc_view", lambda *args: pytest.fail("matrix must not load SPC"))
     context = cache.build_default_matrix_context(["P1"], reference_date=REFERENCE)
     assert service.MATRIX_ROW_MAP["spc_cpk_trend"].evaluator("P1", context)["state"] == "ok"
     assert service.MATRIX_ROW_MAP["spc_cpm_trend"].evaluator("P1", context)["state"] == "alert"
-    assert cache.build_cell_source_signature("spc_cpm_trend", "P1") == cache.build_cell_source_signature("spc_cpk_trend", "P1")
+    cpm_signature = cache.build_cell_source_signature("spc_cpm_trend", "P1", REFERENCE)
+    cpk_signature = cache.build_cell_source_signature("spc_cpk_trend", "P1", REFERENCE)
+    assert cpm_signature != cpk_signature  # Different metrics retain independent selections.
+    assert cpm_signature == alert_results.alert_result_signature("spc_cpm_trend", "P1", REFERENCE)
+    assert len(parses) == 1  # Their underlying workbook parsing is nevertheless shared.
     # Empty CPM results never load chart data; the CPK sheet must not be used instead.
-    monkeypatch.setattr(detail, "cpm_latest_store", lambda: SimpleNamespace(read_product=lambda product: None))
+    monkeypatch.setattr(alert_results, "read_alert_result", lambda key, *_: {
+        "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(),
+    })
     bundle = detail.build_default_detail_loaders()["spc_cpm_trend"]("P1", REFERENCE)
     assert bundle["alerts_df"].empty
 
@@ -95,7 +111,11 @@ def test_cpm_detail_renders_metric_and_only_alert_indicator_charts(monkeypatch):
         "main_eqp_id": "EQ1", "chamber_id": "CH1",
     } for factory in ("ARRAY", "TP")
       for i, day in enumerate(("2025-12-10", "2025-12-30", "2026-01-02"))])
-    monkeypatch.setattr(detail, "cpm_latest_store", lambda: SimpleNamespace(read_product=lambda product: frame))
+    alerts = service.build_latest_capability_alerts(frame, REFERENCE, metric="cpm")
+    def saved(key, product, reference):
+        assert (key, product, reference) == ("spc_cpm_trend", "P1", REFERENCE)
+        return {"state": "alert", "alerts": alerts.copy(), "records": frame.copy()}
+    monkeypatch.setattr(alert_results, "read_alert_result", saved)
     monkeypatch.setattr(detail, "_load_spc_view", lambda *args: SimpleNamespace(
         period_capability_df=frame, sheet_features_df=raw, raw_measurements_df=raw))
     monkeypatch.setattr(detail, "_report_end_date", lambda: REFERENCE)

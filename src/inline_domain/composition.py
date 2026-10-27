@@ -55,6 +55,17 @@ def build_decoration_port() -> DecorationPort:
     return ExcelDecorationStore()
 
 
+def build_trend_alert_results(scope: str):
+    """Bind independent evaluation publication and file-only display reads."""
+    from src.inline_domain.application.monitor.trend_alert_results import TrendAlertResults, trend_policy_signature
+    from src.inline_domain.infrastructure.monitor.trend_alert_workbook import TrendAlertWorkbook
+
+    path = ConfigLoader.get_domain_resource_path("inline_domain", f"{scope}_trend_alerts")
+    return TrendAlertResults(TrendAlertWorkbook(path), scope=scope,
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
+        policy=trend_policy_signature(ConfigLoader.get_inline_data_exclusion()))
+
+
 def build_oos_history_service(resource_dir: Path | None = None):
     """Assemble the shared OOS use case at the composition boundary."""
     resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")

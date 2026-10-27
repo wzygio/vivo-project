@@ -53,6 +53,7 @@ def test_default_inline_reads_each_workbook_once_for_all_products(tmp_path, monk
     for path in paths.values():
         pd.DataFrame().to_excel(path)
     monkeypatch.setattr(cache, "scope_decoration_path", lambda scope: paths[scope])
+    monkeypatch.setattr("src.inline_domain.infrastructure.shared.resource_paths.scope_decoration_path", lambda scope: paths[scope])
     monkeypatch.setattr("src.inline_domain.infrastructure.shared.resource_paths.decision_workbook_paths", lambda alarm_type: paths)
     monkeypatch.setattr(matrix, "load_sheet_oos_decoration", lambda *a, **k: pytest.fail("per-product Excel read"))
     calls = []
@@ -68,7 +69,8 @@ def test_default_inline_reads_each_workbook_once_for_all_products(tmp_path, monk
         context = cache.build_default_matrix_context(products, reference_date=date.today())
         for scope in paths:
             for product in products:
-                assert matrix.MATRIX_ROW_MAP[f"{scope}_sheet_oos"].evaluator(product, context)["state"] == "no_data"
+                # A successfully read empty product result is an explicit zero.
+                assert matrix.MATRIX_ROW_MAP[f"{scope}_sheet_oos"].evaluator(product, context)["state"] == "ok"
         assert len(calls) == 4
         import os
         target = paths["spc"]

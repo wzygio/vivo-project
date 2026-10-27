@@ -105,6 +105,8 @@ The [Domain Submodule Architecture](#domain-submodule-architecture) owns the cap
 
 ## Dependency Direction and Composition
 
+Automatic alert **display** is assembled in `app/sections/shared/alert_results.py`: report pages and matrix status/details consume the same published-result readers, selectors and native-payload cache. Domain producers and optional plot data retain their existing services; display reads never run producers or raw-data fallback. Inline `monitor` owns independent AOI evaluation publication protocols/adapters, and Indicator `qtime` owns its separate per-shop alert result workbook, without changing raw L1 or decision-ledger ownership. See [published alert display design](references/design/inline_domain/shared/architecture-published-alert-display.md) and [ADR-0036](docs/ADR/0036-shared-published-alert-display.md).
+
 The diagram shows code dependencies, not a sequential data pipeline. **Core does not depend on Infrastructure.**
 
 ```text

@@ -8,8 +8,8 @@
   ``alert_matrix_service.build_alert_matrix_signature`` 对
   ``build_default_signature_components`` 的分量做确定性摘要；
 - ``build_cell_source_signature``：仅采集本指标输入，不混入其他指标 revision；
-- ``build_default_matrix_context``：生产依赖装配（Inline/CPK/CPM 结果工作簿、
-  Yield 结果只读入口、Q-Time 全产品监控、IJP/备件/IQC 已发布快照）。所有服务对象经下划线前缀
+- ``build_default_matrix_context``：只注入各报表共用的已发布预警显示服务。
+  状态不加载原始监控；独立图像助手仍保留原服务入口。所有服务对象经下划线前缀
   参数或闭包进入缓存函数，不参与哈希。
 """
 
@@ -54,6 +54,7 @@ from src.inline_domain.core.monitor.monitor_param_classifier import (
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from app.sections.shared.alert_results import read_alert_result, alert_result_signature
 from app.sections.inline_domain.monitor.published_alert_snapshots import (
     PUBLISHED_ALERT_ROWS, read_published_alerts, published_alert_signature,
 )
@@ -98,46 +99,18 @@ def _file_signature(path: Path) -> str:
 
 
 def build_cell_source_signature(row_key: str, product: str, reference_date: date | None = None) -> str:
-    """Only the selected indicator's real input signatures; no board/global revision."""
-    if row_key in PUBLISHED_ALERT_ROWS:
-        return published_alert_signature(row_key, product, reference_date or date.today())
-    if row_key in ("spc_cpk_trend", "spc_cpm_trend"):
-        return cpk_latest_store().source_signature() + ":" + repr(ConfigLoader.get_inline_data_exclusion())
-    if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
-        scope = row_key.removesuffix("_sheet_oos")
-        return ":".join([
-            PARAM_CLASSIFICATION_SIGNATURE,
-            _file_signature(scope_decoration_path(scope)),
-            repr(ConfigLoader.get_inline_data_exclusion()),
-        ])
-    if row_key.startswith("yield_"):
-        from src.yield_domain.composition import build_yield_alert_results
-
-        kind = "lot" if row_key == "yield_lot_oos" else "trend"
-        return build_yield_alert_results().source_signature(product, kind, reference_date or date.today())
-    path = ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx")
-    source_dir = ConfigLoader.get_project_root() / "data" / "indicator_domain" / "qtime"
-    return build_alert_matrix_signature(products=(product,), components={
-        "decision": _file_signature(Path(path)),
-        "sources": [_file_signature(source_dir / f"qtime_source_{shop.lower()}.parquet") for shop in QTIME_SHOPS],
-        "settings": ConfigLoader.load_domain_config("indicator_domain").get("qtime", {}),
-        "data_policy": ConfigLoader.get_data_forward_policy().signature,
-    })
+    """Use the exact display policy/file signature used by each report consumer."""
+    return alert_result_signature(row_key, product, reference_date or date.today())
 
 
 def load_all_product_qtime_monitoring(
     db_manager: DatabaseManager,
     reference_date: date,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """全产品 Q-Time (details, alerts)：3 个 shop 各查一次（全站点）后 union。
+    """Optional chart input from the original full-shop monitoring service.
 
-    统一走 ``get_cached_shop_monitoring`` 公共入口：矩阵 payload（按 prodcode
-    拆分）、点击详情（按产品过滤）与 Q-Time 页面（页内内存过滤）命中同一组
-    (shop, 全站点, 全产品) L2 缓存条目，不会重复打库。厂别无站点时
-    ``QTimeQuery`` 校验上抛 ValidationError，维持既有 skip 语义。
-
-    alerts 帧在 union 时按 shop 打标（``assign`` 返回新帧，不污染共享缓存
-    对象）：ARRAY/OLED/TP 本身即厂别，供矩阵单元格 ``alert_factories`` 提取。
+    This helper is never used by production matrix state or saved alert reads.
+    Charts may request its independently cached full-shop frames on demand.
     """
     service = build_qtime_service(db_manager)
     stat = get_qtime_decision_file_stat(service.decoration_path)
@@ -182,43 +155,8 @@ def build_default_matrix_context(
     *,
     reference_date: date,
 ) -> AlertMatrixContext:
-    """生产装配：构建带真实数据源的 AlertMatrixContext（在缓存 miss 时调用一次）。"""
-    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
-    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
-    from src.yield_domain.composition import build_yield_alert_results
-
-    saved_yield_results = build_yield_alert_results()
-    inline_reader = ExcelAlarmReader(ExcelAlarmStore({
-        scope: scope_decoration_path(scope) for scope in MATRIX_INLINE_SCOPES
-    }))
-    inline_resource_dir = ConfigLoader.get_domain_resource_dir("inline_domain")
-
-    def spc_cpk_loader(prod_code: str) -> pd.DataFrame | None:
-        return cpk_latest_store().read_product(prod_code)
-
-    def spc_cpm_loader(prod_code: str) -> pd.DataFrame | None:
-        return cpm_latest_store().read_product(prod_code)
-
-    def yield_result_loader(prod_code: str, kind: str):
-        return saved_yield_results.read(prod_code, kind, reference_date)
-
-    def oos_product_loader(scope: str, product: str, resource_dir: Path):
-        return inline_reader.read_product(scope, product)
-
-    def qtime_monitoring_loader() -> tuple[pd.DataFrame, pd.DataFrame]:
-        """全产品 Q-Time 监控（共享入口，与点击详情同一 L2 缓存）。"""
-        return load_all_product_qtime_monitoring(DatabaseManager(), reference_date)
-
-    return AlertMatrixContext(
-        reference_date=reference_date,
-        inline_resource_dir=inline_resource_dir,
-        spc_cpk_loader=spc_cpk_loader,
-        spc_cpm_loader=spc_cpm_loader,
-        yield_result_loader=yield_result_loader,
-        oos_product_loader=oos_product_loader,
-        qtime_monitoring_loader=qtime_monitoring_loader,
-        published_alert_loader=read_published_alerts,
-    )
+    """Inject the same file-only display consumer used by report pages."""
+    return AlertMatrixContext(reference_date=reference_date, alert_result_loader=read_alert_result)
 
 
 @st.cache_data(

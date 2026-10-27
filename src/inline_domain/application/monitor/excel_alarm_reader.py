@@ -46,10 +46,22 @@ class ExcelAlarmReader:
         return ":".join(parts)
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:
-        payload = self._store.read(scope, prod_code)
-        if payload is None:
+        frame = self.read_detail(scope, prod_code)
+        if frame is None:
             empty = self._projector.project_detail(scope, pd.DataFrame())
             return OosProductRead(empty, empty.copy(), "missing", None)
+        projected = self._projector.project_detail(scope, frame)
+        if scope == "aoi_rs" and "chart_kind" in frame:
+            projected["chart_kind"] = frame["chart_kind"].reindex(projected.index).to_numpy()
+        mask = projected["flag"].map(self._projector._is_false_flag)
+        alerts = projected.loc[mask.astype(bool)].reset_index(drop=True)
+        return OosProductRead(projected, alerts, "excel", frame.attrs.get("refreshed_at"))
+
+    def read_detail(self, scope: str, prod_code: str) -> pd.DataFrame | None:
+        """Read validated effective product rows while preserving source keys."""
+        payload = self._store.read(scope, prod_code)
+        if payload is None:
+            return None
         frame = payload["frame"].copy()
         frame.columns = [str(column).strip() for column in frame.columns]
         if "Flag" in frame.columns and "flag" not in frame.columns:
@@ -59,14 +71,8 @@ class ExcelAlarmReader:
             # Old generated sheets may contain non-TT facts with null spec types.
             # Apply current ownership on a copy without rewriting decisions.
             frame = frame.loc[frame["tt_name"].map(is_aoi_tt_parameter)].copy()
-        projected = self._projector.project_detail(scope, frame)
-        if scope == "aoi_rs" and "chart_kind" in frame:
-            projected["chart_kind"] = frame["chart_kind"].reindex(projected.index).to_numpy()
-        mask = projected["flag"].map(self._projector._is_false_flag)
-        alerts = projected.loc[mask.astype(bool)].reset_index(drop=True)
-        return OosProductRead(
-            projected, alerts, "excel", self._refresh_time(payload["refresh_meta"], scope, prod_code)
-        )
+        frame.attrs["refreshed_at"] = self._refresh_time(payload["refresh_meta"], scope, prod_code)
+        return frame
 
     def _validate(self, scope: str, product: str, frame: pd.DataFrame) -> None:
         if scope not in {"spc", "ctq", "aoi_tt", "aoi_rs"}:

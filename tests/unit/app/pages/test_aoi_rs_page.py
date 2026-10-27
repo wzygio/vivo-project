@@ -24,6 +24,10 @@ from src.shared_kernel.infrastructure import db_handler
 
 @pytest.mark.parametrize("queried", [True, False])
 def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch, queried) -> None:
+    from app.sections.shared import alert_results
+    monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
+        "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(), "evaluation": pd.DataFrame(),
+    })
     from src.inline_domain.application.shared import decision_signature
     monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *_args: "test-decisions")
     monkeypatch.setattr(aoi_rs_dashboard, "load_cached_aoi_rs_sheet_oos_decoration", lambda *_args: None)

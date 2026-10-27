@@ -38,6 +38,7 @@ from app.sections.inline_domain.shared import (
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
     filter_report_by_alert_keys,
+    render_sheet_oos_alert_center,
 )
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.aoi_rs.aoi_rs_decoration import (
@@ -70,6 +71,53 @@ AOI_RS_ALERT_KEY_MAP = {"厂别": "factory", "站点": "step_id", "RS Code": "rs
 # 过货帧无 rs_code，仅按 厂别+站点 过滤
 AOI_RS_ALERT_PASS_THROUGH_KEY_MAP = {"厂别": "factory", "站点": "step_id"}
 AOI_RS_ALERT_CHART_KIND_LABELS = {"lot": "By Lot", "sheet": "By Sheet"}
+
+
+def render_saved_aoi_rs_alerts(
+    product: str, *, reference_date: date, report: object | None = None,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Read published Sheet and trend results independently of chart availability."""
+    from app.sections.shared.alert_results import read_alert_result
+    from app.sections.inline_domain.aoi_rs.trend_alerts import render_aoi_rs_trend_alerts
+    from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+
+    if report is not None and hasattr(report, "trend_evaluation_df"):
+        from src.inline_domain.composition import build_trend_alert_results
+        try:
+            build_trend_alert_results("aoi_rs").publish(product, reference_date, report.trend_evaluation_df)
+        except Exception:
+            logger.exception("AOI RS trend result publication failed")
+            st.warning("趋势预警更新失败，请稍后重试。")
+    result = read_alert_result("aoi_rs_sheet_oos", product, reference_date)
+    if result["state"] == "error":
+        st.error("单片异常预警数据暂不可用，请稍后重试。")
+    else:
+        iso = previous_iso_week_range(reference_date)[0].isocalendar()
+        render_sheet_oos_alert_center(
+            result["alerts"], title=f"单片异常预警中心（上一周 {iso.year}-W{iso.week:02d}）",
+            has_source_data=result["state"] != "no_data", step_desc_map=step_desc_map,
+        )
+        if report is not None:
+            try:
+                render_aoi_rs_sheet_oos_alert_indicator_sections(
+                    alerts_df=result["alerts"], rs_details_df=report.rs_details_df,
+                    pass_through_df=report.pass_through_df, spec_df=report.spec_df,
+                    indicators_df=report.indicators_df, lot_points_df=report.lot_points_df,
+                    sheet_points_df=report.sheet_points_df, end_date=reference_date,
+                    step_desc_map=step_desc_map,
+                )
+            except Exception:
+                logger.exception("Optional AOI RS Sheet alert charts unavailable")
+                st.warning("单片异常预警图像暂不可用。")
+    trend = read_alert_result("aoi_rs_trend", product, reference_date)
+    if trend["state"] == "error":
+        st.error("趋势预警数据暂不可用，请稍后重试。")
+    else:
+        render_aoi_rs_trend_alerts(
+            report, reference_date=reference_date, step_desc_map=step_desc_map,
+            evaluation_df=trend.get("evaluation", trend["records"]),
+        )
 
 
 def get_default_aoi_rs_start_date(end_date: date) -> date:

@@ -51,7 +51,7 @@ def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
 
-    assert app.subheader[0].value == "北极星QTime监控"
+    assert app.subheader[0].value == "重点站点QTime监控"
     assert [widget.key for widget in app.multiselect] == [
         "qtime_products",
         "qtime_step_descriptions",
@@ -156,7 +156,8 @@ def test_station_expander_wraps_four_products_into_two_rows():
     # The inline test already runs with the repository on sys.path.
     script = script[script.index("from app.sections.indicator_domain.qtime.dashboard"):]
     app = AppTest.from_string(
-        "from pathlib import Path\nimport pandas as pd\nimport streamlit as st\n" + script
+        "from pathlib import Path\nfrom datetime import date, timedelta\n"
+        "from unittest.mock import patch\nimport pandas as pd\nimport streamlit as st\n" + script
     ).run()
     app.button(key="qtime_search").click().run()
     assert not app.exception

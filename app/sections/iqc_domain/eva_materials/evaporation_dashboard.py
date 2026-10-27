@@ -17,6 +17,7 @@ from src.iqc_domain.core.eva_materials.evaporation import (
     PRODUCT_SCOPE_RULE_VERSION, REPORT_COLUMNS, RESULT_RULE_VERSION,
 )
 from src.shared_kernel.config import ConfigLoader
+from app.sections.shared.alert_results import read_alert_result
 
 logger = logging.getLogger(__name__)
 
@@ -73,27 +74,38 @@ def _render_automatic_alerts(
     start, end = previous_week_window(today)
     week = start.isocalendar()
     title = f'蒸镀材料超规预警中心（上一周 {week.year}-W{week.week:02d}）'
+    update_failed = False
     try:
         signature = (
             start, end, ConfigLoader.get_data_forward_policy().signature,
             ConfigLoader.get_report_cutoff_policy().signature, enabled, enabled, work_orders,
         )
         frame = _load_report(service, signature)
-        alerts = publish_evaporation_alerts(
+        publish_evaporation_alerts(
             frame, store=alert_store if alert_store is not None else build_evaporation_alert_store(),
             start=start, end=end, products=enabled,
         )
     except Exception as exc:
         logger.error('IQC_ALERT_UPDATE_UNAVAILABLE exception_type=%s', type(exc).__name__)
-        with st.expander(title, expanded=True):
-            st.error('蒸镀材料预警数据暂时无法更新，请稍后重试。')
-        return
-    with st.expander(title, expanded=not alerts.empty):
+        update_failed = True
+    _render_saved_automatic_alerts(today, title, start, end, update_failed=update_failed)
+
+
+def _render_saved_automatic_alerts(
+    today: date, title: str, start: date, end: date, *, update_failed: bool = False,
+) -> None:
+    result = read_alert_result('iqc_evaporation_ng', '', today)
+    alerts = result['alerts']
+    with st.expander(title, expanded=not alerts.empty or update_failed or result['state'] == 'error'):
         st.caption(f'检验日期：{start:%Y-%m-%d} 至 {end:%Y-%m-%d} · 全部已启用产品')
-        if not alerts.empty:
+        if update_failed:
+            st.warning('蒸镀材料预警数据暂时无法更新；以下状态以已保存结果为准。')
+        if result['state'] == 'error':
+            st.error(result['message'])
+        elif not alerts.empty:
             st.error(f'检测到 {len(alerts)} 条蒸镀材料超规预警（IQC或COA结果为NG），请关注。')
             _render_report_table(alerts, height=400)
-        elif frame.empty:
+        elif result['state'] == 'no_data':
             st.info('上一周暂无蒸镀材料检验数据。')
         else:
             st.success('上一周未发现 IQC 或 COA 结果为 NG 的记录。')
@@ -114,6 +126,8 @@ def render_evaporation_dashboard(
         logger.error("IQC_REPORT_CONFIGURATION_UNAVAILABLE exception_type=%s", type(exc).__name__)
         st.session_state.pop("iqc_evap_active", None)
         st.error("蒸镀材料检验筛选条件暂时无法加载，请稍后重试。")
+        start, end = previous_week_window(today)
+        _render_saved_automatic_alerts(today, '蒸镀材料超规预警中心', start, end)
         return
     if not enabled:
         st.session_state.pop("iqc_evap_active", None)

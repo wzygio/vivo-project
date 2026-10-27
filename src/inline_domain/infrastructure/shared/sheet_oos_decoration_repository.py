@@ -165,6 +165,7 @@ def load_refresh_meta(
         "product_revision": text_value("product_revision"),
         "decision_signature": text_value("decision_signature"),
         "detail_row_count": row.get("detail_row_count"),
+        "detail_signature": text_value("detail_signature"),
     }
 
 
@@ -205,6 +206,9 @@ def persist_sheet_oos_decoration_outcome(
         if value is not None and str(value).strip()
     }))
     merged = release_exempt_parameter_flags(merged, parameter_column, exemptions)
+    detail_signature = hashlib.sha256(
+        merged.to_json(orient="split", date_format="iso", index=False).encode("utf-8")
+    ).hexdigest()
     effective_now = now or datetime.now()
     effective_revision = "" if product_revision is None else str(product_revision)
     effective_signature = decision_signature or compute_decision_signature(decisions, keys)
@@ -226,6 +230,11 @@ def persist_sheet_oos_decoration_outcome(
     )
     if force or scope is None:
         refresh = RefreshDecision(True, refresh.reason)
+    elif (not refresh.should_write and meta.get("detail_signature")
+          and meta["detail_signature"] != detail_signature):
+        # Displays now read the committed file. Never return fresh memory while
+        # leaving changed result rows hidden behind an unchanged input revision.
+        refresh = RefreshDecision(True, "detail_changed")
     if refresh.should_write:
         sheets: dict[str, pd.DataFrame] = {sheet: merged}
         if sheet_names is None or decision_sheet not in sheet_names:
@@ -238,6 +247,7 @@ def persist_sheet_oos_decoration_outcome(
                 effective_revision,
                 effective_signature,
                 len(merged),
+                detail_signature=detail_signature,
             )
             existing_meta = read_workbook_sheet(path, REFRESH_META_SHEET_NAME)
             sheets[REFRESH_META_SHEET_NAME] = _upsert_refresh_meta_row(existing_meta, meta_row)

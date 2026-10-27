@@ -54,6 +54,9 @@ def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path)
     assert publisher.read("M678", "lot", day).status in {"no_data", "uncovered"}
     assert publisher.read("M678", "trend", day).status == "no_data"
     assert app.error
+    assert [item.label for item in app.expander[:2]] == [
+        'Lot 超规预警中心（最近过货日向前30天）', '趋势预警中心（月／周）',
+    ]
     assert all("internal source failure" not in item.value for item in app.error)
     versions = {path.name: path.stat().st_mtime_ns for path in tmp_path.glob("*.xlsx")}
     app.run()

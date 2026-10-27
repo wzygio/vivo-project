@@ -13,6 +13,7 @@ from src.indicator_domain.application.qtime.decoration_service import (
     QTimeDecisionUploadResult,
     parse_qtime_decision_upload,
 )
+from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
 from src.indicator_domain.application.qtime.dtos import (
     QTimeQuery,
     QTimeStepOption,
@@ -44,6 +45,7 @@ class QTimeMonitoringResult:
     decisions: pd.DataFrame
     decoration_path: Path | None
     data_health: DataHealth = field(default_factory=lambda: make_data_health("unknown"))
+    alert_publication_error: str = ""
 
 
 class QTimeReportService:
@@ -54,11 +56,18 @@ class QTimeReportService:
         *,
         spec_overrides: dict[str, float] | None = None,
         constrain_display: bool = False,
+        alert_results: QTimeAlertResults | None = None,
     ) -> None:
         self._data_port = data_port
         self._decoration_port = decoration_port
         self._spec_overrides = dict(spec_overrides or {})
         self._constrain_display = constrain_display
+        self._alert_results = alert_results
+
+    def publish_alert_results(self, result: QTimeMonitoringResult, shop: Shop, as_of: date) -> None:
+        """Publish only the full-shop projection produced by the shared cached use case."""
+        if self._alert_results is not None:
+            self._alert_results.publish(shop, result.details, result.alerts, result.data_health, as_of)
 
     @property
     def decoration_path(self) -> Path | None:

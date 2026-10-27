@@ -39,9 +39,9 @@ AppSetup.initialize_app()
 # 矩阵为全产品视图，不参与 Header 单产品筛选（D3）；筛选条（监控类型/产品
 # 型号/厂别）在 Expander 内常驻渲染，未加载时也可先选条件；默认只渲染
 # 「加载预警矩阵」按钮（无 info 文案，门控语义由按钮承担，UI 优化轮次），
-# 点击后读取状态缓存并按当前筛选切片；Inline / Yield 缺缓存时只读已发布
-# 预警文件，Q-Time 沿用共享监控管路。IJP、关键备件、IQC 蒸镀材料的
-# 状态与详情均只读本地 Excel 快照；其他详情图像仅在选中红灯后加载。
+# 点击后读取状态缓存并按当前筛选切片；所有指标复用各报表的已发布结果
+# 预警显示入口，缺文件不回退原始分析。IJP、备件、IQC、Q-Time详情先读
+# 保存结果；图像继续独立按需加载，不作为预警表可用的前提。
 # 已加载状态存 session_state，普通 rerun 保持可见；刷新只影响本看板。
 # --------------------------------------------------------------------------
 ALERT_MATRIX_LOADED_STATE_KEY = "alert_matrix_board_loaded"
@@ -99,7 +99,7 @@ def render_alert_matrix_panel() -> None:
         if st.session_state.get(ALERT_MATRIX_LOADED_STATE_KEY):
             selected_row = str(st.session_state.get(MATRIX_SELECTION_STATE_KEY, '')).partition('|')[0]
             # Only legacy detail charts need station descriptions from the DB.
-            db_manager = DatabaseManager() if selected_row and selected_row not in PUBLISHED_ALERT_ROWS else None
+            db_manager = DatabaseManager() if selected_row and selected_row not in (*PUBLISHED_ALERT_ROWS, "qtime_sheet_oos") else None
             render_alert_matrix_board(
                 db_manager=db_manager,
                 step_desc_map=get_cached_step_description_map(db_manager) if db_manager is not None else None,

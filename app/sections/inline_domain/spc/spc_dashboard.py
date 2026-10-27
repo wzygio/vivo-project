@@ -37,6 +37,7 @@ from app.sections.inline_domain.shared import (
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
     filter_report_by_alert_keys,
+    render_sheet_oos_alert_center,
 )
 from app.utils.step_labels import format_step_label
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
@@ -209,35 +210,39 @@ def _render_capability_alert_section(
         if not has_alerts:
             return
 
-        alert_capability_df = filter_spc_report_by_alerts(period_capability_df, alerts_df)
-        alert_sheet_features_df = filter_spc_report_by_alerts(sheet_features_df, alerts_df)
-        alert_raw_measurements_df = filter_spc_report_by_alerts(raw_measurements_df, alerts_df)
-        if alert_sheet_features_df.empty:
-            st.warning("预警指标暂无可绘制的 Sheet 数据。")
-            return
+        try:
+            alert_capability_df = filter_spc_report_by_alerts(period_capability_df, alerts_df)
+            alert_sheet_features_df = filter_spc_report_by_alerts(sheet_features_df, alerts_df)
+            alert_raw_measurements_df = filter_spc_report_by_alerts(raw_measurements_df, alerts_df)
+            if alert_sheet_features_df.empty:
+                st.warning("预警指标暂无可绘制的 Sheet 数据。")
+                return
 
-        indicator_count = (
-            alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
-            if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
-            else 0
-        )
-        st.markdown(f"**🚨 {metric_label}自动预警指标图像（{indicator_count} 个指标）**")
-        st.caption(
-            f"以下图像由 {metric_label} 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。"
-        )
-        render_spc_indicator_sections(
-            period_capability_df=alert_capability_df,
-            sheet_features_df=alert_sheet_features_df,
-            raw_measurements_df=alert_raw_measurements_df,
-            period_box_source=period_box_source,
-            memo_signature=_alert_charts_signature(
-                alerts_df, alert_sheet_features_df, base=signature_base
-            ),
-            memo_state_key=memo_state_key,
-            chart_key_prefix=chart_key_prefix,
-            step_desc_map=step_desc_map,
-            reference_date=reference_date,
-        )
+            indicator_count = (
+                alert_sheet_features_df.groupby(["factory", "step_id", "param_name"]).ngroups
+                if {"factory", "step_id", "param_name"}.issubset(alert_sheet_features_df.columns)
+                else 0
+            )
+            st.markdown(f"**🚨 {metric_label}自动预警指标图像（{indicator_count} 个指标）**")
+            st.caption(
+                f"以下图像由 {metric_label} 预警自动匹配，无需通过筛选器查询；每个指标保留独立的子折叠面板。"
+            )
+            render_spc_indicator_sections(
+                period_capability_df=alert_capability_df,
+                sheet_features_df=alert_sheet_features_df,
+                raw_measurements_df=alert_raw_measurements_df,
+                period_box_source=period_box_source,
+                memo_signature=_alert_charts_signature(
+                    alerts_df, alert_sheet_features_df, base=signature_base
+                ),
+                memo_state_key=memo_state_key,
+                chart_key_prefix=chart_key_prefix,
+                step_desc_map=step_desc_map,
+                reference_date=reference_date,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Optional %s alert charts unavailable", metric_label)
+            st.warning(f"{metric_label} 预警图像暂不可用。")
 
 
 def render_cpk_alert_section(
@@ -349,6 +354,49 @@ def build_spc_sheet_oos_alerts(
     if not display_df.empty and "超规时间" in display_df.columns:
         display_df["超规时间"] = display_df["超规时间"].astype(str)
     return display_df
+
+
+def render_saved_spc_alerts(
+    product: str, *, reference_date: date, report: object | None = None,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Read the same saved results as the matrix; report frames are optional charts."""
+    from app.sections.shared.alert_results import read_alert_result
+    from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+
+    frames = {
+        name: getattr(report, name, pd.DataFrame())
+        for name in ("period_capability_df", "sheet_features_df", "raw_measurements_df")
+    }
+    for metric, renderer in (("cpk", render_cpk_alert_section), ("cpm", render_cpm_alert_section)):
+        result = read_alert_result(f"spc_{metric}_trend", product, reference_date)
+        if result["state"] == "error":
+            st.error(f"{metric.upper()} 预警数据暂不可用，请稍后重试。")
+            continue
+        renderer(
+            result["alerts"], has_capability_data=result["state"] != "no_data",
+            **frames, period_box_source=ConfigLoader.get_spc_period_box_source(),
+            step_desc_map=step_desc_map, reference_date=reference_date,
+        )
+    result = read_alert_result("spc_sheet_oos", product, reference_date)
+    if result["state"] == "error":
+        st.error("单片异常预警数据暂不可用，请稍后重试。")
+        return
+    iso = previous_iso_week_range(reference_date)[0].isocalendar()
+    render_sheet_oos_alert_center(
+        result["alerts"], title=f"单片异常预警中心（上一周 {iso.year}-W{iso.week:02d}）",
+        has_source_data=result["state"] != "no_data", step_desc_map=step_desc_map,
+    )
+    if report is not None:
+        try:
+            render_sheet_oos_alert_indicator_sections(
+                alerts_df=result["alerts"], **frames,
+                period_box_source=ConfigLoader.get_spc_period_box_source(),
+                step_desc_map=step_desc_map, reference_date=reference_date,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Optional SPC Sheet alert charts unavailable")
+            st.warning("单片异常预警图像暂不可用。")
 
 
 def get_available_factories(report_df: pd.DataFrame) -> list[str]:

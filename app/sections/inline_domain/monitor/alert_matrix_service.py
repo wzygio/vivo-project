@@ -87,6 +87,7 @@ class AlertMatrixContext:
     spc_cpm_loader: Callable[[str], pd.DataFrame | None] | None = None
     yield_result_loader: Callable[[str, str], Any] | None = None
     published_alert_loader: Callable[[str, str, date], dict] | None = None
+    alert_result_loader: Callable[[str, str, date], dict] | None = None
     _qtime_monitoring_memo: Any = field(default=_UNSET, repr=False)
 
     def get_qtime_monitoring(self) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -215,6 +216,7 @@ def _sheet_oos_evaluator(
             decoration_df,
             time_column=projected_time_column,
             reference_date=context.reference_date,
+            excluded_param_name_contains=(ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() if scope == "spc" else ()),
         )
         return _alerts_cell(
             row_key,
@@ -410,7 +412,12 @@ def _guarded_evaluator(
 
     def evaluate(prod_code: str, context: AlertMatrixContext) -> dict[str, str]:
         try:
-            cell = evaluator(prod_code, context)
+            if context.alert_result_loader is not None:
+                result = context.alert_result_loader(row_key, prod_code, context.reference_date)
+                cell = _cell(row_key, prod_code, result["state"], result.get("message", ""),
+                             result.get("alert_factories", ()))
+            else:
+                cell = evaluator(prod_code, context)
         except Exception as exc:  # noqa: BLE001 - 单元格级降级是契约要求
             logger.warning(
                 "[alert-matrix] cell %s 求值失败: %s",
@@ -546,7 +553,7 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
                    _published_evaluator('ijp_aa_oos'), supports_factory_filter=False),
     AlertMatrixRow('ijp_hole_oos', 'IJP 孔区超规', 'ijp', _PREVIOUS_WEEK_SCOPE,
                    _published_evaluator('ijp_hole_oos'), supports_factory_filter=False),
-    AlertMatrixRow('parts_oos', '关键备件超规（全厂共用）', 'parts', '当前备件状态（全厂共用）',
+    AlertMatrixRow('parts_oos', '关键备件超规', 'parts', '当前备件状态',
                    _published_evaluator('parts_oos')),
     AlertMatrixRow('iqc_evaporation_ng', 'IQC 蒸镀材料NG', 'iqc', _PREVIOUS_WEEK_SCOPE,
                    _published_evaluator('iqc_evaporation_ng'), supports_factory_filter=False),

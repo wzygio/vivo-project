@@ -15,6 +15,8 @@ TTL 读 ``config/global.yaml`` 的 ``application.cache_ttl_hours``。
 from __future__ import annotations
 
 from datetime import date
+from dataclasses import replace
+import logging
 from pathlib import Path
 
 import streamlit as st
@@ -30,6 +32,7 @@ from src.shared_kernel.config import ConfigLoader
 MISSING_DECISION_FILE_STAT: tuple[int, int] = (-1, -1)
 # Invalidate results computed before support for microsecond source timekeys.
 MONITORING_CACHE_VERSION = 5
+logger = logging.getLogger(__name__)
 
 
 def get_qtime_decision_file_stat(
@@ -125,16 +128,16 @@ def get_cached_shop_monitoring(
 ) -> QTimeMonitoringResult:
     """厂别级公共入口：该厂别全部站点 + 全产品（products=()）的一次计算。
 
-    矩阵（全产品聚合）与 Q-Time 页面（页内内存过滤）共用此入口，命中
-    ``_cached_monitoring`` 同一组 (shop, 全站点, 全产品) 缓存条目，
-    不新增缓存键维度。无站点（QTimeQuery min_length=1）或取站点失败时
-    错误上抛，由调用方降级（页面 error / 矩阵单元格 ⬜）。
+    生产流程命中 ``_cached_monitoring`` 同一组 (shop, 全站点, 全产品)
+    缓存条目，并将完整厂别投影发布为独立 Excel 结果；页面和矩阵的预警
+    消费只读已发布文件，不因缓存缺失触发本函数。无站点
+    （QTimeQuery min_length=1）或取站点失败时错误上抛，由生产调用方降级。
     """
     options = _service.get_filter_options(shop)
     step_descriptions = tuple(
         option.step_desc for option in options["step_options"]
     )
-    return get_cached_monitoring(
+    result = get_cached_monitoring(
         _service,
         shop=shop,
         step_descriptions=step_descriptions,
@@ -143,6 +146,14 @@ def get_cached_shop_monitoring(
         decision_mtime_ns=decision_mtime_ns,
         decision_size=decision_size,
     )
+    publisher = getattr(_service, "publish_alert_results", None)
+    if publisher is not None:
+        try:
+            publisher(result, shop, as_of or date.today())
+        except Exception:
+            logger.exception("Q-Time saved alert publication failed for shop=%s", shop)
+            return replace(result, alert_publication_error="Q-Time 预警结果更新失败，请稍后重试。")
+    return result
 
 
 def get_qtime_cached_funcs() -> list:

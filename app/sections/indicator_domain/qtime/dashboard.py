@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 
 import pandas as pd
 from pydantic import ValidationError
@@ -76,6 +76,11 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             options = service.get_filter_options(shop)
         except QTimeDataAccessError as exc:
             st.error(str(exc))
+            previous_paths = st.session_state.get("qtime_step_descriptions", ())
+            render_saved_qtime_alerts(
+                selected_products, shop=shop,
+                step_descriptions=tuple(option.step_desc for option in previous_paths),
+            )
             return
 
         with path_column:
@@ -105,6 +110,12 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             selected_products=selected_products,
             signature=signature,
         )
+
+    # Published warnings remain available independently of query/chart state.
+    render_saved_qtime_alerts(
+        selected_products, shop=shop,
+        step_descriptions=tuple(option.step_desc for option in step_options),
+    )
 
     stored_signature = st.session_state.get(SIGNATURE_STATE_KEY)
     monitoring = st.session_state.get(RESULT_STATE_KEY)
@@ -142,11 +153,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         # as well as the charts without rerunning the independent chamber report.
         st.rerun(scope="fragment")
 
-    if is_current or not monitoring.alerts.empty:
-        render_qtime_alert_center(
-            monitoring.alerts,
-            total_lots=details["lot_id"].nunique(),
-        )
     for index, step_option in enumerate(step_options):
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
         with st.expander(step_option.label, expanded=True):
@@ -165,6 +171,42 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
                             width="stretch",
                             key=f"qtime_lot_chart_{index}_{product}",
                         )
+
+
+def render_saved_qtime_alerts(
+    products: list[str], *, shop: Shop,
+    step_descriptions: tuple[str, ...] = (), reference_date: date | None = None,
+) -> None:
+    """Share the saved consumer with the matrix, retaining this report's scope."""
+    from app.sections.shared.alert_results import read_alert_result
+
+    reference = reference_date or date.today()
+    if not step_descriptions:
+        st.info("请选择站点以查看已发布的 Q-Time 预警。")
+        return
+    selected = products or list(SessionManager.AVAILABLE_PRODUCTS)
+    frames: list[pd.DataFrame] = []
+    failures = False
+    total_lots = 0
+    start = (reference.replace(day=1) - timedelta(days=1)).replace(day=1)
+    for product in selected:
+        result = read_alert_result(
+            "qtime_sheet_oos", product, reference, shops=(shop,),
+            step_descriptions=step_descriptions, start_date=start.isoformat(),
+            end_date=reference.isoformat(),
+        )
+        if result["state"] == "error":
+            failures = True
+            st.warning(f"{product}：Q-Time 预警结果暂不可用，请更新对应报表后重试。")
+            continue
+        records = result["records"]
+        if not records.empty:
+            frames.append(records)
+        total_lots += int(result.get("metadata", {}).get("total_lots", 0))
+    if frames or not failures:
+        st.caption(f"自动预警范围：{start} 至 {reference}，按当前产品、厂别和站点筛选。")
+        alerts = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        render_qtime_alert_center(alerts, total_lots=total_lots)
 
 
 def refresh_qtime_data(service: QTimeReportService) -> bool:
@@ -254,6 +296,9 @@ def _run_query(
         logger.exception("Q-Time report query failed")
         st.error("Q-Time 数据读取失败，请稍后重试。")
         return
+
+    if monitoring.alert_publication_error:
+        st.error(monitoring.alert_publication_error)
 
     st.session_state[RESULT_STATE_KEY] = _filter_monitoring_result(
         monitoring,

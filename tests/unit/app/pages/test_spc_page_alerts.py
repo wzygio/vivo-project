@@ -21,6 +21,7 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 
 @pytest.mark.parametrize("saved_value", [.9, 1.6, None, "unreadable"])
 def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch, saved_value) -> None:
+    from app.sections.shared import alert_results
     signature_module = importlib.import_module("src.inline_domain.application.shared.decision_signature")
     monkeypatch.setattr(signature_module, "get_scope_decision_signature", lambda *_args: "test-decisions")
     current_spc_service = importlib.import_module(
@@ -87,6 +88,19 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     monkeypatch.setattr(composition, "build_capability_latest_reader", lambda metric: SimpleNamespace(
         read_product=lambda product: read_product(metric, product),
     ))
+    def read_saved_result(key, product, reference_date):
+        if key == "spc_sheet_oos":
+            return {"state": "no_data", "alerts": pd.DataFrame(columns=spc_dashboard.SPC_OOS_ALERT_COLUMNS)}
+        metric = "cpk" if key == "spc_cpk_trend" else "cpm"
+        try:
+            frame = read_product(metric, product)
+        except OSError:
+            return {"state": "error", "alerts": pd.DataFrame()}
+        builder = spc_dashboard.build_weekly_cpk_alerts if metric == "cpk" else spc_dashboard.build_weekly_cpm_alerts
+        alerts = builder(frame, reference_date=reference_date)
+        return {"state": "no_data" if frame is None else "alert" if len(alerts) else "ok", "alerts": alerts}
+
+    monkeypatch.setattr(alert_results, "read_alert_result", read_saved_result)
     monkeypatch.setattr(composition, "build_spc_input_signature", lambda product: "snapshot-v1")
 
     monkeypatch.setattr(spc_dashboard.st, "set_page_config", lambda **_kwargs: None)
@@ -161,15 +175,12 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "SPC监控报表.py"
     if saved_value == "unreadable":
-        class PageStopped(Exception):
-            pass
         errors = []
         monkeypatch.setattr(spc_dashboard.st, "error", errors.append)
-        monkeypatch.setattr(spc_dashboard.st, "stop", lambda: (_ for _ in ()).throw(PageStopped()))
-        with pytest.raises(PageStopped):
-            runpy.run_path(str(page_path), run_name="__main__")
-        assert errors == ["CPK/CPM 预警数据读取失败，请稍后重试。"]
+        runpy.run_path(str(page_path), run_name="__main__")
+        assert errors == ["CPK 预警数据暂不可用，请稍后重试。", "CPM 预警数据暂不可用，请稍后重试。"]
         assert not rendered_alerts and not rendered_cpm_alerts
+        assert events == ["header", "filters", "charts"]
         return
     runpy.run_path(str(page_path), run_name="__main__")
 

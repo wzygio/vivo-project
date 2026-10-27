@@ -89,8 +89,10 @@ resources:
       aoi_rs_weekly_ppt_template: references/template/template-PPT.pptx
       aoi_tt_weekly_ppt_template: references/template/template-PPT.pptx
       aoi_rs_sheet_oos_decoration: resources/inline_domain/aoi_rs/aoi_rs_sheet_oos_decoration.xlsx
+      aoi_rs_trend_alerts: resources/inline_domain/aoi_rs/aoi_rs_trend_alerts.xlsx
       aoi_rs_sheet_ooc_decoration: resources/inline_domain/aoi_rs/aoi_rs_sheet_ooc_decoration.xlsx
       aoi_tt_sheet_oos_decoration: resources/inline_domain/aoi_tt/aoi_tt_sheet_oos_decoration.xlsx
+      aoi_tt_trend_alerts: resources/inline_domain/aoi_tt/aoi_tt_trend_alerts.xlsx
       aoi_tt_sheet_ooc_decoration: resources/inline_domain/aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx
       aoi_tt_particle_size_ratio_spec: resources/inline_domain/aoi_tt/AOI_TT-比例规格表.xlsx
       compliance_config: resources/inline_domain/monitor/compliance_config.xlsx
@@ -212,6 +214,7 @@ resources:
     dir: resources/indicator_domain
     files:
       qtime_oos_decoration: resources/indicator_domain/qtime/qtime_oos_decoration.xlsx
+      qtime_alerts: resources/indicator_domain/qtime/qtime_alerts.xlsx
       qtime_spec: resources/indicator_domain/qtime/Q-Time规格表.xlsx
       ijp_alerts: resources/indicator_domain/ijp/ijp_alerts.xlsx
   iqc_domain:

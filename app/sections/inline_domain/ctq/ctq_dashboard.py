@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from functools import partial
 import hashlib
+import logging
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -26,6 +27,7 @@ from app.sections.inline_domain.shared import (
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
     filter_report_by_alert_keys,
+    render_sheet_oos_alert_center,
 )
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
@@ -50,6 +52,35 @@ CTQ_OOS_ALERT_COLUMN_MAP = {
     "oos_type": "超规类型",
 }
 CTQ_OOS_ALERT_COLUMNS = ["厂别", "站点", "参数名称", "Sheet ID", "超规时间", "超规类型"]
+
+
+def render_saved_ctq_alerts(
+    product: str, *, reference_date: date, report: object | None = None,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Display committed Sheet alerts even when current measurement loading fails."""
+    from app.sections.shared.alert_results import read_alert_result
+    from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+
+    result = read_alert_result("ctq_sheet_oos", product, reference_date)
+    if result["state"] == "error":
+        st.error("单片异常预警数据暂不可用，请稍后重试。")
+        return
+    iso = previous_iso_week_range(reference_date)[0].isocalendar()
+    render_sheet_oos_alert_center(
+        result["alerts"], title=f"单片异常预警中心（上一周 {iso.year}-W{iso.week:02d}）",
+        has_source_data=result["state"] != "no_data", step_desc_map=step_desc_map,
+    )
+    if report is not None:
+        try:
+            render_ctq_sheet_oos_alert_indicator_sections(
+                alerts_df=result["alerts"], sheet_features_df=report.sheet_features_df,
+                raw_measurements_df=report.raw_measurements_df,
+                period_box_source=ConfigLoader.get_spc_period_box_source(), step_desc_map=step_desc_map,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Optional CTQ alert charts unavailable")
+            st.warning("单片异常预警图像暂不可用。")
 
 # 公共管线别名：供本模块组合层引用，并保持既有测试的 monkeypatch 锚点。
 _create_sheet_points_box_charts = create_sheet_points_box_charts

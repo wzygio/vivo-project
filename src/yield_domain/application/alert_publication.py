@@ -77,9 +77,17 @@ def generate_yield_alert_publications(
             try:
                 if publisher.policy_signature(product) != initial_policy:
                     raise ValueError("Yield policy changed during calculation")
+                selection_metadata = {}
+                if kind == "lot" and outcome["lot_data"]:
+                    detail_frames = outcome["lot_data"].get("code_level_details", {}).values()
+                    source_dates = [pd.to_datetime(frame["warehousing_time"], format="%Y%m%d", errors="coerce")
+                                    for frame in detail_frames if not frame.empty and "warehousing_time" in frame]
+                    latest = pd.concat(source_dates, ignore_index=True).max() if source_dates else pd.NaT
+                    if pd.notna(latest):
+                        selection_metadata["lot_reference_date"] = latest.date().isoformat()
                 publisher.publish(product, kind, records, reference_date=reference,
                     coverage_start=coverage_start, coverage_end=common["analysis_end_date"],
-                    has_data=has_data, health=health, calculation_signature=calculation)
+                    has_data=has_data, health=health, calculation_signature=calculation, **selection_metadata)
             except Exception as exc:
                 logger.error("YIELD_ALERT_PUBLICATION_FAILED kind=%s type=%s", kind, type(exc).__name__)
                 outcome["publication_errors"][kind] = "YIELD_ALERT_PUBLICATION_FAILED"

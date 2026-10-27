@@ -190,3 +190,92 @@ def test_invalid_publication_is_unavailable(snapshots, broken):
     result = saved.read_published_alerts('ijp_aa_oos', 'M678', date.today())
     assert result['state'] == 'error' and result['alerts'].empty
     assert result['message'] == saved.UNAVAILABLE
+
+
+def write_empty_templates(paths):
+    specs = {
+        'ijp_alerts': (
+            {'AA区': ALERT_COLUMNS, '孔区': ALERT_COLUMNS},
+            ['region', 'reference_date', 'period_start', 'period_end', 'updated_at', 'alert_count', 'status'],
+        ),
+        'parts_alerts': (
+            {'超规备件': PARTS_PUBLIC_COLUMNS},
+            ['as_of_date', 'last_update', 'updated_at', 'alert_count', 'status'],
+        ),
+        'evaporation_alerts': (
+            {'超规材料': REPORT_COLUMNS},
+            ['start_date', 'end_date', 'products', 'updated_at', 'alert_count', 'status'],
+        ),
+    }
+    for key, (sheets, metadata_columns) in specs.items():
+        with pd.ExcelWriter(paths[key]) as writer:
+            for name, columns in sheets.items():
+                pd.DataFrame(columns=columns).to_excel(writer, sheet_name=name, index=False)
+            pd.DataFrame(columns=metadata_columns).to_excel(writer, sheet_name='__meta__', index=False)
+
+
+def test_header_only_templates_are_no_data_without_fabricating_success(snapshots):
+    write_empty_templates(snapshots)
+    for row in saved.PUBLISHED_ALERT_ROWS:
+        for reference in (date.today(), date.today() + timedelta(days=8)):
+            result = saved.read_published_alerts(row, 'M678', reference)
+            assert result['state'] == 'no_data'
+            assert result['alerts'].empty and result['message'] == '当前暂无预警记录。'
+    for path in snapshots.values():
+        assert all(frame.empty for frame in pd.read_excel(path, sheet_name=None).values())
+    # A normal subsequent publication retains its normal freshness contract.
+    write_snapshots(snapshots, empty=True)
+    for row in saved.PUBLISHED_ALERT_ROWS:
+        assert saved.read_published_alerts(row, 'M678', date.today())['state'] == 'ok'
+        assert saved.read_published_alerts(row, 'M678', date.today() + timedelta(days=1))['state'] == 'error'
+
+
+def test_empty_metadata_cannot_hide_nonempty_alert_records(snapshots):
+    write_empty_templates(snapshots)
+    path = snapshots['ijp_alerts']
+    sheets = pd.read_excel(path, sheet_name=None)
+    sheets['AA区'] = pd.DataFrame([dict(region='AA区', productcode='M678')], columns=ALERT_COLUMNS)
+    with pd.ExcelWriter(path) as writer:
+        for name, frame in sheets.items():
+            frame.to_excel(writer, sheet_name=name, index=False)
+    assert saved.read_published_alerts('ijp_hole_oos', 'M678', date.today())['state'] == 'error'
+
+
+def test_publishing_one_ijp_region_keeps_other_initialized_region_no_data(snapshots):
+    from src.indicator_domain.infrastructure.ijp.alert_workbook import IjpAlertWorkbook
+    write_empty_templates(snapshots)
+    store = IjpAlertWorkbook(snapshots['ijp_alerts'])
+    store.save('AA区', pd.DataFrame(columns=ALERT_COLUMNS), date.today())
+    assert saved.read_published_alerts('ijp_aa_oos', 'M678', date.today())['state'] == 'ok'
+    assert saved.read_published_alerts('ijp_hole_oos', 'M678', date.today())['state'] == 'no_data'
+
+
+def test_empty_template_cells_are_green_and_clicks_show_no_records(snapshots, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from app.sections.inline_domain.monitor import alert_matrix_cache as cache, alert_matrix_service as matrix
+    write_empty_templates(snapshots)
+    monkeypatch.setattr(matrix, 'MATRIX_ROWS', tuple(matrix.MATRIX_ROW_MAP[key] for key in saved.PUBLISHED_ALERT_ROWS))
+    def forbidden(*args, **kwargs):
+        pytest.fail('empty template unexpectedly queried database')
+    monkeypatch.setattr(cache, 'DatabaseManager', forbidden)
+    cache._cached_alert_matrix_cell.clear()
+    try:
+        app = AppTest.from_string('''
+from datetime import date
+from app.sections.inline_domain.monitor.alert_matrix_cache import get_cached_alert_matrix
+from app.sections.inline_domain.monitor.alert_matrix import render_alert_matrix_section
+from app.sections.inline_domain.monitor.alert_matrix_detail import render_alert_matrix_detail
+payload = get_cached_alert_matrix(reference_date=date.today(), products=('M678','M626'),
+                                  _revision_provider=lambda *a: 'initialized-empty')
+render_alert_matrix_section(payload)
+render_alert_matrix_detail(payload)
+''').run()
+        for row in saved.PUBLISHED_ALERT_ROWS:
+            for product in ('M678', 'M626'):
+                button = app.button(key=f'matrix_cell_{row}_{product}')
+                assert button.label == '🟢' and button.help == '当前暂无预警记录。'
+            app.button(key=f'matrix_cell_{row}_M678').click().run()
+            assert not app.exception and not app.dataframe and not app.error and not app.warning
+            assert any(item.value == '当前暂无预警记录。' for item in app.caption)
+    finally:
+        cache._cached_alert_matrix_cell.clear()

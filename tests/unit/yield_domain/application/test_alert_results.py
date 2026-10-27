@@ -131,3 +131,21 @@ def test_reader_rejects_corrupt_metadata_and_recovers_on_publication(tmp_path):
         service.read("P1", "lot", DAY)
     assert publish(service)
     assert service.read("P1", "lot", DAY).status == "ready"
+
+
+def test_lot_report_window_is_explicit_and_preserves_published_latest_source_anchor(tmp_path):
+    service = results(tmp_path)
+    rows = [{**LOT, "超规 Lot ID": "OLDER", "入库时间": "2026/09/18"},
+            {**LOT, "超规 Lot ID": "LATEST_ALERT", "入库时间": "2026/10/15"}]
+    service.publish("P1", "lot", rows, reference_date=DAY, coverage_start="2026-09-01",
+                    coverage_end="2026-10-20", has_data=True, health=HEALTH,
+                    calculation_signature="scope", lot_reference_date="2026-10-18")
+    # The latest source Lot can be normal and therefore absent from the alert rows.
+    monthly = service.read("P1", "lot", DAY, time_period=30)
+    assert monthly.records["超规 Lot ID"].tolist() == ["OLDER", "LATEST_ALERT"]
+    weekly = service.read("P1", "lot", DAY)
+    assert weekly.records["超规 Lot ID"].tolist() == ["LATEST_ALERT"]
+    assert service.source_signature("P1", "lot", DAY) != service.source_signature("P1", "lot", DAY, time_period=30)
+    explicit = service.read("P1", "lot", DAY, start_date="2026-10-01", end_date="2026-10-18")
+    assert explicit.records["超规 Lot ID"].tolist() == ["LATEST_ALERT"]
+    assert service.read("P1", "lot", DAY, start_date="2026-08-01", end_date="2026-10-18").status == "uncovered"

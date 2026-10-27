@@ -360,7 +360,7 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 |---|---|---|
 | CPK 预警 | 能力明细工作簿的产品 CPK sheet；上一 ISO 周、flag=False、cpk_corrected < 1.33，且有效 Sheet 时间跨度至少 48 小时。 | 厂别、站点、参数、周次、已保存的 CPK 值。 |
 | CPM 预警 | 同一工作簿的产品 CPM sheet；上一 ISO 周、flag=False、cpm_corrected < 1.33，且有效 Sheet 时间跨度至少 48 小时。 | 厂别、站点、参数、周次、已保存的 CPM 值。 |
-| 单片异常预警 | Sheet OOS 修饰结果中的异常明细；上一 ISO 周且 flag=False，再排除命中独立预警过滤配置的参数。 | 厂别、站点、参数、Sheet、超规时间、超规类型。 |
+| 单片异常预警 | 已发布SPC OOS Excel产品明细；上一 ISO 周且 flag=False，再排除命中独立预警过滤配置的参数。 | 厂别、站点、参数、Sheet、超规时间、超规类型。 |
 
 SPC 页面单片预警使用 `config/domain/inline_domain.yaml` 的
 `spc.sheet_oos_alerts.excluded_param_name_contains`，按参数名作不区分大小写的普通文本包含匹配；
@@ -368,6 +368,8 @@ SPC 页面单片预警使用 `config/domain/inline_domain.yaml` 的
 该配置与 `auto_decoration.exempt_param_name_contains`、能力计算参数豁免相互独立：
 不自动修饰不代表必须预警，预警过滤也不改写修饰决策、点位、Sheet 特征或常规查询结果。
 全部预警被过滤时沿用无预警展示。
+
+2026-10-27起，CPK、CPM与单片预警统一通过 `app/sections/shared/alert_results.py::read_alert_result` 消费已保存Excel，和自动预警看板使用相同的读取、规则注入与展示缓存。页面不再用ViewModel内存异常明细代替已发布记录。报表初始化、决策读取、计算失败或结果为空时仍调用独立保存结果展示；三个预警分别隔离，图像失败也不阻断后续预警。完整边界见 [发布结果展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md)。
 
 CPK 和 CPM 分别读取，不能用其中一项的记录替代另一项。能力区有预警时显示数量与明细；成功读取但无预警时根据能力表是否为空选择无预警提示或无能力数据提示。日度能力为空不会产生能力预警。预警明细读取失败时显示不可用，不降级为“无预警”。
 

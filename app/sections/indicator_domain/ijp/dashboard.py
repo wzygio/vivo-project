@@ -69,6 +69,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
             )
         except IjpDataAccessError:
             st.error("IJP 筛选项暂时无法读取，请稍后重试。")
+            render_ijp_alert_center(service, 'AA区', produce=False)
             return
 
         with product_column:

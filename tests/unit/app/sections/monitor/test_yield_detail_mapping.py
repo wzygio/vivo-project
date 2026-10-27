@@ -9,8 +9,8 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.sections.inline_domain.monitor import alert_matrix_detail
-from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import YieldAnalysisService
+from app.sections.shared import alert_results
 
 
 @pytest.fixture
@@ -56,11 +56,26 @@ def yield_sources(monkeypatch: pytest.MonkeyPatch) -> dict:
             calls[_name] = (args, kwargs)
             return _value
         monkeypatch.setattr(YieldAnalysisService, name, read)
-    records = [{"level": "code", "defect_group": "Array_Line", "defect_desc": code}]
-    monkeypatch.setattr(AlertService, "get_dashboard_alert_records", lambda *args: records)
-    monkeypatch.setattr(alert_matrix_detail, "compute_lot_oos_records", lambda *args: (
-        [{"异常 Code": code, "入库时间": "2026/09/08"}], 1))
-    return {"sources": sources, "calls": calls, "context": context}
+    saved_reads = []
+    saved_frames = {
+        "yield_trend_fluctuation": pd.DataFrame([{
+            "level": "code", "defect_group": "Array_Line", "defect_desc": code,
+            "time_period": "2026-09月", "period_scope": "monthly",
+            "curr_rate": .0035, "prev_rate": .001, "rules": "环比升高",
+        }]),
+        "yield_lot_oos": pd.DataFrame([{
+            "超规 Lot ID": "LOT-1", "异常 Code": code, "入库时间": "2026/09/08",
+            "管控规格线": "0.40%", "实际不良率": "0.50%", "不良panel数": 5,
+            "阵列投入时间": "2026/09/01",
+        }]),
+    }
+    def read_saved(row_key, product, reference_date, **selection):
+        saved_reads.append((row_key, product, reference_date, selection))
+        frame = saved_frames[row_key].copy()
+        return {"state": "alert", "records": frame, "alerts": frame,
+                "message": "", "alert_factories": []}
+    monkeypatch.setattr(alert_results, "read_alert_result", read_saved)
+    return {"sources": sources, "calls": calls, "context": context, "saved_reads": saved_reads}
 
 
 @pytest.mark.parametrize("mode", ["trend", "lot"])
@@ -73,6 +88,10 @@ def test_yield_loader_loads_complete_readonly_chart_inputs(yield_sources, mode) 
     }.items():
         assert bundle[field] is yield_sources["sources"][method]
     assert bundle["records"]
+    assert yield_sources["saved_reads"] == [(
+        "yield_lot_oos" if mode == "lot" else "yield_trend_fluctuation",
+        "Z517", date(2026, 9, 14), {},
+    )]
     for method, (_, kwargs) in yield_sources["calls"].items():
         if method != "load_static_warning_lines":
             assert kwargs["read_only"] is True

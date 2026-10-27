@@ -39,6 +39,7 @@ REFRESH_META_COLUMNS = [
     "product_revision",
     "decision_signature",
     "detail_row_count",
+    "detail_signature",
 ]
 # 明细重生成 TTL：超过该间隔即使内容未变也重写产品 sheet
 DETAIL_REFRESH_TTL = timedelta(hours=4)
@@ -333,6 +334,7 @@ def build_refresh_meta_row(
     product_revision: str,
     decision_signature: str,
     detail_row_count: int,
+    detail_signature: str = "",
 ) -> dict:
     """构造一行 __refresh_meta__ 记录（last_generated_at 序列化为 ISO 字符串）。"""
     return {
@@ -344,6 +346,7 @@ def build_refresh_meta_row(
         "product_revision": product_revision,
         "decision_signature": decision_signature,
         "detail_row_count": int(detail_row_count),
+        "detail_signature": detail_signature,
     }
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import logging
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -34,19 +35,25 @@ def build_aoi_rs_trend_alert_display(
 
 
 def render_aoi_rs_trend_alerts(
-    report: AoiRsReportViewModel,
+    report: AoiRsReportViewModel | None,
     *,
     reference_date: date,
     step_desc_map: dict[str, str] | None = None,
+    evaluation_df: pd.DataFrame | None = None,
 ) -> None:
     """Show fixed-yesterday status and exact matching indicator charts."""
     alerts = render_density_trend_alert_center(
-        report.trend_evaluation_df, reference_date=reference_date,
+        evaluation_df if evaluation_df is not None else getattr(report, "trend_evaluation_df", pd.DataFrame()),
+        reference_date=reference_date,
         indicator_columns=_INDICATOR_COLUMNS, step_desc_map=step_desc_map,
     )
-    if alerts.empty:
+    if alerts.empty or report is None:
         return
-    _render_alert_charts(report, alerts, reference_date, step_desc_map)
+    try:
+        _render_alert_charts(report, alerts, reference_date, step_desc_map)
+    except Exception:
+        logging.getLogger(__name__).exception("Optional AOI RS trend charts unavailable")
+        st.warning("趋势预警图像暂不可用。")
 
 
 def _render_alert_charts(

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import sys
+from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import streamlit as st
@@ -27,6 +29,10 @@ FIXTURE_PRODUCTS = ("M626", "M678")
 
 
 class FixtureQTimeService:
+    def publish_alert_results(self, result, shop, as_of):
+        # Isolated saved-result seam: no maintained workbook or database access.
+        st.session_state[f"fixture_saved_alerts_{shop}"] = result
+
     def cache_signature(self, shop):
         return ("isolated-qtime-fixture", st.query_params.get("fixture_health", "fresh"),
                 st.query_params.get("fixture_empty", "false"))
@@ -84,6 +90,7 @@ class FixtureQTimeService:
             "L3MY6800QAA",
         ]
         wait_times = [0.41, 1.26, 1.18, 0.65, 0.51, 1.40, 1.14, 0.18, 0.09, 0.67, 1.21, 0.30]
+        fixture_day = ((date.today().replace(day=1) - timedelta(days=1)).replace(day=2)).strftime("%Y%m%d")
         raw_details = pd.DataFrame(
             [
                 {
@@ -95,7 +102,7 @@ class FixtureQTimeService:
                     "t_step": "15600",
                     "q_spec": 1.0,
                     "wait_time": wait_time,
-                    "timekey": f"20260802{index:02d}0000",
+                    "timekey": f"{fixture_day}{index:02d}0000",
                     "shop": shop,
                     "prodcode": prodcode,
                 }
@@ -113,7 +120,7 @@ class FixtureQTimeService:
                     "prodcode": prodcode,
                     "step_desc": step_descriptions[0],
                     "lot_id": "L3MY67005AA",
-                    "timekey": "20260802020000",
+                    "timekey": f"{fixture_day}020000",
                     "flag": False,
                 }
                 for prodcode in requested
@@ -139,6 +146,23 @@ class FixtureQTimeService:
         raise AssertionError("Fixture tests do not upload a decoration workbook")
 
 
+def fixture_saved_alerts(row_key, product, reference_date, **selection):
+    shop = selection["shops"][0]
+    saved = st.session_state.get(f"fixture_saved_alerts_{shop}")
+    if saved is None or saved.data_health["status"] != "fresh":
+        return {"state": "error"}
+    steps = selection["step_descriptions"]
+    records = saved.alerts
+    if not records.empty:
+        records = records.loc[records.prodcode.eq(product) & records.step_desc.isin(steps)]
+    details = saved.details
+    if not details.empty:
+        details = details.loc[details.prodcode.eq(product) & details.step_desc.isin(steps)]
+    return {"state": "alert" if not records.empty else "ok", "records": records,
+            "metadata": {"total_lots": details.lot_id.nunique() if not details.empty else 0}}
+
+
 if __name__ == '__main__':
     st.set_page_config(page_title="Q-Time E2E", layout="wide")
-    render_qtime_dashboard(FixtureQTimeService())
+    with patch("app.sections.shared.alert_results.read_alert_result", fixture_saved_alerts):
+        render_qtime_dashboard(FixtureQTimeService())

@@ -24,21 +24,32 @@ def build_period_trend_service(db_manager=None):
 
 
 def yield_alert_policy_signature(product: str) -> str:
-    """Policy identity only; do not load Panel facts to validate saved alerts."""
+    """Hash Yield policy content; unrelated config edits never expire results."""
     import hashlib
+    import json
+    import yaml
     from src.shared_kernel.config import ConfigLoader
     from src.yield_domain.application.alert_results import RESULT_SCHEMA_VERSION
 
     root = ConfigLoader.get_project_root()
-    parts = [str(RESULT_SCHEMA_VERSION)]
-    for path in (root / "config/global.yaml", root / "config/products" / f"{product}.yaml",
-                 ConfigLoader.get_domain_config_path("yield_domain")):
-        try:
-            stat = path.stat()
-            parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")
-        except FileNotFoundError:
-            parts.append(f"{path.resolve()}:missing")
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()
+    def read_mapping(path: Path) -> dict:
+        with path.open(encoding="utf-8") as stream:
+            value = yaml.safe_load(stream)
+        if not isinstance(value, dict):
+            raise ValueError("Yield alert policy requires mapping configuration")
+        return value
+
+    global_config = read_mapping(root / "config/global.yaml")
+    product_config = read_mapping(root / "config/products" / f"{product}.yaml")
+    policy = {
+        "schema": RESULT_SCHEMA_VERSION,
+        "global": {key: global_config.get(key) for key in ("data_source", "data_forward", "report_cutoff")},
+        "resources": global_config.get("resources", {}).get("yield_domain"),
+        "product": {key: product_config.get(key) for key in ("data_source", "paths", "processing")},
+        "domain": read_mapping(ConfigLoader.get_domain_config_path("yield_domain")),
+    }
+    encoded = json.dumps(policy, sort_keys=True, ensure_ascii=False, default=str, allow_nan=False)
+    return "yield-alert-policy-v2:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def build_yield_alert_results():

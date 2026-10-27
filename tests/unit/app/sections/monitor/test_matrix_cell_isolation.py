@@ -9,6 +9,7 @@ from app.sections.inline_domain.monitor import alert_matrix_cache as cache
 from app.sections.inline_domain.monitor import alert_matrix_service as service
 from app.sections.inline_domain.monitor import alert_matrix_detail as detail
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
+from src.inline_domain import composition
 
 
 def test_cell_refresh_and_details_do_not_invalidate_neighbors(monkeypatch):
@@ -57,7 +58,7 @@ def test_cpk_excel_changes_rebuild_only_cpk_and_default_detail(tmp_path, monkeyp
                        "period_type": "week", "period_label": "2026-W36", "cpk_corrected": 0.8, "flag": flag,
                        "period_start": "2026-08-31", "period_end": "2026-09-02"}]).to_excel(path, sheet_name="P1", index=False)
     monkeypatch.setattr(service, "MATRIX_ROWS", (service.MATRIX_ROW_MAP["spc_cpk_trend"],))
-    monkeypatch.setattr(detail, "cpk_latest_store", lambda: store)
+    monkeypatch.setattr(composition, "build_capability_latest_reader", lambda metric: store)
     monkeypatch.setattr(detail, "_resolve_db_manager", lambda db: object())
     monkeypatch.setattr(detail, "_load_spc_view", lambda *args: SimpleNamespace(
         period_capability_df=pd.DataFrame(), sheet_features_df=pd.DataFrame(),

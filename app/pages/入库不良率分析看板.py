@@ -10,7 +10,6 @@ import logging
 from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 
-from yield_domain.application.alert_service import AlertService
 from yield_domain.application.yield_service import (
     YieldAnalysisService,
     YieldDataLoadError,
@@ -26,7 +25,6 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.components.indicator_cache import build_indicator_product_cache_signature
-from app.components.alert_center import render_alert_center, build_trend_context
 from src.yield_domain.application.alert_publication import generate_yield_alert_publications
 from src.yield_domain.composition import build_yield_alert_results
 from app.components.file_uploader import render_yield_config_uploader
@@ -41,6 +39,7 @@ from app.sections.yield_domain.yield_dashboard import (
 from app.sections.yield_domain.resource_config import get_dashboard_resource_config, get_code_monthly_rate_threshold
 from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE
 from app.sections.yield_domain.code_analysis import render_code_analysis_section
+from app.sections.yield_domain.published_alert_center import render_saved_yield_alerts
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
@@ -89,30 +88,41 @@ render_page_header(
 query_params = st.query_params
 if query_params.get("admin") == "true":
     render_yield_config_uploader(active_config, product_dir)
-active_config = get_dashboard_resource_config(active_config, product_cache_signature)
-# Resource edits (including modifier-table writeback) must not invalidate this
-# page on widget reruns. The header's explicit revision controls synchronization.
-yield_cache_context = YieldAnalysisService.build_cache_context(
-    active_config,
-    product_dir,
-    resource_revision=YIELD_DASHBOARD_CACHE_SIGNATURE,
-)
+try:
+    active_config = get_dashboard_resource_config(active_config, product_cache_signature)
+    # Resource edits follow the original explicit-refresh policy.
+    yield_cache_context = YieldAnalysisService.build_cache_context(
+        active_config,
+        product_dir,
+        resource_revision=YIELD_DASHBOARD_CACHE_SIGNATURE,
+    )
+except Exception:
+    logging.exception("Yield report inputs could not be prepared")
+    render_saved_yield_alerts(active_config.data_source.product_code, pd.Timestamp.today().date())
+    st.error("Yield 报表配置或资源读取失败，请稍后重试。")
+    st.stop()
 
 # ==============================================================================
 #  数据加载
 # ==============================================================================
 # Publish prepared alerts before any Sheet/Mapping or chart-only gates.
-with st.spinner("正在加载预警分析数据..."):
-    alert_generation = generate_yield_alert_publications(
-        analysis=YieldAnalysisService,
-        publisher=build_yield_alert_results(),
-        config=active_config,
-        product_dir=product_dir,
-        cache_context=yield_cache_context,
-        trend_signature=product_cache_signature,
-        lot_signature=lot_cache_signature,
-        db_manager=db_manager,
-    )
+try:
+    with st.spinner("正在加载预警分析数据..."):
+        alert_generation = generate_yield_alert_publications(
+            analysis=YieldAnalysisService,
+            publisher=build_yield_alert_results(),
+            config=active_config,
+            product_dir=product_dir,
+            cache_context=yield_cache_context,
+            trend_signature=product_cache_signature,
+            lot_signature=lot_cache_signature,
+            db_manager=db_manager,
+        )
+except Exception:
+    logging.exception("Yield alert results could not be updated")
+    render_saved_yield_alerts(active_config.data_source.product_code, pd.Timestamp.today().date())
+    st.error("Yield 预警结果暂时无法更新，请稍后重试。")
+    st.stop()
 mwd_group_data = alert_generation["mwd_group_data"]
 mwd_code_data = alert_generation["mwd_code_data"]
 lot_data = alert_generation["lot_data"]
@@ -124,6 +134,11 @@ for health in alert_generation["health"].values():
         displayed_health.append(health)
 if alert_generation["publication_errors"]:
     st.warning("预警结果保存失败，请稍后重试。")
+# Saved results are independent of Sheet/Mapping, chart settings and report gates.
+saved_alerts = render_saved_yield_alerts(
+    active_config.data_source.product_code,
+    pd.Timestamp(yield_cache_context['analysis_end_date']).date(),
+)
 if alert_generation["errors"]:
     st.error("Yield 报表数据加载失败，请稍后重试。")
     st.stop()
@@ -182,42 +197,10 @@ if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
 # ==============================================================================
 #  🚨 智能预警中心 (Intelligent Alert Center)
 # ==============================================================================
-with st.spinner("正在执行全维度智能预警扫描 (趋势监测 + Spec拦截)..."):
-    # 1. 趋势预警
-    trend_alerts = AlertService.get_dashboard_alerts(
-        mwd_group_data=mwd_group_data,
-        mwd_code_data=mwd_code_data,
-        product_dir=product_dir,
-        benchmark_report_config=active_config.processing.get(
-            'benchmark_report_config', {}
-        ),
-    )
-    
-    # 2. 构建趋势监控上下文
-    trend_context = build_trend_context(
-        alert_service_result=trend_alerts,
-        mwd_code_data=mwd_code_data,
-        mwd_group_data=mwd_group_data
-    )
-
-    # 3. Lot 超规扫描
-    oos_records = alert_generation["lot_records"]
-    total_recent_lots = alert_generation["total_recent_lots"]
-
-    # 4. 统一渲染
-    render_alert_center(
-        trend_alerts=trend_alerts,
-        trend_context=trend_context,
-        oos_records=oos_records,
-        total_recent_lots=total_recent_lots,
-        time_period=30,
-        source_current=bool(displayed_health) and all(
-            item.get("status") == "fresh" for item in displayed_health
-        ),
-    )
-
-    # 5. 自动预警缺陷图像：对趋势波动与 Lot 超规命中的 Defect Code 自动出图
-    alert_records = alert_generation["trend_records"]
+with st.spinner("正在准备预警指标图像..."):
+    # Published alert keys select images; images never determine alert status.
+    oos_records = saved_alerts['lot_records']
+    alert_records = saved_alerts['trend_records']
     render_alert_code_expanders(
         trend_records=alert_records,
         lot_oos_records=oos_records,

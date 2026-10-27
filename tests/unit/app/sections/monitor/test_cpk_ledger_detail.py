@@ -7,6 +7,8 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.sections.inline_domain.monitor import alert_matrix_detail as detail
+from app.sections.inline_domain.monitor.alert_matrix_service import build_latest_capability_alerts
+from app.sections.shared import alert_results
 from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
 
 
@@ -27,7 +29,11 @@ def ledger():
 def load_bundle(monkeypatch):
     frame = ledger()
     before = frame.copy(deep=True)
-    monkeypatch.setattr(detail, "cpk_latest_store", lambda: SimpleNamespace(read_product=lambda product: frame))
+    alerts = build_latest_capability_alerts(frame, date(2026, 1, 5), metric="cpk")
+    def saved(key, product, reference):
+        assert (key, product, reference) == ("spc_cpk_trend", "P1", date(2026, 1, 5))
+        return {"state": "alert", "alerts": alerts.copy(), "records": frame.copy()}
+    monkeypatch.setattr(alert_results, "read_alert_result", saved)
     monkeypatch.setattr(detail, "_report_end_date", lambda: date(2026, 1, 5))
     raw = pd.DataFrame([
         dict(factory=factory, step_id="100", param_name="CD", sheet_id=f"S{i}",
@@ -75,7 +81,9 @@ def test_production_cpk_bundle_renders_three_original_charts(monkeypatch):
 
 
 def test_empty_alerts_skip_spc_loading_and_charts(monkeypatch):
-    monkeypatch.setattr(detail, "cpk_latest_store", lambda: SimpleNamespace(read_product=lambda product: None))
+    monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
+        "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(),
+    })
     monkeypatch.setattr(detail, "_load_spc_view", lambda *args: pytest.fail("No alerts must not load SPC"))
     bundle = detail._make_spc_cpk_loader(None)("P1", date(2026, 1, 5))
     assert bundle["alerts_df"].empty
@@ -94,13 +102,23 @@ def test_missing_spc_data_keeps_alert_table_and_business_message(monkeypatch):
     assert result.warning[0].value == "预警指标暂无可绘制的 Sheet 数据。"
 
 
-def test_spc_failure_propagates_to_detail_error_boundary(monkeypatch):
+def test_optional_spc_failure_keeps_saved_table_in_default_detail(monkeypatch):
     load_bundle(monkeypatch)
     def fail(*args):
         raise RuntimeError("source unavailable")
     monkeypatch.setattr(detail, "_load_spc_view", fail)
+    # The underlying optional chart adapter still reports its own source failure.
     with pytest.raises(RuntimeError, match="source unavailable"):
         detail._make_spc_cpk_loader(object())("P1", date(2026, 1, 5))
+    # Production wraps it so a chart failure never discards the authoritative saved alerts.
+    bundle = detail.build_default_detail_loaders(object())["spc_cpk_trend"]("P1", date(2026, 1, 5))
+    assert bundle["chart_unavailable"] is True
+    assert bundle["alerts_df"]["超规周次"].tolist() == ["2026-W01"]
+    assert all(frame.empty for frame in bundle["frames"].values())
+    result = render_bundle(bundle)
+    assert not result.exception
+    assert len(result.dataframe) == 1
+    assert len(result.get("plotly_chart")) == 0
 
 
 def test_spc_detail_signature_tracks_chart_inputs_without_board_invalidation(monkeypatch):

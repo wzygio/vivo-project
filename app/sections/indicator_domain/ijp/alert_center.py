@@ -12,6 +12,7 @@ from src.indicator_domain.application.ijp.ports import IjpAlertSource, IjpAlertR
 from src.indicator_domain.core.ijp.alerts import previous_week_range
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
+from app.sections.shared.alert_results import read_alert_result
 
 logger = logging.getLogger(__name__)
 GROUP_COLUMNS = ['productcode', 'line', 'printer']
@@ -23,41 +24,48 @@ def load_ijp_alert_report(_service: IjpAlertSource, signature: tuple[object, ...
     return _service.get_alert_report()
 
 
-def render_ijp_alert_center(service: IjpAlertSource, region: str) -> None:
+def render_ijp_alert_center(service: IjpAlertSource, region: str, *, produce: bool = True) -> None:
     start, end = service.get_reporting_window()
     previous_start, previous_end = previous_week_range(end.date())
     week = previous_start.isocalendar()
     title = f'超规预警中心（{region}，上一周 {week.year}-W{week.week:02d}）'
-    try:
-        signature = (
-            'ijp-alert-v1', region, start, end, type(service).__module__, type(service).__qualname__,
-            tuple(ConfigLoader.get_enabled_products()), tuple(ConfigLoader.get_work_order_types()),
-            repr(ConfigLoader.load_domain_config('indicator_domain')),
-            ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,
-            str(ConfigLoader.get_domain_resource_path('indicator_domain', 'ijp_alerts', 'ijp/ijp_alerts.xlsx')),
-        )
-        payload = load_ijp_alert_report(service, signature)
-    except Exception:
-        logger.exception('IJP automatic alert calculation or snapshot publication failed: %s', region)
-        with st.expander(title, expanded=True):
-            st.error('IJP 预警数据暂时无法更新，请稍后重试。')
-        return
-    alerts, frame = payload['alerts'], payload['ratios']
+    payload = None
+    update_failed = False
+    if produce:
+        try:
+            signature = (
+                'ijp-alert-v1', region, start, end, type(service).__module__, type(service).__qualname__,
+                tuple(ConfigLoader.get_enabled_products()), tuple(ConfigLoader.get_work_order_types()),
+                repr(ConfigLoader.load_domain_config('indicator_domain')),
+                ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,
+                str(ConfigLoader.get_domain_resource_path('indicator_domain', 'ijp_alerts', 'ijp/ijp_alerts.xlsx')),
+            )
+            payload = load_ijp_alert_report(service, signature)
+        except Exception:
+            logger.exception('IJP automatic alert calculation or snapshot publication failed: %s', region)
+            update_failed = True
+    result = read_alert_result('ijp_hole_oos' if region == '孔区' else 'ijp_aa_oos', '', end.date())
+    alerts = result['alerts']
     descriptions = get_ijp_code_descriptions(region)
-    with st.expander(title, expanded=not alerts.empty):
-        if not alerts.empty:
+    with st.expander(title, expanded=not alerts.empty or update_failed or result['state'] == 'error'):
+        if update_failed:
+            st.warning('IJP 预警数据暂时无法更新；以下状态以已保存结果为准。')
+        if result['state'] == 'error':
+            st.error(result['message'])
+        elif not alerts.empty:
             st.error(f'检测到 {len(alerts)} 条 IJP 超规预警，请关注。')
             _render_alert_table(alerts, descriptions)
-        elif frame.empty or not frame.loc[
-            frame.period_start.eq(str(previous_start)) & frame.period_end.eq(str(previous_end)),
-            'has_data',
-        ].any():
+        elif result['state'] == 'no_data':
             st.info('上一周暂无 IJP 监控数据。')
         else:
             st.success('上一周未发现 IJP 超规数据。')
-    if alerts.empty:
+    if alerts.empty or payload is None:
         return
-    _render_alert_charts(frame, alerts, region)
+    try:
+        _render_alert_charts(payload['ratios'], alerts, region)
+    except Exception:
+        logger.exception('IJP optional alert charts could not be rendered: %s', region)
+        st.info('预警图像暂不可用。')
 
 
 def _render_alert_table(alerts: pd.DataFrame, descriptions: dict[str, str]) -> None:

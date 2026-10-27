@@ -4,17 +4,21 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.sections.indicator_domain.ijp.alert_center import load_ijp_alert_report
+from app.sections.indicator_domain.ijp import alert_center
+import pandas as pd
 
 
 @pytest.mark.parametrize('region', ['AA区', '孔区'])
 @pytest.mark.parametrize('mode', ['alert', 'normal', 'empty', 'failure'])
-def test_automatic_alerts_without_query_and_safe_public_output(region, mode):
+def test_automatic_alerts_without_query_and_safe_public_output(region, mode, monkeypatch, tmp_path):
     load_ijp_alert_report.clear()
     source = '''
 from datetime import datetime, date
 import pandas as pd
 from app.sections.indicator_domain.ijp.alert_center import render_ijp_alert_center
 from src.indicator_domain.core.ijp.alerts import build_weekly_alerts
+from src.indicator_domain.infrastructure.ijp.alert_workbook import IjpAlertWorkbook
+from pathlib import Path
 class Service:
     def get_reporting_window(self):
         return datetime(2026, 9, 1), datetime(2026, 10, 26)
@@ -27,10 +31,20 @@ class Service:
             period='10/19–10/25（周）', period_start='2026-10-19', period_end='2026-10-25',
             rs_code=code, has_data=MODE != 'empty', **{column: ratio})
             for printer, ratio in [('P1', .8 if MODE == 'alert' else .9), ('P2', .95)]])
-        return {'alerts': build_weekly_alerts(frame, REGION, date(2026, 10, 26)), 'ratios': frame}
+        alerts = build_weekly_alerts(frame, REGION, date(2026, 10, 26))
+        IjpAlertWorkbook(Path(SNAPSHOT)).save(REGION, alerts, date(2026, 10, 26))
+        return {'alerts': alerts, 'ratios': frame}
 render_ijp_alert_center(Service(), REGION)
 '''
-    app = AppTest.from_string(f'REGION = {region!r}\nMODE = {mode!r}\n' + source).run()
+    path = tmp_path / 'ijp.xlsx'
+    def read_saved(row, product, reference):
+        if not path.exists():
+            return {'state': 'error', 'alerts': pd.DataFrame(), 'message': '预警结果暂不可用。'}
+        records = pd.read_excel(path, sheet_name=region)
+        return {'state': 'alert' if len(records) else 'no_data' if mode == 'empty' else 'ok',
+                'alerts': records, 'message': ''}
+    monkeypatch.setattr(alert_center, 'read_alert_result', read_saved)
+    app = AppTest.from_string(f'REGION = {region!r}\nMODE = {mode!r}\nSNAPSHOT={str(path)!r}\n' + source).run()
     assert not app.exception and not app.button
     assert '2026-W43' in app.expander[0].label
     if mode == 'alert':
@@ -47,7 +61,8 @@ render_ijp_alert_center(Service(), REGION)
     elif mode == 'empty':
         assert app.info[0].value == '上一周暂无 IJP 监控数据。'
     else:
-        assert app.error[0].value == 'IJP 预警数据暂时无法更新，请稍后重试。'
+        assert app.warning[0].value == 'IJP 预警数据暂时无法更新；以下状态以已保存结果为准。'
+        assert app.error[0].value == '预警结果暂不可用。'
         assert not app.dataframe and not app.get('plotly_chart')
     load_ijp_alert_report.clear()
 

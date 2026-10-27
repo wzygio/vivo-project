@@ -30,15 +30,13 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.inline_domain.ctq.ctq_dashboard import (
-    build_ctq_sheet_oos_alerts,
+    render_saved_ctq_alerts,
     filter_ctq_report,
     get_default_ctq_start_date,
     render_ctq_decoration_admin,
     render_ctq_filters,
     render_ctq_indicator_sections,
-    render_ctq_sheet_oos_alert_indicator_sections,
 )
-from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -51,7 +49,6 @@ from src.inline_domain.application.shared.decorated_features import fetch_decora
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_ctq_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
@@ -59,6 +56,13 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 CTQ_PAGE_CACHE_SIGNATURE = "ctq_distribution_report_v1"
+
+
+def _render_saved_page_alerts(report=None) -> None:
+    render_saved_ctq_alerts(
+        current_product, reference_date=default_end_dt.date(), report=report,
+        step_desc_map=step_desc_map,
+    )
 
 
 st.set_page_config(page_title="CTQ监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -71,10 +75,17 @@ product_cache_signature = build_indicator_product_cache_signature(
     current_product,
     PRODUCT_CACHE_INDICATORS,
 )
-db_manager = DatabaseManager()
-step_desc_map = get_cached_step_description_map(db_manager)
-
 _, default_end_dt = MonitorAnalysisService.get_time_window()
+step_desc_map = {}
+try:
+    db_manager = DatabaseManager()
+    step_desc_map = get_cached_step_description_map(db_manager)
+except Exception:
+    logging.getLogger(__name__).exception("CTQ report setup failed")
+    _render_saved_page_alerts()
+    st.error("CTQ 报表数据加载失败，请稍后重试。")
+    st.stop()
+
 default_start_dt = get_default_ctq_start_date(default_end_dt.date())
 
 query_config = SpcQueryConfig(
@@ -83,7 +94,6 @@ query_config = SpcQueryConfig(
     end_date=default_end_dt.strftime("%Y-%m-%d"),
     data_type_filter="CTQ",
 )
-ctq_data_port = build_ctq_repository(db_manager, current_product)
 
 render_page_header(
     title="CTQ监控报表",
@@ -110,9 +120,16 @@ except SheetOosDecorationReadError:
     st.error(
         "CTQ 数据读取失败，请稍后重试。"
     )
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("CTQ decision inputs could not be read")
+    _render_saved_page_alerts()
+    st.error("CTQ 报表数据加载失败，请稍后重试。")
     st.stop()
 
 try:
+    ctq_data_port = build_ctq_repository(db_manager, current_product)
     with st.spinner("正在加载 CTQ 分布数据..."):
         view_model = CtqReportService.get_ctq_report_data(
             _data_port=ctq_data_port,
@@ -123,6 +140,12 @@ try:
         )
 except CtqReportBuildError:
     st.error("CTQ 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("CTQ report generation failed")
+    _render_saved_page_alerts()
+    st.error("CTQ 报表加载失败，请稍后重试。")
     st.stop()
 
 sheet_features_df = view_model.sheet_features_df
@@ -131,6 +154,7 @@ indicator_df = view_model.indicators_df
 
 if sheet_features_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 CTQ 数据。")
+    _render_saved_page_alerts(view_model)
     st.stop()
 
 query_params = st.query_params
@@ -145,25 +169,7 @@ selected_factory, selected_params, selected_steps, should_render_report = render
     step_desc_map=step_desc_map,
 )
 
-ctq_oos_alerts_df = build_ctq_sheet_oos_alerts(
-    view_model.sheet_oos_decoration_result,
-    reference_date=default_end_dt.date(),
-)
-oos_week_start, _ = previous_iso_week_range(default_end_dt.date())
-oos_iso_week = oos_week_start.isocalendar()
-render_sheet_oos_alert_center(
-    ctq_oos_alerts_df,
-    title=f"单片异常预警中心（上一周 {oos_iso_week.year}-W{oos_iso_week.week:02d}）",
-    has_source_data=view_model.sheet_oos_decoration_result is not None,
-    step_desc_map=step_desc_map,
-)
-render_ctq_sheet_oos_alert_indicator_sections(
-    alerts_df=ctq_oos_alerts_df,
-    sheet_features_df=sheet_features_df,
-    raw_measurements_df=raw_measurements_df,
-    period_box_source=ConfigLoader.get_spc_period_box_source(),
-    step_desc_map=step_desc_map,
-)
+_render_saved_page_alerts(view_model)
 
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")

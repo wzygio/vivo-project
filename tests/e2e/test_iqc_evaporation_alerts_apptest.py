@@ -66,12 +66,21 @@ def test_automatic_ng_scope_snapshot_and_public_failures(monkeypatch, tmp_path, 
     # Pre-existing bytes must remain untouched when source or publication fails.
     if 'failure' in mode:
         path.write_bytes(b'previous snapshot')
+    def read_saved(row, product, reference):
+        try:
+            records = pd.read_excel(path, sheet_name='超规材料')
+        except Exception:
+            return {'state': 'error', 'alerts': pd.DataFrame(), 'message': '预警结果暂不可用。'}
+        return {'state': 'alert' if len(records) else 'no_data' if mode == 'empty' else 'ok',
+                'alerts': records, 'message': ''}
+    monkeypatch.setattr(dashboard, 'read_alert_result', read_saved)
     app = AppTest.from_string(f'MODE={mode!r}\nSNAPSHOT={str(path)!r}\n' + APP).run()
     assert not app.exception
     assert '2026-W43' in app.expander[0].label
     assert app.session_state['source_scope'] == (date(2026, 10, 19), date(2026, 10, 25), ('M678', 'M626'))
     if 'failure' in mode:
-        assert app.error[0].value == '蒸镀材料预警数据暂时无法更新，请稍后重试。'
+        assert app.warning[0].value == '蒸镀材料预警数据暂时无法更新；以下状态以已保存结果为准。'
+        assert app.error[0].value == '预警结果暂不可用。'
         assert path.read_bytes() == b'previous snapshot'
         assert not app.dataframe
         assert 'private' not in caplog.text and 'admin=true' not in caplog.text

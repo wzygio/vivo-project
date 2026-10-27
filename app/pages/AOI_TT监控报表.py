@@ -30,17 +30,13 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
-    build_aoi_tt_sheet_oos_alerts,
+    render_saved_aoi_tt_alerts,
     filter_aoi_tt_report,
     get_default_aoi_tt_start_date,
-    load_aoi_tt_oos_decoration,
     render_aoi_tt_filters,
     render_aoi_tt_indicator_sections,
-    render_aoi_tt_sheet_oos_alert_indicator_sections,
 )
-from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.sections.inline_domain.aoi_tt.aoi_tt_weekly_export import render_aoi_tt_weekly_export
-from app.sections.inline_domain.aoi_tt.trend_alerts import render_aoi_tt_trend_alerts
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -52,13 +48,19 @@ from src.inline_domain.application.aoi_tt.dtos import AoiTtQueryConfig
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_aoi_tt_repository, refresh_raw_measurements
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_TT_PAGE_CACHE_SIGNATURE = "aoi_tt_report_v4_integer_particle_quantities"
+
+
+def _render_saved_page_alerts(report=None) -> None:
+    render_saved_aoi_tt_alerts(
+        current_product, reference_date=default_end_dt.date(), report=report,
+        step_desc_map=step_desc_map,
+    )
 
 
 st.set_page_config(page_title="AOI_TT监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -71,18 +73,24 @@ product_cache_signature = build_indicator_product_cache_signature(
     current_product,
     PRODUCT_CACHE_INDICATORS,
 )
-db_manager = DatabaseManager()
-step_desc_map = get_cached_step_description_map(db_manager)
+_, default_end_dt = MonitorAnalysisService.get_time_window()
+step_desc_map = {}
+try:
+    db_manager = DatabaseManager()
+    step_desc_map = get_cached_step_description_map(db_manager)
+except Exception:
+    logging.getLogger(__name__).exception("AOI_TT report setup failed")
+    _render_saved_page_alerts()
+    st.error("AOI_TT 报表数据加载失败，请稍后重试。")
+    st.stop()
 
 # 固定时间窗：上一自然月 1 日 ~ 当前日期（含当天），不提供时间筛选框
-_, default_end_dt = MonitorAnalysisService.get_time_window()
 default_start_dt = get_default_aoi_tt_start_date(default_end_dt.date())
 query_config = AoiTtQueryConfig(
     prod_code=current_product,
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
 )
-aoi_tt_data_port = build_aoi_tt_repository(db_manager, current_product)
 
 render_page_header(
     title="AOI_TT监控报表",
@@ -113,9 +121,16 @@ except SheetOosDecorationReadError:
     st.error(
         "AOI_TT 数据读取失败，请稍后重试。"
     )
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("AOI_TT decision inputs could not be read")
+    _render_saved_page_alerts()
+    st.error("AOI_TT 报表数据加载失败，请稍后重试。")
     st.stop()
 
 try:
+    aoi_tt_data_port = build_aoi_tt_repository(db_manager, current_product)
     with st.spinner("正在加载 AOI TT 数据..."):
         view_model = AoiTtReportService.get_aoi_tt_report_data(
             _data_port=aoi_tt_data_port,
@@ -126,6 +141,12 @@ try:
         )
 except AoiTtReportBuildError:
     st.error("AOI TT 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("AOI_TT report generation failed")
+    _render_saved_page_alerts()
+    st.error("AOI_TT 报表加载失败，请稍后重试。")
     st.stop()
 
 tt_details_df = view_model.tt_details_df
@@ -134,6 +155,7 @@ indicator_df = view_model.indicators_df
 
 if tt_details_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 AOI TT 数据。")
+    _render_saved_page_alerts(view_model)
     st.stop()
 
 (
@@ -144,28 +166,7 @@ if tt_details_df.empty or indicator_df.empty:
     should_render_report,
 ) = render_aoi_tt_filters(indicator_df=indicator_df, step_desc_map=step_desc_map)
 
-# 单片异常预警：只读加载修饰工作簿，失败降级为提示、不阻断报表主体
-oos_decoration_df = load_aoi_tt_oos_decoration(current_product)
-alerts_df = build_aoi_tt_sheet_oos_alerts(oos_decoration_df, reference_date=default_end_dt.date())
-_iso_week = previous_iso_week_range(default_end_dt.date())[0].isocalendar()
-render_sheet_oos_alert_center(
-    alerts_df,
-    title=f"单片异常预警中心（上一周 {_iso_week.year}-W{_iso_week.week:02d}）",
-    has_source_data=oos_decoration_df is not None,
-    step_desc_map=step_desc_map,
-)
-render_aoi_tt_sheet_oos_alert_indicator_sections(
-    alerts_df,
-    tt_details_df=tt_details_df,
-    spec_df=spec_df,
-    indicators_df=indicator_df,
-    end_date=default_end_dt.date(),
-    step_desc_map=step_desc_map,
-)
-
-render_aoi_tt_trend_alerts(
-    view_model, reference_date=default_end_dt.date(), step_desc_map=step_desc_map,
-)
+_render_saved_page_alerts(view_model)
 
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")

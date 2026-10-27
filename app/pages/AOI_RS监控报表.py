@@ -32,18 +32,14 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
-    build_aoi_rs_sheet_oos_alerts,
+    render_saved_aoi_rs_alerts,
     filter_aoi_rs_report,
     get_default_aoi_rs_start_date,
-    load_cached_aoi_rs_sheet_oos_decoration,
     render_aoi_rs_filters,
     render_aoi_rs_indicator_sections,
-    render_aoi_rs_sheet_oos_alert_indicator_sections,
 )
-from app.sections.inline_domain.shared.alert_center import render_sheet_oos_alert_center
 from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
 from app.sections.inline_domain.aoi_rs.aoi_rs_weekly_export import render_aoi_rs_weekly_export
-from app.sections.inline_domain.aoi_rs.trend_alerts import render_aoi_rs_trend_alerts
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -53,17 +49,21 @@ from src.inline_domain.application.aoi_rs.aoi_rs_service import (
     AoiRsReportService,
 )
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
-from src.inline_domain.application.shared.decorated_data import resolve_product_resource_dir
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_aoi_rs_repository, refresh_aoi_rs_snapshots
-from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_DECORATION_FILE_NAME
-from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 AOI_RS_PAGE_CACHE_SIGNATURE = "aoi_rs_report_v1"
+
+
+def _render_saved_page_alerts(report=None) -> None:
+    render_saved_aoi_rs_alerts(
+        current_product, reference_date=default_end_dt.date(), report=report,
+        step_desc_map=step_desc_map,
+    )
 
 
 st.set_page_config(page_title="AOI_RS监控报表", layout="wide", initial_sidebar_state="collapsed")
@@ -76,18 +76,24 @@ product_cache_signature = build_indicator_product_cache_signature(
     current_product,
     PRODUCT_CACHE_INDICATORS,
 )
-db_manager = DatabaseManager()
-step_desc_map = get_cached_step_description_map(db_manager)
+_, default_end_dt = MonitorAnalysisService.get_time_window()
+step_desc_map = {}
+try:
+    db_manager = DatabaseManager()
+    step_desc_map = get_cached_step_description_map(db_manager)
+except Exception:
+    logging.getLogger(__name__).exception("AOI_RS report setup failed")
+    _render_saved_page_alerts()
+    st.error("AOI_RS 报表数据加载失败，请稍后重试。")
+    st.stop()
 
 # 固定时间窗：上一自然月 1 日 ~ 当前日期（含当天），不提供时间筛选框
-_, default_end_dt = MonitorAnalysisService.get_time_window()
 default_start_dt = get_default_aoi_rs_start_date(default_end_dt.date())
 query_config = AoiRsQueryConfig(
     prod_code=current_product,
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
 )
-aoi_rs_data_port = build_aoi_rs_repository(db_manager, current_product)
 
 render_page_header(
     title="AOI_RS监控报表",
@@ -126,9 +132,16 @@ except SheetOosDecorationReadError:
     st.error(
         "AOI_RS 数据读取失败，请稍后重试。"
     )
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("AOI_RS decision inputs could not be read")
+    _render_saved_page_alerts()
+    st.error("AOI_RS 报表数据加载失败，请稍后重试。")
     st.stop()
 
 try:
+    aoi_rs_data_port = build_aoi_rs_repository(db_manager, current_product)
     with st.spinner("正在加载 AOI RS 数据..."):
         view_model = AoiRsReportService.get_aoi_rs_report_data(
             _data_port=aoi_rs_data_port,
@@ -139,6 +152,12 @@ try:
         )
 except AoiRsReportBuildError:
     st.error("AOI RS 报表加载失败，请稍后重试或点击页头“刷新缓存”。")
+    _render_saved_page_alerts()
+    st.stop()
+except Exception:
+    logging.getLogger(__name__).exception("AOI_RS report generation failed")
+    _render_saved_page_alerts()
+    st.error("AOI_RS 报表加载失败，请稍后重试。")
     st.stop()
 
 rs_details_df = view_model.rs_details_df
@@ -148,6 +167,7 @@ indicator_df = view_model.indicators_df
 
 if rs_details_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 AOI RS 数据。")
+    _render_saved_page_alerts(view_model)
     st.stop()
 
 selected_factory, selected_codes, selected_steps, should_render_report = render_aoi_rs_filters(
@@ -155,50 +175,7 @@ selected_factory, selected_codes, selected_steps, should_render_report = render_
     step_desc_map=step_desc_map,
 )
 
-# 单片异常预警：只读加载工作簿（企业加密读取失败降级为 None，不阻断报表）
-product_resource_dir = resolve_product_resource_dir(current_product, scope="aoi_rs")
-decoration_path = ConfigLoader.get_domain_resource_path("inline_domain", "aoi_rs_sheet_oos_decoration", AOI_RS_OOS_DECORATION_FILE_NAME)
-if decoration_path.exists():
-    decoration_stat = decoration_path.stat()
-    sheet_oos_decoration_df = load_cached_aoi_rs_sheet_oos_decoration(
-        decoration_stat.st_mtime_ns,
-        decoration_stat.st_size,
-        current_product,
-        str(decoration_path.parent),
-        decoration_path.name,
-    )
-else:
-    sheet_oos_decoration_df = None
-
-sheet_oos_alerts_df = build_aoi_rs_sheet_oos_alerts(
-    sheet_oos_decoration_df,
-    reference_date=default_end_dt.date(),
-)
-iso_week_start, _ = previous_iso_week_range(default_end_dt.date())
-iso_week = iso_week_start.isocalendar()
-render_sheet_oos_alert_center(
-    sheet_oos_alerts_df,
-    title=f"单片异常预警中心（上一周 {iso_week.year}-W{iso_week.week:02d}）",
-    has_source_data=sheet_oos_decoration_df is not None,
-    step_desc_map=step_desc_map,
-)
-render_aoi_rs_sheet_oos_alert_indicator_sections(
-    alerts_df=sheet_oos_alerts_df,
-    rs_details_df=rs_details_df,
-    pass_through_df=pass_through_df,
-    spec_df=spec_df,
-    indicators_df=indicator_df,
-    lot_points_df=view_model.lot_points_df,
-    sheet_points_df=view_model.sheet_points_df,
-    end_date=default_end_dt.date(),
-    step_desc_map=step_desc_map,
-)
-
-render_aoi_rs_trend_alerts(
-    view_model,
-    reference_date=default_end_dt.date(),
-    step_desc_map=step_desc_map,
-)
+_render_saved_page_alerts(view_model)
 
 if not should_render_report:
     st.info("当前筛选条件尚未查询。")

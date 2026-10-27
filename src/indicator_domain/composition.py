@@ -1,5 +1,11 @@
 """Composition root for indicator-domain outbound adapters."""
 
+from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
+
 from src.indicator_domain.application.ijp.service import IjpReportService
 from src.indicator_domain.application.ijp.settings import IjpSettings
 from src.indicator_domain.application.ijp_hole.service import IjpHoleReportService
@@ -40,7 +46,42 @@ def build_qtime_service(db_manager: DatabaseManager) -> QTimeReportService:
         QTimeDecorationRepository(decoration_path),
         spec_overrides=settings.get("spec_overrides", {}),
         constrain_display=settings.get("constrain_display", False),
+        alert_results=build_qtime_alert_results(),
     )
+
+
+def build_qtime_alert_results() -> "QTimeAlertResults":
+    """Saved-result consumer and producer; constructing it never touches a database."""
+    import hashlib
+    from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
+    from src.indicator_domain.infrastructure.qtime.alert_workbook import QTimeAlertWorkbook
+
+    return QTimeAlertResults(
+        QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts")),
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
+        policy_signature=lambda: hashlib.sha256(repr((
+            "qtime-published-v1", ConfigLoader.get_indicator_data_exclusion(),
+            ConfigLoader.get_data_forward_policy().signature,
+            ConfigLoader.get_report_cutoff_policy().signature,
+            ConfigLoader.load_domain_config("indicator_domain").get("qtime", {}),
+            _qtime_decision_signature(),
+        )).encode()).hexdigest(),
+    )
+
+
+def _qtime_decision_signature() -> tuple[int, int] | None:
+    from src.indicator_domain.application.qtime.cached_monitoring import get_qtime_decision_file_stat
+    return get_qtime_decision_file_stat(ConfigLoader.get_domain_resource_path(
+        "indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx",
+    ))
+
+
+def read_qtime_alert_result(product: str, reference_date: date, **selection) -> dict:
+    return build_qtime_alert_results().read(product, reference_date, **selection)
+
+
+def qtime_alert_result_signature(product: str, reference_date: date, **selection) -> str:
+    return build_qtime_alert_results().source_signature(product, reference_date, **selection)
 
 
 def build_chamber_qtime_service(db_manager: DatabaseManager) -> ChamberQTimeService:

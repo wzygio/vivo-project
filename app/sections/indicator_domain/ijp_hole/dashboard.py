@@ -28,6 +28,7 @@ def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
         except IjpDataAccessError:
             st.session_state.pop(RESULT_KEY, None)
             st.error('IJP 筛选项暂时无法读取，请稍后重试。')
+            render_ijp_alert_center(service, '孔区', produce=False)
             return
         values = {}
         fields = [('产品型号', 'products', 'product_codes'), ('线体', 'lines', 'lines'),

@@ -134,73 +134,13 @@ def _report_end_date() -> date:
     return end_dt.date()
 
 
-def _load_sheet_oos_alerts_display(
-    scope: str,
-    prod_code: str,
-    reference_date: date,
-) -> pd.DataFrame:
-    """只读加载 scope 修饰工作簿并产出中文预警展示表（与各域页面同口径）。"""
-    from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
-        AOI_RS_ALERT_CHART_KIND_LABELS,
-        AOI_RS_ALERT_COLUMN_MAP,
-        AOI_RS_ALERT_COLUMNS,
-    )
-    from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
-        AOI_TT_ALERT_COLUMN_MAP,
-        AOI_TT_ALERT_OUTPUT_COLUMNS,
-    )
-    from app.sections.inline_domain.ctq.ctq_dashboard import (
-        CTQ_OOS_ALERT_COLUMN_MAP,
-        CTQ_OOS_ALERT_COLUMNS,
-    )
-    from app.sections.inline_domain.spc.spc_dashboard import (
-        SPC_OOS_ALERT_COLUMN_MAP,
-        SPC_OOS_ALERT_COLUMNS,
-    )
-    from src.inline_domain.core.aoi_rs.aoi_rs_decoration import AOI_RS_OOS_KEY_COLUMNS
-    from src.inline_domain.core.aoi_tt.aoi_tt_decoration import AOI_TT_OOS_KEY_COLUMNS
-
-    scope_config = {
-        "spc": ("sheet_start_time", None, SPC_OOS_ALERT_COLUMN_MAP, SPC_OOS_ALERT_COLUMNS),
-        "ctq": ("sheet_start_time", None, CTQ_OOS_ALERT_COLUMN_MAP, CTQ_OOS_ALERT_COLUMNS),
-        "aoi_tt": ("start_time", AOI_TT_OOS_KEY_COLUMNS, AOI_TT_ALERT_COLUMN_MAP, AOI_TT_ALERT_OUTPUT_COLUMNS),
-        "aoi_rs": ("sheet_start_time", AOI_RS_OOS_KEY_COLUMNS, AOI_RS_ALERT_COLUMN_MAP, AOI_RS_ALERT_COLUMNS),
-    }
-    time_column, key_columns, column_map, output_columns = scope_config[scope]
-
-    workbook_path = scope_decoration_path(scope)
-    resource_dir = workbook_path.parent
-    decoration_df = load_sheet_oos_decoration(
-        resource_dir,
-        file_name=workbook_path.name,
-        sheet_name=prod_code,
-        key_columns=key_columns,
-    )
-    if decoration_df.empty:
-        return pd.DataFrame(columns=output_columns)
-    if scope == "aoi_tt":
-        from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
-            build_aoi_tt_sheet_oos_alerts,
-        )
-
-        return build_aoi_tt_sheet_oos_alerts(decoration_df, reference_date)
-    alerts_df = build_sheet_oos_alerts(
-        decoration_df,
-        time_column=time_column,
-        reference_date=reference_date,
-    )
-    display_df = build_sheet_oos_alert_display(
-        alerts_df,
-        column_map=column_map,
-        output_columns=output_columns,
-    )
-    if scope == "aoi_rs" and "图类型" in display_df.columns:
-        display_df["图类型"] = display_df["图类型"].astype(str).replace(
-            AOI_RS_ALERT_CHART_KIND_LABELS
-        )
-    if "超规时间" in display_df.columns:
-        display_df["超规时间"] = display_df["超规时间"].astype(str)
-    return display_df
+def _load_sheet_oos_alerts_display(scope: str, prod_code: str, reference_date: date) -> pd.DataFrame:
+    """Report and matrix consume the same published selection and cache entry."""
+    from app.sections.shared.alert_results import read_alert_result
+    result = read_alert_result(f"{scope}_sheet_oos", prod_code, reference_date)
+    if result["state"] == "error":
+        raise ValueError("Saved alert result is unavailable")
+    return result["alerts"]
 
 
 def _load_spc_view(db_manager: Any, prod_code: str):
@@ -398,10 +338,11 @@ def _make_spc_capability_loader(db_manager: Any, *, metric: str) -> DetailLoader
     """保留台账预警判据，按命中指标加载 SPC 页面使用的三图数据。"""
 
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
-        store = cpk_latest_store() if metric == "cpk" else cpm_latest_store()
-        frame = store.read_product(prod_code)
-        alerts_df = (build_latest_capability_alerts(frame, reference_date, metric=metric)
-                     if frame is not None and not frame.empty else pd.DataFrame())
+        from app.sections.shared.alert_results import read_alert_result
+        saved = read_alert_result(f"spc_{metric}_trend", prod_code, reference_date)
+        if saved["state"] == "error":
+            raise ValueError("Saved capability alerts are unavailable")
+        alerts_df = saved["alerts"]
         frames = {
             name: pd.DataFrame()
             for name in ("period_capability_df", "sheet_features_df", "raw_measurements_df")
@@ -531,21 +472,12 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
             warning_signature=cache_context["warning_signature"],
         )
 
-        if mode == "lot":
-            oos_records, _ = compute_lot_oos_records(lot_data, warning_lines)
-            start, end = previous_iso_week_range(reference_date)
-            records = [
-                record
-                for record in oos_records
-                if start
-                <= pd.to_datetime(str(record.get("入库时间")), format="%Y/%m/%d", errors="coerce")
-                < end
-            ]
-        else:
-            records = AlertService.get_dashboard_alert_records(
-                mwd_group_data or {},
-                mwd_code_data or {},
-            )
+        from app.sections.shared.alert_results import read_alert_result
+        row_key = "yield_lot_oos" if mode == "lot" else "yield_trend_fluctuation"
+        saved = read_alert_result(row_key, prod_code, reference_date)
+        if saved["state"] == "error":
+            raise ValueError("Saved Yield alerts are unavailable")
+        records = saved["records"].to_dict("records")
 
         return {
             "kind": "yield",
@@ -565,48 +497,62 @@ def _make_yield_loader(db_manager: Any, mode: str) -> DetailLoader:
 
 
 def _make_qtime_loader(db_manager: Any) -> DetailLoader:
-    """qtime 行：全产品监控（与矩阵同一 L2 缓存）→ 按产品 + 上一 ISO 周过滤。"""
-
+    """Q-Time detail is a read-only view of the same published alert result."""
     def load(prod_code: str, reference_date: date) -> dict[str, Any]:
-        details_df, alerts_df = load_all_product_qtime_monitoring(
-            _resolve_db_manager(db_manager), reference_date
-        )
+        from app.sections.shared.alert_results import read_alert_result
+        result = read_alert_result("qtime_sheet_oos", prod_code, reference_date)
+        if result["state"] == "error":
+            raise ValueError("Saved Q-Time alerts are unavailable")
+        return {"kind": "qtime", "alerts_df": result["records"],
+                "details_df": pd.DataFrame(), "total_lots": result.get("metadata", {}).get("total_lots", 0),
+                "reference_date": str(reference_date)}
+    return load
 
-        def _for_product(frame: pd.DataFrame) -> pd.DataFrame:
-            if frame.empty or "prodcode" not in frame.columns:
-                return frame.iloc[0:0].copy() if isinstance(frame, pd.DataFrame) else pd.DataFrame()
-            return frame.loc[frame["prodcode"].astype(str) == str(prod_code)].copy()
 
-        prod_details = _for_product(details_df)
-        prod_alerts = _for_product(alerts_df)
-        if not prod_alerts.empty and "timekey" in prod_alerts.columns:
-            start, end = previous_iso_week_range(reference_date)
-            times = pd.to_datetime(
-                prod_alerts["timekey"].astype(str).str.slice(0, 14),
-                format="%Y%m%d%H%M%S",
-                errors="coerce",
-            )
-            prod_alerts = prod_alerts.loc[
-                (times >= start) & (times < end)
-            ].copy()
-        total_lots = (
-            int(prod_details["lot_id"].nunique())
-            if not prod_details.empty and "lot_id" in prod_details.columns
-            else 0
-        )
-        return {
-            "kind": "qtime",
-            "alerts_df": prod_alerts,
-            "details_df": prod_details,
-            "total_lots": total_lots,
-        }
-
+def _saved_detail_loader(row_key: str, chart_loader: DetailLoader) -> DetailLoader:
+    def load(product: str, reference_date: date) -> dict[str, Any]:
+        from app.sections.shared.alert_results import read_alert_result
+        result = read_alert_result(row_key, product, reference_date)
+        if result["state"] == "error":
+            raise ValueError("Saved alert result is unavailable")
+        if row_key.endswith("_sheet_oos") and row_key != "qtime_sheet_oos":
+            bundle = {"kind": "sheet_oos", "scope": row_key.removesuffix("_sheet_oos"),
+                      "alerts_df": result["alerts"], "frames": {
+                          name: pd.DataFrame() for name in (
+                              "period_capability_df", "sheet_features_df", "raw_measurements_df",
+                              "tt_details_df", "rs_details_df", "pass_through_df", "spec_df",
+                              "indicators_df", "lot_points_df", "sheet_points_df")},
+                      "end_date": str(reference_date)}
+        elif row_key in ("spc_cpk_trend", "spc_cpm_trend"):
+            bundle = {"kind": row_key.removesuffix("_trend"), "alerts_df": result["alerts"],
+                      "frames": {name: pd.DataFrame() for name in (
+                          "period_capability_df", "sheet_features_df", "raw_measurements_df")},
+                      "end_date": str(reference_date)}
+        elif row_key.startswith("yield_"):
+            bundle = {"kind": "yield", "yield_mode": "lot" if row_key == "yield_lot_oos" else "trend",
+                      "records": result["records"].to_dict("records"), "mwd_code_data": {}, "lot_data": {},
+                      "sheet_data": {}, "mapping_data": None, "warning_lines": {},
+                      "hotspot_scripts": [], "mapping_layout": None, "product_code": product}
+        else:
+            return chart_loader(product, reference_date)
+        if result["state"] == "alert":
+            try:
+                bundle.update(chart_loader(product, reference_date))
+            except Exception:
+                logger.exception("Optional alert charts unavailable: %s/%s", row_key, product)
+                bundle["chart_unavailable"] = True
+        # The saved result remains authoritative even if a chart service republishes.
+        if row_key.startswith("yield_"):
+            bundle["records"] = result["records"].to_dict("records")
+        else:
+            bundle["alerts_df"] = result["alerts"]
+        return bundle
     return load
 
 
 def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoader]:
-    """Legacy chart loaders plus file-only published-alert detail readers."""
-    return {
+    """Shared saved alert display with independent optional chart acquisition."""
+    charts = {
         "aoi_rs_sheet_oos": _make_sheet_oos_loader("aoi_rs", db_manager),
         "aoi_tt_sheet_oos": _make_sheet_oos_loader("aoi_tt", db_manager),
         "spc_sheet_oos": _make_sheet_oos_loader("spc", db_manager),
@@ -616,8 +562,9 @@ def build_default_detail_loaders(db_manager: Any = None) -> dict[str, DetailLoad
         "yield_lot_oos": _make_yield_loader(db_manager, "lot"),
         "yield_trend_fluctuation": _make_yield_loader(db_manager, "trend"),
         "qtime_sheet_oos": _make_qtime_loader(db_manager),
-        **{key: partial(load_published_detail, key) for key in PUBLISHED_ALERT_ROWS},
     }
+    return {**{key: _saved_detail_loader(key, loader) for key, loader in charts.items()},
+            **{key: partial(load_published_detail, key) for key in PUBLISHED_ALERT_ROWS}}
 
 
 # ---------------------------------------------------------------------------
@@ -872,8 +819,18 @@ def _render_qtime_detail(
     if alerts_df.empty:
         return
     if details_df.empty:
-        st.caption("预警站点暂无可绘制的 Q-Time 明细数据。")
-        return
+        if not st.button("加载预警站点图像", key=f"matrix_qtime_charts_{prod_code}"):
+            return
+        try:
+            # Optional plots use the original report flow only after an explicit
+            # request, after the published alert table has already rendered.
+            as_of = date.fromisoformat(bundle.get("reference_date", date.today().isoformat()))
+            all_details, _ = load_all_product_qtime_monitoring(_resolve_db_manager(None), as_of)
+            details_df = all_details.loc[all_details["prodcode"].astype(str).eq(str(prod_code))].copy()
+        except Exception:
+            logger.exception("Optional Q-Time alert charts unavailable: %s", prod_code)
+            st.info("预警站点图像暂不可用，请稍后重试。")
+            return
     alert_steps = alerts_df["step_desc"].dropna().unique()
     details_df = details_df.loc[details_df["step_desc"].isin(alert_steps)].copy()
     if details_df.empty:
@@ -1016,6 +973,9 @@ def render_alert_matrix_detail(
         )
 
         state = cell.get("state")
+        if state == CELL_STATE_NO_DATA and (row_key in PUBLISHED_ALERT_ROWS or cell.get("message") == "当前暂无预警记录。"):
+            st.caption('当前暂无预警记录。')
+            return
         if state in (CELL_STATE_OK, CELL_STATE_NO_DATA):
             st.success("该产品该项上一周期无预警（达标）。")
             return
@@ -1039,6 +999,8 @@ def render_alert_matrix_detail(
             return
 
         try:
+            from app.sections.shared.alert_results import alert_result_signature
+            memo_base += alert_result_signature(row_key, prod_code, reference_date)
             if row_key in PUBLISHED_ALERT_ROWS:
                 memo_base += published_alert_signature(row_key, prod_code, reference_date)
             if row_key.startswith("yield_"):

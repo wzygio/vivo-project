@@ -53,7 +53,7 @@ from app.sections.equipment_domain.parts_dashboard import (
     render_parts_metrics,
     render_parts_table,
 )
-from app.sections.equipment_domain.parts_alerts import render_parts_alerts
+from app.sections.equipment_domain.parts_alerts import render_parts_alerts, render_saved_parts_alerts
 from src.equipment_domain.composition import create_parts_alert_store
 
 # ==============================================================================
@@ -79,7 +79,13 @@ st.set_page_config(
 active_config = SessionManager.get_active_config()
 db_manager = DatabaseManager()
 parts_report_cache_signature = PARTS_REPORT_CACHE_SIGNATURE
-parts_report_cache_context = build_parts_report_cache_context(BASELINE_PATH, CVD_PATH)
+try:
+    parts_report_cache_context = build_parts_report_cache_context(BASELINE_PATH, CVD_PATH)
+except Exception:
+    logger.exception("Critical-parts report context could not be loaded")
+    st.error("备件寿命数据暂时无法加载，请稍后重试。")
+    render_saved_parts_alerts()
+    st.stop()
 render_page_header(
     "📋 关键备件报表",
     active_config,
@@ -113,6 +119,7 @@ with st.spinner("正在加载备件寿命数据..."):
     except Exception:
         logger.exception("关键备件报表加载失败")
         st.error("备件寿命数据暂时无法加载，请稍后重试。")
+        render_saved_parts_alerts()
         st.stop()
 
 

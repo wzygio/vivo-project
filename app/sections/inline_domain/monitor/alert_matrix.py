@@ -96,6 +96,8 @@ def _cell_help(cell: Mapping[str, str]) -> str:
     """单元格 tooltip：状态说明 +（如有）降级原因，⬜ 的 message 在此可见。"""
     state = cell.get("state", CELL_STATE_ERROR)
     if state == CELL_STATE_NO_DATA:
+        if cell.get('message') == '当前暂无预警记录。':
+            return '当前暂无预警记录。'
         return _STATE_HELP[CELL_STATE_OK]
     if state == CELL_STATE_ERROR:
         return "数据加载失败，请稍后重试。"
@@ -295,7 +297,8 @@ def _render_matrix_rows(
             column.button(
                 CELL_STATE_ICONS.get(state, CELL_STATE_ICONS[CELL_STATE_ERROR]),
                 key=matrix_cell_button_key(row_key, prod_code),
-                help=_cell_help(cell if state == cell.get("state") else {"state": state}),
+                help=_cell_help(cell if state == cell.get("state") or cell.get('state') == CELL_STATE_NO_DATA
+                                else {"state": state}),
                 on_click=_select_cell,
                 args=(detail_key,),
                 width="stretch",

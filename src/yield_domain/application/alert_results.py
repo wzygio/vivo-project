@@ -53,7 +53,8 @@ class YieldAlertResults:
 
     def publish(self, product: str, kind: str, records: Sequence[Mapping], *,
                 reference_date: date, coverage_start: str, coverage_end: str,
-                has_data: bool, health: Mapping, calculation_signature: str) -> bool:
+                has_data: bool, health: Mapping, calculation_signature: str,
+                lot_reference_date: str | None = None) -> bool:
         required_columns = RESULT_COLUMNS[kind]
         columns = required_columns + (["is_current"] if kind == "trend" else [])
         rows = []
@@ -86,6 +87,8 @@ class YieldAlertResults:
             "policy_signature": self.policy_signature(product),
             "calculation_signature": calculation_signature, "status": "ready",
         }
+        if kind == "lot" and lot_reference_date is not None:
+            metadata["lot_reference_date"] = date.fromisoformat(lot_reference_date).isoformat()
         if metadata["source_status"] != "fresh":
             return self.mark_failed(product, kind, reference_date, "YIELD_SOURCE_NOT_CURRENT")
         if pd.isna(_utc_timestamp(metadata["source_refreshed_at"])):
@@ -101,7 +104,9 @@ class YieldAlertResults:
         metadata["attempted_at"] = self.clock().isoformat()
         return self.store.write_product(product, kind, None, metadata)
 
-    def read(self, product: str, kind: str, reference_date: date) -> PublishedYieldAlerts:
+    def read(self, product: str, kind: str, reference_date: date, *,
+             start_date: str | None = None, end_date: str | None = None,
+             time_period: int | None = None) -> PublishedYieldAlerts:
         payload = self.store.read_product(product, kind)
         if payload is None:
             return PublishedYieldAlerts("missing", pd.DataFrame(columns=RESULT_COLUMNS[kind]), {})
@@ -132,6 +137,21 @@ class YieldAlertResults:
         monday = reference_date - timedelta(days=reference_date.weekday())
         required_start = monday - timedelta(days=7) if kind == "lot" else reference_date
         required_end = monday - timedelta(days=1) if kind == "lot" else reference_date
+        if kind != "lot" and any(value is not None for value in (start_date, end_date, time_period)):
+            raise ValueError("Date selections apply only to Lot results")
+        if time_period is not None:
+            if isinstance(time_period, bool) or not isinstance(time_period, int) or time_period < 0:
+                raise ValueError("Invalid Lot time period")
+            if start_date is not None or end_date is not None:
+                raise ValueError("Choose an explicit Lot window or time period")
+            required_end = date.fromisoformat(str(meta.get("lot_reference_date", meta["coverage_end"])))
+            required_start = required_end - timedelta(days=time_period)
+        elif start_date is not None or end_date is not None:
+            if start_date is None or end_date is None:
+                raise ValueError("Lot selection needs both start and end dates")
+            required_start, required_end = date.fromisoformat(start_date), date.fromisoformat(end_date)
+            if required_start > required_end:
+                raise ValueError("Invalid Lot selection window")
         start, end = pd.Timestamp(meta["coverage_start"]), pd.Timestamp(meta["coverage_end"])
         if start > pd.Timestamp(required_start) or end < pd.Timestamp(required_end):
             return PublishedYieldAlerts("uncovered", frame, meta)
@@ -139,15 +159,19 @@ class YieldAlertResults:
             times = pd.to_datetime(frame["入库时间"], format="%Y/%m/%d", errors="coerce")
             if times.isna().any():
                 raise ValueError("Invalid published Lot event date")
-            frame = frame.loc[(times >= pd.Timestamp(monday-timedelta(days=7)))
-                              & (times < pd.Timestamp(monday))].reset_index(drop=True)
+            frame = frame.loc[(times >= pd.Timestamp(required_start))
+                              & (times < pd.Timestamp(required_end) + pd.Timedelta(days=1))].reset_index(drop=True)
         if kind == "trend" and "is_current" in frame:
             if not frame["is_current"].isin([True, False]).all():
                 raise ValueError("Invalid published current trend marker")
             frame = frame.loc[frame["is_current"].eq(True)].reset_index(drop=True)
         return PublishedYieldAlerts("ready" if bool(meta["has_data"]) else "no_data", frame, meta)
 
-    def source_signature(self, product: str, kind: str, reference_date: date) -> str:
-        result = self.read(product, kind, reference_date)
+    def source_signature(self, product: str, kind: str, reference_date: date, *,
+                         start_date: str | None = None, end_date: str | None = None,
+                         time_period: int | None = None) -> str:
+        selection = {"start_date": start_date, "end_date": end_date, "time_period": time_period}
+        result = self.read(product, kind, reference_date, **selection)
         return _digest({"file": self.store.source_signature(kind), "status": result.status,
-                        "policy": self.policy_signature(product), "as_of": str(reference_date)})
+                        "policy": self.policy_signature(product), "as_of": str(reference_date),
+                        "selection": selection})

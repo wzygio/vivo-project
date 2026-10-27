@@ -42,6 +42,7 @@ from app.sections.inline_domain.shared import (
 from app.sections.inline_domain.shared.alert_center import (
     build_sheet_oos_alert_display,
     filter_report_by_alert_keys,
+    render_sheet_oos_alert_center,
 )
 from app.utils.step_labels import format_step_label
 from src.inline_domain.core.aoi_tt.aoi_tt_calculator import (
@@ -82,6 +83,51 @@ AOI_TT_ALERT_COLUMN_MAP = {
 }
 AOI_TT_ALERT_OUTPUT_COLUMNS = ["厂别", "站点", "TT名称", "Sheet ID", "超规时间", "TT数量", "规格上限"]
 AOI_TT_ALERT_KEY_MAP = {"厂别": "factory", "站点": "step_id", "TT名称": "tt_name"}
+
+
+def render_saved_aoi_tt_alerts(
+    product: str, *, reference_date: date, report: object | None = None,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Use committed Sheet/trend results; missing chart frames do not hide alerts."""
+    from app.sections.shared.alert_results import read_alert_result
+    from app.sections.inline_domain.aoi_tt.trend_alerts import render_aoi_tt_trend_alerts
+    from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+
+    if report is not None and hasattr(report, "trend_evaluation_df"):
+        from src.inline_domain.composition import build_trend_alert_results
+        try:
+            build_trend_alert_results("aoi_tt").publish(product, reference_date, report.trend_evaluation_df)
+        except Exception:
+            logger.exception("AOI TT trend result publication failed")
+            st.warning("趋势预警更新失败，请稍后重试。")
+    result = read_alert_result("aoi_tt_sheet_oos", product, reference_date)
+    if result["state"] == "error":
+        st.error("单片异常预警数据暂不可用，请稍后重试。")
+    else:
+        iso = previous_iso_week_range(reference_date)[0].isocalendar()
+        render_sheet_oos_alert_center(
+            result["alerts"], title=f"单片异常预警中心（上一周 {iso.year}-W{iso.week:02d}）",
+            has_source_data=result["state"] != "no_data", step_desc_map=step_desc_map,
+        )
+        if report is not None:
+            try:
+                render_aoi_tt_sheet_oos_alert_indicator_sections(
+                    result["alerts"], tt_details_df=report.tt_details_df,
+                    spec_df=report.spec_df, indicators_df=report.indicators_df,
+                    end_date=reference_date, step_desc_map=step_desc_map,
+                )
+            except Exception:
+                logger.exception("Optional AOI TT Sheet alert charts unavailable")
+                st.warning("单片异常预警图像暂不可用。")
+    trend = read_alert_result("aoi_tt_trend", product, reference_date)
+    if trend["state"] == "error":
+        st.error("趋势预警数据暂不可用，请稍后重试。")
+    else:
+        render_aoi_tt_trend_alerts(
+            report, reference_date=reference_date, step_desc_map=step_desc_map,
+            evaluation_df=trend.get("evaluation", trend["records"]),
+        )
 
 
 def get_default_aoi_tt_start_date(end_date: date) -> date:

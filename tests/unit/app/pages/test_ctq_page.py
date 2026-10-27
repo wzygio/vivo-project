@@ -18,6 +18,10 @@ from src.shared_kernel.infrastructure import db_handler
 
 
 def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypatch) -> None:
+    from app.sections.shared import alert_results
+    monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
+        "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(),
+    })
     from src.inline_domain.application.shared import decision_signature
     monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *_args: "test-decisions")
     events: list[str] = []
