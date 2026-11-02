@@ -17,7 +17,7 @@ from src.yield_domain.infrastructure.repositories.yield_repository import (
 def test_safe_refresh_injects_loaded_config_into_bottom_data_provider(
     tmp_path, monkeypatch
 ) -> None:
-    def fake_read_sql(sql_query, engine) -> pd.DataFrame:
+    def fake_read_sql(sql_query, engine, params=None) -> pd.DataFrame:
         return pd.DataFrame(
             [
                 {

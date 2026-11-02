@@ -22,7 +22,7 @@
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |
-| SPC 主制程设备 / 腔室、最近 OUT、履历回退 | [SPC 主制程数据源](domain/inline_domain/spc/data-source-spc-main-process.md) |
+| SPC 主制程设备 / 腔室、最近 OUT、履历回退；2120A PPID 产品归属、MQC 映射、非 UNI 参数屏蔽 | [SPC 主制程数据源与 2120A 特殊处理](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |
 | AOI_TT 聚合、Particle Size、趋势与单片异常链路 | [AOI_TT 数据流](domain/inline_domain/aoi_tt/data-flow-aoi-tt.md) |
 | AOI_TT 专用 Sheet 修饰、厂别日期窗口、UCL 半规格触发、四分之一上限整数哈希、可配置比例 | [AOI_TT 专用修饰规则](domain/inline_domain/aoi_tt/rules-aoi-tt-special-decoration.md) |

@@ -14,15 +14,17 @@ User explicitly requested feat-API2.2: all filters optional, default authorized 
 
 ### Phase 2: Planning
 **Status:** complete
-Execution view approved with requirements. Tickets01/02 complete; frontier03. Failure contract uses meta.complete/failed_sources, all-failed503 with safe error.failed_sources.
+Execution view approved with requirements. All three tickets complete. Failure contract uses meta.complete/failed_sources, all-failed503 with safe error.failed_sources.
 01 optional authorized scope/unlimited results and removal →02 local published date window/filter end-to-end →03 global cursor binding/security/integration/docs. Reuse HTTP/file seams and existing source application readers; extend Inline date-selection contract while preserving page defaults.
 
 ### Phase 3: Development and testing
-**Status:** in_progress
+**Status:** complete
+Merged7cc66191 to master; existing8890 service updated and healthy,0 restarts, profile/scopes and8503 identity unchanged. Postmerge158 pass. Full baseline24 remain separately tracked; transient cases serially resolved. Root audit recorded1 concurrent un-attributed workbook-byte change with0 protected-write attempts; no whole-root byte-preservation claim.
 Test-first at existing HTTP and temporary-file source seams; static checks, focused coverage, guarded regression and independent Standards/Spec review. No production DB or workbook writes. Keep all original user changes. Prior session's merge/deployment authorization applies only to the existing8890API; never restart8503or unrelated services.
 
 ### Phase 4: Project record
-**Status:** pending
+**Status:** complete
+Existing acceptedADR0037 updated only for the user's explicitly confirmed2.2 decisions, with alternatives/consequences and implementation/evidence traceability. API guide owns behavior; dated delivery/review reports own validation facts.
 Update owning API guide/architecture/ADR and record verification. Explain cursor simply; list possible extra return fields with their actual source/prerequisites, implement none beyond explicitly required contract.
 
 ## Decisions and limits

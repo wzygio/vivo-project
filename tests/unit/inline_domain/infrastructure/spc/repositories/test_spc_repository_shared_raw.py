@@ -69,6 +69,16 @@ def test_spc_source_signature_tracks_only_selected_product_snapshot(tmp_path):
     assert spc_input_signature(tmp_path, "M626") != second
 
 
+def test_spc_source_signature_changes_when_measurement_policy_changes(tmp_path, monkeypatch):
+    from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
+        InlineMeasurementSnapshotRepository,
+    )
+
+    previous = spc_input_signature(tmp_path, "M626")
+    monkeypatch.setattr(InlineMeasurementSnapshotRepository, "SNAPSHOT_POLICY_VERSION", "new-product-mapping")
+    assert spc_input_signature(tmp_path, "M626") != previous
+
+
 class FakeMetadata:
     def get_parameter_catalog(self, prod_code: str) -> pd.DataFrame:
         return pd.DataFrame(

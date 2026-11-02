@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+MQC_PRODUCT_STEP_ID = "2120A"
+
 FACTORY_TABLES = {
     "ARRAY": ("spc_tzbjx_array", "sheet_id", "sheet_start_time"),
     "OLED": ("spc_tzbjx_oled", "glass_id", "glass_start_time"),
@@ -45,11 +47,32 @@ def load_raw_measurements(
 
     selects = []
     for factory, (table_name, id_column, time_column) in FACTORY_TABLES.items():
-        selects.append(
-            f"""
+        normal_station_filter = (
+            "AND (T.step_id <> :mqc_step_id OR T.step_id IS NULL)"
+            if factory == "OLED" else ""
+        )
+        product_routes = [(
+            "P.productcode",
+            "JOIN mdw.dwr_mes_productspec P ON T.product_spec = P.productspecname",
+            normal_station_filter,
+        )]
+        if factory == "OLED":
+            # 2120A belongs to the PPID-mapped product even when its spec says MQC.
+            product_routes.append((
+                "M.prodcode",
+                """JOIN (
+                    SELECT DISTINCT ppid, prodcode
+                    FROM eda.IMP_SPC_TZBJX_MQC
+                    WHERE prodcode = :prod_code
+                ) M ON T.ppid = M.ppid""",
+                "AND T.step_id = :mqc_step_id",
+            ))
+        for product_column, product_join, station_filter in product_routes:
+            selects.append(
+                f"""
             SELECT
                 '{factory}' AS factory,
-                P.productcode AS prod_code,
+                {product_column} AS prod_code,
                 T.{time_column} AS start_time,
                 T.{id_column} AS sheet_id,
                 T.lot_id,
@@ -59,18 +82,19 @@ def load_raw_measurements(
                 T.unit_id,
                 T.param_value
             FROM eda.{table_name} T
-            JOIN mdw.dwr_mes_productspec P
-              ON T.product_spec = P.productspecname
+            {product_join}
             WHERE T.{time_column} >= :start_time
               AND T.{time_column} <= :end_time
-              AND P.productcode = :prod_code
+              AND {product_column} = :prod_code
+              {station_filter}
             """
-        )
+            )
 
     params = {
         "start_time": f"{start_date} 00:00:00",
         "end_time": f"{end_date} 23:59:59",
         "prod_code": prod_code,
+        "mqc_step_id": MQC_PRODUCT_STEP_ID,
     }
     try:
         result = pd.read_sql(text(" UNION ALL ".join(selects)), db_manager.engine, params=params)

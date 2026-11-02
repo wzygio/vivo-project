@@ -86,6 +86,30 @@ def test_repository_reuses_one_product_snapshot_for_repeated_reads(tmp_path) -> 
     )
 
 
+def test_product_mapping_change_rebuilds_complete_window_instead_of_reusing_v4_snapshot(tmp_path):
+    path = tmp_path / "inline_measurements_M678.parquet"
+    _raw_measurements().assign(lot_id="OLD-SPEC-MAPPING").to_parquet(path, index=False)
+    _write_coverage(path)
+    old_policy = "inline-measurement-raw-v4-rolling"
+    metadata = json.loads(path.with_suffix(".snapshot.json").read_text(encoding="utf-8"))
+    metadata["policy_version"] = old_policy
+    path.with_suffix(".snapshot.json").write_text(json.dumps(metadata), encoding="utf-8")
+    path.with_suffix(".policy").write_text(old_policy, encoding="utf-8")
+    calls = []
+
+    def loader(_db, start, end, product):
+        calls.append((start, end, product))
+        return _raw_measurements().assign(lot_id="PPID-MAPPING")
+
+    repository = InlineMeasurementSnapshotRepository(
+        snapshot_dir=tmp_path, db_manager=SimpleNamespace(engine=object()), measurement_loader=loader,
+    )
+    result = repository.get_measurements("M678", "2026-08-13")
+
+    assert calls == [("2026-05-01", "2026-08-13", "M678")]
+    assert result["lot_id"].tolist() == ["PPID-MAPPING"]
+
+
 def test_repository_refreshes_snapshot_without_current_raw_policy(tmp_path) -> None:
     snapshot_path = tmp_path / "inline_measurements_M678.parquet"
     _raw_measurements().assign(lot_id="STALE").to_parquet(snapshot_path, index=False)

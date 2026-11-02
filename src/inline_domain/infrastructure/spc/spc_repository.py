@@ -10,6 +10,9 @@ from src.inline_domain.application.ports.measurement_snapshot import (
     MeasurementPreparationPort,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import (
+    InlineMeasurementSnapshotRepository,
+)
 from src.shared_kernel.snapshot_paths import inline_measurement_directory, snapshot_component
 
 
@@ -18,7 +21,7 @@ def spc_input_signature(project_root: Path, prod_code: str) -> str:
     path = inline_measurement_directory(project_root / "data") / (
         f"inline_measurements_{snapshot_component(prod_code)}.parquet"
     )
-    parts = []
+    parts = [InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION]
     for source in [path, path.with_suffix(".policy")]:
         try:
             stat = source.stat()

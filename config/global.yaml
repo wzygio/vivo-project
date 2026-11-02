@@ -43,6 +43,7 @@ product_registry:
     Z576: "CPD2576"
     Z611: "CPD2611"
     Z553: "CPD2553"
+    Z622: "CPDZ622"
 
 # Yield 域通用数据策略。产品配置只声明产品差异。
 data_source:

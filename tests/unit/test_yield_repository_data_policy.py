@@ -104,7 +104,7 @@ def test_repository_persists_raw_defects_before_applying_policy(
 ) -> None:
     snapshot_path = tmp_path / "yield_snapshot.parquet"
 
-    def fake_read_sql(sql_query, engine) -> pd.DataFrame:
+    def fake_read_sql(sql_query, engine, params=None) -> pd.DataFrame:
         return pd.DataFrame(
             [
                 {

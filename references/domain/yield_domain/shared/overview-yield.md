@@ -137,6 +137,15 @@ DAO 层职责：
 - Excel/CSV 本地文件读取（Override 数据）
 - 多数据源统一接口
 
+Panel 明细的蒸镀批次取数规则（2026-11-02）：
+
+- 从 `mdw.spot_glass_batch_info` 读取，`lot` 前 8 位作为 `batch_no`，例如 `26/11/01`；不再从工单描述中提取日期。
+- 关联键为产品型号 `sgbi.productcode = dmp.productcode`，以及 `glass_id` 前 11 位等于 `panel_id` 前 11 位；批次表的 `productcode` 不能与入库表的 `prod_id` 直接匹配。
+- 必须直接过滤分区字段 `sgbi.timekey`：下界为本次 `load_panel_details` 查询开始日（含），上界为结束日下一日（不含），格式为 `YYYYMMDD`。沿用仓储传入的源时间窗口，不额外回溯；仓储分片或增量查询时使用对应分片窗口。
+- 同产品、同 Sheet 在窗口内存在多条记录时，按 `timekey` 降序选一条；相同 `timekey` 冲突按完整 `lot` 降序、空值最后确定顺序，避免批次关联放大 Panel/缺陷明细。
+- 未匹配到批次时保留 Panel 和缺陷记录，`batch_no` 为空；产品字典、入库日期、工单类型及缺陷关联保持各自原有职责。
+- 此规则作用于重新取数。已有快照和增量窗口外的记录不会被自动改写，切换来源后需通过现有完整刷新入口重建所需窗口，才能统一批次格式。
+
 ### 5.2 [`yield_repository.py`](../../../../src/yield_domain/infrastructure/repositories/yield_repository.py)
 
 `PanelRepository` 职责：

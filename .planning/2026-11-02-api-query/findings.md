@@ -12,3 +12,5 @@ Baseline observations below refer tobe925c9e; current implementation and progres
 
 - Review exposed aware timestamp normalization must precede existing Inline display-date exclusion; this is now at the established ExcelAlarmStore boundary, verified across4 sources*2 events with active exclusion. API workbook I/O now converts only known parser/COM/Windows failures to typed source unavailability, keeping programming errors distinct.
 - Pre-review full regression2797 pass/24 fail, node set matches tracked24 exactly. A broader post-review targeted run355 pass/1 AppTest3-second timeout under concurrent full load; do not mark that timeout resolved until isolated verification. Final full rerun is on079b8822 production code.
+
+- Closure: both temporary failures resolved via24 serial module tests; final full2808 pass/25 fail includes tracked24 plus that resolved temporary file-lock case. Postmerge158 API/file tests passed; original-root audit recorded1 existing Yield workbook byte change and wrapper3 despite0 write attempts, origin unknown. Preserve the current user workbook and report this limitation, never restore old bytes to manufacture a clean audit.

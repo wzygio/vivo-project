@@ -1,7 +1,7 @@
 # src/vivo_project/infrastructure/data_loader.py
 import logging
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence
 from src.yield_domain.application.errors import YieldSourceReadError
@@ -25,14 +25,14 @@ def load_panel_details(
     
     start_date_fmt = start_date.replace('-', '')
     end_date_fmt = end_date.replace('-', '')
-    # 确保 list 不为空再 join，防止 SQL 语法错误（虽然业务上通常不为空）
-    work_orders_str = "','".join(work_order_types) if work_order_types else ""
+    # 分区范围沿用本次入库查询窗口，结束日全天包含；不额外回溯。
+    batch_end_timekey = (pd.Timestamp(end_date) + pd.Timedelta(days=1)).strftime('%Y%m%d')
 
     # dws_dft_warehousing_d： 获取defect_code
-    # spot_glass_batch_info： 获取批次号
+    # spot_glass_batch_info：按产品型号 + Sheet 匹配批次号，同 Sheet 取窗口内最新记录
     # dwr_mes_productspec： 获取产品号
     # imp_ct_dft_group： 获取defect_group及defect_desc
-    sql_query = f"""
+    sql_query = """
     select 
         evap_batch.batch_no as batch_no,
         substr(dwp.panel_id, 1, 9) as lot_id, 
@@ -46,33 +46,47 @@ def load_panel_details(
         icdg.defect_group as defect_group
     from dwt_warehousing_pnl dwp
     left join dws_dft_warehousing_d ddwd on dwp.panel_id = ddwd.panel_id 
-    left join (
-        select distinct on (D.panel_id)
-            D.panel_id,
-            to_char(to_date(substring(R.DESCRIPTION from '^[0-9]{{4}}/[0-9]{{1,2}}/[0-9]{{1,2}}'), 'YYYY/MM/DD'), 'YYYY/MM/DD') as batch_no
-        from dwt_yield_result_pnl D
-        left join DWR_MES_PRODUCTREQUEST R on D.SUB_PROD_ID = R.PRODUCTREQUESTNAME
-        where D.prod_code = '{prod_code}'
-            and D.sub_prod_type in ('{work_orders_str}')
-            and D.oper_group = 'CT'
-        order by D.panel_id
-    ) evap_batch on dwp.panel_id = evap_batch.panel_id
     left join dwr_mes_productspec dmp on dwp.prod_id = dmp.productspecname
+    left join (
+        select productcode, sheet_id, batch_no
+        from (
+            select
+                sgbi.productcode,
+                substr(sgbi.glass_id, 1, 11) as sheet_id,
+                substr(sgbi.lot, 1, 8) as batch_no,
+                row_number() over (
+                    partition by sgbi.productcode, substr(sgbi.glass_id, 1, 11)
+                    order by sgbi.timekey desc, sgbi.lot desc nulls last
+                ) as batch_rank
+            from mdw.spot_glass_batch_info sgbi
+            where sgbi.productcode = :prod_code
+                and sgbi.timekey >= :start_date
+                and sgbi.timekey < :batch_end_timekey
+        ) ranked_batch
+        where batch_rank = 1
+    ) evap_batch on substr(dwp.panel_id, 1, 11) = evap_batch.sheet_id
+        and dmp.productcode = evap_batch.productcode
     left join imp_ct_dft_group icdg on icdg.defect_code = ddwd.defect_code
     where dwp.last_flag = 'Y'
-        and dwp.first_ship_date between '{start_date_fmt}' and '{end_date_fmt}'
-        and dmp.productcode = '{prod_code}'
-        and dwp.sub_prod_type in ('{work_orders_str}')
+        and dwp.first_ship_date between :start_date and :end_date
+        and dmp.productcode = :prod_code
+        and dwp.sub_prod_type in :work_order_types
     """
-    # 注意：上面的 SQL 中去掉了 order by batch_no, lot_id, sheet_id, panel_id; 
-    # 数据库只负责“拿数据”，不要让它负责“排数据”，尤其是跨表大查询时
+    # 批次子查询仅为去重排序；最终报表顺序由 Pandas 处理，避免跨表全量排序。
 
     try:
         if db_manager.engine is None:
             raise Exception("数据库引擎未初始化。")
         
-        logging.info("正在执行SQL查询 (已移除DB端排序)...")
-        panel_df = pd.read_sql(text(sql_query), db_manager.engine)
+        logging.info("正在执行SQL查询 (最终报表排序由 Pandas 执行)...")
+        query = text(sql_query).bindparams(bindparam('work_order_types', expanding=True))
+        panel_df = pd.read_sql(query, db_manager.engine, params={
+            'start_date': start_date_fmt,
+            'end_date': end_date_fmt,
+            'batch_end_timekey': batch_end_timekey,
+            'prod_code': prod_code,
+            'work_order_types': list(work_order_types),
+        })
         panel_df.columns = panel_df.columns.str.lower()
         
         # 1. 在 Pandas 中进行排序：此时数据已经到了本地内存，Pandas 排序非常快且不会导致数据库连接超时

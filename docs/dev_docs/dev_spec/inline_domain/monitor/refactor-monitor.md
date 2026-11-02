@@ -17,7 +17,6 @@
 
 ## Task
 我们先在“Q-Time预警看板”上尝试，因为其背后的 [indicator\\_domain](../../../../../src/indicator_domain/) 逻辑较为简单。
-
 请分析我的需求，并使用 [$development-flow](C:/Users/V0141351//.agents/skills/development-flow/SKILL.md) 完成开发
 
 ## Goal
