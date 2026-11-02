@@ -1,6 +1,6 @@
 # 24项基线失败处理规格与结论
 
-Status: implementation-complete-validation-pending
+Status: implementation-and-validation-complete
 Source: 用户2026-11-02明确要求：对旧业务逻辑测试删除，否则修复。此授权覆盖原14张问题卡的判断与处理，不授权删除仍有价值的边界或回滚其它用户改动。
 Base:9c616182；branch:fix/baseline-regressions-20261102。
 
@@ -23,3 +23,6 @@ Base:9c616182；branch:fix/baseline-regressions-20261102。
 
 
 Spec复核后的最终决定：退役仅1项旧Yield页面AST。资源库存审计保留原节点名，并新增真实库存／负例保护；不依靠删除库存约束让测试变绿。两个8位十六进制名的0字节占位文件保留原位，只有该空临时模式被识别为非维护输入，非空或有扩展名的正式输入仍必须归属。
+
+
+??????2856???0???collection2845->2856???AST???12??????0???????????????????????????

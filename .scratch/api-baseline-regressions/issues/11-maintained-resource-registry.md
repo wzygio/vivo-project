@@ -1,7 +1,7 @@
 # 11: 维护资源登记与历史文件分类
 
 Category: bug
-Status: in-progress
+Status: complete
 Created: 2026-11-02
 Source: 用户2026-11-02确认将API开发过程中复现的24项基线失败另行跟踪。
 Related: [API交付记录](../../../docs/dev_docs/generated/inline_domain/monitor/api-delivery-2026-11-02.md)；[源码对照证据](../../../output/test-results/api-baseline-attribution/REPORT.md)。
@@ -17,10 +17,10 @@ Related: [API交付记录](../../../docs/dev_docs/generated/inline_domain/monito
 
 ## Acceptance criteria
 
-- [ ] 在临时输入与明确政策下复现下列每一项；核查当前知识文档／业务规则后确定正确结果，记录判断依据。
-- [ ] 正确行为及空／错误／边界分支都有可独立观察的回归证据；不通过删除测试、跳过或单纯改成当前输出使其通过。
-- [ ] 测试不访问生产数据库、不创建真实Office、不写resources/data维护文件；相关夹具或依赖须完全隔离。
-- [ ] 本组用例及受影响相关回归通过，其他来源、公开投影、原始快照及人工维护状态保持既有约定。
+- [x] 在临时输入与明确政策下复现下列每一项；核查当前知识文档／业务规则后确定正确结果，记录判断依据。
+- [x] 正确行为及空／错误／边界分支都有可独立观察的回归证据；不通过删除测试、跳过或单纯改成当前输出使其通过。
+- [x] 测试不访问生产数据库、不创建真实Office、不写resources/data维护文件；相关夹具或依赖须完全隔离。
+- [x] 本组用例及受影响相关回归通过，其他来源、公开投影、原始快照及人工维护状态保持既有约定。
 
 ## Out of scope
 
@@ -65,3 +65,8 @@ Resolution: retained-and-repaired
 ### 2026-11-02 — Spec复核纠正
 
 真实维护资源归属检查仍有价值，最终保留原节点并修复。补登记resources.shared_kernel.directories.archived_report_inputs；实际库存认可已登记集合、已注册主文件的备份／签名及明确空临时标记。新增未登记xlsx、空xlsx、非空十六进制文件和无主备份四个反例，确保仍拒绝未注册正式输入。旧“退役”初步结论由此条覆盖。未移动或删除资源。
+
+
+### 2026-11-02 ? ????
+
+????2845????2856???unit?architecture???API???????????13??AST????????23?????????Standards?Spec?0????????DB?Office????????68??????????????baseline-audit-full-final-20261102???????????????Office?????

@@ -1,7 +1,7 @@
 # 06: SPC能力台账同周变更的一致投影
 
 Category: bug
-Status: in-progress
+Status: complete
 Created: 2026-11-02
 Source: 用户2026-11-02确认将API开发过程中复现的24项基线失败另行跟踪。
 Related: [API交付记录](../../../docs/dev_docs/generated/inline_domain/monitor/api-delivery-2026-11-02.md)；[源码对照证据](../../../output/test-results/api-baseline-attribution/REPORT.md)。
@@ -17,10 +17,10 @@ CPK/CPM同周台账生命周期用例的预警条数与测试期望不一致。
 
 ## Acceptance criteria
 
-- [ ] 在临时输入与明确政策下复现下列每一项；核查当前知识文档／业务规则后确定正确结果，记录判断依据。
-- [ ] 正确行为及空／错误／边界分支都有可独立观察的回归证据；不通过删除测试、跳过或单纯改成当前输出使其通过。
-- [ ] 测试不访问生产数据库、不创建真实Office、不写resources/data维护文件；相关夹具或依赖须完全隔离。
-- [ ] 本组用例及受影响相关回归通过，其他来源、公开投影、原始快照及人工维护状态保持既有约定。
+- [x] 在临时输入与明确政策下复现下列每一项；核查当前知识文档／业务规则后确定正确结果，记录判断依据。
+- [x] 正确行为及空／错误／边界分支都有可独立观察的回归证据；不通过删除测试、跳过或单纯改成当前输出使其通过。
+- [x] 测试不访问生产数据库、不创建真实Office、不写resources/data维护文件；相关夹具或依赖须完全隔离。
+- [x] 本组用例及受影响相关回归通过，其他来源、公开投影、原始快照及人工维护状态保持既有约定。
 
 ## Out of scope
 
@@ -61,3 +61,8 @@ Resolution: retained-and-repaired
 当前验证路由：原卡2项节点保持。原Reproduction scope保留为历史起始节点；退役节点不再进入live collection。
 
 定向验证已通过，完整回归及评审进行中。完整决定及证据见[基线审计](../../../docs/dev_docs/generated/shared_kernel/shared/baseline-regression-audit-2026-11-02.md)。
+
+
+### 2026-11-02 ? ????
+
+????2845????2856???unit?architecture???API???????????13??AST????????23?????????Standards?Spec?0????????DB?Office????????68??????????????baseline-audit-full-final-20261102???????????????Office?????
