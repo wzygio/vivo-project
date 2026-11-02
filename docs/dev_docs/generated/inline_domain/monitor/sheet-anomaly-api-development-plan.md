@@ -2,7 +2,7 @@
 
 初版：2026-10-27。需求修订及实现核验：2026-11-02。
 
-状态：**实现、专项验证及评审已完成，保留基线失败质量门与合并确认**；没有声称已合并、部署或全套通过。结果见 [交付与验证记录](api-delivery-2026-11-02.md)。初版“仅严格逐片”的假设已由用户明确包含Lot的需求替代。来源为 [feat-API](../../../dev_spec/inline_domain/monitor/feat-API.md)，获批契约与任务状态由 [PRD](../../../../../.scratch/sheet-anomaly-api/PRD.md) 和 [执行计划](../../../../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md) 维护。
+状态：**已按用户确认合并到master并采纳ADR-0037**；专项验证、评审及合并后验证完成。24项已复现基线失败按用户确认独立跟踪，不声称全套通过或已部署。结果见 [交付与验证记录](api-delivery-2026-11-02.md)。初版“仅严格逐片”的假设已由用户明确包含Lot的需求替代。来源为 [feat-API](../../../dev_spec/inline_domain/monitor/feat-API.md)，获批契约与任务状态由 [PRD](../../../../../.scratch/sheet-anomaly-api/PRD.md) 和 [执行计划](../../../../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md) 维护。
 
 本文件记录方案、边界及实施组织。实际调用、字段与维护命令由 [API使用说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) 唯一维护；入门解释见 [API基础知识](sheet-anomaly-api-primer.md)。
 

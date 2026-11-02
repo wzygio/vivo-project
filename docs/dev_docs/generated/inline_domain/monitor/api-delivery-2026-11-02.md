@@ -2,7 +2,7 @@
 
 日期：2026-11-02。模式：development-flow complex。开发分支：`feat/sheet-anomaly-api`；起始基准：`b494db8e23ef4e9df1dfb0aefeaf3e24b9fed0c5`。
 
-状态：实现、专项验证与双轴评审已完成；全量回归保留24项已独立复现的基线失败，因此**不宣称全套通过**。目标分支合并、该质量门的处置及ADR采纳仍需确认；未部署正式服务。
+状态：实现提交800ffbc2已按用户2026-11-02确认快进合并到master，收尾修复1e22d029及127项相关验证通过，正式ADR-0037已采纳。用户确认24项已独立复现的基线失败另行跟踪，因此**不宣称全套通过**；本次开发流程在该明确质量例外下交付完成，未部署正式服务。
 
 ## 1. 需求逐项核验
 
@@ -19,6 +19,7 @@
 | 公开投影和可见性规则 | 纯规则共用，政策先于来源访问 | 隐藏且来源已删除仍为公开无预警；政策读取失败503；全响应不含flag／路径／内部状态 |
 | 独立只读接口及必要服务边界 | create_app、独立客户端授权、当前启用范围、分页／限流／有界读取 | HTTP鉴权、撤销、越权、无效参数、稳定／失效游标、安全500／503、超时／429 |
 | 空表不得掩盖坏schema | API启用strict_empty，原页面默认兼容 | RED6项复现后修复；OOS/OOC空白／缺Flag／缺身份503，合法表头空表200 |
+| Q-Time不覆盖的授权厂别返回合法空结果 | 无匹配shop时构造含flag表头的空表，不访问来源 | CELL查询RED503→GREEN200，公开data为空、meta.status为ok，来源builder禁止调用 |
 | 使用说明位于指定领域目录 | [正式使用说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) | 45个文档本地链接、JSON／Python示例、围栏检查通过；环境模板及命令帮助有效 |
 
 相关设计与实现入口见[获批方案](sheet-anomaly-api-development-plan.md)、[PRD](../../../../../.scratch/sheet-anomaly-api/PRD.md)和[执行状态](../../../../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md)。
@@ -28,6 +29,7 @@
 - 最终专项 **267 passed**，覆盖API、真实临时文件集成、Inline读取、Q-Time／Yield发布与Flag、维护命令、元数据、缓存、依赖守卫及真实监听生命周期。
 - 语句覆盖率 **92.37%**，要求的80%门通过。完整命令与结果见 [专项JUnit](../../../../../output/test-results/api-verification-final/junit.xml)、[覆盖率明细](../../../../../output/test-results/api-verification-final/coverage.json)及下方命令范围。
 - 修复4项新增兼容性失败及P2后，HTTP／文件集成、页面夹具和依赖守卫的相关集合 **126 passed**。
+- 合并收尾发现Q-Time无匹配shop空结果与严格Flag检查冲突；新增集成回归先复现503，再修复空表结构。提交 **1e22d029** 后上述相关集合 **127 passed**（25.87秒），见 [最终相关JUnit](../../../../../output/test-results/api-merge/final-junit.xml)；`uvx --offline pyright api/composition.py`为0 errors、0 warnings，编译及差异检查通过。未重跑完整2732项；267项／92.37%及完整回归证据对应主体实现800ffbc2。
 - Pyright限定API及修改读取／元数据／缓存模块：**0 errors、0 warnings**；编译、`git diff --check`、`uv lock --check`通过。
 - 双轴评审各发现同根因P2一项，均已复核关闭；无剩余具体评审阻断项。见 [Standards／Spec分列报告](api-review-2026-11-02.md)。
 
@@ -83,7 +85,7 @@
 - [源码对照方法与限制](../../../../../output/test-results/api-baseline-attribution/REPORT.md)
 - [原28项与起始源码的逐项结果](../../../../../output/test-results/api-baseline-attribution/paired-outcomes.json)
 
-development-flow要求完整回归与合并门通过，故本记录保留这个质量门，而非宣称整个四阶段流程已完成。后续是否接受已复现的基线问题、或另行修复，需由用户确认。
+用户于2026-11-02明确确认合并、采纳ADR并把这24项基线失败单独跟踪。本次依此通过质量例外与合并门，完整回归结果仍保持失败事实；不将例外推广至后续变更。已建立14张独立needs-triage Issue，逐项覆盖全部24个失败节点，见下方跟踪索引。
 
 ## 4. 数据与进程边界
 
@@ -95,10 +97,35 @@ development-flow要求完整回归与合并门通过，故本记录保留这个�
 
 早期扩大页面回归时，旧夹具曾走真实只读Q-Time文件读取并触发COM诊断，随后进程正常结束，检查无Excel存活，但没有事前Office身份清单，不能声称完整证明那次Office归属。现已修复夹具并设置禁止真实I/O护栏；27项页面用例干净通过，零禁止调用，记录进程全部退出。
 
-## 5. 使用与待确认交付
+## 5. 使用与交付状态
 
 入口：`api.main:create_app`；建议按使用说明在单worker、本机／正式内网入口下运行。启动前应分配独立凭证、维护本地字典与Yield真实厂别／必要描述，并由原生产流程发布带有效释放证据的结果。本轮未代替运维部署；真实服务账号下的企业保护文件读取仍需部署验证，HTTP超时不能强制终止Office调用。
 
 提交仅包含本次代码、测试、说明及新增资源注册行，排除用户原有产品注释、需求改动与业务资产。具体提交由Git与最终交付回复标识。
 
-待确认：全量基线失败的质量门处置、是否合并开发分支，以及是否采纳 [ADR草案](adr-sheet-anomaly-api-draft.md)。未获确认前不写正式Accepted ADR、不合并目标分支，不把可运行代码等同于正式服务已上线。
+已确认：用户同意基线问题独立跟踪，并将实现800ffbc2快进合并到master；正式 [ADR-0037](../../../../../docs/ADR/0037-published-anomaly-api.md) 已采纳。合并后126项针对性验证通过，见 [合并后JUnit](../../../../../output/test-results/api-merge/junit.xml)。21个原有未提交文件在快进及分支切换前后逐字节核对无变化，见 [合并证据](../../../../../output/test-results/api-merge/fast-forward.json)。开发分支保留，未推送远端、未部署正式服务。
+
+收尾修复1e22d029同样位于master，最终127项相关验证通过。最终审计再次核对21个用户文件无变化、14张卡片完整覆盖24项、已记录测试服务进程全部退出。文档链接核对未发现新增断链；references/index.md原有GLOSSARY链接目标缺失，保留原路由，未在API交付中虚构术语文件。见 [最终审计](../../../../../output/test-results/api-merge/final-audit.json)。
+
+## 6. 独立基线问题索引
+
+用户仅确认另行跟踪，以下卡片为needs-triage；尚未授权实施修复，不是API交付的未完成子任务。
+
+| Issue | 范围 | 失败节点数 |
+|---|---|---|
+| [01](../../../../../.scratch/api-baseline-regressions/issues/01-parts-cvd-empty-state.md) | 备件CVD空结果提示一致性 | 1 |
+| [02](../../../../../.scratch/api-baseline-regressions/issues/02-ijp-error-message-isolation.md) | IJP孔区与AA区失败提示及夹具隔离 | 2 |
+| [03](../../../../../.scratch/api-baseline-regressions/issues/03-inline-isolated-global-config.md) | Inline隔离夹具的全局配置完整性 | 4 |
+| [04](../../../../../.scratch/api-baseline-regressions/issues/04-aoi-tt-weekly-empty-density.md) | AOI_TT周报零分母与缺数据提示 | 2 |
+| [05](../../../../../.scratch/api-baseline-regressions/issues/05-ctq-report-lifecycle.md) | CTQ报告构建及模块重载稳定性 | 2 |
+| [06](../../../../../.scratch/api-baseline-regressions/issues/06-capability-ledger-refresh.md) | SPC能力台账同周变更的一致投影 | 2 |
+| [07](../../../../../.scratch/api-baseline-regressions/issues/07-capability-span-policy.md) | SPC能力最小数据跨度边界 | 3 |
+| [08](../../../../../.scratch/api-baseline-regressions/issues/08-aoi-tt-excluded-reinspection.md) | AOI_TT排除日期与复测选择 | 1 |
+| [09](../../../../../.scratch/api-baseline-regressions/issues/09-aoi-tt-exemption-projection.md) | AOI_TT参数豁免与有效释放投影 | 2 |
+| [10](../../../../../.scratch/api-baseline-regressions/issues/10-yield-monthly-output-contract.md) | Yield周期输出monthly_full契约 | 1 |
+| [11](../../../../../.scratch/api-baseline-regressions/issues/11-maintained-resource-registry.md) | 维护资源登记与历史文件分类 | 1 |
+| [12](../../../../../.scratch/api-baseline-regressions/issues/12-cutoff-factory-projection.md) | 共享量测截止规则夹具的厂别字段 | 1 |
+| [13](../../../../../.scratch/api-baseline-regressions/issues/13-yield-alert-health-forwarding.md) | Yield预警中心源健康透传 | 1 |
+| [14](../../../../../.scratch/api-baseline-regressions/issues/14-yield-readonly-office-fixture.md) | Yield只读服务测试禁止真实Office回退 | 1 |
+
+共14张卡片、24个节点，集合核对无重复或遗漏。后续triage需核查现行业务政策，不得只为通过测试而弱化断言或修改生产资料。

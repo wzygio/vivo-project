@@ -133,6 +133,8 @@ domain composition -> assembles application services and concrete adapters
 
 ### Presentation and Operational Entry Points
 
+The published Sheet/Lot API boundary, alternatives and operating constraints are recorded in [ADR-0037](docs/ADR/0037-published-anomaly-api.md).
+
 | Path | Responsibility |
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |
