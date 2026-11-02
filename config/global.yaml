@@ -248,3 +248,4 @@ resources:
       asset_pnl_20260901_xlsx_f5d88a54: resources/shared_kernel/shared/project_files/维信诺北极星PNL指标-20260901.xlsx
     directories:
       project_files: resources/shared_kernel/shared/project_files
+      archived_report_inputs: resources/report

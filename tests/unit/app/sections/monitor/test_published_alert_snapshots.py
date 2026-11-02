@@ -73,6 +73,21 @@ def test_shared_parts_reader_accepts_factory_wide_scope_without_a_product(snapsh
     assert {path: path.read_bytes() for path in snapshots.values()} == before
 
 
+def test_shared_ijp_aggregate_selects_enabled_products_and_distinguishes_empty_scope(snapshots, monkeypatch):
+    from app.sections.shared.alert_results import read_alert_result
+    write_snapshots(snapshots)
+    monkeypatch.setattr(ConfigLoader, 'get_enabled_products', lambda: ['M626', 'M678'])
+    result = read_alert_result('ijp_aa_oos', '', date.today())
+    assert result['state'] == 'alert'
+    assert result['records']['productcode'].tolist() == ['M678']
+    assert result['alerts']['productcode'].tolist() == ['M678']
+    write_snapshots(snapshots, empty=True)
+    empty = read_alert_result('ijp_aa_oos', '', date.today())
+    assert empty['state'] == 'ok' and empty['alerts'].empty
+    monkeypatch.setattr(ConfigLoader, 'get_enabled_products', lambda: [])
+    assert read_alert_result('ijp_aa_oos', '', date.today())['state'] == 'no_data'
+
+
 def test_missing_stale_and_valid_empty_are_distinct(snapshots):
     for key in saved.PUBLISHED_ALERT_ROWS:
         assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'error'

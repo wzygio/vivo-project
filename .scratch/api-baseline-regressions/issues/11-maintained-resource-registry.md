@@ -53,10 +53,15 @@ API变更已专项验收，用户接受这组已复现基线问题单独处理�
 
 ### 2026-11-02 — 用户授权审计与处理
 
-Resolution: retired-with-replacement
+Resolution: retained-and-repaired
 
 旧全集逐文件注册检查与目录集合／伴随备份规则冲突，退役单个旧Item，保留同文件其它严格注册测试。
 
 当前验证路由：tests/unit/test_global_resource_registry.py::test_registered_collections_allow_members_without_separate_file_entries。原Reproduction scope保留为历史起始节点；退役节点不再进入live collection。
 
 定向验证已通过，完整回归及评审进行中。完整决定及证据见[基线审计](../../../docs/dev_docs/generated/shared_kernel/shared/baseline-regression-audit-2026-11-02.md)。
+
+
+### 2026-11-02 — Spec复核纠正
+
+真实维护资源归属检查仍有价值，最终保留原节点并修复。补登记resources.shared_kernel.directories.archived_report_inputs；实际库存认可已登记集合、已注册主文件的备份／签名及明确空临时标记。新增未登记xlsx、空xlsx、非空十六进制文件和无主备份四个反例，确保仍拒绝未注册正式输入。旧“退役”初步结论由此条覆盖。未移动或删除资源。

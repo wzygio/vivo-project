@@ -12,12 +12,12 @@ Collect exact24 nodeids, reproduce under DB/Office/maintained-write guard, map14
 
 ### Phase2: Decide and repair
 **Status:** complete
-22 Items retained/repaired;2 obsolete Items retired with replacements. One actual production defect fixed: factory-wide parts reader rejected empty product cache revision. Other repairs isolate current policies/configuration/ports and correct outdated assertions.
+23 Items retained/repaired;1 obsolete Yield-page AST Item retired with active replacements. The actual resource-inventory boundary is retained after Spec review, recognizing collections and anchored companions; archived_report_inputs registered without moving files. One actual production defect fixed: factory-wide parts reader rejected empty product cache revision. Other repairs isolate current policies/configuration/ports and correct outdated assertions.
 Record item-level active/replaced/retired decisions with evidence. Delete only confirmed obsolete Items, retain supported unique boundaries and fix wrong implementation/assertions/fixtures. No broad moves or weakening for green.
 
 ### Phase3: Validate and review
 **Status:** in_progress
-Retained22 plus initial replacement route28 pass; all owned file groups pass40/90/64. Frozen-base collection2845 ->2849, exactly2 retired and6 new Items. Full guarded run in progress; independent review next.
+Retained22 plus initial replacement route28 pass; all owned file groups pass40/90/64. Initial collection2845 ->2849 and full2849 passed. Spec inventory gap repaired; final expected collection2856 (1 removed/12 added), final full rerun running. Original33 groups and replacement coverage retained; review closure pending.
 Exact nodes ->changed files ->affected scope ->complete unit/architecture/integration as appropriate. Independent code-review once changes are concrete. No production DB or business workbook writes. Temporary services unnecessary for AppTest/unit tests.
 
 ### Phase4: Deliver

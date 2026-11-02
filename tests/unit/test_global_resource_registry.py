@@ -6,6 +6,7 @@ import yaml
 
 from src.shared_kernel.config import ConfigLoader
 from src.yield_domain.application.yield_service import YieldAnalysisService
+from tests.helpers.resource_inventory import unregistered_resources
 
 
 def configure(monkeypatch, tmp_path: Path, resources: dict) -> Path:
@@ -104,6 +105,42 @@ def test_registered_collections_allow_members_without_separate_file_entries(monk
     # A directory collection does not restore a legacy fallback for file keys.
     with pytest.raises(KeyError):
         ConfigLoader.get_domain_resource_path('report', 'unregistered', 'first.md')
+
+
+def test_all_existing_resource_files_have_a_global_registry_entry():
+    root = ConfigLoader.get_project_root()
+    registry = yaml.safe_load((root / 'config/global.yaml').read_text(encoding='utf-8'))['resources']
+    files = {ConfigLoader.get_domain_resource_path(domain, key)
+             for domain, values in registry.items() for key in values.get('files', {})}
+    collections = {ConfigLoader.get_domain_resource_directory(domain, key)
+                   for domain, values in registry.items() for key in values.get('directories', {})}
+    assert not unregistered_resources(root, files, collections)
+
+
+@pytest.mark.parametrize('name,contents', [
+    ('new-input.xlsx', b'new input'), ('empty-input.xlsx', b''),
+    ('66F1A010', b'now contains data'), ('orphan.xlsx.bak', b'unowned backup'),
+])
+def test_inventory_detects_unregistered_standalone_inputs(tmp_path, name, contents):
+    path = tmp_path / 'resources' / name
+    path.parent.mkdir()
+    path.write_bytes(contents)
+    assert unregistered_resources(tmp_path, set(), set()) == {path}
+
+
+def test_inventory_accepts_only_registered_collections_and_anchored_companions(tmp_path):
+    root = tmp_path / 'resources'
+    root.mkdir()
+    main = root / 'maintained.xlsx'
+    main.write_bytes(b'input')
+    collection = root / 'archive'
+    collection.mkdir()
+    (collection / 'historical.md').write_text('reference', encoding='utf-8')
+    for name in ('maintained.xlsx.bak', 'maintained.xlsx.before-review.bak',
+                 'maintained.sig.json', 'maintained.xlsx.sig.json', 'maintained.xlsx.policy', '~$maintained.xlsx'):
+        (root / name).write_bytes(b'companion')
+    (root / '25776420').write_bytes(b'')
+    assert unregistered_resources(tmp_path, {main}, {collection}) == set()
 
 
 @pytest.mark.parametrize("report,date_column", [("inspection", "检验时间"), ("lifetime", "批次")])
