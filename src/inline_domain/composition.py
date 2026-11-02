@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import lru_cache, partial
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -44,6 +45,9 @@ from src.inline_domain.infrastructure.shared.resource_paths import (
 )
 
 if TYPE_CHECKING:
+    import pandas as pd
+
+    from src.inline_domain.application.monitor.sheet_alert_query import SheetAlertQuery
     from src.inline_domain.application.shared.decoration_ports import DecorationPort
 
 
@@ -353,3 +357,36 @@ def refresh_raw_measurements(
         end_date=end_date,
     )
     return result.refreshed_from_db
+
+
+def build_sheet_alert_query(
+    scope: str,
+    event_type: str = "OOS",
+    *,
+    workbook_reader: Callable[[str, int, int], dict[str, pd.DataFrame]] | None = None,
+    strict_empty: bool = False,
+) -> SheetAlertQuery:
+    """Assemble a published-only query; an injected reader bypasses UI caching."""
+    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
+    from src.inline_domain.application.monitor.sheet_alert_query import SheetAlertQuery
+    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
+    from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+
+    scope = scope.strip().lower()
+    event_type = event_type.strip().upper()
+    if scope not in {"spc", "ctq", "aoi_tt", "aoi_rs"} or event_type not in {"OOS", "OOC"}:
+        raise ValueError("Unsupported Inline published alert query")
+    reader = ExcelAlarmReader(
+        ExcelAlarmStore(
+            {scope: scope_decoration_path(scope, event_type.lower())},
+            workbook_reader=workbook_reader,
+        ),
+        event_type,
+        strict_empty=strict_empty,
+    )
+    return SheetAlertQuery(
+        reader,
+        excluded_param_name_contains=(
+            ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() if scope == "spc" else ()
+        ),
+    )

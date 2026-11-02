@@ -228,6 +228,7 @@ resources:
   shared_kernel:
     dir: resources/shared_kernel
     files:
+      api_alert_metadata: resources/shared_kernel/shared/api_alert_metadata.xlsx
       asset_m678_lot_md_6636e6b5: resources/shared_kernel/shared/project_files/北极星-M678高发Lot调查报告.md
       asset_md_b89251c3: resources/shared_kernel/shared/project_files/北极星-上半年规格收严统计报告.md
       asset_md_4044d8cb: resources/shared_kernel/shared/project_files/北极星-专项资料汇总.md

@@ -1,10 +1,12 @@
-"""自动预警矩阵 UI 的隔离 Streamlit harness（AppTest 用，不触 DB/文件）。
+"""自动预警矩阵 UI 的隔离 Streamlit harness（不触生产 DB/业务文件）。
 
 - 直接构造含四态的假 payload（2 产品 × 9 行）；
 - 详情 loader 由测试经 monkeypatch 替换
   ``alert_matrix_detail.build_default_detail_loaders`` 注入；
 - ``st.session_state["fixture_nonce"]`` 进入矩阵签名，隔离 st.cache_data
   的跨用例命中（同用例内多次 run 保持同 nonce 以验证缓存命中）。
+- 测试模块的 autouse fixture 注入本地假签名，并禁止数据库、COM 和非临时
+  工作簿读取；仅替换详情 loader 并不能隔离详情打开时的来源签名采集。
 """
 
 from __future__ import annotations

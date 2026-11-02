@@ -35,6 +35,83 @@ from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROWS
 ROW_COUNT = len(MATRIX_ROWS)
 
 
+@pytest.fixture(autouse=True)
+def forbid_live_io(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Fail even when presentation error handling swallows a forbidden I/O call."""
+    from io import BytesIO
+
+    import sqlalchemy
+    import win32com.client
+
+    from app.manager import compliance_manager
+    from app.sections.shared import alert_results
+    from src.inline_domain.application.shared import decision_signature
+    from src.shared_kernel.infrastructure import db_handler
+    from src.shared_kernel.utils import excel_tools
+
+    attempts: list[str] = []
+    original_read_excel = pd.read_excel
+    original_read_sheet = excel_tools.read_workbook_sheet
+
+    def forbidden(name):
+        def reject(*args, **kwargs):
+            attempts.append(name)
+            raise AssertionError(f"UI fixture attempted live I/O: {name}")
+        return reject
+
+    def require_test_path(path):
+        if isinstance(path, BytesIO):
+            return
+        if not isinstance(path, (str, Path)) or not Path(path).resolve().is_relative_to(tmp_path.resolve()):
+            forbidden("non-fixture workbook")()
+
+    def read_excel(path, *args, **kwargs):
+        require_test_path(path)
+        return original_read_excel(path, *args, **kwargs)
+
+    def read_sheet(path, *args, **kwargs):
+        require_test_path(path)
+        return original_read_sheet(path, *args, **kwargs)
+
+    monkeypatch.setattr(pd, "read_excel", read_excel)
+    monkeypatch.setattr(pd, "read_sql", forbidden("database query"))
+    monkeypatch.setattr(sqlalchemy, "create_engine", forbidden("database engine"))
+    monkeypatch.setattr(db_handler, "create_engine", forbidden("database engine"))
+    monkeypatch.setattr(db_handler, "DatabaseManager", forbidden("database manager"))
+    monkeypatch.setattr(win32com.client, "DispatchEx", forbidden("Excel COM DispatchEx"))
+    monkeypatch.setattr(win32com.client, "Dispatch", forbidden("Excel COM Dispatch"))
+    monkeypatch.setattr(excel_tools, "_read_all_sheets_via_com", forbidden("protected workbook reader"))
+    monkeypatch.setattr(excel_tools, "_read_encrypted_xlsx_via_com", forbidden("protected workbook sheet"))
+    monkeypatch.setattr(excel_tools, "read_workbook_sheet", read_sheet)
+    monkeypatch.setattr(compliance_manager, "read_workbook_sheet", read_sheet)
+    # Fake payloads do not remove the source-signature dependencies used when
+    # opening details. Keep cache behavior real while providing fixture versions.
+    monkeypatch.setattr(
+        alert_results, "alert_result_signature",
+        lambda row, product, reference, **selection: f"fixture-alert:{row}:{product}:{reference}",
+    )
+    monkeypatch.setattr(
+        alert_matrix_detail, "published_alert_signature",
+        lambda row, product, reference: f"fixture-published:{row}:{product}:{reference}",
+    )
+    monkeypatch.setattr(
+        alert_matrix_detail, "_spc_detail_signature",
+        lambda product, cell_signature: f"{cell_signature}|fixture-spc:{product}",
+    )
+    monkeypatch.setattr(
+        alert_matrix_detail, "_yield_detail_signature",
+        lambda product, cell_signature: f"{cell_signature}|fixture-yield:{product}",
+    )
+    monkeypatch.setattr(alert_matrix_detail, "get_indicator_product_revision", lambda *args: "fixture-revision")
+    monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *args: "fixture-decisions")
+    monkeypatch.setattr(alert_results, "read_alert_result", forbidden("published result reader"))
+    monkeypatch.setattr(
+        alert_matrix_detail, "load_all_product_qtime_monitoring", forbidden("Q-Time source loader"),
+    )
+    yield
+    assert attempts == [], f"UI fixture attempted live I/O: {attempts}"
+
+
 def _new_app(nonce: str) -> AppTest:
     app = AppTest.from_file(str(FIXTURE_PATH))
     app.session_state["fixture_nonce"] = nonce

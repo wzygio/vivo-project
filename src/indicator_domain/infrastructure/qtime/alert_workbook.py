@@ -6,6 +6,8 @@ from io import BytesIO
 import os
 from pathlib import Path
 import tempfile
+from collections.abc import Callable
+from zipfile import BadZipFile
 
 import pandas as pd
 import streamlit as st
@@ -13,17 +15,23 @@ import streamlit as st
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.file_lock import publication_lock
 from src.shared_kernel.utils.excel_tools import read_workbook_sheets
-from src.indicator_domain.application.qtime.alert_results import QTIME_ALERT_COLUMNS, QTIME_METADATA_COLUMNS, QTIME_SHOPS
+from src.indicator_domain.application.qtime.alert_results import QTIME_PUBLISHED_COLUMNS, QTIME_METADATA_COLUMNS, QTIME_SHOPS
+
+WorkbookReader = Callable[[str, int, int], dict[str, pd.DataFrame]]
 
 
 @st.cache_data(max_entries=16, ttl=ConfigLoader.get_cache_ttl_seconds(), show_spinner=False)
 def read_qtime_alert_workbook(path: str, mtime_ns: int, size: int) -> dict[str, pd.DataFrame]:
-    return read_workbook_sheets(Path(path))
+    try:
+        return pd.read_excel(path, sheet_name=None, engine="openpyxl", dtype=object)
+    except (BadZipFile, OSError, ValueError):
+        return read_workbook_sheets(Path(path))
 
 
 class QTimeAlertWorkbook:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, workbook_reader: WorkbookReader | None = None) -> None:
         self.path = path
+        self.workbook_reader = workbook_reader or read_qtime_alert_workbook
 
     def initialize_empty_template(self) -> bool:
         """Create an explicit header-only template, preserving every existing file."""
@@ -35,7 +43,7 @@ class QTimeAlertWorkbook:
                 return False
             sheets = {"__meta__": pd.DataFrame(columns=QTIME_METADATA_COLUMNS)}
             for shop in QTIME_SHOPS:
-                sheets[f"alerts_{shop}"] = pd.DataFrame(columns=QTIME_ALERT_COLUMNS)
+                sheets[f"alerts_{shop}"] = pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS)
                 sheets[f"products_{shop}"] = pd.DataFrame(columns=["prodcode", "step_desc", "lot_id", "timekey"])
             result = replace_workbook_sheets(self.path, sheets)
             if not result.written:
@@ -47,7 +55,7 @@ class QTimeAlertWorkbook:
             stat = self.path.stat()
         except FileNotFoundError:
             return None
-        return read_qtime_alert_workbook(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
+        return self.workbook_reader(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
 
     def source_signature(self) -> str:
         try:
@@ -59,10 +67,15 @@ class QTimeAlertWorkbook:
     def save(self, shop: str, alerts: pd.DataFrame, products: pd.DataFrame, metadata: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with publication_lock(self.path):
-            sheets = read_workbook_sheets(self.path) if self.path.exists() else {}
+            sheets = self.read() or {}
             meta = sheets.get("__meta__", pd.DataFrame(columns=["shop", "fingerprint"]))
             prior = meta.loc[meta["shop"].eq(shop)]
-            if len(prior) == 1 and prior.iloc[0].get("fingerprint") == metadata["fingerprint"]:
+            old_alerts = sheets.get(f"alerts_{shop}")
+            same_alerts = (old_alerts is not None and list(old_alerts) == list(alerts)
+                           and old_alerts.astype(object).where(old_alerts.notna(), None).to_dict("records")
+                           == alerts.astype(object).where(alerts.notna(), None).to_dict("records"))
+            if (len(prior) == 1 and prior.iloc[0].get("fingerprint") == metadata["fingerprint"]
+                    and same_alerts):
                 return
             sheets[f"alerts_{shop}"] = alerts.copy()
             sheets[f"products_{shop}"] = products.copy()

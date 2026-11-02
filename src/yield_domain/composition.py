@@ -52,7 +52,7 @@ def yield_alert_policy_signature(product: str) -> str:
     return "yield-alert-policy-v2:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def build_yield_alert_results():
+def build_yield_alert_results(*, workbook_reader=None):
     from src.shared_kernel.config import ConfigLoader
     from src.yield_domain.application.alert_results import YieldAlertResults
     from src.yield_domain.infrastructure.alert_result_workbooks import YieldAlertWorkbookStore
@@ -63,5 +63,6 @@ def build_yield_alert_results():
         "trend": ConfigLoader.get_domain_resource_path(
             "yield_domain", "trend_alert_results", "mwd_trend/yield_trend_alert_results.xlsx"),
     }
-    return YieldAlertResults(YieldAlertWorkbookStore(paths), policy_signature=yield_alert_policy_signature,
+    kwargs = {"workbook_reader": workbook_reader} if workbook_reader is not None else {}
+    return YieldAlertResults(YieldAlertWorkbookStore(paths, **kwargs), policy_signature=yield_alert_policy_signature,
                              ttl_seconds=ConfigLoader.get_cache_ttl_seconds())

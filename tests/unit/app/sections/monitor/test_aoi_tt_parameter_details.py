@@ -38,7 +38,7 @@ def test_matrix_tt_details_exclude_non_tt_workbook_rows(monkeypatch, tmp_path, n
         reads.append((args, kwargs))
         return original_read(*args, **kwargs)
 
-    monkeypatch.setattr(resource_paths, "scope_decoration_path", lambda scope: path)
+    monkeypatch.setattr(resource_paths, "scope_decoration_path", lambda scope, alarm_type="oos": path)
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
     monkeypatch.setattr(pd, "read_excel", tracked_read)
 

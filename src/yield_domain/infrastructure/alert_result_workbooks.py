@@ -2,6 +2,7 @@
 from pathlib import Path
 import threading
 from typing import Mapping
+from collections.abc import Callable
 
 import pandas as pd
 import streamlit as st
@@ -10,12 +11,15 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.file_lock import publication_lock
 from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+from src.yield_domain.application.alert_results import merge_lot_release_controls
+
+WorkbookReader = Callable[[str, int, int], dict[str, pd.DataFrame]]
 
 
 @st.cache_data(show_spinner=False, max_entries=32, ttl=ConfigLoader.get_cache_ttl_seconds())
 def read_yield_alert_workbook(path: str, mtime_ns: int, size: int) -> dict[str, pd.DataFrame]:
     try:
-        return pd.read_excel(path, sheet_name=None, engine="openpyxl")
+        return pd.read_excel(path, sheet_name=None, engine="openpyxl", dtype=object)
     except Exception:
         try:
             return excel_tools._read_all_sheets_via_com(Path(path))
@@ -34,8 +38,9 @@ def clear_yield_alert_workbook(path: Path) -> None:
 class YieldAlertWorkbookStore:
     _write_lock = threading.RLock()
 
-    def __init__(self, paths: Mapping[str, Path]) -> None:
+    def __init__(self, paths: Mapping[str, Path], *, workbook_reader: WorkbookReader | None = None) -> None:
         self.paths = {key: Path(path) for key, path in paths.items()}
+        self.workbook_reader = workbook_reader or read_yield_alert_workbook
         if set(self.paths) != {"lot", "trend"}:
             raise ValueError("Expected Lot and trend result paths")
         if self.paths["lot"].resolve() == self.paths["trend"].resolve():
@@ -53,7 +58,14 @@ class YieldAlertWorkbookStore:
             stat = path.stat()
         except FileNotFoundError:
             return {}
-        return read_yield_alert_workbook(str(path), stat.st_mtime_ns, stat.st_size)
+        return self.workbook_reader(str(path), stat.st_mtime_ns, stat.st_size)
+
+    @classmethod
+    def _flags_sheet(cls, product: str) -> str:
+        cls._meta_sheet(product)
+        if len(product) > 24:
+            raise ValueError("Invalid product release worksheet name")
+        return f"{product}__flags"
 
     def read_product(self, product: str, kind: str) -> dict | None:
         sheets = self._sheets(kind)
@@ -62,8 +74,33 @@ class YieldAlertWorkbookStore:
             return None
         if len(meta) != 1:
             raise ValueError("Invalid Yield publication metadata")
+        decisions = sheets.get(self._flags_sheet(product)) if kind == "lot" else None
         return {"records": sheets.get(product, pd.DataFrame()).copy(),
-                "metadata": meta.iloc[0].where(meta.iloc[0].notna(), None).to_dict()}
+                "metadata": meta.iloc[0].where(meta.iloc[0].notna(), None).to_dict(),
+                "decisions": decisions.copy() if decisions is not None else None,
+                "controls_initialized": decisions is not None}
+
+    def initialize_lot_controls(self, product: str) -> bool:
+        """Explicit operator migration; reading never initializes a decision sheet."""
+        path = self.paths["lot"]
+        flags_name = self._flags_sheet(product)
+        with self._write_lock, publication_lock(path):
+            previous = self.read_product(product, "lot")
+            if previous is None:
+                raise ValueError("Missing Yield publication for release initialization")
+            controlled, decisions = merge_lot_release_controls(
+                previous["records"], previous["decisions"],
+            )
+            if previous["controls_initialized"]:
+                return False
+            metadata = {**previous["metadata"], "release_schema_version": 1}
+            outcome = replace_workbook_sheets(path, {
+                product: controlled, flags_name: decisions,
+                self._meta_sheet(product): pd.DataFrame([metadata]),
+            })
+            if not outcome.written:
+                raise OSError("Yield release initialization could not be published")
+            return True
 
     def source_signature(self, kind: str) -> str:
         path = self.paths[kind].resolve()
@@ -80,6 +117,12 @@ class YieldAlertWorkbookStore:
         with self._write_lock, publication_lock(path):
             previous = self.read_product(product, kind)
             old = previous["metadata"] if previous else {}
+            decisions = None
+            if kind == "lot" and records is not None:
+                records, decisions = merge_lot_release_controls(
+                    records, previous["decisions"] if previous else None,
+                )
+                metadata = {**metadata, "release_schema_version": 1}
             same_records = records is None or (previous is not None
                 and list(previous["records"].columns) == list(records.columns)
                 and previous["records"].astype(object).where(previous["records"].notna(), None).to_dict("records")
@@ -90,6 +133,8 @@ class YieldAlertWorkbookStore:
             sheets = {meta_name: pd.DataFrame([merged])}
             if records is not None:
                 sheets[product] = records
+            if decisions is not None:
+                sheets[self._flags_sheet(product)] = decisions
             outcome = replace_workbook_sheets(path, sheets)
             if not outcome.written:
                 raise OSError("Yield alert workbook could not be published")

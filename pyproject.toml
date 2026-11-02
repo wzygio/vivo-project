@@ -11,6 +11,8 @@ dependencies = [
     "pandas>=2.3.1",
     "numpy>=2.3.2",
     "streamlit>=1.57.0",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.30,<1",
     "plotly>=6.1.1",
     "kaleido>=1.0,<2",       # RS 图像批量导出，运行环境需安装 Chrome/Chromium
     "sqlalchemy>=2.0.42",
@@ -41,6 +43,9 @@ pythonpath = ["src", "."]
 # 开发依赖：仅在本地开发和测试时需要
 dev-dependencies = [
     "pytest",
+    "pytest-cov>=6,<8",
+    "httpx>=0.27,<1",
+    "psutil>=5.9,<8",
     "ipykernel",
     "jupyterlab",
 ]

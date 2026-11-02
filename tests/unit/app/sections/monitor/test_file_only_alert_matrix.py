@@ -41,6 +41,13 @@ def test_default_yield_cells_never_call_report_analysis(tmp_path, monkeypatch):
         "入库时间": (previous_week+timedelta(days=2)).strftime("%Y/%m/%d"), "阵列投入时间": "-"}],
         reference_date=day, coverage_start=str(start), coverage_end=str(day), has_data=True,
         health={"status":"fresh", "refreshed_at":now.isoformat()}, calculation_signature="alert")
+    # New facts remain withheld until the operator explicitly releases them;
+    # matrix reads still must not run analysis or write this decision itself.
+    assert matrix.MATRIX_ROW_MAP["yield_lot_oos"].evaluator("M678", context)["state"] == "ok"
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+    lot_path = tmp_path / "lot_oos_results.xlsx"
+    decisions = pd.read_excel(lot_path, sheet_name="M678__flags").assign(flag=False)
+    assert replace_workbook_sheets(lot_path, {"M678__flags": decisions}).written
     assert matrix.MATRIX_ROW_MAP["yield_lot_oos"].evaluator("M678", context)["state"] == "alert"
 
 
@@ -53,7 +60,7 @@ def test_default_inline_reads_each_workbook_once_for_all_products(tmp_path, monk
     for path in paths.values():
         pd.DataFrame().to_excel(path)
     monkeypatch.setattr(cache, "scope_decoration_path", lambda scope: paths[scope])
-    monkeypatch.setattr("src.inline_domain.infrastructure.shared.resource_paths.scope_decoration_path", lambda scope: paths[scope])
+    monkeypatch.setattr("src.inline_domain.infrastructure.shared.resource_paths.scope_decoration_path", lambda scope, alarm_type="oos": paths[scope])
     monkeypatch.setattr("src.inline_domain.infrastructure.shared.resource_paths.decision_workbook_paths", lambda alarm_type: paths)
     monkeypatch.setattr(matrix, "load_sheet_oos_decoration", lambda *a, **k: pytest.fail("per-product Excel read"))
     calls = []

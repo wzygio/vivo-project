@@ -24,9 +24,10 @@ class ExcelAlarmStorePort(Protocol):
 
 
 class ExcelAlarmReader:
-    def __init__(self, store: ExcelAlarmStorePort, alarm_type: str = "oos") -> None:
+    def __init__(self, store: ExcelAlarmStorePort, alarm_type: str = "oos", *, strict_empty: bool = False) -> None:
         self._store = store
         self.alarm_type = alarm_type.upper()
+        self._strict_empty = strict_empty
         if self.alarm_type not in {"OOS", "OOC"}:
             raise ValueError(f"Unsupported alarm type: {alarm_type}")
         self._projector = OosHistoryService if self.alarm_type == "OOS" else OocHistoryService
@@ -77,7 +78,7 @@ class ExcelAlarmReader:
     def _validate(self, scope: str, product: str, frame: pd.DataFrame) -> None:
         if scope not in {"spc", "ctq", "aoi_tt", "aoi_rs"}:
             raise ValueError(f"Unsupported monitor scope: {scope}")
-        if frame.empty:
+        if frame.empty and not self._strict_empty:
             return
         required = {"factory", "prod_code", "step_id", "flag"}
         if scope in {"spc", "ctq"}:
@@ -88,10 +89,14 @@ class ExcelAlarmReader:
             required |= {"usl"} if self.alarm_type == "OOS" else {"ucl", "ooc_type"}
         else:
             required |= {"rs_code", "point_id", "sheet_start_time", "value"}
+            if self._strict_empty:
+                required.add("chart_kind")
             required |= {"spec"} if self.alarm_type == "OOS" else {"ucl", "lcl", "ooc_type"}
         missing = required - set(frame.columns)
         if missing:
             raise ExcelAlarmReadError(f"{scope}/{product} {self.alarm_type}: missing columns {sorted(missing)}")
+        if frame.empty:
+            return
         if not frame["prod_code"].astype(str).str.strip().eq(product).all():
             raise ExcelAlarmReadError(f"{scope}/{product}: product sheet contains another product")
         flags = frame["flag"].map(lambda value: str(value).strip().lower())

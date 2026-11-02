@@ -50,14 +50,15 @@ def build_qtime_service(db_manager: DatabaseManager) -> QTimeReportService:
     )
 
 
-def build_qtime_alert_results() -> "QTimeAlertResults":
+def build_qtime_alert_results(*, workbook_reader=None) -> "QTimeAlertResults":
     """Saved-result consumer and producer; constructing it never touches a database."""
     import hashlib
     from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
     from src.indicator_domain.infrastructure.qtime.alert_workbook import QTimeAlertWorkbook
 
+    kwargs = {"workbook_reader": workbook_reader} if workbook_reader is not None else {}
     return QTimeAlertResults(
-        QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts")),
+        QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts"), **kwargs),
         ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
         policy_signature=lambda: hashlib.sha256(repr((
             "qtime-published-v1", ConfigLoader.get_indicator_data_exclusion(),

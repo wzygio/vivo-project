@@ -12,6 +12,58 @@ LOT_COLUMNS = ["超规 Lot ID", "异常 Code", "管控规格线", "实际不良�
 TREND_COLUMNS = ["level", "defect_group", "defect_desc", "time_period", "curr_rate", "prev_rate", "rules", "period_scope"]
 RESULT_COLUMNS = {"lot": LOT_COLUMNS, "trend": TREND_COLUMNS}
 RESULT_SCHEMA_VERSION = 1
+LOT_RELEASE_KEYS = ["超规 Lot ID", "异常 Code", "入库时间"]
+LOT_RELEASE_COLUMNS = [*LOT_RELEASE_KEYS, "flag"]
+
+
+def is_lot_released(value: object) -> bool:
+    """Missing, deleted or unrecognised decisions never release an alert."""
+    if pd.isna(value):
+        return False
+    return str(value).strip().lower() in {"false", "0", "0.0", "no", "n"}
+
+
+def _release_keys(frame: pd.DataFrame) -> pd.DataFrame:
+    if set(LOT_RELEASE_KEYS) - set(frame.columns):
+        raise ValueError("Incomplete Yield release identity")
+    result = frame.copy()
+    for column in LOT_RELEASE_KEYS:
+        result[column] = result[column].astype("string").str.strip()
+        if result[column].isna().any() or result[column].eq("").any():
+            raise ValueError("Invalid Yield release identity")
+    dates = pd.to_datetime(result["入库时间"], format="mixed", errors="coerce")
+    if dates.isna().any():
+        raise ValueError("Invalid Yield release event date")
+    result["入库时间"] = dates.dt.strftime("%Y/%m/%d")
+    return result
+
+
+def merge_lot_release_controls(
+    records: pd.DataFrame, decisions: pd.DataFrame | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Merge authoritative decisions, retaining history and denying every new key."""
+    source = _release_keys(records)
+    if decisions is None:
+        history = pd.DataFrame(columns=LOT_RELEASE_COLUMNS)
+    else:
+        if set(LOT_RELEASE_COLUMNS) - set(decisions.columns):
+            raise ValueError("Incomplete Yield release decisions")
+        history = _release_keys(decisions).reindex(columns=LOT_RELEASE_COLUMNS)
+        if history.duplicated(LOT_RELEASE_KEYS).any():
+            raise ValueError("Duplicate Yield release decisions")
+    new_keys = source[LOT_RELEASE_KEYS].drop_duplicates()
+    existing = set(history[LOT_RELEASE_KEYS].itertuples(index=False, name=None))
+    unseen = [key not in existing for key in new_keys.itertuples(index=False, name=None)]
+    additions = new_keys.loc[unseen].assign(flag=True)
+    if history.empty:
+        history = additions.reset_index(drop=True)
+    elif not additions.empty:
+        history = pd.concat([history, additions], ignore_index=True)
+    effective = source.drop(columns="flag", errors="ignore").merge(
+        history.assign(flag=~history["flag"].map(is_lot_released)),
+        on=LOT_RELEASE_KEYS, how="left", validate="many_to_one", sort=False,
+    )
+    return effective, history
 
 
 class YieldAlertStore(Protocol):
@@ -26,6 +78,8 @@ class PublishedYieldAlerts:
     status: str
     records: pd.DataFrame
     metadata: dict
+    release_records: pd.DataFrame | None = None
+    release_evidence: bool = False
 
 
 def _digest(value: object) -> str:
@@ -165,7 +219,17 @@ class YieldAlertResults:
             if not frame["is_current"].isin([True, False]).all():
                 raise ValueError("Invalid published current trend marker")
             frame = frame.loc[frame["is_current"].eq(True)].reset_index(drop=True)
-        return PublishedYieldAlerts("ready" if bool(meta["has_data"]) else "no_data", frame, meta)
+        release_records = None
+        release_evidence = False
+        if kind == "lot" and meta.get("release_schema_version") == 1:
+            if not payload.get("controls_initialized") or "flag" not in frame:
+                raise ValueError("Missing Yield release controls")
+            effective, _ = merge_lot_release_controls(frame, payload["decisions"])
+            release_records = effective.loc[effective["flag"].map(is_lot_released)].reset_index(drop=True)
+            frame = release_records.reindex(columns=LOT_COLUMNS)
+            release_evidence = True
+        return PublishedYieldAlerts("ready" if bool(meta["has_data"]) else "no_data",
+            frame.reindex(columns=RESULT_COLUMNS[kind]), meta, release_records, release_evidence)
 
     def source_signature(self, product: str, kind: str, reference_date: date, *,
                          start_date: str | None = None, end_date: str | None = None,

@@ -15,6 +15,7 @@ QTIME_ALERT_COLUMNS = [
     "shop", "prodcode", "f_step", "t_step", "step_desc", "lot_id", "q_spec",
     "wait_time", "over_hours", "timekey",
 ]
+QTIME_PUBLISHED_COLUMNS = [*QTIME_ALERT_COLUMNS, "flag"]
 QTIME_SHOPS = ("ARRAY", "OLED", "TP")
 QTIME_METADATA_COLUMNS = [
     "shop", "reference_date", "coverage_start", "coverage_end", "updated_at", "status",
@@ -32,6 +33,13 @@ class QTimeAlertStore(Protocol):
 
 def _digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _released(value: object) -> bool:
+    """Only an explicit false value is evidence of a release decision."""
+    if pd.isna(value):
+        return False
+    return str(value).strip().lower() in {"false", "0", "0.0", "no", "n"}
 
 
 class QTimeAlertResults:
@@ -58,7 +66,9 @@ class QTimeAlertResults:
             raise ValueError("Q-Time publication requires fresh source data")
         if not alerts.empty and set(QTIME_ALERT_COLUMNS[1:]) - set(alerts):
             raise ValueError("Incomplete Q-Time alert projection")
-        saved = alerts.assign(shop=shop).reindex(columns=QTIME_ALERT_COLUMNS).copy()
+        if not alerts.empty and ("flag" not in alerts or not alerts["flag"].map(_released).all()):
+            raise ValueError("Q-Time publication requires explicit release decisions")
+        saved = alerts.assign(shop=shop, flag=False).reindex(columns=QTIME_PUBLISHED_COLUMNS).copy()
         membership = (
             details[["prodcode", "step_desc", "lot_id", "timekey"]].drop_duplicates().copy()
             if not details.empty else pd.DataFrame(columns=["prodcode", "step_desc", "lot_id", "timekey"])
@@ -103,7 +113,9 @@ class QTimeAlertResults:
                 if initialized:
                     return {"state": "no_data", "records": empty, "alerts": empty.copy(),
                             "alert_factories": [], "message": "当前暂无预警记录。",
-                            "metadata": {"status": "initialized", "total_lots": 0}}
+                            "metadata": {"status": "initialized", "total_lots": 0},
+                            "release_records": pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS),
+                            "release_evidence": False}
             monday = reference_date - timedelta(days=reference_date.weekday())
             start = pd.Timestamp(start_date or monday - timedelta(days=7)).normalize()
             end = (pd.Timestamp(end_date).normalize() + pd.Timedelta(days=1)
@@ -111,9 +123,13 @@ class QTimeAlertResults:
             if start >= end:
                 raise ValueError("Invalid Q-Time publication display window")
             frames = []
+            release_frames = []
+            release_evidence = True
             lot_ids: set[str] = set()
             has_product = False
             now = pd.Timestamp(self.clock())
+            if now.tzinfo is not None:
+                now = now.tz_convert("Asia/Shanghai").tz_localize(None)
             for shop in dict.fromkeys(shops):
                 metadata = meta.loc[meta["shop"].eq(shop)]
                 if len(metadata) != 1:
@@ -151,6 +167,11 @@ class QTimeAlertResults:
                 has_product |= not product_rows.empty
                 lot_ids.update(product_rows["lot_id"].dropna().astype(str))
                 selected = saved.loc[saved["prodcode"].astype(str).eq(str(product))].copy()
+                if "flag" in saved:
+                    selected = selected.loc[selected["flag"].map(_released)].copy()
+                    selected["flag"] = False
+                else:
+                    release_evidence = False
                 times = pd.to_datetime(selected["timekey"].astype(str).str.slice(0, 14),
                                        format="%Y%m%d%H%M%S", errors="coerce")
                 if times.isna().any():
@@ -158,11 +179,17 @@ class QTimeAlertResults:
                 if step_descriptions:
                     selected = selected.loc[selected["step_desc"].isin(step_descriptions)]
                     times = times.reindex(selected.index)
-                frames.append(selected.loc[(times >= start) & (times < end)])
+                selected = selected.loc[(times >= start) & (times < end)]
+                frames.append(selected)
+                if "flag" in selected:
+                    release_frames.append(selected.reindex(columns=QTIME_PUBLISHED_COLUMNS))
             records = pd.concat(frames, ignore_index=True).reindex(columns=QTIME_ALERT_COLUMNS)
+            release_records = (pd.concat(release_frames, ignore_index=True)
+                               if release_frames else pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS))
             state = "alert" if not records.empty else "ok" if has_product else "no_data"
             return {
                 "state": state, "records": records, "alerts": records.copy(),
+                "release_records": release_records, "release_evidence": release_evidence,
                 "alert_factories": sorted(records["shop"].unique().tolist()), "message": "",
                 "metadata": {"total_lots": len(lot_ids), "period_start": str(start.date()),
                              "period_end": str((end-pd.Timedelta(days=1)).date())},
@@ -170,7 +197,9 @@ class QTimeAlertResults:
         except (KeyError, TypeError, ValueError, OSError) as exc:
             logger.warning("Q-Time published alerts unavailable: product=%s cause=%s", product, type(exc).__name__)
             return {"state": "error", "records": empty, "alerts": empty.copy(),
-                    "alert_factories": [], "message": UNAVAILABLE, "metadata": {}}
+                    "alert_factories": [], "message": UNAVAILABLE, "metadata": {},
+                    "release_records": pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS),
+                    "release_evidence": False}
 
     def source_signature(self, product: str, reference_date: date, **selection) -> str:
         # Recheck validity outside the result cache so age expiry invalidates it.

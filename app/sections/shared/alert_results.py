@@ -27,18 +27,6 @@ ALL_ROWS = (*SHEET_ROWS, *CAPABILITY_ROWS, *TREND_ROWS,
             "yield_lot_oos", "yield_trend_fluctuation", "qtime_sheet_oos",
             *snapshots.PUBLISHED_ALERT_ROWS)
 
-_COMMON_MAP = {"factory": "厂别", "step_id": "站点", "param_name": "参数名称",
-               "sheet_id": "Sheet ID", "sheet_start_time": "超规时间", "oos_type": "超规类型"}
-_SHEET_MAPS = {
-    "spc": _COMMON_MAP, "ctq": _COMMON_MAP,
-    "aoi_tt": {"factory": "厂别", "step_id": "站点", "tt_name": "TT名称",
-               "sheet_id": "Sheet ID", "start_time": "超规时间", "tt_qty": "TT数量", "usl": "规格上限"},
-    "aoi_rs": {"factory": "厂别", "step_id": "站点", "rs_code": "RS Code",
-               "chart_kind": "图类型", "point_id": "点位ID", "sheet_start_time": "超规时间",
-               "value": "实测值", "spec": "规格上限"},
-}
-
-
 def _result(state: str, records: pd.DataFrame | None = None, *,
             alerts: pd.DataFrame | None = None, factory_column: str = "factory",
             message: str = "", metadata: dict | None = None) -> dict:
@@ -90,29 +78,10 @@ def alert_result_signature(row_key: str, product: str, reference_date: date, **s
 
 
 def _read_inline(row_key: str, product: str, reference_date: date) -> dict:
-    from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
-    from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
-    from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
-    from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
+    from src.inline_domain.composition import build_sheet_alert_query
 
     scope = row_key.removesuffix("_sheet_oos")
-    reader = ExcelAlarmReader(ExcelAlarmStore({scope: scope_decoration_path(scope)}))
-    detail = reader.read_detail(scope, product)
-    mapping = _SHEET_MAPS[scope]
-    empty_display = pd.DataFrame(columns=list(mapping.values()))
-    if detail is None:
-        return _result("no_data", alerts=empty_display, message="当前产品暂无预警记录。")
-    time_column = "start_time" if scope == "aoi_tt" else "sheet_start_time"
-    rows = build_sheet_oos_alerts(
-        detail, time_column=time_column, reference_date=reference_date,
-        excluded_param_name_contains=ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() if scope == "spc" else (),
-    )
-    display = rows.rename(columns=mapping).reindex(columns=list(mapping.values())).copy()
-    if not display.empty:
-        display["超规时间"] = display["超规时间"].astype(str)
-        if scope == "aoi_rs":
-            display["图类型"] = display["图类型"].replace({"lot": "By Lot", "sheet": "By Sheet"})
-    return _result("alert" if len(rows) else "ok", rows, alerts=display)
+    return build_sheet_alert_query(scope).read(scope, product, reference_date)
 
 
 def _read_capability(row_key: str, product: str, reference_date: date) -> dict:

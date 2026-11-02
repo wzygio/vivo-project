@@ -16,7 +16,7 @@ HEALTH = {"status": "fresh", "refreshed_at": "2026-10-27T09:30:00"}
 def rows():
     return pd.DataFrame([
         dict(shop="ARRAY", prodcode="M678", f_step="100", t_step="200", step_desc=step,
-             lot_id=lot, q_spec=12., wait_time=14., over_hours=2., timekey=when)
+             lot_id=lot, q_spec=12., wait_time=14., over_hours=2., timekey=when, flag=False)
         for lot, when, step in [
             ("LAST", "20261020100000", "PATH1"),
             ("CURRENT", "20261026100000", "PATH2"),

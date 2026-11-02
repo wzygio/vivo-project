@@ -1,0 +1,9 @@
+[
+  {
+    "client_id": "report-consumer-demo",
+    "key_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "products": ["PRODUCT_DEMO"],
+    "factories": ["ARRAY"],
+    "sub_domains": ["SPC", "CTQ", "AOI_TT", "AOI_RS", "Yield", "Q-Time"]
+  }
+]

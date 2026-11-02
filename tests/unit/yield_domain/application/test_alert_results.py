@@ -36,7 +36,7 @@ def test_per_product_publication_is_atomic_and_unchanged_results_do_not_rewrite(
     assert (path.read_bytes(), path.stat().st_mtime_ns) == previous
     cold = results(tmp_path)
     assert cold.read("P1", "lot", DAY).status == "ready"
-    assert len(cold.read("P1", "lot", DAY).records) == 1
+    assert cold.read("P1", "lot", DAY).records.empty  # New decisions default to not released.
     assert cold.read("P2", "lot", DAY).status == "ready"
     assert cold.read("P2", "lot", DAY).records.empty
     assert cold.read("P3", "lot", DAY).status == "missing"
@@ -140,6 +140,10 @@ def test_lot_report_window_is_explicit_and_preserves_published_latest_source_anc
     service.publish("P1", "lot", rows, reference_date=DAY, coverage_start="2026-09-01",
                     coverage_end="2026-10-20", has_data=True, health=HEALTH,
                     calculation_signature="scope", lot_reference_date="2026-10-18")
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+    path = service.store.paths["lot"]
+    decisions = pd.read_excel(path, sheet_name="P1__flags").assign(flag=False)
+    assert replace_workbook_sheets(path, {"P1__flags": decisions}).written
     # The latest source Lot can be normal and therefore absent from the alert rows.
     monthly = service.read("P1", "lot", DAY, time_period=30)
     assert monthly.records["超规 Lot ID"].tolist() == ["OLDER", "LATEST_ALERT"]

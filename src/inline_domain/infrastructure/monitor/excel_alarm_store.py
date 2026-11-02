@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Mapping
 
@@ -49,8 +50,14 @@ def clear_alarm_workbook_cache(path: Path | str) -> None:
 class ExcelAlarmStore:
     """Missing files/sheets are explicit, not an authoritative zero result."""
 
-    def __init__(self, file_paths: Mapping[str, Path | str]) -> None:
+    def __init__(
+        self,
+        file_paths: Mapping[str, Path | str],
+        *,
+        workbook_reader: Callable[[str, int, int], dict[str, pd.DataFrame]] | None = None,
+    ) -> None:
         self.file_paths = {scope: Path(path) for scope, path in file_paths.items()}
+        self._workbook_reader = workbook_reader or read_cached_alarm_workbook
 
     def source_path(self, scope: str) -> Path:
         return self.file_paths[scope]
@@ -61,7 +68,7 @@ class ExcelAlarmStore:
             stat = path.stat()
         except FileNotFoundError:
             return None
-        sheets = read_cached_alarm_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+        sheets = self._workbook_reader(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
         if product not in sheets:
             return None
         frame = sheets[product].copy()
