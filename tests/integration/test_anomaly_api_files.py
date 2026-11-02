@@ -325,6 +325,51 @@ def test_inline_date_boundaries_use_shanghai_for_timezone_aware_published_times(
     _assert_unchanged(before)
 
 
+@pytest.mark.parametrize('scope', ['spc', 'ctq', 'aoi_tt', 'aoi_rs'])
+@pytest.mark.parametrize('event', ['OOS', 'OOC'])
+def test_timezone_normalization_precedes_public_date_exclusion(published_files, monkeypatch, scope, event):
+    files = published_files
+    monkeypatch.setattr(ConfigLoader, 'get_inline_data_exclusion',
+                        lambda: (('ARRAY',), '2026-11-02', '2026-11-02'))
+    frame = _inline_rows(scope).iloc[[0]].copy()
+    frame['sheet_start_time'] = frame['start_time'] = '2026-11-01T16:00:00+00:00'
+    _write(files.paths[('inline_domain', f'{scope}_sheet_{event.lower()}_decoration')], {'P1': frame})
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(
+            sub_domain={'aoi_tt': 'AOI_TT', 'aoi_rs': 'AOI_RS'}.get(scope, scope.upper()),
+            event_type=event, start_date='2026-11-02', end_date='2026-11-02'))
+    assert response.status_code == 200, response.text
+    assert response.json()['data'] == [] and response.json()['meta']['complete'] is True
+    _assert_unchanged(before)
+
+
+@pytest.mark.parametrize('failure', ['com', 'xml'])
+def test_expected_protected_workbook_errors_preserve_other_sources(published_files, monkeypatch, failure):
+    from pywintypes import com_error
+    from xml.etree.ElementTree import ParseError
+    files = published_files
+    failed_path = files.paths[('inline_domain', 'ctq_sheet_oos_decoration')]
+    failed_path.write_bytes(b'not-a-valid-xlsx')
+
+    def fallback(path):
+        assert Path(path) == failed_path
+        raise (com_error(-2147024891, 'private-path', None, None) if failure == 'com'
+               else ParseError('private-xml'))
+
+    monkeypatch.setattr(excel_tools, 'read_workbook_sheets', fallback)
+    before = _bytes(files)
+    with TestClient(files.app(), raise_server_exceptions=False) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
+    assert response.status_code == 200, response.text
+    assert response.json()['meta']['complete'] is False
+    assert response.json()['meta']['failed_sources'] == [dict(product='P1', sub_domain='CTQ',
+                                                             event_type='OOS', code='result_unavailable')]
+    assert len(response.json()['data']) == 5
+    assert 'private-' not in response.text
+    _assert_unchanged(before)
+
+
 @pytest.mark.parametrize('domain', ['Q-Time', 'Yield'])
 def test_lot_sources_honor_dates_outside_default_week_and_retain_coverage_checks(published_files, domain):
     files = published_files

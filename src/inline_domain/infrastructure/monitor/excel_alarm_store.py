@@ -75,9 +75,16 @@ class ExcelAlarmStore:
         frame.columns = [str(column).strip() for column in frame.columns]
         if not frame.empty and "prod_code" in frame and not frame["prod_code"].astype(str).str.strip().eq(product).all():
             raise ExcelAlarmReadError(f"{scope}/{product}: product sheet contains another product")
+        time_column = "start_time" if scope == "aoi_tt" else "sheet_start_time"
+        if not frame.empty and time_column in frame:
+            timestamps = pd.to_datetime(frame[time_column], errors='coerce')
+            if isinstance(timestamps.dtype, pd.DatetimeTZDtype):
+                # Published display dates and exclusion dates are Shanghai dates.
+                # Normalize before the exclusion adapter drops timezone metadata.
+                frame[time_column] = timestamps.dt.tz_convert('Asia/Shanghai').dt.tz_localize(None)
         try:
             frame = apply_inline_date_exclusion(
-                frame, time_column="start_time" if scope == "aoi_tt" else "sheet_start_time",
+                frame, time_column=time_column,
             )
         except ValueError as exc:
             raise ExcelAlarmReadError(f"{scope}/{product}: {exc}") from exc

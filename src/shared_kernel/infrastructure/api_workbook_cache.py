@@ -7,8 +7,26 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import RLock
 from zipfile import BadZipFile
+from xml.etree.ElementTree import ParseError
 
 import pandas as pd
+from openpyxl.utils.exceptions import InvalidFileException
+
+try:
+    from pywintypes import com_error, error as windows_error
+except ImportError:
+    _OFFICE_ERRORS: tuple[type[Exception], ...] = ()
+else:
+    _OFFICE_ERRORS = (com_error, windows_error)
+
+try:
+    from lxml.etree import XMLSyntaxError
+except ImportError:
+    _XML_ERRORS: tuple[type[Exception], ...] = ()
+else:
+    _XML_ERRORS = (XMLSyntaxError,)
+
+_READ_ERRORS = (OSError, ValueError, ImportError, BadZipFile, ParseError, InvalidFileException) + _OFFICE_ERRORS + _XML_ERRORS
 
 DEFAULT_MAX_BYTES = 64 * 1024 * 1024
 
@@ -21,6 +39,10 @@ class WorkbookLimitError(ValueError):
     """An input exceeds configured file, row or parsed-cache limits."""
 
 
+class WorkbookReadError(OSError):
+    """Expected parser or protected-file failures at the local read boundary."""
+
+
 def read_api_workbook(path: Path) -> dict[str, pd.DataFrame]:
     """Preserve stored text identifiers; reuse protected-file support on fallback.
 
@@ -30,10 +52,13 @@ def read_api_workbook(path: Path) -> dict[str, pd.DataFrame]:
     """
     try:
         return pd.read_excel(path, sheet_name=None, engine="openpyxl", dtype=object)
-    except (OSError, ValueError, BadZipFile):
+    except _READ_ERRORS:
         from src.shared_kernel.utils.excel_tools import read_workbook_sheets
 
-        return read_workbook_sheets(path)
+        try:
+            return read_workbook_sheets(path)
+        except _READ_ERRORS as exc:
+            raise WorkbookReadError('Published workbook unavailable') from exc
 
 
 class BoundedWorkbookCache:
