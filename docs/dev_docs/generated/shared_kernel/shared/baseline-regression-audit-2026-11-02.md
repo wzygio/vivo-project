@@ -1,6 +1,6 @@
 # 24项既有失败审计与处理
 
-日期：2026-11-02。固定起点9c616182；状态：实现及定向验证完成，全量／独立评审进行中。
+日期：2026-11-02。固定起点9c616182；状态：完成，已合并master。
 
 ## 判断
 
@@ -33,27 +33,24 @@
 
 资源规则依据：[CONTEXT](../../../../../CONTEXT.md#resource-path-configuration)。Yield依据：[已发布结果展示设计](../../../../../references/design/inline_domain/shared/architecture-published-alert-display.md)和[Yield结果规则](../../../../../references/domain/yield_domain/shared/rules-yield-alert-results.md)。跨度依据：[CPK/CPM规则](../../../../../references/domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md)。TT依据：[参数白名单](../../../../../src/inline_domain/core/aoi_tt/parameters.py)及[周报规则](../../../../../references/domain/inline_domain/aoi_tt/rules-aoi-tt-weekly-report.md)。
 
-## 证据
+## 验证结果
 
-- 起始24项全部失败；两个分组完整文件40项及90项通过；主要修复组64项通过；保留22项＋初版替代路径28项通过。现行健康状态独立文件4项通过。
-- 使用固定9c616182的独立工作区收集2845项。首轮2849项全通过；Spec复核后恢复有价值的库存检查，补充治理反例及IJP汇总验证，最终收集数待末轮复核（预计2856项，删除1／新增12）。原工作区存在并行Yield改动，其早期2849项清点不作为固定基线；所有原始清点记录保留。
-- 所有已完成护栏测试的68个维护文件哈希无变化。初始失败组的Office尝试被阻止；修复组均无数据库／Office／维护目录写入尝试。类型检查共同读取器与新增夹具helper为0 errors、0 warnings。
-- 首轮全量2849项通过；Standards初审0项，Spec发现1项库存替代覆盖不足，已补强并在重验。末轮全量、评审复核及合并验证待补记。不启动新测试Web服务，不操作8890／8503正式服务。
+固定起点9c616182收集2845项，最终收集2856项：只移除旧Yield页面AST一项，新增12项（目录集合、全厂备件、四种Yield健康状态、实际库存负例／伴随文件、IJP汇总），净增11。原其它23个失败节点均保留且通过。原工作区早期清点包含另一组并行Yield改动，不作为固定基线；独立起点工作区及所有原始证据均保留。
 
-原始证据在原仓库output/test-results/：baseline-audit-initial-20261102、baseline-inline-fixtures-20261102、baseline-audit-aoi-span-20261102、baseline-audit-main-fixes-20261102、baseline-audit-resolved-20261102、baseline-audit-collection-pinned-20261102、baseline-audit-collection-final-20261102。全量证据baseline-audit-full-20261102。原问题卡见[14卡目录](../../../../../.scratch/api-baseline-regressions/issues/)。
+首轮完整回归2849项通过。Spec发现初期替代资源getter测试丢失真实库存保护，最终恢复原节点，登记历史资料集合，并补强负例；完整串行重跑2856项全部通过、0失败，413.93秒，113项既有依赖库警告。命令范围：`pytest tests/unit tests/architecture tests/integration/test_anomaly_api_files.py`。没有skip／xfail屏蔽，也没有提高既有UI测试超时。
 
+补强专项曾有42项通过、1项既有矩阵AppTest触发3秒超时，原始失败记录保留；该项在最终完整串行运行中通过。所有完成的隔离工作区保护测试均记录68个资源／数据文件哈希无变化；初始失败组的Office尝试被阻止，修复后的测试无数据库／Office／维护目录写入尝试。未执行需要真实生产数据库、Office或浏览器Web服务的外部集成；页面用Streamlit AppTest验证。
 
-## 评审补强与范围
+共享读取器同一源码覆盖合并为86.992%，覆盖合并不修改或隐藏专项超时结果。Pyright检查生产模块与两个夹具helper为0 errors、0 warnings。Standards初审0项；Spec初审1项P2库存保护不足，16a62595补强后两轴均0项未关闭。[评审记录](baseline-regression-review-2026-11-02.md)保留完整关闭过程。
 
-初步曾将资源清点也归为退役。Spec指出仍须发现新未注册输入，因此最终保留原节点，纠正旧规则并补强真实库存与反例。只排除已登记集合成员、锚定已登记主文件的备份／签名、Office所有权标记，以及现有两个8位十六进制名0字节临时占位；不排除非空同名文件或未注册空xlsx，文件本身均保留。
+## 合并与原工作区验证
 
-首次补强专项42项通过、1个既有矩阵AppTest触发3秒超时，原始结果保留；最终完整串行回归会再次覆盖该项。首轮共享读取器覆盖79.675%，合并同一源码的有效库存／IJP专项覆盖后为86.992%；合并覆盖不改变或隐藏专项超时结果。
+已快进合并master至fb1e454b。合并前后并行Yield改动逐一字节比较相同；8890及8503的PID与创建时间保持一致，API ready正常，未停止／重启正式服务或修改监听设置。没有移动或删除业务资源；配置仅补登记现有历史资料集合。
 
+合并后全部变更测试文件201项通过，51.82秒，无数据库／Office／维护目录写入尝试。该轮采用同样写入、DB、Office保护及预检，不为全仓哈希清点读取无关维护工作簿；不宣称整仓字节不变，也不把隔离全量结果当成对并行未提交Yield代码的完整认证。保留原用户改动，最终提交仅补记录，分支／工作区保留供审计。
 
-## ??????
+## 证据位置
 
-??????????runner???`pytest tests/unit tests/architecture tests/integration/test_anomaly_api_files.py`?2856 passed?0 failed?413.93??68????????????????Office????????0?????AppTest3??????????????????????????????????1??AST???12?????23????????green????
+原仓库output/test-results/：baseline-audit-initial-20261102（24项起始失败）、baseline-inline-fixtures-20261102（40项）、baseline-audit-aoi-span-20261102（90项）、baseline-audit-main-fixes-20261102（64项）、baseline-audit-resolved-20261102（原22与初版替代28项）、baseline-audit-full-20261102（首轮2849项）、baseline-audit-full-final-20261102（最终2856项及保护摘要）、baseline-audit-collection-closed-20261102（1移除／12新增节点）、baseline-audit-review-fix-20261102（补强及合并覆盖）、baseline-audit-merge-20261102（字节／服务身份比较）、baseline-audit-postmerge-20261102（合并后201项）。
 
-???????????????86.992%??????????????helper?0 errors?0 warnings?[????](baseline-regression-review-2026-11-02.md)???P2?????????????????Office????Web????????Streamlit????AppTest?
-
-?????output/test-results/baseline-audit-full-final-20261102?JUnit???????baseline-audit-collection-closed-20261102?????????baseline-audit-review-fix-20261102???????????16a62595???????
+原问题卡见[14卡目录](../../../../../.scratch/api-baseline-regressions/issues/)。源代码提交86264465、资源库存补强16a62595，合并fb1e454b。收尾曾因PowerShell管道编码使记录中的部分中文变为问号，已从正确的16a62595记录版本重新生成并校验；未改变已验证的代码、测试结果或原始证据。
