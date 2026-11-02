@@ -39,5 +39,3 @@ def test_existing_fresh_callers_keep_normal_result():
     ).run()
     assert not app.exception
     assert app.success[0].value == "系统监测正常"
-
-

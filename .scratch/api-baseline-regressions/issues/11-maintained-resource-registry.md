@@ -59,4 +59,4 @@ Resolution: retired-with-replacement
 
 当前验证路由：tests/unit/test_global_resource_registry.py::test_registered_collections_allow_members_without_separate_file_entries。原Reproduction scope保留为历史起始节点；退役节点不再进入live collection。
 
-定向验证已通过，完整回归及评审进行中。完整决定及证据见[基线审计](../../../../docs/dev_docs/generated/shared_kernel/shared/baseline-regression-audit-2026-11-02.md)。
+定向验证已通过，完整回归及评审进行中。完整决定及证据见[基线审计](../../../docs/dev_docs/generated/shared_kernel/shared/baseline-regression-audit-2026-11-02.md)。
