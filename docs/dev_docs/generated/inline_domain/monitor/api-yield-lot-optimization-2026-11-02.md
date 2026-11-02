@@ -46,3 +46,13 @@
 ## 运行与排除项
 
 本次不改写正式Lot发布工作簿、不初始化或修改人工Flag、不查询生产数据库、不推送远端。原报表服务不重启；API托管恢复如上。最终代码合并及API进程更新状态以最终记录为准；配置／代码到位不代表旧发布已自动重算。
+
+## 最终交付
+
+沿用本会话用户已明确批准的合并／正式部署授权，开发分支已快进合并至master（e8f337ba包含98b2b957实现及3fb2d69e托管修复）。仅更新8890 API，原8503报表进程1428未重启；凭证、授权、地址及登录启动快捷方式保持原样。
+
+合并前先验证所有拟更新代码文件无用户改动。global.yaml使用三方合并并保留原Windows换行及用户产品备注；只把目标分支的配置块与托管修复放入索引，再执行标准fast-forward，未暂存用户备注／原始需求／业务资源。两份原需求文档哈希保持不变，见 [合并证据](../../../../../output/test-results/yield-lot-api-merge/merge.json)。
+
+合并后129项相关验证通过；观察窗口内247个原仓库维护文件哈希0差异，数据库／Office／维护文件写入尝试0，见 [合并后JUnit](../../../../../output/test-results/yield-lot-api-postmerge/junit.xml)及[护栏摘要](../../../../../output/test-results/yield-lot-api-postmerge/summary.json)。服务本机与本机内网IP的live／ready均200、未认证schema401；新DTO的层别可空已在当前代码schema核验。没有读取生产业务明细验证可用性，见 [运行检查](../../../../../output/test-results/yield-lot-api-merge/runtime-verification.json)。先前跨设备连通性确认保留，不把本次本机探针冒充新远端实测。
+
+需要正常重新发布Yield结果，才能生成带defect_group／factory且符合当前策略签名的正式文件。没有自动迁移旧结果、没有修改人工决定，不将业务源尚待重发描述为已完成数据更新。
