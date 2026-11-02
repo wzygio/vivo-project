@@ -123,7 +123,8 @@ def published_files(tmp_path, monkeypatch):
         return create_app(clients_provider=lambda: (principal,), clock=lambda: NOW)
 
     return SimpleNamespace(paths=paths, metadata_path=metadata_path,
-        policy_path=policy_path, policy=policy, app=app)
+        policy_path=policy_path, policy=policy, app=app,
+        qtime_service=qtime_service, yield_service=yield_service)
 
 
 def _bytes(files) -> dict[Path, bytes]:
@@ -191,7 +192,7 @@ def test_real_qtime_uses_from_station_and_its_dictionary_layer(published_files):
             params={"product": "P1", "sub_domain": "Q-Time"})
     assert response.status_code == 200, response.text
     row, = response.json()["data"]
-    assert row["发生站点"] == row["起始站点"] == "0100"
+    assert row["发生站点"] == "0100" and "起始站点" not in row
     assert row["层别"] == "PI2" and row["层别"] != "OTHER"
     assert row["部门"] == "ARRAY" and row["对象类型"] == "lot"
     _assert_unchanged(before)
@@ -253,6 +254,112 @@ def test_yield_factory_filter_uses_published_factory_before_metadata_access(publ
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
             params={'product': 'P1', 'sub_domain': 'Yield', 'factory': 'CELL'})
     assert response.status_code == 200 and response.json()['data'] == []
+    _assert_unchanged(before)
+
+
+@pytest.mark.parametrize('domain', ['SPC', 'CTQ', 'AOI_TT', 'AOI_RS'])
+def test_custom_dates_and_field_filters_reach_inline_source_selection(published_files, domain):
+    files = published_files
+    before = _bytes(files)
+    parameter = {'SPC': 'THK', 'CTQ': 'THK', 'AOI_TT': 'TDSUM', 'AOI_RS': '01234'}[domain]
+    params = dict(sub_domain=domain, start_date='2026-11-02', end_date='2026-11-02',
+                  step_id='0100', layer='PI2', parameter_name=parameter)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=params)
+        assert response.status_code == 200, response.text
+        assert [row['对象编号'] for row in response.json()['data']] == ['CURRENT']
+        assert response.json()['meta']['period_end_exclusive'] == '2026-11-03T00:00:00+08:00'
+        for change in ({'parameter_name': 'unmatched'}, {'step_id': '100'}, {'layer': 'OTHER'}):
+            excluded = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={**params, **change})
+            assert excluded.status_code == 200 and excluded.json()['data'] == []
+    _assert_unchanged(before)
+
+
+def test_no_parameters_and_partial_failure_across_real_published_sources(published_files):
+    files = published_files
+    _release_yield(files)
+    with TestClient(files.app()) as client:
+        before = _bytes(files)
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
+        assert response.status_code == 200, response.text
+        assert len(response.json()['data']) == 7
+        assert response.json()['meta']['complete'] is True
+        assert response.json()['meta']['failed_sources'] == []
+        _assert_unchanged(before)
+        files.paths[('inline_domain', 'ctq_sheet_oos_decoration')].unlink()
+        before = _bytes(files)
+        partial = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
+        assert partial.status_code == 200, partial.text
+        assert len(partial.json()['data']) == 6
+        assert partial.json()['meta']['complete'] is False
+        assert partial.json()['meta']['failed_sources'] == [dict(
+            product='P1', sub_domain='CTQ', event_type='OOS', code='result_unavailable')]
+        assert str(files.paths[('inline_domain', 'ctq_sheet_oos_decoration')]) not in partial.text
+        _assert_unchanged(before)
+
+
+def test_omitted_category_for_ooc_selects_only_supported_authorized_sources(published_files):
+    files = published_files
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'OOC'})
+    assert response.status_code == 200, response.text
+    assert {row['分类'] for row in response.json()['data']} == {'SPC', 'CTQ', 'AOI_TT', 'AOI_RS'}
+    assert response.json()['meta']['complete'] is True
+    _assert_unchanged(before)
+
+
+def test_inline_date_boundaries_use_shanghai_for_timezone_aware_published_times(published_files):
+    files = published_files
+    frame = _inline_rows('spc').iloc[[0, 0]].copy()
+    frame['sheet_id'] = ['INCLUDED', 'NEXT_DAY']
+    frame['sheet_start_time'] = ['2026-11-01T16:00:00+00:00', '2026-11-02T16:00:00+00:00']
+    _write(files.paths[('inline_domain', 'spc_sheet_oos_decoration')], {'P1': frame})
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(
+            sub_domain='SPC', start_date='2026-11-02', end_date='2026-11-02'))
+    assert response.status_code == 200, response.text
+    row, = response.json()['data']
+    assert row['对象编号'] == 'INCLUDED' and row['发生时间'] == '2026-11-02T00:00:00+08:00'
+    _assert_unchanged(before)
+
+
+@pytest.mark.parametrize('domain', ['Q-Time', 'Yield'])
+def test_lot_sources_honor_dates_outside_default_week_and_retain_coverage_checks(published_files, domain):
+    files = published_files
+    if domain == 'Q-Time':
+        rows = pd.DataFrame([dict(prodcode='P1', f_step='0100', t_step='0200',
+            step_desc='SOURCE_DESTINATION', lot_id='HISTORICAL', q_spec=1., wait_time=2.,
+            over_hours=1., timekey='20261025000000', flag=False)])
+        files.qtime_service().publish('ARRAY', rows, rows,
+            {'status': 'fresh', 'refreshed_at': NOW.isoformat()}, DAY)
+        filters = dict(step_id='0100', layer='PI2', parameter_name='SOURCE_DESTINATION')
+    else:
+        lot = pd.read_excel(files.paths[('yield_domain', 'lot_oos_results')], sheet_name='P1', dtype=object)
+        lot.loc[:, '入库时间'] = '2026/10/25'
+        lot.loc[:, '超规 Lot ID'] = 'HISTORICAL'
+        files.yield_service().publish('P1', 'lot', lot.to_dict('records'), reference_date=DAY,
+            coverage_start='2026-10-01', coverage_end=str(DAY), has_data=True,
+            health={'status': 'fresh', 'refreshed_at': NOW.isoformat()}, calculation_signature='fixture')
+        _release_yield(files)
+        filters = dict(parameter_name='D1')
+    before = _bytes(files)
+    params = dict(sub_domain=domain, start_date='2026-10-25', end_date='2026-10-25', **filters)
+    with TestClient(files.app()) as client:
+        result = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=params)
+        assert result.status_code == 200, result.text
+        assert [row['对象编号'] for row in result.json()['data']] == ['HISTORICAL']
+        empty = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                           params={**params, 'start_date': '2026-10-26', 'end_date': '2026-10-26'})
+        assert empty.status_code == 200 and empty.json()['data'] == []
+        uncovered = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                               params={**params, 'start_date': '2026-09-01'})
+        assert uncovered.status_code == 503
+        if domain == 'Yield':
+            station = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                                 params={**params, 'step_id': '0100'})
+            assert station.status_code == 200 and station.json()['data'] == []
     _assert_unchanged(before)
 
 

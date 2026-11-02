@@ -58,7 +58,8 @@ class SheetAlertQuery:
         if reader.alarm_type not in {"OOS", "OOC"}:
             raise ValueError("Unsupported Inline alarm type")
 
-    def read(self, scope: str, product: str, reference_date: date) -> dict:
+    def read(self, scope: str, product: str, reference_date: date, *,
+             start_date: str | None = None, end_date: str | None = None) -> dict:
         if scope not in _DISPLAY_COLUMNS:
             raise ValueError("Unsupported Inline alert scope")
         detail = self._reader.read_detail(scope, product)
@@ -72,6 +73,7 @@ class SheetAlertQuery:
             detail,
             time_column="start_time" if scope == "aoi_tt" else "sheet_start_time",
             reference_date=reference_date,
+            start_date=start_date, end_date=end_date,
             excluded_param_name_contains=self._excluded_parameters if scope == "spc" else (),
         )
         display = rows.rename(columns=columns).reindex(columns=list(columns.values())).copy()

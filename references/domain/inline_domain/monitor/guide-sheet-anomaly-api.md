@@ -17,7 +17,7 @@
 
 不包含趋势、CPK／CPM、IJP 比例汇总、备件、IQC、图像和原始量测点。Lot 报警不会展开成该 Lot 所有片都报警。
 
-查询范围固定为服务器上海时区的上一完整 ISO 周：上周一 00:00 起，本周一 00:00 止，右端不包含。例如参考日 2026-11-02 的窗口为 `[2026-10-26, 2026-11-02)`。不接受任意历史日期参数。已发布数据使用现有报表显示时间，不再次前推日期。
+查询范围默认服务器上海时区的上一完整 ISO 周：上周一 00:00 起，本周一 00:00 止，右端不包含。例如参考日2026-11-02默认日期为2026-10-26至2026-11-01。可通过start_date／end_date指定包含首尾两天的日期范围；只传一项时，另一项独立采用对应默认日期。开始晚于截止返回422。已发布数据使用现有报表显示时间，不再次前推日期。历史查询受本地已发布内容及原有覆盖、有效性限制，API不会补算历史或延长有效期。
 
 ## 2. 启动前准备
 
@@ -173,7 +173,7 @@ powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
 .venv/Scripts/python.exe tools/anomaly_api_service.py start
 ```
 
-仅停止进程不会删除登录启动项；如需永久取消，应由该用户删除其启动目录中的上述专用快捷方式。初始监听地址／端口由用户profile的`host`／`port`提供。修改前确认端口归属与网络范围，不重用报表端口。真实来源仍受发布有效性、字典、Yield归属及人工释放决定限制；`/health/ready`成功不代表所有业务来源均可提供明细。
+仅停止进程不会删除登录启动项；如需永久取消，应由该用户删除其启动目录中的上述专用快捷方式。初始监听地址／端口由用户profile的`host`／`port`提供。修改前确认端口归属与网络范围，不重用报表端口。真实来源仍受发布有效性、字典、Yield发布厂别及人工释放决定限制；`/health/ready`成功不代表所有业务来源均可提供明细。
 
 | 路径 | 说明 |
 |---|---|
@@ -188,16 +188,32 @@ powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
 
 | 参数 | 要求 |
 |---|---|
-| `product` | 必填，产品原代码，区分实际配置值，不拼接界面注释 |
-| `sub_domain` | 必填，严格使用第1节中的六个值与大小写 |
+| `product` | 可选，省略表示启用且获授权的全部产品；显式填写产品原代码 |
+| `sub_domain` | 可选，省略表示全部授权分类；显式值严格使用第1节大小写 |
 | `event_type` | 默认 `OOS`；四类 Inline 可指定 `OOC`；Yield／Q-Time 指定 OOC 返回422 |
 | `factory` | 可选，显式请求必须在授权范围；省略表示所有已授权厂别 |
+| `step_id` | 可选，发生站点精确匹配 |
+| `layer` | 可选，层别精确匹配 |
+| `parameter_name` | 可选，监控参数精确匹配 |
+| `start_date` | 可选，YYYY-MM-DD，含当天；默认上个ISO周周一 |
+| `end_date` | 可选，YYYY-MM-DD，含当天；默认上个ISO周周日 |
 | `entity_type` | 可选，`sheet` 或 `lot` |
 | `entity_id` | 可选，对象编号精确匹配 |
-| `limit` | 默认100，范围1～500 |
-| `cursor` | 下一页令牌，首个请求不填写 |
+| `limit` | 可选，省略不按条数截断；显式1～500时启用分页 |
+| `cursor` | 下一页令牌，首个请求不填写；使用时必须同时提供显式limit |
 
-不接受表路径、工作表名、任意日期、强制刷新或绕过公开政策等额外参数。无效或未知参数返回422。
+所有查询参数都可省略；认证请求头X-API-Key仍为必需。省略参数表示授权范围内全选，空字符串不表示全选。参数按“且”组合，文本精确匹配，保留站点／对象编号前导零。不接受表路径、工作表名、强制刷新或绕过公开政策等额外参数。无效或未知参数返回422。
+
+未指定分类而event_type=OOC时，仅查询获授权且支持OOC的四类Inline。Yield的站点／层别为null，带站点或层别筛选时不匹配。
+
+请求示例（仍需X-API-Key请求头）：
+
+```text
+GET /api/v1/sheet-anomalies
+GET /api/v1/sheet-anomalies?sub_domain=SPC&step_id=00100&layer=PI2
+GET /api/v1/sheet-anomalies?start_date=2026-10-25&end_date=2026-11-01
+GET /api/v1/sheet-anomalies?limit=200
+```
 
 下面是调用方 Python 示例，凭证由其运行环境注入，不在代码中写死或打印：
 
@@ -233,16 +249,25 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 | 监控参数 | 参数名、TT名称、RS Code、Yield异常Code或Q-Time路径名 |
 | 异常事件 | OOS／OOC，独立于命中边界 |
 | 对象类型／对象编号 | sheet／lot 与对应原始字符串编号 |
-| 产品型号 | 请求产品原代码 |
+| 产品型号 | 每条记录所属产品原代码 |
 | 发生时间 | Inline／Q-Time 为带时区时间；Yield 为入库日期 `YYYY-MM-DD` |
-| 起始站点 | Q-Time 的起点，与该来源发生站点一致；其余来源可空 |
 | 命中边界 | 已发布的 USL／LSL／UCL／LCL 等，可空 |
 
 Yield 只有日期精度，返回日期而不是虚构零点事件时间。一片在多个站点／参数上可以多条，`returned_count` 是本页明细行数，不是去重异常片数。
 
-响应外层为 `data` 和 `meta`。`meta` 含 `status`、`returned_count`、`has_more`、`next_cursor`、查询周起止、`timezone`、`read_at` 和 `limitations`。`read_at` 是此次取数时间，不是源数据更新时间。
+响应外层为data和meta。meta包含status、returned_count、has_more、next_cursor、实际查询范围period_start／period_end_exclusive、timezone、read_at、limitations，以及complete和failed_sources。read_at是此次取数时间，不是源数据更新时间。
 
-读取下一页时保留首个请求的全部过滤条件及 `limit`，把 `next_cursor` 原样放进 `cursor`。游标绑定调用方、授权范围、查询条件、参考周和公开结果，不能跨查询复用。默认有效期300秒，且数量／字节有上限；进程重启、淘汰、权限／公开结果变化可能要求重查。
+**每次先检查meta.complete。** complete=true表示选中来源均读取成功，failed_sources为空；complete=false表示部分来源不可用，data只含可用来源。status=ok／alert描述已返回记录是否为空，不能替代完整性判断。失败来源逐项列出product、sub_domain、event_type和固定code=result_unavailable，不包含路径或内部诊断。例如：
+
+```json
+{"complete": false, "failed_sources": [{"product": "PRODUCT_DEMO", "sub_domain": "Yield", "event_type": "OOS", "code": "result_unavailable"}]}
+```
+
+上面展示的是meta中的部分字段。即使data为空，complete=false也不能解释为全部来源均无异常。全部选中来源均失败时返回503，error.failed_sources列出失败来源。请求级配置错误、超时、容量或限流失败仍返回相应错误，不能保证逐来源清单。
+
+cursor就是服务发出的“下一页取数凭条”。默认完整取数不需要它；数据较多时，先带limit请求第一页，再保留相同筛选条件和limit，把meta.next_cursor原样作为下一次的cursor，直到has_more=false。调用方无需理解或拼接令牌内容。
+
+先合并各产品／分类的公开结果，按发生时间及公开身份字段统一倒序，再整体分页。游标绑定调用方、授权、实际启用产品／分类／厂别范围、日期、筛选、公开结果及失败来源状态，不能跨查询复用。默认有效期300秒，且数量／字节有上限；进程重启、淘汰、权限／范围／公开结果／失败状态变化可能要求重查。
 
 收到410时，从不带 cursor 的第一页重新查询，并丢弃上次未完成的分页集合，避免拼接两个版本。不要修改或解析游标内容；篡改返回422。进程重启会更换签名密钥，因此旧游标也可能返回422；确认请求参数未变且服务刚重启时，同样从第一页重查。只读接口可以重试，但429应等待 `Retry-After` 指定时间，不能快速无限重试。
 
@@ -250,14 +275,15 @@ Yield 只有日期精度，返回日期而不是虚构零点事件时间。一�
 
 | 状态 | 含义及处理 |
 |---|---|
-| 200，`status=alert` | 当前公开范围存在异常明细 |
-| 200，`status=ok`，空数组 | 有效查询没有可提供的异常；不等于原始源数据刚完成更新 |
+| 200，complete=true，status=alert | 全部选中来源可用，公开范围存在异常明细 |
+| 200，complete=true，status=ok，空数组 | 有效查询没有可提供的异常；不等于原始源数据刚完成更新 |
+| 200，complete=false | 部分来源不可用；核对failed_sources，不能将data视为完整结果 |
 | 401 | 检查是否提交有效 `X-API-Key` |
 | 403 | 检查产品、厂别、分类授权和启用产品 |
 | 410 | 分页快照失效，从第一页重查 |
 | 422 | 检查参数名、值、OOC适用分类及游标 |
 | 429 | 请求过频或读取槽位忙，按 `Retry-After` 等待 |
-| 503 | 本地结果、公开政策、释放证据、元数据完整性或来源有效性暂不可用；联系维护者 |
+| 503 | 全部选中来源不可用，或请求级超时／容量／配置问题；检查安全错误码及可用的failed_sources |
 | 500 | 未预期故障，记录 `X-Request-ID`，交由维护者排查 |
 
 排查503时，依次核对正式发布及其日期／覆盖、原有人工决定、站点类来源的本地字典、Yield发布factory和全局分组映射、启用产品及当前公开政策。不要通过删除元数据、填写假站点或把全部Flag改为False绕过问题。
@@ -268,7 +294,7 @@ Inline 当前没有统一“当日发布＋TTL”的数据时效协议；Q-Time�
 
 正式架构决定及取舍见 [ADR-0037](../../../../docs/ADR/0037-published-anomaly-api.md)。
 
-默认每调用系统每分钟60次，来源地址还有有限总频率限制；同步读取并发默认2、请求等待上限30秒。工作簿缓存默认16项、64MiB缓存与单文件上限、总行数20万；公开分页快照默认64份、总字节16MiB。限制由应用设置控制，超限明确返回忙或不可用。
+默认每调用系统每分钟60次，来源地址还有有限总频率限制；同步读取并发默认2、请求等待上限30秒。工作簿缓存默认16项、64MiB缓存与单文件上限、总行数20万；公开分页快照默认64份、总字节16MiB。默认不限返回行数仍受16MiB公开结果容量限制，超限返回503，不会静默截断；显式分页也需要完整快照，不能绕过容量。限制由应用设置控制，超限明确返回忙或不可用。
 
 Excel解析是同步操作；首次冷读需要解析工作簿，分页并不把整本Excel读取变为按行读取。企业保护文件可能使用已有Office COM回退，运行账号与交互环境必须单独验证。HTTP超时不会强制终止Office调用；仍运行的读取占用有限槽位，服务不会无限新增替代线程。
 
@@ -277,3 +303,18 @@ API缓存与分页快照位于本进程内存，不与Streamlit或其他worker�
 维护字典和人工决定应保留备份及既有资源生命周期；历史Yield归属表保留但不参与读取。API GET 不维护这些文件。临时测试产物归 `output/test-results/` 或 `output/tmp/`；实际正式日志按项目规则归 `output/logs/`，不得把维护工作簿当缓存删除。
 
 实现依据：[API入口](../../../../api/main.py)、[公开投影](../../../../api/service.py)、[元数据读取及同步](../../../../src/shared_kernel/infrastructure/api_alert_metadata.py)、[看板架构](architecture-alert-dashboard.md)。开发过程与最终验证由[开发方案](../../../../docs/dev_docs/generated/inline_domain/monitor/sheet-anomaly-api-development-plan.md)及交付记录追踪。
+
+## 7. 后续返回字段扩展方向
+
+本次删除起始站点，Q-Time发生站点继续使用起点。除部分结果所需的meta完整性标记外，不新增业务明细列。后续可考虑：
+
+| 信息 | 用途与前提 |
+|---|---|
+| 实测值、最小／最大值 | 判断异常程度；各来源量测口径不同，Lot未必有单一数值 |
+| 规格／控制上下限、单位、超出幅度 | 解释超限方向与程度；需区分OOS／OOC并规范单位 |
+| Yield缺陷分组 | 按Array_Line等分组汇总；现有发布已包含defect_group |
+| 发布时间、数据覆盖范围 | 判断新鲜度；需统一各来源元数据，不能混同发生时间 |
+| 稳定异常事件ID | 支持去重／增量同步；需定义跨来源稳定键与重新发布规则 |
+| Lot／Sheet关联或Q-Time终点 | 支持追踪；需确认本地发布内容及业务含义 |
+
+这些是未来建议，当前接口不返回以上新增信息。

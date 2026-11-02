@@ -49,7 +49,7 @@ class PublicSnapshots:
 
     def page(self, records: list[dict], query: AnomalyQuery, principal: ApiClient,
              reference_week: str) -> tuple[list[dict], str | None]:
-        binding = _digest((query.model_dump(exclude={'cursor'}), vars(principal), reference_week))
+        binding = _digest((query.model_dump(mode='json', exclude={'cursor'}), vars(principal), reference_week))
         fingerprint = _digest(records)
         with self._lock:
             now = time.monotonic()
@@ -68,7 +68,7 @@ class PublicSnapshots:
                 payload = json.dumps(records, ensure_ascii=False, allow_nan=False).encode()
                 if len(payload) > self._settings.max_snapshot_bytes:
                     raise SnapshotLimit('Public result too large')
-                if len(records) <= query.limit:
+                if query.limit is None or len(records) <= query.limit:
                     return records, None
                 while self._snapshots and (
                     len(self._snapshots) >= self._settings.max_snapshots
@@ -79,6 +79,8 @@ class PublicSnapshots:
                 self._snapshots[identifier] = Snapshot(binding, fingerprint, payload, now+self._settings.snapshot_ttl_seconds)
                 self._bytes += len(payload)
                 rows = records
+            if query.limit is None:
+                raise CursorError('Cursor requires page size')
             end = offset + query.limit
             next_cursor = self._encode(identifier, end) if end < len(rows) else None
             return rows[offset:end], next_cursor

@@ -4,7 +4,7 @@ Alert semantics (see docs/PRD/PRD-2026-08-25-Inline自动预警中心.md):
 
 - 单片异常口径固定为 `flag == FALSE`（用户确认释放真实值的超规片）；
   明细工作簿中的每一行本来就是超规片，`flag` 只是修饰决策。
-- 预警范围固定为上一 ISO 周，即半开区间 ``[上周一 00:00, 本周一 00:00)``。
+- 预警范围默认上一 ISO 周；消费方可指定包含首尾两天的日期范围。
 
 本模块只包含纯函数，不做任何文件或数据库 I/O。
 """
@@ -44,8 +44,10 @@ def build_sheet_oos_alerts(
     time_column: str,
     reference_date: date | pd.Timestamp | None = None,
     excluded_param_name_contains: Sequence[str] = (),
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> pd.DataFrame:
-    """筛选上一 ISO 周内 flag == FALSE 的 OOS 明细，按时间倒序返回。
+    """筛选指定日期内 flag == FALSE 的明细，默认上一ISO周，按时间倒序。
 
     - ``flag`` 解析与修饰工作簿语义一致（True/Delete/空值均不报警）；
     - ``time_column`` 经 ``pd.to_datetime(errors="coerce")`` 归一化，
@@ -59,8 +61,14 @@ def build_sheet_oos_alerts(
         return detail_df.iloc[0:0].copy()
 
     start, end = previous_iso_week_range(reference_date or date.today())
+    start = pd.Timestamp(start_date).normalize() if start_date is not None else start
+    end = pd.Timestamp(end_date).normalize() + pd.Timedelta(days=1) if end_date is not None else end
+    if start >= end:
+        raise ValueError('Invalid alert date range')
     result = detail_df.copy()
     result[time_column] = pd.to_datetime(result[time_column], errors="coerce")
+    if isinstance(result[time_column].dtype, pd.DatetimeTZDtype):
+        result[time_column] = result[time_column].dt.tz_convert('Asia/Shanghai').dt.tz_localize(None)
     mask = (
         result["flag"].map(_is_false_flag)
         & result[time_column].notna()

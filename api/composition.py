@@ -33,20 +33,24 @@ def build_service() -> PublishedAnomalyService:
         return switches[key]
 
     def source(query: AnomalyQuery, day: date, factories: tuple[str, ...]) -> dict:
+        if query.product is None or query.sub_domain is None:
+            raise ValueError('Source query must be resolved')
+        dates = {'start_date': query.start_date.isoformat() if query.start_date else None,
+                 'end_date': query.end_date.isoformat() if query.end_date else None}
         if query.sub_domain in ('SPC', 'CTQ', 'AOI_TT', 'AOI_RS'):
             from src.inline_domain.composition import build_sheet_alert_query
             scope = query.sub_domain.lower()
-            return build_sheet_alert_query(scope, query.event_type, workbook_reader=reader, strict_empty=True).read(scope, query.product, day)
+            return build_sheet_alert_query(scope, query.event_type, workbook_reader=reader, strict_empty=True).read(scope, query.product, day, **dates)
         if query.sub_domain == 'Q-Time':
             from src.indicator_domain.composition import build_qtime_alert_results
             shops = tuple(shop for shop in factories if shop in ('ARRAY', 'OLED', 'TP'))
             if not shops:
                 import pandas as pd
                 return {'state': 'ok', 'records': pd.DataFrame(columns=['flag']), 'release_evidence': True}
-            return build_qtime_alert_results(workbook_reader=reader).read(query.product, day, shops=shops)
+            return build_qtime_alert_results(workbook_reader=reader).read(query.product, day, shops=shops, **dates)
         if query.sub_domain == 'Yield':
             from src.yield_domain.composition import build_yield_alert_results
-            result = build_yield_alert_results(workbook_reader=reader).read(query.product, 'lot', day)
+            result = build_yield_alert_results(workbook_reader=reader).read(query.product, 'lot', day, **dates)
             return {'state': 'ok' if result.status in ('ready', 'no_data') else 'error',
                     'records': result.records, 'release_records': result.release_records,
                     'release_evidence': result.release_evidence}

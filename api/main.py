@@ -1,5 +1,5 @@
 """HTTP entry point; constructing the app does not query sources or open a DB."""
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from contextlib import asynccontextmanager
 import hashlib
 import hmac
@@ -15,10 +15,11 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from starlette.responses import Response
 
-from api.schemas import AnomalyQuery, AnomalyRecord, AnomalyResponse, ResultMeta
+from api.schemas import AnomalyQuery, AnomalyResponse, ResultMeta
 from api.settings import ApiClient, ApiSettings, load_clients
 from api.pagination import CursorError, PublicSnapshots, SnapshotExpired, SnapshotLimit
 from api.limits import BoundedReads, RateLimit, ReadBusy, ReadTimeout
+from api.query import AllSourcesUnavailable, ForbiddenQuery, InvalidQuery, resolve_query
 
 
 def create_app(*, service: Any = None, clients_provider: Callable = load_clients,
@@ -41,7 +42,7 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
         yield
         reads.close()
 
-    app = FastAPI(title='异常片／Lot 明细 API', version='1.0.0', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app = FastAPI(title='异常片／Lot 明细 API', version='1.1.0', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     key_header = APIKeyHeader(name='X-API-Key', auto_error=False)
 
     @app.middleware('http')
@@ -69,6 +70,14 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
     async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
         return JSONResponse(status_code=422, content={'error': {'code': 'invalid_request', 'message': '查询参数不符合接口约定。'},
                                                      'request_id': request.state.request_id})
+
+    @app.exception_handler(AllSourcesUnavailable)
+    async def no_sources(request: Request, exc: AllSourcesUnavailable) -> JSONResponse:
+        return JSONResponse(status_code=503, content={
+            'error': {'code': 'result_unavailable', 'message': '所选来源暂时无法提供有效结果。',
+                      'failed_sources': [failure.model_dump() for failure in exc.failures]},
+            'request_id': request.state.request_id,
+        })
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
@@ -111,16 +120,18 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
             enabled = enabled_products()
         except (ValueError, OSError):
             raise HTTPException(503, 'service_unavailable') from None
-        if (query.product not in principal.products or query.product not in enabled
-                or query.sub_domain not in principal.sub_domains
-                or query.factory is not None and query.factory not in principal.factories):
-            raise HTTPException(403, 'forbidden')
         now = clock().astimezone(ZoneInfo('Asia/Shanghai'))
-        end = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        factories = (query.factory,) if query.factory else principal.factories
         try:
-            records = await reads.run(service.read, query, factories, now.date())
-            public = [AnomalyRecord.model_validate(row).model_dump(by_alias=True) for row in records]
+            plan = resolve_query(query, principal, enabled, now.date())
+        except ForbiddenQuery:
+            raise HTTPException(403, 'forbidden') from None
+        except InvalidQuery:
+            raise HTTPException(422, 'invalid_request') from None
+        start = datetime.combine(plan.start_date, time.min, ZoneInfo('Asia/Shanghai'))
+        end = datetime.combine(plan.end_date + timedelta(days=1), time.min, ZoneInfo('Asia/Shanghai'))
+        try:
+            result = await reads.run(plan.read, service, now.date(), settings.max_snapshot_bytes)
+            public = result.records
         except ReadBusy:
             raise HTTPException(429, 'reader_busy', headers={'Retry-After': '5'}) from None
         except ReadTimeout:
@@ -129,7 +140,7 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
             logging.getLogger(__name__).warning('API_RESULT_UNAVAILABLE cause=%s', type(exc).__name__)
             raise HTTPException(503, 'result_unavailable') from None
         try:
-            page, next_cursor = snapshots.page(public, query, principal, end.isoformat())
+            page, next_cursor = snapshots.page(public, query, principal, plan.snapshot_context(result.failed_sources))
         except CursorError:
             raise HTTPException(422, 'invalid_cursor') from None
         except SnapshotExpired:
@@ -138,8 +149,9 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
             raise HTTPException(503, 'result_unavailable') from None
         return AnomalyResponse(data=page, meta=ResultMeta(
             status='alert' if public else 'ok', returned_count=len(page),
-            has_more=next_cursor is not None, next_cursor=next_cursor, period_start=(end-timedelta(days=7)).isoformat(),
+            has_more=next_cursor is not None, next_cursor=next_cursor, period_start=start.isoformat(),
             period_end_exclusive=end.isoformat(), read_at=now.isoformat(),
+            complete=not result.failed_sources, failed_sources=result.failed_sources,
         ))
 
     @app.get('/openapi.json', include_in_schema=False)

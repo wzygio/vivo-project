@@ -75,7 +75,7 @@ def test_inline_public_fields_follow_each_source_and_event(
     assert result == [{
         "分类": domain, "发生站点": "00100", "部门": "ARRAY", "层别": "PI2",
         "监控参数": parameter, "异常事件": event, "对象类型": "sheet", "对象编号": "00000000101",
-        "产品型号": "P1", "发生时间": "2026-10-28T09:30:00+08:00", "起始站点": None, "命中边界": boundary,
+        "产品型号": "P1", "发生时间": "2026-10-28T09:30:00+08:00", "命中边界": boundary,
     }]
     assert metadata_path.read_bytes() == before
 
@@ -116,7 +116,7 @@ def test_qtime_uses_from_step_for_occurrence_station_and_layer(metadata_path: Pa
     assert result == [{
         "分类": "Q-Time", "发生站点": "00100", "部门": "OLED", "层别": "PI2", "监控参数": "FROM_TO",
         "异常事件": "OOS", "对象类型": "lot", "对象编号": "000000001", "产品型号": "P1",
-        "发生时间": "2026-10-28T09:30:00+08:00", "起始站点": "00100", "命中边界": None,
+        "发生时间": "2026-10-28T09:30:00+08:00", "命中边界": None,
     }]
 
 
@@ -133,7 +133,7 @@ def test_yield_uses_published_factory_and_null_layer_without_metadata(metadata_p
     assert result == [{
         "分类": "Yield", "发生站点": None, "部门": "ARRAY", "层别": None, "监控参数": "LINE",
         "异常事件": "OOS", "对象类型": "lot", "对象编号": "000000001", "产品型号": "P1",
-        "发生时间": "2026-10-28", "起始站点": None, "命中边界": None,
+        "发生时间": "2026-10-28", "命中边界": None,
     }]
 
 

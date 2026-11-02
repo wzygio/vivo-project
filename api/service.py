@@ -29,6 +29,8 @@ class PublishedAnomalyService:
         self._metadata = metadata
 
     def read(self, query: AnomalyQuery, factories: tuple[str, ...], reference_date: date) -> list[dict]:
+        if query.product is None or query.sub_domain is None:
+            raise ResultUnavailable('Source query must be resolved')
         # Deliberately precedes source access: hidden state cannot leak through
         # source failures, publication dates, counts, or pagination versions.
         if self._hidden(query.sub_domain, query.product):
@@ -57,6 +59,10 @@ class PublishedAnomalyService:
                 continue
             if query.entity_id and query.entity_id != normalized['entity_id']:
                 continue
+            if query.step_id and query.step_id != normalized['step_id']:
+                continue
+            if query.parameter_name and query.parameter_name != normalized['parameter_name']:
+                continue
             if query.sub_domain == 'Yield':
                 enriched = {'factory': normalized['factory'], 'step_id': None, 'layer': None}
             else:
@@ -65,6 +71,8 @@ class PublishedAnomalyService:
                     normalized['factory'], normalized['step_id'],
                 )
             if enriched['factory'] not in factories:
+                continue
+            if query.layer and query.layer != enriched['layer']:
                 continue
             model = AnomalyRecord(
                 sub_domain=query.sub_domain, product=query.product, event_type=query.event_type,
@@ -81,7 +89,6 @@ class PublishedAnomalyService:
     def _identity(query: AnomalyQuery, row: dict) -> dict:
         domain = query.sub_domain
         boundary = None
-        from_step = None
         precision = 'second'
         if domain in ('SPC', 'CTQ', 'AOI_TT', 'AOI_RS'):
             entity_type = _text(row.get('chart_kind')) if domain == 'AOI_RS' else 'sheet'
@@ -94,7 +101,6 @@ class PublishedAnomalyService:
             entity_type, entity_id = 'lot', _text(row.get('lot_id'))
             parameter = _text(row.get('step_desc'))
             factory, step = _text(row.get('shop')).upper(), _text(row.get('f_step'))
-            from_step = step
             stamp = pd.to_datetime(_text(row.get('timekey'))[:14], format='%Y%m%d%H%M%S', errors='coerce')
         elif domain == 'Yield':
             entity_type, entity_id = 'lot', _text(row.get('超规 Lot ID'))
@@ -117,4 +123,4 @@ class PublishedAnomalyService:
         occurred_at = timestamp.date().isoformat() if precision == 'day' else timestamp.isoformat()
         return dict(entity_type=entity_type, entity_id=entity_id, parameter_name=parameter,
                     factory=factory, step_id=step or None, occurred_at=occurred_at,
-                    from_step_id=from_step, boundary=boundary)
+                    boundary=boundary)
