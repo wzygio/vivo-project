@@ -33,7 +33,16 @@ def save(path: Path, value: dict) -> None:
     temporary = path.with_name(f'.{path.name}.{uuid4().hex}.tmp')
     try:
         temporary.write_text(json.dumps(value, ensure_ascii=True, indent=2), encoding='utf-8')
-        os.replace(temporary, path)
+        for attempt in range(20):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                # Windows readers may briefly hold a handle without delete
+                # sharing. Keep the last valid state and retry the atomic swap.
+                if attempt == 19:
+                    raise
+                time.sleep(.05)
     finally:
         temporary.unlink(missing_ok=True)
 
