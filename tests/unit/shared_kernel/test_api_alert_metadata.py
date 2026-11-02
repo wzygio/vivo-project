@@ -9,6 +9,12 @@ import pytest
 from src.shared_kernel.infrastructure.api_alert_metadata import ApiAlertMetadata, initialize
 
 
+def test_new_metadata_template_only_requires_station_dictionary(tmp_path: Path) -> None:
+    path = tmp_path / 'metadata.xlsx'
+    assert initialize(path)
+    assert pd.ExcelFile(path).sheet_names == ['站点字典']
+
+
 def test_reading_metadata_preserves_identity_and_does_not_modify_workbook(tmp_path: Path) -> None:
     path = tmp_path / "metadata.xlsx"
     assert initialize(path) is True
@@ -26,38 +32,34 @@ def test_reading_metadata_preserves_identity_and_does_not_modify_workbook(tmp_pa
 
 
 def _write(path: Path, stations: list[dict], attributions: list[dict] | None = None) -> None:
-    from src.shared_kernel.infrastructure.api_alert_metadata import ATTRIBUTION_COLUMNS, STATION_COLUMNS
+    from src.shared_kernel.infrastructure.api_alert_metadata import STATION_COLUMNS
 
     with pd.ExcelWriter(path) as writer:
         pd.DataFrame(stations, columns=STATION_COLUMNS).to_excel(writer, sheet_name="站点字典", index=False)
-        pd.DataFrame(attributions or [], columns=ATTRIBUTION_COLUMNS).to_excel(
-            writer, sheet_name="Yield归属", index=False,
-        )
+        if attributions:
+            pd.DataFrame(attributions).to_excel(writer, sheet_name="Yield归属", index=False)
 
 
-def test_yield_factory_mandatory_but_station_nullable_and_exact_lot_wins(tmp_path: Path) -> None:
+def test_legacy_yield_attribution_does_not_override_station_facts(tmp_path: Path) -> None:
     path = tmp_path / "metadata.xlsx"
-    _write(path, [], [
+    _write(path, [{'step_id': '001', 'description': 'PI2_CURE'}], [
         dict(product="P1", lot_id="", parameter_name="CODE", factory="ARRAY", step_id="", description="BASE_default"),
         dict(product="P1", lot_id="0001", parameter_name="CODE", factory="CELL", step_id="", description="CELL_review"),
     ])
     metadata = ApiAlertMetadata(path)
-    assert metadata.enrich("Yield", "P1", "0001", "CODE", None, None) == {
-        "factory": "CELL", "step_id": None, "layer": "CELL",
+    assert metadata.enrich("SPC", "P1", "0001", "CODE", 'OLED', '001') == {
+        "factory": "OLED", "step_id": '001', "layer": "PI2",
     }
-    assert metadata.enrich("Yield", "P1", "0002", "CODE", None, None)["layer"] == "BASE"
-    assert metadata.enrich("Yield", "P1", "0001", "CODE", "OLED", "FAKE")["factory"] == "CELL"
 
 
-@pytest.mark.parametrize("factory,step,description", [("", "", "PI2_CURE"), ("ARRAY", "", ""), ("ARRAY", "", "_CURE")])
-def test_incomplete_yield_required_fields_are_unavailable(
-    tmp_path: Path, factory: str, step: str, description: str,
+@pytest.mark.parametrize("description", ['', '_CURE', '   '])
+def test_station_sources_still_require_nonempty_layer(
+    tmp_path: Path, description: str,
 ) -> None:
     path = tmp_path / "metadata.xlsx"
-    _write(path, [], [dict(product="P1", lot_id="L1", parameter_name="CODE", factory=factory,
-                          step_id=step, description=description)])
+    _write(path, [{'step_id': '001', 'description': description}])
     with pytest.raises(ValueError):
-        ApiAlertMetadata(path).enrich("Yield", "P1", "L1", "CODE", None, None)
+        ApiAlertMetadata(path).enrich("CTQ", "P1", "L1", "CODE", 'ARRAY', '001')
 
 
 def test_station_dictionary_is_authoritative_and_conflicts_are_rejected(tmp_path: Path) -> None:
@@ -65,7 +67,7 @@ def test_station_dictionary_is_authoritative_and_conflicts_are_rejected(tmp_path
     _write(path, [{"step_id": "001", "description": "FIRST_CURE"}], [
         dict(product="P1", lot_id="L1", parameter_name="CODE", factory="ARRAY", step_id="001", description="WRONG_value"),
     ])
-    assert ApiAlertMetadata(path).enrich("Yield", "P1", "L1", "CODE", None, None)["layer"] == "FIRST"
+    assert ApiAlertMetadata(path).enrich("SPC", "P1", "L1", "CODE", 'ARRAY', '001')["layer"] == "FIRST"
     _write(path, [{"step_id": "001", "description": "FIRST_CURE"}, {"step_id": "001", "description": "SECOND_CURE"}])
     with pytest.raises(ValueError, match="AMBIGUOUS"):
         ApiAlertMetadata(path).enrich("SPC", "P1", "S1", "THK", "ARRAY", "001")
@@ -112,6 +114,17 @@ class FakeEngine:
         if self.fail_view and "processoperationspec_v" in sql:
             raise SQLAlchemyError("fixture unavailable view")
         return _Rows(self.rows)
+
+
+def test_station_sync_ignores_and_preserves_unrecognised_legacy_yield_sheet(tmp_path: Path) -> None:
+    from src.shared_kernel.infrastructure.api_alert_metadata import sync_metadata
+    path = tmp_path / 'metadata.xlsx'
+    initialize(path)
+    legacy = pd.DataFrame({'old operator notes': ['keep this maintained information']})
+    with pd.ExcelWriter(path, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        legacy.to_excel(writer, sheet_name='Yield归属', index=False)
+    assert sync_metadata(path, ['001'], FakeEngine([{'step_id': '001', 'description': 'PI2_CURE'}])) == 1
+    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name='Yield归属'), legacy)
 
 
 def test_bounded_sync_falls_back_in_fresh_transaction_and_preserves_manual_data(tmp_path: Path) -> None:
@@ -166,12 +179,11 @@ def test_identical_station_rows_are_deduplicated_and_plain_description_is_layer(
     assert ApiAlertMetadata(path).enrich("CTQ", "P1", "S1", "THK", "ARRAY", "001")["layer"] == "PI2"
 
 
-def test_yield_ambiguous_manual_rows_are_unavailable(tmp_path: Path) -> None:
+def test_ambiguous_obsolete_yield_rows_do_not_invalidate_stations(tmp_path: Path) -> None:
     path = tmp_path / "metadata.xlsx"
     row = dict(product="P1", lot_id="", parameter_name="CODE", factory="ARRAY", step_id="", description="PI2_CURE")
-    _write(path, [], [row, row])
-    with pytest.raises(ValueError, match="YIELD_ATTRIBUTION_UNAVAILABLE"):
-        ApiAlertMetadata(path).enrich("Yield", "P1", "L1", "CODE", None, None)
+    _write(path, [{'step_id': '001', 'description': 'REAL_LAYER'}], [row, row])
+    assert ApiAlertMetadata(path).enrich("SPC", "P1", "L1", "CODE", 'ARRAY', '001')['layer'] == 'REAL'
 
 
 def test_read_missing_file_never_creates_it_and_injected_reader_is_used(tmp_path: Path) -> None:

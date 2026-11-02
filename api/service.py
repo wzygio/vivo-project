@@ -57,10 +57,13 @@ class PublishedAnomalyService:
                 continue
             if query.entity_id and query.entity_id != normalized['entity_id']:
                 continue
-            enriched = self._metadata.enrich(
-                query.sub_domain, query.product, normalized['entity_id'], normalized['parameter_name'],
-                normalized['factory'], normalized['step_id'],
-            )
+            if query.sub_domain == 'Yield':
+                enriched = {'factory': normalized['factory'], 'step_id': None, 'layer': None}
+            else:
+                enriched = self._metadata.enrich(
+                    query.sub_domain, query.product, normalized['entity_id'], normalized['parameter_name'],
+                    normalized['factory'], normalized['step_id'],
+                )
             if enriched['factory'] not in factories:
                 continue
             model = AnomalyRecord(
@@ -96,7 +99,9 @@ class PublishedAnomalyService:
         elif domain == 'Yield':
             entity_type, entity_id = 'lot', _text(row.get('超规 Lot ID'))
             parameter = _text(row.get('异常 Code'))
-            factory, step = '', ''
+            factory, step = _text(row.get('factory')).upper(), ''
+            if not factory:
+                raise ResultUnavailable('Published Yield factory unavailable')
             stamp = pd.to_datetime(row.get('入库时间'), format='%Y/%m/%d', errors='coerce')
             precision = 'day'
         else:

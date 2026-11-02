@@ -1,7 +1,8 @@
-"""Read local alert attribution; only explicit maintenance functions may write.
+"""Read local station metadata; only explicit maintenance functions may write.
 
 The HTTP reader never creates a database manager or fills missing metadata.
-Factory and layer are mandatory. Yield alone permits a missing step identifier.
+Factory, station and layer are mandatory for station-based sources. Yield does
+not consume this adapter: its factory is published and its location is unknown.
 """
 
 from __future__ import annotations
@@ -18,9 +19,7 @@ from src.shared_kernel.infrastructure.file_lock import publication_lock
 
 logger = logging.getLogger(__name__)
 STATION_SHEET = "站点字典"
-ATTRIBUTION_SHEET = "Yield归属"
 STATION_COLUMNS = ("step_id", "description")
-ATTRIBUTION_COLUMNS = ("product", "lot_id", "parameter_name", "factory", "step_id", "description")
 WorkbookReader = Callable[[str, int, int], dict[str, pd.DataFrame]]
 STEP_TABLES = ("mdw.dwr_mes_processoperationspec_v", "mdw.dwr_mes_processoperationspec")
 MAX_STEPS = 1000
@@ -64,7 +63,7 @@ def _station_map(frame: pd.DataFrame) -> dict[str, str]:
 
 
 class ApiAlertMetadata:
-    """Read-only adapter for the maintained station/attribution workbook."""
+    """Read-only adapter for the maintained station dictionary."""
 
     def __init__(self, path: Path, *, workbook_reader: WorkbookReader = read_metadata_workbook) -> None:
         self.path = Path(path)
@@ -78,26 +77,9 @@ class ApiAlertMetadata:
         sheets = self._reader(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
         stations = _station_map(_frame(sheets, STATION_SHEET, STATION_COLUMNS))
         chosen_factory, chosen_step = _text(factory).upper(), _text(step_id)
-        description = ""
-        is_yield = sub_domain.casefold() == "yield"
-        if is_yield:
-            attributions = _frame(sheets, ATTRIBUTION_SHEET, ATTRIBUTION_COLUMNS)
-            candidates = attributions.loc[
-                attributions["product"].eq(product)
-                & attributions["parameter_name"].eq(parameter_name)
-            ]
-            selected = candidates.loc[candidates["lot_id"].eq(entity_id)]
-            if selected.empty:
-                selected = candidates.loc[candidates["lot_id"].eq("")]
-            if len(selected) != 1:
-                raise ValueError("YIELD_ATTRIBUTION_UNAVAILABLE")
-            chosen = selected.iloc[0]
-            chosen_factory, chosen_step = chosen["factory"].upper(), chosen["step_id"]
-            description = chosen["description"]
-        if not chosen_factory or (not is_yield and not chosen_step):
+        if not chosen_factory or not chosen_step:
             raise ValueError("ALERT_ATTRIBUTION_INCOMPLETE")
-        if chosen_step:
-            description = stations.get(chosen_step, "")
+        description = stations.get(chosen_step, "")
         layer = description.split("_", 1)[0].strip()
         if not layer:
             raise ValueError("ALERT_LAYER_UNAVAILABLE")
@@ -115,7 +97,6 @@ def initialize(path: Path) -> bool:
             return False
         result = replace_workbook_sheets(path, {
             STATION_SHEET: pd.DataFrame(columns=STATION_COLUMNS),
-            ATTRIBUTION_SHEET: pd.DataFrame(columns=ATTRIBUTION_COLUMNS),
         })
         if not result.written:
             raise OSError("ALERT_METADATA_INITIALIZATION_FAILED")
@@ -162,7 +143,7 @@ def sync_metadata(
     path: Path, steps: Sequence[str], engine: Any, *,
     max_rows: int = MAX_QUERY_ROWS, timeout_ms: int = 10000,
 ) -> int:
-    """Explicitly refresh requested stations; preserve attribution and history.
+    """Explicitly refresh requested stations; preserve other sheets and history.
 
     This bounded command is separate from HTTP reads. Invalid/incomplete source
     responses fail before writing. Source views are never scanned without a
@@ -186,7 +167,6 @@ def sync_metadata(
         previous = read_metadata_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
         stations = _frame(previous, STATION_SHEET, STATION_COLUMNS)
         _station_map(stations)
-        _frame(previous, ATTRIBUTION_SHEET, ATTRIBUTION_COLUMNS)
         merged = pd.concat([
             stations.loc[~stations["step_id"].isin(chosen)], incoming,
         ], ignore_index=True).sort_values("step_id", kind="stable").reset_index(drop=True)

@@ -79,6 +79,23 @@ class ConfigLoader:
         }
 
     @classmethod
+    def get_yield_lot_factory_mapping(cls) -> Dict[str, str]:
+        """Load the explicit global Defect Group -> factory publication policy."""
+        global_conf = cls._load_yaml(cls.get_project_root() / "config/global.yaml")
+        source = global_conf.get("data_source") if isinstance(global_conf, dict) else None
+        configured = source.get("defect_group_factory_mapping") if isinstance(source, dict) else None
+        if not isinstance(configured, dict) or not configured or any(
+            not isinstance(group, str) or not group.strip()
+            or not isinstance(factory, str) or not factory.strip()
+            for group, factory in configured.items()
+        ):
+            raise ValueError("YIELD_LOT_FACTORY_MAPPING_INVALID")
+        normalized = {group.strip(): factory.strip().upper() for group, factory in configured.items()}
+        if len(normalized) != len(configured):
+            raise ValueError("YIELD_LOT_FACTORY_MAPPING_AMBIGUOUS")
+        return normalized
+
+    @classmethod
     def get_work_order_types(cls) -> List[str]:
         """Return the global work-order allowlist used by report queries."""
         yaml_path = cls.get_project_root() / "config" / "global.yaml"

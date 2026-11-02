@@ -9,6 +9,7 @@ from typing import Protocol
 import pandas as pd
 
 LOT_COLUMNS = ["超规 Lot ID", "异常 Code", "管控规格线", "实际不良率", "不良panel数", "入库时间", "阵列投入时间"]
+LOT_ATTRIBUTION_COLUMNS = ["defect_group", "factory"]
 TREND_COLUMNS = ["level", "defect_group", "defect_desc", "time_period", "curr_rate", "prev_rate", "rules", "period_scope"]
 RESULT_COLUMNS = {"lot": LOT_COLUMNS, "trend": TREND_COLUMNS}
 RESULT_SCHEMA_VERSION = 1
@@ -99,23 +100,27 @@ def _utc_timestamp(value: object) -> pd.Timestamp:
 
 class YieldAlertResults:
     def __init__(self, store: YieldAlertStore, *, policy_signature: Callable[[str], str],
-                 ttl_seconds: int, clock: Callable[[], datetime] | None = None) -> None:
+                 ttl_seconds: int, clock: Callable[[], datetime] | None = None,
+                 lot_factory_mapping: Callable[[], Mapping[str, str]] | None = None) -> None:
         self.store = store
         self.policy_signature = policy_signature
         self.ttl_seconds = ttl_seconds
         self.clock = clock or (lambda: datetime.now().astimezone())
+        self.lot_factory_mapping = lot_factory_mapping or (lambda: {})
 
     def publish(self, product: str, kind: str, records: Sequence[Mapping], *,
                 reference_date: date, coverage_start: str, coverage_end: str,
                 has_data: bool, health: Mapping, calculation_signature: str,
                 lot_reference_date: str | None = None) -> bool:
         required_columns = RESULT_COLUMNS[kind]
-        columns = required_columns + (["is_current"] if kind == "trend" else [])
+        columns = required_columns + (["is_current"] if kind == "trend" else LOT_ATTRIBUTION_COLUMNS)
         rows = []
         for record in records:
             if missing := set(required_columns) - record.keys():
                 raise ValueError(f"Yield result columns missing: {sorted(missing)}")
             row = {key: record[key] for key in required_columns}
+            if kind == "lot":
+                row.update({key: record.get(key) for key in LOT_ATTRIBUTION_COLUMNS})
             if kind == "trend":
                 if record.get("is_current", True) not in (True, False):
                     raise ValueError("Invalid current trend marker")
@@ -226,10 +231,11 @@ class YieldAlertResults:
                 raise ValueError("Missing Yield release controls")
             effective, _ = merge_lot_release_controls(frame, payload["decisions"])
             release_records = effective.loc[effective["flag"].map(is_lot_released)].reset_index(drop=True)
-            frame = release_records.reindex(columns=LOT_COLUMNS)
+            frame = release_records.drop(columns="flag")
             release_evidence = True
+        columns = RESULT_COLUMNS[kind] + ([key for key in LOT_ATTRIBUTION_COLUMNS if key in frame] if kind == "lot" else [])
         return PublishedYieldAlerts("ready" if bool(meta["has_data"]) else "no_data",
-            frame.reindex(columns=RESULT_COLUMNS[kind]), meta, release_records, release_evidence)
+            frame.reindex(columns=columns), meta, release_records, release_evidence)
 
     def source_signature(self, product: str, kind: str, reference_date: date, *,
                          start_date: str | None = None, end_date: str | None = None,

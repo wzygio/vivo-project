@@ -28,7 +28,7 @@ class AnomalyRecord(BaseModel):
     sub_domain: Literal['SPC', 'CTQ', 'AOI_TT', 'AOI_RS', 'Yield', 'Q-Time'] = Field(alias='分类')
     step_id: str | None = Field(alias='发生站点', min_length=1, max_length=128)
     factory: str = Field(alias='部门', min_length=1, max_length=64)
-    layer: str = Field(alias='层别', min_length=1, max_length=256)
+    layer: str | None = Field(alias='层别', min_length=1, max_length=256)
     parameter_name: str = Field(alias='监控参数', min_length=1, max_length=512)
     event_type: Literal['OOS', 'OOC'] = Field(alias='异常事件')
     entity_type: Literal['sheet', 'lot'] = Field(alias='对象类型')
@@ -40,8 +40,11 @@ class AnomalyRecord(BaseModel):
 
     @model_validator(mode='after')
     def required_station(self) -> AnomalyRecord:
-        if self.sub_domain != 'Yield' and not self.step_id:
-            raise ValueError('Source station is required')
+        if self.sub_domain == 'Yield':
+            if self.step_id is not None or self.layer is not None:
+                raise ValueError('Yield location must be unknown')
+        elif not self.step_id or not self.layer:
+            raise ValueError('Source station and layer are required')
         return self
 
 

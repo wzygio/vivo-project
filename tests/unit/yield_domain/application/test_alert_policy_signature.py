@@ -41,7 +41,7 @@ def test_unrelated_resource_registration_and_touch_do_not_expire_yield_results(p
     assert yield_alert_policy_signature('P1') == before
 
 
-@pytest.mark.parametrize('part', ['product', 'domain', 'time_policy', 'yield_resource'])
+@pytest.mark.parametrize('part', ['product', 'domain', 'time_policy', 'yield_resource', 'lot_factory_mapping'])
 def test_real_yield_policy_changes_still_invalidate_results(policy_files, part):
     paths, values = policy_files
     before = yield_alert_policy_signature('P1')
@@ -53,6 +53,9 @@ def test_real_yield_policy_changes_still_invalidate_results(policy_files, part):
         key = 'domain'
     elif part == 'time_policy':
         values['global']['data_forward']['enabled'] = True
+        key = 'global'
+    elif part == 'lot_factory_mapping':
+        values['global']['data_source']['defect_group_factory_mapping'] = {'Array_Line': 'OLED'}
         key = 'global'
     else:
         values['global']['resources']['yield_domain']['files']['static_warning_lines'] = 'other.xlsx'

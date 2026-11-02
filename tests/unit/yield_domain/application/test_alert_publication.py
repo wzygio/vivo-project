@@ -64,6 +64,47 @@ def test_producer_reuses_existing_rules_and_no_unrelated_sheet_mapping_dependenc
     assert results(tmp_path).read("P1", "trend", DAY).status == "ready"
 
 
+def test_lot_publication_reads_configured_mapping_again_and_preserves_release_decision(tmp_path, monkeypatch):
+    import yaml
+    from src.shared_kernel.config import ConfigLoader
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+
+    class Grouped(Analysis):
+        @staticmethod
+        def get_lot_defect_rates(*args, **kwargs):
+            frame = Analysis.get_lot_defect_rates()['code_level_details']['D1']
+            return {'code_level_details': {'Array_Line': frame.assign(defect_group='Array_Line')}}
+
+    config_dir = tmp_path / 'config'
+    config_dir.mkdir()
+    policy_path = config_dir / 'global.yaml'
+    policy_path.write_text(yaml.safe_dump({'data_source': {'defect_group_factory_mapping': {'Array_Line': 'ARRAY'}}}))
+    monkeypatch.setattr(ConfigLoader, 'get_project_root', staticmethod(lambda: tmp_path))
+    publisher = results(tmp_path)
+    publisher.lot_factory_mapping = ConfigLoader.get_yield_lot_factory_mapping
+
+    def produce():
+        return generate_yield_alert_publications(
+            analysis=Grouped, publisher=publisher,
+            config=SimpleNamespace(data_source=SimpleNamespace(product_code='P1')), product_dir=tmp_path,
+            cache_context={'analysis_start_date': '2026-10-01', 'analysis_end_date': str(DAY),
+                           'modifier_signature': 'm1', 'warning_signature': 'w1', 'rate_override_signature': 'r1'},
+            trend_signature='t1', lot_signature='l1', db_manager=None, kinds=('lot',),
+        )
+
+    assert not produce()['errors']
+    path = publisher.store.paths['lot']
+    assert pd.read_excel(path, sheet_name='P1')['factory'].tolist() == ['ARRAY']
+    flags = pd.read_excel(path, sheet_name='P1__flags').assign(flag=False)
+    assert replace_workbook_sheets(path, {'P1__flags': flags}).written
+    policy_path.write_text(yaml.safe_dump({'data_source': {'defect_group_factory_mapping': {'Array_Line': 'OLED'}}}))
+    assert not produce()['errors']
+    published = publisher.read('P1', 'lot', DAY)
+    assert published.records['defect_group'].tolist() == ['Array_Line']
+    assert published.records['factory'].tolist() == ['OLED']
+    assert published.release_records['flag'].tolist() == [False]
+
+
 def test_trend_publishes_even_when_lot_calculation_fails(tmp_path):
     class Fails(Analysis):
         @staticmethod

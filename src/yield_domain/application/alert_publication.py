@@ -61,14 +61,16 @@ def generate_yield_alert_publications(
                     outcome["mwd_group_data"] or {}, outcome["mwd_code_data"] or {}) for frame in group.values())
                 coverage_start = publish_start
             else:
+                factory_mapping = publisher.lot_factory_mapping()
                 outcome["lot_data"] = analysis.get_lot_defect_rates(config, product_dir,
                     _db_manager=db_manager, snapshot_signature=signature, **cache_context)
                 outcome["warning_lines"] = analysis.load_static_warning_lines(config, product_dir,
                     signature, warning_signature=cache_context["warning_signature"])
                 outcome["lot_records"], outcome["total_recent_lots"] = compute_lot_oos_records(
-                    outcome["lot_data"], outcome["warning_lines"])
+                    outcome["lot_data"], outcome["warning_lines"], factory_mapping=factory_mapping)
                 records, count = compute_lot_oos_records(
-                    outcome["lot_data"], outcome["warning_lines"], time_period=None)
+                    outcome["lot_data"], outcome["warning_lines"], time_period=None,
+                    factory_mapping=factory_mapping)
                 records = [record for record in records if publish_start <=
                     date.fromisoformat(record["入库时间"].replace("/", "-")).isoformat() <= common["analysis_end_date"]]
                 has_data = count > 0

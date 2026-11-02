@@ -55,6 +55,15 @@ data_source:
     - "TP_Short NG"
     - "TP 容值NG"
 
+  # Lot 超规发布时由 Defect Group 自动确定厂别；未知分组不猜测归属。
+  defect_group_factory_mapping:
+    Array_Line: "ARRAY"
+    Array_Pixel: "ARRAY"
+    Array_Mura: "ARRAY"
+    OLED_Mura: "OLED"
+    "TP_Short NG": "TP"
+    "TP 容值NG": "TP"
+
   work_order_types:
     - "ESLC" # 量产
     - "P" # 量产

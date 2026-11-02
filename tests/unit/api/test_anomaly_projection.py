@@ -6,10 +6,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from api.schemas import AnomalyQuery
+from api.schemas import AnomalyQuery, AnomalyRecord
 from api.service import PublishedAnomalyService
 from src.shared_kernel.infrastructure.api_alert_metadata import (
-    ATTRIBUTION_COLUMNS,
     STATION_COLUMNS,
     ApiAlertMetadata,
 )
@@ -24,13 +23,8 @@ def metadata_path(tmp_path: Path) -> Path:
         {"step_id": "00100", "description": "PI2_CURE_THK"},
         {"step_id": "00200", "description": "LAST_FINAL"},
     ]
-    attributions = [
-        {"product": "P1", "lot_id": "000000001", "parameter_name": "LINE", "factory": "CELL",
-         "step_id": "", "description": "EVA_REVIEW"},
-    ]
     with pd.ExcelWriter(path) as writer:
         pd.DataFrame(stations, columns=STATION_COLUMNS).to_excel(writer, sheet_name="站点字典", index=False)
-        pd.DataFrame(attributions, columns=ATTRIBUTION_COLUMNS).to_excel(writer, sheet_name="Yield归属", index=False)
     return path
 
 
@@ -127,28 +121,33 @@ def test_qtime_uses_from_step_for_occurrence_station_and_layer(metadata_path: Pa
 
 
 def yield_row() -> dict:
-    return {"超规 Lot ID": "000000001", "异常 Code": "LINE", "入库时间": "2026/10/28", "flag": False}
+    return {"超规 Lot ID": "000000001", "异常 Code": "LINE", "入库时间": "2026/10/28", "flag": False,
+            "defect_group": "Array_Line", "factory": "ARRAY"}
 
 
-def test_yield_uses_maintained_factory_and_allows_null_station_without_inventing_time(metadata_path: Path) -> None:
+def test_yield_uses_published_factory_and_null_layer_without_metadata(metadata_path: Path) -> None:
+    metadata_path.unlink()
     result = service_for(metadata_path, [yield_row()]).read(
-        AnomalyQuery(product="P1", sub_domain="Yield"), ("CELL",), REFERENCE,
+        AnomalyQuery(product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE,
     )
     assert result == [{
-        "分类": "Yield", "发生站点": None, "部门": "CELL", "层别": "EVA", "监控参数": "LINE",
+        "分类": "Yield", "发生站点": None, "部门": "ARRAY", "层别": None, "监控参数": "LINE",
         "异常事件": "OOS", "对象类型": "lot", "对象编号": "000000001", "产品型号": "P1",
         "发生时间": "2026-10-28", "起始站点": None, "命中边界": None,
     }]
 
 
 def test_yield_missing_factory_is_unavailable_instead_of_dropping_rows(metadata_path: Path) -> None:
-    with pd.ExcelWriter(metadata_path, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        pd.DataFrame([dict(product="P1", lot_id="000000001", parameter_name="LINE", factory="",
-                           step_id="", description="EVA_REVIEW")], columns=ATTRIBUTION_COLUMNS).to_excel(
-            writer, sheet_name="Yield归属", index=False,
-        )
     with pytest.raises(ValueError):
-        service_for(metadata_path, [yield_row()]).read(AnomalyQuery(product="P1", sub_domain="Yield"), ("CELL",), REFERENCE)
+        service_for(metadata_path, [{**yield_row(), 'factory': None}]).read(
+            AnomalyQuery(product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE)
+
+
+@pytest.mark.parametrize('domain', ['SPC', 'CTQ', 'AOI_TT', 'AOI_RS', 'Q-Time'])
+def test_null_layer_is_only_valid_for_yield(domain):
+    with pytest.raises(ValueError, match='layer'):
+        AnomalyRecord(sub_domain=domain, product='P1', event_type='OOS', step_id='001', factory='ARRAY',
+                      layer=None, parameter_name='D1', entity_type='sheet', entity_id='S1', occurred_at='2026-10-28')
 
 
 def test_known_unauthorized_factory_is_skipped_before_missing_station_metadata(metadata_path: Path) -> None:

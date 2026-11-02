@@ -62,12 +62,9 @@ def published_files(tmp_path, monkeypatch):
     paths[("yield_domain", "trend_alert_results")] = tmp_path / "yield-trend.xlsx"
     metadata_path = tmp_path / "metadata.xlsx"
     paths[("shared_kernel", "api_alert_metadata")] = metadata_path
-    attribution = pd.DataFrame([dict(product="P1", lot_id="LOT001", parameter_name="D1",
-        factory="CELL", step_id="", description="YLD_LAYER")])
     _write(metadata_path, {
         "站点字典": pd.DataFrame([{"step_id": "0100", "description": "PI2_CURE_THK"},
                                       {"step_id": "0200", "description": "OTHER_PROCESS"}]),
-        "Yield归属": attribution,
     })
     policy_path = tmp_path / "policy.xlsx"
     policy = pd.DataFrame({"监控参数": list(DISPLAY_NAMES.values()), "P1": False})
@@ -90,8 +87,13 @@ def published_files(tmp_path, monkeypatch):
         over_hours=1., timekey="20261028100000", flag=False)])
     qtime_service().publish("ARRAY", qtime_rows, qtime_rows,
         {"status": "fresh", "refreshed_at": NOW.isoformat()}, DAY)
-    lot = {"超规 Lot ID": "LOT001", "异常 Code": "D1", "管控规格线": "1%",
-        "实际不良率": "2%", "不良panel数": 2, "入库时间": "2026/10/28", "阵列投入时间": "2026/10/01"}
+    from src.yield_domain.core.sheet_lot.lot_alerts import compute_lot_oos_records
+    computed, _ = compute_lot_oos_records({'code_level_details': {'Array_Line': pd.DataFrame([{
+        'lot_id': 'LOT001', 'defect_desc': 'D1', 'defect_group': 'Array_Line',
+        'warehousing_time': '20261028', 'array_input_time': '20261001',
+        'defect_rate': .02, 'defect_panel_count': 2,
+    }])}}, {'D1': {'upper': .01}}, factory_mapping={'Array_Line': 'ARRAY'})
+    lot, = computed
     yield_service().publish("P1", "lot", [lot], reference_date=DAY,
         coverage_start="2026-10-01", coverage_end=str(DAY), has_data=True,
         health={"status": "fresh", "refreshed_at": NOW.isoformat()}, calculation_signature="fixture")
@@ -120,7 +122,7 @@ def published_files(tmp_path, monkeypatch):
     def app():
         return create_app(clients_provider=lambda: (principal,), clock=lambda: NOW)
 
-    return SimpleNamespace(paths=paths, metadata_path=metadata_path, attribution=attribution,
+    return SimpleNamespace(paths=paths, metadata_path=metadata_path,
         policy_path=policy_path, policy=policy, app=app)
 
 
@@ -209,7 +211,7 @@ def test_authorized_factory_outside_qtime_scope_is_valid_empty(published_files, 
     _assert_unchanged(before)
 
 
-def test_real_yield_requires_manual_false_and_factory_but_allows_null_station(published_files):
+def test_real_yield_publishes_automatic_factory_and_null_location_without_metadata(published_files):
     files = published_files
     with TestClient(files.app()) as client:
         before = _bytes(files)
@@ -218,23 +220,40 @@ def test_real_yield_requires_manual_false_and_factory_but_allows_null_station(pu
         assert denied.status_code == 200 and denied.json()["data"] == []
         _assert_unchanged(before)
         _release_yield(files)
+        published = pd.read_excel(files.paths[('yield_domain', 'lot_oos_results')], sheet_name='P1')
+        assert published['defect_group'].tolist() == ['Array_Line']
+        assert published['factory'].tolist() == ['ARRAY']
+        files.metadata_path.unlink()
         before = _bytes(files)
         released = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
             params={"product": "P1", "sub_domain": "Yield"})
         assert released.status_code == 200, released.text
         row, = released.json()["data"]
-        assert row["部门"] == "CELL" and row["发生站点"] is None and row["层别"] == "YLD"
+        assert row["部门"] == "ARRAY" and row["发生站点"] is None and row["层别"] is None
         assert row["发生时间"] == "2026-10-28"
         _assert_unchanged(before)
-        sheets = pd.read_excel(files.metadata_path, sheet_name=None, dtype=object)
-        sheets["Yield归属"]["factory"] = ""
-        _write(files.metadata_path, sheets)
+        path = files.paths[('yield_domain', 'lot_oos_results')]
+        sheets = pd.read_excel(path, sheet_name=None, dtype=object)
+        sheets['P1'] = sheets['P1'].drop(columns=['defect_group', 'factory'])
+        _write(path, sheets)  # A legacy publication cannot infer attribution on GET.
         before = _bytes(files)
         incomplete = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
             params={"product": "P1", "sub_domain": "Yield"})
         assert incomplete.status_code == 503
-        assert "CELL" not in incomplete.text and "LOT001" not in incomplete.text
+        assert "LOT001" not in incomplete.text
         _assert_unchanged(before)
+
+
+def test_yield_factory_filter_uses_published_factory_before_metadata_access(published_files):
+    files = published_files
+    _release_yield(files)
+    files.metadata_path.unlink()
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+            params={'product': 'P1', 'sub_domain': 'Yield', 'factory': 'CELL'})
+    assert response.status_code == 200 and response.json()['data'] == []
+    _assert_unchanged(before)
 
 
 @pytest.mark.parametrize("domain", list(DISPLAY_NAMES))
