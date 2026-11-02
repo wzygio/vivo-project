@@ -1,6 +1,6 @@
 # ADR-0037：本地发布结果驱动的异常片／Lot 只读 API
 
-- Status: Accepted（用户于2026-11-02确认合并并采纳已审阅草案）
+- Status: Accepted（用户于2026-11-02确认合并并采纳原草案；同日确认2.2的日期、部分成功口径与执行计划）
 - Date: 2026-11-02
 - Scope: 异常片／Lot HTTP消费、共同公开投影、本地元数据和人工释放证据；不合并各域原始分析管路
 
@@ -41,6 +41,14 @@
 
 文件改写期间offset可造成漏行或重复；新增基础设施又超出当前小范围内网需求。选择单worker、有界不可变公开快照和认证游标；扩展多worker前需重新设计共享或路由。
 
+### 2.2跨来源整次失败／返回可用部分
+
+原API单来源完整性不足即失败；若直接推广到全部产品／分类，某个过期发布会让其余来源一并不可用。用户明确选择返回可用部分，因此按产品／分类／事件隔离已知来源失败，用完整性标记防止调用方将部分结果误认为全量。失败来源的已投影行整批丢弃，全部失败仍503，程序错误仍安全500；这不是忽略失败后默认成功。
+
+### 2.2强制指定分类／全部可选
+
+强制分类或固定行数可缩小单次负担，但不符合用户直接提取全部上周异常的使用方式。选择默认授权与启用范围内全选、无行数截断，同时保留字节、线程、缓存、超时等有限资源约束；不新增外部服务。
+
 ## Consequences
 
 2.2将“所有来源一起成功”改为显式部分成功；这是用户选择的可用性取舍。调用方必须检查meta.complete，不能仅凭HTTP200或status=ok判断全量无异常。失败列表只含已授权的产品／分类／事件与固定错误码。默认不限行仍受原有字节／超时等资源约束；分页也需要完整公开快照。未来实测值、阈值、分组等业务字段仅作建议，本次不添加。
@@ -55,6 +63,7 @@ Excel／Office读取依旧具有平台和账号约束。缓存和并发受限，
 - 实现：[HTTP入口](../../api/main.py)、[跨域组合](../../api/composition.py)、[公开投影](../../api/service.py)、[Inline共同查询](../../src/inline_domain/application/monitor/sheet_alert_query.py)、[公开规则](../../src/shared_kernel/core/alert_visibility.py)、[本地维护元数据](../../src/shared_kernel/infrastructure/api_alert_metadata.py)。
 - 测试：[本地文件到HTTP集成](../../tests/integration/test_anomaly_api_files.py)、[Inline查询](../../tests/unit/inline_domain/application/monitor/test_sheet_alert_query.py)、[元数据](../../tests/unit/shared_kernel/test_api_alert_metadata.py)、[缓存](../../tests/unit/shared_kernel/test_api_workbook_cache.py)、[依赖守卫](../../tests/architecture/test_backend_dependencies.py)。
 - 使用：[异常片／Lot API使用说明](../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md)。
+- 2.2：[获批查询规格](../../.scratch/anomaly-api-query/PRD.md)、[执行计划](../../.planning/2026-11-02-api-query/task_plan.md)、[查询协调](../../api/query.py)、[HTTP查询回归](../../tests/unit/api/test_query_options_http.py)、[交付记录](../dev_docs/generated/inline_domain/monitor/api-query-optimization-2026-11-02.md)。
 
 ## Verification and acceptance
 

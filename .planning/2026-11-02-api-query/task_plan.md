@@ -10,11 +10,11 @@ Spec: .scratch/anomaly-api-query/PRD.md
 ### Phase 1: Requirements
 **Status:** complete
 Approval2026-11-02: inclusive dates, explicit partial results,01 ->02 ->03 and existing HTTP/file seams confirmed by user.
-User explicitly requested feat-API2.2: all filters optional, default authorized all-products/all-sources; OOS default, custom date/time bounds, unlimited row count by default, remove redundant starting station, explain cursor and propose future fields without adding them. Pending user answers: date versus timestamp precision; strict versus explicitly marked partial multi-source results.
+User explicitly requested feat-API2.2: all filters optional, default authorized all-products/all-sources; OOS default, inclusive Shanghai calendar dates, unlimited row count by default, remove redundant starting station, explain cursor and propose future fields without adding them. All material questions answered; partial available results explicitly marked.
 
 ### Phase 2: Planning
 **Status:** complete
-Execution view approved with requirements. Frontier01; then02 then03. Failure contract uses meta.complete/failed_sources, all-failed503 with safe error.failed_sources.
+Execution view approved with requirements. Tickets01/02 complete; frontier03. Failure contract uses meta.complete/failed_sources, all-failed503 with safe error.failed_sources.
 01 optional authorized scope/unlimited results and removal →02 local published date window/filter end-to-end →03 global cursor binding/security/integration/docs. Reuse HTTP/file seams and existing source application readers; extend Inline date-selection contract while preserving page defaults.
 
 ### Phase 3: Development and testing
