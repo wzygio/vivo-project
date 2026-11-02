@@ -43,3 +43,7 @@
 合并后API单元与真实临时工作簿HTTP集成158项通过。首次核验在清点资源时被已有Excel所有权标记`~$入库良率修饰表.xlsx`的读取锁阻止，未开始测试；后续只跳过`~$`所有权标记，所有正式工作簿仍纳入哈希和写入保护。该轮pytest_exit_code=0、无数据库／Office／维护目录写入尝试；248项正式资源／数据中1项`resources/yield_domain/mwd_trend/入库良率修饰表.xlsx`在窗口内发生大小／哈希变化，故审计包装器返回3。变化来源尚未归因，未关闭用户Excel、回滚或改写该表；不能据此轮声称整仓文件字节保持不变。其余247项哈希相同。该情况和API测试结果分开保留，不重写审计结果。
 
 部署证据：`output/test-results/api-query-deployment-20261102/result.json`与`schema-verification.json`；合并后测试及差异：`output/test-results/api-query-postmerge-guarded-20261102/`。此后仅提交记录文件，无运行代码变化，无需再次重启正式API。
+
+## 后续：24项基线问题已处理
+
+用户随后授权审计：最终23项仍有价值，保留修复；仅1项旧Yield页面AST约束删除。隔离完整回归2856项全部通过，合并后相关201项通过，原14张问题卡均已关闭。此前24项失败数字保留为API交付当时的历史事实，当前处理结论见[基线审计](../../shared_kernel/shared/baseline-regression-audit-2026-11-02.md)。本轮没有重启正式服务。
