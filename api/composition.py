@@ -42,7 +42,7 @@ def build_service() -> PublishedAnomalyService:
             shops = tuple(shop for shop in factories if shop in ('ARRAY', 'OLED', 'TP'))
             if not shops:
                 import pandas as pd
-                return {'state': 'ok', 'records': pd.DataFrame(), 'release_evidence': True}
+                return {'state': 'ok', 'records': pd.DataFrame(columns=['flag']), 'release_evidence': True}
             return build_qtime_alert_results(workbook_reader=reader).read(query.product, day, shops=shops)
         if query.sub_domain == 'Yield':
             from src.yield_domain.composition import build_yield_alert_results

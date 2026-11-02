@@ -195,6 +195,20 @@ def test_real_qtime_uses_from_station_and_its_dictionary_layer(published_files):
     _assert_unchanged(before)
 
 
+def test_authorized_factory_outside_qtime_scope_is_valid_empty(published_files, monkeypatch):
+    from src.indicator_domain import composition
+    files = published_files
+    monkeypatch.setattr(composition, 'build_qtime_alert_results',
+                        lambda **kwargs: pytest.fail('No Q-Time shop was requested'))
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': 'Q-Time', 'factory': 'CELL'})
+    assert response.status_code == 200
+    assert response.json()['data'] == [] and response.json()['meta']['status'] == 'ok'
+    _assert_unchanged(before)
+
+
 def test_real_yield_requires_manual_false_and_factory_but_allows_null_station(published_files):
     files = published_files
     with TestClient(files.app()) as client:
