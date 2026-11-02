@@ -21,10 +21,28 @@
 - 最终隔离专项235项通过，覆盖API、元数据、发布／读取／人工Flag、配置与真实临时文件HTTP集成；语句覆盖率92.40%，80%门通过。见 [JUnit](../../../../../output/test-results/yield-lot-api-focused-final/junit.xml)、[覆盖率](../../../../../output/test-results/yield-lot-api-focused-final/coverage.json)。
 - 护栏同时保护原仓库和隔离worktree，拒绝数据库／Office和维护目录写入；专项测试阶段禁止操作尝试0，62个隔离维护文件前后哈希0差异。护栏预检的故意拒绝单独计数，见 [summary](../../../../../output/test-results/yield-lot-api-focused-final/summary.json)。
 - 类型检查使用原项目虚拟环境。当前修改集的alert_results中有3项既有Timestamp／NaT比较诊断，在原344f4e23文件同一语句逐项复现；未作为新问题或通过来报告。其它被检查修改模块未见诊断。
-- 完整unit＋architecture回归和Standards／Spec双轴评审进行中，最终结果随后写入。
+- 完整unit＋architecture快照回归：2756项，2731通过／25失败。24项与前次已登记基线失败集合完全一致；另1项为隔离worktree缺少未纳入Git的IQC SQL参考文件，补入原参考副本后单项通过，未修改原文件或业务实现。不能把完整回归称为全绿。见 [全量JUnit](../../../../../output/test-results/yield-lot-api-full-clean/junit.xml)、[逐项比较](../../../../../output/test-results/yield-lot-api-full-clean/failure-comparison.json)、[参考文件复验](../../../../../output/test-results/yield-lot-api-reference-check/junit.xml)。
+- 最终全量护栏观察窗口内62个维护文件哈希无差异；数据库尝试0，一项既有Yield只读fixture的Office尝试被阻止，未实际创建Office。预检还实际验证了子进程替换PYTHONPATH时护栏仍生效。全量快照早于下述托管修复；托管修复另有专项验证。
+- 编译、依赖锁检查和文档路由检查通过。依赖清单未变，锁检查在原仓库执行；隔离worktree未安装另一套环境。类型诊断基线对照见`output/test-results/yield-lot-api-static/`。
 
-首轮复用回归runner时临时目录父路径缺失，造成夹具setup错误；已改为预先创建的报告目录并干净重跑，首轮不作为验收证据。较早扩大到旧冷进程／warmup集成时，原fixture写了隔离worktree内复制的IQC结果；已只恢复本次新建worktree中的该复制文件，之后采用上述不可移除护栏。该轮不计为生产I/O隔离证据，原仓库业务文件未由本次实施改写。
+首轮复用回归runner时临时目录父路径缺失，造成夹具setup错误；已修正后重跑。随后预检发现旧子进程替换PYTHONPATH可绕过继承，且Windows的Popen审计事件executable可能为None；两轮不完整验证已按核验PID身份停止并确认退出。最终使用解析实际命令的启动审计继承护栏，预检通过后重跑，不把早期运行作为完整隔离证据。隔离IQC副本曾观察到额外512字节及企业保护文件头，无法据此归因到某个fixture或声称某个生产文件被修改；该复制文件未纳入提交，未复制回原资源目录。
+
+## Standards
+
+独立只读评审344f4e23→98b2b957：无具体规范违规或阻断缺陷；配置／纯计算／发布／API边界、字段完整性、人工决定保留及历史归属表保留均符合项目约定。补充评审3fb2d69e同样无阻断。
+
+## Spec
+
+独立只读评审：用户2.1及可配置补充均有实现和验证，未发现缺失或错误实现。保留运行限制：原生产结果必须正常重发，不能由GET补字段。补充托管修复不改变业务授权或工作簿。
+
+两轴具体阻断发现均为0，未将测试基线或类型基线诊断伪装为成功。
+
+## 托管恢复
+
+检查发现原API监督进程已退出，只记录PermissionError类型，原Streamlit仍监听8503。最小测试复现了Windows不允许delete-sharing的读句柄导致状态JSON原子替换失败；保存逻辑新增最多20次、每次50ms重试，永久失败仍上抛。模拟冲突与真实Win32句柄两项通过，原六项最小监听／崩溃恢复／正常失败中断清理也通过，所有临时进程和端口完成清理，见 [生命周期JUnit](../../../../../output/test-results/yield-lot-api-host-recovery/junit.xml)。真实句柄测试另一次定向运行通过，不冒充原7项JUnit包含该后加用例。
+
+仅托管工具修复已回填原仓库并恢复原API，未提前应用未完成验证的Yield业务代码。修复不承诺持续超过约1秒或永久权限错误的恢复能力，原退出日志不足以证明每次PermissionError的具体发生位置。
 
 ## 运行与排除项
 
-本次不改写正式Lot发布工作簿、不初始化或修改人工Flag、不查询生产数据库、不推送远端。既有正式API与报表服务在开发／测试期间保持原运行状态。最终代码合并及API进程更新状态以最终记录为准；配置／代码到位不代表旧发布已自动重算。
+本次不改写正式Lot发布工作簿、不初始化或修改人工Flag、不查询生产数据库、不推送远端。原报表服务不重启；API托管恢复如上。最终代码合并及API进程更新状态以最终记录为准；配置／代码到位不代表旧发布已自动重算。
