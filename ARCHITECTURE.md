@@ -135,6 +135,8 @@ domain composition -> assembles application services and concrete adapters
 
 The published Sheet/Lot API boundary, alternatives and operating constraints are recorded in [ADR-0037](docs/ADR/0037-published-anomaly-api.md).
 
+On Windows, [the user-session API host](tools/anomaly_api_service.py) injects caller authorization digests into the API worker environment, supervises its own process family, and provides a current-user logon shortcut. It is independent of Streamlit and is not a Windows system service. Deployment state belongs to the [API guide](references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) and its dated deployment record.
+
 | Path | Responsibility |
 |---|---|
 | `app/Home.py`, `app/pages/` | Portal initialization and thin page entry points; follow section calls before descending into a domain |

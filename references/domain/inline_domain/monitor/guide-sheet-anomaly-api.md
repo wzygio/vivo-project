@@ -146,7 +146,31 @@ $env:VIVO_API_CLIENTS = ConvertTo-Json -InputObject $apiClients -Depth 4 -Compre
 .venv/Scripts/python.exe -m uvicorn api.main:create_app --factory --host 127.0.0.1 --port 8890 --workers 1 --no-access-log
 ```
 
-这个示例只监听本机，端口需确认未被占用；没有自动部署或创建正式服务。前台运行时可用 Ctrl+C 结束该进程。供其他系统访问时，应由运维配置正式内网 HTTPS 入口及网络访问范围，原 Streamlit 服务独立运行。
+这个示例只监听本机，端口需确认未被占用；前台运行时可用 Ctrl+C 结束该进程。供其他系统访问时，可以在本机监听内网地址并由调用方直接访问，也可以使用运维提供的HTTPS入口。HTTP不加密请求头中的调用密钥；2026-11-02用户明确选择当前电脑内网直连。原Streamlit服务独立运行。
+
+### 4.0 Windows当前用户后台托管
+
+仓库提供 [后台托管工具](../../../../tools/anomaly_api_service.py) 和 [首次密钥设置窗口](../../../../tools/setup_anomaly_api_credentials.ps1)。本次部署范围和实际验证状态见 [部署记录](../../../../docs/dev_docs/generated/inline_domain/monitor/api-deployment-2026-11-02.md)。
+
+首次设置窗口由当前用户输入并自行保存至少32字符的随机密钥；原始密钥只用于该窗口内的鉴权检查，不写文件、日志或命令行。摘要与批准的授权保存在当前用户的 `%LOCALAPPDATA%\Tianzhu\AnomalyApi\deployment.json`，启动工具将其中调用方JSON注入worker的`VIVO_API_CLIENTS`环境。该文件不是业务YAML，不包含原始密钥，不加入Git。现有profile不会被首次设置工具覆盖。
+
+```powershell
+powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
+.venv/Scripts/python.exe tools/anomaly_api_service.py status
+```
+
+后台工具以单worker运行，另有一个本机监督进程负责异常退出后退避重启。日志按天保留14份，位于`output/logs/anomaly-api/server.log`；进程身份、启动意图及维护状态也归该目录。不会启动报表生产或补齐业务资料。
+
+首次启动成功后，在当前用户的Windows启动目录创建`Tianzhu Anomaly API.lnk`，指向项目虚拟环境的`pythonw.exe`。这是**登录后自动启动**，不是开机即运行的Windows系统服务；未登录、注销、休眠或关机时不保证可调用。无人值守开机运行需运维另行配置适合企业文件读取的服务账号。
+
+以下命令仅管理该工具记录并验证身份的API进程，不停止原Streamlit或其他端口上的服务。更新授权profile后需停止并重新启动，使新环境生效；进程重启会使原分页游标失效。
+
+```powershell
+.venv/Scripts/python.exe tools/anomaly_api_service.py stop
+.venv/Scripts/python.exe tools/anomaly_api_service.py start
+```
+
+仅停止进程不会删除登录启动项；如需永久取消，应由该用户删除其启动目录中的上述专用快捷方式。初始监听地址／端口由用户profile的`host`／`port`提供。修改前确认端口归属与网络范围，不重用报表端口。真实来源仍受发布有效性、字典、Yield归属及人工释放决定限制；`/health/ready`成功不代表所有业务来源均可提供明细。
 
 | 路径 | 说明 |
 |---|---|

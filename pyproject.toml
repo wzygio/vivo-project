@@ -32,6 +32,7 @@ dependencies = [
     "pytest>=9.0.2",
     "streamlit-aggrid>=1.2.1.post2",
     "pywin32>=311",
+    "psutil>=5.9,<8",       # Windows API host process identity and lifecycle management
     "python-pptx>=1.0.2,<2",
 ]
 
@@ -45,7 +46,6 @@ dev-dependencies = [
     "pytest",
     "pytest-cov>=6,<8",
     "httpx>=0.27,<1",
-    "psutil>=5.9,<8",
     "ipykernel",
     "jupyterlab",
 ]
