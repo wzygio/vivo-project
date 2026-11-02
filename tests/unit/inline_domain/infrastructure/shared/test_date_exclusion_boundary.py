@@ -157,7 +157,8 @@ def test_tt_excluded_reinspection_cannot_replace_eligible_sheet(policy):
     raw = source_rows().iloc[[0, 1]].copy()
     raw["start_time"] += pd.Timedelta(days=4)
     raw["sheet_id"] = "SAME"
-    specs = pd.DataFrame([dict(prod_code="P", step_id="1", param_name="CD", param_type=None)])
+    raw["param_name"] = "TDSUM"
+    specs = pd.DataFrame([dict(prod_code="P", step_id="1", param_name="TDSUM", param_type=None)])
     repository = AoiTtRepository(
         raw_measurements=SimpleNamespace(get_measurements=lambda *_a: raw),
         metadata=SimpleNamespace(get_parameter_specs=lambda _p: specs),

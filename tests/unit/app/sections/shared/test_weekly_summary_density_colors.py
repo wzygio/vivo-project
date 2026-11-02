@@ -65,14 +65,14 @@ def test_tt_colors_use_usl_independently_of_ucl_and_keep_missing_data_black(size
                     tt_qty=8, start_time=pd.Timestamp("2026-10-14"), sheet_id="S1", particle_size=size)
         rows = [] if i == 3 else [base]
         if i == 4:
-            rows = [{**base, "tt_name": "OTHER", "particle_size": "Total"}]
+            rows = [{**base, "tt_name": "DSUM_L", "particle_size": "Total"}]
         specs = pd.DataFrame([dict(prod_code=product, step_id="12620", tt_name="TDSUM",
                                    usl=[8, 7, None, 8, 8, 9][i], ucl=1)])
         return AoiTtReportViewModel(pd.DataFrame(rows), specs, pd.DataFrame())
 
     content = build_aoi_tt_weekly_ppt(products, factories=("ARRAY",), steps=(), particle_sizes=(size,),
         load_report=load, reference_date=date(2026, 10, 21), template_bytes=template())
-    # TDSUM sorts after OTHER, so select its row explicitly.
+    # A different valid TT project proves detection without a TDSUM value.
     deck = Presentation(BytesIO(content))
     grid = next(s.table for s in deck.slides[0].shapes if s.has_table)
     row_index = next(i for i in range(1, len(grid.rows)) if "TDSUM" in grid.cell(i, 2).text)

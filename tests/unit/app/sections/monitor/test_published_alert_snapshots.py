@@ -62,6 +62,17 @@ def test_product_matching_global_parts_and_public_projection(snapshots):
     assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['state'] == 'error'
 
 
+def test_shared_parts_reader_accepts_factory_wide_scope_without_a_product(snapshots):
+    from app.sections.shared.alert_results import read_alert_result
+    write_snapshots(snapshots)
+    before = {path: path.read_bytes() for path in snapshots.values()}
+    result = read_alert_result('parts_oos', '', date.today())
+    assert result['state'] == 'alert'
+    assert result['alert_factories'] == ['ARRAY']
+    assert len(result['alerts']) == 1 and '原始测量值' not in result['alerts']
+    assert {path: path.read_bytes() for path in snapshots.values()} == before
+
+
 def test_missing_stale_and_valid_empty_are_distinct(snapshots):
     for key in saved.PUBLISHED_ALERT_ROWS:
         assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'error'

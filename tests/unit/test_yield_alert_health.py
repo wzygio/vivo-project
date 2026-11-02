@@ -1,8 +1,5 @@
 """Displayed historical facts must not certify the current monitoring state."""
 
-import ast
-from pathlib import Path
-
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -44,17 +41,3 @@ def test_existing_fresh_callers_keep_normal_result():
     assert app.success[0].value == "系统监测正常"
 
 
-def test_yield_dashboard_passes_all_displayed_source_health_to_alert_center():
-    page = Path(__file__).parents[2] / "app/pages/入库不良率分析看板.py"
-    tree = ast.parse(page.read_text(encoding="utf-8"))
-    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
-             and isinstance(node.func, ast.Name) and node.func.id == "render_alert_center"]
-    assert len(calls) == 1
-    arguments = {keyword.arg: keyword.value for keyword in calls[0].keywords}
-    assert "source_current" in arguments
-    expression = ast.Expression(arguments["source_current"])
-    for statuses, expected in [(["fresh", "fresh"], True), (["fresh", "stale"], False),
-                               (["unknown", "fresh"], False), (["partial"], False)]:
-        assert eval(compile(expression, str(page), "eval"), {
-            "displayed_health": [{"status": status} for status in statuses],
-        }) is expected

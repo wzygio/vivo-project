@@ -61,10 +61,10 @@ def test_exemption_change_rewrites_detail_inside_ttl_and_can_be_disabled(tmp_pat
 def test_aoi_tt_returned_and_saved_exempt_details_are_released(
     tmp_path: Path, persist: bool, as_iterator: bool,
 ) -> None:
-    details = pd.DataFrame([dict(factory="ARRAY", prod_code="M", step_id="100", tt_name="PPA_X",
+    details = pd.DataFrame([dict(factory="ARRAY", prod_code="M", step_id="100", tt_name="TDSUM",
                                 sheet_id="S1", lot_id="L1", start_time=pd.Timestamp("2026-09-01"), tt_qty=9.0)])
-    specs = pd.DataFrame([dict(step_id="100", tt_name="PPA_X", usl=6.0, ucl=5.0)])
-    exemptions = iter(["PPA"]) if as_iterator else ["PPA"]
+    specs = pd.DataFrame([dict(step_id="100", tt_name="TDSUM", usl=6.0, ucl=5.0)])
+    exemptions = iter(["TDSUM"]) if as_iterator else ["TDSUM"]
     result = prepare_aoi_tt_decoration(
         details, specs, tmp_path, "M", persist=persist,
         exempt_param_name_contains=exemptions,

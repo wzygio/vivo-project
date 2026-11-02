@@ -301,6 +301,9 @@ def test_pipeline_outlier_filter_drops_out_of_bounds_values(
     monkeypatch, tmp_path: Path
 ) -> None:
     """Exercise the real outlier-filter loader through a standard workbook."""
+    from tests.helpers.inline_resources import write_inline_resource_registry
+
+    write_inline_resource_registry(tmp_path)
     rules_file = tmp_path / "resources" / "inline_domain" / "spc_outlier_filters.xlsx"
     rules_file.parent.mkdir(parents=True)
     pd.DataFrame(
@@ -344,6 +347,9 @@ def test_pipeline_outlier_filter_drops_out_of_bounds_values(
 def test_pipeline_step_only_outlier_rule_removes_all_parameters(
     monkeypatch, tmp_path: Path
 ) -> None:
+    from tests.helpers.inline_resources import write_inline_resource_registry
+
+    write_inline_resource_registry(tmp_path)
     rules_file = tmp_path / "resources" / "inline_domain" / "spc_outlier_filters.xlsx"
     rules_file.parent.mkdir(parents=True)
     pd.DataFrame(
@@ -607,6 +613,9 @@ class _FakeMonitorRepository:
 
 
 def test_monitor_dashboard_aggregation_contract(monkeypatch, tmp_path: Path) -> None:
+    from tests.helpers.inline_resources import write_inline_resource_registry
+
+    write_inline_resource_registry(tmp_path)
     MonitorAnalysisService.fetch_dashboard_data_dict.clear()
     _FakeMonitorRepository.scrap_calls = []
     # Pin the 3-month analysis window so time buckets are deterministic.

@@ -45,6 +45,8 @@ Q-Time 三厂合并保留 `data_health_by_shop`，并生成合并状态。任一
 
 重点证据入口：`tests/unit/test_yield_data_health.py`、`test_report_data_ports.py`、`test_yield_alert_health.py`、`tests/unit/indicator_domain/application/qtime/test_cached_monitoring.py`、Q-Time dashboard AppTest、Inline fake 端口测试及 `tests/architecture/`。首次导入的循环风险使用独立 Python 进程验证，不能只依赖预加载模块后的整套 pytest。
 
+Yield页面已采用已发布结果读取；当前健康状态由`tests/unit/app/sections/yield_domain/test_published_alert_health.py`验证真实发布文件到预警中心的fresh／stale／unknown／partial表现，页面发布先于Sheet失败的时序由`tests/unit/app/pages/test_yield_alert_publication.py`验证。不再通过AST强制页面调用旧render_alert_center；旧通用组件自身的兼容测试仍保留。
+
 ## 有意排除
 
 本次不增加台账审计/版本冲突、身份权限、原子文件发布升级、CI 平台或业务算法重写。以上是用户暂缓的 H2/H3 或仅解释的 H5，不能因本契约自行扩大范围。

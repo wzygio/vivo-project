@@ -43,6 +43,8 @@
 
 共同 `_cached_alert_result` 使用 `st.cache_data`，只存 DataFrame、dict、标量等原生载荷。键包含指标、产品、参考日、实际文件／政策签名、该指标产品 revision 和显式范围；上限512项，TTL来自全局配置。
 
+备件快照是全厂共用、无产品归属的例外：页面以空产品读取时采用固定revision，不调用要求非空产品的单产品revision接口；文件版本、策略及即时有效性仍进入签名。矩阵按具体产品调用时继续保留该产品的手动revision，不虚构产品归属。
+
 工作簿解析缓存按绝对路径、`mtime_ns`、大小复用：Inline 四类 OOS 和 CPK／CPM 使用 `read_cached_alarm_workbook`；IJP／备件／IQC共用中立位置的快照读取器；Q-Time和Yield复用各自文件适配器。解析缓存负责文件复用，共同结果缓存负责预警选择复用。
 
 同一 Streamlit 进程中，报表与矩阵使用同一个缓存函数和缓存条目。`st.cache_data` 返回副本，调用方修改表格不会污染另一页面；这不是承诺共享可变 DataFrame 对象身份。独立定时进程与 Web 服务只能通过文件共享结果，不能共享进程内存。

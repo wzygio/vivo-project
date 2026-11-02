@@ -207,8 +207,10 @@ def test_output_contract_keys_and_determinism() -> None:
         panel_details, _config(), targets, target_end_date=pd.Timestamp("2026-05-03")
     )
 
-    assert set(first) == {"monthly", "weekly", "weekly_full", "daily_full", "daily"}
-    pd.testing.assert_frame_equal(first["daily_full"], second["daily_full"])
+    assert set(first) == {"monthly", "monthly_full", "weekly", "weekly_full", "daily_full", "daily"}
+    assert set(second) == set(first)
+    for period in first:
+        pd.testing.assert_frame_equal(first[period], second[period])
 
 
 def test_group_sheet_only_overrides_monthly_group_result() -> None:

@@ -19,6 +19,9 @@ def report_clock(monkeypatch):
         lambda self, now=None: pd.Timestamp(f"{clock['day']} {self.latest_day_time}"),
     )
     monkeypatch.setattr(ConfigLoader, "get_data_forward_policy", lambda: DataForwardPolicy(True, 4))
+    # This module isolates the report cutoff; date-exclusion integration has
+    # its own explicit-policy tests.
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
     return clock
 
 
@@ -32,7 +35,7 @@ def test_shared_measurements_cut_both_read_and_refresh_but_keep_raw_snapshot(tmp
     calls = []
     def loader(*args):
         calls.append(args)
-        return pd.DataFrame({"start_time": source_times(), "param_value": [1, 2, 3]})
+        return pd.DataFrame({"factory": "ARRAY", "start_time": source_times(), "param_value": [1, 2, 3]})
 
     repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader)
     assert repo.get_measurements("M1", "2026-09-11").param_value.tolist() == [1, 2]

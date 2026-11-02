@@ -21,6 +21,14 @@ REFERENCE = date(2026, 8, 17)
 START = pd.Timestamp("2026-08-10 05:13:57")
 
 
+@pytest.fixture(autouse=True)
+def default_span_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These cases specify the documented48h policy, independently of an
+    # operator's current setting. Configurable cases override it explicitly.
+    monkeypatch.setattr(ConfigLoader, "get_spc_capability_alert_min_span_hours", lambda: 48)
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
+
+
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("minimum, hours, expected", [
     (24, 23.999, 0), (24, 24, 1), (24, 30, 1), (72, 48, 0),

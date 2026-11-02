@@ -31,6 +31,7 @@ from src.inline_domain.application.shared.decorated_features import (
 )
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.shared_kernel.config import ConfigLoader
+from tests.helpers.inline_resources import write_inline_resource_registry
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
     replace_workbook_sheets,
@@ -405,6 +406,7 @@ def test_cached_payload_decisions_flow_to_download_and_unchanged_upload(
     """fetch_decorated_features → SPC view model 重建后：
     下载产出包含真实决策台账行；规范化一致的上传判定为 unchanged。"""
     fetch_decorated_features.clear()
+    write_inline_resource_registry(tmp_path)
     monkeypatch.setattr(
         ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path)
     )

@@ -1,0 +1,10 @@
+# Findings
+
+The24 failures were measured on API task source snapshots and are not automatically obsolete. Existing .scratch/api-baseline-regressions has14 issue groups. Current master9c616182 also contains an external auto-sync of earlier user source changes, so reproduce rather than assume all24 still fail. Formal API8890 and report8503 must remain running; no restart is implied by test maintenance.
+
+No .codegraph and no references/test_references/methods/test_authoring_standard.md; follow project context and scoped source/rules. Existing guard runner blocks production DB, Office and resources/data/config writes, preserving temporary-file test I/O.
+
+- All24 still reproduce at9c616182.22 are valuable:6 missing temporary strict resource registry;11 span/TT/cutoff fixtures;2 independent IJP error centres;1 monthly_full contract/determinism;1 Yield read port isolation;1 parts empty-state/source handling. Two Items obsolete: enumerate every actual resource including companions as separate global files; require Yield page to call former alert component by AST.
+- Current global alert_min_span_hours=0 is supported configuration, not a production bug; span tests must explicitly set48h while retaining configurable0 cases. TT ownership is explicit whitelist; unrelated synthetic OTHER/PPA_X rows were no longer valid TT test facts.
+- Real parts defect: parts_oos intentionally has no product attribution, but common reader looked up a revision requiring a nonempty product. Fixed only global branch revision to0; file/policy/validity signature still controls cache. ConfirmedRED public native reader, thenGREEN.
+- Original workspace has concurrent Yield performance/business edits, including tests/unit/app/pages/test_yield_alert_publication.py. Removed our temporary modifications to that shared path, added independent test_published_alert_health.py instead. Never overwrite concurrent edits. Original-root collection2849 was unsuitable as pinned baseline; detached9c616182 collection2845, final feature2849, exact2 removed/6 added. Preserve discarded evidence with explanation.

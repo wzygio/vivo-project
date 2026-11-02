@@ -136,7 +136,7 @@ def _read_uncached(row_key: str, product: str, reference_date: date, selection: 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=512, show_spinner=False)
 def _cached_alert_result(row_key: str, product: str, reference_date: str,
-                         signature: str, revision: int, selection: dict) -> dict:
+                         signature: str, revision: str, selection: dict) -> dict:
     del signature, revision
     return _read_uncached(row_key, product, date.fromisoformat(reference_date), selection)
 
@@ -159,7 +159,9 @@ def read_alert_result(row_key: str, product: str, reference_date: date, **select
             result["alert_factories"] = sorted({factory for item in results for factory in item["alert_factories"]})
             return result
         signature = alert_result_signature(row_key, product, reference_date, **selection)
-        revision = get_indicator_product_revision(row_key, product)
+        # Parts is a factory-wide publication, without product attribution.
+        # Its file/policy/validity signature already invalidates this view.
+        revision = get_indicator_product_revision(row_key, product) if product else '0'
         return _cached_alert_result(row_key, product, reference_date.isoformat(), signature, revision, selection)
     except Exception:
         logger.exception("Published alert read failed: %s/%s", row_key, product)

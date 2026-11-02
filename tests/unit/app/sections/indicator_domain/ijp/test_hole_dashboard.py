@@ -11,6 +11,11 @@ def test_actual_hole_page_periods_filters_empty_and_failure(monkeypatch):
     from app.components import page_header
     from app.manager.session_manager import SessionManager
     from app.sections.indicator_domain.ijp import dashboard
+    from app.sections.indicator_domain.ijp import alert_center
+    import pandas as pd
+    monkeypatch.setattr(alert_center, 'read_alert_result', lambda *args, **kwargs: {
+        'state': 'error', 'alerts': pd.DataFrame(), 'message': '预警结果暂不可用，请更新对应报表后重试。',
+    })
     from app.utils.app_setup import AppSetup
     from src.indicator_domain import composition
     from src.shared_kernel.infrastructure import db_handler
@@ -65,7 +70,10 @@ def test_actual_hole_page_periods_filters_empty_and_failure(monkeypatch):
     app.multiselect(key='ijp_hole_products').select('M678').run()
     app.button(key='ijp_hole_search').click().run()
     assert not app.exception and not app.get('plotly_chart')
-    assert app.error[0].value == 'IJP 数据暂时无法读取，请稍后重试。'
+    errors = [item.value for item in app.error]
+    assert 'IJP 数据暂时无法读取，请稍后重试。' in errors
+    assert '预警结果暂不可用，请更新对应报表后重试。' in errors
+    assert not any('SELECT' in value or 'admin=true' in value for value in errors)
     assert 'ijp_hole_result' not in app.session_state
 
 

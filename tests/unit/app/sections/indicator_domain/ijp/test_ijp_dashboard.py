@@ -130,13 +130,20 @@ def test_chunked_limits_each_chart_row_to_three_items() -> None:
     )
 
 
-def test_ijp_dashboard_shows_a_safe_database_error() -> None:
+def test_ijp_dashboard_shows_a_safe_database_error(monkeypatch) -> None:
+    from app.sections.indicator_domain.ijp import alert_center
+    monkeypatch.setattr(alert_center, 'read_alert_result', lambda *args, **kwargs: {
+        'state': 'error', 'alerts': pd.DataFrame(), 'message': '预警结果暂不可用，请更新对应报表后重试。',
+    })
     app = AppTest.from_file(str(FIXTURE_PATH)).run()
 
     app.multiselect(key="ijp_product_codes").set_value(["M678"])
     app.button(key="ijp_search").click().run()
 
-    assert app.error[0].value == "IJP 数据暂时无法读取，请稍后重试。"
+    errors = [item.value for item in app.error]
+    assert "IJP 数据暂时无法读取，请稍后重试。" in errors
+    assert '预警结果暂不可用，请更新对应报表后重试。' in errors
+    assert not any('SELECT' in value or 'admin=true' in value for value in errors)
     assert not app.dataframe
 
 

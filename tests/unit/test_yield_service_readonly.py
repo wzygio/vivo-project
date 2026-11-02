@@ -91,6 +91,14 @@ def test_mwd_trend_threads_read_only(captured_context_calls, mock_config, tmp_pa
 
 
 def test_lot_defect_rates_threads_read_only(captured_context_calls, mock_config, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from src.yield_domain import composition
+    override_calls = []
+    def read_overrides(path, sheet):
+        override_calls.append((path, sheet))
+        return None, None
+    monkeypatch.setattr(composition, 'create_yield_data_port',
+                        lambda *_args: SimpleNamespace(read_rate_overrides=read_overrides))
     monkeypatch.setattr(
         YieldAnalysisService,
         "_get_array_times",
@@ -115,3 +123,4 @@ def test_lot_defect_rates_threads_read_only(captured_context_calls, mock_config,
     YieldAnalysisService.get_lot_defect_rates(mock_config, tmp_path, read_only=True)
 
     assert captured_context_calls == [True]
+    assert len(override_calls) == 1

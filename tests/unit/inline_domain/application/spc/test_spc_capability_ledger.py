@@ -10,9 +10,17 @@ from src.inline_domain.application.spc.capability_decoration_service import prep
 from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
 from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
 from src.inline_domain.infrastructure.spc import capability_decoration_repository as repository
+from src.shared_kernel.config import ConfigLoader
 
 
 REFERENCE = date(2026, 8, 17)
+
+
+@pytest.fixture(autouse=True)
+def lifecycle_span_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The lifecycle examples intentionally exercise a48h admission threshold.
+    monkeypatch.setattr(ConfigLoader, "get_spc_capability_alert_min_span_hours", lambda: 48)
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
 
 
 def computed(metric, value=.9, hours=72):

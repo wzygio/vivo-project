@@ -89,15 +89,21 @@ def test_runtime_yield_paths_are_hydrated_without_changing_product_sheets(monkey
         assert YieldAnalysisService.resolve_modifier_table_path(config, tmp_path / product) == tmp_path / "resources/yield_domain/mwd_trend/targets-renamed.xlsx"
 
 
-def test_all_existing_resource_files_have_a_global_registry_entry():
-    root = ConfigLoader.get_project_root()
-    registry = yaml.safe_load((root / "config/global.yaml").read_text(encoding="utf-8"))["resources"]
-    registered = {
-        ConfigLoader.get_domain_resource_path(domain, key).resolve()
-        for domain, values in registry.items() for key in values["files"]
-    }
-    existing = {path.resolve() for path in (root / "resources").rglob("*") if path.is_file()}
-    assert existing <= registered
+def test_registered_collections_allow_members_without_separate_file_entries(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path, {'report': {
+        'dir': 'resources/report', 'files': {},
+        'directories': {'analysis': 'resources/report/analysis'},
+    }})
+    collection = tmp_path / 'resources/report/analysis'
+    collection.mkdir(parents=True)
+    (collection / 'first.md').write_text('first report', encoding='utf-8')
+    (collection / 'second.md').write_text('second report', encoding='utf-8')
+    resolved = ConfigLoader.get_domain_resource_directory('report', 'analysis')
+    assert resolved == collection
+    assert {p.read_text(encoding='utf-8') for p in resolved.glob('*.md')} == {'first report', 'second report'}
+    # A directory collection does not restore a legacy fallback for file keys.
+    with pytest.raises(KeyError):
+        ConfigLoader.get_domain_resource_path('report', 'unregistered', 'first.md')
 
 
 @pytest.mark.parametrize("report,date_column", [("inspection", "检验时间"), ("lifetime", "批次")])

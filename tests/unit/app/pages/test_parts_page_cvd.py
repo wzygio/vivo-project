@@ -10,6 +10,7 @@ from src.equipment_domain.application.parts_service import PartsReportService, P
 from src.shared_kernel.infrastructure import db_handler
 from src.equipment_domain import composition
 from src.equipment_domain.infrastructure.parts_alert_workbook import PartsAlertWorkbook
+from src.shared_kernel.config import ConfigLoader
 
 
 PAGE = Path(__file__).resolve().parents[4] / "app" / "pages" / "关键备件报表.py"
@@ -41,6 +42,11 @@ def test_parts_page_cvd_public_states(monkeypatch, tmp_path, mode):
     monkeypatch.setattr(page_header, "render_page_header", lambda *args, **kwargs: None)
     monkeypatch.setattr(composition, 'create_parts_alert_store',
                         lambda: PartsAlertWorkbook(tmp_path / 'parts_alerts.xlsx'))
+    original_path = ConfigLoader.get_domain_resource_path
+    monkeypatch.setattr(ConfigLoader, 'get_domain_resource_path',
+                        lambda domain, key, default=None: tmp_path / 'parts_alerts.xlsx'
+                        if (domain, key) == ('equipment_domain', 'parts_alerts')
+                        else original_path(domain, key, default))
 
     app = AppTest.from_file(str(PAGE)).run()
     assert not app.exception
@@ -49,7 +55,8 @@ def test_parts_page_cvd_public_states(monkeypatch, tmp_path, mode):
         assert not app.dataframe
     elif mode == "empty":
         assert '当前筛选条件下没有数据。' in [message.value for message in app.info]
-        assert '当前暂无备件监控数据。' in [message.value for message in app.info]
+        # A successful empty publication is ok, distinct from an uninitialized template.
+        assert '当前未发现使用进度超过 100% 的备件。' in [message.value for message in app.success]
         assert not app.dataframe
     else:
         assert "进度" not in app.dataframe[0].value
