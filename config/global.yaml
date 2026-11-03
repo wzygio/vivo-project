@@ -227,6 +227,7 @@ resources:
       qtime_alerts: resources/indicator_domain/qtime/qtime_alerts.xlsx
       qtime_spec: resources/indicator_domain/qtime/Q-Time规格表.xlsx
       ijp_alerts: resources/indicator_domain/ijp/ijp_alerts.xlsx
+      point_test_workbook: resources/indicator_domain/point_test/inline密集点测试数据.xlsx
   iqc_domain:
     dir: resources/iqc_domain
     files:

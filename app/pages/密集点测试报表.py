@@ -1,0 +1,24 @@
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).resolve().parents[2]
+for path in (project_root, project_root / "src"):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+import streamlit as st
+
+from app.components.page_header import render_page_header
+from app.sections.indicator_domain.point_test.dashboard import (
+    fetch_report_payload,
+    render_point_test_dashboard,
+)
+from app.utils.app_setup import AppSetup
+
+st.set_page_config(page_title="密集点测试报表", layout="wide", initial_sidebar_state="collapsed")
+AppSetup.initialize_app()
+render_page_header(
+    title="密集点测试报表", show_product_filter=False,
+    show_data_refresh=False, cached_funcs=[fetch_report_payload],
+)
+render_point_test_dashboard()

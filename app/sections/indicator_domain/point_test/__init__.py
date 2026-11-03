@@ -1,0 +1,1 @@
+"""Point-test report presentation."""

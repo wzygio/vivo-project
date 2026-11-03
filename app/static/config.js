@@ -20,6 +20,7 @@ const LINKS = {
     AOI_TT_REPORT: "http://10.72.26.31:8503/AOI_TT监控报表",
     IQC_INSPECTION_REPORT: "http://10.72.26.31:8503/IQC蒸镀材料报表",
     IQC_LIFETIME_REPORT: "http://10.72.26.31:8503/IQC寿命测试报表",
+    POINT_TEST_REPORT: "http://10.72.26.31:8503/密集点测试报表",
 
     // 3. FineReport
     SPC: "http://10.73.17.76:8080/webroot/decision/v10/entry/access/588faa78-b65f-4725-9ab3-a93b11896c4b?preview=true",
@@ -94,6 +95,7 @@ const APP_CONFIG = {
             children: [
                 { name: "IQC", url: LINKS.IQC },
                 { name: "IJP", url: LINKS.IJP_OVERFLOW },
+                { name: "密集点测试", url: LINKS.POINT_TEST_REPORT },
             ]
         },
         {
@@ -149,6 +151,7 @@ const APP_CONFIG = {
             subs: [ 
                 {l:'', v:'Q-time', url: LINKS.QTIME },          
                 {l:'', v:'IJP溢流', url: LINKS.IJP_OVERFLOW },          
+                {l:'', v:'密集点测试', url: LINKS.POINT_TEST_REPORT },
             ]
         },
         { 

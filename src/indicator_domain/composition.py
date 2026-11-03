@@ -1,10 +1,12 @@
 """Composition root for indicator-domain outbound adapters."""
 
 from datetime import date
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
+    from src.indicator_domain.application.point_test.service import PointTestReportService
 
 from src.indicator_domain.application.ijp.service import IjpReportService
 from src.indicator_domain.application.ijp.settings import IjpSettings
@@ -127,3 +129,14 @@ def build_ijp_alert_store() -> IjpAlertWorkbook:
     return IjpAlertWorkbook(ConfigLoader.get_domain_resource_path(
         'indicator_domain', 'ijp_alerts', 'ijp/ijp_alerts.xlsx',
     ))
+
+
+def build_point_test_service(path: str | Path | None = None) -> "PointTestReportService":
+    """File-only composition; a directly supplied path remains caller-owned."""
+    from src.indicator_domain.application.point_test.service import PointTestReportService
+    from src.indicator_domain.infrastructure.point_test.workbook import PointTestWorkbook
+
+    source_path = path if path is not None else ConfigLoader.get_domain_resource_path(
+        "indicator_domain", "point_test_workbook",
+    )
+    return PointTestReportService(PointTestWorkbook(source_path))

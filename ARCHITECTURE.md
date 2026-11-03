@@ -25,6 +25,7 @@ src
 |   |-- qtime
 |   |-- ijp
 |   |-- ijp_hole
+|   |-- point_test
 |   `-- shared
 |-- iqc_domain
 |   |-- eva_materials
@@ -51,6 +52,7 @@ src
 | `indicator_domain` | `qtime` | Q-Time monitoring with two internal use cases: station/Lot waiting time and evaporation-chamber residence time; each has its own source and calculation flow |
 | `indicator_domain` | `ijp` | IJP border-overflow analysis, Glass ratios, printer summaries and period summaries; owns shared previous-week IJP alert rules, the application-owned snapshot store port and its atomic Excel adapter for border/hole results |
 | `indicator_domain` | `ijp_hole` | IJP large-hole analysis with two-month/three-week count-weighted ratios and Core decoration; reuses `ijp` query/filter contracts, calendar periods and previous-week alert/snapshot contracts while retaining independent counting rules |
+| `indicator_domain` | `point_test` | Read-only dense-point workbook report, product-paired detail and three-stage position summaries; Application consumes a workbook port, Core parses the block layout, Infrastructure reads standard/enterprise-protected inputs through an isolated temporary copy. Presentation lives under Inline指标 and caches native payloads by configured path and file generation; no database or live date policies |
 | `indicator_domain` | `shared` | Infrastructure display-date exclusions shared by Q-Time station/chamber and IJP border/hole adapters; filters output copies and binds source-time SQL exclusions before aggregation |
 | `iqc_domain` | `eva_materials` | Evaporation incoming-material measurements, specifications, per-point decisions and overall material results; product eligibility uses material/cycle/product-request membership, including unwarehoused work orders, without multiplying inspection facts. Owns automatic previous-week IQC/COA NG selection, an application-owned alert store port and its atomic Excel snapshot adapter |
 | `iqc_domain` | `lifetime` | Lifetime-test measurement validation, group-local anonymous sample numbering, product/batch filtering and report projection; uses an independent M3 data source |
