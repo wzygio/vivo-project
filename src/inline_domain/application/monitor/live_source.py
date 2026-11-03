@@ -25,6 +25,7 @@ from src.inline_domain.core.monitor.monitor_param_classifier import (
     PARAM_CLASSIFICATION_SIGNATURE,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.inline_domain.core.spc.spc_point_decoration import SPC_POINT_DECORATION_SIGNATURE
 
 
 def monitor_date_window() -> tuple[str, str]:
@@ -58,7 +59,7 @@ class LiveMonitorSource:
         scopes = tuple(scopes)
         policy = ConfigLoader.get_inline_data_exclusion()
         point_policy = ConfigLoader.get_spc_point_decoration_policy() if "spc" in scopes else None
-        return f"live-v5-sequential-point-band:{PARAM_CLASSIFICATION_SIGNATURE}:{','.join(sorted(scopes))}:{self._signature_provider(products)}:{policy!r}:{point_policy!r}"
+        return f"live-v6-single-sided-point-band:{SPC_POINT_DECORATION_SIGNATURE}:{PARAM_CLASSIFICATION_SIGNATURE}:{','.join(sorted(scopes))}:{self._signature_provider(products)}:{policy!r}:{point_policy!r}"
 
     def read_payload(
         self, product: str, scope: str, start_date: str | None = None,

@@ -1,0 +1,113 @@
+{
+  "date": "2026-11-03",
+  "scope": "real Parquet with fixed native maintenance inputs; computation-only paired replay",
+  "all_five_outputs_equal": true,
+  "baseline": {
+    "mode": "baseline",
+    "window": {
+      "analysis_start_date": "2026-08-01",
+      "analysis_end_date": "2026-11-02"
+    },
+    "config_sha256": "6fc31ab15abeffbe0a2388af2cc976153a67816d2e3ada31cb8d199f1b710fdd",
+    "input_sha256": {
+      "yield_snapshot_M626_b8447adfe8c8.parquet": "9f24814bff9ebcbd0025064a0f12fd6774d75c332f82e833a2e0539e99e4d719"
+    },
+    "inputs_unchanged": true,
+    "counts": {
+      "raw": 3,
+      "projected_rows": 1258622,
+      "modifier_context": 3,
+      "create_code_level_mwd_trend_data": 4,
+      "array": 2,
+      "overrides": 3,
+      "calculate_lot_defect_rates": 2,
+      "calculate_sheet_defect_rates": 1,
+      "prepare_mapping_data": 1
+    },
+    "timings": {
+      "cold_report": 37.317108599992935,
+      "cold_details": 24.91673599999922,
+      "cold_total": 62.23384739999892,
+      "warm_report": 1.7998413000022992,
+      "warm_details": 0.07364179998694453,
+      "warm_total": 1.8734852000052342
+    },
+    "output_sha256": {
+      "cold": {
+        "group": "110a988d12f04233e4c0a602f3301f20c60b43597ddad16ec37931a4c132ce47",
+        "code": "eefcd36685496e231797353575fdf24d82785fcb912d4b73da2d11b1c62ae5cb",
+        "lot": "891e64b042223893d0c7d0e3b71950853ae2f2855423353afa94f833d615baa2",
+        "sheet": "d1a443428b6b5e52a3273ea54ef756ff7d8ff490b655d150effa61295c9a4fdd",
+        "mapping": "99e618c35feb50df3d03cdb72820edd71b1bd5235ea6c1d7565c52c934d4f946"
+      },
+      "warm": {
+        "group": "110a988d12f04233e4c0a602f3301f20c60b43597ddad16ec37931a4c132ce47",
+        "code": "eefcd36685496e231797353575fdf24d82785fcb912d4b73da2d11b1c62ae5cb",
+        "lot": "891e64b042223893d0c7d0e3b71950853ae2f2855423353afa94f833d615baa2",
+        "sheet": "d1a443428b6b5e52a3273ea54ef756ff7d8ff490b655d150effa61295c9a4fdd",
+        "mapping": "99e618c35feb50df3d03cdb72820edd71b1bd5235ea6c1d7565c52c934d4f946"
+      }
+    },
+    "maintenance_fixture": "first three sorted Codes at 0.001 for each month; other Codes raw targets, no Group override/hotspot scripts",
+    "limitations": [
+      "no SQL/Office/publication/browser or ledger-I/O cost",
+      "empty Array times, warning lines and override inputs",
+      "fixed native modifier context instead of enterprise workbooks",
+      "one cold/warm pair, uncontrolled host load"
+    ]
+  },
+  "optimized": {
+    "mode": "optimized",
+    "window": {
+      "analysis_start_date": "2026-08-01",
+      "analysis_end_date": "2026-11-02"
+    },
+    "config_sha256": "6fc31ab15abeffbe0a2388af2cc976153a67816d2e3ada31cb8d199f1b710fdd",
+    "input_sha256": {
+      "yield_snapshot_M626_b8447adfe8c8.parquet": "9f24814bff9ebcbd0025064a0f12fd6774d75c332f82e833a2e0539e99e4d719"
+    },
+    "inputs_unchanged": true,
+    "counts": {
+      "raw": 1,
+      "projected_rows": 1258622,
+      "modifier_context": 1,
+      "create_code_level_mwd_trend_data": 1,
+      "overrides": 1,
+      "calculate_lot_defect_rates": 1,
+      "calculate_sheet_defect_rates": 1,
+      "prepare_mapping_data": 1
+    },
+    "timings": {
+      "cold_report": 7.880040899995947,
+      "cold_details": 6.698532700000214,
+      "cold_total": 14.578577599997516,
+      "warm_report": 0.6103119000035804,
+      "warm_details": 0.0643489999929443,
+      "warm_total": 0.6746639000048162
+    },
+    "output_sha256": {
+      "cold": {
+        "group": "110a988d12f04233e4c0a602f3301f20c60b43597ddad16ec37931a4c132ce47",
+        "code": "eefcd36685496e231797353575fdf24d82785fcb912d4b73da2d11b1c62ae5cb",
+        "lot": "891e64b042223893d0c7d0e3b71950853ae2f2855423353afa94f833d615baa2",
+        "sheet": "d1a443428b6b5e52a3273ea54ef756ff7d8ff490b655d150effa61295c9a4fdd",
+        "mapping": "99e618c35feb50df3d03cdb72820edd71b1bd5235ea6c1d7565c52c934d4f946"
+      },
+      "warm": {
+        "group": "110a988d12f04233e4c0a602f3301f20c60b43597ddad16ec37931a4c132ce47",
+        "code": "eefcd36685496e231797353575fdf24d82785fcb912d4b73da2d11b1c62ae5cb",
+        "lot": "891e64b042223893d0c7d0e3b71950853ae2f2855423353afa94f833d615baa2",
+        "sheet": "d1a443428b6b5e52a3273ea54ef756ff7d8ff490b655d150effa61295c9a4fdd",
+        "mapping": "99e618c35feb50df3d03cdb72820edd71b1bd5235ea6c1d7565c52c934d4f946"
+      }
+    },
+    "maintenance_fixture": "first three sorted Codes at 0.001 for each month; other Codes raw targets, no Group override/hotspot scripts",
+    "limitations": [
+      "no SQL/Office/publication/browser or ledger-I/O cost",
+      "empty Array times, warning lines and override inputs",
+      "fixed native modifier context instead of enterprise workbooks",
+      "one cold/warm pair, uncontrolled host load"
+    ]
+  },
+  "cold_full_reduction_percent": 76.57451980062257
+}

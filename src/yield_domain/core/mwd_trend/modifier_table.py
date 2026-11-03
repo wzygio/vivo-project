@@ -170,6 +170,36 @@ def compute_current_month_losses(
     return losses
 
 
+def compute_monthly_losses(
+    panel_details_df: pd.DataFrame,
+    *, known_defects: dict[str, list[str]] | None = None,
+) -> dict[str, dict[str, pd.Series]]:
+    """Prepare all ledger month losses with one date parse and grouped scan.
+
+    Missing-input months remain absent; each existing month keeps the same
+    full-window defect catalog and distinct-Panel denominator as the single-
+    month function. This does not change any specified target or allocation.
+    """
+    from src.yield_domain.core.mwd_trend.data_preparation import month_keys
+
+    if panel_details_df.empty:
+        return {}
+    working = panel_details_df[['warehousing_time', 'panel_id', 'defect_group', 'defect_desc']].copy()
+    dates = pd.to_datetime(working['warehousing_time'], format='%Y%m%d', errors='coerce')
+    working['_month'] = month_keys(dates)
+    totals = working.groupby('_month')['panel_id'].nunique()
+    result = {month: {} for month in totals.index if totals[month] > 0}
+    for level, column in (('group', 'defect_group'), ('code', 'defect_desc')):
+        counts = working.groupby(['_month', column])['panel_id'].nunique()
+        catalog = pd.Index(panel_details_df[column].dropna().unique()).union(
+            pd.Index((known_defects or {}).get(level, [])).unique(), sort=False,
+        )
+        for month in result:
+            observed = counts.xs(month, level='_month') if month in counts.index.get_level_values('_month') else pd.Series(dtype='int64', name='panel_id')
+            result[month][level] = observed.reindex(catalog, fill_value=0) / totals[month]
+    return result
+
+
 def _parse_table_rates(table_df: pd.DataFrame) -> pd.DataFrame:
     """把 `当月良损`/`指定良损` 列解析为 float 列（_raw_loss/_specified_loss）。"""
     parsed = table_df.copy()

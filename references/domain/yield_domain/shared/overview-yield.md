@@ -2,7 +2,7 @@
 
 > **领域代码**: `yield_domain`  
 > **对应目录**: [`src/yield_domain/`](../../../../src/yield_domain/)  
-> **最后更新**: 2026-07-14
+> **最后更新**: 2026-11-03
 
 ---
 
@@ -10,7 +10,7 @@
 
 良率分析域（Yield Domain）是本系统的核心业务域之一，负责从 PostgreSQL 数据仓库抽取 Panel 级生产和量测数据，执行多级不良率模拟、Mapping 空间集中性分析、MWD 趋势聚合等计算，最终以热力图、趋势图、明细表等形式呈现。
 
-报表生成的 Lot 超规与月/周趋势报警还会分别发布为本地结果工作簿，自动预警矩阵和预计算仅读取这些结果。发布、有效性、失败语义与批量补齐入口见 [Yield 预警结果规则](rules-yield-alert-results.md)；不改变原始 L1 或详情图像链路。
+报表生成的 Lot 超规与周度趋势报警分别发布为本地结果工作簿，自动预警矩阵和预计算仅读取这些结果。当前暂禁用月度趋势预警，Lot 当期预警仅上一完整 ISO 周。发布与有效性见 [Yield 预警结果规则](rules-yield-alert-results.md)。最新的共享输入、缓存、Excel 读取、宏观先显示和按需详情见 [报表数据流](data-flow-yield-report.md)；原始 L1、数值分配与 Mapping 级联保持原职责。
 
 ---
 
@@ -29,7 +29,7 @@
 │               Core Domain Layer                   │
 │  sheet_lot_processor.py  (Lot→Sheet 不良率散布)    │
 │  mapping_processor.py    (Mapping 集中性分析)      │
-│  mwd_trend_processor.py  (月/周/日 EMA 聚合)       │
+│  mwd_trend_processor.py  (目标日度与月/周聚合)     │
 │  batch_statistics.py     (批次统计)                │
 │  abnormal_detector.py    (异常检测)               │
 │  defect_modifier.py      (缺陷倍数修饰)            │
@@ -54,8 +54,8 @@
 | `get_raw_panel_details` | 原始 Panel 数据（L1 快照 + L2 缓存） |
 | `get_modified_panel_details` | 修饰后 Panel 数据 |
 | `get_mwd_trend_data` | MWD 趋势数据 |
-| `get_sheet_defect_rate` | Sheet 级不良率 |
-| `get_lot_defect_rate` | Lot 级不良率 |
+| `get_sheet_defect_rates` | Sheet 级不良率（详情请求后加载） |
+| `get_lot_defect_rates` | Lot 级不良率 |
 | `get_mapping_data` | Mapping 集中性数据 |
 
 ### 3.2 [`dtos.py`](../../../../src/yield_domain/application/dtos.py)
@@ -109,14 +109,14 @@
 
 ### 4.3 [`mwd_trend_processor.py`](../../../../src/yield_domain/core/mwd_trend/mwd_trend_processor.py) — MWD 趋势
 
-**核心算法**：月/周/日 EMA 聚合
+**核心算法**：指定月度目标驱动日度整数生成，再聚合月／ISO 周
 
 - 支持 Code 级和 Group 级双轨趋势
 - Group 月度先由最终 Code 日度按 Group 聚合；修饰表仅以同一月份的
   `指定良损` 覆写该月结果（指定为 0 也生效）。当月未指定或缺少该月行时，
   保留日度聚合结果，不沿用历史指定良损，也不使用表中 `当月良损` 覆写。
   Group 指定值不改变日度和周度；Code 级的历史指定值回退规则保持不变。
-- 使用指数移动平均（EMA）进行趋势平滑
+- 使用相邻月中目标锚点插值和稳定扰动准备逐日权重，再按月度目标进行容量内整数分配；旧 EMA 链路不再消费。
 
 ### 4.4 其他核心模块
 
@@ -150,7 +150,7 @@ Panel 明细的蒸镀批次取数规则（2026-11-02）：
 
 `PanelRepository` 职责：
 - Parquet 格式本地快照缓存
-- 增量更新（2 天缓冲窗口）
+- 增量更新（回读天数来自全局 `application.incremental_refresh_days`，当前配置为 7 天）
 - 三防线容灾降级
 - 构造时接收 `YieldDataPolicy`
 - Work Order Type 仅在数据库查询边界应用

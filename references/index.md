@@ -8,7 +8,7 @@
 
 | 问题 / 关键词 | 首选文件 |
 |---|---|
-| Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/shared_kernel/shared/GLOSSARY.md) |
+| Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/GLOSSARY.md) |
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
 | Inline data_exclusion、厂别日期排除、去重与修饰之前过滤、快照与历史保留 | [Inline 日期排除规则](domain/inline_domain/shared/rules-inline-date-exclusion.md) |
@@ -35,6 +35,7 @@
 | Inline Sheet OOS、三态修饰、人工台账与执行机制 | [Sheet OOS 规则](domain/inline_domain/shared/rules-sheet-oos-decoration.md) |
 | Step_ID → Data_Type、SPC / CTQ / AOI 站点分类 | [站点类型映射](domain/inline_domain/shared/mapping-step-id-data-type.json) |
 | Yield 良率分析职责与分层 | [Yield 概览](domain/yield_domain/shared/overview-yield.md) |
+| Yield 报表数据流、共享输入版本、请求缓存、按需详情、覆盖表读取与暂停 Array 时间查询／排序 | [Yield 报表数据流](domain/yield_domain/shared/data-flow-yield-report.md) |
 | Yield Lot/趋势预警结果文件、原报表发布、空结果/失败元数据、矩阵直读与全产品补齐 | [Yield 预警结果规则](domain/yield_domain/shared/rules-yield-alert-results.md) |
 | Mapping 坐标、矩阵修饰、随机分布与守恒 | [Mapping 算法](domain/yield_domain/mapping/algorithm-mapping.md) |
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/mwd_trend/algorithm-mwd-trend.md) |

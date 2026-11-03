@@ -10,6 +10,7 @@ import pandas as pd
 
 OOS_DECORATION_FILE_NAME = "spc_sheet_oos_decoration.xlsx"
 OOS_KEY_COLUMNS = ["prod_code", "step_id", "param_name", "sheet_id"]
+SHEET_POINT_DECORATION_SIGNATURE = "sheet-point-v2-single-sided-span"
 OOS_DETAIL_COLUMNS = [
     "factory",
     "prod_code",
@@ -111,18 +112,32 @@ def _stable_fraction(parts: Iterable[object]) -> float:
     return int(digest[:12], 16) / float(0xFFFFFFFFFFFF)
 
 
+def specification_span(lower: object, upper: object) -> float:
+    """Return a positive finite span; one-sided limits use their distance from zero.
+
+    Missing limits remain missing: zero is a span reference, not a new boundary.
+    Reversed, zero-width or non-finite specifications have no usable span.
+    """
+    has_lower, has_upper = not pd.isna(lower), not pd.isna(upper)
+    if not has_lower and not has_upper:
+        return float("nan")
+    if (has_lower and not math.isfinite(float(lower))) or (has_upper and not math.isfinite(float(upper))):
+        return float("nan")
+    if has_lower and has_upper:
+        span = float(upper) - float(lower)
+    else:
+        span = abs(float(upper if has_upper else lower))
+    return span if math.isfinite(span) and span > 0 else float("nan")
+
+
 def _clip_inside_spec(row: pd.Series, side: str) -> float:
     value = row.get("param_value")
     usl = row.get("_oos_usl")
     lsl = row.get("_oos_lsl")
-    if (
-        pd.isna(value) or pd.isna(usl) or pd.isna(lsl)
-        or not math.isfinite(float(usl)) or not math.isfinite(float(lsl))
-        or float(usl) <= float(lsl)
-    ):
+    span = row.get("_oos_span", specification_span(lsl, usl))
+    if pd.isna(value) or pd.isna(span) or not math.isfinite(float(span)) or span <= 0:
         return value
 
-    span = float(usl) - float(lsl)
     fraction = _stable_fraction(
         [
             row.get("prod_code"),
@@ -177,12 +192,14 @@ def prepare_point_decoration(
 
 def clip_point_values_to_limits(
     points: pd.DataFrame, lower: pd.Series, upper: pd.Series,
-    *, eligible: pd.Series | None = None,
+    *, eligible: pd.Series | None = None, span: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Clip allowed points inside supplied limits, preserving original specs and flags."""
     df = points.copy()
     df["_oos_usl"] = upper
     df["_oos_lsl"] = lower
+    if span is not None:
+        df["_oos_span"] = span
     allowed = df["_decorate"]
     if eligible is not None:
         allowed = allowed & eligible
@@ -193,7 +210,7 @@ def clip_point_values_to_limits(
         active = mask & allowed
         if active.any():
             df.loc[active, "param_value"] = df.loc[active].apply(_clip_inside_spec, axis=1, side=side)
-    return df.drop(columns=["_oos_usl", "_oos_lsl"])
+    return df.drop(columns=["_oos_usl", "_oos_lsl", "_oos_span"], errors="ignore")
 
 
 def build_sheet_oos_detail(sheet_features_df: pd.DataFrame) -> pd.DataFrame:

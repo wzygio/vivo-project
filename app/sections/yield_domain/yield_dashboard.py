@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from app.components.indicator_cache import build_indicator_product_cache_signature
 from app.components.code_selector import DEFAULT_MONTHLY_RATE_THRESHOLD, build_batch_code_options_by_group
 from app.manager.render_gate import RenderGate
+from app.sections.yield_domain.resource_config import get_array_time_query_enabled
 
 # 引入现有的绘图函数
 from app.charts.yield_domain.mwd_chart import (
@@ -31,6 +32,11 @@ from yield_domain.core.mapping.mapping_processor import apply_hotspot_modificati
 # ==============================================================================
 #  1. 宏观分析区 (Group Level)
 # ==============================================================================
+@st.fragment
+def render_macro_trend_fragment(mwd_group_data: dict) -> None:
+    render_macro_trend_section(mwd_group_data)
+
+
 def render_macro_trend_section(
     mwd_group_data: dict,
     group_order: list | None = None,
@@ -209,7 +215,12 @@ def render_lot_distribution_section(lot_data: dict, curr_code: str, curr_warning
         st.markdown("**B. Lot集中性 (点击蓝色柱体可查看 Sheet 分布)**")
         
         lc1, lc2, lc3 = st.columns(3)
-        with lc1: l_sort = st.selectbox("排序:", ["按入库时间(默认)", "按阵列投入时间", "按不良率(降序)"], key="u_lot_sort")
+        sort_options = ["按入库时间(默认)", "按不良率(降序)"]
+        if get_array_time_query_enabled():
+            sort_options.insert(1, "按阵列投入时间")
+        if st.session_state.get('u_lot_sort') not in sort_options:
+            st.session_state.pop('u_lot_sort', None)
+        with lc1: l_sort = st.selectbox("排序:", sort_options, key="u_lot_sort")
         with lc2:
             l_months = sorted(df_lot_curr['month_str'].dropna().unique(), reverse=True)
             l_sel_m = st.selectbox("月别:", ["全部"] + l_months, key="u_lot_m")
@@ -300,12 +311,19 @@ def render_sheet_distribution_section(sheet_data: dict, target_lot: str, curr_gr
         df_sheet['warehousing_time'] = pd.to_datetime(df_sheet['warehousing_time'], format='%Y%m%d', errors='coerce')
         
         with sc2:
-            s_sort = st.selectbox("Sheet 排序规则:", ["默认(投入时间)", "按不良率(降序)"], key="u_sheet_sort")
+            default_sort = "默认(投入时间)" if get_array_time_query_enabled() else "默认(Sheet ID)"
+            options = [default_sort, "按不良率(降序)"]
+            if st.session_state.get('u_sheet_sort') not in options:
+                st.session_state.pop('u_sheet_sort', None)
+            s_sort = st.selectbox("Sheet 排序规则:", options, key="u_sheet_sort")
         
         if s_sort == "按不良率(降序)":
-            df_sheet = df_sheet.sort_values(['defect_rate', 'array_input_time'], ascending=[False, True])
-        else:
+            secondary = 'array_input_time' if get_array_time_query_enabled() else 'sheet_id'
+            df_sheet = df_sheet.sort_values(['defect_rate', secondary], ascending=[False, True])
+        elif get_array_time_query_enabled():
             df_sheet = df_sheet.sort_values('array_input_time')
+        else:
+            df_sheet = df_sheet.sort_values('sheet_id')
         
         fig_sheet = create_sheet_defect_chart(
             df=df_sheet, xaxis_label="Sheet ID", sorted_sheet_ids=df_sheet['sheet_id'].tolist()
@@ -577,13 +595,21 @@ def _prepare_compact_mapping_payload(
         return payload
 
     resolved_layout = resolve_mapping_layout(mapping_layout)
-    batches, matrices_cache, global_max, tab_labels = _prepare_mapping_matrices(
+    matrices_builder = _prepare_mapping_matrices
+    matrix_context = {}
+    if mapping_data.attrs.get('yield_chart_signature'):
+        from app.sections.yield_domain.chart_data import prepare_mapping_chart_matrices
+        matrices_builder = prepare_mapping_chart_matrices
+        matrix_context['data_signature'] = mapping_data.attrs['yield_chart_signature']
+    batches, matrices_cache, global_max, tab_labels = matrices_builder(
         mapping_data=mapping_data,
         curr_group=curr_group,
         curr_code=curr_code,
         hotspot_scripts=hotspot_scripts,
         product_code=product_code,
-        mapping_layout=resolved_layout,
+        mapping_layout={'row_labels': resolved_layout.row_labels,
+                        'column_labels': resolved_layout.column_labels} if matrix_context else resolved_layout,
+        **matrix_context,
     )
     if not batches:
         payload["status"] = "no_records"
@@ -665,6 +691,8 @@ def _render_compact_mapping_section(
 
 
 def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
+    if lot_data and '_chart_code_index' in lot_data:
+        return lot_data['_chart_code_index'].get(curr_code, pd.DataFrame()).copy()
     lot_details = lot_data.get("code_level_details", {}) if lot_data else {}
     if not lot_details:
         return pd.DataFrame()
@@ -680,6 +708,13 @@ def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
     df_lot_curr = df_lot_all[df_lot_all['defect_desc'] == curr_code].copy()
     if df_lot_curr.empty:
         return df_lot_curr
+
+    return normalize_lot_chart_rows(df_lot_curr).sort_values('warehousing_time')
+
+
+def normalize_lot_chart_rows(df_lot_curr: pd.DataFrame) -> pd.DataFrame:
+    """Native normalization once for the shared index, without changing code order."""
+    df_lot_curr = df_lot_curr.copy()
 
     df_lot_curr['warehousing_time'] = pd.to_datetime(
         df_lot_curr['warehousing_time'],
@@ -699,7 +734,7 @@ def _prepare_lot_code_dataframe(lot_data: dict, curr_code: str) -> pd.DataFrame:
 
     iso_s = df_lot_curr['warehousing_time'].dt.isocalendar()
     df_lot_curr['week_label'] = iso_s.year.astype(str) + '-W' + iso_s.week.map('{:02d}'.format)
-    return df_lot_curr.sort_values('warehousing_time')
+    return df_lot_curr
 
 
 def _prepare_compact_lot_figure(
@@ -815,7 +850,7 @@ def _prepare_sheet_chart_dataframe(
     else:
         df_sheet['array_input_time'] = pd.NaT
 
-    if 'array_input_time' in df_sheet.columns:
+    if get_array_time_query_enabled() and 'array_input_time' in df_sheet.columns:
         return df_sheet.sort_values('array_input_time')
     return df_sheet.sort_values('sheet_id')
 
@@ -1050,14 +1085,17 @@ def _render_compact_sheet_from_payload(payload: dict, target_lot: str) -> None:
 def _render_compact_payload(payload: dict) -> None:
     """[RenderGate 阶段2] 集中渲染：仅执行 st.* 调用，不做任何重计算。"""
     with st.expander(payload["label"], expanded=payload["expanded"]):
-        top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
-        with top_trend_col:
-            _render_compact_trend_entries(payload["trend_entries"], payload["key_fragment"])
-        with top_mapping_col:
-            _render_compact_mapping_payload(payload["mapping"])
+        render_compact_payload_contents(payload)
 
-        target_lot = _render_compact_lot_payload(payload["lot"], payload["key_fragment"])
-        _render_compact_sheet_from_payload(payload, target_lot)
+
+def render_compact_payload_contents(payload: dict) -> None:
+    top_trend_col, top_mapping_col = st.columns([1.35, 1.0])
+    with top_trend_col:
+        _render_compact_trend_entries(payload["trend_entries"], payload["key_fragment"])
+    with top_mapping_col:
+        _render_compact_mapping_payload(payload["mapping"])
+    target_lot = _render_compact_lot_payload(payload["lot"], payload["key_fragment"])
+    _render_compact_sheet_from_payload(payload, target_lot)
 
 
 def render_code_compact_expander(
@@ -1277,6 +1315,7 @@ def render_alert_code_expanders(
     chart_key_prefix: str = "yield_alert",
     data_signature: str = "",
     rate_threshold: float = DEFAULT_MONTHLY_RATE_THRESHOLD,
+    detail_loader=None,
 ) -> None:
     """渲染预警命中 Defect Code 的图像（趋势 + Mapping + Lot + Sheet），无需手动筛选。
 
@@ -1289,6 +1328,16 @@ def render_alert_code_expanders(
         trend_records, lot_oos_records, mwd_code_data, rate_threshold=rate_threshold,
     )
     if not hit_codes:
+        return
+
+    if detail_loader is not None:
+        from app.sections.yield_domain.lazy_details import render_lazy_alert_code_expanders
+        render_lazy_alert_code_expanders(
+            pairs=hit_codes, warning_lines=warning_lines or {}, mwd_code_data=mwd_code_data,
+            lot_data=lot_data, detail_loader=detail_loader, hotspot_scripts=hotspot_scripts,
+            product_code=product_code, mapping_layout=mapping_layout,
+            data_signature=data_signature, chart_key_prefix=chart_key_prefix,
+        )
         return
 
     gate = RenderGate()

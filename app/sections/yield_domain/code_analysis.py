@@ -20,6 +20,8 @@ def render_code_analysis_section(
     product_code: str,
     mapping_layout: dict | None = None,
     rate_threshold: float = DEFAULT_MONTHLY_RATE_THRESHOLD,
+    detail_loader=None,
+    data_signature: str = '',
 ) -> None:
     """Filter and render the payload supplied by the latest full dashboard run.
 
@@ -39,6 +41,17 @@ def render_code_analysis_section(
         return
     if not selection.get("should_render", False):
         st.info("当前筛选条件尚未查询。")
+        return
+
+    if detail_loader is not None:
+        from app.sections.yield_domain.lazy_details import render_lazy_code_groups
+        pairs = [(str(group), str(code)) for group in selected_groups for code in codes_by_group.get(group, [])]
+        render_lazy_code_groups(
+            pairs=pairs, warning_lines=warning_lines or {}, mwd_code_data=mwd_code_data,
+            lot_data=lot_data, detail_loader=detail_loader, hotspot_scripts=hotspot_scripts,
+            product_code=product_code, mapping_layout=mapping_layout,
+            data_signature=data_signature, key_prefix='yield_manual', first_expanded=True,
+        )
         return
 
     render_code_compact_expanders(

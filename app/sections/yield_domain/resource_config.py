@@ -28,6 +28,13 @@ def get_code_monthly_rate_threshold() -> float:
     return threshold
 
 
+def get_array_time_query_enabled() -> bool:
+    value = ConfigLoader.load_domain_config('yield_domain').get('array_input_time', {}).get('query_enabled', False)
+    if not isinstance(value, bool):
+        raise ValueError('Yield Array-time switch must be boolean')
+    return value
+
+
 def get_dashboard_resource_config(
     config: AppConfig, resource_revision: str
 ) -> AppConfig:

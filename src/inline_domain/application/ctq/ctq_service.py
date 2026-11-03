@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 import streamlit as st
+from src.inline_domain.core.shared.sheet_oos_decoration import SHEET_POINT_DECORATION_SIGNATURE
 
 from src.inline_domain.application.shared.decorated_features import (
     fetch_decorated_features,
@@ -123,6 +124,7 @@ class CtqReportService:
                 start_date=query_config.start_date,
                 end_date=query_config.end_date,
                 snapshot_signature=snapshot_signature,
+                point_decoration_signature=SHEET_POINT_DECORATION_SIGNATURE,
                 product_revision=product_revision,
                 decision_signature=decision_signature,
                 date_exclusion=date_exclusion,
@@ -171,7 +173,7 @@ class CtqReportService:
         payload = CtqReportService.fetch_ctq_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
-            snapshot_signature=snapshot_signature,
+            snapshot_signature=f"{SHEET_POINT_DECORATION_SIGNATURE}:{snapshot_signature}",
             product_revision=product_revision,
             decision_signature=decision_signature,
             date_exclusion=date_exclusion,

@@ -17,9 +17,9 @@
 
 ## 2. 生产规则与时机
 
-- Lot 复用 `core/sheet_lot/lot_alerts.compute_lot_oos_records`，使用报表已计算的 Lot 不良率与已读取警戒线。文件发布传入 `time_period=None`，保留所选期间内原 Lot 计算输出的全部超规；页面仍按数据最大入库日回看 30 天展示。原 `app.components.alert_center` 保留同名导入兼容。
-- 趋势使用 `AlertService.get_dashboard_alert_history`，逐月/逐周复用原 `AbnormalDetector.detect_system_trend_records` 判定，保存分析期间全部 monthly/weekly、group/code、周期、当前/前期值及命中规则。没有两个有效观察点时不虚构前期基线。`is_current` 由原 `get_dashboard_alert_records` 的最新逐序列判定生成，是程序计算的当前状态标记，不是人工决策字段。页面继续消费原最新预警；外部基准报表比较的文本报警不进入这份结果。
-- 聚合输出的 `monthly_full`、`weekly_full` 供历史发布使用，保留完整计算序列；`monthly`、`weekly` 继续保持原最近 3 个图表周期。月标签保留原 `%Y-%m月`，窗口解析兼容该业务标签，不改写展示格式。仅重发某类结果时，生产用例的 `kinds` 参数限制对应分支，其他结果文件不变。
+- Lot 复用 `core/sheet_lot/lot_alerts.compute_lot_oos_records`，使用报表已计算的 Lot 不良率与已读取警戒线。文件发布传入 `time_period=None`，保留所选期间内原 Lot 计算输出的全部超规；2026-11-02 起，页面、生产用例的当期返回及矩阵均只预警上一完整 ISO 周，即相对分析参考日的 `[上周一 00:00, 本周一 00:00)`。参考日通常为当前日；不能以数据最大入库日回溯或回退到更早有数据的周。当前周、上上周及未来日期不纳入当期 Lot 预警，跨年仍按周一至周日取完整七天。纯计算通过 `previous_week_as_of` 显式接收参考日；兼容的显式天数／全窗口查询保留，原 `app.components.alert_center` 保留同名导入兼容。
+- 2026-11-02 起暂时禁用月度趋势预警，系统文本预警、最新结构化记录及历史发布统一仅启用 `TREND_ALERT_SCOPES=("weekly",)`。趋势使用 `AlertService.get_dashboard_alert_history`，逐 ISO 周复用原 `AbnormalDetector.detect_system_trend_records` 判定，保存分析期间全部 weekly、group/code、周期、当前/前期值及命中规则。周度趋势继续沿用原最新逐序列判定，并不改为只检测上周；“仅上周”限制属于 Lot 超规。没有两个有效观察点时不虚构前期基线。`is_current` 由 `get_dashboard_alert_records` 生成，是程序计算的当前状态标记，不是人工决策字段。外部基准报表比较的文本报警不进入这份结果。
+- `monthly_full`、`weekly_full` 继续保留完整计算序列；历史趋势发布只消费 `weekly_full`。`monthly`、`weekly` 保持原最近 3 个图表周期，月度图表、修饰和图像月均门槛保持原业务口径。月标签保留原 `%Y-%m月`，兼容窗口解析不改写展示格式。仅重发某类结果时，生产用例的 `kinds` 参数限制对应分支，其他结果文件不变。
 - 入库分析页先生成并发布两类预警，之后才加载 Sheet/Mapping 与图像筛选设置。Lot 和趋势分别捕获失败，一种失败不阻止另一种发布；两者所需的原有计算缓存与资源手动刷新参数保持不变。
 - 发布在计算缓存外调用。计算命中内存但结果文件缺失时仍能落盘；指纹和记录内容相同则不重写，不延长旧来源的刷新时间。计算过程中配置版本变化时不发布为成功。
 - Lot发布新增`defect_group`和`factory`。原计算已有分组事实，按`global.yaml → data_source.defect_group_factory_mapping`确定厂别；配置由既有ConfigLoader验证并在composition中注入，纯计算不读取YAML。初始规则为三类Array→ARRAY、OLED_Mura→OLED、两类TP→TP；可在全局配置中调整，无需改代码。未知分组保留超规记录但不猜厂别。该映射位于既有Yield策略签名覆盖的data_source中，修改后需正常重新发布，不延长旧结果的有效期。
@@ -34,7 +34,7 @@
 
 旧的文件mtime策略签名不被读取器无条件接受。2026-10-27的修复核实全局配置仅新增AOI／Q-Time三个无关资源项，产品／Yield域配置均早于原发布；在其它有效性检查通过后，仅迁移既有Lot／趋势产品元数据，保留结果行、源刷新时间与原发布时间，并保存原签名、迁移原因和迁移时间。迁移前完整文件备份位于`output/tmp/published-alert-repair-20261027-145955/`。这不是重新分析或延长结果有效期；无法证明业务配置未变时应走正常生产重发。
 
-读取要求参考日一致，策略版本一致，来源为 fresh，发布时间和来源刷新时间均处于全局 TTL 内。源快照的无时区时间按服务器本地 `Asia/Shanghai` 解释，再与 UTC 比较；带时区时间保留其含义。重写结果不能让旧来源重新变 fresh。Lot 的扫描覆盖必须包含上一完整 ISO 周；趋势覆盖必须包含参考日。Lot 读取后筛选 `[上周一, 本周一)`；趋势文件保留全部历史记录，但矩阵只读取 `is_current=True` 的记录，历史预警不改变当前红绿灯。旧格式没有该列时按原“全部为最新结果”的契约读取。
+读取要求参考日一致，策略版本一致，来源为 fresh，发布时间和来源刷新时间均处于全局 TTL 内。源快照的无时区时间按服务器本地 `Asia/Shanghai` 解释，再与 UTC 比较；带时区时间保留其含义。重写结果不能让旧来源重新变 fresh。Lot 的扫描覆盖必须包含上一完整 ISO 周；趋势覆盖必须包含参考日。Lot 默认读取后筛选 `[上周一, 本周一)`，分析页不再传近 30 天参数；趋势读取先限定启用的 weekly 范围，再读取 `is_current=True` 的记录，历史预警不改变当前红绿灯。旧文件中的月度记录即使标记为当前也不返回；只读过滤不改写原工作簿，待正常发布替换本产品结果。旧格式没有 `is_current` 时按原“全部为最新结果”的契约读取，但仍只保留 weekly。结果选择缓存签名包含启用的趋势周期，防止复用禁用月度前的展示载荷。
 
 | 读取状态 | 含义 | 矩阵行为 |
 |---|---|---|
@@ -81,6 +81,8 @@ CLI 沿用页面配置装配、手动资源版本和原报表服务，不新增�
 警戒线 XLSX 由 `infrastructure/warning_workbook_reader.py` 读取：普通文件沿用 `header=None` 解析；`BadZipFile` 时走现有只读 COM，恢复首行后继续同一业务解析。不能因读取失败返回空规格；不改写维护文件。写入测试数据前必须把真实配置派生出的绝对路径重绑定到临时目录，并核实路径归属。
 
 ## 6. 验证入口
+
+2026-11-03 起，页面与 CLI 的生产用例在独立展示 revision 之外传入共享输入根版本，并结合实际来源健康绑定计算代次。同次生产局部复用原生中间结果；健康读取缓存小字典，不为取 attrs 反复反序列化整份 Panel。发布仍位于计算缓存之外，且先于任何用户请求的 Sheet／Mapping／图像。数据换代信号中止旧视图并触发一致的整页重跑，不写成普通生产失败。完整输入／缓存及详情数据流见 [报表数据流](data-flow-yield-report.md)。
 
 - `tests/unit/yield_domain/application/test_alert_results.py`：空结果、覆盖/日期/TTL、失败保留、原子写失败、损坏恢复。
 - `tests/unit/yield_domain/application/test_alert_publication.py`：既有判据、独立失败、空来源与无图像依赖。

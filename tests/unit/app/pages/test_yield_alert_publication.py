@@ -43,7 +43,9 @@ def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path)
         monkeypatch.setattr(analysis, name, lambda *args, **kwargs: {"weekly": pd.DataFrame()})
     monkeypatch.setattr(analysis, "get_lot_defect_rates", lambda *args, **kwargs: None)
     monkeypatch.setattr(analysis, "load_static_warning_lines", lambda *args, **kwargs: {})
+    sheet_calls = []
     def sheet_failure(*args, **kwargs):
+        sheet_calls.append(True)
         raise analysis_module.YieldDataLoadError("internal source failure")
     monkeypatch.setattr(analysis, "get_sheet_defect_rates", sheet_failure)
     page = Path(__file__).resolve().parents[4] / "app/pages/入库不良率分析看板.py"
@@ -54,8 +56,10 @@ def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path)
     assert publisher.read("M678", "lot", day).status in {"no_data", "uncovered"}
     assert publisher.read("M678", "trend", day).status == "no_data"
     assert app.error
+    assert not sheet_calls
+    assert any('Group Level' in item.value for item in app.subheader)
     assert [item.label for item in app.expander[:2]] == [
-        'Lot 超规预警中心（最近过货日向前30天）', '趋势预警中心（月／周）',
+        'Lot 超规预警中心（上周，ISO周）', '趋势预警中心（周度，ISO周）',
     ]
     assert all("internal source failure" not in item.value for item in app.error)
     versions = {path.name: path.stat().st_mtime_ns for path in tmp_path.glob("*.xlsx")}

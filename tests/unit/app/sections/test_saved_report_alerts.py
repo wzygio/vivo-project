@@ -108,7 +108,42 @@ def test_yield_saved_center_needs_neither_report_nor_chart_data(monkeypatch):
                         calls.append((row, product, reference, selection)) or saved(lot if row == 'yield_lot_oos' else trend))
     result = yield_alerts.render_saved_yield_alerts('P', date(2026, 10, 27))
     assert [call[0] for call in calls] == ['yield_lot_oos', 'yield_trend_fluctuation']
-    assert calls[0][3] == {'time_period': 30} and calls[1][3] == {}
+    assert calls[0][3] == {} and calls[1][3] == {}
     assert result['lot_records'][0]['超规 Lot ID'] == 'SAVED'
     assert 'is_current' not in ui.tables[1]
     assert ui.tables[1]['缺陷名称'].tolist() == ['C2']
+
+
+def test_yield_saved_center_selects_complete_previous_iso_week_across_year(monkeypatch, tmp_path):
+    from datetime import timedelta, timezone
+    from src.yield_domain import composition
+    from src.yield_domain.application.alert_results import YieldAlertResults
+    from src.yield_domain.infrastructure.alert_result_workbooks import YieldAlertWorkbookStore
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+
+    day = date(2027, 1, 4)
+    now = datetime(2027, 1, 4, 10, tzinfo=timezone(timedelta(hours=8)))
+    publisher = YieldAlertResults(
+        YieldAlertWorkbookStore({'lot': tmp_path / 'lots.xlsx', 'trend': tmp_path / 'trends.xlsx'}),
+        policy_signature=lambda product: 'fixture', ttl_seconds=43200, clock=lambda: now,
+    )
+    rows = [{'超规 Lot ID': identifier, '异常 Code': 'D1', '管控规格线': '1.00%',
+             '实际不良率': '2.00%', '不良panel数': 2, '入库时间': value,
+             '阵列投入时间': '2026/12/01'} for identifier, value in (
+                 ('older', '2026/12/27'), ('monday', '2026/12/28'),
+                 ('sunday', '2027/01/03'), ('current', '2027/01/04'))]
+    for kind, records in (('lot', rows), ('trend', [])):
+        publisher.publish('P', kind, records, reference_date=day,
+                          coverage_start='2026-12-01', coverage_end=str(day), has_data=True,
+                          health={'status': 'fresh', 'refreshed_at': now.isoformat()},
+                          calculation_signature='fixture')
+    path = tmp_path / 'lots.xlsx'
+    flags = pd.read_excel(path, sheet_name='P__flags').assign(flag=False)
+    assert replace_workbook_sheets(path, {'P__flags': flags}).written
+    monkeypatch.setattr(composition, 'build_yield_alert_results', lambda: publisher)
+    ui = UI()
+    monkeypatch.setattr(yield_alerts, 'st', ui)
+    output = yield_alerts.render_saved_yield_alerts('P', day)
+    assert [record['超规 Lot ID'] for record in output['lot_records']] == ['monday', 'sunday']
+    assert output['trend_records'] == []
+    assert ui.errors == ['检测到 2 条预警，请关注。']

@@ -83,3 +83,42 @@ def test_monitor_signature_includes_point_policy(monkeypatch):
     first = source.source_signature(["P"], iter(["spc"]))
     current[0] = (.4, "2026-10-05", "2026-10-10")
     assert source.source_signature(["P"], ["spc"]) != first
+
+
+def test_single_sided_rule_version_invalidates_spc_payload_and_shared_features(tmp_path, monkeypatch):
+    from src.inline_domain.application.spc import spc_service
+
+    write_inline_resource_config(tmp_path)
+    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
+    monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
+    monkeypatch.setattr(ConfigLoader, "get_spc_point_decoration_policy", lambda: (.5, "2026-10-05", "2026-10-11"))
+    calls = []
+
+    class Source:
+        def get_spc_measurements(self, _query):
+            calls.append(1)
+            return pd.DataFrame([
+                dict(prod_code="P", factory="OLED", step_id="2120A", param_name="SE_EV2_T1_UNI",
+                     sheet_id="S", site_name="P1", param_value=12., data_type="SPC",
+                     sheet_start_time=pd.Timestamp("2026-10-05")),
+            ])
+
+        def get_spc_spec_limits(self, _product):
+            return pd.DataFrame([dict(prod_code="P", step_id="2120A", param_name="SE_EV2_T1_UNI", usl=10., lsl=None)])
+
+    SpcReportService.fetch_spc_report_payload.clear()
+    fetch_decorated_features.clear()
+    kwargs = dict(_data_port=Source(), query_config_json=SpcQueryConfig(
+        prod_code="P", start_date="2026-10-01", end_date="2026-10-12",
+    ).model_dump_json(), snapshot_signature="unchanged-raw-snapshot")
+    try:
+        first = SpcReportService.get_spc_report_data(**kwargs)
+        assert 6.75 <= first.raw_measurements_df.param_value.iloc[0] <= 7.25
+        SpcReportService.get_spc_report_data(**kwargs)
+        assert len(calls) == 1
+        monkeypatch.setattr(spc_service, "SPC_POINT_DECORATION_SIGNATURE", "next-rule-version")
+        SpcReportService.get_spc_report_data(**kwargs)
+        assert len(calls) == 2
+    finally:
+        SpcReportService.fetch_spc_report_payload.clear()
+        fetch_decorated_features.clear()

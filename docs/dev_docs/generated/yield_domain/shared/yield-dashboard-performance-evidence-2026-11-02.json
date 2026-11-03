@@ -1,0 +1,437 @@
+{
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "scope": "offline diagnostic, not production page latency",
+  "sample": {
+    "product": "M626",
+    "streamlit": "1.60.0",
+    "snapshot": "data\\yield_domain\\yield\\yield_snapshot_M626_b8447adfe8c8.parquet",
+    "snapshot_bytes": 11243734,
+    "parquet_rows": 1258622,
+    "projected_rows": 1238235,
+    "unique_lots": 406,
+    "unique_sheets": 7565,
+    "codes": 60,
+    "window": {
+      "analysis_start_date": "2026-08-01",
+      "analysis_end_date": "2026-11-02"
+    }
+  },
+  "limitations": [
+    "no production SQL or Array time acquisition",
+    "empty Array times and rate overrides",
+    "read-only modifier synchronization",
+    "no alert workbook publication or browser rendering",
+    "single paired run; host contention not controlled",
+    "output digests are sample checks, not full multi-product equivalence tests"
+  ],
+  "effective_config_sha256": "61973b2b49f56bec01f3058ccd6aca58a9886d9e31039f03420aa31651a05a09",
+  "frozen_input_sha256": {
+    "output\\tmp\\yield_performance_20261102\\frozen_inputs\\yield_snapshot_M626_b8447adfe8c8.parquet": "9f24814bff9ebcbd0025064a0f12fd6774d75c332f82e833a2e0539e99e4d719",
+    "output\\tmp\\yield_performance_20261102\\frozen_inputs\\static_warning_lines.xlsx": "c2f2b0d0093fec28bf1b57c083b7fd27c9fef1e406aa4bffadca02a486ed98a5",
+    "output\\tmp\\yield_performance_20261102\\frozen_inputs\\rate_override_config.xlsx": "2773e513dcafd6136368b0a3f021000f816205251434c71c1b0df46f885b1088",
+    "output\\tmp\\yield_performance_20261102\\frozen_inputs\\yield_modifier_config.xlsx": "b705cafc3b5062313c9c06b4321c7457f5c6887d3c7893263db49b74928b297b",
+    "output\\tmp\\yield_performance_20261102\\frozen_inputs\\mapping.xlsx": "fe2308158fb6c7283717048a714cd5a124a85b261b9debf4c316f4d82140c550"
+  },
+  "results_equal": true,
+  "frozen_inputs_unchanged": true,
+  "result_digests": {
+    "cold": {
+      "group": "c62697d11a145e5c56242f1691a4dd99b85c1aaf7e1209eb2bf9d66fe89cc588",
+      "code": "3de1918ffdae5809e182bebd2c2cceb4ad9f146c4304445044db38aba185a0fa",
+      "lot": "324d37c9504e7eda4ef085e9a1e78a4cbfa59dc40eeb2de0895aaf25f6f2acfe",
+      "sheet": "6f26a89a66d1345f8aafe55f7125d8778b0fcca248b9fc53b60894c6635d4164",
+      "mapping": "df4bc604670015c5a9a4f7e5ddcd63722f506cc0e2236c77665c3a0942fd0030"
+    },
+    "warm": {
+      "group": "c62697d11a145e5c56242f1691a4dd99b85c1aaf7e1209eb2bf9d66fe89cc588",
+      "code": "3de1918ffdae5809e182bebd2c2cceb4ad9f146c4304445044db38aba185a0fa",
+      "lot": "324d37c9504e7eda4ef085e9a1e78a4cbfa59dc40eeb2de0895aaf25f6f2acfe",
+      "sheet": "6f26a89a66d1345f8aafe55f7125d8778b0fcca248b9fc53b60894c6635d4164",
+      "mapping": "df4bc604670015c5a9a4f7e5ddcd63722f506cc0e2236c77665c3a0942fd0030"
+    }
+  },
+  "current": {
+    "runs": {
+      "cold": 74.417975999997,
+      "warm": 2.081797099999676
+    },
+    "stages": {
+      "cold.health_trend": 3.1145622999974876,
+      "cold.group": 13.901709800004028,
+      "cold.code": 0.0017422000018996187,
+      "cold.health_lot": 7.695539100001042,
+      "cold.lot": 20.319287300000724,
+      "cold.health_sheet": 3.5539201000065077,
+      "cold.sheet": 22.262195899995277,
+      "cold.mapping": 3.1870977000071434,
+      "cold.trend_alert_history": 0.2961691000018618,
+      "cold.candidate_union": 0.08473859999503475,
+      "charts_0": 0.56961169999704,
+      "charts_1": 0.303947699998389,
+      "charts_2": 0.3027672000025632,
+      "warm.health_trend": 0.5134772000019439,
+      "warm.group": 0.0012420999992173165,
+      "warm.code": 0.0014797999974689446,
+      "warm.health_lot": 0.5715901999938069,
+      "warm.lot": 0.003268499996920582,
+      "warm.health_sheet": 0.6253524999992806,
+      "warm.sheet": 0.0245234000030905,
+      "warm.mapping": 0.007215599995106459,
+      "warm.trend_alert_history": 0.2775878000029479,
+      "warm.candidate_union": 0.05536660000507254
+    },
+    "internal": {
+      "cold.read_panel": {
+        "calls": 3,
+        "seconds": 11.224315399995248
+      },
+      "cold.sync_modifier_table": {
+        "calls": 3,
+        "seconds": 7.294948199996725
+      },
+      "cold.create_code_level_mwd_trend_data": {
+        "calls": 3,
+        "seconds": 25.99969670000428
+      },
+      "cold.create_mwd_trend_data": {
+        "calls": 1,
+        "seconds": 0.09487269999954151
+      },
+      "cold.read_array_times": {
+        "calls": 2,
+        "seconds": 0.0025425999992876314
+      },
+      "cold.read_warning_matrix": {
+        "calls": 2,
+        "seconds": 0.045296299998881295
+      },
+      "cold.read_rate_overrides": {
+        "calls": 3,
+        "seconds": 0.0061674000025959685
+      },
+      "cold.calculate_lot_defect_rates": {
+        "calls": 2,
+        "seconds": 7.104601200007892
+      },
+      "cold.calculate_sheet_defect_rates": {
+        "calls": 1,
+        "seconds": 3.3817966999995406
+      },
+      "cold.prepare_mapping_data": {
+        "calls": 1,
+        "seconds": 2.5730795999988914
+      }
+    },
+    "source_reads": 3,
+    "array_reads": 2,
+    "override_reads": 3
+  },
+  "shared_input_experiment": {
+    "runs": {
+      "cold": 29.435398599998734,
+      "warm": 2.05447070000082
+    },
+    "stages": {
+      "cold.health_trend": 3.3765653999944334,
+      "cold.group": 14.02522080000199,
+      "cold.code": 0.001560199998493772,
+      "cold.health_lot": 0.772531100003107,
+      "cold.lot": 3.20923450000555,
+      "cold.health_sheet": 0.605350499994529,
+      "cold.sheet": 3.9640756999942823,
+      "cold.mapping": 3.1008239000002504,
+      "cold.trend_alert_history": 0.3081698000023607,
+      "cold.candidate_union": 0.07092030000058003,
+      "charts_0": 0.4986101999966195,
+      "charts_1": 0.4079861999998684,
+      "charts_2": 0.2980720999985351,
+      "warm.health_trend": 0.5890606000029948,
+      "warm.group": 0.0022745000023860484,
+      "warm.code": 0.0021876000027987175,
+      "warm.health_lot": 0.532718799993745,
+      "warm.lot": 0.0026056999995489605,
+      "warm.health_sheet": 0.5649133999977494,
+      "warm.sheet": 0.02133309999771882,
+      "warm.mapping": 0.007162800000514835,
+      "warm.trend_alert_history": 0.2743367000002763,
+      "warm.candidate_union": 0.05713860000105342
+    },
+    "internal": {
+      "cold.read_panel": {
+        "calls": 1,
+        "seconds": 2.6706431999991764
+      },
+      "cold.sync_modifier_table": {
+        "calls": 1,
+        "seconds": 2.4056200999984867
+      },
+      "cold.create_code_level_mwd_trend_data": {
+        "calls": 1,
+        "seconds": 8.283300499999314
+      },
+      "cold.create_mwd_trend_data": {
+        "calls": 1,
+        "seconds": 0.09165829999983544
+      },
+      "cold.read_array_times": {
+        "calls": 1,
+        "seconds": 0.000636199998552911
+      },
+      "cold.read_warning_matrix": {
+        "calls": 1,
+        "seconds": 0.017021799998474307
+      },
+      "cold.read_rate_overrides": {
+        "calls": 2,
+        "seconds": 0.0019015000070794486
+      },
+      "cold.calculate_lot_defect_rates": {
+        "calls": 1,
+        "seconds": 2.4971985000011045
+      },
+      "cold.calculate_sheet_defect_rates": {
+        "calls": 1,
+        "seconds": 3.2653847000037786
+      },
+      "cold.prepare_mapping_data": {
+        "calls": 1,
+        "seconds": 2.535129299998516
+      }
+    },
+    "source_reads": 1,
+    "array_reads": 1,
+    "override_reads": 2
+  },
+  "cold_observed_reduction_percent": 60.445848997559516,
+  "month_key_microbenchmark": {
+    "rows": 1258622,
+    "timings": {
+      "strftime": {
+        "seconds": [
+          6.163842800000566,
+          6.123352499998873,
+          6.350728700002946
+        ],
+        "median": 6.163842800000566
+      },
+      "period_with_null_mask": {
+        "seconds": [
+          0.591501299997617,
+          0.6030997999987449,
+          0.6010507000028156
+        ],
+        "median": 0.6010507000028156
+      },
+      "unique_date_map": {
+        "seconds": [
+          0.10082300000067335,
+          0.082303299997875,
+          0.08830879999732133
+        ],
+        "median": 0.08830879999732133
+      }
+    },
+    "exact_equal": true
+  },
+  "separate_profile": {
+    "runs": {
+      "cold": 33.11821939999936,
+      "warm": 2.5739002999980585
+    },
+    "top_functions": [
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 391,
+        "function": "get_mwd_trend_data",
+        "calls": 1,
+        "self_s": 2.79e-05,
+        "cum_s": 13.733143400000001
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 455,
+        "function": "get_code_level_trend_data",
+        "calls": 1,
+        "self_s": 2.02e-05,
+        "cum_s": 12.385408600000002
+      },
+      {
+        "file": "src\\yield_domain\\core\\mwd_trend\\mwd_trend_processor.py",
+        "line": 96,
+        "function": "create_code_level_mwd_trend_data",
+        "calls": 1,
+        "self_s": 0.1242351,
+        "cum_s": 8.5479252
+      },
+      {
+        "file": "src\\yield_domain\\core\\mwd_trend\\data_preparation.py",
+        "line": 11,
+        "function": "prepare_code_raw_data",
+        "calls": 1,
+        "self_s": 0.0742489,
+        "cum_s": 7.937068600000001
+      },
+      {
+        "file": "src\\yield_domain\\core\\mwd_trend\\data_preparation.py",
+        "line": 67,
+        "function": "_compute_code_raw_monthly_targets",
+        "calls": 1,
+        "self_s": 0.0351328,
+        "cum_s": 7.1051975
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 583,
+        "function": "get_sheet_defect_rates",
+        "calls": 1,
+        "self_s": 4.5100000000000005e-05,
+        "cum_s": 6.2606639
+      },
+      {
+        "file": "src\\yield_domain\\core\\sheet_lot\\sheet_lot_processor.py",
+        "line": 60,
+        "function": "calculate_sheet_defect_rates",
+        "calls": 1,
+        "self_s": 0.0062379,
+        "cum_s": 5.7342899
+      },
+      {
+        "file": "~",
+        "line": 0,
+        "function": "<built-in method _pickle.loads>",
+        "calls": 23,
+        "self_s": 5.5678437,
+        "cum_s": 5.5816396
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 198,
+        "function": "get_data_health",
+        "calls": 6,
+        "self_s": 9.71e-05,
+        "cum_s": 5.1993711000000005
+      },
+      {
+        "file": "src\\yield_domain\\core\\sheet_lot\\simulation.py",
+        "line": 28,
+        "function": "_distribute_sheet_from_lot",
+        "calls": 1,
+        "self_s": 0.235746,
+        "cum_s": 4.3241034
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 653,
+        "function": "get_mapping_data",
+        "calls": 1,
+        "self_s": 1.81e-05,
+        "cum_s": 4.3172173
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 511,
+        "function": "get_lot_defect_rates",
+        "calls": 1,
+        "self_s": 5.84e-05,
+        "cum_s": 3.9553916000000005
+      },
+      {
+        "file": "src\\yield_domain\\core\\mapping\\mapping_processor.py",
+        "line": 72,
+        "function": "prepare_mapping_data",
+        "calls": 1,
+        "self_s": 0.0412029,
+        "cum_s": 3.7683852000000004
+      },
+      {
+        "file": "src\\yield_domain\\core\\sheet_lot\\sheet_lot_processor.py",
+        "line": 163,
+        "function": "calculate_lot_defect_rates",
+        "calls": 1,
+        "self_s": 0.0360788,
+        "cum_s": 3.2848182
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 351,
+        "function": "get_modifier_context",
+        "calls": 1,
+        "self_s": 3.35e-05,
+        "cum_s": 3.1927939000000003
+      },
+      {
+        "file": "app\\sections\\yield_domain\\yield_dashboard.py",
+        "line": 961,
+        "function": "_build_compact_render_payload",
+        "calls": 3,
+        "self_s": 0.0004488,
+        "cum_s": 2.8283155
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 305,
+        "function": "_build_modifier_context",
+        "calls": 1,
+        "self_s": 0.0001116,
+        "cum_s": 2.7067742000000004
+      },
+      {
+        "file": "src\\yield_domain\\application\\modifier_table_service.py",
+        "line": 29,
+        "function": "sync_modifier_table",
+        "calls": 1,
+        "self_s": 0.0199569,
+        "cum_s": 2.3837127000000002
+      },
+      {
+        "file": "src\\yield_domain\\application\\yield_service.py",
+        "line": 165,
+        "function": "get_raw_panel_details",
+        "calls": 1,
+        "self_s": 1.76e-05,
+        "cum_s": 2.2384792
+      },
+      {
+        "file": "src\\yield_domain\\core\\mapping\\mapping_processor.py",
+        "line": 167,
+        "function": "_modify_panel_position",
+        "calls": 29008,
+        "self_s": 0.1236822,
+        "cum_s": 2.129004
+      },
+      {
+        "file": "src\\yield_domain\\core\\mapping\\panel_position.py",
+        "line": 14,
+        "function": "get_deterministically_modified_panel_id",
+        "calls": 29008,
+        "self_s": 0.562546,
+        "cum_s": 1.563577
+      },
+      {
+        "file": "src\\yield_domain\\application\\alert_service.py",
+        "line": 11,
+        "function": "get_dashboard_alert_history",
+        "calls": 2,
+        "self_s": 0.0078186,
+        "cum_s": 1.4849688
+      },
+      {
+        "file": "src\\yield_domain\\core\\abnormal_detector.py",
+        "line": 100,
+        "function": "detect_system_trend_records",
+        "calls": 44,
+        "self_s": 0.029880100000000003,
+        "cum_s": 1.4654002000000002
+      },
+      {
+        "file": "app\\sections\\yield_domain\\yield_dashboard.py",
+        "line": 552,
+        "function": "_prepare_compact_mapping_payload",
+        "calls": 3,
+        "self_s": 0.0004903,
+        "cum_s": 1.3372493
+      }
+    ]
+  }
+}

@@ -9,18 +9,23 @@ YIELD_DASHBOARD_PATH = (
 
 def test_yield_dashboard_keys_cache_by_window_and_manual_resource_revision() -> None:
     source = YIELD_DASHBOARD_PATH.read_text(encoding="utf-8")
+    details = (PROJECT_ROOT / 'app/sections/yield_domain/lazy_details.py').read_text(encoding='utf-8')
 
     assert "build_indicator_product_cache_signature(" in source
     assert "lot_signature=lot_cache_signature" in source
     assert "trend_signature=product_cache_signature" in source
-    assert "snapshot_signature=sheet_cache_signature" in source
-    assert "analysis_start_date=" in source
-    assert "analysis_end_date=" in source
-    assert "modifier_signature=" in source
-    assert "warning_signature=" in source
-    assert "rate_override_signature=" in source
-    assert "resource_revision=YIELD_DASHBOARD_CACHE_SIGNATURE" in source
-    assert "get_dashboard_resource_config(active_config, product_cache_signature)" in source
+    assert "source_signature=source_signature" in source
+    assert "snapshot_signature': source_signature" in details
+    assert "analysis_start_date=" in details
+    assert "analysis_end_date=" in details
+    assert "'modifier_signature':" in details
+    assert "warning_signature=" in details
+    assert "rate_override_signature=" in details
+    assert "resource_revision=source_signature" in source
+    assert "get_dashboard_resource_config(active_config, source_signature)" in source
+    assert 'YIELD_SOURCE_INDICATOR' in source
+    assert 'get_sheet_defect_rates(' not in source
+    assert 'get_mapping_data(' not in source
     assert "ExcelService.inject_mapping_config_to_config(active_config)" not in source
 
 

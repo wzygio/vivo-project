@@ -93,7 +93,12 @@ def _spy_fetch(recorded: list[tuple[str, str]]):
         decision_signature: str = "",
         date_exclusion=None,
         spc_point_policy=None,
+        point_decoration_signature="",
     ) -> dict:
+        assert point_decoration_signature == (
+            monitor_service.SPC_POINT_DECORATION_SIGNATURE if scope == "spc"
+            else monitor_service.SHEET_POINT_DECORATION_SIGNATURE if scope == "ctq" else ""
+        )
         recorded.append((prod_code, scope))
         measurements_df = _features_source.get_spc_measurements(None)
         spec_df = _features_source.get_spc_spec_limits(prod_code)
@@ -179,7 +184,12 @@ def test_dashboard_threads_product_revision_and_per_scope_decision_signature(
         decision_signature: str = "",
         date_exclusion=None,
         spc_point_policy=None,
+        point_decoration_signature="",
     ) -> dict:
+        assert point_decoration_signature == (
+            monitor_service.SPC_POINT_DECORATION_SIGNATURE if scope == "spc"
+            else monitor_service.SHEET_POINT_DECORATION_SIGNATURE if scope == "ctq" else ""
+        )
         recorded.append((prod_code, scope, product_revision, decision_signature))
         measurements_df = _features_source.get_spc_measurements(None)
         spec_df = _features_source.get_spc_spec_limits(prod_code)

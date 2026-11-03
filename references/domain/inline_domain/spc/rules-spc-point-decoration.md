@@ -1,6 +1,6 @@
 # SPC 超规片与点位修饰规则
 
-核验日期：2026-10-26。本文负责 SPC 超规片判定、人工修饰决策、传统与专用点位修饰，以及它们与预警过滤的关系；能力公式由 [Cpk/Cpm 计算规则](rules-spc-cpk&cpm.md) 维护，页面预警筛选由 [SPC 数据流](data-flow-spc.md#54-组装全产品能力与单片预警) 维护。
+核验日期：2026-11-03。本文负责 SPC 超规片判定、人工修饰决策、传统与专用点位修饰，以及它们与预警过滤的关系；能力公式由 [Cpk/Cpm 计算规则](rules-spc-cpk&cpm.md) 维护，页面预警筛选由 [SPC 数据流](data-flow-spc.md#54-组装全产品能力与单片预警) 维护。
 
 ## 1. 配置与执行顺序
 
@@ -23,7 +23,7 @@ spc:
 原始点位 → 传统 OOS 修饰 → SPC 专用中央区间修饰 → 重算 Sheet 特征 → CPK/CPM
 ```
 
-第一阶段在全部允许参与报表的日期内，仅将越过原 USL/LSL 的点移入原规格区间。第二阶段以第一阶段的输出为输入，只对配置日期内、仍位于中央区间之外的点进一步修饰；中央区间始终由原 USL/LSL 派生。窗口外或专用规则关闭时只执行第一阶段。两个阶段均尊重 False/旧 Delete，不删点，不回写源快照。
+第一阶段在全部允许参与报表的日期内，仅将越过原 USL/LSL 的点移入已有规格限内。第二阶段以第一阶段的输出为输入，只对配置日期内、仍越过目标限的点进一步修饰；双边规格使用中央区间，单边规格按第 2 节向规格内收缩已有的一侧。窗口外或专用规则关闭时只执行第一阶段。两个阶段均尊重 False/旧 Delete，不删点，不回写源快照。
 
 ### 1.1 超规片判定与明细
 
@@ -35,7 +35,7 @@ spc:
 | 仅 `sheet_min < lsl` | `LSL` |
 | 两者同时成立 | `USL/LSL` |
 
-`sheet_mean` 不作为单片 OOS 的判定条件。比较不能成立的缺失规格侧不触发对应超规；但“可判定单侧超规”不代表“可执行修饰”，自动改值仍须满足第2节的有效双边规格条件。
+`sheet_mean` 不作为单片 OOS 的判定条件。缺失规格侧不触发对应超规。2026-11-03 起，单边规格也可参与修饰，但仍须满足第 2 节的有限、正跨度条件；缺失侧不会被补成实际规格线。
 
 超规明细保留修饰前的 `sheet_max`、`sheet_min`、`sheet_mean`、规格和超规类型，并附上修饰决策。点位修饰完成后另行重算报表 Sheet 特征，不将异常明细改成修饰后的正常值。因此，明细仍记载超规与图表点位已修饰可以同时成立。
 
@@ -55,7 +55,7 @@ SPC 使用布尔决策：`True` 允许自动修饰，`False` 保留原值；无�
 
 ## 2. 修饰区间与动作
 
-令 `span = USL - LSL`、`midpoint = (USL + LSL) / 2`、`r = central_fraction`，有效目标区间为：
+双边规格令 `span = USL - LSL`、`midpoint = (USL + LSL) / 2`、`r = central_fraction`，有效目标区间为：
 
 ```text
 lower = midpoint - span × r / 2
@@ -72,14 +72,30 @@ upper = midpoint + span × r / 2
 | 窗口外或新规则关闭 | 只保留第一阶段传统修饰的输出。 |
 | `flag=False` 或 SPC 旧 `Delete` | 保留原值，优先于新旧自动修饰。 |
 | `flag=True`、空值或无匹配决策 | 允许修饰。 |
-| 缺少有限双边规格，或 USL≤LSL | 保留原点位。 |
+| 没有有限正跨度（含双方缺失、单边零限、反向或相等双边限） | 保留原点位。 |
+
+### 单边规格的跨度与方向
+
+仅有 USL 时，`span = abs(USL - 0)`；仅有 LSL 时，`span = abs(LSL - 0)`。正规格限下即为该限减 0，负规格限取到零的距离，确保跨度为正。零仅用于计算跨度，不能成为缺失侧的实际边界。共享 Sheet OOS 与 SPC 传统阶段均使用该跨度，只修饰越过已有规格侧的点。
+
+专用阶段沿用双边区间每侧的收缩量 `inset = span × (1-r) / 2`，但仅收缩实际存在的规格侧：
+
+| 原规格 | 专用目标限 | 专用 margin 的跨度 |
+|---|---|---|
+| 只有 USL | `upper = USL - inset`，不设置 lower | `span × r` |
+| 只有 LSL | `lower = LSL + inset`，不设置 upper | `span × r` |
+| 双边 USL/LSL | 上述中央区间 | `span × r` |
+
+例如 `r=0.5`：仅 USL=10 时，传统超上限点落入 8.5～9.5，专用阶段上侧目标为 7.5、margin 为 0.25～0.75，上侧修饰结果为 6.75～7.25；低值不会因为缺少 LSL 而被推高。仅 LSL=10 时，传统超下限点落入 10.5～11.5，专用下侧目标为 12.5，修饰结果为 12.75～13.25；高值不会被新增上限压低。原 USL/LSL 列保持原值或缺失。
+
+此规则适用于所有走该共享修饰链路的单边参数，`2120A` 无独立豁免。双边规格跨度必须为正；单边规格限为 0、双方均缺失、含无穷限或反向双边规格时没有可用正跨度，保留原点位。
 
 ### margin 的计算
 
 每个阶段独立计算 margin，跨度和哈希种子取该阶段的目标区间及输入测量值：
 
 ```text
-span = 当前阶段的目标上限 − 当前阶段的目标下限
+span = 双边时为当前阶段目标上限 − 目标下限；单边时传统阶段为原规格到零的距离，专用阶段为该距离 × r
 seed = prod_code | step_id | param_name | sheet_id | site_name | unit_id | 输入测量值 | side
 digest = SHA256(seed 的 UTF-8 编码)
 h = int(digest 前12位十六进制字符, 16) / 0xFFFFFFFFFFFF
@@ -90,7 +106,7 @@ margin = (0.05 + h × 0.10) × span
 
 `seed` 各字段按代码的字符串表示以 `|` 拼接，缺失值用空字符串；`side` 为 `upper` 或 `lower`。`h` 在 `[0,1]` 内，因此 margin 为当前目标跨度的5%～15%，相同输入重复计算和打乱行顺序后结果一致。
 
-第一阶段使用原规格跨度 `USL−LSL` 和原始点位值；第二阶段使用中央区间跨度 `upper−lower` 和**第一阶段输出值**。若第一阶段改值，第二阶段的哈希也随之改变。margin 不取决于超规距离、标准差或 CPK/CPM；5%～15%的系数目前固定在代码中，未开放配置。
+第一阶段使用原规格跨度（单边为规格到零的距离）和原始点位值；第二阶段使用原跨度乘 `r` 和**第一阶段输出值**。若第一阶段改值，第二阶段的哈希也随之改变。margin 不取决于超规距离、标准差或 CPK/CPM；5%～15%的系数目前固定在代码中，未开放配置。
 
 例如原规格 `[2,10]`：传统 margin 为0.4～1.2，上侧输出8.8～9.6、下侧输出2.4～3.2。中央50%为 `[4,8]`：专用 margin 为0.2～0.6，上侧输出7.4～7.8、下侧输出4.2～4.6。因此原值11先进入8.8～9.6，再以这一结果作为输入进入7.4～7.8；原值9在传统阶段保持9，只在专用阶段修饰。不改时间和原规格限，也不强制覆盖人工 False。
 
@@ -100,17 +116,17 @@ margin = (0.05 + h × 0.10) × span
 
 `apply_spc_point_decoration()` 返回完整修饰点位；`prepare_decorated_data()` 对同一批点位重算 `sheet_mean`、`sheet_max`、`sheet_min`。SPC 的 Sheet 特征时间窗仍为上周一至查询截止日，历史修饰点位保留用于分布图。
 
-`SpcReportService` 使用这批修饰后特征及对应点位计算上一完整 ISO 周的 CPK/CPM。当前配置下 μ 来自重算后的 Sheet 均值等权平均，σ 来自修饰点位样本标准差；不再次按 OOS/OOC 分类筛点。能力豁免和后续能力台账替换继续执行，公式不改变，也不保证修饰后必然达标。
+`SpcReportService` 使用这批修饰后特征及对应点位计算上一完整 ISO 周的 CPK/CPM。当前配置下 μ 来自重算后的 Sheet 均值等权平均，σ 来自修饰点位样本标准差；不再次按 OOS/OOC 分类筛点。能力豁免和后续能力台账替换继续执行，公式不改变，也不保证修饰后必然达标。单边点位允许修饰不改变 CPK/CPM 既有的双边规格准入条件。
 
 ## 4. 分层与缓存
 
 ConfigLoader 解析为 `(central_fraction, start_date, resolved_end_date)` 的原生元组；Application 传给纯 Core 规则。该元组进入 SPC 报表、共享特征、Monitor SPC 计算及实时监控来源签名，避免比例、日期或 `today` 变化后复用旧数据。
 
-规则入口：[core/spc/spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py) 拥有 `SpcPointDecorationPolicy`、`apply_spc_point_decoration()` 和专用中央区间阶段，明确先执行传统截回再执行专用规则。`core/shared/sheet_oos_decoration.py` 只提供通用点位规格与决策关联、布尔规范化和稳定截回能力，不包含 SPC 日期或中央区间规则。
+规则入口：[core/spc/spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py) 拥有 `SpcPointDecorationPolicy`、`apply_spc_point_decoration()` 和专用中央区间阶段，明确先执行传统截回再执行专用规则。`core/shared/sheet_oos_decoration.py` 提供通用点位规格与决策关联、布尔规范化、双边/单边跨度和稳定截回能力，不包含 SPC 日期或中央区间规则。共享和 SPC 点位规则版本进入报表、共享特征与 Monitor 来源缓存签名；更新规则触发派生结果重算，不要求改写原始测量快照。
 
 Application 入口仍为 `application/shared/sheet_oos_decoration_service.py`、`application/shared/decorated_data.py`、`application/spc/spc_service.py`，SPC/Monitor 共用同一规则入口；`core/spc/spc_calculator.py` 继续只计算传入的最终修饰样本，不读取修饰配置。
 
-验证入口：`test_spc_point_band.py` 覆盖传统输出作为专用 margin 哈希输入的执行顺序、中央区间、日期首尾、False/旧 Delete、无效/缺失规格、100%目标保留传统输出、稳定性、源数据不变，以及 Sheet 特征与 CPK/CPM 使用相同点位；`test_spc_point_policy_cache.py` 覆盖比例和日期变化穿透两级报表缓存及 Monitor 来源签名。
+验证入口：`test_spc_point_band.py` 覆盖传统输出作为专用 margin 哈希输入的执行顺序、中央区间、日期首尾、False/旧 Delete、无效规格、单边缺列、100%目标保留传统输出、稳定性、源数据不变，以及 Sheet 特征与 CPK/CPM 使用相同点位；`test_spc_single_sided_decoration.py` 覆盖 `2120A` 的共享与 SPC 两阶段修饰、USL/LSL 单边方向、负规格限、零跨度、人工决策、无匹配规格及特征重算；`test_spc_point_policy_cache.py` 覆盖比例、日期和规则版本变化穿透两级报表缓存及 Monitor 来源签名。
 
 ## 5. 修饰、能力豁免与预警过滤的边界
 

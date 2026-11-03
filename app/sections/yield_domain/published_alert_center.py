@@ -18,11 +18,10 @@ def render_saved_yield_alerts(product: str, reference_date: date) -> dict[str, l
     """Use the same published-result reader as matrix state and details."""
     output: dict[str, list[dict]] = {'lot_records': [], 'trend_records': []}
     for kind, row, title in (
-        ('lot', 'yield_lot_oos', 'Lot 超规预警中心（最近过货日向前30天）'),
-        ('trend', 'yield_trend_fluctuation', '趋势预警中心（月／周）'),
+        ('lot', 'yield_lot_oos', 'Lot 超规预警中心（周度，ISO周）'),
+        ('trend', 'yield_trend_fluctuation', '趋势预警中心（周度，ISO周）'),
     ):
-        selection = {'time_period': 30} if kind == 'lot' else {}
-        result = read_alert_result(row, product, reference_date, **selection)
+        result = read_alert_result(row, product, reference_date)
         records = result['records']
         with st.expander(title, expanded=result['state'] in {'alert', 'error'}):
             if result['state'] == 'error':

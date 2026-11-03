@@ -1,0 +1,19 @@
+# Progress
+
+## 2026-11-03
+- Read repository instructions, current constraints and authorized performance proposal.
+- Selected ECC/Streamlit guidance and persistent task-local planning; did not change another task's active-plan pointer.
+- Initial worktree captured with git status; no application edits for this task yet.
+- Added request-local memo with concurrency/isolation tests, native override caching and small health cache, shared source revision seam, Array opt-in switch, month-key preparation fast path, ordinary XLSX override parsing with read-only COM fallback.
+- First new month/override tests failed as expected (2 red), then passed (10 tests). Service regression found one mock-compatible call issue: avoid passing `_data_port=None` to positional-only test seam; fixed while retaining explicit-port isolation. No production I/O executed.
+- One apply_patch attempt contained an unmatched unrelated import context and was rejected atomically; reapplied precise per-file edits.
+- Shared pipeline call-count test exposed omitted-vs-explicit default parameter key fragmentation; normalize bound defaults for underlying caches and targeted clear as well as request memo. Reuse/read-mode/disabled Array/small-health tests pass.
+- Batched monthly ledger losses exactly match existing single-month function; modifier/MWD/wiring suite 67 passed.
+- Added macro-first page, dynamic per-Code detail expanders and automatic fragment, native Lot index/Mapping matrix caches, dedicated report-source revision and CLI use. Existing chart/page/Code tests 32 passed before targeted new UI tests.
+- Per ECC review instructions used read-only cache/code and security review agents. Fixed formula and COM safety findings; 52 override/modifier tests passed. Adding real-source generation binding and expiry tests to avoid stale figure reuse.
+- Added raw-return generation validation, current-query metadata invalidation and full-page rerun on mismatch, actual native report data digest, product-scoped detail selections, native matrix cache/layout tests and real AppTest expander callback coverage. 52 app/cache/page targets passed after wiring test update.
+- Enterprise workbook hash check failed during exploratory replay. Inspected via fr_file_decryption: encrypted 00-header files; final benchmark excludes workbook I/O, pins native target fixtures, and denies DB/COM. Paired outputs match in all five business dimensions, including cold/warm; unchanged Parquet/config/window confirmed. Evidence JSON written under generated/yield_domain/shared.
+- Final consolidated suite using verify.py: 439 passed, 88 existing warnings, 67.59s pytest / 68.96s wrapper, exit 0. Includes original Yield smoke targets, new app/domain tests, COM mocks, matrix consumers, cross-process published-file integration and architecture boundary. No server/port created.
+- Both review agents completed final read-only follow-ups without blockers. Drafted new owning data-flow document and updated MWD/Sheet-Lot/Mapping/alerts, overview/router/architecture, and plain-language P2 explanations; checking links and final diff now.
+- Final documentation link check found one pre-existing stale glossary link in the touched knowledge router; actual glossary remains references/domain/GLOSSARY.md. Updated only the route, preserving that file and all user instructions. No service process/port was created; diagnostic/verification scripts exited. Unrelated evolving Inline workbook edits were preserved.
+- Final result: 140 local links across 9 owning/report documents resolve; git diff --check passes (line-ending notices only). All five implementation items, disabled Array query/sort, domain documentation and detailed P2 explanation are complete. Latest evidence is yield-dashboard-performance-evidence-2026-11-03.json. No production database queries or formal-service restarts were performed.

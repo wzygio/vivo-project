@@ -8,12 +8,15 @@ import pandas as pd
 
 from src.inline_domain.core.shared.decoration_window import decoration_window_mask
 from src.inline_domain.core.shared.sheet_oos_decoration import (
+    SHEET_POINT_DECORATION_SIGNATURE,
     clip_point_values_to_limits,
     normalize_boolean_decisions as normalize_spc_decisions,
     prepare_point_decoration,
+    specification_span,
 )
 
 SpcPointDecorationPolicy = tuple[float, str, str]
+SPC_POINT_DECORATION_SIGNATURE = f"{SHEET_POINT_DECORATION_SIGNATURE}:spc-point-v2-single-sided-span"
 
 
 def _apply_spc_special_decoration(
@@ -26,10 +29,13 @@ def _apply_spc_special_decoration(
     active = decoration_window_mask(points["sheet_start_time"], (start_date, end_date))
     limits = points.reindex(columns=["usl", "lsl"]).apply(pd.to_numeric, errors="coerce")
     upper, lower = limits["usl"], limits["lsl"]
-    midpoint = (upper + lower) / 2
-    half_span = (upper - lower) * fraction / 2
+    spans = pd.Series(
+        [specification_span(lo, hi) for lo, hi in zip(lower, upper)], index=points.index,
+        dtype=float,
+    )
+    inset = spans * (1 - fraction) / 2
     return clip_point_values_to_limits(
-        points, midpoint - half_span, midpoint + half_span, eligible=active,
+        points, lower + inset, upper - inset, eligible=active, span=spans * fraction,
     )
 
 

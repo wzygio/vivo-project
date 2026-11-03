@@ -1,4 +1,6 @@
 """Lot attribution uses the business group already present in calculated facts."""
+from datetime import date, timedelta
+
 import pandas as pd
 import pytest
 
@@ -42,3 +44,25 @@ def test_older_fact_frame_uses_its_existing_group_key_without_mutating_input():
                                         factory_mapping={'OLED_Mura': 'OLED'})
     assert records[0]['defect_group'] == 'OLED_Mura' and records[0]['factory'] == 'OLED'
     assert 'defect_group' not in rows
+
+
+@pytest.mark.parametrize('reference', [date(2026, 11, 2), date(2026, 11, 8), date(2027, 1, 4)])
+def test_previous_iso_week_uses_reference_calendar_not_latest_lot(reference):
+    monday = reference - timedelta(days=reference.weekday())
+    start = monday - timedelta(days=7)
+    dates = [start - timedelta(days=1), start, monday - timedelta(days=1), monday,
+             monday + timedelta(days=1)]
+    rows = pd.DataFrame({'lot_id': ['older', 'monday', 'sunday', 'current', 'future'],
+                         'defect_desc': 'D1', 'defect_rate': .02,
+                         'warehousing_time': [value.strftime('%Y%m%d') for value in dates]})
+    records, count = compute_lot_oos_records(
+        {'code_level_details': {'G': rows}}, {'D1': {'upper': .01}},
+        previous_week_as_of=reference,
+    )
+    assert count == 2
+    assert [record['超规 Lot ID'] for record in records] == ['monday', 'sunday']
+    old_only = rows.iloc[:1]
+    assert compute_lot_oos_records(
+        {'code_level_details': {'G': old_only}}, {'D1': {'upper': .01}},
+        previous_week_as_of=reference,
+    ) == ([], 0)

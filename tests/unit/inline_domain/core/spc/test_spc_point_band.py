@@ -77,7 +77,7 @@ def test_manual_preservation_has_priority_over_band(flag):
     assert result.param_value.tolist() == [3., 11.]
 
 
-@pytest.mark.parametrize("lower,upper", [(None, 10.), (2., None), (10., 2.), (2., float("inf"))])
+@pytest.mark.parametrize("lower,upper", [(None, None), (10., 2.), (2., 2.), (2., float("inf"))])
 def test_invalid_double_sided_spec_does_not_change_values(lower, upper):
     source = points([3., 11.])
     result = apply_spc_point_decoration(source, specs(lower, upper), pd.DataFrame(), point_policy=POLICY)
@@ -85,10 +85,16 @@ def test_invalid_double_sided_spec_does_not_change_values(lower, upper):
 
 
 @pytest.mark.parametrize("missing", ["usl", "lsl"])
-def test_missing_spec_column_preserves_points_in_both_stages(missing):
+def test_missing_spec_column_uses_remaining_limit_in_both_stages(missing):
     source = points([1., 11.])
     result = apply_spc_point_decoration(source, specs().drop(columns=missing), pd.DataFrame(), point_policy=POLICY)
-    assert result.param_value.tolist() == [1., 11.]
+    if missing == "usl":
+        assert 2.55 <= result.param_value.iloc[0] <= 2.65
+        assert result.param_value.iloc[1] == 11.
+    else:
+        assert result.param_value.iloc[0] == 1.
+        assert 6.75 <= result.param_value.iloc[1] <= 7.25
+    assert missing not in result.columns
 
 
 def test_full_width_special_band_keeps_traditional_output():

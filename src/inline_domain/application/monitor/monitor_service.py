@@ -19,7 +19,8 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.monitor.ports import MonitorSpcRepositoryFactory
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
-from src.inline_domain.core.spc.spc_point_decoration import SpcPointDecorationPolicy
+from src.inline_domain.core.shared.sheet_oos_decoration import SHEET_POINT_DECORATION_SIGNATURE
+from src.inline_domain.core.spc.spc_point_decoration import SPC_POINT_DECORATION_SIGNATURE, SpcPointDecorationPolicy
 from src.inline_domain.application.shared.decorated_features import (
     InMemoryFeaturesSource,
     fetch_decorated_features,
@@ -117,6 +118,10 @@ class MonitorAnalysisService:
                 decision_signature=(decision_signatures or {}).get(scope, ""),
                 date_exclusion=date_exclusion,
                 spc_point_policy=resolved_point_policy,
+                point_decoration_signature=(
+                    SPC_POINT_DECORATION_SIGNATURE if scope == "spc"
+                    else SHEET_POINT_DECORATION_SIGNATURE if scope == "ctq" else ""
+                ),
             )
             features = features_payload["sheet_features_df"]
             if not features.empty:
@@ -516,7 +521,7 @@ class MonitorAnalysisService:
             time_type,
             force_compliant,
             data_type_filter,
-            snapshot_signature,
+            f"{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}",
             product_revisions,
             decision_signatures,
             date_exclusion=ConfigLoader.get_inline_data_exclusion(),

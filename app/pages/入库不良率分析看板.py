@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import logging
+from functools import partial
 
 # ==============================================================================
 #  配置与初始化
@@ -10,13 +11,7 @@ import logging
 from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
 
-from yield_domain.application.yield_service import (
-    YieldAnalysisService,
-    YieldDataLoadError,
-    YieldDataModificationError,
-    YieldWarningLinesReadError,
-)
-from src.yield_domain.infrastructure.rate_override_repository import RateOverrideReadError
+from yield_domain.application.yield_service import YieldAnalysisService
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 # 引入图表组件
@@ -33,11 +28,16 @@ from app.charts.yield_domain.mwd_chart import (
 )
 # [新增引入区块渲染组件]
 from app.sections.yield_domain.yield_dashboard import (
-    render_macro_trend_section,
+    render_macro_trend_fragment as render_macro_trend_section,
     render_alert_code_expanders,
 )
 from app.sections.yield_domain.resource_config import get_dashboard_resource_config, get_code_monthly_rate_threshold
-from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE
+from app.sections.yield_domain.group_trend_data import (
+    YIELD_SNAPSHOT_SIGNATURE_BASE, YIELD_SOURCE_INDICATOR, build_yield_source_signature,
+)
+from app.sections.yield_domain.lazy_details import load_report_details
+from app.sections.yield_domain.chart_data import build_chart_data_signature
+from src.yield_domain.application.report_cache import YieldSourceGenerationChanged
 from app.sections.yield_domain.code_analysis import render_code_analysis_section
 from app.sections.yield_domain.published_alert_center import render_saved_yield_alerts
 
@@ -49,6 +49,7 @@ YIELD_DASHBOARD_CACHE_SIGNATURE = YIELD_SNAPSHOT_SIGNATURE_BASE
 # [Refactor] 2. 获取上下文 (配置 & 路径)
 active_config = SessionManager.get_active_config()
 product_dir = SessionManager.get_product_dir()
+source_signature = build_yield_source_signature(active_config.data_source.product_code)
 product_cache_signature = build_indicator_product_cache_signature(
     YIELD_DASHBOARD_CACHE_SIGNATURE,
     active_config.data_source.product_code,
@@ -81,7 +82,7 @@ render_page_header(
     cached_funcs=funcs_to_clear,
     refresh_handlers=refresh_handlers,
     product_cache_scope=active_config.data_source.product_code,
-    product_cache_indicators=("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos"),
+    product_cache_indicators=("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos", YIELD_SOURCE_INDICATOR),
 )
 
 # [Refactor] 4. 渲染 Yield 配置文件上传组件
@@ -89,12 +90,12 @@ query_params = st.query_params
 if query_params.get("admin") == "true":
     render_yield_config_uploader(active_config, product_dir)
 try:
-    active_config = get_dashboard_resource_config(active_config, product_cache_signature)
+    active_config = get_dashboard_resource_config(active_config, source_signature)
     # Resource edits follow the original explicit-refresh policy.
     yield_cache_context = YieldAnalysisService.build_cache_context(
         active_config,
         product_dir,
-        resource_revision=YIELD_DASHBOARD_CACHE_SIGNATURE,
+        resource_revision=source_signature,
     )
 except Exception:
     logging.exception("Yield report inputs could not be prepared")
@@ -117,7 +118,10 @@ try:
             trend_signature=product_cache_signature,
             lot_signature=lot_cache_signature,
             db_manager=db_manager,
+            source_signature=source_signature,
         )
+except YieldSourceGenerationChanged:
+    st.rerun()
 except Exception:
     logging.exception("Yield alert results could not be updated")
     render_saved_yield_alerts(active_config.data_source.product_code, pd.Timestamp.today().date())
@@ -150,94 +154,57 @@ except (ValueError, TypeError, AttributeError):
     st.error("图像筛选设置不可用，请检查报表设置后重试。")
     st.stop()
 
-try:
-    health = YieldAnalysisService.get_data_health(
-        active_config, _db_manager=db_manager, snapshot_signature=sheet_cache_signature,
-        analysis_start_date=yield_cache_context["analysis_start_date"],
-        analysis_end_date=yield_cache_context["analysis_end_date"],
-    )
-    if health not in displayed_health:
-        render_yield_data_health(health)
-        displayed_health.append(health)
-    with st.spinner("正在加载全维度分析数据..."):
-        sheet_data = YieldAnalysisService.get_sheet_defect_rates(
-            active_config,
-            product_dir,
-            _db_manager=db_manager,
-            snapshot_signature=sheet_cache_signature,
-            analysis_start_date=yield_cache_context["analysis_start_date"],
-            analysis_end_date=yield_cache_context["analysis_end_date"],
-            modifier_signature=yield_cache_context["modifier_signature"],
-            warning_signature=yield_cache_context["warning_signature"],
-            rate_override_signature=yield_cache_context["rate_override_signature"],
-        )
-        mapping_data = YieldAnalysisService.get_mapping_data(
-            active_config,
-            _db_manager=db_manager,
-            snapshot_signature=product_cache_signature,
-            product_dir=product_dir,
-            analysis_start_date=yield_cache_context["analysis_start_date"],
-            analysis_end_date=yield_cache_context["analysis_end_date"],
-            modifier_signature=yield_cache_context["modifier_signature"],
-        )
-except (
-    YieldDataLoadError,
-    YieldDataModificationError,
-    YieldWarningLinesReadError,
-    RateOverrideReadError,
-):
-    st.error("Yield 报表配置或资源读取失败，请检查相关文件后点击页头“刷新缓存”重试。")
-    st.stop()
-
-# 基础校验
-if not all([mwd_group_data, mwd_code_data, lot_data, sheet_data]):
+# 宏观图与结构化预警不依赖 Sheet／Mapping 是否可加载。
+if not mwd_group_data or not mwd_code_data:
     st.info("该产品暂无足够数据进行分析，请检查数据源或稍后再试。")
     st.stop()
 
-# ==============================================================================
-#  🚨 智能预警中心 (Intelligent Alert Center)
-# ==============================================================================
-with st.spinner("正在准备预警指标图像..."):
-    # Published alert keys select images; images never determine alert status.
-    oos_records = saved_alerts['lot_records']
-    alert_records = saved_alerts['trend_records']
-    render_alert_code_expanders(
-        trend_records=alert_records,
-        lot_oos_records=oos_records,
-        warning_lines=warning_lines,
-        mwd_code_data=mwd_code_data,
-        lot_data=lot_data,
-        sheet_data=sheet_data,
-        mapping_data=mapping_data,
-        hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
-        product_code=active_config.data_source.product_code,
-        mapping_layout=active_config.processing.get('mapping_layout'),
-        data_signature=repr(sorted(yield_cache_context.items())),
-        rate_threshold=code_rate_threshold,
-    )
-
-# ==============================================================================
-#  第一部分: 宏观监控 (Group级趋势)
-# ==============================================================================
 st.subheader("1️⃣ 入库不良率分析 (Group Level)")
 render_macro_trend_section(mwd_group_data)
 
-st.divider()
+# 仅在用户请求缺陷详情时调用；保存同版配置与输入，不重新生成预警。
+report_generation = alert_generation.get('source_signature') or source_signature
+detail_loader = partial(
+    load_report_details, active_config, product_dir, source_signature=report_generation,
+    cache_context=yield_cache_context, db_manager=db_manager,
+    expected_health=alert_generation['health'].get('trend'),
+)
+data_signature = build_chart_data_signature(
+    report_generation, product_cache_signature, lot_cache_signature, sheet_cache_signature,
+    yield_cache_context, mwd_group_data, mwd_code_data, lot_data,
+)
 
-# ==============================================================================
-#  第二部分: 独立交互区（筛选与详细图表只触发 fragment rerun）
-# ==============================================================================
-# 候选池仅在整页加载时准备；筛选操作复用同一份全维度结果。
-master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, mapping_data)
+render_alert_code_expanders(
+    trend_records=saved_alerts['trend_records'],
+    lot_oos_records=saved_alerts['lot_records'],
+    warning_lines=warning_lines,
+    mwd_code_data=mwd_code_data,
+    lot_data=lot_data,
+    sheet_data=None,
+    mapping_data=None,
+    hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
+    product_code=active_config.data_source.product_code,
+    mapping_layout=active_config.processing.get('mapping_layout'),
+    data_signature=data_signature,
+    rate_threshold=code_rate_threshold,
+    detail_loader=detail_loader,
+)
+
+st.divider()
+# 月均门槛要求 Code 必须有月度趋势；Mapping 独有的候选不满足此门槛，
+# 因此先以趋势／Lot 建立相同的可选 Code 集，无需为筛选加载 Mapping。
+master_df = prepare_union_data_for_filter(mwd_code_data, lot_data, None)
 render_code_analysis_section(
     master_df,
     rate_threshold=code_rate_threshold,
     warning_lines=warning_lines,
     mwd_code_data=mwd_code_data,
     lot_data=lot_data,
-    sheet_data=sheet_data,
-    mapping_data=mapping_data,
+    sheet_data=None,
+    mapping_data=None,
     hotspot_scripts=active_config.processing.get('mapping_hotspot_script', []),
     product_code=active_config.data_source.product_code,
     mapping_layout=active_config.processing.get('mapping_layout'),
+    detail_loader=detail_loader,
+    data_signature=data_signature,
 )

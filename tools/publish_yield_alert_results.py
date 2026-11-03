@@ -20,7 +20,7 @@ for import_path in (ROOT, ROOT / "src"):
 def publish_product(product: str, *, analysis_start_date: str = "", analysis_end_date: str = "",
                     kinds: tuple[str, ...] = ("trend", "lot")) -> dict:
     from app.components.indicator_cache import build_indicator_product_cache_signature
-    from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE
+    from app.sections.yield_domain.group_trend_data import YIELD_SNAPSHOT_SIGNATURE_BASE, build_yield_source_signature
     from app.sections.yield_domain.resource_config import get_dashboard_resource_config
     from src.shared_kernel.config import ConfigLoader
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -32,10 +32,11 @@ def publish_product(product: str, *, analysis_start_date: str = "", analysis_end
         YIELD_SNAPSHOT_SIGNATURE_BASE, product, ("yield_trend_fluctuation",))
     lot_signature = build_indicator_product_cache_signature(
         YIELD_SNAPSHOT_SIGNATURE_BASE, product, ("yield_lot_oos",))
-    config = get_dashboard_resource_config(ConfigLoader.load_config(product), trend_signature)
+    source_signature = build_yield_source_signature(product)
+    config = get_dashboard_resource_config(ConfigLoader.load_config(product), source_signature)
     product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / product
     context = YieldAnalysisService.build_cache_context(
-        config, product_dir, resource_revision=YIELD_SNAPSHOT_SIGNATURE_BASE)
+        config, product_dir, resource_revision=source_signature)
     if analysis_start_date or analysis_end_date:
         YieldAnalysisService.resolve_analysis_window(analysis_start_date, analysis_end_date)
         # August's month-over-month alarm needs July as a baseline. Publication
@@ -48,7 +49,8 @@ def publish_product(product: str, *, analysis_start_date: str = "", analysis_end
     result = generate_yield_alert_publications(
         analysis=YieldAnalysisService, publisher=publisher, config=config,
         product_dir=product_dir, cache_context=context, trend_signature=trend_signature,
-        lot_signature=lot_signature, db_manager=DatabaseManager(), kinds=kinds, **publication_window)
+        lot_signature=lot_signature, source_signature=source_signature,
+        db_manager=DatabaseManager(), kinds=kinds, **publication_window)
     states = {kind: publisher.read(product, kind, date.fromisoformat(context["analysis_end_date"])).status
               for kind in kinds}
     failed_kinds = (set(result["errors"]) | set(result["publication_errors"])

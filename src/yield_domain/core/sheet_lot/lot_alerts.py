@@ -1,13 +1,15 @@
 """Shared Lot OOS selection for report publication and presentation."""
 import pandas as pd
 from collections.abc import Mapping
+from datetime import date
 
 
 def compute_lot_oos_records(
     lot_data: dict | None, warning_lines: dict, time_period: int | None = 30,
     *, factory_mapping: Mapping[str, str] | None = None,
+    previous_week_as_of: date | None = None,
 ) -> tuple[list[dict], int]:
-    """扫描 Lot 超规记录。纯计算，无渲染。"""
+    """扫描超规；传入参考日时仅选上一完整 ISO 周，否则沿用显式天数／全窗口。"""
     total_recent_lots = 0
     oos_records = []
 
@@ -27,9 +29,16 @@ def compute_lot_oos_records(
             max_date = combined_df["warehousing_time"].max()
 
             if pd.notna(max_date):
-                threshold_date = (max_date - pd.Timedelta(days=time_period)
-                                  if time_period is not None else combined_df["warehousing_time"].min())
-                recent_df = combined_df[combined_df["warehousing_time"] >= threshold_date].copy()
+                if previous_week_as_of is not None:
+                    monday = pd.Timestamp(previous_week_as_of).normalize()
+                    monday -= pd.Timedelta(days=monday.weekday())
+                    start = monday - pd.Timedelta(days=7)
+                    selected = combined_df["warehousing_time"].ge(start) & combined_df["warehousing_time"].lt(monday)
+                else:
+                    threshold_date = (max_date - pd.Timedelta(days=time_period)
+                                      if time_period is not None else combined_df["warehousing_time"].min())
+                    selected = combined_df["warehousing_time"].ge(threshold_date)
+                recent_df = combined_df.loc[selected].copy()
                 total_recent_lots = recent_df["lot_id"].nunique()
 
                 for _, row in recent_df.iterrows():

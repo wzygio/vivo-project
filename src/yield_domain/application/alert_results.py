@@ -13,6 +13,7 @@ LOT_ATTRIBUTION_COLUMNS = ["defect_group", "factory"]
 TREND_COLUMNS = ["level", "defect_group", "defect_desc", "time_period", "curr_rate", "prev_rate", "rules", "period_scope"]
 RESULT_COLUMNS = {"lot": LOT_COLUMNS, "trend": TREND_COLUMNS}
 RESULT_SCHEMA_VERSION = 1
+TREND_ALERT_SCOPES = ("weekly",)
 LOT_RELEASE_KEYS = ["超规 Lot ID", "异常 Code", "入库时间"]
 LOT_RELEASE_COLUMNS = [*LOT_RELEASE_KEYS, "flag"]
 
@@ -220,6 +221,8 @@ class YieldAlertResults:
                 raise ValueError("Invalid published Lot event date")
             frame = frame.loc[(times >= pd.Timestamp(required_start))
                               & (times < pd.Timestamp(required_end) + pd.Timedelta(days=1))].reset_index(drop=True)
+        if kind == "trend":
+            frame = frame.loc[frame["period_scope"].isin(TREND_ALERT_SCOPES)].reset_index(drop=True)
         if kind == "trend" and "is_current" in frame:
             if not frame["is_current"].isin([True, False]).all():
                 raise ValueError("Invalid published current trend marker")
@@ -244,4 +247,5 @@ class YieldAlertResults:
         result = self.read(product, kind, reference_date, **selection)
         return _digest({"file": self.store.source_signature(kind), "status": result.status,
                         "policy": self.policy_signature(product), "as_of": str(reference_date),
+                        "trend_scopes": TREND_ALERT_SCOPES if kind == "trend" else (),
                         "selection": selection})

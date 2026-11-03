@@ -1,4 +1,8 @@
 # Yield business policy; maintained resource locations are in global.yaml.
+array_input_time:
+  # 暂停数据库查询和阵列时间排序；保留实现，后续按需显式启用。
+  query_enabled: false
+
 dashboard:
   # 月均不良率图像门槛，两处共用：手动 Code 筛选、自动预警缺陷图像。
   # 使用小数比例：0.0001 = 0.01%；自动图像还必须命中预警。

@@ -194,6 +194,16 @@ class ConfigLoader:
 
         # 4. 深度合并 (Global < Product)
         merged_conf = cls._deep_merge(global_conf, product_conf)
+        # Yield's optional Array-time query has one domain-owned opt-in switch.
+        yield_policy = cls.load_domain_config("yield_domain").get("array_input_time", {})
+        query_enabled = yield_policy.get("query_enabled", False)
+        if not isinstance(query_enabled, bool):
+            raise ValueError("yield_domain.array_input_time.query_enabled must be boolean")
+        processing = dict(merged_conf.get("processing", {}))
+        array_time = dict(processing.get("array_input_time", {}))
+        array_time["query_enabled"] = query_enabled
+        processing["array_input_time"] = array_time
+        merged_conf["processing"] = processing
         # Resource locations are global; product configuration owns sheet selection.
         if cls._global_resource_config("yield_domain", global_conf) is not None:
             paths = dict(merged_conf.get("paths", {}))

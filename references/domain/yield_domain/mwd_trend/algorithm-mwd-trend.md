@@ -124,3 +124,11 @@ Mapping 入口再次应用同一倍率边界；非有限值或无法解析的倍
 - `mapping/mapping_processor.py`：应用 Code 月度倍率后继续既有级联逻辑；
 - `application/yield_service.py`：通过 `get_modifier_context` 共享修饰表同步、两级目标和
   Mapping 倍率缓存。
+
+## 七、2026-11-03 准备阶段优化
+
+Code 原始月度良损仍按 `nunique(panel_id)` 计算。`data_preparation.month_keys` 只对唯一日期格式化月份，再映射回明细行；全量投入分母和不良分子复用同一个月份键，不在每个分支重复逐行格式化。跨月／跨年、重复缺陷、合成 ID 及无投入月份的回退规则保持。
+
+修饰表同步使用 `compute_monthly_losses` 批量计算窗口中各月 Group／Code 原始良损，代替每月重新解析和扫描全部 Panel。结果与既有 `compute_current_month_losses` 的单月结果逐值一致；后者保留兼容用途。两级维护 Sheet 一次打开，当前月更新、历史只补缺行、人工指定优先级和写回失败处理均沿用原规则。
+
+共享输入代次、只读／写回缓存隔离与按需详情见 [报表数据流](../shared/data-flow-yield-report.md)。本次不改变 `daily_generator` 的插值、确定性扰动、月内整数总量与单日容量算法。

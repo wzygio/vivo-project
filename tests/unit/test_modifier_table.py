@@ -103,7 +103,7 @@ class TestReadModifierTable:
         path.write_bytes(b"broken")
 
         monkeypatch.setattr(
-            "src.yield_domain.infrastructure.modifier_table_repository._read_sheet",
+            "src.yield_domain.infrastructure.modifier_table_repository._read_product_sheets",
             lambda *args, **kwargs: (_ for _ in ()).throw(
                 ValueError("workbook format is unreadable")
             ),
@@ -129,6 +129,19 @@ def _panel_rows():
             "warehousing_time": ["20260701", "20260702", "20260715", "20260801"],
         }
     )
+
+
+def test_batch_monthly_losses_are_exactly_the_single_month_results():
+    from src.yield_domain.core.mwd_trend.modifier_table import compute_monthly_losses
+
+    panels = pd.concat([_panel_rows(), _panel_rows().iloc[[0]].assign(panel_id='P1_SIM_1')], ignore_index=True)
+    known = {'group': ['MissingGroup'], 'code': ['MissingCode', 'MissingCode']}
+    batch = compute_monthly_losses(panels, known_defects=known)
+    assert set(batch) == {'2026-07', '2026-08'}
+    for month in batch:
+        expected = compute_current_month_losses(panels, month, known_defects=known)
+        for level in ('group', 'code'):
+            pd.testing.assert_series_equal(batch[month][level], expected[level], check_exact=True)
 
 
 class TestComputeCurrentMonthLoss:

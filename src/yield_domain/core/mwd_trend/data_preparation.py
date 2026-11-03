@@ -8,6 +8,12 @@ from datetime import datetime as dt
 import pandas as pd
 
 
+def month_keys(dates: pd.Series) -> pd.Series:
+    """Format unique dates once, retaining index and missing-value semantics."""
+    lookup = {value: value.strftime('%Y-%m') for value in dates.dropna().drop_duplicates()}
+    return dates.map(lookup)
+
+
 def prepare_code_raw_data(
     df: pd.DataFrame,
     target_end_date: dt | None = None,
@@ -70,18 +76,19 @@ def _compute_code_raw_monthly_targets(
     end_date: pd.Timestamp,
 ) -> dict[str, dict[str, float]]:
     """Calculate monthly Code loss rates without retaining daily defect counts."""
-    month_keys = working["warehousing_time"].dt.strftime("%Y-%m")
+    months_for_rows = month_keys(working["warehousing_time"])
     # 日历补齐可能包含整月无投入的月份；其原始良损按 0 提供给现有目标回退链。
     calendar_months = pd.period_range(
         working["warehousing_time"].min(), end_date, freq="M"
     ).astype(str)
-    months = sorted(set(month_keys.unique()).union(calendar_months))
+    months = sorted(set(months_for_rows.unique()).union(calendar_months))
     codes = sorted(code_catalog["defect_desc"].astype(str).unique().tolist())
     targets = {code: {month: 0.0 for month in months} for code in codes}
 
-    monthly_totals = working.groupby(month_keys)["panel_id"].nunique()
-    defect_rows = working.dropna(subset=["defect_desc"]).copy()
-    defect_rows["_month"] = defect_rows["warehousing_time"].dt.strftime("%Y-%m")
+    monthly_totals = working.groupby(months_for_rows)["panel_id"].nunique()
+    mask = working["defect_desc"].notna()
+    defect_rows = working.loc[mask, ["panel_id", "defect_desc"]].copy()
+    defect_rows["_month"] = months_for_rows.loc[mask]
     monthly_defects = defect_rows.groupby(["_month", "defect_desc"])[
         "panel_id"
     ].nunique()

@@ -15,6 +15,7 @@ from src.shared_kernel.cache_ports import cache_default_port
 from src.shared_kernel.data_health import attach_data_health, get_data_health, make_data_health
 from src.yield_domain.application.ports import YieldDataPort
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
+from src.yield_domain.application.report_cache import reuse_report_value, reuse_source_value
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -163,6 +164,7 @@ class YieldAnalysisService:
         }
 
     @staticmethod
+    @reuse_source_value
     @cache_default_port
     @st.cache_data(
         show_spinner=False,
@@ -208,13 +210,36 @@ class YieldAnalysisService:
             config, analysis_start_date, analysis_end_date,
         )
         try:
-            frame = YieldAnalysisService.get_raw_panel_details(
+            return YieldAnalysisService._get_cached_data_health(
                 query.model_dump_json(), policy.model_dump_json(),
                 _db_manager, snapshot_signature,
             )
         except YieldDataLoadError:
             return make_data_health("unavailable", error_code="YIELD_SOURCE_UNAVAILABLE")
+
+    @staticmethod
+    @reuse_source_value
+    @cache_default_port
+    @st.cache_data(show_spinner=False, max_entries=32, ttl=ConfigLoader.get_cache_ttl_seconds())
+    def _get_cached_data_health(
+        query_config_json: str, data_policy_json: str,
+        _db_manager=None, snapshot_signature: str = "", _data_port=None,
+    ) -> dict:
+        frame = YieldAnalysisService.get_raw_panel_details(
+            query_config_json, data_policy_json, _db_manager, snapshot_signature,
+            **({"_data_port": _data_port} if _data_port is not None else {}),
+        )
         return get_data_health(frame)
+
+    @staticmethod
+    def invalidate_data_health(config: AppConfig, *, snapshot_signature: str,
+                               analysis_start_date: str, analysis_end_date: str,
+                               _db_manager=None) -> None:
+        """Drop only this query's small metadata after a concurrent source change."""
+        query, policy = YieldAnalysisService._build_panel_request(config, analysis_start_date, analysis_end_date)
+        YieldAnalysisService._get_cached_data_health.clear(
+            query.model_dump_json(), policy.model_dump_json(), _db_manager, snapshot_signature,
+        )
 
     @staticmethod
     def _build_panel_request(
@@ -235,6 +260,7 @@ class YieldAnalysisService:
         return query, YieldDataPolicy.from_app_config(config)
 
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -349,6 +375,7 @@ class YieldAnalysisService:
         }
 
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -389,6 +416,7 @@ class YieldAnalysisService:
         )
 
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -453,6 +481,7 @@ class YieldAnalysisService:
         )
 
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -509,6 +538,7 @@ class YieldAnalysisService:
     #  3. Sheet & Lot 级计算 (Heavy Calculation)
     # ==========================================================================
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -564,10 +594,9 @@ class YieldAnalysisService:
             snapshot_signature,
             warning_signature,
         )
-        override_resource = config.paths.get("rate_override_config")
-        override_df, _ = _resolve_data_port(_db_manager).read_rate_overrides(
-            product_dir.parent / override_resource.file_name if override_resource else None,
-            override_resource.sheet_name or "" if override_resource else "",
+        override_df, _ = YieldAnalysisService.get_rate_overrides(
+            config, product_dir, _db_manager=_db_manager,
+            resource_revision=rate_override_signature + '|' + snapshot_signature,
         )
 
         # 3. 核心计算
@@ -581,6 +610,7 @@ class YieldAnalysisService:
         )
 
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -633,10 +663,9 @@ class YieldAnalysisService:
         )
         if not lot_results: return None
 
-        override_resource = config.paths.get("rate_override_config")
-        override_df, _ = _resolve_data_port(_db_manager).read_rate_overrides(
-            product_dir.parent / override_resource.file_name if override_resource else None,
-            override_resource.sheet_name or "" if override_resource else "",
+        override_df, _ = YieldAnalysisService.get_rate_overrides(
+            config, product_dir, _db_manager=_db_manager,
+            resource_revision=rate_override_signature + '|' + snapshot_signature,
         )
 
         return calculate_sheet_defect_rates(
@@ -651,6 +680,22 @@ class YieldAnalysisService:
     #  4. Mapping 业务
     # ==========================================================================
     @staticmethod
+    @reuse_report_value
+    @cache_default_port
+    @st.cache_data(show_spinner=False, max_entries=32, ttl=ConfigLoader.get_cache_ttl_seconds())
+    def get_rate_overrides(
+        config: AppConfig, product_dir: Path, resource_revision: str = "",
+        _db_manager=None, _data_port: YieldDataPort | None = None,
+    ) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+        """One validated native override payload per product, path/sheet and revision."""
+        resource = config.paths.get("rate_override_config")
+        path = product_dir.parent / resource.file_name if resource else None
+        return _resolve_data_port(_db_manager, _data_port).read_rate_overrides(
+            path, resource.sheet_name or "" if resource else "",
+        )
+
+    @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=16,
@@ -702,6 +747,7 @@ class YieldAnalysisService:
     #  内部辅助方法 (依然需要缓存)
     # ==========================================================================
     @staticmethod
+    @reuse_report_value
     @cache_default_port
     @st.cache_data(
         show_spinner=False,
@@ -716,7 +762,8 @@ class YieldAnalysisService:
         _data_port: YieldDataPort | None = None,
     ) -> pd.DataFrame:
         """独立的 Array Time 查询缓存"""
-        if not lot_ids: return pd.DataFrame()
+        if not lot_ids or not config.processing.get('array_input_time', {}).get('query_enabled', False):
+            return pd.DataFrame(columns=['sheet_id', 'array_input_time'])
         
         processing_conf = config.processing
         input_time_conf = processing_conf.get('array_input_time', {})
@@ -729,6 +776,7 @@ class YieldAnalysisService:
             raise YieldDataLoadError("YIELD_ARRAY_TIMES_UNAVAILABLE") from None
     
     @staticmethod
+    @reuse_report_value
     @st.cache_data(
         show_spinner=False,
         max_entries=32,

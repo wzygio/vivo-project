@@ -99,6 +99,28 @@ def test_historical_trend_rows_do_not_turn_current_status_red(tmp_path):
     assert service.read("P1", "trend", DAY).records.empty
 
 
+def test_saved_monthly_trends_are_suppressed_and_weekly_policy_keys_the_cache(tmp_path, monkeypatch):
+    from src.yield_domain.application import alert_results as module
+
+    service = results(tmp_path)
+    base = {'level': 'group', 'defect_group': 'G', 'defect_desc': None,
+            'curr_rate': .02, 'prev_rate': .001, 'rules': ['rise'], 'is_current': True}
+    monthly = {**base, 'time_period': '2026-10', 'period_scope': 'monthly'}
+    weekly = {**base, 'time_period': '2026-W42', 'period_scope': 'weekly'}
+    publish(service, kind='trend', records=[monthly, weekly])
+    before = (tmp_path / 'trends.xlsx').read_bytes()
+    published = service.read('P1', 'trend', DAY)
+    assert published.records['time_period'].tolist() == ['2026-W42']
+    signature = service.source_signature('P1', 'trend', DAY)
+    monkeypatch.setattr(module, 'TREND_ALERT_SCOPES', ('monthly', 'weekly'))
+    assert service.source_signature('P1', 'trend', DAY) != signature
+    assert (tmp_path / 'trends.xlsx').read_bytes() == before
+    monkeypatch.setattr(module, 'TREND_ALERT_SCOPES', ('weekly',))
+    publish(service, kind='trend', records=[monthly])
+    assert service.read('P1', 'trend', DAY).status == 'ready'
+    assert service.read('P1', 'trend', DAY).records.empty
+
+
 def test_write_failure_keeps_previous_bytes(tmp_path, monkeypatch):
     from src.yield_domain.infrastructure import alert_result_workbooks as module
     service = results(tmp_path)

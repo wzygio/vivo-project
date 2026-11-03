@@ -12,7 +12,7 @@ from src.yield_domain.core.mwd_trend.modifier_table import (
     COL_MONTH,
     COL_SCALE_FACTOR,
     _apply_current_month_loss,
-    compute_current_month_losses,
+    compute_monthly_losses,
     compute_scale_factors,
     specified_signature,
 )
@@ -46,22 +46,9 @@ def sync_modifier_table(
         ].unique().tolist()
         for level, frame in table.items()
     }
-    losses = compute_current_month_losses(
-        panel_details_df, current_month, known_defects=known_defects
-    )
-    historical_losses = {}
-    if not panel_details_df.empty:
-        dates = pd.to_datetime(
-            panel_details_df["warehousing_time"], format="%Y%m%d", errors="coerce"
-        )
-        months = dates.dropna().dt.to_period("M").astype(str).unique()
-        historical_losses = {
-            month: compute_current_month_losses(
-                panel_details_df, month, known_defects=known_defects
-            )
-            for month in sorted(months)
-            if month < current_month
-        }
+    monthly_losses = compute_monthly_losses(panel_details_df, known_defects=known_defects)
+    losses = monthly_losses.get(current_month, {'group': pd.Series(dtype=float), 'code': pd.Series(dtype=float)})
+    historical_losses = {month: monthly_losses[month] for month in sorted(monthly_losses) if month < current_month}
     for level in ("group", "code"):
         suffix = "Group级" if level == "group" else "Code级"
         sheet_name = f"{product_code}_{suffix}"

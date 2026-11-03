@@ -144,22 +144,28 @@ def test_publication_keeps_full_lot_window_and_history_without_changing_page_res
         def get_lot_defect_rates(*args, **kwargs):
             frame = Analysis.get_lot_defect_rates()["code_level_details"]["D1"]
             old = frame.assign(lot_id="OLD", warehousing_time="20260810")
-            return {"code_level_details": {"D1": pd.concat([old, frame], ignore_index=True)}}
+            current = frame.assign(lot_id="CURRENT", warehousing_time="20261020")
+            return {"code_level_details": {"D1": pd.concat([old, frame, current], ignore_index=True)}}
 
         @staticmethod
         def get_mwd_trend_data(*args, **kwargs):
             return {"monthly": pd.DataFrame({"defect_group": ["G"] * 3,
                 "time_period": ["2026-08", "2026-09", "2026-10"],
-                "defect_rate": [.001, .02, .001]})}
+                "defect_rate": [.001, .02, .001]}),
+                "weekly": pd.DataFrame({"defect_group": ["G"] * 3,
+                    "time_period": ["2026-W40", "2026-W41", "2026-W42"],
+                    "defect_rate": [.001, .02, .001]})}
 
     outcome = generate(tmp_path, History)
     assert not outcome["errors"]
     assert [row["超规 Lot ID"] for row in outcome["lot_records"]] == ["L1"]
+    assert outcome["total_recent_lots"] == 1
     published = pd.read_excel(tmp_path/"lots.xlsx", sheet_name="P1")
-    assert set(published["超规 Lot ID"]) == {"OLD", "L1"}
+    assert set(published["超规 Lot ID"]) == {"OLD", "L1", "CURRENT"}
     assert results(tmp_path).read("P1", "lot", DAY).metadata["coverage_start"] == "2026-07-01"
     history = pd.read_excel(tmp_path/"trends.xlsx", sheet_name="P1")
-    assert history["time_period"].tolist() == ["2026-09"]
+    assert history["time_period"].tolist() == ["2026-W41"]
+    assert history["period_scope"].tolist() == ["weekly"]
     assert not history["is_current"].any()
     assert outcome["trend_records"] == []
     assert results(tmp_path).read("P1", "trend", DAY).records.empty
@@ -169,9 +175,9 @@ def test_prior_period_is_only_a_baseline_for_selected_publication_window(tmp_pat
     class History(Analysis):
         @staticmethod
         def get_mwd_trend_data(*args, **kwargs):
-            return {"monthly": pd.DataFrame({"defect_group":["G"]*4,
-                "time_period":["2026-07","2026-08","2026-09","2026-10"],
-                "defect_rate":[.001,.02,.001,.02]})}
+            return {"weekly": pd.DataFrame({"defect_group":["G"]*5,
+                "time_period":["2026-W29","2026-W30","2026-W31","2026-W32","2026-W33"],
+                "defect_rate":[.001,.02,.04,.001,.02]})}
     outcome = generate_yield_alert_publications(analysis=History,publisher=results(tmp_path),
         config=SimpleNamespace(data_source=SimpleNamespace(product_code="P1")),product_dir=tmp_path,
         cache_context={"analysis_start_date":"2026-07-01","analysis_end_date":str(DAY),
@@ -179,18 +185,22 @@ def test_prior_period_is_only_a_baseline_for_selected_publication_window(tmp_pat
         trend_signature="t",lot_signature="l",db_manager=None,publication_start_date="2026-08-01")
     assert not outcome["errors"]
     frame = pd.read_excel(tmp_path/'trends.xlsx',sheet_name='P1')
-    assert frame['time_period'].tolist() == ['2026-08','2026-10']
+    # W30 ends before August; W31 intersects August 1 and remains included.
+    assert frame['time_period'].tolist() == ['2026-W31','2026-W33']
     assert frame['is_current'].tolist() == [False,True]
     assert results(tmp_path).read('P1','trend',DAY).metadata['coverage_start'] == '2026-08-01'
 
 
-def test_history_uses_full_series_and_chinese_month_labels():
+def test_history_uses_full_iso_week_series_and_skips_monthly_history():
     from src.yield_domain.application.alert_service import AlertService
     from src.yield_domain.application.alert_publication import _trend_period_overlaps
     full=pd.DataFrame({'defect_group':['G']*4,'time_period':['2026-07月','2026-08月','2026-09月','2026-10月'],
                        'defect_rate':[.001,.02,.001,.02]})
-    records=AlertService.get_dashboard_alert_history({'monthly':full.iloc[-3:],'monthly_full':full},{})
-    assert [row['time_period'] for row in records] == ['2026-08月','2026-10月']
+    weekly = full.assign(time_period=['2026-W39', '2026-W40', '2026-W41', '2026-W42'])
+    records=AlertService.get_dashboard_alert_history({'monthly':full.iloc[-3:],'monthly_full':full,
+        'weekly':weekly.iloc[-3:], 'weekly_full':weekly},{})
+    assert [row['time_period'] for row in records] == ['2026-W40','2026-W42']
+    assert {row['period_scope'] for row in records} == {'weekly'}
     assert all(_trend_period_overlaps(row,'2026-08-01','2026-10-21') for row in records)
 
 

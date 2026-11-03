@@ -5,6 +5,7 @@ import pandas as pd
 
 from src.yield_domain.infrastructure.data_loader import load_excel_report
 from src.yield_domain.core.abnormal_detector import AbnormalDetector
+from src.yield_domain.application.alert_results import TREND_ALERT_SCOPES
 
 
 class AlertService:
@@ -12,7 +13,7 @@ class AlertService:
     def get_dashboard_alert_history(
         mwd_group_data: Dict[str, pd.DataFrame], mwd_code_data: Dict[str, pd.DataFrame],
     ) -> List[Dict[str, Any]]:
-        """Publish each available period using the existing pairwise detector.
+        """Publish enabled ISO-week periods using the existing pairwise detector.
 
         Current markers preserve the dashboard's latest-per-series semantics.
         No baseline is invented for a series with fewer than two observations.
@@ -24,7 +25,7 @@ class AlertService:
         current = {identity(record) for record in AlertService.get_dashboard_alert_records(
             mwd_group_data, mwd_code_data)}
         history = []
-        for scope in ("monthly", "weekly"):
+        for scope in TREND_ALERT_SCOPES:
             group = mwd_group_data.get(f"{scope}_full", mwd_group_data.get(scope))
             code = mwd_code_data.get(f"{scope}_full", mwd_code_data.get(scope))
             frames = [frame for frame in (group, code) if frame is not None and not frame.empty]
@@ -54,44 +55,15 @@ class AlertService:
         """
         all_alerts = []
         
-        # 1. 获取系统计算数据的趋势预警
-        # ----------------------------------------------------
-        group_monthly = mwd_group_data.get('monthly')
-        code_monthly = mwd_code_data.get('monthly')
-        
-        valid_group_monthly = (
-            group_monthly if group_monthly is not None else pd.DataFrame()
-        )
-        valid_code_monthly = (
-            code_monthly if code_monthly is not None else pd.DataFrame()
-        )
-        
-        # 调用检测器
-        system_alerts = AbnormalDetector.detect_system_trend_alerts(
-            valid_group_monthly, 
-            valid_code_monthly,
-            period_scope="monthly",
-        )
-        all_alerts.extend(system_alerts)
-        
-        # 2. 周度趋势预警
-        group_weekly = mwd_group_data.get('weekly')
-        code_weekly = mwd_code_data.get('weekly')
-
-        valid_group_weekly = (
-            group_weekly if group_weekly is not None else pd.DataFrame()
-        )
-        valid_code_weekly = (
-            code_weekly if code_weekly is not None else pd.DataFrame()
-        )
-
-        # 复用同一判定规则，并显式传入周度范围以生成正确的比较标签。
-        system_alerts_weekly = AbnormalDetector.detect_system_trend_alerts(
-            valid_group_weekly,
-            valid_code_weekly,
-            period_scope="weekly",
-        )
-        all_alerts.extend(system_alerts_weekly)
+        # 月度数据仍供图表及基准清单使用，趋势预警只检测已启用的 ISO 周。
+        for scope in TREND_ALERT_SCOPES:
+            group = mwd_group_data.get(scope)
+            code = mwd_code_data.get(scope)
+            all_alerts.extend(AbnormalDetector.detect_system_trend_alerts(
+                group if group is not None else pd.DataFrame(),
+                code if code is not None else pd.DataFrame(),
+                period_scope=scope,
+            ))
 
         # 3. 获取外部基准报表的批次预警
         # ----------------------------------------------------
@@ -106,6 +78,10 @@ class AlertService:
             raw_report_df = load_excel_report(file_path, sheet_name)
             
             if raw_report_df is not None:
+                group_monthly = mwd_group_data.get('monthly')
+                code_monthly = mwd_code_data.get('monthly')
+                valid_group_monthly = group_monthly if group_monthly is not None else pd.DataFrame()
+                valid_code_monthly = code_monthly if code_monthly is not None else pd.DataFrame()
                 # B. 提取目标列表 (Context)
                 target_groups_context = []
                 if not valid_group_monthly.empty:
@@ -136,13 +112,13 @@ class AlertService:
         mwd_code_data: Dict[str, pd.DataFrame],
     ) -> List[Dict[str, Any]]:
         """
-        获取结构化趋势预警记录（系统计算，月度 + 周度），用于按 Defect Code 自动出图。
+        获取结构化 ISO 周趋势预警记录，用于按 Defect Code 自动出图。
 
         判定口径与 get_dashboard_alerts 完全一致；每条记录额外带 period_scope
-        （"monthly" / "weekly"）标识来源周期。基准报表比对的文本预警不在此返回。
+        （"weekly"）标识来源周期。基准报表比对的文本预警不在此返回。
         """
         records: List[Dict[str, Any]] = []
-        for scope in ("monthly", "weekly"):
+        for scope in TREND_ALERT_SCOPES:
             group_df = mwd_group_data.get(scope)
             code_df = mwd_code_data.get(scope)
             scope_records = AbnormalDetector.detect_system_trend_records(

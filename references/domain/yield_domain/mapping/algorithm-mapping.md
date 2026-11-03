@@ -2,7 +2,7 @@
 
 ## 1. 边界与总体流程
 
-Mapping 与 MWD 是两条独立流水线。Mapping 只使用 Panel 明细中的批次、Code 和坐标，不读取 MWD 月度目标，也不向 MWD 回写数量。
+Mapping 与 MWD 独立生成各自输出，但共享 Code 修饰 Sheet 的目标来源。Mapping 使用 Panel 明细的批次、Code、坐标和修饰上下文给出的月度倍率；随后继续自己的批次级联和热点规则，不向 MWD 回写数量，也不要求最终数量与 MWD 相等。
 
 ```text
 panel_details_df
@@ -12,6 +12,7 @@ panel_details_df
        最新五批排序
        解析唯一 Mapping 修饰方案
        默认方案执行 Panel 坐标确定性偏移
+       按 Code × 批次月份应用受限的月度缩放倍数
        By Code 的 Rate-Based 级联衰减
        固定种子抽样
   -> Panel ID 解析为矩阵坐标
@@ -134,7 +135,7 @@ defect_rate = defect_count / total_input
 
 ### `get_deterministically_modified_panel_id`
 
-解析原 Panel 坐标后，以 `panel_id + batch_no` 生成随机种子，分别产生行列偏移。行裁剪到 `[0, 9]`，列裁剪到 `[0, 18]`，再重建 Panel ID。
+解析原 Panel 坐标后，以 `panel_id + batch_no` 生成稳定随机种子，分别产生行列偏移。裁剪范围由产品布局的行列数决定，再重建 Panel ID；标准 10×19 布局的行范围为 `[0,9]`，列范围为 `[0,18]`。
 
 ### `parse_panel_id_to_coords`
 
@@ -300,4 +301,10 @@ scale = variation²
 - random 矩阵修饰严格保持进入修饰器时的矩阵总数；
 - additive 和 multiplicative 会改变矩阵总数；
 - original 不执行坐标偏移，也不改变聚合后的矩阵；级联抽样仍可能减少记录数；
-- Mapping 数量不要求与 MWD 月度数量相等，也不建立月度到批次的换算依赖。
+- Mapping 数量不要求与 MWD 月度数量相等；共享的月度目标仅提供按 Code／批次月份使用的倍率，不反向约束独立级联和热点之后的最终数量。
+
+## 9. 月度倍率与按需计算（2026-11-03）
+
+`get_mapping_data` 消费共享修饰上下文的 `factors`。`_apply_monthly_scale_factors` 在级联前按 `(defect_desc, 批次月份)` 调整行数：缩小时固定种子抽样，放大时整倍复制加余数抽样并保留合成 ID 后缀；倍率归一化到 `[0.3,3.0]`，原始良损为零／缺失或无匹配时按既有规则回退。随后仍按原顺序执行 0.95 理论天花板级联，不从 MWD 最终日／周输出换算批次。
+
+看板初次进入不加载 Mapping。用户请求某个 Code 图像时仍先运行完整窗口／完整五批的准备逻辑，随后才在展示侧筛选 Group／Code。矩阵按数据代次、产品、Group／Code、布局、批次与脚本缓存原生 DataFrame；Plotly 图在展示侧构建。只减少不必要的调用和重复坐标聚合，不改变坐标种子、抽样、级联或热点算法。完整编排见 [报表数据流](../shared/data-flow-yield-report.md)。

@@ -38,7 +38,10 @@ from src.inline_domain.application.shared.decorated_data import (
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
-from src.inline_domain.core.spc.spc_point_decoration import SpcPointDecorationPolicy
+from src.inline_domain.core.spc.spc_point_decoration import (
+    SPC_POINT_DECORATION_SIGNATURE,
+    SpcPointDecorationPolicy,
+)
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
@@ -235,6 +238,7 @@ class SpcReportService:
                 sheet_features_start_date=previous_week_start.strftime("%Y-%m-%d"),
                 date_exclusion=date_exclusion,
                 spc_point_policy=spc_point_policy,
+                point_decoration_signature=SPC_POINT_DECORATION_SIGNATURE,
             )
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload()
@@ -368,7 +372,7 @@ class SpcReportService:
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
-            snapshot_signature=f"{PARAM_CLASSIFICATION_SIGNATURE}:{snapshot_signature}",
+            snapshot_signature=f"{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}",
             period_sigma_source=period_sigma_source,
             product_revision=product_revision,
             decision_signature=decision_signature,

@@ -104,13 +104,14 @@ def fetch_decorated_features(
     sheet_features_start_date: str = "",
     date_exclusion: InlineDateExclusion | None = None,
     spc_point_policy: SpcPointDecorationPolicy | None = None,
+    point_decoration_signature: str = "",
 ) -> dict[str, object]:
     """Fetch prepared measurements, apply the scope's decoration calibre, compute features.
 
     SPC points pass through traditional OOS clipping before the time-scoped central band.
     Cache key = (prod_code, scope, start_date, end_date, snapshot_signature,
     product_revision, decision_signature, sheet_features_start_date, date_exclusion,
-    spc_point_policy);
+    spc_point_policy, point_decoration_signature);
     resolved date exclusion invalidates the projection cache; adapters enforce it
     before this function receives measurements. ``_features_source`` is
     underscore-prefixed and therefore excluded from hashing (same pattern as
@@ -142,6 +143,7 @@ def fetch_decorated_features(
     throughput coverage then starts at that feature boundary, so a short
     report cannot replace older history with incomplete facts.
     """
+    del point_decoration_signature  # Rule version participates in the cache key only.
     normalized_scope = (scope or "").strip().lower()
     if normalized_scope not in _DATA_TYPE_FILTER_BY_SCOPE:
         raise ValueError(f"unknown decoration scope: {scope!r}")

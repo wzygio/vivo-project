@@ -11,7 +11,7 @@ def test_alert_service_consumes_pre_filtered_data_without_app_config(tmp_path) -
     assert alerts == []
 
 
-def test_alert_service_labels_monthly_and_weekly_comparisons_correctly(tmp_path) -> None:
+def test_alert_service_disables_monthly_but_keeps_iso_week_comparisons(tmp_path) -> None:
     import pandas as pd
 
     group_monthly = pd.DataFrame(
@@ -35,10 +35,9 @@ def test_alert_service_labels_monthly_and_weekly_comparisons_correctly(tmp_path)
         product_dir=tmp_path,
     )
 
-    assert len(alerts) == 2
-    monthly_alert = next(alert for alert in alerts if "2026-09" in alert)
-    weekly_alert = next(alert for alert in alerts if "2026-W37" in alert)
-    assert "上月 0.10%" in monthly_alert
+    assert len(alerts) == 1
+    weekly_alert = alerts[0]
+    assert "2026-W37" in weekly_alert
     assert "上周 1.00%" in weekly_alert
     assert "上月" not in weekly_alert
 
@@ -68,12 +67,24 @@ def test_alert_service_returns_structured_records_with_period_scope(tmp_path) ->
         mwd_code_data={"monthly": code_monthly, "weekly": code_weekly},
     )
 
-    assert len(records) == 2
+    assert len(records) == 1
     by_scope = {rec["period_scope"]: rec for rec in records}
-    assert by_scope["monthly"]["defect_desc"] == "Particle"
+    assert "monthly" not in by_scope
     assert by_scope["weekly"]["defect_desc"] == "Scratch"
     assert by_scope["weekly"]["time_period"] == "2026-W34"
 
 
 def test_alert_service_records_empty_when_no_abnormality() -> None:
     assert AlertService.get_dashboard_alert_records(mwd_group_data={}, mwd_code_data={}) == []
+
+
+def test_weekly_trend_keeps_iso_year_boundary() -> None:
+    import pandas as pd
+
+    weekly = pd.DataFrame({'defect_group': ['G', 'G'],
+                           'time_period': ['2026-W53', '2027-W01'],
+                           'defect_rate': [.001, .004]})
+    records = AlertService.get_dashboard_alert_records({'weekly': weekly}, {})
+    assert len(records) == 1
+    assert records[0]['time_period'] == '2027-W01'
+    assert records[0]['period_scope'] == 'weekly'

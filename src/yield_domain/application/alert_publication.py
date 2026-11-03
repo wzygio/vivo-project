@@ -10,15 +10,20 @@ import pandas as pd
 from src.yield_domain.application.alert_results import YieldAlertResults
 from src.yield_domain.application.alert_service import AlertService
 from src.yield_domain.core.sheet_lot.lot_alerts import compute_lot_oos_records
+from src.yield_domain.application.report_cache import (
+    report_operation, bind_source_generation, YieldSourceGenerationChanged,
+)
 
 logger = logging.getLogger(__name__)
 
 
+@report_operation
 def generate_yield_alert_publications(
     *, analysis: Any, publisher: YieldAlertResults, config: Any, product_dir: Path,
     cache_context: dict[str, str], trend_signature: str, lot_signature: str, db_manager: Any,
     publication_start_date: str | None = None,
     kinds: tuple[str, ...] = ("trend", "lot"),
+    source_signature: str | None = None,
 ) -> dict[str, Any]:
     """Use the same service calls/cache keys as the report; never load Sheet/Mapping.
 
@@ -39,8 +44,14 @@ def generate_yield_alert_publications(
         "lot_records": [], "trend_records": [], "total_recent_lots": 0,
         "health": {}, "errors": {}, "publication_errors": {},
     }
+    if source_signature is not None:
+        health = analysis.get_data_health(config, _db_manager=db_manager,
+                                         snapshot_signature=source_signature, **common)
+        source_signature = bind_source_generation(source_signature, health)
+    outcome['source_signature'] = source_signature
     for kind in kinds:
-        signature = trend_signature if kind == "trend" else lot_signature
+        indicator_signature = trend_signature if kind == "trend" else lot_signature
+        signature = source_signature or indicator_signature
         try:
             initial_policy = publisher.policy_signature(product)
             health = analysis.get_data_health(config, _db_manager=db_manager,
@@ -67,7 +78,8 @@ def generate_yield_alert_publications(
                 outcome["warning_lines"] = analysis.load_static_warning_lines(config, product_dir,
                     signature, warning_signature=cache_context["warning_signature"])
                 outcome["lot_records"], outcome["total_recent_lots"] = compute_lot_oos_records(
-                    outcome["lot_data"], outcome["warning_lines"], factory_mapping=factory_mapping)
+                    outcome["lot_data"], outcome["warning_lines"], factory_mapping=factory_mapping,
+                    previous_week_as_of=reference)
                 records, count = compute_lot_oos_records(
                     outcome["lot_data"], outcome["warning_lines"], time_period=None,
                     factory_mapping=factory_mapping)
@@ -75,7 +87,7 @@ def generate_yield_alert_publications(
                     date.fromisoformat(record["入库时间"].replace("/", "-")).isoformat() <= common["analysis_end_date"]]
                 has_data = count > 0
                 coverage_start = publish_start
-            calculation = hashlib.sha256(repr((signature, sorted(cache_context.items()))).encode()).hexdigest()
+            calculation = hashlib.sha256(repr((signature, indicator_signature, sorted(cache_context.items()))).encode()).hexdigest()
             try:
                 if publisher.policy_signature(product) != initial_policy:
                     raise ValueError("Yield policy changed during calculation")
@@ -94,6 +106,11 @@ def generate_yield_alert_publications(
                 logger.error("YIELD_ALERT_PUBLICATION_FAILED kind=%s type=%s", kind, type(exc).__name__)
                 outcome["publication_errors"][kind] = "YIELD_ALERT_PUBLICATION_FAILED"
                 _mark_failed(publisher, product, kind, reference, outcome["publication_errors"][kind], outcome)
+        except YieldSourceGenerationChanged:
+            if hasattr(analysis, 'invalidate_data_health'):
+                analysis.invalidate_data_health(config, snapshot_signature=signature,
+                                               _db_manager=db_manager, **common)
+            raise
         except Exception as exc:
             logger.error("YIELD_ALERT_ANALYSIS_FAILED kind=%s type=%s", kind, type(exc).__name__)
             outcome["errors"][kind] = "YIELD_ALERT_ANALYSIS_FAILED"

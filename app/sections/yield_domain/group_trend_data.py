@@ -6,6 +6,15 @@ from yield_domain.application.yield_service import YieldAnalysisService
 
 
 YIELD_SNAPSHOT_SIGNATURE_BASE = "yield_dashboard_manual_refresh_v1"
+YIELD_SOURCE_INDICATOR = "yield_report_source"
+
+
+def build_yield_source_signature(product_code: str) -> str:
+    """Only report refresh advances shared inputs; display indicators stay separate."""
+    return build_indicator_product_cache_signature(
+        YIELD_SNAPSHOT_SIGNATURE_BASE + "|shared-inputs-v2", product_code,
+        (YIELD_SOURCE_INDICATOR,),
+    )
 
 
 def load_product_group_trends(product_code: str, *, db_manager=None) -> dict:

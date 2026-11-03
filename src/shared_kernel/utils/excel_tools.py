@@ -157,7 +157,8 @@ def _read_all_sheets_via_com(xlsx_path: Path) -> dict[str, pd.DataFrame]:
         excel = win32com.client.DispatchEx("Excel.Application")
         excel.Visible = False
         excel.DisplayAlerts = False
-        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), ReadOnly=True)
+        excel.AutomationSecurity = 3
+        wb = excel.Workbooks.Open(str(xlsx_path.resolve()), UpdateLinks=0, ReadOnly=True)
         sheets: dict[str, pd.DataFrame] = {}
         for ws in wb.Worksheets:
             data = ws.UsedRange.Value

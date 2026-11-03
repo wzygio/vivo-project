@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from zipfile import BadZipFile
 
 import pandas as pd
 
 from src.shared_kernel.utils.excel_tools import (
-    read_workbook_sheet,
+    read_workbook_sheets,
     replace_workbook_sheet,
 )
 from src.yield_domain.core.mwd_trend.modifier_table import (
@@ -21,17 +22,28 @@ from src.yield_domain.core.mwd_trend.modifier_table import (
 logger = logging.getLogger(__name__)
 
 
-def _read_sheet(path: Path, sheet_name: str) -> pd.DataFrame:
-    return read_workbook_sheet(path, sheet_name)
+def _read_product_sheets(path: Path, product_code: str) -> dict[str, pd.DataFrame]:
+    if not path.exists():
+        return {}
+    names = [f'{product_code}_{suffix}' for suffix in ('Group级', 'Code级')]
+    try:
+        with pd.ExcelFile(path, engine='openpyxl') as workbook:
+            return {name: pd.read_excel(workbook, sheet_name=name)
+                    for name in names if name in workbook.sheet_names}
+    except (BadZipFile, OSError, ValueError):
+        # One protected-workbook read; never start separate Office instances
+        # for the two product sheets.
+        return read_workbook_sheets(path)
 
 
 def read_modifier_table(xlsx_path: Path, product_code: str) -> dict[str, pd.DataFrame]:
     """Read and validate the product's Group/Code sheets."""
     path = Path(xlsx_path)
+    sheets = _read_product_sheets(path, product_code)
     table: dict[str, pd.DataFrame] = {}
     for level, suffix in (("group", "Group级"), ("code", "Code级")):
         sheet_name = f"{product_code}_{suffix}"
-        frame = _read_sheet(path, sheet_name) if path.exists() else _empty_table()
+        frame = sheets.get(sheet_name, _empty_table())
         if frame.empty:
             frame = _empty_table()
         else:

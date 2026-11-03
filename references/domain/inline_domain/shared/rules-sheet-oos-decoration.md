@@ -14,6 +14,8 @@ SPC 已改为布尔决策：点位直接关联规格与 flag，True 先按原规
 
 ## 1. 结论
 
+2026-11-03 起，共享 Sheet 点位截回支持仅有 USL 或 LSL 的规格：按已有规格限到零的距离计算 margin 跨度，只修饰越过实际存在的规格限的点，不把缺失侧补成零边界。`False` 保留和非 SPC 口径的 `Delete` 删除语义继续执行。SPC 两阶段的完整公式和无效跨度条件由 [SPC 单边规格规则](../spc/rules-spc-point-decoration.md#单边规格的跨度与方向) 维护；共享修饰规则版本进入 SPC/CTQ 和 Monitor 的派生缓存签名。
+
 ### AOI 参数豁免与有效明细状态（2026-10-09）
 
 `auto_decoration.exempt_param_name_contains` 作用于 AOI_TT 的 `tt_name` 和

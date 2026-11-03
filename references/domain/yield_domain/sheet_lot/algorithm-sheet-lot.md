@@ -11,7 +11,7 @@
    - 按 Lot 入库日期匹配 ISO 周；
    - 读取该周、该 Code 的 MWD 不良率；
    - 按 Lot 投入数和固定随机扰动，将周度不良总量分配到各 Lot；
-   - 无可用周度数据时保留原始结果。
+   - 完整周度表缺失时保留原始结果；完整周度表存在但该 Lot 所属周没有命中时按 0，不回退原始 Lot 或日度良损。
 5. 若开启缺陷截断，根据 Warning Line 对超过上限的 Code 数量进行软截断；未超过上限的不良数量不变。
 6. 读取 Excel 覆盖配置，计算 Lot 级覆盖率：
    - 以所属周 MWD 不良率为基础；
@@ -32,3 +32,11 @@
 - Group 结果始终由最终 Code 结果重新汇总，避免 Group 与 Code 数量不一致。
 - 模拟、截断和覆盖都作用于 Code 级明细。
 - 找不到有效基础数据时返回空结果或 `None`，不继续生成虚构的实体数据。
+
+## 四、报表读取与按需执行（2026-11-03）
+
+Lot、Sheet 通过同一共享输入代次、参数规范化和有界缓存复用 Lot 结果；同次操作的中间 DataFrame 只取回一次。Sheet 仍在完整名册和全部 Code 上执行原分发，不能先按用户选中的 Code／Lot 缩小输入而改变随机数顺序。用户请求详情时才加载整份 Sheet，失败不阻断宏观趋势或已发布预警。
+
+覆盖表解析在 Lot／Sheet 间共享。普通 XLSX 直读；公式（含数组公式）与企业保护文件保留只读 Excel COM 计算／读取，失败不能返回合法空覆盖。缺产品 Sheet 仍表示没有覆盖，覆盖公式、百分比、缺值、合法 Sheet 补行与 Group 重聚合语义保持。
+
+`config/domain/yield_domain.yaml:array_input_time.query_enabled` 当前为 false：Array 时间端口不会被调用，Lot／Sheet 的 `array_input_time` 保持空值。按阵列时间排序的选项关闭，Sheet 默认按 ID 排序；原查询、自定义时间和排序代码保留供显式重新启用。详见 [报表数据流](../shared/data-flow-yield-report.md)。
