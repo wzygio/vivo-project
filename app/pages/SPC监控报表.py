@@ -36,6 +36,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_spc_decoration_admin,
 )
 from app.sections.inline_domain.spc.spc_export import render_spc_export
+from app.sections.inline_domain.spc.scroll_layout import render_spc_page_scroll_layout
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -78,6 +79,7 @@ def _render_saved_page_alerts(report=None) -> None:
 
 
 st.set_page_config(page_title="SPC监控报表", layout="wide", initial_sidebar_state="collapsed")
+render_spc_page_scroll_layout()
 AppSetup.initialize_app()
 
 active_config = SessionManager.get_active_config()

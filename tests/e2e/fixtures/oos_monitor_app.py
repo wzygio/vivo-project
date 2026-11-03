@@ -18,6 +18,7 @@ for search_path in (PROJECT_ROOT, PROJECT_ROOT / "src"):
 from app.components import page_header
 from app.manager.session_manager import SessionManager
 from app.sections.inline_domain.monitor import alert_matrix, alert_matrix_cache
+from app.sections.yield_domain import all_product_board as yield_board
 from app.utils import app_setup, reloader
 from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
 from src.inline_domain.application.monitor.cpk_workbook_service import CpkWorkbookMonitorService
@@ -50,8 +51,10 @@ def write_cpk_latest(decorated=False):
     previous_week = today - pd.Timedelta(days=today.weekday() + 7)
     iso = previous_week.isocalendar()
     rows = [dict(prod_code="M626", factory="ARRAY", step_id="1100", param_name="E2E_CPK",
-                 period_type=kind, period_label=label, cpk_corrected=0.8, flag=decorated)
-            for kind, label in (("month", today.strftime("%Y-%m")), ("week", f"{iso.year}-W{iso.week:02d}"))]
+                 period_type=kind, period_label=label, cpk_corrected=0.8, flag=decorated,
+                 period_start=start, period_end=start + pd.Timedelta(hours=48))
+            for kind, label, start in (("month", today.strftime("%Y-%m"), today.replace(day=1)),
+                                       ("week", f"{iso.year}-W{iso.week:02d}", previous_week))]
     with pd.ExcelWriter(cpk_latest_path) as writer:
         pd.DataFrame(rows).to_excel(writer, sheet_name="M626", index=False)
         pd.DataFrame(rows).rename(columns={"cpk_corrected": "cpm_corrected"}).assign(
@@ -120,6 +123,26 @@ def forbidden_raw(*args, **kwargs):
     raise AssertionError("Inline Excel-only E2E attempted raw computation or database access")
 
 
+class EmptyAoiRsMonitorService:
+    """Keep the unrelated section visible without reading its maintained history."""
+    def read_catalog(self, products, factory):
+        return pd.DataFrame(columns=["step_id", "rs_code", "code_desc"])
+
+    def presentation_signature(self, products):
+        return ("isolated-empty-aoi-rs", tuple(products))
+
+    def build_dashboard(self, query, *, refresh=False):
+        return {"tables": {product: pd.DataFrame(columns=["产品", "厂别", "站点", "RSCode", "缺陷名称"])
+                           for product in query.products}}
+
+
+def empty_yield_periods(product):
+    """A controlled model for the independently tested, query-gated Yield section."""
+    return {"rates": pd.DataFrame(columns=["level", "defect_group", "defect_code", "defect_desc",
+                                          "period", "defect_rate"]),
+            "volumes": pd.DataFrame(columns=["period", "total_panels"])}
+
+
 service = ExcelAlarmReader(ExcelAlarmStore(paths["oos"]), "oos")
 ooc_service = ExcelAlarmReader(ExcelAlarmStore(paths["ooc"]), "ooc")
 summary_store = MonitorSummaryWorkbookStore(summary_path)
@@ -132,6 +155,8 @@ composition.build_cpk_monitor_service = lambda: CpkWorkbookMonitorService(cpk_st
 composition.build_cpm_monitor_service = lambda: CpkWorkbookMonitorService(
     cpm_store, latest_reader=CpmLatestExcelStore(cpk_latest_path), metric="cpm",
 )
+composition.build_aoi_rs_monitor_service = EmptyAoiRsMonitorService
+yield_board.load_product_period_trends = empty_yield_periods
 composition.build_live_throughput_reader = forbidden_raw
 composition.build_live_monitor_source = forbidden_raw
 composition.build_raw_measurement_repository = forbidden_raw

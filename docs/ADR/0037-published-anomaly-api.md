@@ -15,7 +15,7 @@
 1. 增加独立FastAPI入口及上层跨域组合，保持原域生产、发布协议和来源有效性。HTTP只消费本地结果；不新增异常识别引擎，不从application/core反向依赖app。
 2. 提取Inline共同SheetAlertQuery、纯公开显示规则与可注入工作簿读取适配器，保留页面兼容包装。API使用有上限的独立进程缓存及短期公开分页快照。
 3. Q-Time沿用原人工台账，在发布中保存明确False证据。Yield增加产品持久决定表、默认不释放并跨发布保留历史，读写在既有文件锁和原子发布边界内完成。
-4. 工序字典是站点类来源的维护资源。独立有界同步命令产生本地站点映射，API只读。根据用户需求2.1修订，Yield厂别由全局Defect Group/factory映射注入原计算并随Lot结果发布，API只读该厂别，站点／层别固定NULL，不再维护或查询Yield归属；旧归属表保留而不删除。
+4. 工序字典是站点类来源的维护资源。独立有界同步命令产生本地站点映射，API只读。2026-11-03按用户澄清，`--initialize` 应探查规模后从数据库完整读取站点、描述并生成层别，不能只创建空模板；`--step` 定向刷新，离线模板另用 `--template-only`。全量读取须有超时、容量限制、冲突检查和原子写入，失败保留旧字典；源描述的层别缺口明确报告，不伪造值。根据用户需求2.1修订，Yield厂别由全局Defect Group/factory映射注入原计算并随Lot结果发布，API只读该厂别，站点／层别固定NULL，不再维护或查询Yield归属。2026-11-03用户授权删除`api_alert_metadata.xlsx`内的旧归属表，保留删除前备份；不批量清理其它历史文件。
 5. API在当前授权及公开政策下投影、计数和分页，严格白名单输出。按用户2026-11-02的2.2确认，所有查询参数可选；默认上一ISO周全部启用且授权的产品／分类OOS、不按条数截断，显式limit启用全局分页。自定义日期按上海时区包含首尾，仍由各域发布结果选择并检查原有有效性；删除重复起始站点。
 6. 用户2.2选择返回可用部分：单个产品／分类／事件来源失败时丢弃该来源的全部行，成功来源仍返回200，并以meta.complete=false及failed_sources明确标记；全部选中来源失败仍503，附安全失败来源列表。成功空来源与失败分开表示。请求级超时／容量／配置故障仍为安全错误。游标绑定身份、授权、实际启用范围、查询日期、公开结果和失败来源状态，不暴露内部来源签名。
 
@@ -57,12 +57,24 @@
 
 Excel／Office读取依旧具有平台和账号约束。缓存和并发受限，但HTTP超时不能终止卡住的COM，部署前仍需真实账号验证与运维恢复安排。当前不承诺公网、跨进程缓存、高可用或源数据实时。
 
+## 2026-11-03：扩展 SPC 周度能力项目
+
+用户要求兼容维护工作簿中的 CPK／CPM 不达项、保留必要字段、更新调用程序和文档，并授权所有设计决策采用默认项。采用现有路径显式增加 `event_type=CPK/CPM`，仍归属 SPC 授权；原默认 OOS 及 Sheet/Lot 的十一字段记录保持兼容。能力记录使用独立模型与 `capability` 对象身份，增加有限指标值、达标下限、周期类型、ISO 周、统计首尾日期。
+
+Inline monitor 提供薄只读应用查询和可注入的现有 workbook reader，复用标准化释放、严格 `<1.33`、实际跨度、周期日期排除；HTTP 不调用会更新汇总的 dashboard 服务。默认上一完整周，自定义日期只包含已结束的完整 ISO 周；不把源数据首末时间伪造为周边界。缺少周期记录不证明已经计算且无异常，继续标记来源不可用。
+
+不新增独立分类或修改全部查询默认值，以保留现有授权配置和调用行为；不把能力项伪装成单片或 Lot，公开键摘要作为稳定对象编号。旧新模型联合验证，CSV 则统一追加六列。CPK 与 CPM 分别使用矩阵政策，并在读取来源前执行；分页来源身份增加事件，继续绑定公开结果变化。
+
+实际旧配置缺少 catalog 已声明的 CPM 行，计划在备份后仅追加该行、初始逐产品复制 CPK 设置，之后独立维护。该公开政策变更被自动审批拒绝，目前尚未执行，不能以缺行默认允许或回退 CPK 政策代替。正式工作进程亦尚未加载新代码。设计与代码验收不等于正式 CPM 取数验收；后者须在明确授权并部署后完成。
+
+规格及任务：[能力 API 规格](../../.scratch/anomaly-api-capability/PRD.md)；核心应用：[只读能力查询](../../src/inline_domain/application/monitor/capability_alert_query.py)；HTTP 验证：[能力文件集成](../../tests/integration/test_anomaly_api_capability.py)。验证证据与真实来源预检位于 `output/test-results/api-cpk-cpm-20261103/`。
+
 ## Traceability
 
 - 需求：[feat-API](../dev_docs/dev_spec/inline_domain/monitor/feat-API.md)、[获批规格](../../.scratch/sheet-anomaly-api/PRD.md)、[执行计划](../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md)。
 - 实现：[HTTP入口](../../api/main.py)、[跨域组合](../../api/composition.py)、[公开投影](../../api/service.py)、[Inline共同查询](../../src/inline_domain/application/monitor/sheet_alert_query.py)、[公开规则](../../src/shared_kernel/core/alert_visibility.py)、[本地维护元数据](../../src/shared_kernel/infrastructure/api_alert_metadata.py)。
 - 测试：[本地文件到HTTP集成](../../tests/integration/test_anomaly_api_files.py)、[Inline查询](../../tests/unit/inline_domain/application/monitor/test_sheet_alert_query.py)、[元数据](../../tests/unit/shared_kernel/test_api_alert_metadata.py)、[缓存](../../tests/unit/shared_kernel/test_api_workbook_cache.py)、[依赖守卫](../../tests/architecture/test_backend_dependencies.py)。
-- 使用：[异常片／Lot API使用说明](../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md)。
+- 部署：[API服务部署说明](../../references/domain/inline_domain/api/guide-sheet-anomaly-api.md)；调用：[API调用说明](../../references/domain/inline_domain/api/api-caller-guide-2026-11-03.md)；实现：[API程序介绍](../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。
 - 2.2：[获批查询规格](../../.scratch/anomaly-api-query/PRD.md)、[执行计划](../../.planning/2026-11-02-api-query/task_plan.md)、[查询协调](../../api/query.py)、[HTTP查询回归](../../tests/unit/api/test_query_options_http.py)、[交付记录](../dev_docs/generated/inline_domain/monitor/api-query-optimization-2026-11-02.md)。
 
 ## Verification and acceptance

@@ -17,9 +17,10 @@
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界；OOS 点位修饰、OOC 清单筛选与能力不达标的先后关系 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-cpk&cpm.md) |
 | SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
-| 全指标预警矩阵、计划任务、跨进程预计算快照、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
-| 异常片／Lot 只读API、OOS/OOC、调用凭证、分页、Q-Time起点站、Yield可配置厂别映射／NULL层别／Flag释放、本地工序字典同步 | [异常片／Lot API 使用说明](domain/inline_domain/monitor/guide-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
-| 首次调用异常 API、同事交接、其它设备 PowerShell 测试、真实记录核对 | [调用入门](../docs/dev_docs/generated/inline_domain/monitor/api-caller-guide-2026-11-03.md)；[跨设备测试步骤与案例](../docs/dev_docs/generated/inline_domain/monitor/api-remote-test-2026-11-03.md)；接口约定以正式使用说明为准 |
+| 全指标预警矩阵、计划任务、跨进程预计算快照、Yield/IJP 独立生产巡检、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
+| API 概念、服务部署、一键启动、凭证配置、站点字典、Yield厂别映射、CPK/CPM来源和公开政策 | [API 服务部署说明](domain/inline_domain/api/guide-sheet-anomaly-api.md) |
+| API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/inline_domain/api/api-caller-guide-2026-11-03.md) |
+| API 程序架构、能力周期对象、查询流程、缓存与容量、安全边界 | [API 程序介绍](domain/inline_domain/api/architecture-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |
@@ -61,7 +62,7 @@
 | 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/shared_kernel/shared/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
 | 门户节点、Inline指标、寿命测试入口、专项资料合并、台账周报与解析报告上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
-| Inline 报表滚动、Plotly 滚轮缩放冲突与交互约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |
+| Inline 报表滚动、Plotly 滚轮缩放冲突、SPC 浏览器原生滚轴与页面布局约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |
 | Inline 周度 PPT 输出设计、density 规格判定、红绿字体、八产品分页与共用数据契约 | [周度 PPT 输出设计规范](design/inline_domain/shared/architecture-weekly-summary-ppt.md) |
 
 共享工程标准按任务使用 `$ecc-production-rules`；文档职责与维护规则见 [CONTEXT.md](../CONTEXT.md#maintenance-and-document-ownership)。

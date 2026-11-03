@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date
+import hashlib
+import json
 from typing import Any
 
 import pandas as pd
 
-from api.schemas import AnomalyQuery, AnomalyRecord
+from api.schemas import AnomalyQuery, AnomalyRecord, CapabilityRecord
+from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD
 
 
 class ResultUnavailable(ValueError):
@@ -23,17 +26,26 @@ def _released(value: Any) -> bool:
 
 
 class PublishedAnomalyService:
-    def __init__(self, *, source_reader: Callable, hidden: Callable, metadata: Any) -> None:
+    def __init__(self, *, source_reader: Callable, hidden: Callable, metadata: Any,
+                 capability_hidden: Callable | None = None) -> None:
         self._source_reader = source_reader
         self._hidden = hidden
         self._metadata = metadata
+        self._capability_hidden = capability_hidden
 
     def read(self, query: AnomalyQuery, factories: tuple[str, ...], reference_date: date) -> list[dict]:
         if query.product is None or query.sub_domain is None:
             raise ResultUnavailable('Source query must be resolved')
         # Deliberately precedes source access: hidden state cannot leak through
         # source failures, publication dates, counts, or pagination versions.
-        if self._hidden(query.sub_domain, query.product):
+        capability = query.event_type in ('CPK', 'CPM')
+        if capability:
+            if self._capability_hidden is None:
+                raise ResultUnavailable('Capability public policy unavailable')
+            hidden = self._capability_hidden(query.event_type, query.product)
+        else:
+            hidden = self._hidden(query.sub_domain, query.product)
+        if hidden:
             return []
         result = self._source_reader(query, reference_date, factories)
         if (result.get('state') == 'error'
@@ -74,11 +86,12 @@ class PublishedAnomalyService:
                 continue
             if query.layer and query.layer != enriched['layer']:
                 continue
-            model = AnomalyRecord(
+            record_model = CapabilityRecord if capability else AnomalyRecord
+            model = record_model(
                 sub_domain=query.sub_domain, product=query.product, event_type=query.event_type,
                 **{**normalized, **enriched},
             )
-            public.append(model.model_dump(by_alias=True))
+            public.append(model.model_dump(mode='json', by_alias=True))
         # All sort keys are public. Source file signatures never become tokens.
         public.sort(key=lambda row: tuple(str(row.get(name) or '') for name in (
             '发生时间', '对象编号', '发生站点', '监控参数', '命中边界', '对象类型',
@@ -87,6 +100,8 @@ class PublishedAnomalyService:
 
     @staticmethod
     def _identity(query: AnomalyQuery, row: dict) -> dict:
+        if query.event_type in ('CPK', 'CPM'):
+            return PublishedAnomalyService._capability_identity(query, row)
         domain = query.sub_domain
         boundary = None
         precision = 'second'
@@ -124,3 +139,24 @@ class PublishedAnomalyService:
         return dict(entity_type=entity_type, entity_id=entity_id, parameter_name=parameter,
                     factory=factory, step_id=step or None, occurred_at=occurred_at,
                     boundary=boundary)
+
+    @staticmethod
+    def _capability_identity(query: AnomalyQuery, row: dict) -> dict:
+        factory = _text(row.get('factory')).upper()
+        step, parameter = _text(row.get('step_id')), _text(row.get('param_name'))
+        period_type, period_label = _text(row.get('period_type')), _text(row.get('period_label'))
+        if not factory or not step or not parameter:
+            raise ResultUnavailable('Required capability identity unavailable')
+        start = pd.to_datetime(row.get('calendar_start'), errors='coerce')
+        end = pd.to_datetime(row.get('calendar_end'), errors='coerce')
+        if pd.isna(start) or pd.isna(end):
+            raise ResultUnavailable('Required capability period unavailable')
+        # Identity contains only the visible business keys, not values or files.
+        keys = (query.event_type, query.product, factory, step, parameter, period_type, period_label)
+        digest = hashlib.sha256(json.dumps(keys, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+        return dict(entity_type='capability', entity_id='capability:' + digest,
+                    parameter_name=parameter, factory=factory, step_id=step,
+                    occurred_at=end.date().isoformat(), boundary='LOWER',
+                    metric_value=row.get(query.event_type.lower()), lower_bound=CPK_THRESHOLD,
+                    period_type=period_type, period_label=period_label,
+                    period_start_date=start.date(), period_end_date=end.date())

@@ -2,7 +2,7 @@
 
 编写日期：2026-10-27。面向第一次接触 API 的项目负责人。
 
-本文是2026-10-27编写的入门说明，下面的请求与JSON是教学示例。2026-11-02已开始按获批需求实现；当前接口参数、中文字段和维护步骤以 [API使用说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) 为准，部署状态以交付记录为准。方案见 [异常片明细 API 开发方案](sheet-anomaly-api-development-plan.md)。
+本文是2026-10-27编写的入门说明，下面的请求与JSON是教学示例。2026-11-02已开始按获批需求实现；当前接口参数与中文字段以 [API调用说明](api-caller-guide-2026-11-03.md) 为准，维护步骤见 [部署说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md)，部署状态以交付记录为准。方案见 [异常片明细 API 开发方案](sheet-anomaly-api-development-plan.md)。
 
 ## 1. 你要开发的东西是什么
 

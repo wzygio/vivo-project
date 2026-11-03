@@ -1,9 +1,11 @@
 """Cached, read-only access to product CPK sheets (never CPM sheets)."""
 from pathlib import Path
+from collections.abc import Callable
 
 import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_latest import normalize_latest_cpk
+from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.monitor.excel_alarm_store import read_cached_alarm_workbook
 
@@ -12,8 +14,11 @@ class CpkLatestExcelStore:
     metric = "cpk"
     sheet_suffix = ""
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, workbook_reader: Callable | None = None,
+                 strict_empty: bool = False) -> None:
         self.path = Path(path)
+        self._workbook_reader = workbook_reader or read_cached_alarm_workbook
+        self._strict_empty = strict_empty
 
     def source_updated_at(self) -> str | None:
         try:
@@ -37,11 +42,19 @@ class CpkLatestExcelStore:
             stat = self.path.stat()
         except FileNotFoundError:
             return None
-        sheets = read_cached_alarm_workbook(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
+        sheets = self._workbook_reader(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
         sheet_name = f"{product}{self.sheet_suffix}"
         if sheet_name not in sheets:
             return None
+        frame = sheets[sheet_name].copy()
+        frame.columns = [str(column).strip() for column in frame.columns]
+        if self._strict_empty:
+            required = {*CPK_KEY_COLUMNS, f"{self.metric}_corrected", "flag", "period_start", "period_end"}
+            if frame.columns.duplicated().any():
+                raise ValueError(f"{product} {self.metric.upper()} 明细列重复")
+            if missing := required - set(frame.columns):
+                raise ValueError(f"{product} {self.metric.upper()} 明细缺少列: {sorted(missing)}")
         return normalize_latest_cpk(
-            sheets[sheet_name], product, metric=self.metric,
+            frame, product, metric=self.metric,
             min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
         )

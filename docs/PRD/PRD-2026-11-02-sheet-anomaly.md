@@ -4,7 +4,7 @@
 
 状态：**已按用户确认合并到master并采纳ADR-0037**；专项验证、评审及合并后验证完成。24项已复现基线失败按用户确认独立跟踪，不声称全套通过或已部署。结果见 [交付与验证记录](api-delivery-2026-11-02.md)。初版“仅严格逐片”的假设已由用户明确包含Lot的需求替代。来源为 [feat-API](../../../dev_spec/inline_domain/monitor/feat-API.md)，获批契约与任务状态由 [PRD](../../../../../.scratch/sheet-anomaly-api/PRD.md) 和 [执行计划](../../../../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md) 维护。
 
-本文件记录方案、边界及实施组织。实际调用、字段与维护命令由 [API使用说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) 唯一维护；入门解释见 [API基础知识](sheet-anomaly-api-primer.md)。
+本文件记录方案、边界及实施组织。实际调用与字段由 [API调用说明](api-caller-guide-2026-11-03.md) 维护，维护命令由 [部署说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md) 维护；入门解释见 [API基础知识](sheet-anomaly-api-primer.md)。
 
 ## 1. 已确认范围与数据口径
 
@@ -74,7 +74,7 @@ Inline应用层的 [SheetAlertQuery](../../../../../src/inline_domain/applicatio
 
 [ApiAlertMetadata](../../../../../src/shared_kernel/infrastructure/api_alert_metadata.py) 读取 `resources.shared_kernel.files.api_alert_metadata`，包含站点字典及Yield归属。编号、描述、归属不从Lot号猜测。
 
-站点描述由操作人员独立命令同步：指定站点集合，先视图、失败回退表，参数绑定、有界条数及超时，成功后原子更新本地字典。API请求只读本地；不会直接复用原页面无界字典SQL，也不会假设页面内存缓存跨进程可见。
+站点描述由独立命令同步。2026-11-03按用户澄清，`--initialize` 需先探查规模，再带超时和条数上限读取完整字典并保存派生层别；`--step` 保留指定站点刷新。优先视图，SQL失败回退表，成功后原子更新本地字典。API请求只读本地；不会直接复用原页面无界字典SQL，也不会假设页面内存缓存跨进程可见。
 
 Yield优先精确匹配产品＋异常Code＋Lot，没有专用Lot时再匹配lot_id空白的默认归属。厂别必须存在。填写站点时从站点字典取描述；站点为空时使用维护归属的描述，层别仍必需。资料缺失／冲突时安全失败。
 
@@ -98,9 +98,10 @@ Yield优先精确匹配产品＋异常Code＋Lot，没有专用Lot时再匹配lo
 
 采用单worker、独立进程的Uvicorn工厂入口。本地示例监听127.0.0.1:8890，不代表已配置跨主机可达、HTTPS或正式托管。实际环境由运维配置，不改变原正式Streamlit服务。
 
-维护工具明确区分无数据库初始化与显式有界同步：
+维护工具明确区分完整初始化、离线模板与定向同步：
 
-- `tools/sync_api_alert_metadata.py --initialize`：仅初始化元数据，已有文件不覆盖。
+- `tools/sync_api_alert_metadata.py --initialize`：探查规模后读取完整工序字典，初始化或刷新站点、描述及层别，保留其它工作表和历史站点。
+- `tools/sync_api_alert_metadata.py --template-only`：仅离线创建或检查空模板，不连接数据库。
 - `tools/sync_api_alert_metadata.py --step ...`：操作人员同步指定站点，API不会执行。
 - `tools/initialize_yield_alert_controls.py --product ...`：对启用产品旧发布初始化默认拒绝的持久决定，不刷新原发布时间。
 

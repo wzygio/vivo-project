@@ -1,10 +1,24 @@
-"""Real Streamlit section, with the data port as the only controlled boundary."""
+"""Real manual-report UI with controlled data and saved-alert read ports."""
 
+import pandas as pd
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
+from app.sections.iqc_domain.eva_materials import evaporation_dashboard as dashboard
 from src.shared_kernel.config import ConfigLoader
 from src.iqc_domain.core.eva_materials.evaporation import REPORT_COLUMNS
+
+
+@pytest.fixture(autouse=True)
+def isolated_saved_alert_result(monkeypatch):
+    """Keep manual UI tests independent of maintained automatic-alert workbooks."""
+    def read_saved(row, product, reference):
+        if st.session_state.get("test_mode", "normal") == "failure":
+            return {"state": "error", "alerts": pd.DataFrame(), "message": "预警结果暂不可用。"}
+        return {"state": "ok", "alerts": pd.DataFrame(), "message": ""}
+
+    monkeypatch.setattr(dashboard, "read_alert_result", read_saved)
 
 
 APP = '''

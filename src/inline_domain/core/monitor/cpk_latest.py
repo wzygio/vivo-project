@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
-from datetime import date
+from datetime import date, timedelta
+import re
 
 import pandas as pd
 
@@ -13,7 +14,6 @@ from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, ex
 from src.inline_domain.core.spc.cpk_decoration import (
     CAPABILITY_ALERT_MIN_SPAN_HOURS, CPK_KEY_COLUMNS, capability_alert_span_mask,
 )
-from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
 
 def normalize_latest_cpk(
@@ -56,25 +56,80 @@ def normalize_latest_cpk(
     return result
 
 
+def capability_week_window(
+    reference_date: date, *, start_date: str | date | None = None,
+    end_date: str | date | None = None,
+) -> tuple[date, date] | None:
+    """Return closed ISO weeks contained in an inclusive requested date range."""
+    reference = pd.Timestamp(reference_date).date()
+    monday = reference - timedelta(days=reference.weekday())
+    start = pd.Timestamp(start_date).date() if start_date is not None else monday - timedelta(days=7)
+    end = pd.Timestamp(end_date).date() if end_date is not None else monday - timedelta(days=1)
+    if start > end:
+        raise ValueError("Invalid capability date range")
+    end = min(end, monday - timedelta(days=1))
+    if start > end:
+        return None
+    first = start.toordinal() + (7 - start.weekday()) % 7
+    last = end.toordinal() - (end.weekday() + 1) % 7
+    return (date.fromordinal(first), date.fromordinal(last)) if first <= last else None
+
+
+def capability_period_records(
+    detail: pd.DataFrame | None, reference_date: date, *,
+    start_date: str | date | None = None, end_date: str | date | None = None,
+) -> pd.DataFrame:
+    """Keep complete weekly records and add calendar bounds without replacing data spans."""
+    frame = detail.copy() if detail is not None else pd.DataFrame()
+    for column in ("calendar_start", "calendar_end"):
+        frame[column] = pd.Series(index=frame.index, dtype=object)
+    window = capability_week_window(reference_date, start_date=start_date, end_date=end_date)
+    if window is None or frame.empty:
+        return frame.iloc[:0].copy()
+    if {"period_type", "period_label"} - set(frame.columns):
+        raise ValueError("Capability period identity unavailable")
+    frame = frame.loc[frame["period_type"].eq("week")].copy()
+    starts = {}
+    for label in frame["period_label"].unique():
+        if not isinstance(label, str) or not re.fullmatch(r"[0-9]{4}-W[0-9]{2}", label):
+            raise ValueError("Invalid capability ISO week")
+        year, week = label.split("-W")
+        starts[label] = date.fromisocalendar(int(year), int(week), 1)
+    frame["calendar_start"] = frame["period_label"].map(starts)
+    frame["calendar_end"] = frame["calendar_start"].map(lambda start: start + timedelta(days=6))
+    start, end = window
+    return frame.loc[frame["calendar_start"].ge(start) & frame["calendar_end"].le(end)].reset_index(drop=True)
+
+
+def select_capability_alert_records(
+    detail: pd.DataFrame | None, reference_date: date, *, metric: str = "cpk",
+    date_exclusion: InlineDateExclusion | None = None,
+    min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
+    start_date: str | date | None = None, end_date: str | date | None = None,
+) -> pd.DataFrame:
+    """Select full saved alert records using the shared status, span and period policy."""
+    capability_summary_columns(metric)
+    required = {"factory", "step_id", "param_name", "period_label", metric, "period_type", "status"}
+    if detail is None or detail.empty or not required.issubset(detail.columns):
+        return pd.DataFrame(columns=[*(detail.columns if detail is not None else sorted(required)),
+                                     "calendar_start", "calendar_end"])
+    frame = capability_period_records(detail, reference_date, start_date=start_date, end_date=end_date)
+    frame = exclude_inline_period_records(frame, date_exclusion, as_of=pd.Timestamp(reference_date))
+    mask = frame["status"].eq("预警") & capability_alert_span_mask(frame, min_span_hours)
+    return frame.loc[mask].reset_index(drop=True)
+
+
 def latest_capability_alerts(
     detail: pd.DataFrame | None, reference_date: date, *, metric: str = "cpk",
     date_exclusion: InlineDateExclusion | None = None,
     min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
 ) -> pd.DataFrame:
-    """Select alerts from normalized saved records, never a computed capability report."""
-    capability_summary_columns(metric)
+    """Retain the report's five-column previous-complete-week projection."""
     columns = ["factory", "step_id", "param_name", "period_label", metric]
-    required = {*columns, "period_type", "status"}
-    if detail is None or detail.empty or not required.issubset(detail.columns):
-        return pd.DataFrame(columns=columns)
-    frame = exclude_inline_period_records(detail, date_exclusion, as_of=pd.Timestamp(reference_date))
-    start, _ = previous_iso_week_range(reference_date)
-    iso = start.isocalendar()
-    mask = (frame["period_type"].eq("week")
-            & frame["period_label"].eq(f"{iso.year}-W{iso.week:02d}")
-            & frame["status"].eq("预警")
-            & capability_alert_span_mask(frame, min_span_hours))
-    return frame.loc[mask, columns].reset_index(drop=True)
+    return select_capability_alert_records(
+        detail, reference_date, metric=metric, date_exclusion=date_exclusion,
+        min_span_hours=min_span_hours,
+    ).reindex(columns=columns)
 
 
 def _complete_cpk_baselines(

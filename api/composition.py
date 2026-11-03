@@ -16,27 +16,40 @@ DISPLAY_NAMES = {
     'AOI_TT': 'AOI_TT 单片异常', 'AOI_RS': 'AOI_RS 单片异常',
     'Yield': 'Yield 单片异常（Lot 超规）', 'Q-Time': 'Q-Time 单片异常',
 }
+CAPABILITY_DISPLAY_NAMES = {
+    'CPK': 'SPC 趋势波动（CPK）', 'CPM': 'SPC 趋势波动（CPM）',
+}
 
 
 def build_service() -> PublishedAnomalyService:
     reader = BoundedWorkbookCache()
 
-    def hidden(domain: str, product: str) -> bool:
+    def hidden_row(display_name: str, product: str) -> bool:
         path = ConfigLoader.get_compliance_config_path()
         stat = path.stat()
         frames = reader(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
         switches = parse_matrix_config(frames['全指标预警看板'])
-        key = (DISPLAY_NAMES[domain], product)
+        key = (display_name, product)
         # A missing public policy is not permission to disclose a source.
         if key not in switches:
             raise ValueError('Public policy unavailable')
         return switches[key]
+
+    def hidden(domain: str, product: str) -> bool:
+        return hidden_row(DISPLAY_NAMES[domain], product)
+
+    def capability_hidden(event_type: str, product: str) -> bool:
+        return hidden_row(CAPABILITY_DISPLAY_NAMES[event_type], product)
 
     def source(query: AnomalyQuery, day: date, factories: tuple[str, ...]) -> dict:
         if query.product is None or query.sub_domain is None:
             raise ValueError('Source query must be resolved')
         dates = {'start_date': query.start_date.isoformat() if query.start_date else None,
                  'end_date': query.end_date.isoformat() if query.end_date else None}
+        if query.event_type in ('CPK', 'CPM'):
+            from src.inline_domain.composition import build_capability_alert_query
+            return build_capability_alert_query(query.event_type.lower(), workbook_reader=reader).read(
+                query.product, day, **dates)
         if query.sub_domain in ('SPC', 'CTQ', 'AOI_TT', 'AOI_RS'):
             from src.inline_domain.composition import build_sheet_alert_query
             scope = query.sub_domain.lower()
@@ -63,4 +76,5 @@ def build_service() -> PublishedAnomalyService:
             path = ConfigLoader.get_domain_resource_path('shared_kernel', 'api_alert_metadata')
             return ApiAlertMetadata(path, workbook_reader=reader).enrich(*args)
 
-    return PublishedAnomalyService(source_reader=source, hidden=hidden, metadata=Metadata())
+    return PublishedAnomalyService(source_reader=source, hidden=hidden, metadata=Metadata(),
+                                   capability_hidden=capability_hidden)

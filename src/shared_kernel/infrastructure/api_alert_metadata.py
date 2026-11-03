@@ -8,6 +8,7 @@ not consume this adapter: its factory is published and its location is unknown.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 import logging
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,9 @@ WorkbookReader = Callable[[str, int, int], dict[str, pd.DataFrame]]
 STEP_TABLES = ("mdw.dwr_mes_processoperationspec_v", "mdw.dwr_mes_processoperationspec")
 MAX_STEPS = 1000
 MAX_QUERY_ROWS = 10000
+MAX_DICTIONARY_PLAN_COST = 100000
+MAX_DICTIONARY_SCAN_ROWS = 100000
+MAX_DICTIONARY_SCAN_BYTES = 64 * 1024 * 1024
 
 
 def _text(value: object) -> str:
@@ -103,6 +107,142 @@ def initialize(path: Path) -> bool:
     return True
 
 
+@dataclass(frozen=True)
+class StationDictionarySummary:
+    station_count: int
+    stations_without_layer: tuple[str, ...]
+
+
+def inspect_station_dictionary(path: Path) -> StationDictionarySummary:
+    """Validate dictionary identities and report source layer gaps without writes.
+
+    An empty template is initialized but does not yet supply station metadata.
+    Legacy sheets are ignored and preserved, as in the API enrichment reader.
+    """
+    path = Path(path)
+    stat = path.stat()
+    sheets = read_metadata_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+    stations = _station_map(_frame(sheets, STATION_SHEET, STATION_COLUMNS))
+    gaps = tuple(step for step, description in stations.items() if not description.split('_', 1)[0].strip())
+    return StationDictionarySummary(len(stations), gaps)
+
+
+def _with_layers(frame: pd.DataFrame) -> pd.DataFrame:
+    stations = _station_map(frame)
+    if not stations:
+        raise ValueError('STATION_DICTIONARY_EMPTY')
+    if any(value.startswith('=') for pair in stations.items() for value in pair):
+        raise ValueError('STATION_DICTIONARY_FORMULA_INVALID')
+    result = pd.DataFrame(list(stations.items()), columns=STATION_COLUMNS)
+    result['layer'] = result['description'].str.split('_', n=1).str[0].str.strip()
+    return result.sort_values('step_id', kind='stable').reset_index(drop=True)
+
+
+def _check_dictionary_plan(plan: dict, max_rows: int) -> None:
+    """EXPLAIN only: inspect output cardinality and estimated query cost."""
+    if plan['Plan Rows'] > max_rows or plan['Total Cost'] > MAX_DICTIONARY_PLAN_COST:
+        raise ValueError('STATION_DICTIONARY_SCALE_LIMIT')
+    pending = [plan]
+    scan_rows = scan_bytes = 0
+    while pending:
+        node = pending.pop()
+        pending.extend(node.get('Plans', []))
+        if 'Relation Name' in node:
+            rows = node['Plan Rows']
+            scan_rows += rows
+            scan_bytes += rows * node['Plan Width']
+    if scan_rows > MAX_DICTIONARY_SCAN_ROWS or scan_bytes > MAX_DICTIONARY_SCAN_BYTES:
+        raise ValueError('STATION_DICTIONARY_SCALE_LIMIT')
+
+
+def _check_dictionary_relations(connection: Any, plan: dict) -> None:
+    """Use physical relation statistics, not post-filter Plan Rows, for scale."""
+    from sqlalchemy import bindparam, text
+
+    pending, relations = [plan], set()
+    while pending:
+        node = pending.pop()
+        pending.extend(node.get('Plans', []))
+        if 'Relation Name' in node:
+            if not node.get('Schema'):
+                raise ValueError('STATION_DICTIONARY_SCALE_UNKNOWN')
+            relations.add((node['Schema'], node['Relation Name']))
+    if not relations or len(relations) > 100:
+        raise ValueError('STATION_DICTIONARY_SCALE_UNKNOWN')
+    query = text(
+        "SELECT c.reltuples AS estimated_rows, "
+        "c.relpages * current_setting('block_size')::bigint AS estimated_bytes "
+        "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "WHERE (n.nspname, c.relname) IN :relations"
+    ).bindparams(bindparam('relations', expanding=True))
+    stats = connection.execute(query, {'relations': sorted(relations)}).mappings().all()
+    if len(stats) != len(relations) or any(row['estimated_rows'] < 0 for row in stats):
+        raise ValueError('STATION_DICTIONARY_SCALE_UNKNOWN')
+    if (sum(row['estimated_rows'] for row in stats) > MAX_DICTIONARY_SCAN_ROWS
+            or sum(row['estimated_bytes'] for row in stats) > MAX_DICTIONARY_SCAN_BYTES):
+        raise ValueError('STATION_DICTIONARY_SCALE_LIMIT')
+
+
+def _fetch_all_stations(engine: Any, max_rows: int, timeout_ms: int) -> pd.DataFrame:
+    from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
+
+    for table in STEP_TABLES:
+        selection = (f'SELECT oper_code AS step_id, description FROM {table} '
+                     'WHERE oper_code IS NOT NULL AND description IS NOT NULL')
+        try:
+            with engine.begin() as connection:
+                connection.execute(text('SET TRANSACTION READ ONLY'))
+                connection.execute(text("SELECT set_config('statement_timeout', :timeout, true)"),
+                                   {'timeout': f'{timeout_ms}ms'})
+                plan = connection.execute(text('EXPLAIN (FORMAT JSON, VERBOSE) ' + selection)).scalar_one()[0]['Plan']
+                _check_dictionary_plan(plan, max_rows)
+                _check_dictionary_relations(connection, plan)
+                rows = connection.execute(text(selection + ' LIMIT :row_limit'),
+                                          {'row_limit': max_rows + 1}).mappings().all()
+        except SQLAlchemyError as exc:
+            logger.warning('STATION_DICTIONARY_QUERY_FAILED exception_type=%s', type(exc).__name__)
+            continue
+        if len(rows) > max_rows:
+            raise ValueError('STATION_DICTIONARY_TRUNCATED')
+        frame = _frame({STATION_SHEET: pd.DataFrame(rows, columns=STATION_COLUMNS)},
+                       STATION_SHEET, STATION_COLUMNS)
+        return _with_layers(frame)
+    raise OSError('STATION_DICTIONARY_UNAVAILABLE')
+
+
+def initialize_from_database(
+    path: Path, engine: Any, *, max_rows: int = MAX_QUERY_ROWS, timeout_ms: int = 10000,
+) -> tuple[bool, int]:
+    """Initialize/refresh every station after a bounded, scale-checked DB read.
+
+    Complete and validate the source before creating or replacing a workbook.
+    Keep historical stations and other maintained sheets; update matching codes.
+    """
+    from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+
+    if (isinstance(max_rows, bool) or not isinstance(max_rows, int) or not 1 <= max_rows <= MAX_QUERY_ROWS
+            or isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or not 1 <= timeout_ms <= 60000):
+        raise ValueError('STATION_SYNC_SCOPE_INVALID')
+    incoming = _fetch_all_stations(engine, max_rows, timeout_ms)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with publication_lock(path):
+        created = not path.exists()
+        merged = incoming
+        if not created:
+            stat = path.stat()
+            previous = read_metadata_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+            stations = _frame(previous, STATION_SHEET, STATION_COLUMNS)
+            _station_map(stations)
+            kept = stations.loc[~stations['step_id'].isin(incoming['step_id'])]
+            merged = _with_layers(pd.concat([kept, incoming.loc[:, list(STATION_COLUMNS)]], ignore_index=True))
+        result = replace_workbook_sheets(path, {STATION_SHEET: merged})
+        if not result.written:
+            raise OSError('STATION_DICTIONARY_PUBLICATION_FAILED')
+    return created, len(incoming)
+
+
 def _fetch_stations(engine: Any, steps: list[str], row_limit: int, timeout_ms: int) -> pd.DataFrame:
     from sqlalchemy import bindparam, text
     from sqlalchemy.exc import SQLAlchemyError
@@ -167,9 +307,9 @@ def sync_metadata(
         previous = read_metadata_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
         stations = _frame(previous, STATION_SHEET, STATION_COLUMNS)
         _station_map(stations)
-        merged = pd.concat([
+        merged = _with_layers(pd.concat([
             stations.loc[~stations["step_id"].isin(chosen)], incoming,
-        ], ignore_index=True).sort_values("step_id", kind="stable").reset_index(drop=True)
+        ], ignore_index=True))
         result = replace_workbook_sheets(path, {STATION_SHEET: merged})
         if not result.written:
             raise OSError("STATION_DICTIONARY_PUBLICATION_FAILED")

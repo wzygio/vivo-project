@@ -7,9 +7,10 @@ import json
 import logging
 from typing import Any
 
-from api.schemas import AnomalyQuery, AnomalyRecord, SourceFailure
+from api.schemas import AnomalyQuery, PUBLIC_RECORD_ADAPTER, SourceFailure
 from api.settings import ApiClient
 from api.pagination import SnapshotLimit
+from src.shared_kernel.infrastructure.api_workbook_cache import WorkbookVersionError
 
 
 class ForbiddenQuery(ValueError):
@@ -45,10 +46,16 @@ class QueryPlan:
         public_bytes = 2  # JSON array brackets; same serialization as snapshots.
         for query in self.queries:
             try:
-                rows = service.read(query, self.factories, reference_date)
+                try:
+                    rows = service.read(query, self.factories, reference_date)
+                except WorkbookVersionError:
+                    # Retry the complete source once, including current public
+                    # policy. Never reuse a prefix or bypass workbook versions.
+                    # The outer bounded-read deadline still covers both calls.
+                    rows = service.read(query, self.factories, reference_date)
                 # Validate the entire source before adding any rows. A failed
                 # source must not leave a prefix in an apparently partial result.
-                projected = [AnomalyRecord.model_validate(row).model_dump(by_alias=True) for row in rows]
+                projected = [PUBLIC_RECORD_ADAPTER.validate_python(row).model_dump(mode='json', by_alias=True) for row in rows]
             except (ValueError, KeyError, OSError, TypeError) as exc:
                 logging.getLogger(__name__).warning('API_SOURCE_UNAVAILABLE product=%s sub_domain=%s cause=%s',
                                                    query.product, query.sub_domain, type(exc).__name__)
@@ -71,7 +78,7 @@ class QueryPlan:
 
     def snapshot_context(self, failures: list[SourceFailure]) -> str:
         return json.dumps({
-            'sources': [(q.product, q.sub_domain) for q in self.queries],
+            'sources': [(q.product, q.sub_domain, q.event_type) for q in self.queries],
             'factories': self.factories, 'start': self.start_date.isoformat(), 'end': self.end_date.isoformat(),
             'failed_sources': [failure.model_dump() for failure in failures],
         }, sort_keys=True)
@@ -87,7 +94,12 @@ def resolve_query(query: AnomalyQuery, principal: ApiClient, enabled: list[str],
         raise ForbiddenQuery('No enabled authorized products')
     if query.product:
         products = (query.product,)
-    domains = (query.sub_domain,) if query.sub_domain else principal.sub_domains
+    if query.event_type in ('CPK', 'CPM'):
+        if 'SPC' not in principal.sub_domains:
+            raise ForbiddenQuery('SPC capability scope is not authorized')
+        domains = ('SPC',)
+    else:
+        domains = (query.sub_domain,) if query.sub_domain else principal.sub_domains
     if query.event_type == 'OOC':
         domains = tuple(d for d in domains if d not in ('Yield', 'Q-Time'))
     factories = (query.factory,) if query.factory else principal.factories

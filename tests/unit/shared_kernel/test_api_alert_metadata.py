@@ -244,7 +244,7 @@ def test_formula_like_source_values_are_not_published(tmp_path: Path) -> None:
     assert path.read_bytes() == before
 
 
-def test_cli_initialization_never_constructs_database_and_preserves_existing(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_cli_offline_template_never_constructs_database_and_preserves_existing(tmp_path: Path, monkeypatch, capsys) -> None:
     import json
     from src.shared_kernel.infrastructure import db_handler
     from tools.sync_api_alert_metadata import main
@@ -253,12 +253,105 @@ def test_cli_initialization_never_constructs_database_and_preserves_existing(tmp
         raise AssertionError("Database must not be created for initialization")
     monkeypatch.setattr(db_handler, "DatabaseManager", forbidden)
     path = tmp_path / "metadata.xlsx"
-    assert main(["--initialize"], metadata_path=path) == 0
-    assert json.loads(capsys.readouterr().out)["created"] is True
+    assert main(["--template-only"], metadata_path=path) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert first["created"] is True
+    assert first["initialized"] is True
+    assert first["stations_total"] == 0
+    assert first["dictionary_state"] == "empty"
+    assert first["message"]
     before = path.read_bytes()
-    assert main(["--initialize"], metadata_path=path) == 0
-    assert json.loads(capsys.readouterr().out)["created"] is False
+    assert main(["--template-only"], metadata_path=path) == 0
+    repeated = json.loads(capsys.readouterr().out)
+    assert repeated["created"] is False
+    assert repeated["initialized"] is True
+    assert repeated["stations_total"] == 0
+    assert repeated["dictionary_state"] == "empty"
+    assert repeated["message"] != first["message"]
     assert path.read_bytes() == before
+
+
+def test_cli_initialization_reports_populated_dictionary_without_rewriting(tmp_path: Path, capsys) -> None:
+    import json
+    from tools.sync_api_alert_metadata import main
+
+    path = tmp_path / 'metadata.xlsx'
+    _write(path, [{'step_id': '00100', 'description': 'PI2_CURE'}], [
+        dict(product='P1', lot_id='L1', parameter_name='CODE', factory='ARRAY', step_id='', description='old'),
+    ])
+    before = path.read_bytes()
+    assert main(['--template-only'], metadata_path=path) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload['initialized'] is True
+    assert payload['created'] is False
+    assert payload['stations_total'] == 1
+    assert payload['dictionary_state'] == 'populated'
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('stations', [
+    [{'wrong_column': '00100'}],
+    [{'step_id': '00100', 'description': ''}],
+    [{'step_id': '00100', 'description': 'PI2_CURE'}, {'step_id': '00100', 'description': 'PI3_CURE'}],
+])
+def test_cli_initialization_rejects_invalid_existing_dictionary_without_database_or_writes(
+    tmp_path: Path, monkeypatch, capsys, stations,
+) -> None:
+    import json
+    from src.shared_kernel.infrastructure import db_handler
+    from tools.sync_api_alert_metadata import main
+
+    def forbidden():
+        raise AssertionError('Initialization must not access database')
+
+    monkeypatch.setattr(db_handler, 'DatabaseManager', forbidden)
+    path = tmp_path / 'metadata.xlsx'
+    pd.DataFrame(stations).to_excel(path, sheet_name='站点字典', index=False)
+    before = path.read_bytes()
+    assert main(['--template-only'], metadata_path=path) == 2
+    assert json.loads(capsys.readouterr().out)['status'] == 'error'
+    assert path.read_bytes() == before
+
+
+def test_cli_rejects_combining_full_initialization_with_partial_selection(tmp_path: Path) -> None:
+    from tools.sync_api_alert_metadata import main
+
+    path = tmp_path / 'metadata.xlsx'
+    with pytest.raises(SystemExit) as error:
+        main(['--initialize', '--step', '00100'], metadata_path=path,
+             engine=FakeEngine([{'step_id': '00100', 'description': 'PI2_CURE'}]))
+    assert error.value.code == 2
+    assert not path.exists()
+
+
+def test_cli_entry_outputs_utf8_json_even_with_legacy_pipe_encoding(tmp_path: Path) -> None:
+    import json
+    import os
+    import subprocess
+    import sys
+
+    path = tmp_path / 'metadata.xlsx'
+    code = '''import runpy, sys
+from pathlib import Path
+from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.infrastructure import db_handler
+metadata_path = Path(sys.argv[1])
+ConfigLoader.get_domain_resource_path = staticmethod(lambda *_: metadata_path)
+def forbidden():
+    raise AssertionError("Initialization must not construct database")
+db_handler.DatabaseManager = forbidden
+sys.argv = ["sync_api_alert_metadata", "--template-only"]
+runpy.run_module("tools.sync_api_alert_metadata", run_name="__main__")
+'''
+    result = subprocess.run([sys.executable, '-c', code, str(path)],
+                            cwd=Path(__file__).resolve().parents[3],
+                            env=dict(os.environ, PYTHONIOENCODING='ascii'),
+                            capture_output=True, timeout=20)
+    assert result.returncode == 0, result.stderr.decode('utf-8', errors='replace')
+    payload = json.loads(result.stdout.decode('utf-8'))
+    assert payload['initialized'] is True
+    assert payload['message'].startswith('站点字典已新建')
+    assert path.exists()
 
 
 def test_cli_resolves_registry_and_uses_explicit_engine(tmp_path: Path, monkeypatch, capsys) -> None:

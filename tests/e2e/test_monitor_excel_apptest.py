@@ -9,6 +9,7 @@ def _monitor_app(monkeypatch, tmp_path):
     from app.components import page_header
     from app.manager.session_manager import SessionManager
     from app.sections.inline_domain.monitor import alert_matrix, alert_matrix_cache
+    from app.sections.yield_domain import all_product_board as yield_board
     from app.utils import app_setup, reloader
     from src.inline_domain.application.monitor.live_source import LiveMonitorSource
     import src.inline_domain.composition as composition
@@ -21,6 +22,7 @@ def _monitor_app(monkeypatch, tmp_path):
     targets = {
         composition: ("build_oos_history_service", "build_ooc_history_service",
                       "build_monitor_summary_workbook_service", "build_cpk_monitor_service", "build_cpm_monitor_service",
+                      "build_aoi_rs_monitor_service",
                       "build_live_throughput_reader", "build_live_monitor_source",
                       "build_raw_measurement_repository"),
         LiveMonitorSource: ("compute",), db_handler: ("DatabaseManager",),
@@ -28,6 +30,7 @@ def _monitor_app(monkeypatch, tmp_path):
         app_setup.AppSetup: ("initialize_app",), reloader: ("deep_reload_modules",),
         alert_matrix: ("render_alert_matrix_filter_bar", "render_alert_matrix_board"),
         alert_matrix_cache: ("get_alert_matrix_cached_funcs",),
+        yield_board: ("load_product_period_trends",),
         SessionManager: ("AVAILABLE_PRODUCTS", "get_active_config"),
     }
     for target, names in targets.items():

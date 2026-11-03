@@ -37,7 +37,7 @@
 
 `alert_result_signature()` 汇总实际文件版本、规则配置、参考日、范围以及即时有效性。矩阵的单元格和详情签名也使用它。域特定读取和验证保持原有边界，不将不同工作簿强制改造成一套元数据格式。
 
-独立HTTP API复用Inline的SheetAlertQuery选择能力；其start_date／end_date可传包含首尾的日期，省略仍为上一ISO周，报表与矩阵默认行为不变。跨产品／分类授权聚合、部分失败标记和全局分页由API上层拥有，接口契约见[API使用说明](../../../domain/inline_domain/monitor/guide-sheet-anomaly-api.md)，不将HTTP元数据加入页面共同载荷。
+独立HTTP API复用Inline的SheetAlertQuery选择能力；其start_date／end_date可传包含首尾的日期，省略仍为上一ISO周，报表与矩阵默认行为不变。跨产品／分类授权聚合、部分失败标记和全局分页由API上层拥有，接口契约见[API调用说明](../../../../docs/dev_docs/generated/inline_domain/monitor/api-caller-guide-2026-11-03.md)，不将HTTP元数据加入页面共同载荷。
 
 ## 3. 缓存与一致性
 

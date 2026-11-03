@@ -227,7 +227,8 @@ def _build_capability_monitor_service(resource_dir: Path | None, *, metric: str)
     )
 
 
-def build_capability_latest_reader(metric: str, resource_dir: Path | None = None):
+def build_capability_latest_reader(metric: str, resource_dir: Path | None = None, *,
+                                   workbook_reader=None, strict_empty: bool = False):
     """Use one configured capability workbook reader for SPC and monitoring."""
     from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
     from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
@@ -239,7 +240,18 @@ def build_capability_latest_reader(metric: str, resource_dir: Path | None = None
             if resource_dir is not None else ConfigLoader.get_domain_resource_path(
                 "inline_domain", "spc_cpk_cpm_decoration", "spc/spc_cpk_cpm_decoration.xlsx",
             ))
-    return reader(path)
+    return reader(path, workbook_reader=workbook_reader, strict_empty=strict_empty)
+
+
+def build_capability_alert_query(metric: str, *, workbook_reader=None):
+    """Bind a file-only capability query to current configured period policies."""
+    from src.inline_domain.application.monitor.capability_alert_query import CapabilityAlertQuery
+
+    return CapabilityAlertQuery(
+        build_capability_latest_reader(metric, workbook_reader=workbook_reader, strict_empty=True),
+        metric=metric, date_exclusion=ConfigLoader.get_inline_data_exclusion(),
+        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
+    )
 
 
 def build_spc_input_signature(prod_code: str) -> str:
