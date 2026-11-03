@@ -87,6 +87,36 @@ def test_conflicting_measurements_are_not_averaged():
         LifetimeReportService(MemorySource(pd.concat([raw, conflict]))).get_report()
 
 
+@pytest.mark.parametrize('scope', [(), ('M999',)])
+def test_scoped_report_without_matching_products_has_complete_empty_schema(scope):
+    raw = source_frame()
+    result = LifetimeReportService(MemorySource(raw), enabled_products=scope).get_report()
+    assert result.empty and len(result.columns) == 16
+    assert not result.attrs
+
+
+@pytest.mark.parametrize('column,value,code', [
+    ('panel_id', None, 'LIFETIME_IDENTITY_MISSING'),
+    ('bu', '  ', 'LIFETIME_IDENTITY_MISSING'),
+    ('test_time', 'bad', 'LIFETIME_TIME_INVALID'),
+])
+def test_enabled_measurements_still_fail_validation(column, value, code):
+    raw = source_frame()
+    raw.loc[0, column] = value
+    with pytest.raises(LifetimeDataInvalid, match=code):
+        LifetimeReportService(MemorySource(raw), enabled_products=('M678',)).get_report()
+
+
+def test_enabled_conflicting_measurements_still_fail_validation():
+    raw = source_frame()
+    conflict = raw.iloc[[0]].assign(eff_decay='0.5')
+    service = LifetimeReportService(
+        MemorySource(pd.concat([raw, conflict])), enabled_products=('M678',),
+    )
+    with pytest.raises(LifetimeDataInvalid, match='LIFETIME_MEASUREMENT_CONFLICT'):
+        service.get_report()
+
+
 def test_group_numbers_do_not_change_on_filtering_or_cross_group_overlap():
     raw = source_frame()
     other = raw.iloc[[0]].copy()

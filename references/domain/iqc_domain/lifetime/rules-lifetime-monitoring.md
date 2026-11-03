@@ -1,6 +1,6 @@
 # IQC 寿命监控与取数规则
 
-核验日期：2026-10-13。适用范围：IQC 寿命测试报表的监控维度与数据新鲜度。
+核验日期：2026-11-03。适用范围：IQC 寿命测试报表的监控维度与数据新鲜度。
 
 ## 监控维度
 
@@ -24,7 +24,9 @@ JNCD 同时进入公开明细表和原生 CSV 导出。空值、缺测标记、�
 
 - `LifetimeRepository.read_report()` 每次调用均在 M3 只读事务中执行完整 SELECT，读取 `m3dwd.dwd_panel_eff_dec_enter`；没有文件快照读写、增量合并或失败快照回退。
 - `LifetimeReportService.get_report()` 读取仓储并生成公开投影，服务层没有结果缓存；M3 engine 的 `lru_cache` 只复用连接池对象，不缓存查询结果。
+- 默认 composition 从 `ConfigLoader.get_enabled_products(strict=True)` 注入启用产品范围；Core 在字段完整性检查后、身份/时间/冲突校验及匿名编号前过滤范围外记录。空产品和未启用产品不参与校验，也不进入公开缓存；启用产品的完整组仍执行原有严格校验。显式空范围返回完整列结构的空表；直接构造且不传范围的服务保留全源校验，供受控调用使用。
 - 默认页面入口经过 `fetch_report_payload()` 的 `st.cache_data`。它只缓存匿名公开 DataFrame，`max_entries=1`，没有启用磁盘持久化；有效期来自 `config/global.yaml` 的 `application.cache_ttl_hours`（核验时为 12 小时）。这是内存结果缓存，因此页面并非每次交互实时读库。
+- 页面将启用产品元组作为缓存参数传入，并将相同范围传给服务；配置变化重新生成对应公开载荷，避免复用先前范围的缓存导致新启用产品缺失。页面仍在渲染前复核启用范围。
 - “查询”按钮应用筛选条件，不清除数据缓存。缓存过期后下一次页面运行，或页头“刷新缓存”清理本页注册函数后，才重新读库。页头刷新入口遵循既有管理展示模式；本页不注册快照刷新任务。
 - 服务注入路径绕过默认页面缓存，用于受控验证。读取失败不缓存失败结果；页面显示安全业务提示，不用旧快照或示例替代。
 
@@ -50,6 +52,19 @@ $env:IQC_LIFETIME_LIVE_DB='1'
 验证命令：`.venv/Scripts/python.exe -m pytest tests/e2e/test_iqc_lifetime_apptest.py tests/unit/test_iqc_lifetime.py tests/unit/test_iqc_lifetime_repository.py -q --tb=short`。
 
 已同步浏览器脚本的画面范围和图数预期；本轮未重跑浏览器、实库或完整业务回归。
+
+## 2026-11-03 空产品记录导致整页失败的修复
+
+服务端报错为 `LifetimeDataInvalid / LIFETIME_IDENTITY_MISSING`。先经只读元数据探查确认源表规模较小，再读取核验：1,871 条源记录中有 1 条产品型号为空；其余 1,870 条可通过原有投影校验。原流程在页面过滤启用产品之前校验全部源记录，导致范围外空产品记录阻断整页。现按上述启用范围先过滤再校验，保留启用产品的身份、时间及冲突测点失败规则，源表不写入。
+
+修复前，composition 回归用例对 NULL、空字符串、纯空白和禁用产品四类范围外异常记录均失败；修复后实库服务成功返回 1,870 条、16 列公开数据。以下聚焦验证共 95 项通过，包含实库逐测点对账、默认 composition 到页面查询的 AppTest、空范围、范围内异常拦截、配置变化缓存失效、页头刷新及架构检查：
+
+```powershell
+$env:IQC_LIFETIME_LIVE_DB='1'
+.venv/Scripts/python.exe -m pytest tests/unit/test_iqc_lifetime.py tests/unit/test_iqc_lifetime_repository.py tests/e2e/test_iqc_lifetime_apptest.py tests/integration/test_iqc_lifetime_live.py tests/unit/app/components/test_page_header_product_cache.py tests/architecture -q --tb=short
+```
+
+实库对账测试新增只读元数据规模门控，拒绝未知或超出上限的全量核验。本轮未启动临时服务，也未重跑浏览器脚本或完整业务回归。
 
 ## 首次展示由查询触发的追加验证
 

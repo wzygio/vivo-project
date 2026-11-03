@@ -9,6 +9,26 @@ from src.iqc_domain.application.lifetime.lifetime import LifetimeSourceUnavailab
 from src.iqc_domain.infrastructure.lifetime.lifetime_repository import LifetimeRepository
 
 
+@pytest.mark.parametrize('product', [None, '', ' \t ', 'DISABLED'])
+def test_composed_service_scopes_products_before_identity_validation(monkeypatch, product):
+    from src.iqc_domain import composition
+    from tests.unit.test_iqc_lifetime import source_frame
+
+    raw = source_frame()
+    outside = raw.iloc[[0]].assign(product_group=product, panel_id=None, test_time='bad')
+    combined = pd.concat([raw, outside], ignore_index=True)
+    monkeypatch.setattr(composition, 'get_m3_engine', lambda: object())
+    monkeypatch.setattr(LifetimeRepository, 'read_report', lambda self: combined.copy())
+    monkeypatch.setattr(composition.ConfigLoader, 'get_enabled_products',
+                        lambda **kwargs: ['M678'])
+
+    report = composition.build_lifetime_service().get_report()
+
+    assert len(report) == len(raw)
+    assert report['产品型号'].unique().tolist() == ['M678']
+    assert 'private' not in report.to_json()
+
+
 def test_read_uses_read_only_transaction_and_complete_columns(monkeypatch):
     commands = []
 
@@ -143,5 +163,33 @@ def test_cache_fill_survives_service_module_reload(monkeypatch):
             report = filling.result(timeout=10)
         pd.testing.assert_frame_equal(report, dashboard.fetch_report_payload())
         assert len(calls) == 1 and not report.attrs
+    finally:
+        dashboard.fetch_report_payload.clear()
+
+
+def test_public_cache_changes_with_enabled_product_scope(monkeypatch):
+    from app.sections.iqc_domain.lifetime import lifetime_dashboard as dashboard
+    from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
+    from tests.unit.test_iqc_lifetime import MemorySource, source_frame
+
+    raw = source_frame()
+    raw = pd.concat([raw, raw.assign(product_group='M626')], ignore_index=True)
+    calls = []
+
+    def build(*, enabled_products):
+        calls.append(enabled_products)
+        return LifetimeReportService(MemorySource(raw), enabled_products=enabled_products)
+
+    monkeypatch.setattr(dashboard, 'build_lifetime_service', build)
+    dashboard.fetch_report_payload.clear()
+    try:
+        first = dashboard.fetch_report_payload(('M678',))
+        pd.testing.assert_frame_equal(first, dashboard.fetch_report_payload(('M678',)))
+        assert calls == [('M678',)]
+        second = dashboard.fetch_report_payload(('M678', 'M626'))
+        assert set(second['产品型号']) == {'M678', 'M626'}
+        assert len(calls) == 2
+        assert dashboard.fetch_report_payload(()).empty
+        assert len(calls) == 3
     finally:
         dashboard.fetch_report_payload.clear()

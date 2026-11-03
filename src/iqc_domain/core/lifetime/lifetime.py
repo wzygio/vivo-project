@@ -20,11 +20,15 @@ class LifetimeDataInvalid(ValueError):
     """Measurements cannot be assigned to unambiguous lifetime curves."""
 
 
-def project_report(source: pd.DataFrame) -> pd.DataFrame:
+def project_report(
+    source: pd.DataFrame, *, enabled_products: tuple[str, ...] | None = None,
+) -> pd.DataFrame:
     if not set(REPORT_FIELDS).issubset(source.columns):
         raise LifetimeDataInvalid('LIFETIME_COLUMNS_MISSING')
     frame = source.loc[:, list(REPORT_FIELDS)].copy()
     frame.attrs = {}
+    if enabled_products is not None:
+        frame = frame.loc[frame['product_group'].isin(enabled_products)].copy()
     for column in [*SOURCE_GROUP, 'panel_id', 'product_id', 'wo_name']:
         frame[column] = frame[column].astype('string')
     # Normalize absent batches before grouping, deduplication and sample numbering.

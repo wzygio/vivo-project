@@ -17,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=1, show_spinner=False)
-def fetch_report_payload() -> pd.DataFrame:
+def fetch_report_payload(enabled_products: tuple[str, ...] | None = None) -> pd.DataFrame:
     """Cache anonymous public facts including JNCD. Failed reads are never cached."""
-    return build_lifetime_service().get_report()
+    service = (build_lifetime_service() if enabled_products is None
+               else build_lifetime_service(enabled_products=enabled_products))
+    return service.get_report()
 
 
 def _select(
@@ -113,13 +115,14 @@ def _render_details(frame: pd.DataFrame) -> None:
 
 def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> None:
     try:
+        enabled_products = list(dict.fromkeys(ConfigLoader.get_enabled_products(strict=True)))
         with st.spinner('正在读取寿命测试数据…'):
-            frame = service.get_report() if service is not None else fetch_report_payload()
+            frame = (service.get_report() if service is not None
+                     else fetch_report_payload(tuple(enabled_products)))
     except Exception as exc:
         logger.error('LIFETIME_REPORT_UNAVAILABLE exception_type=%s', type(exc).__name__)
         st.error('寿命测试数据暂时无法读取，请稍后刷新重试。')
         return
-    enabled_products = list(dict.fromkeys(ConfigLoader.get_enabled_products()))
     # Apply the allowlist even when "all" is selected; never send disabled facts to UI.
     frame = frame.loc[frame['产品型号'].isin(enabled_products)].copy()
     filters = _render_filters(frame, enabled_products)

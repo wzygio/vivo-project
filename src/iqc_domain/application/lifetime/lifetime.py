@@ -18,8 +18,11 @@ class LifetimeDataPort(Protocol):
 
 
 class LifetimeReportService:
-    def __init__(self, source: LifetimeDataPort) -> None:
+    def __init__(
+        self, source: LifetimeDataPort, *, enabled_products: tuple[str, ...] | None = None,
+    ) -> None:
         self._source = source
+        self._enabled_products = enabled_products
 
     def get_report(self) -> pd.DataFrame:
-        return project_report(self._source.read_report())
+        return project_report(self._source.read_report(), enabled_products=self._enabled_products)

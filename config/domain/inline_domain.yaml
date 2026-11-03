@@ -51,8 +51,8 @@ aoi_rs:
   special_decoration:
     enabled: true
     # 严格超过 sheet_threshold_ratio × spec 时触发，哈希值位于 [0, sheet_replacement_ratio × spec]。
-    sheet_threshold_ratio: 0.4
-    sheet_replacement_ratio: 0.2
+    sheet_threshold_ratio: 0.5
+    sheet_replacement_ratio: 0.25
     factories:
       - "OLED"
     # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。

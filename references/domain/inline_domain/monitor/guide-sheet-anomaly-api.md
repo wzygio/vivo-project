@@ -184,20 +184,20 @@ powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
 
 当前未开放 `/docs` 或 `/redoc` 交互页面；可把获授权读取的 OpenAPI 导入调用工具。关闭访问日志避免把请求 URL 写入默认 access log。当前启动命令的服务日志输出到终端，正式托管应将标准输出／错误归档到 `output/logs/`，不要额外记录密钥或完整请求头。
 
-### 4.1 查询参数
+### 4.1 查询参数（前六个字段与下方返回数据中的前六个必要字段一一对应）
 
 | 参数 | 要求 |
 |---|---|
-| `product` | 可选，省略表示启用且获授权的全部产品；显式填写产品原代码 |
 | `sub_domain` | 可选，省略表示全部授权分类；显式值严格使用第1节大小写 |
-| `event_type` | 默认 `OOS`；四类 Inline 可指定 `OOC`；Yield／Q-Time 指定 OOC 返回422 |
-| `factory` | 可选，显式请求必须在授权范围；省略表示所有已授权厂别 |
 | `step_id` | 可选，发生站点精确匹配 |
+| `factory` | 可选，显式请求必须在授权范围；省略表示所有已授权厂别 |
 | `layer` | 可选，层别精确匹配 |
 | `parameter_name` | 可选，监控参数精确匹配 |
+| `event_type` | 默认 `OOS`；四类 Inline 可指定 `OOC`；Yield／Q-Time 指定 OOC 返回422 |
+| `entity_type` | 可选，`sheet` 或 `lot` |
+| `product` | 可选，省略表示启用且获授权的全部产品；显式填写产品原代码 |
 | `start_date` | 可选，YYYY-MM-DD，含当天；默认上个ISO周周一 |
 | `end_date` | 可选，YYYY-MM-DD，含当天；默认上个ISO周周日 |
-| `entity_type` | 可选，`sheet` 或 `lot` |
 | `entity_id` | 可选，对象编号精确匹配 |
 | `limit` | 可选，省略不按条数截断；显式1～500时启用分页 |
 | `cursor` | 下一页令牌，首个请求不填写；使用时必须同时提供显式limit |
@@ -236,7 +236,7 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
 
 `VIVO_API_BASE_URL` 填运维提供的地址；本机示例为 `http://127.0.0.1:8890`。虚构产品必须替换为真实启用且获授权的产品。调用失败时按下一节处理状态码。
 
-### 4.2 返回数据与分页
+### 4.2 返回数据（前六个字段为业务方规定的必要字段）
 
 业务列是固定白名单：
 

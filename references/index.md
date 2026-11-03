@@ -19,6 +19,7 @@
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | 异常片／Lot 只读API、OOS/OOC、调用凭证、分页、Q-Time起点站、Yield可配置厂别映射／NULL层别／Flag释放、本地工序字典同步 | [异常片／Lot API 使用说明](domain/inline_domain/monitor/guide-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
+| 首次调用异常 API、同事交接、其它设备 PowerShell 测试、真实记录核对 | [调用入门](../docs/dev_docs/generated/inline_domain/monitor/api-caller-guide-2026-11-03.md)；[跨设备测试步骤与案例](../docs/dev_docs/generated/inline_domain/monitor/api-remote-test-2026-11-03.md)；接口约定以正式使用说明为准 |
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |

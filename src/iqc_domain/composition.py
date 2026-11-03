@@ -23,8 +23,14 @@ def build_evaporation_service(
     ))
 
 
-def build_lifetime_service() -> LifetimeReportService:
-    return LifetimeReportService(LifetimeRepository(get_m3_engine()))
+def build_lifetime_service(
+    *, enabled_products: tuple[str, ...] | None = None,
+) -> LifetimeReportService:
+    return LifetimeReportService(
+        LifetimeRepository(get_m3_engine()),
+        enabled_products=(tuple(ConfigLoader.get_enabled_products(strict=True))
+                          if enabled_products is None else enabled_products),
+    )
 
 
 def build_evaporation_alert_store() -> EvaporationAlertWorkbook:

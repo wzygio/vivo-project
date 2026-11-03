@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from src.iqc_domain.composition import build_lifetime_service
 from src.iqc_domain.infrastructure.lifetime.m3_database import get_m3_engine
+from src.shared_kernel.config import ConfigLoader
 
 
 @pytest.mark.skipif(os.getenv('IQC_LIFETIME_LIVE_DB') != '1', reason='Opt-in M3 read')
@@ -16,6 +17,13 @@ def test_live_lifetime_public_report_matches_source():
     with get_m3_engine().connect() as connection, connection.begin():
         connection.execute(text('SET TRANSACTION READ ONLY'))
         connection.execute(text("SET LOCAL statement_timeout = '60s'"))
+        metadata = connection.execute(text('''
+            SELECT relkind, reltuples, pg_relation_size(oid)
+            FROM pg_class WHERE oid = 'm3dwd.dwd_panel_eff_dec_enter'::regclass
+        ''')).one()
+        if (metadata[0] != 'r' or not 0 <= metadata[1] <= 100_000
+                or metadata[2] > 64 * 1024 * 1024):
+            pytest.skip('Full parity read requires a small source with known table statistics')
         raw = pd.read_sql_query(text('''
             SELECT product_group, product_id, wo_name, date_key, panel_id,
                    test_time, bu, luminance, lumi_decay, cie_x, cie_xy,
@@ -23,6 +31,7 @@ def test_live_lifetime_public_report_matches_source():
             FROM m3dwd.dwd_panel_eff_dec_enter
         '''), connection)
     actual = build_lifetime_service().get_report()
+    raw = raw.loc[raw.product_group.isin(ConfigLoader.get_enabled_products(strict=True))].copy()
     raw['date_key'] = raw['date_key'].map(
         lambda value: '未填写批次' if pd.isna(value) or not str(value).strip() else str(value)
     )

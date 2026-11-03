@@ -240,3 +240,35 @@ def test_unfiltered_query_returns_all_products_and_changes_wait_for_query():
     app.button(key='iqc_lifetime_query').click().run()
     assert set(app.dataframe[0].value['产品型号']) == {'M626'}
     assert len(app.dataframe[0].value) == 24
+
+
+def test_default_composition_excludes_blank_product_before_validation():
+    from app.sections.iqc_domain.lifetime.lifetime_dashboard import fetch_report_payload
+
+    script = '''
+import pandas as pd
+from unittest.mock import patch
+from tests.unit.test_iqc_lifetime import source_frame
+from src.iqc_domain import composition
+from src.iqc_domain.infrastructure.lifetime.lifetime_repository import LifetimeRepository
+from src.shared_kernel.config import ConfigLoader
+from app.sections.iqc_domain.lifetime.lifetime_dashboard import render_lifetime_dashboard
+raw = source_frame()
+outside = raw.iloc[[0]].assign(product_group='', panel_id=None)
+with patch.object(ConfigLoader, 'get_enabled_products', return_value=['M678']), \\
+     patch.object(composition, 'get_m3_engine', return_value=object()), \\
+     patch.object(LifetimeRepository, 'read_report', return_value=pd.concat([raw, outside])):
+    render_lifetime_dashboard()
+'''
+    fetch_report_payload.clear()
+    try:
+        app = AppTest.from_string(script).run()
+        assert not app.exception and not app.error
+        assert len(app.multiselect) == 3 and not app.dataframe
+        app.button(key='iqc_lifetime_query').click().run()
+        assert not app.exception and not app.error
+        assert len(app.dataframe[0].value) == 24
+        assert len(app.get('plotly_chart')) == 9
+        assert 'private' not in app.dataframe[0].value.to_json()
+    finally:
+        fetch_report_payload.clear()
