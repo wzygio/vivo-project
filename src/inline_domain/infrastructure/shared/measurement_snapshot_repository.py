@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import hashlib
+import json
 import logging
 from pathlib import Path
 import threading
@@ -15,6 +17,7 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     load_raw_measurements,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_forward import DataForwardPolicy
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
@@ -32,6 +35,20 @@ if TYPE_CHECKING:
 MeasurementLoader = Callable[["DatabaseManager", str, str, str], pd.DataFrame]
 MeasurementCorrector = Callable[[pd.DataFrame], pd.DataFrame]
 logger = logging.getLogger(__name__)
+
+
+def measurement_snapshot_coverage(path: Path, policy: DataForwardPolicy) -> dict | None:
+    """Bind inclusive display coverage to one validated raw-file generation."""
+    metadata = read_metadata(path, InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION,
+                             policy_file=True)
+    if metadata is None:
+        return None
+    offset = pd.Timedelta(days=policy.effective_days)
+    generation = hashlib.sha256(json.dumps({"metadata": metadata, "forward": policy.signature},
+                                          sort_keys=True).encode()).hexdigest()
+    return {"start_date": (pd.Timestamp(metadata["covered_from"]) + offset).date().isoformat(),
+            "end_date": (pd.Timestamp(metadata["covered_through"]) + offset).date().isoformat(),
+            "source_generation": generation}
 
 
 @dataclass(frozen=True)
@@ -120,7 +137,7 @@ class InlineMeasurementSnapshotRepository:
         with self._lock_for(snapshot_path), snapshot_process_lock(snapshot_path):
             cached = None if force_refresh else self._try_read_fresh(snapshot_path, end_timestamp)
             if cached is not None:
-                return MeasurementRefreshResult(cached, False)
+                return self._snapshot_result(snapshot_path, cached, False)
             metadata = read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True)
             previous = None
             if metadata is not None:
@@ -142,8 +159,8 @@ class InlineMeasurementSnapshotRepository:
                 )
             except Exception:
                 logger.exception("Failed to refresh Inline measurement snapshot for %s", prod_code)
-                return MeasurementRefreshResult(
-                    self._fallback(snapshot_path, required_start=start_date), False
+                return self._snapshot_result(
+                    snapshot_path, self._fallback(snapshot_path, required_start=start_date), False
                 )
             if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
@@ -152,7 +169,15 @@ class InlineMeasurementSnapshotRepository:
             )
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
             self._write_snapshot(snapshot_path, measurements, end_timestamp)
-            return MeasurementRefreshResult(measurements.copy(), True)
+            return self._snapshot_result(snapshot_path, measurements.copy(), True)
+
+    def _snapshot_result(self, path: Path, measurements: pd.DataFrame,
+                         refreshed: bool) -> MeasurementRefreshResult:
+        # Every caller is inside the same product/process lock as the data read
+        # or publication. Never look up newer coverage after releasing that lock.
+        measurements.attrs["spc_source_coverage"] = measurement_snapshot_coverage(
+            path, self.data_forward_policy)
+        return MeasurementRefreshResult(measurements, refreshed)
 
     def _is_fresh(self, snapshot_path: Path, end_timestamp: pd.Timestamp) -> bool:
         return is_fresh(read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True), end_timestamp, self.SNAPSHOT_TTL_HOURS)

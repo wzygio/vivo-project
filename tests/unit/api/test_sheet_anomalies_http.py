@@ -29,7 +29,7 @@ def test_authorized_caller_gets_only_public_fields():
                      enabled_products=lambda: ['P1'],
                      clock=lambda: datetime(2026, 11, 2, 10, tzinfo=ZoneInfo('Asia/Shanghai')))
     with TestClient(app) as client:
-        response = client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC', headers={'X-API-Key': key})
+        response = client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS', headers={'X-API-Key': key})
     assert response.status_code == 200
     assert response.json()['data'] == rows
     assert response.json()['meta']['period_start'] == '2026-10-26T00:00:00+08:00'
@@ -70,7 +70,7 @@ def test_spc_file_to_http_shares_existing_filters_and_never_writes(tmp_path, mon
     app = create_app(service=service,clients_provider=lambda:(principal,),enabled_products=lambda:['P1'],
                      clock=lambda:datetime(2026,11,2,10,tzinfo=ZoneInfo('Asia/Shanghai')))
     with TestClient(app) as client:
-        response=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC',headers={'X-API-Key':key})
+        response=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
     assert response.status_code == 200
     assert [row['对象编号'] for row in response.json()['data']] == ['000001']
     assert response.json()['data'][0]['层别'] == 'PI2'
@@ -88,7 +88,7 @@ def test_cursor_pages_one_public_snapshot_and_rejects_changed_results():
     class Source:
         def read(self,*args): return rows
     app=create_app(service=Source(),clients_provider=lambda:(principal,),enabled_products=lambda:['P1'])
-    params={'product':'P1','sub_domain':'SPC','limit':1}
+    params={'product':'P1','sub_domain':'SPC','event_type':'OOS','limit':1}
     with TestClient(app) as client:
         first=client.get('/api/v1/sheet-anomalies',params=params,headers={'X-API-Key':key})
         assert first.status_code==200 and first.json()['meta']['has_more'] is True
@@ -109,7 +109,7 @@ def test_unavailable_source_is_safe_json_and_does_not_echo_technical_details():
         def read(self,*args): raise ValueError('private-workbook-path and internal flag')
     app=create_app(service=Source(),clients_provider=lambda:(principal,),enabled_products=lambda:['P1'])
     with TestClient(app,raise_server_exceptions=False) as client:
-        result=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC',headers={'X-API-Key':key})
+        result=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
     assert result.status_code==503
     assert result.json()['error']['code']=='result_unavailable'
     assert 'private-workbook-path' not in result.text and 'flag' not in result.text
@@ -128,7 +128,7 @@ def test_client_limit_and_read_timeout_are_enforced():
     settings=ApiSettings(requests_per_minute=1,read_timeout_seconds=.01,max_concurrent_reads=1)
     app=create_app(service=SlowSource(),settings=settings,clients_provider=lambda:(principal,),enabled_products=lambda:['P1'])
     with TestClient(app) as client:
-        first=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC',headers={'X-API-Key':key})
+        first=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
         assert first.status_code==503
-        second=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC',headers={'X-API-Key':key})
+        second=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
         assert second.status_code==429 and int(second.headers['retry-after'])>0

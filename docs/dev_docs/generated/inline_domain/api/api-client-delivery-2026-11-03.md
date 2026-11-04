@@ -4,7 +4,7 @@
 
 ## 结论与交付
 
-- 提供 [独立 Python 调用程序](../../../../../tools/fetch_sheet_anomalies.py) 和 [Windows 一键入口](../../../../../query_anomaly_api.cmd)。仅使用标准库，无参数打开中文窗口，支持隐藏输入密钥、查询、预览和 JSON 导出。
+- 当时提供 [独立 Python 调用程序](../../../../../tools/fetch_sheet_anomalies.py) 和 Windows 一键入口。后者于 2026-11-04 按用户要求移除，目前使用 `uv run --no-sync python tools/fetch_sheet_anomalies.py` 直接打开同一中文窗口；Python 客户端保留，支持隐藏输入密钥、查询、预览和 JSON 导出。
 - 默认不分页；选择每页行数后自动取完并合并。完整空结果、部分来源失败、协议错误和取数失败分别提示，不导出未完成的分页前缀。
 - [调用说明](api-caller-guide-2026-11-03.md) 已改为以程序操作为主，明确本机也可真实调用，跨设备测试用于额外确认网络可达。
 

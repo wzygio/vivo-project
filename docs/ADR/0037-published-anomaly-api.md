@@ -65,9 +65,33 @@ Inline monitor 提供薄只读应用查询和可注入的现有 workbook reader�
 
 不新增独立分类或修改全部查询默认值，以保留现有授权配置和调用行为；不把能力项伪装成单片或 Lot，公开键摘要作为稳定对象编号。旧新模型联合验证，CSV 则统一追加六列。CPK 与 CPM 分别使用矩阵政策，并在读取来源前执行；分页来源身份增加事件，继续绑定公开结果变化。
 
-实际旧配置缺少 catalog 已声明的 CPM 行，计划在备份后仅追加该行、初始逐产品复制 CPK 设置，之后独立维护。该公开政策变更被自动审批拒绝，目前尚未执行，不能以缺行默认允许或回退 CPK 政策代替。正式工作进程亦尚未加载新代码。设计与代码验收不等于正式 CPM 取数验收；后者须在明确授权并部署后完成。
+11-03旧配置缺少catalog已声明的CPM行，自动审批当时拒绝新增公开政策，未以回退CPK或缺行默认放行绕过。用户于11-04明确批准后，已备份并仅追加CPM行、初始逐产品复制CPK设置，核对原单元格保留；之后两行独立维护。
+
+同日已在原地址及授权下加载正式1.2.0，部署配置原字节保持一致，旧进程退出和新监听就绪均已核实。正式HTTP已返回M626／2026-W44的CPK、CPM各1条，必要字段完整，与本地台账一致，并完成真实多页和CSV／JSON行数验证。见[正式验收记录](../dev_docs/generated/inline_domain/api/api-capability-deployment-2026-11-04.md)。
 
 规格及任务：[能力 API 规格](../../.scratch/anomaly-api-capability/PRD.md)；核心应用：[只读能力查询](../../src/inline_domain/application/monitor/capability_alert_query.py)；HTTP 验证：[能力文件集成](../../tests/integration/test_anomaly_api_capability.py)。验证证据与真实来源预检位于 `output/test-results/api-cpk-cpm-20261103/`。
+
+## 2026-11-04：能力项目返回完整 Sheet ID 名单
+
+用户明确将 LOWER 和未明确边界统一为 `spec`，并要求能力项目的对象编号返回对应统计周全部 Sheet ID。1.3.0 保持 `对象类型=capability`、每行一个能力项目，`对象编号` 改为非空、去重、文本升序的字符串数组；片／Lot 仍使用字符串。`entity_id` 对能力项目按成员匹配并返回完整名单；分页及计数仍以项目行为单位，完整名单进入游标指纹。JSON 保留数组，CSV 在单个单元格保存标准 JSON，不截断片号。
+
+SPC 应用提供成员发布及只读查询接口。来源是现有报表 By Sheet 的制备点位，按产品／厂别／站点／参数和完整 ISO 周筛选，不从 OOS 名单反推，也不把整月的片都放进上周。正常 SPC 报表在 native payload 缓存外自动发布产品／周 JSON 分片；对应策略进入上游缓存键。独立同步命令调用同一个正常报表流程以初始化，不引入 HTTP 数据库回退。成员文件属于 `data/inline_domain/spc/sheet_membership/` 的可重建快照，维护工作簿及原始数据生命周期不变。
+
+成员快照验证完整日期覆盖、策略、业务键、真实点位跨度和指标／来源跨度锚点；资料不匹配时沿用来源不可用语义，不返回假成功的空编号。真实来源覆盖及代际在原始快照事务锁内捕获，经显示时间映射后随同批制备点位及原生缓存传递，当前 manifest 不得给旧缓存扩大覆盖。正常发布只覆盖本次完整覆盖的周，保留其它历史周；完整覆盖但无点位的周必须覆盖为空，不能继续保留旧名单。缺成员或发布失败不在 HTTP 中补算。
+
+复用完整 SPC 报表服务作为 HTTP 查询接口虽然能取得片号，却会在缓存未命中时查数据库并维护台账，因此不采用。直接切原始 Parquet 会遗漏制备阶段的清洗、分类、去重和物理过滤，也不采用。新增成员 port 是既有报表生产与独立 HTTP 读取两种运行时之间的必要边界。
+
+规格与任务见 [片号优化规格](../../.scratch/anomaly-api-sheet-membership/PRD.md)。文件／HTTP 回归和 [真实网络 E2E](../../tests/e2e/test_anomaly_api_sheet_membership_e2e.py) 验证完整名单、按片号查询、跨页、导出、部分失败及成功／失败／中断的监听清理。536 项相关验证通过，覆盖率 92.21%；正式 1.3.0 已核对真实 M626 上周各指标的 3 个片号及历史两页，原部署配置保留，见 [交付记录](../dev_docs/generated/inline_domain/api/api-sheet-membership-delivery-2026-11-04.md)。新契约是已授权的对象编号类型调整，调用方需按 1.3.0 说明迁移，不再依赖旧 `capability:` 摘要。
+
+## 2026-11-04：默认查询全部适用事件
+
+用户要求省略 `event_type` 时全选。1.4.0 将查询参数默认值改为未指定，并在授权范围内按分类展开：SPC 为 OOS／OOC／CPK／CPM，CTQ／AOI 为 OOS／OOC，Yield／Q-Time 仅 OOS。显式选择保持单事件语义；非 SPC 调用方的默认查询不要求 SPC 权限。每个事件仍是独立来源，失败列表保留具体事件，公开政策、完整性、合并排序、容量和游标约束继续生效。
+
+用户同时询问能否取消密钥或默认填写。本次保留当前认证及授权，没有启用匿名访问；客户端从进程环境的 `API_KEY` 或兼容名称 `VIVO_API_KEY` 自动取得密钥，GUI 星号显示，查询后清空输入框并可从环境再次读取，不落盘、不加载共享默认密钥。项目本机启动器在没有进程凭证时，仅从已授权使用的项目 `.env` 取得 `API_KEY`，注入本次调用并在退出时恢复，独立客户端仍不读密钥文件。API Key 是本项目选择的认证方式，不是 HTTP 的强制要求；取消认证及匿名范围不作为这次默认查询调整的一部分。
+
+## 2026-11-04：简化查询程序启动入口
+
+用户明确要求删除 `query_anomaly_api.cmd` 与 `tools/launch_anomaly_api_query.py`，改为直接使用 `uv run --no-sync python tools/fetch_sheet_anomalies.py`。两份启动文件及仅验证已移除启动器的专用测试一并删除，保留客户端的 HTTP 封装、GUI、分页、导出和环境变量密钥支持。此前启动器读取项目 `.env` 的行为随组件移除而终止，客户端不新增密钥文件读取；本次不调整正式 API 服务及其启动入口。
 
 ## Traceability
 
@@ -75,7 +99,7 @@ Inline monitor 提供薄只读应用查询和可注入的现有 workbook reader�
 - 实现：[HTTP入口](../../api/main.py)、[跨域组合](../../api/composition.py)、[公开投影](../../api/service.py)、[Inline共同查询](../../src/inline_domain/application/monitor/sheet_alert_query.py)、[公开规则](../../src/shared_kernel/core/alert_visibility.py)、[本地维护元数据](../../src/shared_kernel/infrastructure/api_alert_metadata.py)。
 - 测试：[本地文件到HTTP集成](../../tests/integration/test_anomaly_api_files.py)、[Inline查询](../../tests/unit/inline_domain/application/monitor/test_sheet_alert_query.py)、[元数据](../../tests/unit/shared_kernel/test_api_alert_metadata.py)、[缓存](../../tests/unit/shared_kernel/test_api_workbook_cache.py)、[依赖守卫](../../tests/architecture/test_backend_dependencies.py)。
 - 部署：[API服务部署说明](../../references/domain/inline_domain/api/guide-sheet-anomaly-api.md)；调用：[API调用说明](../../references/domain/inline_domain/api/api-caller-guide-2026-11-03.md)；实现：[API程序介绍](../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。
-- 2.2：[获批查询规格](../../.scratch/anomaly-api-query/PRD.md)、[执行计划](../../.planning/2026-11-02-api-query/task_plan.md)、[查询协调](../../api/query.py)、[HTTP查询回归](../../tests/unit/api/test_query_options_http.py)、[交付记录](../dev_docs/generated/inline_domain/monitor/api-query-optimization-2026-11-02.md)。
+- 2.2：[获批查询规格](../../.scratch/anomaly-api-query/PRD.md)、[执行计划](../../.planning/2026-11-02-api-query/task_plan.md)、[查询协调](../../api/query.py)、[HTTP查询回归](../../tests/unit/api/test_query_options_http.py)、[交付记录](../dev_docs/generated/inline_domain/api/api-query-optimization-2026-11-02.md)。
 
 ## Verification and acceptance
 
@@ -83,5 +107,5 @@ Inline monitor 提供薄只读应用查询和可注入的现有 workbook reader�
 - 专项267项通过，覆盖率92.37%；Standards／Spec具体阻断项均已关闭。合并后126项验证通过；新增Q-Time边界回归后127项相关验证通过，该变更Pyright为0 errors、0 warnings。
 - 完整回归2708项通过、24项失败；24项在同条件起始相关源码对照中仍复现。用户明确接受另行跟踪，不把它们标记为通过，亦不把质量例外推广到后续变更。
 - 初版开发验收时未代替正式部署或真实服务账号的保护文件可读性验证。后续已授权部署和需求2.1变更分别由对应交付记录跟踪；2.1不再要求维护Yield归属。
-- 用户明确要求的2.1修订及global.yaml可配置要求、实施范围和新验证见 [Yield Lot优化记录](../dev_docs/generated/inline_domain/monitor/api-yield-lot-optimization-2026-11-02.md)。此处只修订用户已明确选择的业务决定，其他API边界保持原决定。
-- 验证与限制：[交付记录](../dev_docs/generated/inline_domain/monitor/api-delivery-2026-11-02.md)；后续基线问题：[独立Issue目录](../../.scratch/api-baseline-regressions/issues/)。
+- 用户明确要求的2.1修订及global.yaml可配置要求、实施范围和新验证见 [Yield Lot优化记录](../dev_docs/generated/inline_domain/api/api-yield-lot-optimization-2026-11-02.md)。此处只修订用户已明确选择的业务决定，其他API边界保持原决定。
+- 验证与限制：[交付记录](../dev_docs/generated/inline_domain/api/api-delivery-2026-11-02.md)；后续基线问题：[独立Issue目录](../../.scratch/api-baseline-regressions/issues/)。

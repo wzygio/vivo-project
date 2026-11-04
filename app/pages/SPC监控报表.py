@@ -49,6 +49,9 @@ from src.inline_domain.application.shared.decision_signature import get_scope_de
 from src.inline_domain.composition import (
     build_spc_repository, refresh_raw_measurements,
     build_spc_input_signature,
+    build_spc_sheet_membership_store,
+    build_spc_sheet_membership_policy_signature,
+    build_spc_sheet_membership_coverage,
 )
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
@@ -145,6 +148,9 @@ try:
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
             product_revision=product_revision,
             decision_signature=decision_signature,
+            _sheet_membership_store=build_spc_sheet_membership_store(),
+            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(),
+            _sheet_membership_coverage=build_spc_sheet_membership_coverage(current_product),
         )
 except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):
     logging.getLogger(__name__).exception("SPC report inputs could not be read")

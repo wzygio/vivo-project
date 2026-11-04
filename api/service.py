@@ -9,7 +9,10 @@ from typing import Any
 
 import pandas as pd
 
-from api.schemas import AnomalyQuery, AnomalyRecord, CapabilityRecord
+from api.schemas import (
+    AnomalyQuery, AnomalyRecord, CapabilityRecord, normalize_sheet_ids,
+    public_record_sort_key,
+)
 from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD
 
 
@@ -27,14 +30,16 @@ def _released(value: Any) -> bool:
 
 class PublishedAnomalyService:
     def __init__(self, *, source_reader: Callable, hidden: Callable, metadata: Any,
-                 capability_hidden: Callable | None = None) -> None:
+                 capability_hidden: Callable | None = None,
+                 sheet_membership: Callable[[AnomalyQuery, dict], list[str]] | None = None) -> None:
         self._source_reader = source_reader
         self._hidden = hidden
         self._metadata = metadata
         self._capability_hidden = capability_hidden
+        self._sheet_membership = sheet_membership
 
     def read(self, query: AnomalyQuery, factories: tuple[str, ...], reference_date: date) -> list[dict]:
-        if query.product is None or query.sub_domain is None:
+        if query.product is None or query.sub_domain is None or query.event_type is None:
             raise ResultUnavailable('Source query must be resolved')
         # Deliberately precedes source access: hidden state cannot leak through
         # source failures, publication dates, counts, or pagination versions.
@@ -69,7 +74,7 @@ class PublishedAnomalyService:
                 continue
             if query.entity_type and query.entity_type != normalized['entity_type']:
                 continue
-            if query.entity_id and query.entity_id != normalized['entity_id']:
+            if not capability and query.entity_id and query.entity_id != normalized['entity_id']:
                 continue
             if query.step_id and query.step_id != normalized['step_id']:
                 continue
@@ -86,6 +91,13 @@ class PublishedAnomalyService:
                 continue
             if query.layer and query.layer != enriched['layer']:
                 continue
+            if capability:
+                if self._sheet_membership is None:
+                    raise ResultUnavailable('Capability Sheet membership unavailable')
+                members = normalize_sheet_ids(self._sheet_membership(query, row))
+                if query.entity_id and query.entity_id not in members:
+                    continue
+                normalized = {**normalized, 'entity_id': members}
             record_model = CapabilityRecord if capability else AnomalyRecord
             model = record_model(
                 sub_domain=query.sub_domain, product=query.product, event_type=query.event_type,
@@ -93,9 +105,7 @@ class PublishedAnomalyService:
             )
             public.append(model.model_dump(mode='json', by_alias=True))
         # All sort keys are public. Source file signatures never become tokens.
-        public.sort(key=lambda row: tuple(str(row.get(name) or '') for name in (
-            '发生时间', '对象编号', '发生站点', '监控参数', '命中边界', '对象类型',
-        )), reverse=True)
+        public.sort(key=public_record_sort_key, reverse=True)
         return public
 
     @staticmethod
@@ -156,7 +166,7 @@ class PublishedAnomalyService:
         digest = hashlib.sha256(json.dumps(keys, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
         return dict(entity_type='capability', entity_id='capability:' + digest,
                     parameter_name=parameter, factory=factory, step_id=step,
-                    occurred_at=end.date().isoformat(), boundary='LOWER',
+                    occurred_at=end.date().isoformat(), boundary='spec',
                     metric_value=row.get(query.event_type.lower()), lower_bound=CPK_THRESHOLD,
                     period_type=period_type, period_label=period_label,
                     period_start_date=start.date(), period_end_date=end.date())

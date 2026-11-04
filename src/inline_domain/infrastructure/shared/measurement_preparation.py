@@ -177,7 +177,11 @@ class InlineMeasurementPreparationRepository:
             config.end_date,
             force_refresh,
         )
-        return self._prepare_shared_measurements(raw, config)
+        prepared = self._prepare_shared_measurements(raw, config)
+        # Merges/empty projections need not retain pandas attrs. Carry the exact
+        # source generation separately from the observed point population.
+        prepared.attrs["spc_source_coverage"] = raw.attrs.get("spc_source_coverage")
+        return prepared
 
     def _prepare_shared_measurements(
         self, raw: pd.DataFrame, config: SpcQueryConfig

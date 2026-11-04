@@ -360,6 +360,7 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     assert entered_repository.wait(timeout=10)
 
     module_name = original_module.__name__
+    parent_package = importlib.import_module(original_module.__package__)
     try:
         del sys.modules[module_name]
         importlib.import_module(module_name)
@@ -368,6 +369,9 @@ def test_cpm_report_remains_available_when_service_module_reloads_during_cache_f
     finally:
         continue_repository.set()
         sys.modules[module_name] = original_module
+        # import_module also replaces the attribute used by later
+        # ``from ...spc import spc_service`` imports; restore both boundaries.
+        setattr(parent_package, module_name.rsplit(".", 1)[1], original_module)
 
     assert not worker.is_alive()
     assert "error" not in outcome, repr(outcome.get("error"))

@@ -260,6 +260,65 @@ def build_spc_input_signature(prod_code: str) -> str:
     return spc_input_signature(ConfigLoader.get_project_root(), prod_code)
 
 
+def build_spc_sheet_membership_store():
+    """Bind rebuildable SPC members to the existing domain snapshot lifecycle."""
+    from src.inline_domain.infrastructure.spc.sheet_membership_store import SpcSheetMembershipJsonStore
+    from src.shared_kernel.snapshot_paths import snapshot_directory
+
+    directory = snapshot_directory(ConfigLoader.get_project_root() / "data", "inline_domain", "spc")
+    return SpcSheetMembershipJsonStore(directory / "sheet_membership")
+
+
+def build_spc_sheet_membership_policy_signature() -> str:
+    """Invalidate published member projections when membership policies change."""
+    import hashlib
+    import json
+    from src.inline_domain.core.monitor.monitor_param_classifier import PARAM_CLASSIFICATION_SIGNATURE
+
+    rules = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters")
+    stat = rules.stat()
+    components = (
+        "spc-sheet-membership-v1", PARAM_CLASSIFICATION_SIGNATURE,
+        repr(ConfigLoader.get_data_forward_policy()),
+        repr(ConfigLoader.get_inline_data_exclusion()),
+        str(rules.resolve()), stat.st_size, stat.st_mtime_ns,
+    )
+    return hashlib.sha256(json.dumps(components, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def build_spc_sheet_membership_query():
+    """Read published By Sheet membership; never construct a producer or DB."""
+    from src.inline_domain.application.spc.sheet_membership import SpcSheetMembershipQuery
+
+    return SpcSheetMembershipQuery(
+        build_spc_sheet_membership_store(),
+        policy_signature=build_spc_sheet_membership_policy_signature,
+    )
+
+
+def build_spc_sheet_membership_coverage(product: str):
+    """Read proven raw-source coverage on the display axis after report loading.
+
+    A requested report window is not evidence that a fallback snapshot contains
+    the entire week. The raw manifest binds its coverage to exact Parquet bytes.
+    """
+    from src.shared_kernel.snapshot_paths import snapshot_component
+
+    component = snapshot_component(product)
+
+    def coverage():
+        from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import measurement_snapshot_coverage
+
+        path = inline_measurement_directory(ConfigLoader.get_project_root() / "data") / (
+            f"inline_measurements_{component}.parquet")
+        bound = measurement_snapshot_coverage(path, ConfigLoader.get_data_forward_policy())
+        if bound is None:
+            raise ValueError("SPC source coverage unavailable")
+        return bound
+
+    return coverage
+
+
 def build_raw_measurement_repository(
     db_manager: DatabaseManager,
     prod_code: str,

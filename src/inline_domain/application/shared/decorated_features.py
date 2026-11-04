@@ -78,12 +78,13 @@ class InMemoryFeaturesSource:
         return self._spec_df.copy()
 
 
-def _empty_features_payload(spec_empty: bool = True) -> dict[str, object]:
+def _empty_features_payload(spec_empty: bool = True, source_coverage: dict | None = None) -> dict[str, object]:
     return {
         "sheet_features_df": pd.DataFrame(),
         "raw_measurements_df": pd.DataFrame(),
         "spec_empty": spec_empty,
         "sheet_oos_decoration": None,
+        "spc_source_coverage": source_coverage,
     }
 
 
@@ -160,6 +161,7 @@ def fetch_decorated_features(
         data_type_filter=_DATA_TYPE_FILTER_BY_SCOPE[normalized_scope],
     )
     measurements_df = _features_source.get_spc_measurements(fetch_config)
+    source_coverage = measurements_df.attrs.get("spc_source_coverage")
     if normalized_scope == SCOPE_SPC and not measurements_df.empty:
         measurements_df = ConfigLoader.get_report_cutoff_policy().filter_frame(
             measurements_df, "sheet_start_time",
@@ -197,7 +199,7 @@ def fetch_decorated_features(
                 coverage_start=coverage_start,
                 coverage_end=coverage_end,
             )
-        return _empty_features_payload(spec_empty=spec_df.empty)
+        return _empty_features_payload(spec_empty=spec_df.empty, source_coverage=source_coverage)
 
     if "sheet_start_time" in measurements_df.columns:
         measurements_df = measurements_df.copy()
@@ -239,7 +241,7 @@ def fetch_decorated_features(
                     coverage_start=coverage_start,
                     coverage_end=coverage_end,
                 )
-            return _empty_features_payload(spec_empty=spec_df.empty)
+            return _empty_features_payload(spec_empty=spec_df.empty, source_coverage=source_coverage)
 
     if normalized_scope == SCOPE_NONE:
         # 免修饰口径：只做 preprocess 特征计算（与 aoi_tt 一致）。
@@ -249,6 +251,7 @@ def fetch_decorated_features(
             "raw_measurements_df": measurements_df,
             "spec_empty": spec_df.empty,
             "sheet_oos_decoration": None,
+            "spc_source_coverage": source_coverage,
         }
 
     decorated_data = prepare_decorated_data(
@@ -321,4 +324,5 @@ def fetch_decorated_features(
             "decision_df": decoration_result.decision_df,
             "refresh_reason": decoration_result.refresh_reason,
         },
+        "spc_source_coverage": source_coverage,
     }

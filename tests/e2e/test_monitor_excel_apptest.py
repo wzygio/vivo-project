@@ -1,7 +1,32 @@
 """Actual-page regression with local workbook fixtures and forbidden raw paths."""
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
+
+
+@pytest.fixture(autouse=True)
+def forbid_protected_workbook_fallbacks(monkeypatch):
+    """A caught UI error must not conceal an unisolated maintained-workbook read."""
+    from src.shared_kernel.utils import excel_tools
+
+    attempts = []
+
+    def forbidden(path, *args, **kwargs):
+        attempts.append(str(path))
+        raise AssertionError(f"Protected workbook access forbidden in Excel fixture: {path}")
+
+    for name in ("_read_all_sheets_via_com", "_read_encrypted_xlsx_via_com", "_list_sheet_names_via_com"):
+        if hasattr(excel_tools, name):
+            monkeypatch.setattr(excel_tools, name, forbidden)
+    try:
+        import win32com.client
+    except ImportError:
+        pass
+    else:
+        monkeypatch.setattr(win32com.client, "DispatchEx", forbidden)
+    yield
+    assert not attempts, f"Unisolated protected workbook reads: {attempts}"
 
 
 def _monitor_app(monkeypatch, tmp_path):
@@ -23,6 +48,7 @@ def _monitor_app(monkeypatch, tmp_path):
         composition: ("build_oos_history_service", "build_ooc_history_service",
                       "build_monitor_summary_workbook_service", "build_cpk_monitor_service", "build_cpm_monitor_service",
                       "build_aoi_rs_monitor_service",
+                      "build_capability_latest_reader",
                       "build_live_throughput_reader", "build_live_monitor_source",
                       "build_raw_measurement_repository"),
         LiveMonitorSource: ("compute",), db_handler: ("DatabaseManager",),

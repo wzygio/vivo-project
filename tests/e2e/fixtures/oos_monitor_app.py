@@ -155,6 +155,10 @@ composition.build_cpk_monitor_service = lambda: CpkWorkbookMonitorService(cpk_st
 composition.build_cpm_monitor_service = lambda: CpkWorkbookMonitorService(
     cpm_store, latest_reader=CpmLatestExcelStore(cpk_latest_path), metric="cpm",
 )
+composition.build_capability_latest_reader = lambda metric, resource_dir=None, **kwargs: (
+    CpmLatestExcelStore(cpk_latest_path, **kwargs) if metric == "cpm"
+    else CpkLatestExcelStore(cpk_latest_path, **kwargs)
+)
 composition.build_aoi_rs_monitor_service = EmptyAoiRsMonitorService
 yield_board.load_product_period_trends = empty_yield_periods
 composition.build_live_throughput_reader = forbidden_raw

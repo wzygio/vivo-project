@@ -27,7 +27,7 @@ def _record(query):
                监控参数='THK', 异常事件=query.event_type, 对象类型='sheet', 对象编号='FRESH',
                发生时间='2026-10-28T09:30:00+08:00', 命中边界='USL')
     if query.event_type == 'CPK':
-        row.update(对象类型='capability', 对象编号='capability:' + 'a' * 64,
+        row.update(对象类型='capability', 对象编号=['FRESH'],
                    发生时间='2026-11-01', 命中边界='LOWER', 指标值=1.2, 达标下限=1.33,
                    统计周期类型='week', 统计周期='2026-W44',
                    统计开始日期='2026-10-26', 统计截止日期='2026-11-01')

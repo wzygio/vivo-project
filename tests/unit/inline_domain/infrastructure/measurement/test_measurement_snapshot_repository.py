@@ -60,6 +60,30 @@ def _raw_measurements() -> pd.DataFrame:
     )
 
 
+def test_partial_fallback_keeps_its_actual_coverage_and_old_payload_proof(tmp_path):
+    fail = False
+
+    def loader(*args):
+        if fail:
+            raise OSError("source temporarily unavailable")
+        return _raw_measurements()
+
+    repository = InlineMeasurementSnapshotRepository(
+        snapshot_dir=tmp_path, db_manager=SimpleNamespace(engine=object()),
+        measurement_loader=loader)
+    first = repository.get_measurements("M678", "2026-08-13")
+    proof = dict(first.attrs["spc_source_coverage"])
+    assert proof["end_date"] == "2026-08-17"  # source inclusive day + four display days
+    fail = True
+    partial = repository.get_measurements("M678", "2026-08-20", force_refresh=True)
+    assert partial.attrs["spc_source_coverage"] == proof
+    fail = False
+    refreshed = repository.get_measurements("M678", "2026-08-20", force_refresh=True)
+    assert refreshed.attrs["spc_source_coverage"]["end_date"] == "2026-08-24"
+    assert refreshed.attrs["spc_source_coverage"]["source_generation"] != proof["source_generation"]
+    assert first.attrs["spc_source_coverage"] == proof
+
+
 def test_repository_reuses_one_product_snapshot_for_repeated_reads(tmp_path) -> None:
     calls: list[tuple[str, str, str]] = []
 

@@ -16,7 +16,7 @@ from api.settings import ApiClient, ApiSettings
 ENDPOINT = "/api/v1/sheet-anomalies"
 KEY = "synthetic-security-test-key-not-a-real-credential"
 OTHER_KEY = "synthetic-other-system-key-not-a-real-credential"
-PARAMS = {"product": "P1", "sub_domain": "SPC"}
+PARAMS = {"product": "P1", "sub_domain": "SPC", "event_type": "OOS"}
 HEADERS = {"X-API-Key": KEY}
 NOW = datetime(2026, 11, 2, 10, tzinfo=ZoneInfo("Asia/Shanghai"))
 

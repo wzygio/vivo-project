@@ -15,11 +15,25 @@ FAKE_KEY = 'offline-client-fixture-key'
 CAPABILITY_FIELDS = ('指标值', '达标下限', '统计周期类型', '统计周期', '统计开始日期', '统计截止日期')
 
 
+@pytest.fixture(autouse=True)
+def isolated_credential_environment(monkeypatch):
+    monkeypatch.delenv('API_KEY', raising=False)
+    monkeypatch.delenv('VIVO_API_KEY', raising=False)
+
+
+def test_environment_key_can_be_filled_without_loading_or_saving_a_file(monkeypatch):
+    assert client.configured_api_key() == ''
+    monkeypatch.setenv('VIVO_API_KEY', 'synthetic-legacy')
+    assert client.configured_api_key() == 'synthetic-legacy'
+    monkeypatch.setenv('API_KEY', FAKE_KEY)
+    assert client.configured_api_key() == FAKE_KEY
+
+
 def capability_record(index=0, event_type='CPK'):
     return {'分类': 'SPC', '发生站点': '00100', '部门': 'ARRAY', '层别': 'PI2',
             '监控参数': '中文参数', '异常事件': event_type, '对象类型': 'capability',
-            '对象编号': f'capability:{index:064x}', '产品型号': 'M626',
-            '发生时间': '2026-11-01', '命中边界': None,
+            '对象编号': [f'{index:08d}-SHEET-01', f'{index:08d}-SHEET-02'], '产品型号': 'M626',
+            '发生时间': '2026-11-01', '命中边界': 'spec',
             '指标值': 1.12, '达标下限': 1.33, '统计周期类型': 'week',
             '统计周期': '2026-W44', '统计开始日期': '2026-10-26', '统计截止日期': '2026-11-01'}
 
@@ -118,13 +132,51 @@ def test_capability_pages_and_exports_keep_every_row_and_public_field(tmp_path: 
         assert reader.fieldnames[-6:] == list(CAPABILITY_FIELDS)
         exported = list(reader)
     assert len(exported) == 1205
-    assert exported[-1]['对象编号'] == records[-1]['对象编号']
+    assert json.loads(exported[-1]['对象编号']) == records[-1]['对象编号']
     assert exported[-1]['对象类型'] == 'capability'
     assert exported[-1]['异常事件'] == event_type
     assert [exported[-1][name] for name in CAPABILITY_FIELDS] == [str(records[-1][name]) for name in CAPABILITY_FIELDS]
     receipt = json.loads(csv_path.with_name(csv_path.name + '.meta.json').read_text(encoding='utf-8'))
     assert receipt['meta']['complete'] is complete and receipt['meta']['failed_sources'] == failed
     assert receipt['export']['row_count'] == 1205
+
+
+@pytest.mark.parametrize('event_type', ['CPK', 'CPM'])
+def test_capability_sheet_filter_and_exports_preserve_the_complete_id_array(tmp_path: Path, event_type):
+    record = capability_record(event_type=event_type)
+    # A single capability project can contain more members than one page's row limit.
+    sheet_ids = [f'{index:08d}' for index in range(1205)] + ['中文片号', 'S,"quoted"', '=1+2', '\t=1']
+    record['对象编号'] = sheet_ids
+    opener = Opener(response([record]))
+    result = client.fetch_anomalies('http://host:8890', FAKE_KEY,
+                                    {'event_type': event_type, 'entity_id': '00000001'},
+                                    page_size=1, opener=opener)
+    query = parse_qs(urlsplit(opener.requests[0][0].full_url).query)
+    assert query['entity_id'] == ['00000001']
+    assert result['meta']['returned_count'] == 1
+    assert result['data'][0]['对象编号'] == sheet_ids
+    json_path, csv_path = tmp_path / 'members.json', tmp_path / 'members.csv'
+    client.save_result(result, json_path)
+    assert json.loads(json_path.read_text(encoding='utf-8'))['data'][0]['对象编号'] == sheet_ids
+    client.save_records_csv(result, csv_path)
+    with csv_path.open(encoding='utf-8-sig', newline='') as stream:
+        exported = list(csv.DictReader(stream))
+    assert len(exported) == 1
+    assert json.loads(exported[0]['对象编号']) == sheet_ids
+    assert exported[0]['命中边界'] == 'spec'
+    receipt = json.loads(csv_path.with_name(csv_path.name + '.meta.json').read_text(encoding='utf-8'))
+    assert receipt['export']['row_count'] == 1
+
+
+@pytest.mark.parametrize('invalid_member', [float('nan'), {'not-a-json-value'}])
+def test_csv_rejects_non_json_id_lists_before_creating_files(tmp_path: Path, invalid_member):
+    record = capability_record()
+    record['对象编号'] = ['00001', invalid_member]
+    output = tmp_path / 'invalid-list.csv'
+    with pytest.raises(client.ApiCallError, match='JSON'):
+        client.save_records_csv(response([record]), output)
+    assert not output.exists()
+    assert not output.with_name(output.name + '.meta.json').exists()
 
 
 def test_empty_success_and_partial_success_are_distinguished():
@@ -314,8 +366,10 @@ def test_csv_download_rolls_back_its_new_data_file_if_receipt_cannot_be_saved(tm
     assert not output.with_name(output.name + '.meta.json').exists()
 
 
-def test_cli_can_download_csv_and_companion_metadata(tmp_path: Path, monkeypatch, capsys):
-    monkeypatch.setenv('VIVO_API_KEY', FAKE_KEY)
+@pytest.mark.parametrize('variable', ['API_KEY', 'VIVO_API_KEY'])
+def test_cli_can_download_csv_and_companion_metadata(tmp_path: Path, monkeypatch, capsys, variable):
+    monkeypatch.setenv(variable, FAKE_KEY)
+    monkeypatch.setattr(client.getpass, 'getpass', lambda *args: pytest.fail('Configured key should not prompt'))
     monkeypatch.setattr(client, 'fetch_anomalies', lambda *a, **k: response([{'对象编号': '0001'}]))
     output = tmp_path / 'cli.csv'
     assert client.main(['--cli', '--format', 'csv', '--output', str(output)]) == 0
@@ -442,7 +496,7 @@ def test_gui_timeout_is_forwarded_by_main(monkeypatch):
 
 
 @pytest.mark.parametrize('complete', [True, False])
-@pytest.mark.parametrize('event_type', ['OOS', 'CPK', 'CPM'])
+@pytest.mark.parametrize('event_type', ['OOS', 'CPK', 'CPM', None])
 def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path: Path, monkeypatch, complete, event_type):
     """Exercise real Tk widgets hidden; the HTTP function is an in-memory fixture."""
     tk = pytest.importorskip('tkinter')
@@ -452,7 +506,10 @@ def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path:
     real_tk = tk.Tk
     failures, calls, completed, dialogs = [], [], [], []
     output = tmp_path / 'gui-result.json'
-    records = ([{'对象编号': f'{i:08d}'} for i in range(1205)] if event_type == 'OOS' else
+    capability = event_type in ('CPK', 'CPM')
+    if event_type is None:
+        monkeypatch.setenv('API_KEY', FAKE_KEY)
+    records = ([{'对象编号': f'{i:08d}'} for i in range(1205)] if not capability else
                [capability_record(i, event_type) for i in range(1205)])
     payload = response(records, complete=complete,
                        failed=[] if complete else [{'code': 'result_unavailable'}])
@@ -479,15 +536,20 @@ def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path:
                 buttons = next(w for w in frame.winfo_children() if w.winfo_class() == 'TFrame')
                 query_button, csv_button, save_button = buttons.winfo_children()
                 assert root.title() == '异常明细查询'
-                assert tuple(inputs[4]['values']) == ('OOS', 'OOC', 'CPK', 'CPM')
+                assert tuple(inputs[4]['values']) == ('全部', 'OOS', 'OOC', 'CPK', 'CPM')
+                assert inputs[4].get() == '全部'
                 labels = ' '.join(str(w['text']) for w in frame.winfo_children() if w.winfo_class() == 'TLabel')
                 assert 'CPK/CPM' in labels and 'SPC' in labels and '周统计项' in labels
                 assert csv_button['text'] == '下载全部明细(CSV)'
                 assert save_button['text'] == '保存完整响应(JSON)'
-                inputs[1].insert(0, FAKE_KEY)
+                if event_type is None:
+                    assert inputs[1].get() == FAKE_KEY and inputs[1]['show'] == '*'
+                else:
+                    inputs[1].insert(0, FAKE_KEY)
                 inputs[2].insert(0, 'M626')
-                if event_type != 'OOS':
+                if capability:
                     inputs[3].set('SPC')
+                if event_type is not None:
                     inputs[4].set(event_type)
                 query_button.invoke()
 
@@ -498,24 +560,29 @@ def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path:
                             return
                         assert inputs[1].get() == ''
                         assert calls[0][1] == FAKE_KEY
-                        expected = {'product': 'M626', 'event_type': event_type}
-                        if event_type != 'OOS':
+                        expected = {'product': 'M626'}
+                        if event_type is not None:
+                            expected['event_type'] = event_type
+                        if capability:
                             expected['sub_domain'] = 'SPC'
                         assert calls[0][2] == expected
                         assert calls[0][3]['timeout'] == 12.5
                         view = next(w for w in frame.winfo_children() if w.winfo_class() == 'Text')
-                        assert records[0]['对象编号'] in view.get('1.0', 'end')
-                        assert records[-1]['对象编号'] not in view.get('1.0', 'end')
+                        first_id, last_id = records[0]['对象编号'], records[-1]['对象编号']
+                        if capability:
+                            first_id, last_id = first_id[0], last_id[0]
+                        assert first_id in view.get('1.0', 'end')
+                        assert last_id not in view.get('1.0', 'end')
                         assert FAKE_KEY not in view.get('1.0', 'end')
                         assert csv_button['text'] == ('下载全部明细(CSV)' if complete else '下载可用部分(CSV)')
                         csv_button.invoke()
                         with output.with_suffix('.csv').open(encoding='utf-8-sig', newline='') as stream:
                             exported = list(csv.DictReader(stream))
                         assert len(exported) == 1205
-                        if event_type != 'OOS':
+                        if capability:
                             assert exported[-1]['指标值'] == '1.12'
                             assert exported[-1]['统计周期'] == '2026-W44'
-                            assert exported[-1]['对象编号'] == records[-1]['对象编号']
+                            assert json.loads(exported[-1]['对象编号']) == records[-1]['对象编号']
                         save_button.invoke()
                         assert json.loads(output.read_text(encoding='utf-8')) == payload
                         assert all(('-partial' in call['initialfile']) == (not complete) for call in dialogs)

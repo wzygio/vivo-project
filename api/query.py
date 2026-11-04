@@ -7,10 +7,16 @@ import json
 import logging
 from typing import Any
 
-from api.schemas import AnomalyQuery, PUBLIC_RECORD_ADAPTER, SourceFailure
+from api.schemas import AnomalyQuery, PUBLIC_RECORD_ADAPTER, SourceFailure, public_record_sort_key
 from api.settings import ApiClient
 from api.pagination import SnapshotLimit
 from src.shared_kernel.infrastructure.api_workbook_cache import WorkbookVersionError
+
+SUPPORTED_EVENTS = {
+    'SPC': ('OOS', 'OOC', 'CPK', 'CPM'),
+    'CTQ': ('OOS', 'OOC'), 'AOI_TT': ('OOS', 'OOC'), 'AOI_RS': ('OOS', 'OOC'),
+    'Yield': ('OOS',), 'Q-Time': ('OOS',),
+}
 
 
 class ForbiddenQuery(ValueError):
@@ -71,9 +77,7 @@ class QueryPlan:
             public.extend(projected)
         if failures and len(failures) == len(self.queries):
             raise AllSourcesUnavailable(failures)
-        public.sort(key=lambda row: tuple(str(row.get(name) or '') for name in (
-            '发生时间', '产品型号', '分类', '对象编号', '发生站点', '监控参数', '命中边界', '对象类型',
-        )), reverse=True)
+        public.sort(key=public_record_sort_key, reverse=True)
         return QueryResult(public, failures)
 
     def snapshot_context(self, failures: list[SourceFailure]) -> str:
@@ -108,7 +112,9 @@ def resolve_query(query: AnomalyQuery, principal: ApiClient, enabled: list[str],
     end = query.end_date or this_monday - timedelta(days=1)
     if start > end or end == date.max:
         raise InvalidQuery('Invalid date range')
-    queries = tuple(query.model_copy(update={'product': product, 'sub_domain': domain,
+    queries = tuple(query.model_copy(update={'product': product, 'sub_domain': domain, 'event_type': event,
                                             'start_date': start, 'end_date': end})
-                    for product in products for domain in dict.fromkeys(domains))
+                    for product in products for domain in dict.fromkeys(domains)
+                    for event in SUPPORTED_EVENTS[domain]
+                    if query.event_type is None or query.event_type == event)
     return QueryPlan(queries, factories, start, end)

@@ -30,6 +30,18 @@ PROD = "M678"
 START_DATE = "2026-08-01"
 END_DATE = "2026-08-10"
 
+
+def test_empty_source_keeps_native_generation_coverage():
+    proof = {"start_date": "2026-08-01", "end_date": "2026-08-10", "source_generation": "a" * 64}
+    points = pd.DataFrame()
+    points.attrs["spc_source_coverage"] = proof
+    payload = fetch_decorated_features(
+        _features_source=InMemoryFeaturesSource(points, pd.DataFrame()),
+        prod_code=PROD, scope="spc", start_date=START_DATE, end_date=END_DATE,
+        snapshot_signature="empty-source-native-coverage")
+    assert payload["spc_source_coverage"] == proof
+    assert payload["raw_measurements_df"].empty
+
 DECORATION_COLUMNS = [
     "factory",
     "prod_code",

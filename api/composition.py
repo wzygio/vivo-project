@@ -76,5 +76,19 @@ def build_service() -> PublishedAnomalyService:
             path = ConfigLoader.get_domain_resource_path('shared_kernel', 'api_alert_metadata')
             return ApiAlertMetadata(path, workbook_reader=reader).enrich(*args)
 
+    def sheet_membership(query: AnomalyQuery, row: dict) -> list[str]:
+        from src.inline_domain.composition import build_spc_sheet_membership_query
+
+        return build_spc_sheet_membership_query().sheet_ids(
+            product=query.product, factory=str(row['factory']).upper(),
+            step_id=str(row['step_id']), parameter_name=str(row['param_name']),
+            start_date=row['calendar_start'], end_date=row['calendar_end'],
+            expected_period_start=row.get('period_start'),
+            expected_period_end=row.get('period_end'),
+            metric=query.event_type.lower(),
+            expected_value=row.get(query.event_type.lower()),
+        )
+
     return PublishedAnomalyService(source_reader=source, hidden=hidden, metadata=Metadata(),
-                                   capability_hidden=capability_hidden)
+                                   capability_hidden=capability_hidden,
+                                   sheet_membership=sheet_membership)

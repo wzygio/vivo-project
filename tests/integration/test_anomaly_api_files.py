@@ -189,7 +189,7 @@ def test_real_qtime_uses_from_station_and_its_dictionary_layer(published_files):
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "Q-Time"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "Q-Time"})
     assert response.status_code == 200, response.text
     row, = response.json()["data"]
     assert row["发生站点"] == "0100" and "起始站点" not in row
@@ -206,7 +206,7 @@ def test_authorized_factory_outside_qtime_scope_is_valid_empty(published_files, 
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
-                              params={'product': 'P1', 'sub_domain': 'Q-Time', 'factory': 'CELL'})
+                              params={'event_type': 'OOS', 'product': 'P1', 'sub_domain': 'Q-Time', 'factory': 'CELL'})
     assert response.status_code == 200
     assert response.json()['data'] == [] and response.json()['meta']['status'] == 'ok'
     _assert_unchanged(before)
@@ -217,7 +217,7 @@ def test_real_yield_publishes_automatic_factory_and_null_location_without_metada
     with TestClient(files.app()) as client:
         before = _bytes(files)
         denied = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "Yield"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "Yield"})
         assert denied.status_code == 200 and denied.json()["data"] == []
         _assert_unchanged(before)
         _release_yield(files)
@@ -227,7 +227,7 @@ def test_real_yield_publishes_automatic_factory_and_null_location_without_metada
         files.metadata_path.unlink()
         before = _bytes(files)
         released = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "Yield"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "Yield"})
         assert released.status_code == 200, released.text
         row, = released.json()["data"]
         assert row["部门"] == "ARRAY" and row["发生站点"] is None and row["层别"] is None
@@ -239,7 +239,7 @@ def test_real_yield_publishes_automatic_factory_and_null_location_without_metada
         _write(path, sheets)  # A legacy publication cannot infer attribution on GET.
         before = _bytes(files)
         incomplete = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "Yield"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "Yield"})
         assert incomplete.status_code == 503
         assert "LOT001" not in incomplete.text
         _assert_unchanged(before)
@@ -252,7 +252,7 @@ def test_yield_factory_filter_uses_published_factory_before_metadata_access(publ
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
-            params={'product': 'P1', 'sub_domain': 'Yield', 'factory': 'CELL'})
+            params={'event_type': 'OOS', 'product': 'P1', 'sub_domain': 'Yield', 'factory': 'CELL'})
     assert response.status_code == 200 and response.json()['data'] == []
     _assert_unchanged(before)
 
@@ -262,7 +262,7 @@ def test_custom_dates_and_field_filters_reach_inline_source_selection(published_
     files = published_files
     before = _bytes(files)
     parameter = {'SPC': 'THK', 'CTQ': 'THK', 'AOI_TT': 'TDSUM', 'AOI_RS': '01234'}[domain]
-    params = dict(sub_domain=domain, start_date='2026-11-02', end_date='2026-11-02',
+    params = dict(event_type='OOS', sub_domain=domain, start_date='2026-11-02', end_date='2026-11-02',
                   step_id='0100', layer='PI2', parameter_name=parameter)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=params)
@@ -282,17 +282,19 @@ def test_no_parameters_and_partial_failure_across_real_published_sources(publish
         before = _bytes(files)
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
         assert response.status_code == 200, response.text
-        assert len(response.json()['data']) == 7
-        assert response.json()['meta']['complete'] is True
-        assert response.json()['meta']['failed_sources'] == []
+        assert len(response.json()['data']) == 12
+        assert response.json()['meta']['complete'] is False
+        capability_failures = [dict(product='P1', sub_domain='SPC', event_type=event,
+                                    code='result_unavailable') for event in ('CPK', 'CPM')]
+        assert response.json()['meta']['failed_sources'] == capability_failures
         _assert_unchanged(before)
         files.paths[('inline_domain', 'ctq_sheet_oos_decoration')].unlink()
         before = _bytes(files)
         partial = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
         assert partial.status_code == 200, partial.text
-        assert len(partial.json()['data']) == 6
+        assert len(partial.json()['data']) == 11
         assert partial.json()['meta']['complete'] is False
-        assert partial.json()['meta']['failed_sources'] == [dict(
+        assert partial.json()['meta']['failed_sources'] == capability_failures + [dict(
             product='P1', sub_domain='CTQ', event_type='OOS', code='result_unavailable')]
         assert str(files.paths[('inline_domain', 'ctq_sheet_oos_decoration')]) not in partial.text
         _assert_unchanged(before)
@@ -317,7 +319,7 @@ def test_inline_date_boundaries_use_shanghai_for_timezone_aware_published_times(
     _write(files.paths[('inline_domain', 'spc_sheet_oos_decoration')], {'P1': frame})
     before = _bytes(files)
     with TestClient(files.app()) as client:
-        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(event_type='OOS',
             sub_domain='SPC', start_date='2026-11-02', end_date='2026-11-02'))
     assert response.status_code == 200, response.text
     row, = response.json()['data']
@@ -360,7 +362,7 @@ def test_expected_protected_workbook_errors_preserve_other_sources(published_fil
     monkeypatch.setattr(excel_tools, 'read_workbook_sheets', fallback)
     before = _bytes(files)
     with TestClient(files.app(), raise_server_exceptions=False) as client:
-        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS)
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'OOS'})
     assert response.status_code == 200, response.text
     assert response.json()['meta']['complete'] is False
     assert response.json()['meta']['failed_sources'] == [dict(product='P1', sub_domain='CTQ',
@@ -390,7 +392,7 @@ def test_lot_sources_honor_dates_outside_default_week_and_retain_coverage_checks
         _release_yield(files)
         filters = dict(parameter_name='D1')
     before = _bytes(files)
-    params = dict(sub_domain=domain, start_date='2026-10-25', end_date='2026-10-25', **filters)
+    params = dict(event_type='OOS', sub_domain=domain, start_date='2026-10-25', end_date='2026-10-25', **filters)
     with TestClient(files.app()) as client:
         result = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=params)
         assert result.status_code == 200, result.text
@@ -421,7 +423,7 @@ def test_hidden_public_policy_does_not_read_missing_sources_or_disclose_them(pub
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": domain})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": domain})
     assert response.status_code == 200 and response.json()["data"] == []
     assert response.json()["meta"]["status"] == "ok"
     _assert_unchanged(before)
@@ -433,7 +435,7 @@ def test_invalid_policy_fails_closed_without_source_details(published_files):
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "SPC"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "SPC"})
     assert response.status_code == 503
     assert str(files.policy_path) not in response.text
     _assert_unchanged(before)
@@ -443,7 +445,7 @@ def test_policy_change_is_observed_before_a_cached_source_is_read_again(publishe
     files = published_files
     with TestClient(files.app()) as client:
         initial = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "SPC"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "SPC"})
         assert initial.status_code == 200 and len(initial.json()["data"]) == 1
         policy = files.policy.copy()
         policy.loc[policy["监控参数"].eq(DISPLAY_NAMES["SPC"]), "P1"] = True
@@ -451,7 +453,7 @@ def test_policy_change_is_observed_before_a_cached_source_is_read_again(publishe
         files.paths[("inline_domain", "spc_sheet_oos_decoration")].unlink()
         before = _bytes(files)
         hidden = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "SPC"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "SPC"})
         assert hidden.status_code == 200 and hidden.json()["data"] == []
         assert hidden.json()["meta"]["status"] == "ok"
         assert "SHEET" not in hidden.text and "flag" not in hidden.text
@@ -466,7 +468,7 @@ def test_missing_required_layer_is_unavailable_instead_of_omitting_records(publi
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": "SPC"})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": "SPC"})
     assert response.status_code == 503
     assert "PI2" not in response.text and "00000000001" not in response.text
     _assert_unchanged(before)
@@ -493,6 +495,6 @@ def test_missing_release_evidence_never_becomes_a_successful_empty_result(publis
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get("/api/v1/sheet-anomalies", headers=HEADERS,
-            params={"product": "P1", "sub_domain": domain})
+            params={'event_type': 'OOS', "product": "P1", "sub_domain": domain})
     assert response.status_code == 503, response.text
     _assert_unchanged(before)

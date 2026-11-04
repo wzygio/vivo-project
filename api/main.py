@@ -42,7 +42,9 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
         yield
         reads.close()
 
-    app = FastAPI(title='异常明细与能力不达项 API', version='1.2.0', docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app = FastAPI(title='异常明细与能力不达项 API', version='1.4.0',
+                  description='省略 event_type 时查询各分类支持的全部事件。CPK/CPM 对象编号包含对应完整 ISO 周的全部 Sheet ID。未明确命中边界统一为 spec。',
+                  docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     key_header = APIKeyHeader(name='X-API-Key', auto_error=False)
 
     @app.middleware('http')

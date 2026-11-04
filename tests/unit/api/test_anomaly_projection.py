@@ -46,7 +46,7 @@ def service_for(metadata_path: Path, rows: list[dict], **result_changes) -> Publ
 
 def test_entity_filter_avoids_unrequested_invalid_metadata(metadata_path: Path) -> None:
     service = service_for(metadata_path, [spc_row(), spc_row(sheet_id="UNREQUESTED", step_id="missing")])
-    query = AnomalyQuery(product="P1", sub_domain="SPC", entity_id="00000000101")
+    query = AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC", entity_id="00000000101")
     values = service.read(query, ("ARRAY",), REFERENCE)
     assert [row["对象编号"] for row in values] == ["00000000101"]
 
@@ -88,11 +88,11 @@ def test_rs_keeps_sheet_and_lot_separate_and_filters_by_type(metadata_path: Path
              sheet_start_time="2026-10-28 09:31:00", flag=False),
     ]
     service = service_for(metadata_path, rows)
-    values = service.read(AnomalyQuery(product="P1", sub_domain="AOI_RS"), ("ARRAY",), REFERENCE)
+    values = service.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="AOI_RS"), ("ARRAY",), REFERENCE)
     assert [(row["对象类型"], row["对象编号"]) for row in values] == [
         ("lot", "000000001"), ("sheet", "00000000101"),
     ]
-    filtered = service.read(AnomalyQuery(product="P1", sub_domain="AOI_RS", entity_type="lot"), ("ARRAY",), REFERENCE)
+    filtered = service.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="AOI_RS", entity_type="lot"), ("ARRAY",), REFERENCE)
     assert [row["对象编号"] for row in filtered] == ["000000001"]
 
 
@@ -104,7 +104,7 @@ def test_object_type_filter_precedes_unrequested_rs_lot_metadata(metadata_path: 
              sheet_start_time="2026-10-28 09:31:00", flag=False),
     ]
     result = service_for(metadata_path, rows).read(
-        AnomalyQuery(product="P1", sub_domain="AOI_RS", entity_type="sheet"), ("ARRAY",), REFERENCE,
+        AnomalyQuery(event_type="OOS", product="P1", sub_domain="AOI_RS", entity_type="sheet"), ("ARRAY",), REFERENCE,
     )
     assert [row["对象编号"] for row in result] == ["00000000101"]
 
@@ -112,11 +112,11 @@ def test_object_type_filter_precedes_unrequested_rs_lot_metadata(metadata_path: 
 def test_qtime_uses_from_step_for_occurrence_station_and_layer(metadata_path: Path) -> None:
     row = dict(shop="OLED", prodcode="P1", f_step="00100", t_step="00200", step_desc="FROM_TO",
                lot_id="000000001", timekey="20261028093000123456", flag=False)
-    result = service_for(metadata_path, [row]).read(AnomalyQuery(product="P1", sub_domain="Q-Time"), ("OLED",), REFERENCE)
+    result = service_for(metadata_path, [row]).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="Q-Time"), ("OLED",), REFERENCE)
     assert result == [{
         "分类": "Q-Time", "发生站点": "00100", "部门": "OLED", "层别": "PI2", "监控参数": "FROM_TO",
         "异常事件": "OOS", "对象类型": "lot", "对象编号": "000000001", "产品型号": "P1",
-        "发生时间": "2026-10-28T09:30:00+08:00", "命中边界": None,
+        "发生时间": "2026-10-28T09:30:00+08:00", "命中边界": "spec",
     }]
 
 
@@ -128,19 +128,19 @@ def yield_row() -> dict:
 def test_yield_uses_published_factory_and_null_layer_without_metadata(metadata_path: Path) -> None:
     metadata_path.unlink()
     result = service_for(metadata_path, [yield_row()]).read(
-        AnomalyQuery(product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE,
+        AnomalyQuery(event_type="OOS", product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE,
     )
     assert result == [{
         "分类": "Yield", "发生站点": None, "部门": "ARRAY", "层别": None, "监控参数": "LINE",
         "异常事件": "OOS", "对象类型": "lot", "对象编号": "000000001", "产品型号": "P1",
-        "发生时间": "2026-10-28", "命中边界": None,
+        "发生时间": "2026-10-28", "命中边界": "spec",
     }]
 
 
 def test_yield_missing_factory_is_unavailable_instead_of_dropping_rows(metadata_path: Path) -> None:
     with pytest.raises(ValueError):
         service_for(metadata_path, [{**yield_row(), 'factory': None}]).read(
-            AnomalyQuery(product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE)
+            AnomalyQuery(event_type="OOS", product="P1", sub_domain="Yield"), ("ARRAY",), REFERENCE)
 
 
 @pytest.mark.parametrize('domain', ['SPC', 'CTQ', 'AOI_TT', 'AOI_RS', 'Q-Time'])
@@ -152,14 +152,14 @@ def test_null_layer_is_only_valid_for_yield(domain):
 
 def test_known_unauthorized_factory_is_skipped_before_missing_station_metadata(metadata_path: Path) -> None:
     service = service_for(metadata_path, [spc_row(), spc_row(factory="OLED", sheet_id="UNAUTHORIZED", step_id="missing")])
-    values = service.read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+    values = service.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
     assert [row["对象编号"] for row in values] == ["00000000101"]
 
 
 def test_unknown_required_metadata_fails_the_source_instead_of_returning_partial_rows(metadata_path: Path) -> None:
     service = service_for(metadata_path, [spc_row(), spc_row(sheet_id="S2", step_id="missing")])
     with pytest.raises(ValueError):
-        service.read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+        service.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
 
 
 @pytest.mark.parametrize("changes", [
@@ -170,31 +170,31 @@ def test_unknown_required_metadata_fails_the_source_instead_of_returning_partial
 ])
 def test_missing_or_legacy_release_evidence_is_not_a_successful_empty_result(metadata_path: Path, changes: dict) -> None:
     with pytest.raises(ValueError):
-        service_for(metadata_path, [], **changes).read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+        service_for(metadata_path, [], **changes).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
 
 
 def test_valid_empty_source_is_successful_and_does_not_need_station_metadata(metadata_path: Path) -> None:
     empty = pd.DataFrame(columns=list(spc_row()))
-    assert service_for(metadata_path, [], records=empty).read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE) == []
+    assert service_for(metadata_path, [], records=empty).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE) == []
 
 
 def test_schema_less_empty_source_is_not_a_successful_publication(metadata_path: Path) -> None:
     with pytest.raises(ValueError):
-        service_for(metadata_path, []).read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+        service_for(metadata_path, []).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
 
 
 def test_nonempty_source_without_flags_is_unavailable(metadata_path: Path) -> None:
     row = spc_row()
     del row["flag"]
     with pytest.raises(ValueError):
-        service_for(metadata_path, [row]).read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+        service_for(metadata_path, [row]).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
 
 
 def test_only_explicit_false_decisions_are_released_and_internal_fields_never_leak(metadata_path: Path) -> None:
     rows = [spc_row(sheet_id=f"S{number:02}", flag=flag) for number, flag in enumerate([
         False, "FALSE", 0, 0.0, "0.0", "no", "n", True, "True", "Delete", None, "", "not-false",
     ])]
-    result = service_for(metadata_path, rows).read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+    result = service_for(metadata_path, rows).read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
     assert {row["对象编号"] for row in result} == {"S00", "S01", "S02", "S03", "S04", "S05", "S06"}
     assert all("flag" not in row and "internal_policy" not in row for row in result)
 
@@ -208,11 +208,25 @@ def test_hidden_source_is_not_called_even_when_source_and_metadata_would_fail(tm
         source_reader=forbidden, hidden=lambda domain, product: (domain, product) == ("SPC", "P1"),
         metadata=ApiAlertMetadata(tmp_path / "missing.xlsx"),
     )
-    assert service.read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE) == []
+    assert service.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE) == []
     assert calls == []
 
 
 def test_release_records_are_used_without_leaking_public_table_projections(metadata_path: Path) -> None:
     source = service_for(metadata_path, [{"wrong": "public-table-row"}], release_records=pd.DataFrame([spc_row()]))
-    result = source.read(AnomalyQuery(product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
+    result = source.read(AnomalyQuery(event_type="OOS", product="P1", sub_domain="SPC"), ("ARRAY",), REFERENCE)
     assert [row["对象编号"] for row in result] == ["00000000101"]
+
+
+@pytest.mark.parametrize('boundary', [None, '', ' ', 'NULL', 'null', 'lower', 'LOWER', 'LoWeR'])
+def test_unspecified_or_lower_boundary_defaults_to_spec(metadata_path, boundary):
+    result = service_for(metadata_path, [spc_row(oos_type=boundary)]).read(
+        AnomalyQuery(event_type="OOS", product='P1', sub_domain='SPC'), ('ARRAY',), REFERENCE)
+    assert result[0]['命中边界'] == 'spec'
+
+
+@pytest.mark.parametrize('boundary', ['USL', 'LSL', 'USL/LSL', 'UCL', 'LCL', 'UCL/LCL'])
+def test_explicit_boundary_is_preserved(metadata_path, boundary):
+    result = service_for(metadata_path, [spc_row(oos_type=boundary)]).read(
+        AnomalyQuery(event_type="OOS", product='P1', sub_domain='SPC'), ('ARRAY',), REFERENCE)
+    assert result[0]['命中边界'] == boundary

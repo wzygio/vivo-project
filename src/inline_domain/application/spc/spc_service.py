@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -43,6 +43,11 @@ from src.inline_domain.core.spc.spc_point_decoration import (
     SpcPointDecorationPolicy,
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
+from src.inline_domain.application.spc.sheet_membership import (
+    MEMBERSHIP_POLICY,
+    SpcSheetMembershipStore,
+    publish_spc_sheet_memberships,
+)
 from src.inline_domain.application.shared.decoration_defaults import (
     get_capability_decoration_signature,
 )
@@ -59,6 +64,44 @@ class SpcReportBuildError(RuntimeError):
 
 class SpcDecorationFileError(SpcReportBuildError):
     """Raised when the SPC decoration workbook cannot be read safely."""
+
+
+def _verified_membership_window(query: SpcQueryConfig, coverage: Callable | None, *,
+                                source_coverage: dict | None = None,
+                                require_native: bool = False) -> tuple[date, date]:
+    """Use coverage carried by the prepared batch; current metadata may only narrow it."""
+    try:
+        def bounds(value):
+            if isinstance(value, dict):
+                generation = value.get("source_generation")
+                if not isinstance(generation, str) or not generation:
+                    raise ValueError("Source generation unavailable")
+                return pd.Timestamp(value["start_date"]).date(), pd.Timestamp(value["end_date"]).date(), generation
+            first, last = value
+            return pd.Timestamp(first).date(), pd.Timestamp(last).date(), None
+
+        observed = bounds(coverage()) if coverage is not None else None
+        if source_coverage is not None:
+            covered_start, covered_end, generation = bounds(source_coverage)
+            if observed is not None:
+                if observed[2] is not None and observed[2] != generation:
+                    raise ValueError("Prepared source generation changed")
+                covered_start, covered_end = max(covered_start, observed[0]), min(covered_end, observed[1])
+        elif require_native:
+            raise ValueError("Prepared source coverage unavailable")
+        elif observed is not None:
+            covered_start, covered_end, _ = observed
+        else:
+            raise ValueError("Source coverage unavailable")
+        start = max(pd.Timestamp(query.start_date).date(), pd.Timestamp(covered_start).date())
+        end = min(pd.Timestamp(query.end_date).date(), pd.Timestamp(covered_end).date())
+        required_start, required_end = previous_iso_week_range(pd.Timestamp(query.end_date))
+        required_last = (required_end - pd.Timedelta(days=1)).date()
+        if start > required_start.date() or end < required_last:
+            raise ValueError("Source coverage does not contain the previous complete week")
+        return start, end
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise SpcReportBuildError("SPC Sheet membership source coverage unavailable.") from exc
 
 
 def exclude_cpm_cpk_parameters(
@@ -119,7 +162,7 @@ class SpcReportService:
     """Application service for SPC-only Lot-level CPM reporting."""
 
     @staticmethod
-    def _empty_payload() -> dict[str, object]:
+    def _empty_payload(source_coverage: dict | None = None) -> dict[str, object]:
         return {
             "period_capability_df": pd.DataFrame(),
             "sheet_features_df": pd.DataFrame(),
@@ -128,6 +171,7 @@ class SpcReportService:
             "sheet_oos_decoration": None,
             "cpk_decoration": None,
             "cpm_decoration": None,
+            "spc_source_coverage": source_coverage,
         }
 
     @staticmethod
@@ -206,6 +250,8 @@ class SpcReportService:
         capability_decoration_signature: tuple[object, ...] = (0, 0),
         date_exclusion: InlineDateExclusion | None = None,
         spc_point_policy: SpcPointDecorationPolicy | None = None,
+        _sheet_membership_coverage: Callable[[], tuple[date, date]] | None = None,
+        _require_native_sheet_membership_coverage: bool = False,
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
@@ -240,8 +286,14 @@ class SpcReportService:
                 spc_point_policy=spc_point_policy,
                 point_decoration_signature=SPC_POINT_DECORATION_SIGNATURE,
             )
+            if _sheet_membership_coverage is not None or _require_native_sheet_membership_coverage:
+                # Verify after the source load (it may establish coverage), but
+                # before capability publication can replace a saved metric.
+                _verified_membership_window(query_config, _sheet_membership_coverage,
+                    source_coverage=features_payload.get("spc_source_coverage"),
+                    require_native=_require_native_sheet_membership_coverage)
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
-                return SpcReportService._empty_payload()
+                return SpcReportService._empty_payload(features_payload.get("spc_source_coverage"))
 
             measurements_df = features_payload["raw_measurements_df"]
             sheet_features_df = features_payload["sheet_features_df"]
@@ -307,6 +359,7 @@ class SpcReportService:
                 "sheet_features_df": sheet_features_df,
                 "raw_measurements_df": measurements_df,
                 "indicators_df": indicators_df,
+                "spc_source_coverage": features_payload.get("spc_source_coverage"),
                 "sheet_oos_decoration": features_payload["sheet_oos_decoration"],
                 "cpk_decoration": {
                     "decoration_df": cpk_decoration_result.decoration_df,
@@ -341,6 +394,9 @@ class SpcReportService:
         product_revision: str = "",
         decision_signature: str = "",
         capability_exempt_param_name_contains: tuple[str, ...] | None = None,
+        _sheet_membership_store: SpcSheetMembershipStore | None = None,
+        sheet_membership_policy_signature: str = "",
+        _sheet_membership_coverage: Callable[[], tuple[date, date]] | None = None,
     ) -> SpcReportViewModel:
         """Load cached CPM data and construct project ViewModels outside the pickle boundary."""
         resolved_capability_exemptions = (
@@ -352,6 +408,8 @@ class SpcReportService:
             query = SpcQueryConfig.model_validate_json(query_config_json)
         except Exception as exc:
             raise SpcReportBuildError("SPC query config is invalid.") from exc
+        if _sheet_membership_store is not None and _sheet_membership_coverage is None:
+            raise SpcReportBuildError("SPC Sheet membership requires verified source coverage.")
         try:
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
             spc_point_policy = ConfigLoader.get_spc_point_decoration_policy()
@@ -369,10 +427,15 @@ class SpcReportService:
             f"weekly_span_hours={alert_min_span_hours}",
             "alerts_from_saved_records_v1",
         )
+        prepared_signature = f"{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}"
+        if _sheet_membership_store is not None or sheet_membership_policy_signature:
+            # Never relabel an old prepared-data cache with a newly changed
+            # physical/time/member policy. This also reaches the shared cache.
+            prepared_signature += f":sheet_membership_policy={sheet_membership_policy_signature or MEMBERSHIP_POLICY}"
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
-            snapshot_signature=f"{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}",
+            snapshot_signature=prepared_signature,
             period_sigma_source=period_sigma_source,
             product_revision=product_revision,
             decision_signature=decision_signature,
@@ -380,5 +443,36 @@ class SpcReportService:
             capability_decoration_signature=capability_signature,
             date_exclusion=date_exclusion,
             spc_point_policy=spc_point_policy,
+            _sheet_membership_coverage=_sheet_membership_coverage,
+            _require_native_sheet_membership_coverage=bool(_sheet_membership_store is not None
+                and getattr(_data_port, "supports_shared_history_persistence", False)),
         )
+        measurements = payload.get("raw_measurements_df")
+        if _sheet_membership_store is not None:
+            if not isinstance(measurements, pd.DataFrame):
+                raise SpcReportBuildError("SPC Sheet membership prepared data unavailable.")
+            anchors = [payload.get("period_capability_df")]
+            for metric in ("cpk", "cpm"):
+                decoration = payload.get(f"{metric}_decoration")
+                if isinstance(decoration, dict):
+                    anchors.append(decoration.get("decoration_df"))
+            try:
+                coverage_start, coverage_end = _verified_membership_window(query, _sheet_membership_coverage,
+                    source_coverage=payload.get("spc_source_coverage"),
+                    require_native=bool(getattr(_data_port, "supports_shared_history_persistence", False)))
+                source_proof = payload.get("spc_source_coverage")
+                source_generation = (source_proof["source_generation"] if isinstance(source_proof, dict)
+                                     else prepared_signature)
+                # Outside st.cache_data: the store and COM-free write lifecycle
+                # are never serialized into a shared cached payload.
+                publish_spc_sheet_memberships(
+                    measurements, store=_sheet_membership_store, product=query.prod_code,
+                    start_date=coverage_start, end_date=coverage_end,
+                    policy_signature=sheet_membership_policy_signature or MEMBERSHIP_POLICY,
+                    source_generation=source_generation, capability_records=anchors,
+                )
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                logger.error("[SPC] Sheet membership publication failed: product=%s cause=%s",
+                             query.prod_code, type(exc).__name__, exc_info=True)
+                raise SpcReportBuildError("SPC Sheet membership publication failed.") from exc
         return SpcReportService._view_model_from_payload(payload)

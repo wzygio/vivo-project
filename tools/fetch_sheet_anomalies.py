@@ -46,7 +46,7 @@ class SafeArgumentParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> None:
         self.print_usage(sys.stderr)
-        self.exit(2, '命令参数无效，请用 --help 查看用法。API Key 只能通过隐藏输入或 VIVO_API_KEY 提供，不能放在命令行中。\n')
+        self.exit(2, '命令参数无效，请用 --help 查看用法。API Key 只能通过隐藏输入或 API_KEY／VIVO_API_KEY 提供，不能放在命令行中。\n')
 
 
 class ApiCallError(Exception):
@@ -143,6 +143,9 @@ def fetch_anomalies(base_url: str, api_key: str, params: dict[str, str] | None =
 
     Tests/embedders can inject an opener exposing open(Request, timeout=...).
     The function does not save anything, prompt, or print credentials/results.
+    Capability rows retain every Sheet ID in their entity-ID arrays. Page sizes
+    count result rows, not individual IDs; entity_id filters one Sheet ID while
+    the server still returns the complete matching capability row.
     """
     base = validate_base_url(base_url)
     if (not isinstance(api_key, str) or not api_key or len(api_key) > 1024
@@ -231,7 +234,12 @@ def save_result(result: dict, path: Path) -> Path:
 
 
 def _csv_value(value: Any) -> str:
-    """Keep text IDs, but neutralize formula-leading spreadsheet cells."""
+    """Keep complete JSON arrays and neutralize scalar spreadsheet formulas."""
+    if isinstance(value, list):
+        try:
+            return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+        except (TypeError, ValueError):
+            raise ApiCallError('查询结果包含无法转换为 JSON 的列表，未保存文件。') from None
     text = '' if value is None else str(value)
     candidate = re.sub(r'^[\s\ufeff]+', '', text)
     if text.startswith(('\t', '\r', '\n')) or candidate.startswith(('=', '+', '-', '@')):
@@ -245,6 +253,8 @@ def save_records_csv(result: dict, path: Path) -> Path:
     No 20-row preview or 500-row page limit is applied here. API-side capacity
     remains applicable. CSV stores identifiers as text; Excel import should set
     identifier columns to Text to avoid Excel's own automatic number conversion.
+    Capability Sheet IDs occupy one JSON-array cell per result row; parsing that
+    cell with json.loads restores every original string, including leading zeros.
     The companion <name>.csv.meta.json carries complete/failed_sources and count.
     """
     rows, meta = _completed_export(result)
@@ -278,6 +288,11 @@ def default_output() -> Path:
     return Path(__file__).resolve().parents[1] / 'output/reports/anomaly-api' / f'anomalies-{datetime.now():%Y%m%d-%H%M%S-%f}.json'
 
 
+def configured_api_key() -> str:
+    """Use the caller process environment only; never persist or load key files."""
+    return os.environ.get('API_KEY') or os.environ.get('VIVO_API_KEY') or ''
+
+
 def launch_gui(defaults: argparse.Namespace | None = None) -> int:
     """Human-operated local/remote caller, no credentials are written to disk."""
     import tkinter as tk
@@ -290,10 +305,10 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
     frame.pack(fill='both', expand=True)
     fields = {}
     values = [('base_url', 'API 地址', getattr(defaults, 'base_url', 'http://127.0.0.1:8890')),
-              ('api_key', 'API Key（原始密钥）', ''),
+              ('api_key', 'API Key（原始密钥）', configured_api_key()),
               ('product', '产品（留空为全部授权产品）', getattr(defaults, 'product', '') or ''),
               ('sub_domain', '分类', getattr(defaults, 'sub_domain', '') or '全部'),
-              ('event_type', '异常事件', getattr(defaults, 'event_type', 'OOS') or 'OOS'),
+              ('event_type', '异常事件', getattr(defaults, 'event_type', None) or '全部'),
               ('start_date', '开始日期 YYYY-MM-DD（可空）', getattr(defaults, 'start_date', '') or ''),
               ('end_date', '截止日期 YYYY-MM-DD（可空）', getattr(defaults, 'end_date', '') or ''),
               ('page_size', '每页行数（留空为不分页）', str(getattr(defaults, 'page_size', '') or ''))]
@@ -303,15 +318,16 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
         fields[name] = var
         if name in ('sub_domain', 'event_type'):
             widget = ttk.Combobox(frame, textvariable=var, state='readonly',
-                                  values=('全部', *DOMAINS) if name == 'sub_domain' else ('OOS', 'OOC', 'CPK', 'CPM'))
+                                  values=('全部', *DOMAINS) if name == 'sub_domain' else ('全部', 'OOS', 'OOC', 'CPK', 'CPM'))
         else:
             widget = ttk.Entry(frame, textvariable=var, show='*' if name == 'api_key' else '')
         widget.grid(row=row, column=1, sticky='ew', pady=4)
     ttk.Label(frame, text='本机地址用 127.0.0.1；其它设备填维护者提供的内网地址。日期留空为上周。'
               'CPK/CPM是SPC周统计项，请选择SPC或全部；仅返回日期内完整ISO周，发生时间为统计截止日期。'
+              '其对象编号为完整Sheet ID列表，分页按统计项行数计算；CSV列表单元格为JSON文本。'
               '预览仅20行，下载包含本次收到的全部明细。',
               wraplength=880).grid(row=8, column=0, columnspan=2, sticky='w', pady=8)
-    status = tk.StringVar(value='请输入原始密钥并查询。密钥仅在本次请求中使用，不保存到文件。')
+    status = tk.StringVar(value='可从 API_KEY／VIVO_API_KEY 环境变量自动填入密钥，或手动输入；密钥不保存到文件。')
     ttk.Label(frame, textvariable=status, wraplength=880).grid(row=10, column=0, columnspan=2, sticky='w', pady=8)
     view = tk.Text(frame, wrap='none', height=18, state='disabled')
     view.grid(row=11, column=0, columnspan=2, sticky='nsew')
@@ -344,7 +360,7 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
             status.set('查询条件无效，本次没有可下载的结果。')
             messagebox.showerror('查询条件', '每页行数须为整数；留空表示不分页。', parent=root)
             return
-        base, key = fields['base_url'].get().strip(), fields['api_key'].get()
+        base, key = fields['base_url'].get().strip(), fields['api_key'].get() or configured_api_key()
         fields['api_key'].set('')
         state.update(result=None, busy=True)
         query_button.configure(state='disabled')
@@ -425,8 +441,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument('--gui', action='store_true', help='打开图形窗口')
     parser.add_argument('--base-url', default='http://127.0.0.1:8890')
     for field in FILTERS:
-        help_text = {'event_type': 'OOS（默认）、OOC、CPK或CPM；CPK/CPM仅支持SPC周统计项',
-                     'entity_type': 'sheet、lot或capability（能力统计项）'}.get(field)
+        help_text = {'event_type': '不填为全部适用事件；可选OOS、OOC、CPK或CPM；CPK/CPM仅支持SPC周统计项',
+                     'entity_type': 'sheet、lot或capability（能力统计项）',
+                     'entity_id': '单片或Lot编号；CPK/CPM按Sheet ID匹配，返回完整统计项及全部Sheet ID'}.get(field)
         parser.add_argument('--' + field.replace('_', '-'), dest=field, help=help_text)
     parser.add_argument('--page-size', type=int, help='可选1～500；不填则不分页')
     parser.add_argument('--timeout', type=float, default=45)
@@ -443,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
             print('无法打开图形窗口，可使用 --cli 运行；不会显示或保存密钥。', file=sys.stderr)
             return 2
     try:
-        key = os.environ.get('VIVO_API_KEY') or getpass.getpass('请输入原始 API Key（输入隐藏）：')
+        key = configured_api_key() or getpass.getpass('请输入原始 API Key（输入隐藏）：')
         params = {name: value for name in FILTERS if (value := getattr(args, name)) is not None}
         result = fetch_anomalies(args.base_url, key, params, page_size=args.page_size, timeout=args.timeout)
         del key
