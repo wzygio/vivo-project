@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from datetime import date
+import logging
 
 import pandas as pd
 import streamlit as st
@@ -16,6 +17,7 @@ from src.shared_kernel.config import ConfigLoader
 
 RESULT_KEY = 'chamber_qtime_view_model'
 SIGNATURE_KEY = 'chamber_qtime_signature'
+logger = logging.getLogger(__name__)
 
 
 def clear_chamber_result() -> bool:
@@ -88,11 +90,10 @@ def render_chamber_dashboard(service: ChamberQTimeService) -> None:
                 )
             st.session_state[SIGNATURE_KEY] = signature
         except QTimeDataAccessError:
-            st.error('蒸镀单腔停留时间数据读取失败，请稍后重试。')
+            logger.exception('Chamber Q-Time report query failed')
             return
     report = st.session_state.get(RESULT_KEY)
     if report is None:
-        st.info('请选择筛选条件并点击“查询单腔”。')
         return
     # Reapply enabled scope on every rerun before constructing frontend payloads.
     details = report['details']
@@ -104,7 +105,6 @@ def render_chamber_dashboard(service: ChamberQTimeService) -> None:
     ].copy()
     selected = exclude_chamber_outliers(selected)
     if selected.empty:
-        st.info('当前筛选条件下暂无单腔停留时间数据。')
         return
     _render_results(selected, chambers or list(CHAMBERS), service.enabled_products)
 
@@ -121,5 +121,3 @@ def _render_results(details: pd.DataFrame, chambers: list[str], products: tuple[
                         build_chamber_figure(subset, chamber=chamber, product_order=products),
                         width='stretch', key=f'chamber_chart_{line}_{chamber}',
                     )
-                else:
-                    st.info('当前组别暂无有效测量值。')

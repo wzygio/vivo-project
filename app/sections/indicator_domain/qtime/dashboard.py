@@ -21,6 +21,7 @@ from src.indicator_domain.application.qtime.cached_monitoring import (
     MISSING_DECISION_FILE_STAT,
     get_cached_shop_monitoring,
     get_qtime_decision_file_stat,
+    publish_refreshed_qtime_alerts,
 )
 from src.indicator_domain.application.qtime.dtos import QTimeStepOption, Shop
 from src.indicator_domain.application.qtime.errors import (
@@ -74,8 +75,8 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
 
         try:
             options = service.get_filter_options(shop)
-        except QTimeDataAccessError as exc:
-            st.error(str(exc))
+        except QTimeDataAccessError:
+            logger.exception("Q-Time filter options read failed for shop=%s", shop)
             previous_paths = st.session_state.get("qtime_step_descriptions", ())
             render_saved_qtime_alerts(
                 selected_products, shop=shop,
@@ -120,7 +121,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
     stored_signature = st.session_state.get(SIGNATURE_STATE_KEY)
     monitoring = st.session_state.get(RESULT_STATE_KEY)
     if stored_signature != signature or monitoring is None:
-        st.info("请选择筛选条件并点击“查询”。")
         return
     details = monitoring.details
     health = monitoring.data_health
@@ -131,14 +131,8 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             if health["status"] == "stale"
             else "数据完整性或新鲜度尚未确认，当前预警状态未知。"
         )
-        st.warning(message)
-        if health["refreshed_at"]:
-            st.caption(f"最后成功刷新：{health['refreshed_at']}")
-        if health["source_start"] and health["source_end"]:
-            st.caption(f"源数据覆盖：{health['source_start']} 至 {health['source_end']}")
+        logger.warning("Q-Time report health: %s health=%s", message, health)
     if details.empty:
-        if is_current:
-            st.info("当前筛选条件下暂无 Q-Time 数据。")
         return
 
     if st.query_params.get("admin") == "true" and render_qtime_decoration_admin(service, monitoring):
@@ -157,7 +151,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
         with st.expander(step_option.label, expanded=True):
             if step_details.empty:
-                st.info(f"{step_option.label} 当前筛选条件下暂无 Q-Time 数据。")
                 continue
             groups = list(step_details.groupby("prodcode", sort=True))
             for row_start in range(0, len(groups), 3):
@@ -182,7 +175,6 @@ def render_saved_qtime_alerts(
 
     reference = reference_date or date.today()
     if not step_descriptions:
-        st.info("请选择站点以查看已发布的 Q-Time 预警。")
         return
     selected = products or list(SessionManager.AVAILABLE_PRODUCTS)
     frames: list[pd.DataFrame] = []
@@ -197,7 +189,7 @@ def render_saved_qtime_alerts(
         )
         if result["state"] == "error":
             failures = True
-            st.warning(f"{product}：Q-Time 预警结果暂不可用，请更新对应报表后重试。")
+            logger.warning("Q-Time saved alert display unavailable: product=%s shop=%s", product, shop)
             continue
         records = result["records"]
         if not records.empty:
@@ -217,6 +209,9 @@ def refresh_qtime_data(service: QTimeReportService) -> bool:
         _mark_displayed_result_stale()
         raise
     if not results or not all(result.refreshed_from_database for result in results):
+        _mark_displayed_result_stale()
+        return False
+    if not publish_refreshed_qtime_alerts(service, results):
         _mark_displayed_result_stale()
         return False
     st.session_state.pop(RESULT_STATE_KEY, None)
@@ -288,17 +283,15 @@ def _run_query(
             decision_mtime_ns=decision_mtime_ns,
             decision_size=decision_size,
         )
-    except ValidationError as exc:
-        message = next(iter(exc.errors()), {}).get("msg", "筛选条件无效")
-        st.error(str(message).removeprefix("Value error, "))
+    except ValidationError:
+        logger.exception("Q-Time report query validation failed: shop=%s", shop)
         return
     except (QTimeDataAccessError, QTimeDecorationAccessError):
         logger.exception("Q-Time report query failed")
-        st.error("Q-Time 数据读取失败，请稍后重试。")
         return
 
     if monitoring.alert_publication_error:
-        st.error(monitoring.alert_publication_error)
+        logger.error("Q-Time report alert publication failed: shop=%s", shop)
 
     st.session_state[RESULT_STATE_KEY] = _filter_monitoring_result(
         monitoring,

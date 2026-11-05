@@ -1,4 +1,4 @@
-"""Refresh the shared rolling Q-Time snapshots for all shops."""
+"""Refresh rolling Q-Time source snapshots and publish all shop alert results."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ for import_path in (REPO_ROOT, REPO_ROOT / "src"):
         sys.path.insert(0, path_text)
 
 from src.indicator_domain.application.qtime.service import QTimeReportService
+from src.indicator_domain.application.qtime.cached_monitoring import publish_refreshed_qtime_alerts
 from src.indicator_domain.composition import build_qtime_service
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -35,7 +36,7 @@ def main(
     service_factory: Callable[[], QTimeReportService] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(
-        description="Incrementally refresh all shared Q-Time shop snapshots.",
+        description="Refresh all Q-Time shop snapshots and publish current alert results.",
     )
     parser.add_argument(
         "--as-of",
@@ -64,14 +65,16 @@ def main(
         )
         return 2
 
-    is_fresh = all(result.refreshed_from_database for result in results)
+    is_fresh = bool(results) and all(result.refreshed_from_database for result in results)
+    alerts_published = is_fresh and publish_refreshed_qtime_alerts(service, results, as_of=args.as_of)
     payload = {
-        "status": "success" if is_fresh else "stale-fallback",
+        "status": ("success" if alerts_published else
+                   "alert-publication-failed" if is_fresh else "stale-fallback"),
         "as_of": (args.as_of or date.today()).isoformat(),
         "snapshots": [asdict(result) for result in results],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if is_fresh else 1
+    return 0 if alerts_published else 2 if is_fresh else 1
 
 
 if __name__ == "__main__":

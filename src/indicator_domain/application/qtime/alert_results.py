@@ -139,12 +139,22 @@ class QTimeAlertResults:
                 if (set(QTIME_ALERT_COLUMNS) - set(saved)
                         or {"prodcode", "step_desc", "lot_id", "timekey"} - set(products)
                         or len(saved) != int(row.alert_count) or len(products) != int(row.product_count)
-                        or row.status != "success" or row.source_status != "fresh"
-                        or str(row.reference_date) != str(reference_date)
-                        or row.policy_signature != self.policy_signature()
-                        or pd.Timestamp(row.coverage_start) > start
+                        or row.status != "success" or row.source_status != "fresh"):
+                    raise ValueError(f"Invalid Q-Time publication schema/count/status: shop={shop}")
+                if str(row.reference_date) != str(reference_date):
+                    raise ValueError(
+                        f"Q-Time publication reference date mismatch: shop={shop} "
+                        f"published={row.reference_date} requested={reference_date}"
+                    )
+                if row.policy_signature != self.policy_signature():
+                    raise ValueError(f"Q-Time publication policy changed: shop={shop}")
+                if (pd.Timestamp(row.coverage_start) > start
                         or pd.Timestamp(row.coverage_end) < end - pd.Timedelta(days=1)):
-                    raise ValueError("Invalid Q-Time publication scope")
+                    raise ValueError(
+                        f"Insufficient Q-Time publication coverage: shop={shop} "
+                        f"published={row.coverage_start}..{row.coverage_end} "
+                        f"requested={start.date()}..{(end - pd.Timedelta(days=1)).date()}"
+                    )
                 for field in ("updated_at", "source_refreshed_at"):
                     stamp = pd.Timestamp(row[field])
                     if pd.isna(stamp):
@@ -195,7 +205,12 @@ class QTimeAlertResults:
                              "period_end": str((end-pd.Timedelta(days=1)).date())},
             }
         except (KeyError, TypeError, ValueError, OSError) as exc:
-            logger.warning("Q-Time published alerts unavailable: product=%s cause=%s", product, type(exc).__name__)
+            logger.warning(
+                "Q-Time published alerts unavailable: product=%s shops=%s reference_date=%s "
+                "start_date=%s end_date=%s cause=%s: %s",
+                product, tuple(shops), reference_date, start_date, end_date,
+                type(exc).__name__, exc, exc_info=True,
+            )
             return {"state": "error", "records": empty, "alerts": empty.copy(),
                     "alert_factories": [], "message": UNAVAILABLE, "metadata": {},
                     "release_records": pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS),

@@ -162,3 +162,52 @@ def test_atomic_publish_failure_preserves_old_success_and_other_shop_sheets(tmp_
         results.publish("ARRAY", rows(), rows().iloc[:1], HEALTH, AS_OF)
     assert results.store.path.read_bytes() == original
     assert not list(tmp_path.glob(".qtime-alert-*.xlsx"))
+
+
+@pytest.mark.parametrize("empty_tp", [False, True])
+def test_snapshot_refresh_cli_replaces_outdated_publication_with_readable_results(tmp_path, empty_tp):
+    from src.indicator_domain.application.qtime.cached_monitoring import get_qtime_cached_funcs
+    from src.indicator_domain.application.qtime.dtos import QTimeStepOption
+    from src.indicator_domain.application.qtime.ports import QTimeSnapshotRefresh
+    from src.indicator_domain.application.qtime.service import QTimeReportService
+    from src.shared_kernel.data_health import attach_data_health, make_data_health
+    from tools.refresh_qtime_snapshots import main
+
+    results = service(tmp_path)
+    results.publish("ARRAY", rows(), rows(), HEALTH, AS_OF - timedelta(days=1))
+    assert results.read("M678", AS_OF, shops=("ARRAY",))["state"] == "error"
+
+    class DataPort:
+        def refresh_snapshot(self, shop, *, as_of=None):
+            count = 0 if empty_tp and shop == "TP" else 3
+            return QTimeSnapshotRefresh(shop, count, True, "2026-09-01", "2026-10-28", HEALTH["refreshed_at"])
+
+        def list_step_options(self, shop):
+            if empty_tp and shop == "TP":
+                raise AssertionError("Fresh empty shop must not query station options")
+            return (QTimeStepOption("PATH1", "100", "200"), QTimeStepOption("PATH2", "100", "200"))
+
+        def fetch_details(self, query):
+            return attach_data_health(
+                rows().assign(shop=query.shop), make_data_health(**HEALTH),
+            )
+
+    class Decisions:
+        decoration_path = tmp_path / "decisions.xlsx"
+
+        def load_decisions(self):
+            return rows()[["prodcode", "step_desc", "lot_id", "timekey", "flag"]]
+
+    report = QTimeReportService(DataPort(), Decisions(), alert_results=results)
+    for cached in get_qtime_cached_funcs():
+        cached.clear()
+    try:
+        assert main(["--as-of", AS_OF.isoformat()], service_factory=lambda: report) == 0
+        value = results.read("M678", AS_OF)
+        assert value["state"] == "alert"
+        assert len(value["records"]) == (2 if empty_tp else 3)
+        assert value["alert_factories"] == (["ARRAY", "OLED"] if empty_tp else ["ARRAY", "OLED", "TP"])
+        assert value["metadata"]["total_lots"] == 1
+    finally:
+        for cached in get_qtime_cached_funcs():
+            cached.clear()

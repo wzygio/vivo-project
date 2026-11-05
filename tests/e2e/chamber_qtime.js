@@ -3,6 +3,7 @@ async page => {
   const output = 'D:/wzy/Python/vivo-project/output/test-results/qtime-chamber';
   const query = () => page.getByRole('button', { name: '查询单腔', exact: true });
   const waitText = text => page.getByText(text, { exact: false }).first().waitFor({ timeout: 30000 });
+  const waitReady = () => waitText('chamber-executions:');
   const select = async (label, value) => {
     await page.getByRole('combobox', { name: new RegExp(label) }).click();
     const name = label === '产品型号' ? new RegExp(`^${value}(?:（.*）)?$`) : value;
@@ -26,7 +27,7 @@ async page => {
   page.on('console', message => { if (/WebGL|context lost/i.test(message.text())) warnings.push(message.text()); });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(base);
-  await waitText('请选择筛选条件并点击“查询单腔”。');
+  await waitReady();
   const beforeLower = await counts();
   await query().click();
   await waitText('3CEE002 - PT → OC1');
@@ -53,12 +54,12 @@ async page => {
   await select('产品型号', 'M678');
   await page.getByText('3CEE001 - PT → OC1', {exact: true}).waitFor({state: 'hidden'});
   await select('线体', '3CEE001');
-  await waitText('当前筛选条件下暂无单腔停留时间数据。');
+  await page.getByText('3CEE002 - PT → OC1', {exact: true}).waitFor({state: 'hidden'});
   await page.getByRole('button', { name: '刷新单腔缓存', exact: true }).click();
-  await waitText('请选择筛选条件并点击“查询单腔”。');
+  await waitReady();
 
   await page.goto(base);
-  await waitText('请选择筛选条件并点击“查询单腔”。');
+  await waitReady();
   await query().click();
   await waitText('3CEE002 - PT → OC1');
   // Empty chamber selection means all 11 chambers on both lines.
@@ -86,16 +87,20 @@ async page => {
   await oc.screenshot({ path: output + '/mobile-markers.png' });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2)) throw new Error('Viewport overflow');
 
-  for (const [scenario, message] of [['failure', '蒸镀单腔停留时间数据读取失败，请稍后重试。'], ['empty', '当前筛选条件下暂无单腔停留时间数据。']]) {
+  for (const scenario of ['failure', 'empty']) {
     await page.goto(base + '?scenario=' + scenario);
-    await waitText('请选择筛选条件并点击“查询单腔”。');
+    await waitReady();
+    const before = await counts();
     await query().click();
-    await waitText(message);
+    await waitText('chamber-executions: ' + (before.chamber + 1));
+    if (await page.getByText(/请选择筛选条件并点击|暂无单腔|单腔停留时间数据读取失败/).count()) {
+      throw new Error('Unexpected operational message after ' + scenario);
+    }
     await healthy();
     if (await page.locator('[data-testid="stPlotlyChart"]').count()) throw new Error('Stale result after ' + scenario);
   }
   await page.goto(base);
-  await waitText('请选择筛选条件并点击“查询单腔”。');
+  await waitReady();
   await query().click();
   await waitText('3CEE002 - PT → OC1');
   await healthy();

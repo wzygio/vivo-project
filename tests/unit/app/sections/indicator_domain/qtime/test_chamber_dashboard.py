@@ -43,7 +43,7 @@ def test_daily_removal_leaves_only_retained_points_and_handles_all_removed():
     assert not app.get('plotly_chart')
     app.button(key='chamber_search').click().run()
     assert not app.exception and not app.get('plotly_chart')
-    assert any('暂无单腔' in item.value for item in app.info)
+    assert not app.info
 
 
 def chart_products(app):
@@ -71,7 +71,7 @@ def test_chamber_filters_empty_means_all_and_refresh_resets_results():
     assert chart_products(app) == {'M678'}
     app.multiselect(key='chamber_lines').set_value(['3CEE001']).run()
     assert len(app.dataframe) == 0
-    assert any('暂无单腔' in item.value for item in app.info)
+    assert not app.info
     app.multiselect(key='chamber_lines').set_value([]).run()
     app.multiselect(key='chamber_names').set_value([]).run()
     assert not app.dataframe
@@ -82,7 +82,7 @@ def test_chamber_filters_empty_means_all_and_refresh_resets_results():
     assert not app.exception
 
 
-def test_chamber_failure_and_empty_state_do_not_leave_prior_success_visible():
+def test_chamber_failure_and_empty_state_do_not_leave_prior_success_visible(caplog):
     clear_chamber_cache()
     app = AppTest.from_file(str(FIXTURE)).run()
     app.button(key='chamber_search').click().run()
@@ -93,12 +93,13 @@ def test_chamber_failure_and_empty_state_do_not_leave_prior_success_visible():
     assert len(app.dataframe) == 0
     assert not app.get('plotly_chart')
     assert not app.exception
-    assert app.error[0].value == '蒸镀单腔停留时间数据读取失败，请稍后重试。'
+    assert not app.error and not app.warning and not app.info
+    assert 'Chamber Q-Time report query failed' in caplog.text
     app.query_params['scenario'] = 'empty'
     app.run()
     app.button(key='chamber_search').click().run()
     assert len(app.dataframe) == 0
-    assert any('暂无单腔' in item.value for item in app.info)
+    assert not app.info
     assert not app.exception
 
 
@@ -150,7 +151,7 @@ def test_chamber_frontend_keeps_october_seventh_from_infrastructure_results():
     app.session_state['chamber_qtime_view_model'] = {**report, 'details': details.iloc[:0].copy()}
     app.run()
     assert not app.exception and not app.get('plotly_chart')
-    assert any('暂无单腔' in item.value for item in app.info)
+    assert not app.info
 
 
 def test_date_change_clears_prior_result_and_invalid_window_is_not_queried():

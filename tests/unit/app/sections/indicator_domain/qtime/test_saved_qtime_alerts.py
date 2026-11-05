@@ -28,11 +28,12 @@ def test_saved_qtime_alert_display_keeps_scope_and_uses_shared_consumer(monkeypa
     assert displayed[0][1] == {"total_lots": 6}
 
 
-def test_saved_qtime_error_never_claims_no_alerts_or_invokes_report_service(monkeypatch):
+def test_saved_qtime_error_never_claims_no_alerts_or_invokes_report_service(monkeypatch, caplog):
     warnings, displayed = [], []
     monkeypatch.setattr(alert_results, "read_alert_result", lambda *_a, **_k: {"state": "error"})
     monkeypatch.setattr(dashboard.st, "warning", warnings.append)
     monkeypatch.setattr(dashboard, "render_qtime_alert_center", lambda *_a, **_k: displayed.append(True))
     dashboard.render_saved_qtime_alerts(["M678"], shop="ARRAY", step_descriptions=("PATH",))
-    assert len(warnings) == 1
+    assert warnings == []
+    assert "product=M678 shop=ARRAY" in caplog.text
     assert displayed == []

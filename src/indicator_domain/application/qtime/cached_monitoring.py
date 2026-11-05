@@ -19,14 +19,18 @@ from dataclasses import replace
 import logging
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from src.indicator_domain.application.qtime.dtos import Shop
+from src.indicator_domain.application.qtime.alert_results import QTIME_SHOPS
+from src.indicator_domain.application.qtime.ports import QTimeSnapshotRefresh
 from src.indicator_domain.application.qtime.service import (
     QTimeMonitoringResult,
     QTimeReportService,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.data_health import make_data_health
 
 # 决策工作簿不存在（按需创建，用户从未上传过决策）时的确定性哨兵。
 MISSING_DECISION_FILE_STAT: tuple[int, int] = (-1, -1)
@@ -159,3 +163,47 @@ def get_cached_shop_monitoring(
 def get_qtime_cached_funcs() -> list:
     """页头「刷新缓存」需清理的 qtime L2 缓存函数清单（矩阵清单同款模式）。"""
     return [_cached_monitoring]
+
+
+def publish_refreshed_qtime_alerts(
+    service: QTimeReportService, refreshes: tuple[QTimeSnapshotRefresh, ...], *,
+    as_of: date | None = None,
+) -> bool:
+    """Publish all shops after a successful explicit source-snapshot refresh."""
+    if (len(refreshes) != len(QTIME_SHOPS)
+            or {item.shop for item in refreshes} != set(QTIME_SHOPS)
+            or not all(item.refreshed_from_database for item in refreshes)):
+        logger.error("Q-Time alert publication requires all shops freshly refreshed")
+        return False
+    reference_date = as_of or date.today()
+    decision_stat = (
+        get_qtime_decision_file_stat(service.decoration_path)
+        or MISSING_DECISION_FILE_STAT
+    )
+    succeeded = True
+    for refresh in refreshes:
+        shop = refresh.shop
+        try:
+            if refresh.row_count == 0:
+                # A successful empty source has no station options. Publish its
+                # actual refresh evidence without inventing a query station.
+                empty = QTimeMonitoringResult(
+                    pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+                    service.decoration_path,
+                    make_data_health(
+                        "fresh", refreshed_at=refresh.refreshed_at,
+                        source_start=refresh.source_start, source_end=refresh.source_end,
+                    ),
+                )
+                service.publish_alert_results(empty, shop, reference_date)
+                continue
+            result = get_cached_shop_monitoring(
+                service, shop=shop, as_of=reference_date,
+                decision_mtime_ns=decision_stat[0], decision_size=decision_stat[1],
+            )
+            if result.alert_publication_error:
+                succeeded = False
+        except Exception:
+            logger.exception("Q-Time refreshed alert publication failed for shop=%s", shop)
+            succeeded = False
+    return succeeded

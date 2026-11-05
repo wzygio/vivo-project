@@ -15,14 +15,15 @@ PSI_ELA_TO_PSI_PHT = QTimeStepOption("PSI_ELA->PSI_PHT", "11300", "11400")
 SHIPPING_TO_CUTTING = QTimeStepOption("Shipping->Cutting", "2X999", "31000")
 
 
-def test_empty_stale_result_warns_instead_of_claiming_no_current_data():
+def test_empty_stale_result_logs_without_showing_operational_messages(caplog):
     fixture = Path(__file__).parents[6] / "tests/e2e/fixtures/qtime_app.py"
     app = AppTest.from_file(str(fixture)).run()
     app.query_params["fixture_health"] = "stale"
     app.multiselect(key="qtime_step_descriptions").set_value([SHIPPING_TO_CUTTING]).run()
     app.button(key="qtime_search").click().run()
     assert not app.exception
-    assert any("旧快照" in item.value for item in app.warning)
+    assert "旧快照" in caplog.text
+    assert not app.warning and not app.error and not app.info
     assert not app.success
     assert not any("当前筛选条件下暂无" in item.value for item in app.info)
 
@@ -44,7 +45,7 @@ def test_previous_day_session_result_requires_query_again(monkeypatch):
     monkeypatch.setattr(dashboard, "date", Tomorrow, raising=False)
     app.run()
     assert not app.get("plotly_chart")
-    assert any("点击“查询”" in item.value for item in app.info)
+    assert not app.info
 
 
 def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
@@ -59,7 +60,7 @@ def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
     assert not app.date_input
     assert app.selectbox(key="qtime_shop").label == "厂别"
     assert app.multiselect(key="qtime_step_descriptions").label == "站点"
-    assert app.info[0].value == "请选择筛选条件并点击“查询”。"
+    assert not app.info and not app.warning and not app.error
 
     app.button(key="qtime_search").click().run()
 
@@ -79,12 +80,24 @@ def test_refresh_reloads_full_window_and_clears_results_only_on_success(monkeypa
     state = {dashboard.RESULT_STATE_KEY: "old", dashboard.SIGNATURE_STATE_KEY: "old"}
     monkeypatch.setattr(dashboard.st, "session_state", state)
     calls = []
+    publications = []
+    monkeypatch.setattr(dashboard, "publish_refreshed_qtime_alerts", lambda received, _refreshes: publications.append(received) or True)
     service = SimpleNamespace(refresh_snapshots=lambda **kwargs: (
         calls.append(kwargs) or [SimpleNamespace(refreshed_from_database=success)]
     ))
     assert dashboard.refresh_qtime_data(service) is success
     assert calls == [{"full_refresh": True}]
+    assert publications == ([service] if success else [])
     assert bool(state) is not success
+
+
+def test_refresh_does_not_claim_success_when_publication_fails(monkeypatch):
+    from app.sections.indicator_domain.qtime import dashboard
+
+    monkeypatch.setattr(dashboard.st, "session_state", {})
+    monkeypatch.setattr(dashboard, "publish_refreshed_qtime_alerts", lambda *_args: False)
+    service = SimpleNamespace(refresh_snapshots=lambda **kwargs: [SimpleNamespace(refreshed_from_database=True)])
+    assert dashboard.refresh_qtime_data(service) is False
 
 
 def test_failed_manual_refresh_marks_previously_fresh_session_result_stale(monkeypatch):
@@ -181,11 +194,11 @@ def test_qtime_dashboard_invalidates_stale_results_when_filters_change() -> None
         [PSI_ELA_TO_PSI_PHT]
     ).run()
 
-    assert app.info[0].value == "请选择筛选条件并点击“查询”。"
+    assert not app.info
     assert not app.get("plotly_chart")
 
 
-def test_qtime_dashboard_shows_a_safe_database_error() -> None:
+def test_qtime_dashboard_logs_database_error_without_displaying_it(caplog) -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
 
@@ -195,11 +208,12 @@ def test_qtime_dashboard_shows_a_safe_database_error() -> None:
     ).run()
     app.button(key="qtime_search").click().run()
 
-    assert app.error[0].value == "Q-Time 数据读取失败，请稍后重试。"
+    assert not app.error and not app.warning and not app.info
+    assert "Q-Time report query failed" in caplog.text
     assert not app.get("plotly_chart")
 
 
-def test_qtime_dashboard_explains_an_empty_result() -> None:
+def test_qtime_dashboard_empty_result_has_no_info_message() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
 
@@ -208,7 +222,7 @@ def test_qtime_dashboard_explains_an_empty_result() -> None:
     ).run()
     app.button(key="qtime_search").click().run()
 
-    assert app.info[0].value == "当前筛选条件下暂无 Q-Time 数据。"
+    assert not app.info
     assert not app.get("plotly_chart")
 def test_qtime_dashboard_product_filter_defaults_to_all_and_leads_the_filter_row() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
