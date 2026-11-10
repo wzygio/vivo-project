@@ -5,7 +5,7 @@ application:
 
 # 制造事实显示时间策略：客户报表展示源数据四天后的日期。
 data_forward:
-  enabled: true
+  enabled: false
   offset_days: 4
 
 # 仅服务器当天的报表数据截止到此时刻（含）；日期前推在仓储边界换算。

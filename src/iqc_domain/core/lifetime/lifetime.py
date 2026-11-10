@@ -14,10 +14,26 @@ REPORT_FIELDS = {
 GROUP_COLUMNS = ['产品型号', '批次号', '测试画面']
 MEASUREMENT_COLUMNS = list(REPORT_FIELDS.values())[7:]
 SOURCE_GROUP = ['product_group', 'date_key', 'bu']
+FORECAST_ANCHOR_HOURS = (100, 400)
+FORECAST_TARGET_HOURS = 1200
 
 
 class LifetimeDataInvalid(ValueError):
     """Measurements cannot be assigned to unambiguous lifetime curves."""
+
+
+def predict_lifetime_value(points: pd.DataFrame, *, metric: str) -> float | None:
+    """Extrapolate one sample's metric using its exact 100H and 400H points."""
+    anchors = points.loc[points['测试时间'].isin(FORECAST_ANCHOR_HOURS)]
+    if len(anchors) != 2 or anchors['测试时间'].nunique() != 2:
+        return None
+    values = anchors.set_index('测试时间')[metric].reindex(FORECAST_ANCHOR_HOURS)
+    if not np.isfinite(values.to_numpy(dtype=float)).all():
+        return None
+    start, end = FORECAST_ANCHOR_HOURS
+    slope = (float(values.loc[end]) - float(values.loc[start])) / (end - start)
+    prediction = float(values.loc[end]) + slope * (FORECAST_TARGET_HOURS - end)
+    return prediction if np.isfinite(prediction) else None
 
 
 def project_report(

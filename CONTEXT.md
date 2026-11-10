@@ -19,7 +19,8 @@ Search by the **Domain Submodule Architecture** in [ARCHITECTURE.md](ARCHITECTUR
 
 | Need | Location and lifecycle |
 |---|---|
-| Agent entry, task-specific reading and iteration triggers | [AGENTS.md](AGENTS.md) |
+| DDD Python project-type instructions | [AGENTS.md](AGENTS.md); shared by NTFS hard links |
+| Project-specific instructions and task routes | This CONTEXT, including Project Agent Rules |
 | Domain/submodule ownership, dependencies and scoped lookup | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Business terminology, rules, algorithms and current designs | [references/index.md](references/index.md); `references/{domain,design}/<domain>/<submodule>/`; preserve project-owned knowledge |
 | Development requirements and implementation specifications | `docs/dev_docs/dev_spec/<domain>/<submodule>/`; retain authorized task descriptions |
@@ -89,8 +90,8 @@ The default presentation mode applies when the URL does not set `admin=true`. Th
 
 | Owner | Owns |
 |---|---|
-| `AGENTS.md` | Agent entry instructions, essential safety, task triggers and iteration routing |
-| `CONTEXT.md` | Purpose, operating assumptions, project-wide constraints, important routes and artifact lifecycle |
+| `AGENTS.md` | DDD Python project-type workflow and common reading/update routes; shared by NTFS hard links |
+| `CONTEXT.md` | Project-specific rules and task triggers; purpose, operating assumptions, project-wide constraints, important routes and artifact lifecycle |
 | `ARCHITECTURE.md` | Canonical domain/submodule map, path grammar, ownership, dependency and verification routes |
 | `references/index.md` | Task-to-knowledge routes and knowledge-file naming rules |
 | The scoped `references` document | Feature behavior, domain rules, current design and implementation rationale |
@@ -100,3 +101,31 @@ Load documents through task triggers: read the relevant context/map first, then 
 Root-document prose is English; preserve actual identifiers, filenames and Chinese business documents. Documentation changes need link/anchor, directory, trigger, ownership and conflicting-rule checks. Executable changes additionally need the affected runtime checks; `tools/smoke.py all` covers unit tests rather than all verification categories. Report commands, results and material omissions; a documentation check does not establish runtime correctness.
 
 Preserve unrelated edits and business assets. Add hooks, nested instructions or orchestration only when the current task authorizes them and repeated failures or scale justify them. An explicit current request may authorize a behavior change; do not invent an additional approval step for already-authorized work.
+
+## Project Agent Rules
+
+This CONTEXT owns this project's specific instructions, constraints and task
+triggers. The global AGENTS owns user-wide operating/safety rules; this project's
+AGENTS owns the shared DDD Python workflow. Update the appropriate owner and any
+affected routes together. This user-requested ownership model takes precedence
+over earlier template descriptions of where project instructions belong.
+
+- Before changing UI, operator messages, downloads or exports, read the
+  Non-administrator Presentation Boundary in this context; those constraints also
+  govern project-specific task execution.
+- Manufacturing terminology uses
+  `references/domain/shared_kernel/shared/GLOSSARY.md`. Consult relevant `docs/ADR/`
+  decisions before changing established architecture boundaries.
+- Browser snapshots, DOM dumps, console logs and screenshots belong only in
+  `output/test-results/` or `output/tmp/`, following `output/README.md`.
+- Follow the verified Domain Submodule Architecture in ARCHITECTURE when locating
+  code and knowledge. Domain/business facts use the matching
+  `references/{domain,design}/<domain>/<submodule>/` owner; existing source and data
+  lifecycle exceptions remain in force.
+- Folder indexes remain folder-only except the curated `references/index.md`.
+  Update the knowledge router when its route or scope changes.
+
+- For local Markdown issues and PRDs, follow `docs/agents/issue-tracker.md`.
+- For issue state changes, follow `docs/agents/triage-labels.md`, including its
+  configured canonical role/status vocabulary rather than inventing new states.
+- Before domain behavior/documentation changes, follow `docs/agents/domain.md`.

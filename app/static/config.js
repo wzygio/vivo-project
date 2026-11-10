@@ -19,7 +19,7 @@ const LINKS = {
     AOI_RS_REPORT: "http://10.72.26.31:8503/AOI_RS监控报表",
     AOI_TT_REPORT: "http://10.72.26.31:8503/AOI_TT监控报表",
     IQC_INSPECTION_REPORT: "http://10.72.26.31:8503/IQC蒸镀材料报表",
-    IQC_LIFETIME_REPORT: "http://10.72.26.31:8503/IQC寿命测试报表",
+    IQC_LIFETIME_REPORT: "http://10.72.26.31:8503/寿命测试报表",
     POINT_TEST_REPORT: "http://10.72.26.31:8503/密集点测试报表",
 
     // 3. FineReport

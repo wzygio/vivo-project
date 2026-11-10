@@ -51,10 +51,10 @@ class ScenarioSource:
 
 # Keep injection local to this session; mutating a module-level renderer races
 # with Streamlit reruns and concurrent browser sessions.
-st.set_page_config(page_title='IQC寿命测试报表', layout='wide', initial_sidebar_state='collapsed')
+st.set_page_config(page_title='寿命测试报表', layout='wide', initial_sidebar_state='collapsed')
 AppSetup.initialize_app()
 render_page_header(
-    title='IQC寿命测试报表', show_product_filter=False,
+    title='寿命测试报表', show_product_filter=False,
     show_data_refresh=False, cached_funcs=[fetch_report_payload],
 )
 render_lifetime_dashboard(LifetimeReportService(ScenarioSource()))

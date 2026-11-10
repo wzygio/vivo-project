@@ -19,14 +19,12 @@ def create_lot_defect_chart(df, xaxis_label, sorted_lot_ids, warning_line_value=
         labels={
             'lot_id': xaxis_label,
             'defect_rate': '不良率',
-            'array_input_time': '阵列投入时间',
             'warehousing_time': '入库时间',
             'defect_panel_count': '不良panel数',
             'week_label': '周别'
         },
         hover_data={
             "warehousing_time": "|%Y/%m/%d",
-            "array_input_time": "|%Y/%m/%d %H:%M",
             "defect_panel_count": True,
             "defect_rate": ":.2%",
             "week_label": True

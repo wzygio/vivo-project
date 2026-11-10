@@ -8,7 +8,7 @@ import pandas as pd
 
 STAGES = ("调整前", "调整后", "修正后")
 METRICS = ("MAX", "MIN", "AVE", "STD", "Δ/（MAX-MIN)")
-SUMMARY_COLUMNS = ("产品", "阶段", "SHEET_ID", "膜位", *METRICS)
+SUMMARY_COLUMNS = ("产品", "SHEET_ID", "膜位", *METRICS)
 GROUP_STARTS = (0, 8, 16)
 SHEET_PATTERN = re.compile(r"^(.+)-(detail|summary)$")
 TIME_COLUMNS = ("SHEET_START_TIME", "SHEET_END_TIME", "RECIPE_MODIFY_TIME")
@@ -73,12 +73,12 @@ def _summary(raw: pd.DataFrame, product: str) -> pd.DataFrame:
             if not np.isfinite(metrics).all():
                 raise ValueError("Point-test summary metrics must be finite numbers")
             records.append([product, stage, sheet_ids[group], position, *metrics.tolist()])
-    result = pd.DataFrame(records, columns=list(SUMMARY_COLUMNS))
+    result = pd.DataFrame(records, columns=["产品", "阶段", "SHEET_ID", "膜位", *METRICS])
     if not result.empty and set(result["阶段"]) != set(STAGES):
         raise ValueError("Point-test summary is missing a business stage")
     if result.duplicated(["阶段", "SHEET_ID", "膜位"]).any():
         raise ValueError("Point-test summary contains duplicate identities")
-    return result
+    return result.loc[result["阶段"] == "修正后", list(SUMMARY_COLUMNS)].reset_index(drop=True)
 
 
 def parse_report(sheets: Mapping[str, pd.DataFrame]) -> dict[str, dict[str, pd.DataFrame]]:

@@ -194,3 +194,60 @@ def test_invalid_jncd_is_blank_without_changing_other_measurements(value):
     assert report['JNCD'].isna().sum() == 1
     assert report['效率衰减'].notna().all()
     assert report['亮度衰减'].notna().all()
+
+
+@pytest.mark.parametrize('metric', ['效率衰减', '亮度衰减', 'JNCD'])
+@pytest.mark.parametrize('value_100,value_400,expected', [
+    (0.99, 0.97, 0.9166666666666666),
+    (0.8, 0.9, 1.1666666666666667), (0.0, 0.0, 0.0),
+])
+def test_chart_forecasts_each_sample_from_100_to_400_without_changing_measurements(
+    metric, value_100, value_400, expected,
+):
+    from app.charts.iqc_domain.lifetime import build_lifetime_chart
+
+    frame = pd.DataFrame({
+        '样品编号': [1, 1, 1, 1, 2, 2, 1],
+        '测试时间': [1200, 400, 0, 100, 100, 400, 200],
+        metric: [0.75, value_400, 1.0, value_100, 1.0, 0.9, 0.1],
+    })
+    original = frame.copy(deep=True)
+    chart = build_lifetime_chart(frame, metric=metric)
+    observed = [trace for trace in chart.data if trace.showlegend is not False]
+    predicted = [trace for trace in chart.data if trace.showlegend is False]
+    assert len(observed) == len(predicted) == 2
+    assert list(observed[0].x) == [0, 100, 200, 400, 1200]
+    assert list(observed[0].y) == [1.0, value_100, 0.1, value_400, 0.75]
+    for measured, forecast, anchor, target in zip(
+        observed, predicted, [value_400, 0.9], [expected, 0.6333333333333333],
+    ):
+        assert list(forecast.x) == [400, 1200]
+        assert list(forecast.y) == pytest.approx([anchor, target])
+        assert forecast.line.color == measured.line.color
+        assert forecast.line.width == measured.line.width == 2
+        assert forecast.line.dash == 'dash'
+        assert forecast.marker.size == measured.marker.size == 6
+        assert forecast.legendgroup == measured.legendgroup == measured.name
+        assert list(forecast.customdata) == ['实测', '预测']
+        assert '%{customdata}' in forecast.hovertemplate
+        assert metric in forecast.hovertemplate
+    assert chart.layout.xaxis.dtick == 100
+    assert chart.layout.height == 320
+    pd.testing.assert_frame_equal(frame, original)
+
+
+@pytest.mark.parametrize('times,values', [
+    ([0, 100], [1.0, 0.99]), ([0, 400], [1.0, 0.97]),
+    ([99, 401], [0.99, 0.97]), ([100, 400], [None, 0.97]),
+    ([100, 400], [0.99, float('nan')]),
+    ([100, 400], [float('inf'), 0.97]),
+    ([100, 400], [0.99, float('-inf')]),
+    ([200, 400], [0.99, 0.97]),
+])
+def test_chart_does_not_forecast_without_both_finite_exact_anchor_points(times, values):
+    from app.charts.iqc_domain.lifetime import build_lifetime_chart
+
+    frame = pd.DataFrame({'样品编号': 1, '测试时间': times, '效率衰减': values})
+    chart = build_lifetime_chart(frame)
+    assert len(chart.data) == 1
+    assert list(chart.data[0].x) == times

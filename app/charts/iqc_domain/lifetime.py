@@ -3,6 +3,12 @@
 import pandas as pd
 import plotly.graph_objects as go
 
+from src.iqc_domain.core.lifetime.lifetime import (
+    FORECAST_ANCHOR_HOURS,
+    FORECAST_TARGET_HOURS,
+    predict_lifetime_value,
+)
+
 COLORS = ('#477da8', '#47a99d', '#6e8dad', '#a2a59b', '#d27479', '#ac8ac4', '#bc944f')
 
 
@@ -10,14 +16,29 @@ def build_lifetime_chart(group: pd.DataFrame, *, metric: str = '效率衰减') -
     figure = go.Figure()
     for number, samples in group.groupby('样品编号', sort=True):
         points = samples.sort_values('测试时间', kind='stable')
+        color = COLORS[(int(number) - 1) % len(COLORS)]
         figure.add_trace(go.Scatter(
             x=points['测试时间'].tolist(), y=points[metric].tolist(),
-            name=str(number), mode='lines+markers', connectgaps=False,
-            line={'color': COLORS[(int(number) - 1) % len(COLORS)], 'width': 2},
+            name=str(number), legendgroup=str(number),
+            mode='lines+markers', connectgaps=False,
+            line={'color': color, 'width': 2},
             marker={'size': 6},
             hovertemplate=(f'样品编号：{number}<br>测试时间：%{{x:g}}'
                            f'<br>{metric}：%{{y:.4f}}<extra></extra>'),
         ))
+        prediction = predict_lifetime_value(points, metric=metric)
+        if prediction is not None:
+            anchor_time = FORECAST_ANCHOR_HOURS[-1]
+            anchor_value = points.loc[points['测试时间'].eq(anchor_time), metric].iloc[0]
+            figure.add_trace(go.Scatter(
+                x=[anchor_time, FORECAST_TARGET_HOURS], y=[anchor_value, prediction],
+                name=f'{number}（预测）', legendgroup=str(number), showlegend=False,
+                mode='lines+markers', connectgaps=False,
+                line={'color': color, 'width': 2, 'dash': 'dash'}, marker={'size': 6},
+                customdata=['实测', '预测'],
+                hovertemplate=(f'样品编号：{number}<br>测试时间：%{{x:g}}'
+                               f'<br>{metric}（%{{customdata}}）：%{{y:.4f}}<extra></extra>'),
+            ))
     figure.update_layout(
         height=320, margin={'l': 12, 'r': 12, 't': 74, 'b': 12},
         paper_bgcolor='white', plot_bgcolor='white',

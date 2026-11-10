@@ -46,10 +46,10 @@
 | 共享内核、配置、日志、缓存与数据库公共能力 | [共享内核概览](design/shared_kernel/shared/overview-shared-kernel.md) |
 | QTime 取数、重点站点修饰、蒸镀腔室停留时间 | [QTime 数据源](domain/indicator_domain/qtime/datasource-Q-Time数据源分析.md)、[站点修饰算法](design/indicator_domain/qtime/algorithm-qtime-data-decoration.md)、[腔室数据库规则](domain/indicator_domain/qtime/rules-chamber-database.md) |
 | Indicator data_exclusion、Q-Time/IJP 显示日期过滤、聚合前排除、缓存失效 | [Indicator 日期排除规则](domain/indicator_domain/shared/rules-indicator-date-exclusion.md) |
-| 密集点测试、产品配对、detail 明细、三阶段膜位汇总、企业加密读取 | [密集点测试报表规则](domain/indicator_domain/point_test/rules-point-test-report.md) |
+| 密集点测试、产品配对、detail 明细箱线图、修正后膜位汇总、企业加密读取 | [密集点测试报表规则](domain/indicator_domain/point_test/rules-point-test-report.md) |
 | IJP 溢流数据源、站点与时间口径、CODE 注释、上一周自动预警与 Excel 快照 | [IJP 数据源](domain/indicator_domain/ijp/datasource-IJP溢流报表分析.md)；[孔区月周汇总与占比规则](domain/indicator_domain/ijp_hole/rules-hole-period-report.md)；[IJP CODE 注释与自动预警](domain/indicator_domain/ijp/rules-ijp-alerts.md)；孔区输入按 `docs/dev_docs/dev_spec/indicator_domain/ijp_hole/` 定位 |
 | IQC 寿命测试 JNCD、衰减曲线、实时取数与快照/缓存边界 | [寿命监控与取数规则](domain/iqc_domain/lifetime/rules-lifetime-monitoring.md)；原始来源分析按 `docs/dev_docs/dev_spec/iqc_domain/lifetime/` 定位，匿名边界见 `docs/ADR/0030-*` |
-| IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围、IQC/COA NG 上一周自动预警与 Excel 快照 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
+| IQC 蒸镀材料、物料／批次／产品多对多关联、已启用产品筛选、产品型号展示、默认检验日期范围、按物料／特性的 IQC-1/COA-1 点位趋势与规格线、10% span 测点显示修饰、IQC/COA NG 上一周自动预警与 Excel 快照 | [蒸镀材料产品范围规则](domain/iqc_domain/eva_materials/rules-evaporation-product-scope.md)；来源分析按 `docs/dev_docs/dev_spec/iqc_domain/eva_materials/` 定位，决策见 `docs/ADR/0029-*` |
 | 关键备件规格、测量、快照与寿命报表；数据读取、通用仿造、CVD 特殊规则仿造、厂别-MMDD Sheet 更新、小数年限与自然月、98% 更换、使用进度 >100% 自动预警与 Excel 快照 | [关键备件数据流](domain/equipment_domain/parts/data-flow-critical-parts.md) |
 | 日期前推、offset_days、源日期与显示日期、跨模块报表时间链路 | [报表日期前推数据链路](domain/shared_kernel/shared/data-flow-report-date-forward.md) |
 

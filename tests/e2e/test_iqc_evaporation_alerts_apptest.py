@@ -92,6 +92,8 @@ def test_automatic_ng_scope_snapshot_and_public_failures(monkeypatch, tmp_path, 
         assert app.expander[0].proto.expanded
         alerts = app.dataframe[0].value
         assert set(alerts['物料号']) == {'A', 'B', 'C'} and len(alerts) == 3
+        assert alerts.loc[alerts['物料号'].eq('A'), 'IQC-1'].tolist() == [63.8]
+        assert alerts.loc[alerts['物料号'].eq('B'), 'COA-1'].tolist() == [63.8]
         assert not {'batch_no', '蒸镀批次', 'ticketno', 'flag'} & set(alerts)
         saved = pd.read_excel(path, sheet_name='超规材料')
         pd.testing.assert_frame_equal(saved.fillna(''), alerts.fillna(''), check_dtype=False)

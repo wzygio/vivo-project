@@ -1,0 +1,1 @@
+"""Dense-point report charts."""

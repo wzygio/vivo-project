@@ -1,50 +1,66 @@
-# AGENTS.md
+# DDD Python Project Instructions
 
-## Project Overview
-
-`vivo-project` is the Tianzhu manufacturing quality reporting system, built with Streamlit and a standard `src` layout with DDD layers. Prefer explicit, testable, traceable workflows.
+These are project-type instructions shared by the enrolled DDD Python projects.
+User-wide operating and safety rules belong to `C:/Users/V0141351/.codex/AGENTS.md`.
+Each project's identity, configuration, constraints and specific task routes belong
+to its own `CONTEXT.md`. Read the global instructions if they are not already loaded.
 
 ## Context Router
 
-Use this file as the repository entry point. Load additional context by task; do not read every linked document automatically.
+Before the first substantive task in a project, read its `CONTEXT.md`. For work
+across projects, read each affected project's context. Follow only relevant task
+routes; do not load every linked document or another project's business rules.
 
 | Task | Read next |
 |---|---|
-| First substantive task in this repository; project purpose or business constraints | [CONTEXT.md](CONTEXT.md) |
-| Locate code, understand runtime flow, or change ownership/dependencies | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Change UI, messages, downloads, or exports | [Non-administrator presentation boundary](CONTEXT.md#non-administrator-presentation-boundary) before editing |
-| Find business rules or project-specific designs | [Knowledge router](references/index.md); select only relevant entries |
-| Interpret manufacturing terminology | [Manufacturing glossary](references/domain/shared_kernel/shared/GLOSSARY.md) |
-| Change an established architectural boundary | Relevant decisions under [docs/ADR/](docs/ADR/) |
-| Change agent instructions, document ownership, or knowledge routing | [Document ownership](CONTEXT.md#maintenance-and-document-ownership) and this file's Iteration Router |
+| Purpose, terminology, project-specific rules, inputs or artifact lifecycle | The affected project's `CONTEXT.md` |
+| Locate code, trace ownership, change naming or technical dependencies | Its `ARCHITECTURE.md` when present, then the relevant implementation |
+| Find domain rules, specifications, designs or verification guidance | Its knowledge router, normally `references/index.md`, using the routes in CONTEXT |
+| Issue, triage or domain-documentation work | The project procedure selected by CONTEXT |
+| Change agent instructions or document ownership | The owning instruction tier and CONTEXT's maintenance rules; use `$manage-harness` for Harness work |
 
-If `.codegraph/` exists, use CodeGraph before text search or source reads for code discovery. Otherwise, skip indexing and follow the scoped `rg` workflow in `ARCHITECTURE.md`. Verify actual paths rather than inventing missing files.
+If a routed document is missing, inspect the actual project rather than inventing
+its contents or copying another project's facts. Preserve established source names,
+artifact lifecycles and project-specific exceptions recorded in CONTEXT.
 
-## Safety Boundary
+## DDD and Engineering Conventions
 
-- Do not print, copy, commit, or persist secrets.
-- Do not delete user data unless explicitly requested. Preserve unrelated user changes.
-- Write browser snapshots, DOM dumps, console logs, and screenshots only to `output/test-results/` or `output/tmp/`, never to the repository root or `src/`. See [output classification](output/README.md).
-- Follow the project constraints in `CONTEXT.md`; a linked constraint is not optional when its task trigger applies.
+- Prefer explicit, testable, traceable use cases and workflows. Follow the project's
+  established DDD boundaries: domain/core behavior remains independent of external
+  adapters, application code orchestrates use cases, and infrastructure integrates
+  external systems. Keep presentation concerns outside domain behavior.
+- Keep ARCHITECTURE focused on verified ownership, entry points, naming and technical
+  boundaries; inspect implementation for detailed behavior. A domain inventory must
+  be explicitly maintained before it drives directory organization. Do not reorganize
+  existing packages or business assets just to match a template.
+- For source discovery without CodeGraph, choose the scope and filename patterns from
+  ARCHITECTURE before content search. The global CodeGraph rule applies when indexed.
+- Use `$ecc-production-rules` for implementation, refactoring, debugging, testing,
+  review and performance work. Load relevant `common` rules and Python extensions;
+  activate framework rules only for a confirmed framework. Keep shared rule libraries
+  in their installed location and use the project's configured tools and commands.
+- Use `$manage-harness` for Harness creation, audit, migration or repair. Respect the
+  project's adopted contract and explicit user overrides; do not copy shared Harness
+  templates or historical rule libraries into a repository.
+- Keep business rules and durable domain knowledge in project-owned documents. Route
+  to the project's issue, triage, glossary and domain procedures through CONTEXT.
+  Respect each project's index policy and retained knowledge; do not flatten it into
+  one global file catalog or impose another project's paths.
 
-## Development Conventions
+## Update Routes
 
-Use `$ecc-production-rules` for implementation, refactoring, debugging, testing, security/code review, performance work, and development workflow decisions.
+Update the authoritative owner and its affected consumers together:
 
-- Default rule sets: `common + python`. Load only task-relevant rules directly from the installed skill; do not copy rule libraries into this repository.
-- Python rules override common rules where they conflict. Project instructions, applicable ADRs, and repository tooling override conflicting ECC defaults, subject to higher-priority instructions and the current user request.
-- Load FastAPI-specific rules only for confirmed FastAPI code. Do not activate unrelated language/framework rules.
-- Issues and PRDs use local Markdown: [issue tracker](docs/agents/issue-tracker.md). For triage, read [role labels](docs/agents/triage-labels.md); for domain documentation, read [domain conventions](docs/agents/domain.md).
-- Choose verification that matches the change; report commands, results, and material omissions. Documentation-only edits need route/content checks, not a business-suite run by default.
+- Rules applicable across project types: `C:/Users/V0141351/.codex/AGENTS.md`.
+- Rules shared by this DDD Python project type: this hard-linked `AGENTS.md`.
+- Project identity, specific instructions/task triggers, configuration constraints,
+  important routes, artifact lifecycle and document ownership: its `CONTEXT.md`.
+- Technical boundaries, source/test naming and maintained module ownership: its
+  `ARCHITECTURE.md` and affected implementation/configuration.
+- Business facts and decisions: the owning project document; update its knowledge
+  router when the route, scope or naming changes.
 
-## Iteration Router
-
-Update the owner of the changed fact:
-
-- Project feature behavior or domain business rules: update the matching `references/{domain,design}/<domain>/<submodule>/` document; update `references/index.md` when its route or scope changes.
-- Project architecture, domain/submodule ownership, directory organization or runtime dependencies: update `ARCHITECTURE.md`, especially the canonical Domain Submodule Architecture and its path grammar. Update affected consumers/configuration when paths change.
-- Purpose, operating assumptions, project-wide constraints, resource configuration or artifact lifecycle: update `CONTEXT.md` and the owning configuration.
-- Agent entry instructions or task triggers: update this file.
-- Knowledge filenames or task-to-document routes: update `references/index.md`; retain one authoritative owner per fact.
-
-Keep folder indexes folder-only, except `references/index.md`, which owns file-level knowledge routes and naming rules. Use the canonical domain/submodule map to find scoped files rather than expanding root documents into file catalogs.
+The current NTFS link group's maintenance entry is `D:/wzy/Python/AGENTS.md`, with
+enrolled paths in `D:/wzy/Python/AGENTS.links.json`. Follow the global hard-link
+maintenance rules when editing any enrolled entry. Keep project-specific rules
+directly in CONTEXT.

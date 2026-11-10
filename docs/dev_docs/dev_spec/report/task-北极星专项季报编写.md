@@ -23,7 +23,7 @@
         - `app\pages\关键备件报表.py`: 2026M6
     - Q3季度：
         - `app\pages\IJP溢流监控报表.py`: 2026M8
-        - `app\pages\IQC寿命测试报表.py`: 2026M9
+        - `app\pages\寿命测试报表.py`: 2026M9
         - `app\pages\IQC蒸镀材料报表.py`: 2026M9
         - `app\pages\自动预警看板.py`: 2026M9
 2. 表格字段：

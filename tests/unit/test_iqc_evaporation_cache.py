@@ -44,6 +44,8 @@ def test_cache_native_payload_survives_module_reload_and_separates_policy(monkey
         assert len(calls) == 7
         dashboard.fetch_report_payload(*args, product_scope_rule_version='next-product-scope')
         assert len(calls) == 8
+        dashboard.fetch_report_payload(*args, decoration_rule_version='next-decoration')
+        assert len(calls) == 9
     finally:
         dashboard.fetch_report_payload.clear()
 

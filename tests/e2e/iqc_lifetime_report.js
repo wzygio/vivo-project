@@ -22,7 +22,10 @@ async page => {
   const boxes = await expander.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => {
     const r = el.getBoundingClientRect(); return { x: r.x, y: r.y };
   }));
-  if (boxes.some(box => Math.abs(box.y - boxes[0].y) > 2) || boxes.some((box, i) => i > 0 && box.x <= boxes[i - 1].x)) throw new Error('Four charts are not in one row');
+  if (boxes.length !== 4 || boxes.some((box, i) =>
+      Math.abs(box.y - boxes[Math.floor(i / 2) * 2].y) > 2 ||
+      (i % 2 === 1 && box.x <= boxes[i - 1].x) ||
+      (i >= 2 && box.y <= boxes[i - 2].y))) throw new Error('Decay charts are not in a two-by-two grid');
   const legendOverlap = await expander.locator('.js-plotly-plot').evaluateAll(elements => elements.some(el => {
     const legend = el.querySelector('.legend').getBoundingClientRect();
     const plot = el.querySelector('.nsewdrag').getBoundingClientRect();
@@ -34,17 +37,26 @@ async page => {
   await expander.locator('summary').click();
   if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
   const charts = await page.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => ({
-    traces: el.data.map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate })),
+    traces: el.data.map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate,
+      predicted: t.showlegend === false, color: t.line.color, dash: t.line.dash,
+      group: t.legendgroup, labels: t.customdata })),
     xaxis: el.layout.xaxis.title.text, yaxis: el.layout.yaxis.title.text,
     dtick: el.layout.xaxis.dtick, tickformat: el.layout.xaxis.tickformat,
   })));
   for (const chart of charts) {
-    if (chart.traces.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减', 'JNCD'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
+    const observed = chart.traces.filter(trace => !trace.predicted);
+    const predicted = chart.traces.filter(trace => trace.predicted);
+    if (observed.length !== 5 || predicted.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减', 'JNCD'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
     if (chart.dtick !== 100 || chart.tickformat !== '.0f') throw new Error('Wrong time tick precision');
-    for (const [index, trace] of chart.traces.entries()) {
+    for (const [index, trace] of observed.entries()) {
       if (trace.name !== String(index + 1)) throw new Error('Non-numeric sample legend');
       if (trace.x.join(',') !== '0,100,200,300,400') throw new Error('Time order changed');
       if (!trace.hover.includes('样品编号')) throw new Error('Hover lacks anonymous identity');
+      const forecast = predicted.find(item => item.group === trace.group);
+      const expected = trace.y[4] + (trace.y[4] - trace.y[1]) / (400 - 100) * (1200 - 400);
+      if (!forecast || forecast.x.join(',') !== '400,1200' ||
+          Math.abs(forecast.y[1] - expected) > 1e-10 || forecast.dash !== 'dash' ||
+          forecast.color !== trace.color || forecast.labels[1] !== '预测') throw new Error('Wrong 1200H forecast');
     }
   }
   await page.getByRole('combobox', { name: '产品型号', exact: true }).click();
@@ -85,5 +97,5 @@ async page => {
   await page.getByText('🔄 缓存已刷新 · 代码与配置已重载', { exact: true }).waitFor();
   await table.waitFor({ timeout: 90000 });
   if (await page.locator('[data-testid="stException"]').count() || errors.length) throw new Error(errors.join('\n') || 'Streamlit exception');
-  return { status: 'passed', source: 'live M3', rows: 100, columns: 16, charts: 9, layout: 'four decay charts per row; W only for JNCD', filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
+  return { status: 'passed', source: 'live M3', rows: 100, columns: 16, charts: 9, layout: 'two-by-two decay charts; W only for JNCD', forecastHours: 1200, filters: 3, tickStep: 100, headerCacheRefresh: true, viewports: [1365, 768, 390] };
 }

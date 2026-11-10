@@ -30,8 +30,8 @@ class MemorySource:
     def __init__(self, sheets=None):
         self.sheets = sheets if sheets is not None else {
             "Z576-detail": pd.DataFrame([
-                ["SHEET_ID", "SITE_NAME", "PARAM_NAME", "PARAM_VALUE", "SHEET_END_TIME", "LATEST_FLAG"],
-                ["S00", 1, "CD1", 12.543, 46316.57506944444, "T"],
+                ["SHEET_ID", "SITE_NAME", "PARAM_NAME", "PARAM_VALUE", "SHEET_END_TIME", "LATEST_FLAG", "STEP_ID", "IMAGE_DATA"],
+                ["S00", 1, "CD1", 12.543, 46316.57506944444, "T", "1B455", "https://example.invalid/point-test.png"],
             ]),
             "Z576-summary": pd.DataFrame(summary_rows()),
             "Sheet3": pd.DataFrame([["ignored"]]),
@@ -41,8 +41,10 @@ class MemorySource:
         return self.sheets
 
 
-def test_report_keeps_stages_blocks_sheet_ids_and_values_separate():
-    report = PointTestReportService(MemorySource()).read_report()
+def test_report_keeps_only_corrected_summary_without_stage_column():
+    source = MemorySource()
+    source.sheets['Z576-summary'].iloc[17, 2] = 99.0
+    report = PointTestReportService(source).read_report()
 
     assert list(report) == ["Z576"]
     detail = report["Z576"]["detail"]
@@ -50,12 +52,12 @@ def test_report_keeps_stages_blocks_sheet_ids_and_values_separate():
     assert detail.loc[0, "LATEST_FLAG"] == "T"
     assert str(detail.loc[0, "SHEET_END_TIME"]) == "2026-10-21 13:48:06"
     summary = report["Z576"]["summary"]
-    assert summary.groupby("阶段", sort=False).size().to_dict() == {
-        "调整前": 12, "调整后": 12, "修正后": 12,
-    }
-    row = summary[(summary["阶段"] == "调整前") & (summary["SHEET_ID"] == "S00")]
+    assert "阶段" not in summary.columns
+    assert len(summary) == 12
+    row = summary[summary["SHEET_ID"] == "S00"]
     assert row["膜位"].tolist() == ["1AA0", "2EU0"]
     assert row.iloc[0]["AVE"] == pytest.approx(12.717272727272729)
+    assert row.iloc[0]["MAX"] == 99.0
     assert set(summary["SHEET_ID"]) == {"S00", "S01", "S02", "S10", "S11", "S12"}
 
 

@@ -43,8 +43,10 @@ async page => {
     }));
     const expectedScreens = metric === 'JNCD' ? ['W'] : ['W', 'R', 'G', 'B'];
     if (JSON.stringify(await group.getByTestId('stText').allTextContents()) !== JSON.stringify(expectedScreens)) throw new Error('Wrong test screens');
-    if (charts.length !== expectedScreens.length || charts.some(chart => Math.abs(chart.y - charts[0].y) > 2) ||
-        charts.some((chart, i) => i > 0 && chart.x <= charts[i - 1].x)) throw new Error('Wrong chart count or row layout');
+    if (charts.length !== expectedScreens.length || charts.some((chart, i) =>
+        Math.abs(chart.y - charts[Math.floor(i / 2) * 2].y) > 2 ||
+        (i % 2 === 1 && chart.x <= charts[i - 1].x) ||
+        (i >= 2 && chart.y <= charts[i - 2].y))) throw new Error('Wrong chart count or two-column layout');
     for (const chart of charts) {
       const trace = chart.traces[0];
       if (chart.traces.length !== 9 || trace.y[1] !== null || trace.connectgaps !== false) throw new Error('Missing gaps or >5 samples lost');
@@ -91,5 +93,5 @@ async page => {
   const exposed = await page.evaluate(() => document.body.innerText + JSON.stringify([...document.querySelectorAll('.js-plotly-plot')].map(el => el.data)));
   if (/private-|panel_id|admin=true|管理员/.test(exposed)) throw new Error('Identity leak');
   if (await page.locator('[data-testid="stException"]').count() || errors.length) throw new Error(errors.join('\n') || 'Streamlit exception');
-  return { status: 'passed', scenarios: ['failure', 'empty', 'recovery', 'missing', 'nine-samples', 'complete-native-export', 'filter-reset', 'anonymous-hover', 'enabled-products', 'product-status', 'three-metrics', 'four-charts-per-row', 'nested-expanders', 'matching-sample-colors', 'query-applies-draft-filters', 'no-missing-warning'] };
+  return { status: 'passed', scenarios: ['failure', 'empty', 'recovery', 'missing', 'nine-samples', 'complete-native-export', 'filter-reset', 'anonymous-hover', 'enabled-products', 'product-status', 'three-metrics', 'two-by-two-decay-charts', 'nested-expanders', 'matching-sample-colors', 'query-applies-draft-filters', 'no-missing-warning'] };
 }

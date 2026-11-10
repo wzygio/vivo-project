@@ -1,6 +1,6 @@
 # 全指标预警看板：By Domain / By 指标实现说明
 
-更新日期：2026-10-27。顶部矩阵十三行的预警状态与明细统一调用 `app/sections/shared/alert_results.py::read_alert_result()`，与对应监控报表共用已发布Excel的读取、预警筛选和进程内结果缓存。共享范围仅为预警显示，原始处理、修饰、统计与结果生产仍由各报表负责；缺结果文件或缓存miss不触发分析补齐。图像详情独立、按需加载，图像失败不能遮蔽预警表。范围不包含下方 Inline／CPK／CPM 历史汇总看板。通用设计由 [已发布结果展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md) 维护。
+更新日期：2026-11-10。顶部矩阵十三行的预警状态与明细统一调用 `app/sections/shared/alert_results.py::read_alert_result()`，与对应监控报表共用已发布Excel的读取、预警筛选和进程内结果缓存。共享范围仅为预警显示，原始处理、修饰、统计与结果生产仍由各报表负责；缺结果文件或缓存miss不触发分析补齐。图像详情独立、按需加载，图像失败不能遮蔽预警表。范围不包含下方 Inline／CPK／CPM 历史汇总看板。通用设计由 [已发布结果展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md) 维护。
 
 ## 共同预警展示入口
 
@@ -80,7 +80,7 @@ AOI_RS／AOI_TT报表的昨日密度预警也使用共同展示服务，分别�
 
 正常厂别生产入口 `get_cached_shop_monitoring` 继续按原有服务获取全站点、全产品结果，成功后发布 `resources.indicator_domain.files.qtime_alerts`（默认 `resources/indicator_domain/qtime/qtime_alerts.xlsx`）。各厂别分别拥有告警sheet、最小Lot归属sheet和一行发布元数据；不改原始L1或人工决策表。
 
-报表和矩阵都通过共同 `read_alert_result` 消费 `read_qtime_alert_result`。矩阵默认要求 ARRAY／OLED／TP 全部已有当日、TTL内、源健康有效且覆盖上周的发布，按产品筛选上一完整周；缺厂别或覆盖不足为error，不调用监控服务补齐。报表显式传选定厂别／站点及原滚动窗口，保留查询范围；相同范围命中相同展示缓存。
+报表和矩阵都通过共同 `read_alert_result` 消费 `read_qtime_alert_result`。按2026-11-10用户要求，共同展示入口自动补建缺失的本地结果工作簿和厂别sheet，仅写表头并保留已有内容。空预警表按“达标”（`ok`），不因其旧参考日、TTL、策略或覆盖不足显示加载失败；空厂别不阻断其他厂别预警。非空预警仍要求当日、TTL内、源健康有效且覆盖所选周期，不调用监控服务补齐。矩阵按产品筛选上一完整周；报表显式传选定厂别／站点及原滚动窗口，相同范围命中相同展示缓存。
 
 状态和预警表不创建数据库对象。Q-Time矩阵详情先展示共同保存记录及相应Lot计数；用户另点“加载预警站点图像”后才进入原有报表图像管路，失败仅提示图像不可用。定向刷新只推进对应指标／产品标识，不强刷所有厂别，也不发布缺失结果。
 

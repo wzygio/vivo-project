@@ -80,11 +80,15 @@ def _qtime_decision_signature() -> tuple[int, int] | None:
 
 
 def read_qtime_alert_result(product: str, reference_date: date, **selection) -> dict:
-    return build_qtime_alert_results().read(product, reference_date, **selection)
+    results = build_qtime_alert_results()
+    results.store.ensure_tables()
+    return results.read(product, reference_date, **selection)
 
 
 def qtime_alert_result_signature(product: str, reference_date: date, **selection) -> str:
-    return build_qtime_alert_results().source_signature(product, reference_date, **selection)
+    results = build_qtime_alert_results()
+    results.store.ensure_tables()
+    return results.source_signature(product, reference_date, **selection)
 
 
 def build_chamber_qtime_service(db_manager: DatabaseManager) -> ChamberQTimeService:

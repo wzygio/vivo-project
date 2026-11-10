@@ -86,8 +86,8 @@ def _render_metric_charts(scope: pd.DataFrame, metric: str, group_index: int) ->
         if scope.empty:
             st.info('该组暂无 W 画面测点。')
             return
-        for offset in range(0, len(screens), 4):
-            for screen, column in zip(screens[offset:offset + 4], st.columns(4)):
+        for offset in range(0, len(screens), 2):
+            for screen, column in zip(screens[offset:offset + 2], st.columns(2)):
                 group = scope.loc[scope['测试画面'].eq(screen)]
                 with column:
                     _render_screen_chart(group, str(screen), metric,

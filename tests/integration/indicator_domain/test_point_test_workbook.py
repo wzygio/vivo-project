@@ -33,7 +33,7 @@ def test_standard_workbook_uses_configured_complete_path_and_preserves_source(tm
     path.write_bytes(payload)
     report = build_point_test_service(path).read_report()
     assert list(report) == ["Z576"]
-    assert len(report["Z576"]["summary"]) == 36
+    assert len(report["Z576"]["summary"]) == 12
     assert report["Z576"]["detail"].loc[0, "PARAM_VALUE"] == 12.543
     assert path.read_bytes() == payload
 
@@ -61,7 +61,7 @@ def test_enterprise_read_is_isolated_and_temp_files_are_cleaned(tmp_path, monkey
         with pytest.raises(RuntimeError, match="read failed"):
             build_point_test_service(path).read_report()
     else:
-        assert len(build_point_test_service(path).read_report()["Z576"]["summary"]) == 36
+        assert len(build_point_test_service(path).read_report()["Z576"]["summary"]) == 12
     assert touched and not touched[0].exists()
     assert path.read_bytes() == b"\x00\x00\x00\x00enterprise"
 
@@ -75,9 +75,8 @@ def test_missing_workbook_is_an_error(tmp_path):
 def test_real_enterprise_workbook_matches_supplied_values():
     report = build_point_test_service().read_report()["Z576"]
     assert report["detail"].shape == (936, 41)
-    assert report["summary"].groupby("阶段").size().to_dict() == {
-        "调整前": 72, "调整后": 72, "修正后": 72,
-    }
+    assert len(report["summary"]) == 72
+    assert "阶段" not in report["summary"].columns
     summary = report["summary"]
     rows = summary[(summary["SHEET_ID"] == "L3Z86902B30") & (summary["膜位"] == "1EA0")]
-    assert rows.set_index("阶段")["MAX"].to_dict() == {"调整后": 13.505, "修正后": 13.405}
+    assert rows["MAX"].tolist() == [13.405]

@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class QTimeAlertStore(Protocol):
+    def ensure_tables(self) -> bool: ...
     def read(self) -> dict[str, pd.DataFrame] | None: ...
     def save(self, shop: str, alerts: pd.DataFrame, products: pd.DataFrame, metadata: dict) -> None: ...
     def source_signature(self) -> str: ...
@@ -111,7 +112,7 @@ class QTimeAlertResults:
                     for shop in QTIME_SHOPS
                 )
                 if initialized:
-                    return {"state": "no_data", "records": empty, "alerts": empty.copy(),
+                    return {"state": "ok", "records": empty, "alerts": empty.copy(),
                             "alert_factories": [], "message": "当前暂无预警记录。",
                             "metadata": {"status": "initialized", "total_lots": 0},
                             "release_records": pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS),
@@ -126,44 +127,48 @@ class QTimeAlertResults:
             release_frames = []
             release_evidence = True
             lot_ids: set[str] = set()
-            has_product = False
             now = pd.Timestamp(self.clock())
             if now.tzinfo is not None:
                 now = now.tz_convert("Asia/Shanghai").tz_localize(None)
             for shop in dict.fromkeys(shops):
-                metadata = meta.loc[meta["shop"].eq(shop)]
-                if len(metadata) != 1:
-                    raise ValueError("Missing or duplicate Q-Time shop metadata")
-                row = metadata.iloc[0]
                 saved, products = sheets[f"alerts_{shop}"], sheets[f"products_{shop}"]
                 if (set(QTIME_ALERT_COLUMNS) - set(saved)
-                        or {"prodcode", "step_desc", "lot_id", "timekey"} - set(products)
-                        or len(saved) != int(row.alert_count) or len(products) != int(row.product_count)
-                        or row.status != "success" or row.source_status != "fresh"):
-                    raise ValueError(f"Invalid Q-Time publication schema/count/status: shop={shop}")
-                if str(row.reference_date) != str(reference_date):
-                    raise ValueError(
-                        f"Q-Time publication reference date mismatch: shop={shop} "
-                        f"published={row.reference_date} requested={reference_date}"
-                    )
-                if row.policy_signature != self.policy_signature():
-                    raise ValueError(f"Q-Time publication policy changed: shop={shop}")
-                if (pd.Timestamp(row.coverage_start) > start
-                        or pd.Timestamp(row.coverage_end) < end - pd.Timedelta(days=1)):
-                    raise ValueError(
-                        f"Insufficient Q-Time publication coverage: shop={shop} "
-                        f"published={row.coverage_start}..{row.coverage_end} "
-                        f"requested={start.date()}..{(end - pd.Timedelta(days=1)).date()}"
-                    )
-                for field in ("updated_at", "source_refreshed_at"):
-                    stamp = pd.Timestamp(row[field])
-                    if pd.isna(stamp):
-                        raise ValueError("Missing Q-Time publication time")
-                    if stamp.tzinfo is not None:
-                        stamp = stamp.tz_convert("Asia/Shanghai").tz_localize(None)
-                    age = (now - stamp).total_seconds()
-                    if age < 0 or age > self.ttl_seconds:
-                        raise ValueError("Expired Q-Time publication")
+                        or {"prodcode", "step_desc", "lot_id", "timekey"} - set(products)):
+                    raise ValueError(f"Invalid Q-Time publication schema: shop={shop}")
+                # An empty alert table is a valid passing result, including an
+                # unpopulated shop or an older empty publication. Do not invent
+                # current source-health evidence or rewrite its publication time.
+                if not saved.empty:
+                    metadata = meta.loc[meta["shop"].eq(shop)]
+                    if len(metadata) != 1:
+                        raise ValueError("Missing or duplicate Q-Time shop metadata")
+                    row = metadata.iloc[0]
+                    if (len(saved) != int(row.alert_count) or len(products) != int(row.product_count)
+                            or row.status != "success" or row.source_status != "fresh"):
+                        raise ValueError(f"Invalid Q-Time publication count/status: shop={shop}")
+                    if str(row.reference_date) != str(reference_date):
+                        raise ValueError(
+                            f"Q-Time publication reference date mismatch: shop={shop} "
+                            f"published={row.reference_date} requested={reference_date}"
+                        )
+                    if row.policy_signature != self.policy_signature():
+                        raise ValueError(f"Q-Time publication policy changed: shop={shop}")
+                    if (pd.Timestamp(row.coverage_start) > start
+                            or pd.Timestamp(row.coverage_end) < end - pd.Timedelta(days=1)):
+                        raise ValueError(
+                            f"Insufficient Q-Time publication coverage: shop={shop} "
+                            f"published={row.coverage_start}..{row.coverage_end} "
+                            f"requested={start.date()}..{(end - pd.Timedelta(days=1)).date()}"
+                        )
+                    for field in ("updated_at", "source_refreshed_at"):
+                        stamp = pd.Timestamp(row[field])
+                        if pd.isna(stamp):
+                            raise ValueError("Missing Q-Time publication time")
+                        if stamp.tzinfo is not None:
+                            stamp = stamp.tz_convert("Asia/Shanghai").tz_localize(None)
+                        age = (now - stamp).total_seconds()
+                        if age < 0 or age > self.ttl_seconds:
+                            raise ValueError("Expired Q-Time publication")
                 if not saved.empty and not saved["shop"].eq(shop).all():
                     raise ValueError("Q-Time shop sheet contains another shop")
                 product_rows = products.loc[products["prodcode"].astype(str).eq(str(product))]
@@ -174,7 +179,6 @@ class QTimeAlertResults:
                 product_rows = product_rows.loc[(product_times >= start) & (product_times < end)]
                 if step_descriptions:
                     product_rows = product_rows.loc[product_rows["step_desc"].isin(step_descriptions)]
-                has_product |= not product_rows.empty
                 lot_ids.update(product_rows["lot_id"].dropna().astype(str))
                 selected = saved.loc[saved["prodcode"].astype(str).eq(str(product))].copy()
                 if "flag" in saved:
@@ -196,7 +200,7 @@ class QTimeAlertResults:
             records = pd.concat(frames, ignore_index=True).reindex(columns=QTIME_ALERT_COLUMNS)
             release_records = (pd.concat(release_frames, ignore_index=True)
                                if release_frames else pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS))
-            state = "alert" if not records.empty else "ok" if has_product else "no_data"
+            state = "alert" if not records.empty else "ok"
             return {
                 "state": state, "records": records, "alerts": records.copy(),
                 "release_records": release_records, "release_evidence": release_evidence,

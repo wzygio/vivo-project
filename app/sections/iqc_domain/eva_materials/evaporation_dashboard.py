@@ -7,6 +7,9 @@ import pandas as pd
 import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
+from app.charts.iqc_domain.evaporation import (
+    TREND_CHARACTERISTICS, build_evaporation_figure, prepare_evaporation_points,
+)
 from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
 from src.iqc_domain.application.eva_materials.alerts import (
     EvaporationAlertStore, publish_evaporation_alerts,
@@ -14,7 +17,7 @@ from src.iqc_domain.application.eva_materials.alerts import (
 from src.iqc_domain.composition import build_evaporation_service, build_evaporation_alert_store
 from src.iqc_domain.core.eva_materials.alerts import previous_week_window
 from src.iqc_domain.core.eva_materials.evaporation import (
-    PRODUCT_SCOPE_RULE_VERSION, REPORT_COLUMNS, RESULT_RULE_VERSION,
+    DECORATION_RULE_VERSION, PRODUCT_SCOPE_RULE_VERSION, REPORT_COLUMNS, RESULT_RULE_VERSION,
 )
 from src.shared_kernel.config import ConfigLoader
 from app.sections.shared.alert_results import read_alert_result
@@ -28,6 +31,7 @@ def fetch_report_payload(
     products: tuple[str, ...], enabled_products: tuple[str, ...], work_order_types: tuple[str, ...],
     *, result_rule_version: str = RESULT_RULE_VERSION,
     product_scope_rule_version: str = PRODUCT_SCOPE_RULE_VERSION,
+    decoration_rule_version: str = DECORATION_RULE_VERSION,
 ) -> pd.DataFrame:
     """Cache only public, filtered facts; scope and policy changes separate entries."""
     return build_evaporation_service(
@@ -41,7 +45,37 @@ def _render_results(frame: pd.DataFrame) -> None:
         st.info("没有符合筛选条件的记录，请调整筛选条件。")
         return
     st.caption("IQC／COA结果按测点判定：任一测点为NG则为NG，否则为OK；缺失测点按OK处理。")
+    _render_point_trends(frame)
+    st.subheader('检验明细', anchor=False)
     _render_report_table(frame)
+
+
+@st.fragment
+def _render_point_trends(frame: pd.DataFrame) -> None:
+    st.subheader('IQC／COA 测点趋势', anchor=False, text_alignment='center')
+    st.caption(f'展示特性项目：{"、".join(TREND_CHARACTERISTICS)}')
+    st.caption('按物料号、特性项目分组，按检验时间升序排列，每次检验等间距展示；缺测不补零。')
+    points = prepare_evaporation_points(frame)
+    if points.empty:
+        st.info('所选范围内暂无上述特性项目的 IQC-1 或 COA-1 检验测点。')
+        return
+    for index, (material, details) in enumerate(points.groupby('物料号', sort=True, dropna=False)):
+        descriptions = details['物料描述'].dropna().astype(str).unique()
+        label = f'{material} · {"、".join(descriptions)}' if len(descriptions) else str(material)
+        expander = st.expander(
+            label, expanded=index == 0, key=f'iqc_evap_measured_material_{material}', on_change='rerun',
+        )
+        if not expander.open:
+            continue
+        with expander:
+            for characteristic, group in details.groupby('特性项目', sort=True):
+                st.plotly_chart(
+                    build_evaporation_figure(group, characteristic=str(characteristic)),
+                    width='stretch', key=f'iqc_evap_chart_{material}_{characteristic}',
+                )
+                missing = [column for column in ('规格上限', '规格下限') if group[column].isna().any()]
+                if missing:
+                    st.caption(f'{characteristic}：部分检验记录未提供{"、".join(missing)}，缺失处不绘制规格线。')
 
 
 def _render_report_table(frame: pd.DataFrame, *, height: int = 600) -> None:
@@ -63,6 +97,7 @@ def _load_report(service: EvaporationReportService | None, signature: tuple) -> 
     return fetch_report_payload(
         *signature, result_rule_version=RESULT_RULE_VERSION,
         product_scope_rule_version=PRODUCT_SCOPE_RULE_VERSION,
+        decoration_rule_version=DECORATION_RULE_VERSION,
     )
 
 

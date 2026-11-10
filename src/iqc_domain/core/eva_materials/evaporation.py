@@ -1,5 +1,6 @@
 """Evaporation projection and supplied SQL CASE measurement decisions."""
 
+import numpy as np
 import pandas as pd
 
 
@@ -19,6 +20,36 @@ REPORT_COLUMNS = ("序号", *REPORT_FIELDS.values())
 
 RESULT_RULE_VERSION = "measurement-case-v1"
 PRODUCT_SCOPE_RULE_VERSION = "request-master-cycle-v3"
+DECORATION_RULE_VERSION = "inner-span-10pct-first-point-v1"
+TREND_CHARACTERISTICS = ('DSC-Tg中点', 'HPLC-A', 'HPLC-A+B', 'HPLC-B')
+INNER_SPAN_RATIO = 0.1
+
+
+def decorate_measurements(source: pd.DataFrame) -> pd.DataFrame:
+    """Clamp the displayed first points; preserve source facts and missing values."""
+    frame = source.copy(deep=True)
+    lower = pd.to_numeric(source['low_spec'], errors='raise')
+    upper = pd.to_numeric(source['upp_spec'], errors='raise')
+    span = upper - lower
+    eligible = (
+        source['cha_item'].isin(TREND_CHARACTERISTICS)
+        & np.isfinite(lower) & np.isfinite(upper) & np.isfinite(span) & span.gt(0)
+    ).fillna(False)
+    if not eligible.any():
+        return frame
+    inner_lower = lower + INNER_SPAN_RATIO * span
+    inner_upper = upper - INNER_SPAN_RATIO * span
+    for column in ('iqc_1', 'coa_1'):
+        values = pd.to_numeric(source[column], errors='raise')
+        changed = (
+            eligible & np.isfinite(values)
+            & (values.lt(inner_lower) | values.gt(inner_upper))
+        ).fillna(False)
+        if changed.any():
+            frame[column] = values.where(
+                ~changed, values.clip(lower=inner_lower, upper=inner_upper),
+            )
+    return frame
 
 
 def measurement_results(source: pd.DataFrame) -> pd.DataFrame:
@@ -46,7 +77,9 @@ def project_report(source: pd.DataFrame) -> pd.DataFrame:
     missing = set(REPORT_FIELDS) - set(source.columns)
     if missing:
         raise ValueError("IQC_REPORT_SCHEMA_INVALID")
-    frame = source.loc[:, list(REPORT_FIELDS)].rename(columns=REPORT_FIELDS).copy()
+    displayed = decorate_measurements(source)
+    frame = displayed.loc[:, list(REPORT_FIELDS)].rename(columns=REPORT_FIELDS).copy()
+    # Judgments and automatic NG selection retain the original measurement CASE.
     decisions = measurement_results(source)
     for prefix, label in (("iqc", "IQC结果"), ("coa", "COA结果")):
         failed = decisions[[f"{prefix}_{i}_result" for i in range(1, 6)]].eq("NG").any(axis=1)

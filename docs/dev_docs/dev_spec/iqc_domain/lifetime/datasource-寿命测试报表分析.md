@@ -70,7 +70,7 @@ Excel 企业加密，使用 enterprise-excel-markdown 的 Excel COM 只读单元
 $env:IQC_LIFETIME_LIVE_DB='1'
 .venv/Scripts/python.exe -m pytest tests/unit/test_iqc_lifetime.py tests/unit/test_iqc_lifetime_repository.py tests/e2e/test_iqc_lifetime_apptest.py tests/integration/test_iqc_lifetime_live.py tests/architecture -q
 .venv/Scripts/python.exe -m pytest tests/e2e/test_iqc_evaporation_apptest.py tests/unit/test_iqc_evaporation.py tests/unit/test_iqc_evaporation_cache.py tests/unit/test_iqc_evaporation_repository.py tests/test_iqc_demo_reports.py -q
-.venv/Scripts/python.exe -m streamlit run app/pages/IQC寿命测试报表.py --server.port=8521 --server.headless=true
+.venv/Scripts/python.exe -m streamlit run app/pages/寿命测试报表.py --server.port=8521 --server.headless=true
 .venv/Scripts/python.exe -m streamlit run tests/e2e/fixtures/iqc_lifetime_app.py --server.port=8522 --server.headless=true
 ```
 

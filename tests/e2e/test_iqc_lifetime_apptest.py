@@ -19,6 +19,10 @@ class Source(MemorySource):
             raise RuntimeError('private SQL credentials')
         if mode == 'empty':
             return self.frame.iloc[:0]
+        if mode == 'forecast':
+            frame = self.frame.copy()
+            frame['test_time'] = frame.test_time.map({'0': '0', '20': '100', '100': '400'})
+            return frame
         if mode == 'missing_luminance':
             return self.frame.assign(lumi_decay=None)
         if mode == 'missing_jncd':
@@ -272,3 +276,26 @@ with patch.object(ConfigLoader, 'get_enabled_products', return_value=['M678']), 
         assert 'private' not in app.dataframe[0].value.to_json()
     finally:
         fetch_report_payload.clear()
+
+
+def test_forecasts_render_in_two_by_two_grid_without_adding_detail_rows():
+    app = AppTest.from_string(APP)
+    app.session_state['mode'] = 'forecast'
+    app.run()
+    app.button(key='iqc_lifetime_query').click().run()
+    assert not app.exception and not app.error
+    for section in app.expander[1:3]:
+        rows = section.get('flex_container')
+        assert len(rows) == 2
+        assert [[text.value for text in row.text] for row in rows] == [['W', 'R'], ['G', 'B']]
+        assert all(len(row.get('column')) == 2 for row in rows)
+    assert [text.value for text in app.expander[3].text] == ['W']
+    for element in app.get('plotly_chart'):
+        chart = json.loads(element.proto.spec)
+        assert len(chart['data']) == 4
+        assert sum(trace.get('showlegend') is False for trace in chart['data']) == 2
+        assert all(trace['x'][-1] == 1200 for trace in chart['data']
+                   if trace.get('showlegend') is False)
+        assert 'private' not in element.proto.spec
+    assert len(app.dataframe[0].value) == 24
+    assert app.dataframe[0].value['测试时间'].max() == 400

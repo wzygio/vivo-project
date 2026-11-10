@@ -36,6 +36,91 @@ def publish_all(results, frame=None):
         results.publish(shop, chosen, chosen, HEALTH, AS_OF)
 
 
+def test_empty_alert_tables_remain_ok_when_shop_dates_differ_and_expire(tmp_path):
+    results = service(tmp_path, clock=lambda: NOW + timedelta(days=5))
+    for shop in ("ARRAY", "OLED", "TP"):
+        source = rows() if shop == "ARRAY" else rows().iloc[:0]
+        published_day = AS_OF + timedelta(days=5) if shop == "ARRAY" else AS_OF
+        results.publish(shop, source, rows().iloc[:0], HEALTH, published_day)
+    before = results.store.path.read_bytes()
+    value = results.read("M678", AS_OF + timedelta(days=5))
+    assert value["state"] == "ok"
+    assert value["records"].empty
+    assert results.store.path.read_bytes() == before
+
+
+def test_display_initializes_missing_workbook_and_returns_ok(tmp_path, monkeypatch):
+    from src.indicator_domain import composition
+    results = service(tmp_path)
+    monkeypatch.setattr(composition, "build_qtime_alert_results", lambda: results)
+    monkeypatch.setattr(pd, "read_sql", lambda *_a, **_k: pytest.fail("Unexpected SQL"))
+    value = composition.read_qtime_alert_result("M678", AS_OF)
+    assert value["state"] == "ok"
+    sheets = results.store.read()
+    assert set(sheets) == {"__meta__", *(
+        f"{kind}_{shop}" for shop in ("ARRAY", "OLED", "TP") for kind in ("alerts", "products")
+    )}
+    assert all(frame.empty for frame in sheets.values())
+
+
+def test_display_completes_missing_shop_tables_and_preserves_published_alerts(tmp_path, monkeypatch):
+    from src.indicator_domain import composition
+    results = service(tmp_path)
+    results.publish("ARRAY", rows(), rows(), HEALTH, AS_OF)
+    with pd.ExcelWriter(results.store.path, engine="openpyxl", mode="a") as writer:
+        pd.DataFrame({"note": ["preserve user notes"]}).to_excel(writer, sheet_name="notes", index=False)
+    before = results.store.read()
+    monkeypatch.setattr(composition, "build_qtime_alert_results", lambda: results)
+    signature = composition.qtime_alert_result_signature("M678", AS_OF)
+    value = composition.read_qtime_alert_result("M678", AS_OF)
+    assert value["state"] == "alert"
+    assert value["records"].lot_id.tolist() == ["LAST"]
+    after = results.store.read()
+    for name, frame in before.items():
+        pd.testing.assert_frame_equal(after[name], frame)
+    assert after["alerts_OLED"].empty and after["products_TP"].empty
+    data = results.store.path.read_bytes()
+    assert composition.qtime_alert_result_signature("M678", AS_OF) == signature
+    assert results.store.path.read_bytes() == data
+
+
+def test_table_initialization_does_not_overwrite_an_unreadable_existing_file(tmp_path):
+    path = tmp_path / "unreadable.xlsx"
+    path.write_bytes(b"unreadable-existing-data")
+
+    def unreadable(*_args):
+        raise OSError("Read blocked")
+
+    store = QTimeAlertWorkbook(path, workbook_reader=unreadable)
+    with pytest.raises(OSError, match="Read blocked"):
+        store.ensure_tables()
+    assert path.read_bytes() == b"unreadable-existing-data"
+
+
+def test_table_initialization_rechecks_after_acquiring_publication_lock(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from src.indicator_domain.infrastructure.qtime import alert_workbook
+
+    results = service(tmp_path)
+    real_lock = alert_workbook.publication_lock
+    published = []
+
+    @contextmanager
+    def producer_finishes_first(path):
+        with monkeypatch.context() as producer:
+            producer.setattr(alert_workbook, "publication_lock", real_lock)
+            results.store.initialize_empty_template()
+            publish_all(results)
+            published.append(results.store.path.read_bytes())
+        with real_lock(path):
+            yield
+
+    monkeypatch.setattr(alert_workbook, "publication_lock", producer_finishes_first)
+    assert not results.store.ensure_tables()
+    assert results.store.path.read_bytes() == published[0]
+    assert results.read("M678", AS_OF)["state"] == "alert"
+
+
 def test_published_reader_filters_exact_product_and_last_iso_week(tmp_path):
     results = service(tmp_path)
     publish_all(results)
@@ -45,7 +130,7 @@ def test_published_reader_filters_exact_product_and_last_iso_week(tmp_path):
     assert value["alert_factories"] == ["ARRAY"]
     assert value["records"].columns.tolist() == QTIME_ALERT_COLUMNS
     assert "flag" not in value["records"]
-    assert results.read("M67", AS_OF)["state"] == "no_data"
+    assert results.read("M67", AS_OF)["state"] == "ok"
 
 
 def test_report_selection_preserves_rolling_window_shop_and_station_scope(tmp_path):
@@ -77,14 +162,14 @@ def test_explicit_empty_template_is_not_a_successful_publication(tmp_path):
     assert not results.store.initialize_empty_template()
     assert before == results.store.path.read_bytes()
     value = results.read('M678', AS_OF)
-    assert value['state'] == 'no_data'
+    assert value['state'] == 'ok'
     assert value['records'].empty
     assert value['metadata'].get('status') == 'initialized'
     # Templates have no invented freshness or completed-analysis timestamp.
     assert results.store.read()['__meta__'].empty
     results.publish('ARRAY', rows(), rows(), HEALTH, AS_OF)
     assert results.read('M678', AS_OF, shops=('ARRAY',))['state'] == 'alert'
-    assert results.read('M678', AS_OF)['state'] == 'error'  # Other shops still unknown.
+    assert results.read('M678', AS_OF)['state'] == 'alert'  # Empty shops are passing.
 
 
 def test_nonempty_rows_without_metadata_are_not_an_initialized_template(tmp_path):
@@ -98,14 +183,14 @@ def test_nonempty_rows_without_metadata_are_not_an_initialized_template(tmp_path
     assert results.read('M678', AS_OF)['state'] == 'error'
 
 
-def test_valid_empty_publication_differs_from_missing_and_stale(tmp_path):
+def test_empty_publication_is_ok_without_requiring_fresh_metadata(tmp_path):
     results = service(tmp_path)
     assert results.read("M678", AS_OF)["state"] == "error"
     publish_all(results, rows().iloc[:0])
-    assert results.read("M678", AS_OF)["state"] == "no_data"
-    assert results.read("M678", AS_OF + timedelta(days=1))["state"] == "error"
+    assert results.read("M678", AS_OF)["state"] == "ok"
+    assert results.read("M678", AS_OF + timedelta(days=1))["state"] == "ok"
     expired = service(tmp_path, clock=lambda: NOW + timedelta(days=2))
-    assert expired.read("M678", AS_OF)["state"] == "error"
+    assert expired.read("M678", AS_OF)["state"] == "ok"
 
 
 def test_product_with_source_but_no_alerts_is_ok(tmp_path):
