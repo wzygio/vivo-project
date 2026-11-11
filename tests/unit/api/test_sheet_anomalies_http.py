@@ -115,7 +115,7 @@ def test_unavailable_source_is_safe_json_and_does_not_echo_technical_details():
     assert 'private-workbook-path' not in result.text and 'flag' not in result.text
 
 
-def test_client_limit_and_read_timeout_are_enforced():
+def test_client_limit_and_read_timeout_are_enforced(caplog):
     import time
     from api.main import create_app
     from api.settings import ApiClient, ApiSettings
@@ -130,5 +130,20 @@ def test_client_limit_and_read_timeout_are_enforced():
     with TestClient(app) as client:
         first=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
         assert first.status_code==503
+        assert first.json()['error']['code']=='read_timeout'
+        assert first.headers['x-request-id'] in caplog.text
+        assert 'API_READ_TIMEOUT' in caplog.text
         second=client.get('/api/v1/sheet-anomalies?product=P1&sub_domain=SPC&event_type=OOS',headers={'X-API-Key':key})
         assert second.status_code==429 and int(second.headers['retry-after'])>0
+
+
+def test_default_all_source_budget_fits_within_portable_client_wait(monkeypatch):
+    from api.settings import ApiSettings
+    from tools import fetch_sheet_anomalies as caller
+
+    # The previous 30s server / 45s caller budget failed on a cold 84-source read.
+    defaults = []
+    monkeypatch.setattr(caller, 'launch_gui', lambda args: defaults.append(args) or 0)
+    assert caller.main([]) == 0
+    assert ApiSettings().read_timeout_seconds == 90
+    assert defaults[0].timeout == 120

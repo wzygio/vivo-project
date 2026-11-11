@@ -116,7 +116,7 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
         return {'status': 'ok'}
 
     @app.get('/api/v1/sheet-anomalies', response_model=AnomalyResponse)
-    async def anomalies(query: Annotated[AnomalyQuery, Query()],
+    async def anomalies(request: Request, query: Annotated[AnomalyQuery, Query()],
                   principal: Annotated[ApiClient, Security(authenticate)]) -> AnomalyResponse:
         try:
             enabled = enabled_products()
@@ -137,7 +137,11 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
         except ReadBusy:
             raise HTTPException(429, 'reader_busy', headers={'Retry-After': '5'}) from None
         except ReadTimeout:
-            raise HTTPException(503, 'result_unavailable') from None
+            logging.getLogger(__name__).warning(
+                'API_READ_TIMEOUT request_id=%s sources=%s timeout_seconds=%s',
+                request.state.request_id, len(plan.queries), settings.read_timeout_seconds,
+            )
+            raise HTTPException(503, 'read_timeout') from None
         except (ValueError, KeyError, OSError, TypeError) as exc:
             logging.getLogger(__name__).warning('API_RESULT_UNAVAILABLE cause=%s', type(exc).__name__)
             raise HTTPException(503, 'result_unavailable') from None

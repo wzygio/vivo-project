@@ -164,6 +164,37 @@ def test_empty_publication_requires_complete_headers(published_files, headers, e
     assert path.read_bytes() == before
 
 
+@pytest.mark.parametrize('empty', [True, False])
+def test_aoi_rs_chart_kind_is_required_only_when_records_exist(published_files, empty):
+    frame = _inline_rows('aoi_rs').drop(columns='chart_kind')
+    if empty:
+        frame = frame.iloc[:0]
+    path = published_files.paths[('inline_domain', 'aoi_rs_sheet_ooc_decoration')]
+    _write(path, {'P1': frame})
+    before = path.read_bytes()
+    with TestClient(published_files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': 'AOI_RS', 'event_type': 'OOC'})
+    assert response.status_code == (200 if empty else 503)
+    if empty:
+        assert response.json()['data'] == [] and response.json()['meta']['complete'] is True
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('domain', ['SPC', 'CTQ', 'AOI_TT', 'AOI_RS'])
+@pytest.mark.parametrize('event', ['OOS', 'OOC'])
+def test_missing_product_sheet_means_no_published_anomalies(published_files, domain, event):
+    path = published_files.paths[('inline_domain', f'{domain.lower()}_sheet_{event.lower()}_decoration')]
+    _write(path, {'ANOTHER_PRODUCT': _inline_rows(domain.lower())})
+    before = path.read_bytes()
+    with TestClient(published_files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': domain, 'event_type': event})
+    assert response.status_code == 200
+    assert response.json()['data'] == [] and response.json()['meta']['complete'] is True
+    assert path.read_bytes() == before
+
+
 @pytest.mark.parametrize("domain", ["SPC", "CTQ", "AOI_TT", "AOI_RS"])
 @pytest.mark.parametrize("event", ["OOS", "OOC"])
 def test_real_inline_publications_reach_default_http_with_exact_identity(published_files, domain, event):

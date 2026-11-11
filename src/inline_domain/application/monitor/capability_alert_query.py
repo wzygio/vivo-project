@@ -7,7 +7,7 @@ from typing import Protocol
 import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_latest import (
-    capability_period_records, capability_week_window, select_capability_alert_records,
+    capability_week_window, select_capability_alert_records,
 )
 from src.inline_domain.core.monitor.cpk_summary import capability_summary_columns
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion
@@ -38,13 +38,8 @@ class CapabilityAlertQuery:
         detail = self._reader.read_product(product)
         if detail is None:
             return self._result(pd.DataFrame(columns=["flag"]), availability="missing")
-        periods = capability_period_records(detail, reference_date, start_date=start_date, end_date=end_date)
-        expected_weeks = (window[1] - window[0]).days // 7 + 1
-        available_weeks = periods["period_label"].nunique() if "period_label" in periods else 0
-        if available_weeks < expected_weeks:
-            # This is a maintained historical ledger, not an authoritative empty
-            # publication for every calendar week that has no stored rows.
-            return self._result(detail.iloc[:0].copy(), availability="missing")
+        # A readable, validated product ledger can have no rows in the selected
+        # weeks. That is a successful empty selection, not a missing source.
         records = select_capability_alert_records(
             detail, reference_date, metric=self._metric, date_exclusion=self._date_exclusion,
             min_span_hours=self._min_span_hours, start_date=start_date, end_date=end_date,

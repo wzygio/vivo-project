@@ -33,7 +33,10 @@ class ApiClient:
 class ApiSettings:
     requests_per_minute: int = 60
     max_concurrent_reads: int = 2
-    read_timeout_seconds: float = 30
+    # A default request can read 84 product/domain/event combinations, including
+    # cold imports and protected files. Keep a finite total budget below the
+    # portable caller's 120s wait, rather than applying a single-source budget.
+    read_timeout_seconds: float = 90
     snapshot_ttl_seconds: float = 300
     max_snapshots: int = 64
     max_snapshot_bytes: int = 16 * 1024 * 1024

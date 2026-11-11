@@ -197,8 +197,8 @@ def test_missing_capability_product_retains_successful_product_rows(capability_f
     with TestClient(app) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'CPM'})
     assert response.status_code == 200, response.text
-    assert len(response.json()['data']) == 1 and response.json()['meta']['complete'] is False
-    assert response.json()['meta']['failed_sources'] == [dict(product='P2', sub_domain='SPC', event_type='CPM', code='result_unavailable')]
+    assert len(response.json()['data']) == 1 and response.json()['meta']['complete'] is True
+    assert response.json()['meta']['failed_sources'] == []
 
 
 def test_capability_identity_stable_but_changed_value_invalidates_page(capability_files):

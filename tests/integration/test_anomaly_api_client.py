@@ -57,9 +57,9 @@ def test_client_gets_all_real_records_with_or_without_pagination(published_files
     before = path.read_bytes()
     with TestClient(published_files.app()) as http:
         full = fetch_anomalies('http://api.test', FIXTURE_KEY,
-                               {'product': 'P1', 'sub_domain': 'SPC'}, opener=AsgiOpener(http))
+                               {'product': 'P1', 'sub_domain': 'SPC', 'event_type': 'OOS'}, opener=AsgiOpener(http))
         paged = fetch_anomalies('http://api.test', FIXTURE_KEY,
-                                {'product': 'P1', 'sub_domain': 'SPC'}, page_size=1,
+                                {'product': 'P1', 'sub_domain': 'SPC', 'event_type': 'OOS'}, page_size=1,
                                 opener=AsgiOpener(http))
     assert full['data'] == paged['data']
     assert len(full['data']) == 2
@@ -74,7 +74,8 @@ def test_client_gets_all_real_records_with_or_without_pagination(published_files
 def test_client_reports_complete_empty_query_without_calling_it_a_failure(published_files):
     with TestClient(published_files.app()) as http:
         result = fetch_anomalies('http://api.test', FIXTURE_KEY,
-            {'product': 'P1', 'sub_domain': 'SPC', 'start_date': '2020-01-01', 'end_date': '2020-01-07'},
+            {'product': 'P1', 'sub_domain': 'SPC', 'event_type': 'OOS',
+             'start_date': '2020-01-01', 'end_date': '2020-01-07'},
             opener=AsgiOpener(http))
     assert result['data'] == [] and result['meta']['complete'] is True
     assert '调用成功' in result_summary(result)

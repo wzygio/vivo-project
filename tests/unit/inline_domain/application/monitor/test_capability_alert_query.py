@@ -119,23 +119,30 @@ def test_date_range_with_no_complete_week_is_ready_empty_without_reading_source(
     assert reader.calls == []
 
 
-@pytest.mark.parametrize("rows", [None, [], [row(period_label="2026-W43")]])
-def test_missing_source_or_requested_week_is_not_reported_as_complete_no_anomalies(rows):
+@pytest.mark.parametrize("rows", [[], [row(period_label="2026-W43")]])
+def test_readable_source_without_requested_week_is_successful_empty(rows):
     service, _ = query(rows)
     result = service.read("P1", TODAY)
-    assert result["metadata"]["availability"] == "missing"
+    assert result["metadata"]["availability"] == "ready"
     assert result["records"].empty
 
 
-def test_missing_one_of_several_requested_weeks_is_unavailable():
+def test_missing_source_is_still_unavailable():
+    service, _ = query(None)
+    assert service.read("P1", TODAY)["metadata"]["availability"] == "missing"
+
+
+def test_requested_weeks_without_records_do_not_discard_existing_records():
     service, _ = query([row()])
     result = service.read("P1", TODAY, start_date="2026-10-19", end_date="2026-11-01")
-    assert result["metadata"]["availability"] == "missing"
+    assert result["metadata"]["availability"] == "ready"
+    assert len(result["records"]) == 1
 
 
 def test_other_period_kinds_do_not_substitute_for_missing_week():
     service, _ = query([row(period_type="month", period_label="2026-11")])
-    assert service.read("P1", TODAY)["metadata"]["availability"] == "missing"
+    result = service.read("P1", TODAY)
+    assert result["metadata"]["availability"] == "ready" and result["records"].empty
 
 
 def test_reversed_date_range_is_rejected_before_source_read():

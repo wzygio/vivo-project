@@ -1,6 +1,6 @@
 # 异常片／Lot API 服务部署说明
 
-更新日期：2026-11-04。面向安装、启动和维护服务的人员。
+更新日期：2026-11-11。面向安装、启动和维护服务的人员。
 
 本文维护 API 概念、部署配置、启动操作与数据准备步骤。请求参数、返回字段和跨设备测试统一见 [API 调用说明](api-caller-guide-2026-11-03.md)；程序组成与处理流程见 [API 程序介绍](architecture-sheet-anomaly-api.md)。
 
@@ -75,6 +75,43 @@ uv run --no-sync python tools/anomaly_api_service.py status
 
 重点看 `supervisor_alive`、`listener_owned`、`ready` 是否均为 `true`；`status=running` 单独不能证明服务正常。`ready=true` 只检查服务配置，不保证每个业务来源可用。
 
+#### 为什么任务管理器中有多个 Python 进程
+
+后台托管工具包含两个职责，不能仅凭相同脚本名判断重复启动：
+
+| 命令行中的动作 | 职责 |
+|---|---|
+| `anomaly_api_service.py run` | 监督进程，启动工作进程，并在工作进程异常退出后按退避策略重启 |
+| `anomaly_api_service.py worker` | API 工作进程，运行 Uvicorn 并处理 HTTP 请求；代码明确配置 `workers=1` |
+
+当前 Windows 部署使用项目虚拟环境的 `pythonw.exe`。虚拟环境启动器会调用基础 Python 解释器，因此每个职责还会显示一对父子进程，正常运行时可看到以下四层关系：
+
+```text
+.venv\Scripts\pythonw.exe  … anomaly_api_service.py run     （启动器）
+└─基础 Python\pythonw.exe  … anomaly_api_service.py run     （监督进程）
+  └─.venv\Scripts\pythonw.exe  … anomaly_api_service.py worker  （启动器）
+    └─基础 Python\pythonw.exe  … anomaly_api_service.py worker  （API 服务）
+```
+
+这里的“基础 Python”指创建虚拟环境时使用的解释器目录，可在 `.venv/pyvenv.cfg` 的 `home` 字段核对。因此，两条 `run` 和两条 `worker` 可以属于同一套 API；它们不是四个独立 API 实例，也不是 Uvicorn 多 worker 部署。
+
+判断是否重复启动，应结合父子关系、监听归属和前述 `status` 结果。在任务管理器的“详细信息”页启用“命令行”列可区分 `run` 与 `worker`；需要核对父子关系时，在项目根目录的 PowerShell 执行：
+
+```powershell
+Get-CimInstance Win32_Process |
+    Where-Object { $_.Name -eq 'pythonw.exe' -and $_.CommandLine -like '*anomaly_api_service.py*' } |
+    Select-Object ProcessId, ParentProcessId, ExecutablePath
+
+Get-NetTCPConnection -State Listen -LocalPort 8890 |
+    Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+将 `ParentProcessId` 与上一层的 `ProcessId` 对应，再将 `OwningProcess` 与实际 API 工作进程对应。端口使用部署配置中的值；当前为 `8890`。本次核查（2026-11-11）中，四个进程构成一条父子链，只有最末层工作进程监听 `0.0.0.0:8890`，且 `supervisor_alive`、`listener_owned`、`ready` 均为 `true`，`restarts=0`，确认没有重复启动。PID 在重启后会变化，不应固定使用本次 PID 识别服务；`restarts` 表示工作进程重启次数，不表示实例数量。
+
+日常重复点击一键启动时，托管工具发现已有监督进程会返回 `already_running`，并使用 `host.lock` 防止同一运行目录出现多个监督循环。若发现另一条独立进程链或监听归属不符，应进一步核对启动方式和运行目录；不要直接按进程名批量结束 Python。
+
+#### 停止、更新与登录启动
+
 维护时如需停止，由维护者执行：
 
 ```powershell
@@ -144,6 +181,7 @@ uv run --no-sync python tools/fetch_sheet_anomalies.py
 | `meta.complete=false` | 取得可用部分；查看 `failed_sources`，不能作为完整统计 |
 | 401／密钥无效 | 核对原始密钥是否与服务配置对应；自动填入不等于免认证 |
 | `result_unavailable`／503 | 所选来源暂不可用，按第 5、7 节检查来源资料 |
+| `read_timeout`／503 | API 已响应，但汇总读取超过 90 秒；缩小产品／分类后重试，维护者按请求编号查 `API_READ_TIMEOUT` 日志 |
 | 连接失败 | 核对地址、端口及第 3.3 节的服务状态 |
 
 这里的“2 项”是能力项目数，不是去重片数；能力记录的“对象编号”是片号列表。预览最多显示 20 行，不代表查询或下载只取 20 行。
@@ -331,7 +369,7 @@ uv run --no-sync python tools/initialize_yield_alert_controls.py --product PRODU
 API 1.4.0 可在原地址查询 SPC 的 `CPK`／`CPM` 事件，并返回对应周全部 Sheet ID，仍使用已有 SPC 产品和厂别授权，不需要新密钥。省略 `event_type` 时会同时查询全部适用事件；填写时只查询该事件。需完成以下准备：
 
 1. `resources.inline_domain.files.spc_cpk_cpm_decoration` 指向已维护的能力工作簿。CPK 使用产品同名工作表，CPM 使用 `<产品>_cpm`。
-2. 工作表具有产品、厂别、站点、参数、周期类型／标签、真实数据起止时间、对应指标值和有效 Flag；层别仍由本地站点字典取得。仅有历史行而缺少请求周资料时，来源仍不可用。
+2. 已有工作表具有产品、厂别、站点、参数、周期类型／标签、真实数据起止时间、对应指标值和有效 Flag；层别仍由本地站点字典取得。异常发生时才创建对应产品工作表；可读台账中没有产品工作表或没有请求周记录时，按 2026-11-11 的空数据口径返回成功空结果。
 3. 公开配置的“全指标预警看板”工作表分别具备 `SPC 趋势波动（CPK）` 和 `SPC 趋势波动（CPM）` 行。两者独立维护，缺行／缺产品开关时不输出；不能借用单片异常开关。
 4. 正常生成对应产品的 SPC 报表。报表会自动从 By Sheet 制备点位发布片号快照；首次升级也可使用下节同步命令。API 请求本身不会生成这些资料。
 5. 更新代码后，按第 3.3 节由维护者安排加载新工作进程，再按调用说明分别查询 CPK 和 CPM，核对指标、统计周、完整片号名单及 `meta.complete`。
@@ -376,6 +414,8 @@ uv run --no-sync python tools/sync_spc_sheet_membership.py --product M626
 
 企业保护文件可能使用现有 Office COM 读取回退，必须验证正式账号的文件访问和 Office 环境。HTTP 超时不会强制终止卡住的 Office 调用，后台读取仍会占用有限槽位。并发、容量和限流的具体默认值见 [程序介绍](architecture-sheet-anomaly-api.md)。
 
+默认全选最多串行检查 84 个产品／分类／事件组合。2026-11-11 排查确认原 30 秒总读取上限可使有效部分结果一并丢失，现调整为服务端 90 秒、查询程序每次 HTTP 请求默认等待 120 秒。超时仍返回 503，错误码为 `read_timeout`，服务日志记录请求编号、组合数与超时上限；不会无限等待或自动无限重试。Inline 异常台账只在产生异常时创建产品工作表；可读工作簿缺少产品工作表、有效空表和能力台账在所选周内无记录均返回成功空结果。文件缺失或读取错误仍需核对发布资料。
+
 ## 7. 常见故障处理
 
 | 现象 | 处理顺序 |
@@ -387,9 +427,28 @@ uv run --no-sync python tools/sync_spc_sheet_membership.py --product M626
 | 本机可用、其它设备不可用 | 核对内网 IP、路由、企业代理和访问规则 |
 | 401／403 | 核对调用密钥及授权，确认工作进程加载的是预期配置 |
 | 503／部分来源失败 | 核对正式发布、日期覆盖、释放决定、站点字典、Yield 厂别和启用范围 |
+| `read_timeout`／503 | 端口可用不代表业务读取已完成；按请求编号查 `API_READ_TIMEOUT`，核对首次加载、文件更新及 Office 耗时，可缩小产品／分类后重试 |
 | CPK／CPM 503 | 核对公开政策、产品能力工作表、请求完整周及匹配的片号快照；必要时正常生成 SPC 报表或运行 5.6 同步，不把缺资料当成无不达项 |
 | 请求超时／读取忙 | 看日志与并发使用情况，检查文件和 Office；不要快速无限重试 |
 
 不要用假站点、统一修改全部释放标记或删除元数据来绕过不可用状态。错误反馈应包含时间、状态码及 `X-Request-ID`，不包含密钥。
 
 本说明描述部署方法，当前在线状态需重新检查。当前 1.4.0 更新、默认全选及密钥自动填入验证见 [默认全选验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-default-events-delivery-2026-11-04.md)。
+
+### 7.1 2026-11-11：21 个失败来源的核查
+
+当日默认查询周为 2026-W45（11-02～11-08）。以下 21 个组合来自本地发布文件核查，数量会随正常报表发布变化：
+
+| 产品／分类／事件 | 数量 | 原因及本次处理 |
+|---|---:|---|
+| 全部 7 个启用产品／AOI_RS／OOC | 7 | 产品表均为零行，仅缺 `chart_kind`；修复为空数据成功，有记录时仍严格验证对象类型 |
+| M678、Z553／SPC／CPK、CPM；M673／SPC／CPK | 5 | 可读台账中无 2026-W45 记录；按用户要求修复为成功空结果，不以缺周判失败 |
+| Z576、Z553／CTQ／OOS | 2 | 无异常而未创建对应产品工作表，修复为成功空结果 |
+| M673、Z517、Z576、Z553／CTQ／OOC | 4 | 无异常而未创建对应产品工作表，修复为成功空结果 |
+| M673／AOI_TT／OOS | 1 | 无异常而未创建对应产品工作表，修复为成功空结果 |
+| M673／AOI_RS／OOS | 1 | 无异常而未创建对应产品工作表，修复为成功空结果 |
+| M673／SPC／CPM | 1 | 无异常而未创建 `M673_cpm` 产品工作表，修复为成功空结果 |
+
+这 21 个组合按用户确认的“异常产生时才建产品表”规则均为正常空数据，修复后不再计入失败。排查和代码修复不创建空工作表、不改释放决定、不伪造片号，也不在 HTTP 请求内补算。M678、Z553 的能力台账最近记录截至 W44，M673 的 CPK 截至 W29；这说明本次日期筛选未命中记录，不作为接口失败。
+
+修复验证：432 项相关测试通过。使用真实本地发布文件的进程内 HTTP 验证中，默认全选用时 25.42 秒，返回 2 条记录、`complete=true`、`failed_sources=[]`。随后经用户明确授权，已重启正式 8890 服务并通过便携查询程序完成带凭证 HTTP 验证：默认全选用时 13.72 秒，同样返回 2 条记录且完整；单独查询缺表的 M673／SPC／CPM 和 Z576／CTQ／OOS 均成功返回零条记录且完整。旧 API 四个进程全部退出、旧监听释放及新监听归属均已核实，部署凭证和授权配置文件原字节保持一致。进程内验证未启动临时监听服务。

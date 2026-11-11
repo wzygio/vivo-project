@@ -89,7 +89,9 @@ class ExcelAlarmReader:
             required |= {"usl"} if self.alarm_type == "OOS" else {"ucl", "ooc_type"}
         else:
             required |= {"rs_code", "point_id", "sheet_start_time", "value"}
-            if self._strict_empty:
+            # Empty legacy AOI_RS sheets need no object-kind discrimination.
+            # Nonempty sources must still identify Sheet versus Lot explicitly.
+            if self._strict_empty and not frame.empty:
                 required.add("chart_kind")
             required |= {"spec"} if self.alarm_type == "OOS" else {"ucl", "lcl", "ooc_type"}
         missing = required - set(frame.columns)

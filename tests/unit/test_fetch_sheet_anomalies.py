@@ -73,7 +73,7 @@ def test_default_request_uses_header_and_no_pagination_parameters():
     result = client.fetch_anomalies('http://127.0.0.1:8890', FAKE_KEY,
                                     {'product': 'M626'}, opener=opener)
     request, timeout = opener.requests[0]
-    assert request.method == 'GET' and timeout == 45
+    assert request.method == 'GET' and timeout == 120
     assert request.get_header('X-api-key') == FAKE_KEY
     assert parse_qs(urlsplit(request.full_url).query) == {'product': ['M626']}
     assert FAKE_KEY not in request.full_url
@@ -204,6 +204,24 @@ def test_transport_error_hides_exception_reason():
     with pytest.raises(client.ApiCallError) as caught:
         client.fetch_anomalies('http://host', FAKE_KEY, opener=Opener(URLError(FAKE_KEY)))
     assert FAKE_KEY not in str(caught.value)
+
+
+def test_read_timeout_explains_service_is_reachable_without_echoing_server_message():
+    error = HTTPError('http://host', 503, FAKE_KEY, {'X-Request-ID': 'c' * 32},
+                      BytesIO(json.dumps({'error': {'code': 'read_timeout', 'message': FAKE_KEY}}).encode()))
+    with pytest.raises(client.ApiCallError) as caught:
+        client.fetch_anomalies('http://host', FAKE_KEY, opener=Opener(error))
+    message = str(caught.value)
+    assert '已连接' in message and '读取超时' in message
+    assert FAKE_KEY not in message and 'c' * 32 in message
+
+
+@pytest.mark.parametrize('body', [b'not-json', b'[]', b'{"error":null}', b'{"error":[]}', b'x' * 4097])
+def test_malformed_error_body_keeps_safe_http_error(body):
+    error = HTTPError('http://host', 503, FAKE_KEY, {}, BytesIO(body))
+    with pytest.raises(client.ApiCallError) as caught:
+        client.fetch_anomalies('http://host', FAKE_KEY, opener=Opener(error))
+    assert caught.value.status == 503 and FAKE_KEY not in str(caught.value)
 
 
 @pytest.mark.parametrize('base', [

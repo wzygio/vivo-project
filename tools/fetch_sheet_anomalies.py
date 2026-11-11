@@ -24,6 +24,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 ENDPOINT = '/api/v1/sheet-anomalies'
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+DEFAULT_TIMEOUT_SECONDS = 120
 DOMAINS = ('SPC', 'CTQ', 'AOI_TT', 'AOI_RS', 'Yield', 'Q-Time')
 FILTERS = ('product', 'sub_domain', 'event_type', 'factory', 'start_date', 'end_date',
            'step_id', 'layer', 'parameter_name', 'entity_type', 'entity_id')
@@ -103,8 +104,24 @@ def _read_page(opener, base: str, api_key: str, params: dict, timeout: float) ->
     except HTTPError as exc:
         request_id = _request_id(exc.headers)
         status = exc.code
-        exc.close()
+        # Inspect only a small structured error code. Never display the server's
+        # free-text message, which may contain private paths or other details.
+        code = ''
+        try:
+            if status == 503:
+                error_body = exc.read(4097)
+                if len(error_body) <= 4096:
+                    error_payload = json.loads(error_body)
+                    error = error_payload.get('error') if isinstance(error_payload, dict) else None
+                    if isinstance(error, dict):
+                        code = error.get('code')
+        except (OSError, ValueError, UnicodeError):
+            pass  # Malformed error bodies retain the fixed status-based help.
+        finally:
+            exc.close()
         help_text = ERROR_HELP.get(status, '服务返回了非预期状态；重定向不会自动跟随，请确认正式入口。')
+        if status == 503 and code == 'read_timeout':
+            help_text = '已连接到 API，但结果读取超时。可缩小产品或分类范围后重试；持续失败请将请求编号交给维护者。'
         raise ApiCallError(help_text, status=status, request_id=request_id) from None
     except (URLError, OSError, TimeoutError, ValueError, UnicodeError):
         raise ApiCallError('无法连接或请求超时，请核对地址、网络与服务状态。') from None
@@ -137,7 +154,7 @@ def _validate_page(payload: Any) -> tuple[list[dict], dict]:
 
 
 def fetch_anomalies(base_url: str, api_key: str, params: dict[str, str] | None = None, *,
-                    page_size: int | None = None, timeout: float = 45,
+                    page_size: int | None = None, timeout: float = DEFAULT_TIMEOUT_SECONDS,
                     opener=None, max_pages: int = 10000) -> dict:
     """Fetch a whole query or all explicit pages; errors never return a prefix.
 
@@ -369,7 +386,7 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
         def work():
             try:
                 messages.put(('ok', fetch_anomalies(base, key, params, page_size=size,
-                                                    timeout=getattr(defaults, 'timeout', 45))))
+                                                    timeout=getattr(defaults, 'timeout', DEFAULT_TIMEOUT_SECONDS))))
             except ApiCallError as exc:
                 messages.put(('error', str(exc)))
             except Exception:
@@ -446,7 +463,8 @@ def main(argv: list[str] | None = None) -> int:
                      'entity_id': '单片或Lot编号；CPK/CPM按Sheet ID匹配，返回完整统计项及全部Sheet ID'}.get(field)
         parser.add_argument('--' + field.replace('_', '-'), dest=field, help=help_text)
     parser.add_argument('--page-size', type=int, help='可选1～500；不填则不分页')
-    parser.add_argument('--timeout', type=float, default=45)
+    parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT_SECONDS,
+                        help='每次 HTTP 请求的等待秒数，默认120，允许1～120')
     parser.add_argument('--output', type=Path, help='结果文件保存位置；不覆盖已有文件')
     parser.add_argument('--format', choices=('json', 'csv'), default='json', help='CLI下载格式；CSV同时保存完整性说明文件')
     args = parser.parse_args(argv)
