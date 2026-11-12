@@ -38,6 +38,12 @@ def test_catalog_expands_unmeasured_items_and_preserves_result_source():
         INSERT INTO mdw.imp_iqc_mat_info_tbtj VALUES
             ('有机','T1','HPLC-A','>=',62,'<=',64,63,NULL,NULL,NULL,NULL,62,NULL,NULL,NULL,NULL,'NG',NULL);
         """)
+        for table, column in (
+            ('dwr_wms_tblmitem_b', 'createdate'), ('dwr_wms_tblqcticketsample', 'createdate'),
+            ('dwr_wms_tblmitemset', 'createdate'), ('imp_iqc_mat_info', 'interface_time'),
+            ('imp_iqc_mat_info_tbtj', 'interface_time'),
+        ):
+            connection.execute(f'ALTER TABLE mdw.{table} ADD COLUMN {column} TEXT')
         params = {"start_time": "2026-08-01", "end_time": "2026-09-01"}
         frame = pd.read_sql_query(REPORT_SQL, connection, params=params)
         assert len(frame) == 2
@@ -49,7 +55,7 @@ def test_catalog_expands_unmeasured_items_and_preserves_result_source():
         assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
         connection.execute("UPDATE mdw.dwr_wms_tblqcticket SET eattribute5='V3'")
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='无机'")
-        connection.execute("INSERT INTO mdw.dwr_wms_tblmitemset VALUES ('无机')")
+        connection.execute("INSERT INTO mdw.dwr_wms_tblmitemset (setcode) VALUES ('无机')")
         assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='有机'")
         # Exemption and cleanup flags are SQL exclusions, not UI hiding.
@@ -65,7 +71,7 @@ def test_catalog_expands_unmeasured_items_and_preserves_result_source():
             assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET checkmode='常规检验'")
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='MASK'")
-        connection.execute("INSERT INTO mdw.dwr_wms_tblmitemset VALUES ('MASK')")
+        connection.execute("INSERT INTO mdw.dwr_wms_tblmitemset (setcode) VALUES ('MASK')")
         assert pd.read_sql_query(REPORT_SQL, connection, params=params).empty
         connection.execute("UPDATE mdw.dwr_wms_tblqcticketsample SET eattribute12='有机'")
         connection.execute('DELETE FROM mdw.dwr_wms_tblmitemset')

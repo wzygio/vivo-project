@@ -23,7 +23,7 @@ from fetch_sheet_anomalies import ApiCallError, fetch_anomalies
 
 base_url = "http://10.72.26.31:8890"
 params = {}
-api_key = 'TIANZHUBEIJIXINGZHUANXIANG@20261102'
+api_key = os.environ.get("API_KEY") or getpass("API Key: ")
 
 try:
     result = fetch_anomalies(base_url, api_key, params=params)

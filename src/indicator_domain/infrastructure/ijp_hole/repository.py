@@ -42,6 +42,7 @@ WITH defects AS (
     JOIN EDA.OLED_CHAMBER_HST_T H ON D.GLASS_ID = H.CUT_ID
       AND H.CUT_START_TIME >= :history_start AND H.CUT_START_TIME <= :end_time
     JOIN DWR_MES_PRODUCTSPEC P ON P.PRODUCTSPECNAME = H.PRODUCT_ID
+      AND (P.CREATETIME IS NULL OR P.CREATETIME <= CURRENT_TIMESTAMP)
     WHERE H.SUB_EQUIP_ID IN :printers AND P.PRODUCTCODE IN :products
     {filters}
     GROUP BY D.UPDATE_TIME, D.GLASS_ID, D.CODE, D.image_data,
@@ -81,12 +82,15 @@ class IjpHoleRepository:
             expanding.append('lines')
         if query.work_order_types:
             filters.append('AND EXISTS (SELECT 1 FROM DWR_MES_PRODUCTREQUEST_V V '
-                           'WHERE V.SUB_PROD_ID = H.ITEM5 AND V.SUB_PROD_TYPE IN :orders)')
+                           'WHERE V.SUB_PROD_ID = H.ITEM5 AND V.SUB_PROD_TYPE IN :orders '
+                           'AND (V.CREATE_TIME IS NULL OR V.CREATE_TIME <= CURRENT_TIMESTAMP))')
             params['orders'] = query.work_order_types
             expanding.append('orders')
         if query.picis:
             filters.append('AND EXISTS (SELECT 1 FROM EDA.DWD_GLASS_OLED_CYCLE_V3 T '
-                           'WHERE T.GLASS_ID = D.GLASS_ID AND T.PICI IN :picis)')
+                           'WHERE T.GLASS_ID = D.GLASS_ID AND T.PICI IN :picis '
+                           "AND (T.EVENT_TIME IS NULL OR T.EVENT_TIME IN ('', 'NaT') "
+                           "OR CAST(NULLIF(NULLIF(T.EVENT_TIME, 'NaT'), '') AS TIMESTAMP) <= :end_time))")
             params['picis'] = query.picis
             expanding.append('picis')
         frame = self._read(_FACTS.format(filters='\n'.join(filters), date_exclusion=exclusion_sql), params, expanding)

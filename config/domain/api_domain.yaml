@@ -1,0 +1,27 @@
+notification:
+  api_base_url: http://10.72.26.31:8890
+  api_timeout_seconds: 120
+  # notify: send available records with explicit missing-source warnings;
+  # abort: send nothing when any selected source is unavailable.
+  incomplete_policy: notify
+  smtp:
+    host: smtp.qiye.aliyun.com
+    port: 587
+    security: starttls  # starttls / ssl / plain; plain requires explicit choice
+    timeout_seconds: 30
+  routes:
+    - sub_domains: [SPC, CTQ]
+      factories: [ARRAY, OLED, TP]
+      recipients: [jieqiang@visionox.com]
+    - sub_domains: [AOI_TT, AOI_RS, Q-Time]
+      factories: [ARRAY]
+      recipients: [sunyang01@visionox.com]
+    - sub_domains: [AOI_TT, AOI_RS, Q-Time]
+      factories: [OLED]
+      recipients: [liuzy08@visionox.com]
+    - sub_domains: [AOI_TT, AOI_RS, Q-Time]
+      factories: [TP]
+      recipients: [panxy01@visionox.com]
+    - sub_domains: [Yield]
+      factories: [ARRAY, OLED, TP]
+      recipients: [wangzy03@visionox.com]

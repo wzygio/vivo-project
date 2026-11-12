@@ -61,4 +61,6 @@ def build_hole_engine():
         rows.append(rows[0].copy())
         c.execute(text("INSERT INTO eda.oled_ijp_defect_t VALUES "
                        "('OLED',:step,:g,'xxxA/B/C/D/E/F/G/H/I',:image,:code,:t)"), rows)
+        c.execute(text('ALTER TABLE dwr_mes_productspec ADD COLUMN createtime TEXT'))
+        c.execute(text('ALTER TABLE dwr_mes_productrequest_v ADD COLUMN create_time TEXT'))
     return engine

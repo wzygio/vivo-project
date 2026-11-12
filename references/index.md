@@ -8,6 +8,8 @@
 
 | 问题 / 关键词 | 首选文件 |
 |---|---|
+| 自动巡检、无人访问仍生产预警、全看板模块、每日07:15、周一／周二邮件调度 | [自动巡检说明](domain/api/architecture-automatic-inspection.md) |
+| 预警邮件推送、责任人分派、测试收件人覆盖、SMTP、定时任务及失败重试 | [预警邮件规则](domain/api/notification/rules-alert-notification.md) |
 | Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/GLOSSARY.md) |
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
@@ -19,9 +21,9 @@
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照、Yield/IJP 独立生产巡检、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | 按项目 / domain / sub_domain 汇总当前矩阵各模块触发条件、阈值、优先级及未接入项（2026-11-11 核对快照） | [模块预警方案 Excel](domain/inline_domain/monitor/模块预警方案.xlsx) |
-| API 概念、服务部署、一键启动、进程关系与重复启动排查、凭证配置、站点字典、Yield厂别映射、CPK/CPM来源和公开政策 | [API 服务部署说明](domain/inline_domain/api/guide-sheet-anomaly-api.md) |
-| API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/inline_domain/api/api-caller-guide-2026-11-03.md) |
-| API 程序架构、能力周期对象、查询流程、缓存与容量、安全边界 | [API 程序介绍](domain/inline_domain/api/architecture-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
+| API 概念、服务部署、一键启动、进程关系与重复启动排查、凭证配置、站点字典、Yield厂别映射、CPK/CPM来源和公开政策 | [API 服务部署说明](domain/api/guide-sheet-anomaly-api.md) |
+| API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/api/api-caller-guide-2026-11-03.md) |
+| API 程序架构、能力周期对象、查询流程、缓存与容量、安全边界 | [API 程序介绍](domain/api/architecture-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
 | CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |

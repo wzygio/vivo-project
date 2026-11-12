@@ -9,7 +9,7 @@
     - 数据库探查例程：`references\templates\data_loader.py`
 	- 数据库链接凭证：`.env`
 3. API相关信息：`references\domain\api\api-caller-guide-2026-11-03.md`
-4. 邮件推送例程：
+4. 邮件推送例程：`D:\wzy\Python\array-projects\src\array_ELA\services\ela_report_notification`
 
 # Requirements
 1. 数据获取：调用API，不填写任何参数（默认获取上周全部预警数据）
@@ -24,5 +24,9 @@
 | AOI_TT/AOI_RS/Q-Time | OLED | liuzy08@visionox.com |
 | AOI_TT/AOI_RS/Q-Time | TP | panxy01@visionox.com |
 | Yield | ARRAY/OLED/TP | wangzy03@visionox.com | 
+
+# Workflow
+Goal：请分析上述需求并完成开发，直至E2E测试通过
+- E2E测试中，请将所有的邮箱都设为“wangzy03@visionox.com”
 
 

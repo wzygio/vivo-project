@@ -122,6 +122,8 @@ def _build_engine():
                 "('PROD-C','Z517','ARRAY')"
             )
         )
+        connection.execute(text('ALTER TABLE dwr_mes_productspec ADD COLUMN createtime TEXT'))
+        connection.execute(text('ALTER TABLE dwr_mes_productrequest_v ADD COLUMN create_time TEXT'))
     return engine
 
 

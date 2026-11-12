@@ -149,17 +149,21 @@ AOI_RS／AOI_TT报表的昨日密度预警也使用共同展示服务，分别�
 
 ## 独立结果生产巡检
 
-2026-11-03 增加 `tools/publish_dashboard_alert_results.py`，解决文件展示解耦后“无人打开生产报表，结果一直过期”的运行缺口。它与矩阵预热是两个独立入口：先通过共同展示读取器检查 Yield 全部启用产品的两类结果和 IJP 两个区域，失效时调用原有报表生产用例，随后再次验证；有效结果跳过生产，无数据库访问。IJP 每区域一次覆盖全部产品，Yield 按产品／种类重发；单项失败不阻断其余项，存在失败则退出 1。初始化空 IJP 模板不算完成生产。过程使用全任务锁防止重复巡检并行取数，写入仍沿用各工作簿的锁与原子发布。
+2026-11-12，正式巡检入口迁入 `api.inspection`，覆盖本看板全部13类预警，
+另生产AOI_TT／AOI_RS趋势和API使用的OOC；各域继续使用原application规则。
+统一入口为 `python -m api.inspection`，命令行 `--check` 仅检查范围、不执行生产。
 
-```powershell
-.venv/Scripts/python.exe tools/publish_dashboard_alert_results.py --check
-.venv/Scripts/python.exe tools/publish_dashboard_alert_results.py
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/register_alert_result_publication_task.ps1
-```
+任务仍保留名称 `vivo-project Yield IJP Alert Publication`，执行内容已扩展，
+改为每天07:15运行，不再每30分钟巡检，也不在登录时自动触发。
+新邮件任务每周一07:20及每周二11:00执行，先核验当天完整巡检回执。
+源码组织、来源完整性、任务注册、失败处理和运行条件由
+[自动巡检说明](../../api/architecture-automatic-inspection.md)统一维护。
 
-`--check` 仅验证启用产品和注册路径。注册入口默认拒绝覆盖同名任务；新任务 `vivo-project Yield IJP Alert Publication` 在当前用户登录时运行，并每 30 分钟巡检一次，使用 `pythonw.exe` 隐藏控制台、普通权限、不保存密码、同名任务不并行、单次最长两小时。不修改已有矩阵任务或正式服务。电脑需开机且用户已登录；网络、数据库与 Excel COM 环境需可用。跨日或 TTL 到期后的失效状态，要等下一次巡检成功才恢复；不以旧日期伪装有效结果。结构化运行日志位于 `output/logs/alert_result_publication/`，区分 running／success／partial／failed，只记录安全的异常类型，不记录连接信息。
-
-本入口仅补齐 Yield／IJP 的生产生命周期，不为其他指标新增生产规则。页面、API、矩阵及 `warm_alert_matrix.py` 的读取行为均不触发此命令。2026-11-03 修复先按用户要求临时覆盖 16 个显示单元格，验证真实结果可用后撤销这次覆盖；原有人工开关保留。
+历史背景：2026-11-03的独立巡检仅覆盖Yield／IJP，用于解决无人访问生产报表时的过期问题。
+这些旧生产命令的`tools/`路径保留薄兼容入口，实际实现均已迁入`api.inspection`；
+旧30分钟注册入口已退役，避免重新引入重复调度。原运行日志继续保留在
+`output/logs/alert_result_publication/`，新统一回执位于`output/logs/alert_inspection/`。
+展示、API和以下矩阵预热继续只读结果，不触发生产。
 
 ## 运行方式
 

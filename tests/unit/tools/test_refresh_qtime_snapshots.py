@@ -114,11 +114,12 @@ def test_cli_does_not_claim_success_when_alert_publication_fails(capsys, monkeyp
 def test_windows_task_adapter_defaults_to_daily_0700() -> None:
     script_path = (
         Path(__file__).resolve().parents[3]
-        / "tools"
-        / "register_qtime_snapshot_task.ps1"
+        / "api"
+        / "inspection"
+        / "register_qtime_task.ps1"
     )
     content = script_path.read_text(encoding="utf-8")
 
-    assert '[string]$At = "07:00"' in content
-    assert "New-ScheduledTaskTrigger -Daily -At $At" in content
-    assert "refresh_qtime_snapshots.py" in content
+    assert "[string]$At = '07:00'" in content
+    assert "New-ScheduledTaskTrigger -Daily -DaysInterval 1 -At $Boundary" in content
+    assert "-m api.inspection.qtime_publication" in content

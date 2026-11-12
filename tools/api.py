@@ -1,16 +1,9 @@
 from getpass import getpass
 from tools.call_anomaly_api import main
 
-result = main(
-    api_key="TIANZHUBEIJIXINGZHUANXIANG@20261102",
-    product="M626",
-    sub_domain="SPC",
-)
+result = main(api_key='TIANZHUBEIJIXINGZHUANXIANG@20261102', params={'product': 'M626', 'sub_domain': 'SPC'})
 
-if result["success"]:
-    records = result["data"]
-    print(f"获取 {len(records)} 条明细")
-    print("来源是否完整：", result["meta"]["complete"])
-    print(records)
-else:
-    print(result["error"])
+records = result["data"]
+print(f"获取 {len(records)} 条明细")
+print("来源是否完整：", result["meta"]["complete"])
+print(records)

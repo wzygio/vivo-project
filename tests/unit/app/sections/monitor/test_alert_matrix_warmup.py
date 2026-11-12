@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.sections.inline_domain.monitor.alert_matrix_snapshot import DailyMatrixSnapshot
-from tools.warm_alert_matrix import main
+from api.inspection.matrix_warmup import main
 
 
 @pytest.mark.parametrize("state,expected", [("ok", 0), ("error", 1)])
@@ -33,3 +33,17 @@ def test_fatal_failure_keeps_old_snapshot_and_redacts_error(tmp_path):
     report = next((tmp_path / "logs").glob("*.json")).read_text(encoding="utf-8")
     assert "private-driver-message" not in report
     assert json.loads(report)["error_type"] == "ConnectionError"
+
+
+def test_migrated_warmup_uses_inspection_date_and_products(tmp_path):
+    day = date(2026, 11, 2)
+    calls = []
+    def load(**kwargs):
+        calls.append(kwargs)
+        return {'reference_date': day.isoformat(), 'cells': {
+            ('test', 'P1'): {'state': 'ok', 'detail_key': 'test|P1', 'cache_signature': 's'}}}
+    assert main([], loader=load, store=DailyMatrixSnapshot(tmp_path/'daily.json'),
+                log_dir=tmp_path/'logs', reference_date=day, products=('P1',)) == 0
+    assert calls == [{'reference_date': day, 'products': ('P1',), 'reuse_snapshot': False}]
+    from tools.warm_alert_matrix import main as compatibility_main
+    assert compatibility_main is main

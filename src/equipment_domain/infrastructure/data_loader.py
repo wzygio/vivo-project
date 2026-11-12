@@ -406,6 +406,16 @@ def _query_part_life_from_db(
     spec_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """Query eda.ARRAY_PDS_RESULT_T for part life data matching spec entries."""
+    read_started_at = datetime.now().isoformat()
+
+    def verified(frame: pd.DataFrame) -> pd.DataFrame:
+        # A native source read proof is issued only after the SELECT completes.
+        # Empty fallback frames from the failure path deliberately lack it.
+        frame.attrs['parts_source_read'] = {
+            'status': 'success', 'started_at': read_started_at,
+            'completed_at': datetime.now().isoformat(),
+        }
+        return frame
     if db_manager.engine is None:
         logger.warning("Database engine not initialized.")
         return pd.DataFrame()
@@ -427,13 +437,27 @@ def _query_part_life_from_db(
         like_clauses.append(f"param_name LIKE :pat{i}")
     like_sql = " OR ".join(like_clauses) if like_clauses else "1=0"
 
+    # The verified source contract stores value as PostgreSQL NUMERIC. Exclude
+    # NULL/NaN before ranking, exactly as to_numeric/dropna + latest_part_measurements
+    # did after downloading the history. A newer missing value must not mask an
+    # older usable one. Keep the configured window and independent IN scopes.
     sql = f"""
+        WITH ranked_measurements AS (
+            SELECT step_id, sub_equip_id, param_name, value, glass_start_time,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY step_id, sub_equip_id, param_name
+                       ORDER BY glass_start_time DESC
+                   ) AS measurement_rank
+            FROM {runtime_config.query_source_table}
+            WHERE step_id IN ({st_ph})
+              AND sub_equip_id IN ({mc_ph})
+              AND glass_start_time >= TO_DATE(:cutoff_date, 'YYYY-MM-DD')
+              AND ({like_sql})
+              AND value IS NOT NULL AND value <> 'NaN'
+        )
         SELECT step_id, sub_equip_id, param_name, value, glass_start_time
-        FROM {runtime_config.query_source_table}
-        WHERE step_id IN ({st_ph})
-          AND sub_equip_id IN ({mc_ph})
-          AND glass_start_time >= TO_DATE(:cutoff_date, 'YYYY-MM-DD')
-          AND ({like_sql})
+        FROM ranked_measurements
+        WHERE measurement_rank = 1
         ORDER BY glass_start_time DESC
     """
     params = {"cutoff_date": cutoff_date}
@@ -449,16 +473,19 @@ def _query_part_life_from_db(
             f"Querying: {len(unique_stations)} stations, {len(unique_machines)} machines, "
             f"{len(patterns)} patterns, since {cutoff_date}"
         )
-        df = pd.read_sql(text(sql), db_manager.engine, params=params)
+        # This is always a SELECT. read_sql() first probes has_table() with the
+        # entire query string; PostgreSQL rejects that metadata probe even when
+        # the subsequent business SELECT succeeds. Avoid that false failure.
+        df = pd.read_sql_query(text(sql), db_manager.engine, params=params)
         df.columns = df.columns.str.lower()
         if df.empty:
             logger.info("Empty result.")
-            return df
+            return verified(df)
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
         df = df.dropna(subset=["value"])
         df["glass_start_time"] = pd.to_datetime(df["glass_start_time"], errors="coerce")
         logger.info(f"Extracted {len(df)} records.")
-        return df
+        return verified(df)
     except Exception as e:
         logger.error(f"Query failed: {e}", exc_info=True)
         return pd.DataFrame()

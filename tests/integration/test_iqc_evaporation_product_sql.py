@@ -46,6 +46,11 @@ def bridge_connection():
         CREATE TABLE mdw.dwr_mes_productspec (productspecname TEXT, productcode TEXT);
         INSERT INTO mdw.dwr_mes_productspec VALUES ('S1','M678'),('S2','M626'),('S3','DISABLED');
     """)
+    for table, column in (
+        ('dwr_mes_ct_cruciblelothistory', 'eventtime'), ('dwr_mes_consumablehistory', 'eventtime'),
+        ('dwr_mes_productrequest', 'createtime'), ('dwr_mes_productspec', 'createtime'),
+    ):
+        connection.execute(f'ALTER TABLE mdw.{table} ADD COLUMN {column} TEXT')
     return connection
 
 
@@ -61,6 +66,18 @@ def test_shared_cycle_many_products_many_materials_returns_distinct_memberships(
             params['products'] = ('M626',)
             assert set(connection.execute(material_product_statement(), params).all()) == {('A','M626','20260801'),('B','M626','20260801')}
             params['work_orders'] = ('NOT-ALLOWED',)
+            assert not connection.execute(material_product_statement(), params).all()
+    finally:
+        engine.dispose()
+
+
+def test_future_master_records_do_not_create_current_material_membership():
+    engine = create_engine('sqlite://', creator=bridge_connection)
+    try:
+        with engine.begin() as connection:
+            params = {'materials': ('A',), 'products': ('M678',), 'work_orders': ('P',)}
+            assert connection.execute(material_product_statement(), params).all()
+            connection.exec_driver_sql("UPDATE mdw.dwr_mes_productspec SET createtime='2999-01-01'")
             assert not connection.execute(material_product_statement(), params).all()
     finally:
         engine.dispose()

@@ -10,11 +10,13 @@ WITH material_batches AS (
     FROM mdw.dwr_mes_ct_cruciblelothistory l
     WHERE l.PLANORGANICSPEC IN :materials
       AND l.EVENTNAME = 'KitBatchCrucible'
+      AND (l.EVENTTIME IS NULL OR l.EVENTTIME <= CURRENT_TIMESTAMP)
       AND l.MACHINENAME != '3CEE03' AND l.CYCLETIME IS NOT NULL
       AND EXISTS (
           SELECT 1 FROM mdw.dwr_mes_consumablehistory h
           WHERE h.CRUCIBLELOTNAME = l.CRUCIBLELOTNAME
             AND h.EVENTNAME = 'KitBatchCrucible'
+            AND (h.EVENTTIME IS NULL OR h.EVENTTIME <= CURRENT_TIMESTAMP)
       )
 ), batch_requests AS (
     SELECT mb.material_no, mb.batch_no, r.PRODUCTSPECNAME, r.SUBPRODUCTIONTYPE
@@ -22,10 +24,12 @@ WITH material_batches AS (
       ON mb.batch_no = to_char(to_date(
           substring(r.DESCRIPTION, '^[0-9]{4}/[0-9]{1,2}/[0-9]{1,2}'),
           'YYYY/MM/DD'), 'YYYYMMDD')
+      AND (r.CREATETIME IS NULL OR r.CREATETIME <= CURRENT_TIMESTAMP)
 )
 SELECT DISTINCT b.material_no, p.PRODUCTCODE AS prod_code, b.batch_no
 FROM batch_requests b
 JOIN mdw.dwr_mes_productspec p ON p.PRODUCTSPECNAME = b.PRODUCTSPECNAME
+  AND (p.CREATETIME IS NULL OR p.CREATETIME <= CURRENT_TIMESTAMP)
 WHERE p.PRODUCTCODE IN :products AND b.SUBPRODUCTIONTYPE IN :work_orders
 """
 
