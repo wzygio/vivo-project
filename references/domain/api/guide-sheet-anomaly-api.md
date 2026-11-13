@@ -33,17 +33,19 @@ API 与 Streamlit 报表独立运行。关闭报表页面不等于关闭 API；�
 
 ## 3. 一键启动与日常管理
 
-### 3.1 已完成首次配置：双击启动
+### 3.1 已完成首次配置：双击启动／重启
 
-在项目根目录双击 [start_anomaly_api.cmd](../../../../start_anomaly_api.cmd)。它会调用 [PowerShell 启动脚本](../../../../tools/start_anomaly_api.ps1)，自动定位项目虚拟环境，并复用 [后台托管工具](../../../../tools/anomaly_api_service.py)。不需要先激活环境，也不需要管理员权限。
+在项目根目录双击 [start_anomaly_api.cmd](../../../start_anomaly_api.cmd)。它会调用 [PowerShell 启动脚本](../../../tools/start_anomaly_api.ps1)，自动定位项目虚拟环境，并复用 [后台托管工具](../../../tools/anomaly_api_service.py)。不需要先激活环境，也不需要管理员权限。
 
 启动脚本执行以下操作：
 
-1. 检查虚拟环境、托管工具和当前用户的部署配置是否存在。
-2. 请求托管工具启动 API；若已经运行，复用已有实例。
-3. 检查监督进程、监听归属及 `/health/ready`，全部正常才提示 `API is ready`。
+1. 检查虚拟环境、托管工具和当前用户的部署配置，先验证配置有效性。
+2. 若存在同一项目、地址和端口的部署记录，核实 PID 与创建时间后停止旧监督进程及其子进程，确认旧监听已释放；首次启动时跳过停止步骤。
+3. 启动新实例，检查监督进程、监听归属及 `/health/ready`，全部正常才提示 `API is ready`。
 
-成功后 API 在后台运行，关闭启动窗口不会停止服务。脚本不会重写密钥、不安装依赖、不修改监听配置、不自动停止或重启已有服务。端口被其它程序占用、缺少配置或已有进程未就绪时，会报错并保留现有状态，按第 7 节排查。
+**每次双击都会重启已有 API，并加载当前磁盘上的代码和部署授权。** 重启会短暂中断调用，旧分页游标会失效。成功后 API 在后台运行，关闭启动窗口不会停止服务；脚本保留已有密钥和监听配置，不安装依赖。
+
+缺少或无效配置、部署身份不一致时，在停止旧实例前报错；旧进程无法清理时，不启动第二套服务。端口被其它程序占用时不会结束对方进程。旧实例已经停止而新实例启动失败时，API 可能暂时不可用，按第 7 节检查日志后重试。
 
 也可在项目根目录的 PowerShell 中执行，便于看到退出状态：
 
@@ -84,13 +86,13 @@ uv run --no-sync python tools/anomaly_api_service.py status
 | `anomaly_api_service.py run` | 监督进程，启动工作进程，并在工作进程异常退出后按退避策略重启 |
 | `anomaly_api_service.py worker` | API 工作进程，运行 Uvicorn 并处理 HTTP 请求；代码明确配置 `workers=1` |
 
-当前 Windows 部署使用项目虚拟环境的 `pythonw.exe`。虚拟环境启动器会调用基础 Python 解释器，因此每个职责还会显示一对父子进程，正常运行时可看到以下四层关系：
+按启动入口不同，Windows 进程可能显示为 `python.exe` 或 `pythonw.exe`。虚拟环境启动器会调用基础 Python 解释器，因此每个职责还会显示一对父子进程。以下以 `python.exe` 为例，正常运行时可看到四层关系：
 
 ```text
-.venv\Scripts\pythonw.exe  … anomaly_api_service.py run     （启动器）
-└─基础 Python\pythonw.exe  … anomaly_api_service.py run     （监督进程）
-  └─.venv\Scripts\pythonw.exe  … anomaly_api_service.py worker  （启动器）
-    └─基础 Python\pythonw.exe  … anomaly_api_service.py worker  （API 服务）
+.venv\Scripts\python.exe  … anomaly_api_service.py run     （启动器）
+└─基础 Python\python.exe  … anomaly_api_service.py run     （监督进程）
+  └─.venv\Scripts\python.exe  … anomaly_api_service.py worker  （启动器）
+    └─基础 Python\python.exe  … anomaly_api_service.py worker  （API 服务）
 ```
 
 这里的“基础 Python”指创建虚拟环境时使用的解释器目录，可在 `.venv/pyvenv.cfg` 的 `home` 字段核对。因此，两条 `run` 和两条 `worker` 可以属于同一套 API；它们不是四个独立 API 实例，也不是 Uvicorn 多 worker 部署。
@@ -99,7 +101,7 @@ uv run --no-sync python tools/anomaly_api_service.py status
 
 ```powershell
 Get-CimInstance Win32_Process |
-    Where-Object { $_.Name -eq 'pythonw.exe' -and $_.CommandLine -like '*anomaly_api_service.py*' } |
+    Where-Object { $_.Name -in @('python.exe', 'pythonw.exe') -and $_.CommandLine -like '*anomaly_api_service.py*' } |
     Select-Object ProcessId, ParentProcessId, ExecutablePath
 
 Get-NetTCPConnection -State Listen -LocalPort 8890 |
@@ -108,7 +110,7 @@ Get-NetTCPConnection -State Listen -LocalPort 8890 |
 
 将 `ParentProcessId` 与上一层的 `ProcessId` 对应，再将 `OwningProcess` 与实际 API 工作进程对应。端口使用部署配置中的值；当前为 `8890`。本次核查（2026-11-11）中，四个进程构成一条父子链，只有最末层工作进程监听 `0.0.0.0:8890`，且 `supervisor_alive`、`listener_owned`、`ready` 均为 `true`，`restarts=0`，确认没有重复启动。PID 在重启后会变化，不应固定使用本次 PID 识别服务；`restarts` 表示工作进程重启次数，不表示实例数量。
 
-日常重复点击一键启动时，托管工具发现已有监督进程会返回 `already_running`，并使用 `host.lock` 防止同一运行目录出现多个监督循环。若发现另一条独立进程链或监听归属不符，应进一步核对启动方式和运行目录；不要直接按进程名批量结束 Python。
+日常重复点击一键脚本会先停止旧实例，再创建新实例；重启锁避免两个重启操作同时处理进程。底层 `anomaly_api_service.py start` 和登录启动项仍采用“已运行则复用”的行为，`host.lock` 防止同一运行目录出现多个监督循环。若发现另一条独立进程链或监听归属不符，应进一步核对启动方式和运行目录；不要直接按进程名批量结束 Python。
 
 #### 停止、更新与登录启动
 
@@ -118,7 +120,13 @@ Get-NetTCPConnection -State Listen -LocalPort 8890 |
 uv run --no-sync python tools/anomaly_api_service.py stop
 ```
 
-更新程序或调用方授权后，由维护者安排停机，再执行停止命令和一键启动脚本。托管工具核实 PID 与创建时间后只处理自己记录的 API 进程，不停止 Streamlit。重启会使旧分页游标失效。
+更新程序或调用方授权后，安排维护时间，双击一键脚本即可完成停止和重新启动，无需先手动停止。也可以在项目根目录执行：
+
+```powershell
+uv run --no-sync python tools/anomaly_api_service.py restart
+```
+
+托管工具核实部署身份、PID 与创建时间后只处理自己记录的 API 进程，不停止 Streamlit。重启会使旧分页游标失效。
 
 首次设置会创建当前用户启动目录下的 `Tianzhu Anomaly API.lnk`。已有配置但尚未安装登录启动项时，可在确认没有同名启动项且服务已停止后执行：
 
@@ -216,7 +224,7 @@ uv run --no-sync python tools/fetch_sheet_anomalies.py
 ]
 ```
 
-产品实际可查询范围是调用方授权与项目启用产品的交集。模板见 [api-clients.example.json](../../../../config/api-clients.example.json)，全零摘要和虚构产品不能直接使用。首次配置优先使用前面的设置窗口；新增调用方由维护者生成独立摘要并按需授权。
+产品实际可查询范围是调用方授权与项目启用产品的交集。模板见 [api-clients.example.json](../../../config/api-clients.example.json)，全零摘要和虚构产品不能直接使用。首次配置优先使用前面的设置窗口；新增调用方由维护者生成独立摘要并按需授权。
 
 API 每次鉴权读取本进程环境。编辑外部终端环境或磁盘部署配置不会自动更新已运行的工作进程，需要维护者安排重启。不要把原始密钥写入 Git、业务 YAML、URL、日志或浏览器前端源码。
 
@@ -270,7 +278,7 @@ uv run --no-sync python -m uvicorn api.main:create_app --factory --host 127.0.0.
 
 服务启动不代表来源就绪。请确认启用产品、公开政策、发布有效性、必要字段和人工释放决定都满足要求。公开政策缺失或无法读取时，接口不会输出该来源的数据。
 
-资源路径由 [全局配置](../../../../config/global.yaml) 的 `resources` 统一解析，维护工作簿需要保留。客户端不能提交文件路径或工作表名。
+资源路径由 [全局配置](../../../config/global.yaml) 的 `resources` 统一解析，维护工作簿需要保留。客户端不能提交文件路径或工作表名。
 
 ### 5.1 初始化本地元数据
 
@@ -329,7 +337,7 @@ Q-Time 的“发生站点”和层别均采用**起点 `f_step`**，所以必须
 
 ### 5.3 Yield 自动厂别与空层别
 
-Yield Lot超规在原有计算与发布流程中保存`defect_group`和`factory`，API直接读取发布的`factory`，不再维护或查询`Yield归属`。映射在 [global.yaml](../../../../config/global.yaml) 中配置：
+Yield Lot超规在原有计算与发布流程中保存`defect_group`和`factory`，API直接读取发布的`factory`，不再维护或查询`Yield归属`。映射在 [global.yaml](../../../config/global.yaml) 中配置：
 
 ```yaml
 data_source:
@@ -380,9 +388,9 @@ API 1.4.0 可在原地址查询 SPC 的 `CPK`／`CPM` 事件，并返回对应�
 
 2026-11-04 已获明确授权并完成正式部署：先保留 `compliance_config.xlsx.before-api-cpm-policy-20261104.bak`，仅新增 CPM 行并复制 CPK 的7个产品设置，核对原单元格保留。M626、M678、M673、Z517、Z576、Z553 按原规则公开，Z571 保持隐藏；两行之后可独立维护。
 
-此前正式 1.2.0 的台账与分页验收见 [能力扩展验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-capability-deployment-2026-11-04.md)。1.3.0 将能力对象编号从项目摘要改为片号数组，调用方需要按新形状处理；边界默认值变为 `spec`。现场版本以带凭证读取 `/openapi.json` 的 `info.version` 为准。
+此前正式 1.2.0 的台账与分页验收见 [能力扩展验收记录](../../../docs/ADR/0040-api-capability-deployment-2026-11-04.md)。1.3.0 将能力对象编号从项目摘要改为片号数组，调用方需要按新形状处理；边界默认值变为 `spec`。现场版本以带凭证读取 `/openapi.json` 的 `info.version` 为准。
 
-当前 8890 正式服务已于 2026-11-04 加载 1.4.0，部署配置原字节、密钥和授权保持一致。M626／SPC 省略事件时返回 CPK、CPM 共 2 项，与四类事件分别查询后的合并结果完全一致；全部授权产品的零参数查询也通过逐项对照，24 个缺资料的产品／分类／事件组合仍明确标记在 `failed_sources`，不会被当成有效空结果。见 [默认全选验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-default-events-delivery-2026-11-04.md)。此前完整片号核对见 [片号优化验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-sheet-membership-delivery-2026-11-04.md)。
+当前 8890 正式服务已于 2026-11-04 加载 1.4.0，部署配置原字节、密钥和授权保持一致。M626／SPC 省略事件时返回 CPK、CPM 共 2 项，与四类事件分别查询后的合并结果完全一致；全部授权产品的零参数查询也通过逐项对照，24 个缺资料的产品／分类／事件组合仍明确标记在 `failed_sources`，不会被当成有效空结果。见 [默认全选验收记录](../../../docs/ADR/0041-api-default-events-delivery-2026-11-04.md)。此前完整片号核对见 [片号优化验收记录](../../../docs/ADR/0042-api-sheet-membership-delivery-2026-11-04.md)。
 
 ### 5.6 初始化／同步 SPC 周度片号
 
@@ -423,7 +431,7 @@ uv run --no-sync python tools/sync_spc_sheet_membership.py --product M626
 | 一键启动提示缺文件 | 核对项目位置和 `.venv`；不要随意改用系统 Python |
 | 缺少部署配置 | 用部署用户执行首次设置；已有配置不要删除 |
 | 端口占用／启动失败 | 看启动窗口与日志，确认端口归属；不要直接结束未知进程 |
-| `status=running` 但就绪字段为 false | 核对进程、监听与日志，维护者决定恢复方式；一键脚本不自动重启已有实例 |
+| `status=running` 但就绪字段为 false | 可在维护时间执行一键重启；若仍失败，核对进程归属、部署配置和日志 |
 | 本机可用、其它设备不可用 | 核对内网 IP、路由、企业代理和访问规则 |
 | 401／403 | 核对调用密钥及授权，确认工作进程加载的是预期配置 |
 | 503／部分来源失败 | 核对正式发布、日期覆盖、释放决定、站点字典、Yield 厂别和启用范围 |
@@ -433,7 +441,7 @@ uv run --no-sync python tools/sync_spc_sheet_membership.py --product M626
 
 不要用假站点、统一修改全部释放标记或删除元数据来绕过不可用状态。错误反馈应包含时间、状态码及 `X-Request-ID`，不包含密钥。
 
-本说明描述部署方法，当前在线状态需重新检查。当前 1.4.0 更新、默认全选及密钥自动填入验证见 [默认全选验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-default-events-delivery-2026-11-04.md)。
+本说明描述部署方法，当前在线状态需重新检查。当前 1.4.0 更新、默认全选及密钥自动填入验证见 [默认全选验收记录](../../../docs/ADR/0041-api-default-events-delivery-2026-11-04.md)。
 
 ### 7.1 2026-11-11：21 个失败来源的核查
 

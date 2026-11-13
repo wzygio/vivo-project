@@ -30,16 +30,16 @@ action = sys.argv[1]
 with Path(os.environ['HOST_TEST_CALLS']).open('a') as stream:
     stream.write(action + '\\n')
 mode = os.environ['HOST_TEST_MODE']
-if mode == 'start_error' and action == 'start':
+if mode == 'restart_error' and action == 'restart':
     print(json.dumps({'status': 'error', 'cause': 'OSError'}), file=sys.stderr)
     sys.exit(2)
-if action == 'start':
+if action == 'restart':
     print(json.dumps({'status': 'already_running' if mode == 'already' else 'ready'}))
 elif action == 'status':
     ready = mode != 'unready'
     print(json.dumps({'ready': ready, 'supervisor_alive': ready, 'listener_owned': ready, 'port': 8890}))
 else:
-    raise AssertionError('Launcher must only call start and status')
+    raise AssertionError('Launcher must only call restart and status')
 ''', encoding='utf-8')
     local = tmp_path / 'local'
     profile = local / 'Tianzhu/AnomalyApi/deployment.json'
@@ -49,7 +49,7 @@ else:
     return project, profile, calls, local
 
 
-@pytest.mark.parametrize('mode,expected', [('ready', 0), ('already', 0), ('unready', 2), ('start_error', 2)])
+@pytest.mark.parametrize('mode,expected', [('ready', 0), ('already', 0), ('unready', 2), ('restart_error', 2)])
 def test_launcher_checks_owned_readiness_and_preserves_cli_failure(deployment, mode, expected):
     project, profile, calls, local = deployment
     original = profile.read_bytes()
@@ -58,7 +58,7 @@ def test_launcher_checks_owned_readiness_and_preserves_cli_failure(deployment, m
                              HOST_TEST_CALLS=str(calls), HOST_TEST_MODE=mode),
                             capture_output=True, text=True, timeout=20)
     assert result.returncode == expected, (result.stdout, result.stderr)
-    assert calls.read_text().splitlines() == (['start'] if mode == 'start_error' else ['start', 'status'])
+    assert calls.read_text().splitlines() == (['restart'] if mode == 'restart_error' else ['restart', 'status'])
     assert profile.read_bytes() == original
     assert not (project / 'output').exists()
 
@@ -89,5 +89,5 @@ def test_double_click_entry_finds_its_project_and_preserves_exit_code(deployment
                             HOST_TEST_CALLS=str(calls), HOST_TEST_MODE=mode),
                             input='\n', capture_output=True, text=True, timeout=20)
     assert result.returncode == expected, (result.stdout, result.stderr)
-    assert calls.read_text().splitlines() == ['start', 'status']
+    assert calls.read_text().splitlines() == ['restart', 'status']
     assert profile.read_text() == '{}'

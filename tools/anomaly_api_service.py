@@ -144,10 +144,10 @@ def listener_owned(records: list[dict], port: int) -> bool:
 
 
 @contextmanager
-def host_lock():
+def host_lock(name: str = 'host.lock'):
     import msvcrt
     LOGS.mkdir(parents=True, exist_ok=True)
-    with (LOGS / 'host.lock').open('a+b') as handle:
+    with (LOGS / name).open('a+b') as handle:
         if handle.tell() == 0:
             handle.write(b'0')
             handle.flush()
@@ -323,10 +323,25 @@ def stop() -> dict:
     return {'status': 'stopped', 'owned_listener_released': released}
 
 
+def restart(profile: Path) -> dict:
+    """Validate first, then stop this deployment and start its new worker."""
+    config = load_profile(profile)
+    # Separate from the supervisor's lifetime lock. Concurrent one-click
+    # restarts must not stop a replacement that another restart just created.
+    with host_lock('restart.lock'):
+        if STATE.exists():
+            previous = json.loads(STATE.read_text(encoding='utf-8'))
+            if (Path(previous['project_root']).resolve() != ROOT.resolve()
+                    or any(previous.get(name) != config[name] for name in ('host', 'port'))):
+                raise RuntimeError('Existing deployment identity does not match this restart')
+            stop()  # Checks PID/create-time ownership and listener release.
+        return start(profile, False)
+
+
 def main() -> int:
     global LOGS, STATE
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('start', 'stop', 'status', 'run', 'worker'))
+    parser.add_argument('action', choices=('start', 'restart', 'stop', 'status', 'run', 'worker'))
     parser.add_argument('--profile', type=Path, default=PROFILE)
     parser.add_argument('--launch-id')
     parser.add_argument('--runtime-dir', type=Path, default=LOGS)
@@ -345,6 +360,8 @@ def main() -> int:
             supervise(args.profile, args.launch_id)
         elif args.action == 'start':
             print(json.dumps(start(args.profile, args.install_startup)))
+        elif args.action == 'restart':
+            print(json.dumps(restart(args.profile)))
         elif args.action == 'stop':
             print(json.dumps(stop()))
         else:

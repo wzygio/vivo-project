@@ -93,6 +93,12 @@ SPC 应用提供成员发布及只读查询接口。来源是现有报表 By She
 
 用户明确要求删除 `query_anomaly_api.cmd` 与 `tools/launch_anomaly_api_query.py`，改为直接使用 `uv run --no-sync python tools/fetch_sheet_anomalies.py`。两份启动文件及仅验证已移除启动器的专用测试一并删除，保留客户端的 HTTP 封装、GUI、分页、导出和环境变量密钥支持。此前启动器读取项目 `.env` 的行为随组件移除而终止，客户端不新增密钥文件读取；本次不调整正式 API 服务及其启动入口。
 
+## 2026-11-13：一键入口改为重启已有 API
+
+用户明确要求一键 API 脚本与项目启动入口一样，先停止旧进程再启动新实例。`start_anomaly_api.cmd` 继续调用 PowerShell 入口，由后者执行托管工具新增的 `restart` 动作。重启前验证部署配置，已有状态必须属于本项目且地址、端口一致；只按记录的 PID 和创建时间清理本部署进程并核实监听释放，保留调用方凭证。独立重启锁避免并发重启操作相互停止新实例。首次没有状态记录时直接启动；停止失败不再创建第二套服务，替代实例启动失败或 Python 异常中断时复用现有启动清理流程。
+
+这是用户明确授权的运行方式调整，取代一键入口此前“已运行则复用”的约定。底层 `start` 与登录启动项仍保留幂等启动行为。重启会短暂中断调用、使旧游标失效；新版本启动失败时可能需要维护恢复。验证使用独立项目副本和最小健康检查页面，不连接数据库，不操作正式服务。
+
 ## Traceability
 
 - 需求：[feat-API](../dev_docs/dev_spec/inline_domain/monitor/feat-API.md)、[获批规格](../../.scratch/sheet-anomaly-api/PRD.md)、[执行计划](../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md)。

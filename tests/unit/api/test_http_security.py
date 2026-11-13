@@ -66,7 +66,8 @@ def test_malformed_factory_scope_environment_fails_closed(monkeypatch) -> None:
     assert service.calls == []
 
 
-@pytest.mark.parametrize("headers", [{}, {"X-API-Key": "wrong-synthetic-key"}, {"X-API-Key": "x" * 1025}])
+@pytest.mark.parametrize("headers", [{}, {"X-API-Key": ""}, {"X-API-Key": "   "},
+                                     {"X-API-Key": "wrong-synthetic-key"}, {"X-API-Key": "x" * 1025}])
 def test_invalid_credentials_are_rejected_before_reading_sources(environment, headers) -> None:
     with TestClient(environment.app) as client:
         response = client.get(ENDPOINT, params=PARAMS, headers=headers)

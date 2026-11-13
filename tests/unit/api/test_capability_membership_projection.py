@@ -48,6 +48,20 @@ def app(source, **settings):
 
 
 @pytest.mark.parametrize('event', ['CPK', 'CPM'])
+@pytest.mark.parametrize('blank', ['', '   ', '\u3000'])
+def test_blank_parameter_name_returns_all_matching_capability_projects(event, blank):
+    source = service([capability_row(), capability_row(param_name='SECOND')],
+                     lambda *_: ['00001', '00002'])
+    with TestClient(app(source)) as client:
+        response = client.get(URL, headers=HEADERS,
+                              params={'event_type': event, 'parameter_name': blank})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body['meta']['complete'] is True
+    assert {row['监控参数'] for row in body['data']} == {'THK', 'SECOND'}
+
+
+@pytest.mark.parametrize('event', ['CPK', 'CPM'])
 def test_member_filter_returns_complete_sorted_project_and_preserves_leading_zeroes(event):
     query = AnomalyQuery(product='P1', sub_domain='SPC', event_type=event, entity_id='00002')
     calls = []

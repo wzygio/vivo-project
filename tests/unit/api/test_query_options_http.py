@@ -8,12 +8,15 @@ from fastapi.testclient import TestClient
 import pytest
 
 from api.main import create_app
+from api.schemas import AnomalyQuery
 from api.settings import ApiClient, ApiSettings
 
 KEY = 'synthetic-query-options-not-a-real-key'
 HEADERS = {'X-API-Key': KEY}
 URL = '/api/v1/sheet-anomalies'
 NOW = datetime(2026, 11, 2, 10, tzinfo=ZoneInfo('Asia/Shanghai'))
+QUERY_FIELDS = tuple(AnomalyQuery.model_fields)
+BLANK_VALUES = ('', '   ', '\t\r\n', '\u3000\u00a0')
 
 
 def record(query, identifier='S1'):
@@ -133,12 +136,71 @@ def test_cursor_changes_when_an_empty_available_source_fails(environment):
     assert response.status_code == 410
 
 
+@pytest.mark.parametrize('name', QUERY_FIELDS)
+@pytest.mark.parametrize('blank', BLANK_VALUES)
+def test_each_blank_query_parameter_is_equivalent_to_omission(environment, name, blank):
+    client, state = environment
+    expected = client.get(URL, headers=HEADERS)
+    expected_calls = list(state.calls)
+    state.calls.clear()
+    response = client.get(URL, params={name: blank}, headers=HEADERS)
+    assert response.status_code == 200, response.text
+    assert response.json() == expected.json()
+    assert state.calls == expected_calls
+
+
+@pytest.mark.parametrize('blank', BLANK_VALUES)
+def test_all_blank_query_parameters_use_the_complete_default_scope(environment, blank):
+    client, state = environment
+    expected = client.get(URL, headers=HEADERS)
+    expected_calls = list(state.calls)
+    state.calls.clear()
+    response = client.get(URL, params=dict.fromkeys(QUERY_FIELDS, blank), headers=HEADERS)
+    assert response.status_code == 200, response.text
+    assert response.json() == expected.json()
+    assert state.calls == expected_calls
+
+
+def test_blank_filters_do_not_change_cursor_binding(environment):
+    client, _ = environment
+    params = {'event_type': 'OOS', 'limit': 1}
+    first = client.get(URL, params={**params, 'cursor': ' '}, headers=HEADERS)
+    assert first.status_code == 200, first.text
+    first = first.json()
+    blank_filters = dict.fromkeys(QUERY_FIELDS, ' ')
+    second = client.get(URL, params={**blank_filters, **params, 'cursor': first['meta']['next_cursor']},
+                        headers=HEADERS)
+    assert second.status_code == 200, second.text
+    assert second.json()['data'] != first['data']
+
+
+def test_blank_limit_does_not_allow_a_cursor_without_pagination(environment):
+    client, state = environment
+    response = client.get(URL, params={'limit': ' ', 'cursor': 'nonempty-cursor'}, headers=HEADERS)
+    assert response.status_code == 422
+    assert state.calls == []
+
+
+def test_blank_unknown_parameters_are_still_rejected(environment):
+    client, state = environment
+    response = client.get(URL, params={'param_name': ''}, headers=HEADERS)
+    assert response.status_code == 422
+    assert state.calls == []
+
+
+def test_nonblank_text_is_not_trimmed(environment):
+    client, state = environment
+    response = client.get(URL, params={'parameter_name': ' THK '}, headers=HEADERS)
+    assert response.status_code == 200
+    assert all(query.parameter_name == ' THK ' for query, _, _ in state.calls)
+
+
 @pytest.mark.parametrize('params', [
     {'start_date': '2026-02-30'}, {'end_date': '2026-11-01T12:00:00'},
     {'start_date': '1793000000'}, {'start_date': '2026-11-02'},
     {'start_date': '2026-11-01', 'end_date': '2026-10-31'},
     {'cursor': 'synthetic-token-without-limit'}, {'end_date': '9999-12-31'},
-    {'step_id': ''}, {'layer': ''}, {'parameter_name': ''},
+    {'step_id': 'S' * 129}, {'layer': 'L' * 257}, {'parameter_name': 'P' * 513},
 ])
 def test_invalid_dates_and_filters_fail_before_any_read(environment, params):
     client, state = environment

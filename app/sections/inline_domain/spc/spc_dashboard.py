@@ -451,6 +451,45 @@ def filter_spc_report(
     )
 
 
+@st.fragment
+def render_spc_report_interaction(
+    report: object,
+    *,
+    product: str,
+    reference_date: date,
+    step_desc_map: dict[str, str] | None = None,
+    is_admin: bool = False,
+) -> None:
+    """Rerun cascade controls and charts without re-entering product loading."""
+    selected_factory, selected_params, selected_steps, should_render = render_spc_filters(
+        indicator_df=report.indicators_df, step_desc_map=step_desc_map,
+    )
+    if is_admin:
+        render_spc_decoration_admin(
+            getattr(report, "sheet_oos_decoration_result", None),
+            getattr(report, "cpk_decoration_result", None),
+            getattr(report, "cpm_decoration_result", None),
+        )
+    render_saved_spc_alerts(
+        product, reference_date=reference_date, report=report, step_desc_map=step_desc_map,
+    )
+    if not should_render:
+        st.info("当前筛选条件尚未查询。")
+        return
+
+    selection = dict(
+        selected_factory=selected_factory, selected_params=selected_params,
+        selected_steps=selected_steps,
+    )
+    render_spc_indicator_sections(
+        period_capability_df=filter_spc_report(report.period_capability_df, **selection),
+        sheet_features_df=filter_spc_report(report.sheet_features_df, **selection),
+        raw_measurements_df=filter_spc_report(report.raw_measurements_df, **selection),
+        period_box_source=ConfigLoader.get_spc_period_box_source(),
+        step_desc_map=step_desc_map, reference_date=reference_date,
+    )
+
+
 def render_capability_decoration_admin(
     decoration_result: CpkDecorationResult,
     *,

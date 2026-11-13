@@ -2,13 +2,13 @@
 
 更新日期：2026-11-11。说明当前实现的功能、架构和处理流程，适用 API 1.4.0。
 
-部署操作见 [服务部署说明](guide-sheet-anomaly-api.md)，参数、字段及实测步骤见 [调用说明](api-caller-guide-2026-11-03.md)。架构决定见 [ADR-0037](../../../../docs/ADR/0037-published-anomaly-api.md)。
+部署操作见 [服务部署说明](guide-sheet-anomaly-api.md)，参数、字段及实测步骤见 [调用说明](api-caller-guide-2026-11-03.md)。架构决定见 [ADR-0037](../../../docs/ADR/0037-published-anomaly-api.md)。
 
 ## 1. 程序负责什么
 
 程序把各报表已经发布的异常结果，整理成统一的 HTTP 查询入口。其它系统取得调用凭证后，可以按产品、分类、厂别、日期、站点、层别、参数及对象编号查询异常明细。
 
-配套的 [Python 调用程序](../../../../tools/fetch_sheet_anomalies.py) 是独立客户端，可在本机或其它设备运行；它通过 HTTP 取数、预览和导出，不直接读取业务文件或数据库。使用 `uv run --no-sync python tools/fetch_sheet_anomalies.py` 打开图形窗口，默认不分页，填写每页行数后自动完整取页；其它程序也可导入其中的调用函数。
+配套的 [Python 调用程序](../../../tools/fetch_sheet_anomalies.py) 是独立客户端，可在本机或其它设备运行；它通过 HTTP 取数、预览和导出，不直接读取业务文件或数据库。使用 `uv run --no-sync python tools/fetch_sheet_anomalies.py` 打开图形窗口，默认不分页，填写每页行数后自动完整取页；其它程序也可导入其中的调用函数。
 
 它支持 SPC、CTQ、AOI_TT、AOI_RS 的 OOS／OOC，Yield、Q-Time 的 OOS，以及 SPC 的 CPK／CPM 周度不达项。返回对象保留片、Lot 或能力周期项目的真实含义。其它趋势、IJP、备件、IQC、图像和原始量测点不属于接口范围。
 
@@ -53,7 +53,7 @@ flowchart TD
 | 能力项查询 | `src/inline_domain/application/monitor/capability_alert_query.py` | 只读已维护 CPK／CPM 台账，复用核心规则筛选完整 ISO 周，不维护汇总 |
 | 能力项片号 | `src/inline_domain/application/spc/sheet_membership.py` | 从 SPC 制备点位发布完整周成员；HTTP 只读已发布成员，按业务键和目标周查询 |
 | Windows 托管 | `tools/anomaly_api_service.py` | 注入凭证摘要、启动和监督单个 API worker、管理本次进程及日志 |
-| 一键入口 | `start_anomaly_api.cmd`、`tools/start_anomaly_api.ps1` | 调用现有托管工具并核实服务就绪 |
+| 一键入口 | `start_anomaly_api.cmd`、`tools/start_anomaly_api.ps1` | 验证部署配置，停止本部署旧进程，启动新实例并核实服务就绪 |
 
 `api/` 是独立的接口与装配层。各领域继续拥有自己的发布规则，公共查询入口不会把 Yield 或 Q-Time 的业务所有权转给 Inline。
 
@@ -122,7 +122,7 @@ Inline 异常台账只在产生异常时创建对应产品工作表。因此，�
 
 Windows 托管包含一个监督进程和单个 Uvicorn worker。worker 异常退出后，监督进程按退避规则重启；托管工具保存 PID 与创建时间，停止时核对自己拥有的进程。主机休眠或监督进程本身退出不能依靠这项机制保证服务在线。
 
-一键脚本仅请求启动及检查就绪，缺少凭证时引导首次设置，已有服务异常时报告失败，不自动停止或重启。日志、状态和启动意图位于 `output/logs/anomaly-api/`；原始密钥不写入这些文件。
+一键脚本调用托管工具的 `restart`：先验证部署配置，再核实本项目、地址和端口的已有记录，按 PID 与创建时间清理旧进程及监听，随后启动并检查就绪。独立重启锁避免多个重启操作相互停止新实例；监督进程继续使用自己的运行锁。底层 `start` 和登录启动项保持已运行则复用。新实例启动失败或 Python 异常中断时，启动流程清理本次创建的进程；旧实例已停止后发生启动失败，服务可能暂时不可用。重启短暂中断调用并使旧分页游标失效。日志、状态和启动意图位于 `output/logs/anomaly-api/`；原始密钥不写入这些文件。
 
 接口关闭默认访问日志，不把完整请求头、内部路径和控制信息输出给调用方。每个响应携带 `X-Request-ID`，并设置禁止缓存等响应头。当前内网 HTTP 入口没有传输加密，HTTPS 接入和长期无人值守运行由运维按部署要求安排。
 
@@ -132,17 +132,18 @@ API Key 是本项目选择的认证方式，用于绑定调用方、数据授权
 
 | 目的 | 入口 |
 |---|---|
-| 查看接口和错误处理 | [main.py](../../../../api/main.py)、[schemas.py](../../../../api/schemas.py) |
-| 查看查询与公开字段 | [query.py](../../../../api/query.py)、[service.py](../../../../api/service.py) |
-| 查看跨领域装配 | [composition.py](../../../../api/composition.py) |
-| 查看缓存和元数据 | [工作簿缓存](../../../../src/shared_kernel/infrastructure/api_workbook_cache.py)、[站点元数据](../../../../src/shared_kernel/infrastructure/api_alert_metadata.py) |
-| 验证真实临时文件到 HTTP | [文件集成测试](../../../../tests/integration/test_anomaly_api_files.py) |
-| 验证查询选项 | [HTTP 查询测试](../../../../tests/unit/api/test_query_options_http.py) |
-| 验证一键启动入口 | [启动脚本测试](../../../../tests/unit/test_start_anomaly_api.py) |
+| 查看接口和错误处理 | [main.py](../../../api/main.py)、[schemas.py](../../../api/schemas.py) |
+| 查看查询与公开字段 | [query.py](../../../api/query.py)、[service.py](../../../api/service.py) |
+| 查看跨领域装配 | [composition.py](../../../api/composition.py) |
+| 查看缓存和元数据 | [工作簿缓存](../../../src/shared_kernel/infrastructure/api_workbook_cache.py)、[站点元数据](../../../src/shared_kernel/infrastructure/api_alert_metadata.py) |
+| 验证真实临时文件到 HTTP | [文件集成测试](../../../tests/integration/test_anomaly_api_files.py) |
+| 验证查询选项 | [HTTP 查询测试](../../../tests/unit/api/test_query_options_http.py) |
+| 验证一键启动入口 | [启动脚本测试](../../../tests/unit/test_start_anomaly_api.py) |
+| 验证真实重启及清理 | [隔离健康页面生命周期测试](../../../tests/integration/test_anomaly_api_launcher_restart.py)，覆盖正常重启、失败、中断和其它程序占用端口 |
 
 单元与夹具验证不等于正式业务工作簿或其它设备已经验证。部署验收仍需健康检查、凭证调用、来源完整性和真实记录核对。
 
-此前 1.3.0 的片号、分页及导出验证见 [片号优化验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-sheet-membership-delivery-2026-11-04.md)。当前正式版本为 1.4.0，省略事件时的真实结果已与 OOS／OOC／CPK／CPM 四次查询逐项对照；API／客户端回归 378 项、默认全选专项 10 项通过（有交集，不相加），见 [默认全选验收记录](../../../../docs/dev_docs/generated/inline_domain/api/api-default-events-delivery-2026-11-04.md)。此后按用户要求移除查询启动器及其专用测试，统一直接运行 Python 客户端。另一台设备的数据查询需在该设备运行调用程序验证。
+此前 1.3.0 的片号、分页及导出验证见 [片号优化验收记录](../../../docs/ADR/0042-api-sheet-membership-delivery-2026-11-04.md)。当前正式版本为 1.4.0，省略事件时的真实结果已与 OOS／OOC／CPK／CPM 四次查询逐项对照；API／客户端回归 378 项、默认全选专项 10 项通过（有交集，不相加），见 [默认全选验收记录](../../../docs/ADR/0041-api-default-events-delivery-2026-11-04.md)。此后按用户要求移除查询启动器及其专用测试，统一直接运行 Python 客户端。另一台设备的数据查询需在该设备运行调用程序验证。
 
 ## 8. 后续扩展方向（尚未实现）
 

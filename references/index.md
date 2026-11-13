@@ -12,7 +12,7 @@
 | 预警邮件推送、责任人分派、测试收件人覆盖、SMTP、定时任务及失败重试 | [预警邮件规则](domain/api/notification/rules-alert-notification.md) |
 | Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/GLOSSARY.md) |
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
-| Inline 共享测量、制备管线、快照、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
+| Inline 共享测量、制备管线、快照、Z553 固定历史保留起点、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
 | Inline data_exclusion、厂别日期排除、去重与修饰之前过滤、快照与历史保留 | [Inline 日期排除规则](domain/inline_domain/shared/rules-inline-date-exclusion.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
 | SPC 超规片判定、人工决策台账、传统→专用点位修饰、中央规格区间、稳定哈希 margin、修饰与参数豁免/预警过滤的边界 | [SPC 超规片与点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |

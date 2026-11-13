@@ -21,6 +21,9 @@ from src.inline_domain.application.monitor.monitor_service import MonitorAnalysi
 
 @pytest.mark.parametrize("saved_value", [.9, 1.6, None, "unreadable"])
 def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypatch, saved_value) -> None:
+    # Bare runpy execution has no Streamlit context; exercise the real section.
+    monkeypatch.setattr(spc_dashboard, "render_spc_report_interaction",
+                        spc_dashboard.render_spc_report_interaction.__wrapped__)
     from app.sections.shared import alert_results
     signature_module = importlib.import_module("src.inline_domain.application.shared.decision_signature")
     monkeypatch.setattr(signature_module, "get_scope_decision_signature", lambda *_args: "test-decisions")

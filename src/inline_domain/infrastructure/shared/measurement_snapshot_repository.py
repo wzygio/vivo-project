@@ -25,7 +25,7 @@ from src.inline_domain.infrastructure.shared.rolling_snapshot import (
 )
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError,
-    inline_snapshot_window_start,
+    inline_measurement_snapshot_window_start,
     metadata_covers_start,
 )
 
@@ -131,11 +131,13 @@ class InlineMeasurementSnapshotRepository:
         force_refresh: bool,
     ) -> MeasurementRefreshResult:
         end_timestamp = pd.Timestamp(end_date)
-        start_date = inline_snapshot_window_start(end_timestamp).strftime("%Y-%m-%d")
+        window_start = inline_measurement_snapshot_window_start(prod_code, end_timestamp)
+        start_date = window_start.strftime("%Y-%m-%d")
         snapshot_path = self.snapshot_dir / f"inline_measurements_{prod_code}.parquet"
 
         with self._lock_for(snapshot_path), snapshot_process_lock(snapshot_path):
-            cached = None if force_refresh else self._try_read_fresh(snapshot_path, end_timestamp)
+            cached = None if force_refresh else self._try_read_fresh(
+                snapshot_path, end_timestamp, window_start=window_start)
             if cached is not None:
                 return self._snapshot_result(snapshot_path, cached, False)
             metadata = read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True)
@@ -147,8 +149,8 @@ class InlineMeasurementSnapshotRepository:
                     logger.exception("Unreadable Inline snapshot; rebuilding %s", snapshot_path)
                     metadata = None
             load_start = (
-                inline_snapshot_window_start(end_timestamp)
-                if force_refresh else incremental_start(metadata, end_timestamp)
+                window_start
+                if force_refresh else incremental_start(metadata, end_timestamp, window_start=window_start)
             )
             try:
                 measurements = self.measurement_loader(
@@ -166,9 +168,10 @@ class InlineMeasurementSnapshotRepository:
                 measurements = self.measurement_corrector(measurements)
             measurements = replace_tail(
                 None if force_refresh else previous, measurements, load_start, end_timestamp,
+                window_start=window_start,
             )
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)
-            self._write_snapshot(snapshot_path, measurements, end_timestamp)
+            self._write_snapshot(snapshot_path, measurements, end_timestamp, window_start=window_start)
             return self._snapshot_result(snapshot_path, measurements.copy(), True)
 
     def _snapshot_result(self, path: Path, measurements: pd.DataFrame,
@@ -179,13 +182,16 @@ class InlineMeasurementSnapshotRepository:
             path, self.data_forward_policy)
         return MeasurementRefreshResult(measurements, refreshed)
 
-    def _is_fresh(self, snapshot_path: Path, end_timestamp: pd.Timestamp) -> bool:
-        return is_fresh(read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True), end_timestamp, self.SNAPSHOT_TTL_HOURS)
+    def _is_fresh(self, snapshot_path: Path, end_timestamp: pd.Timestamp,
+                  *, window_start: object | None = None) -> bool:
+        return is_fresh(read_metadata(snapshot_path, self.SNAPSHOT_POLICY_VERSION, policy_file=True),
+                        end_timestamp, self.SNAPSHOT_TTL_HOURS, window_start=window_start)
 
     def _try_read_fresh(
         self, snapshot_path: Path, end_timestamp: pd.Timestamp,
+        *, window_start: object | None = None,
     ) -> pd.DataFrame | None:
-        if not self._is_fresh(snapshot_path, end_timestamp):
+        if not self._is_fresh(snapshot_path, end_timestamp, window_start=window_start):
             return None
         try:
             return self._read_snapshot(snapshot_path)
@@ -213,9 +219,11 @@ class InlineMeasurementSnapshotRepository:
             raise IncompleteMonitorSnapshotError("Inline 原始快照损坏，无法生成汇总") from exc
 
     def _write_snapshot(
-        self, snapshot_path: Path, measurements: pd.DataFrame, end_timestamp: pd.Timestamp
+        self, snapshot_path: Path, measurements: pd.DataFrame, end_timestamp: pd.Timestamp,
+        *, window_start: object | None = None,
     ) -> None:
-        publish_snapshots([(snapshot_path, measurements, self.SNAPSHOT_POLICY_VERSION, end_timestamp, True)])
+        publish_snapshots([(snapshot_path, measurements, self.SNAPSHOT_POLICY_VERSION, end_timestamp, True)],
+                          window_start=window_start)
 
     @classmethod
     def _covers_start(cls, snapshot_path: Path, required_start: object) -> bool:

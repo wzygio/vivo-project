@@ -36,7 +36,7 @@
 
 ## 2.1 API优化：Yield超规Lot
 1. 所属厂别：对于yield_domain的lot别超规明细，不应该由人手动维护记录。
-  1. 请修先改预警逻辑，在写入明细文件时，直接根据其Defect Code判定所属厂别（即“lot_id - defect_code - defect_group - factory”）
+  - 请修先改预警逻辑，在写入明细文件时，直接根据其Defect Code判定所属厂别（即“lot_id - defect_code - defect_group - factory”）
     - 预警逻辑：`src\yield_domain\core\sheet_lot\lot_alerts.py`
     - 明细文件：`resources\yield_domain\sheet_lot\yield_lot_oos_results.xlsx`
     - "defect_group - factory"映射规则：
@@ -46,22 +46,23 @@
       - "OLED_Mura": "OLED"
       - "TP_Short NG": "TP"
       - "TP 容值NG": "TP"
-  2. 请修改API，不再维护“Yield归属表”
+  - 请修改API，不再维护“Yield归属表”
 2. 层别：一律填写NULL（这是正确的，因为入库不良本身就无法直接锁定层别）
 
 ## 2.2 API优化：查询与返回字段
 1. 查询参数：按照以下设计模式，API查询参数中没有任何一个是必选的，即直接获取上一周的所有超规明细。但如果一定要设置一个必选，请将“分类”设为必选
-  1. 包含“必要字段”：其与当前查询参数的对应关系如下
+  - 空值约定（2026-11-13 补充）：所有已定义的查询参数接收到空字符串或纯空白时，统一视为未填写；筛选项不增加限制，日期使用各自默认值，limit/cursor 使用未分页／首次查询的默认行为。非空值仍按原有类型、取值、授权和分页关联规则校验；此约定不适用于鉴权请求头。
+  - 包含“必要字段”：其与当前查询参数的对应关系如下
     - 分类（sub_domain）：可选，默认全选
     - 发生站点：可选，默认全选
     - 部门（factory）：可选，默认全选
     - 层别：可选，默认全选
     - 监控参数：可选，默认全选
     - 异常事件（event_type）：可选，默认为OOS
-  2. 新增参数：
+  - 新增参数：
     - 开始时间：可选，默认为上个ISO周的周一
     - 截止时间：可选，默认为上个ISO周的周日
-  3. 其余参数可保留：
+  - 其余参数可保留：
     - product：可选，默认全选
     - entity_type：可选，默认全选
     - entity_id：可选

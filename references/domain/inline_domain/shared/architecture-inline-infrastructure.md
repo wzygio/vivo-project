@@ -38,7 +38,7 @@
 |---|---|---|
 | `measurement_data_loader.py` | 三厂测量 DAO：一次参数化 UNION ALL（ARRAY/OLED/TP）+ 产品字典 join，产品/时间过滤下推 SQL | `load_raw_measurements(db, start, end, prod)` |
 | `measurement_metadata_loader.py` | 参数元数据 DAO：白名单目录 `eda.IMP_SPC_TZBJX`、规格表 `mdw.dwd_imp_dv_param_spec` | `InlineMeasurementMetadataRepository`（实现 `MeasurementMetadataPort`） |
-| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：3 个月滚动窗口、TTL 统一配置于 `config/global.yaml` 的 `application.cache_ttl_hours`、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
+| `measurement_snapshot_repository.py` | 产品级原始 Parquet 快照：默认滚动窗口及可配置产品历史保留起点（§2.1）、TTL 统一配置于 `config/global.yaml` 的 `application.cache_ttl_hours`、策略版本、原子写、进程内锁、失败降级 | `InlineMeasurementSnapshotRepository`（实现 `MeasurementSnapshotPort`） |
 | `main_process_history_repository.py` | 主制程 OUT 履历 DAO（6 条 factory×route SQL） | `InlineMainProcessHistoryRepository`（实现 `MainProcessHistoryPort`） |
 | `main_process_trace.py` | 主制程追溯**纯函数**（路由 + 最近前序匹配，零 I/O） | `attach_main_process_spec` / `apply_main_process_history` |
 | `measurement_preprocessor.py` | 排除参数关键字过滤（`LOSS`），纯函数 | `filter_excluded_param_names` |
@@ -47,6 +47,24 @@
 
 快照稳定字段超集：`factory, prod_code, start_time, sheet_id, lot_id, step_id,
 param_name, site_name, unit_id, param_value`。**任何派生规则不回写原始快照。**
+
+### 2.1 共享测量快照保留起点
+
+2026-11-13 确认：共享测量默认从请求结束日第三个前序自然月的月初保留；
+`config/domain/inline_domain.yaml` 的 `measurement_snapshots.retain_from` 可按产品
+配置固定源日期（严格 `YYYY-MM-DD` 字符串）。当前 Z553 配置为 `2026-05-01`。
+实际起点取默认滚动起点与配置日期的较早者，因此配置只扩展保留范围，不缩短历史请求窗口。
+未配置的产品和独立 AOI_RS 快照继续使用默认滚动规则。
+
+同一个起点用于 TTL 覆盖判断、全量查询、增量回读下界、合并裁剪、发布的
+`covered_from` 和失败回退的覆盖检查。跨月、跨年不会前移固定保留日期；
+覆盖缺失或强刷时从该起点重取。普通增量仍只替换回读区间，保留更早旧行；
+强刷仍以数据库返回值替换完整保留窗口，不把旧事实当作新查询结果。
+
+此规则作用于 SPC、CTQ、AOI_TT、Monitor 共享的原始测量文件，不改变报表显示窗口、
+日期前推、排除规则或独立吞吐量快照。实现入口为
+`snapshot_window.py::inline_measurement_snapshot_window_start`；验证见
+`tests/unit/inline_domain/infrastructure/measurement/test_measurement_retention.py`。
 
 ---
 

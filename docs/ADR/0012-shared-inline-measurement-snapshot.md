@@ -18,6 +18,10 @@ UNION 查询；应用服务还直接构造基础设施仓储。结果是数据�
 
 ## Decision
 
+2026-11-13 补充：第 3 项的默认滚动窗口允许共享测量按产品配置固定历史保留起点；
+见 [当前快照保留规则](../../references/domain/inline_domain/shared/architecture-inline-infrastructure.md#21-共享测量快照保留起点)。
+快照共享边界与刷新替换语义不变。
+
 1. `infrastructure/measurement/` 作为共享技术适配器，拥有三厂测量 DAO、参数元数据
    DAO、主制程履历 DAO 和产品级原始快照。
 2. 原始快照稳定字段为 `factory, prod_code, start_time, sheet_id, lot_id, step_id,

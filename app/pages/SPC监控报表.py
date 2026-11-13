@@ -29,11 +29,8 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     render_saved_spc_alerts,
     SPC_REPORT_CACHE_INDICATORS as PRODUCT_CACHE_INDICATORS,
     SPC_REPORT_CACHE_SIGNATURE as SPC_PAGE_CACHE_SIGNATURE,
-    filter_spc_report,
     get_default_spc_start_date,
-    render_spc_filters,
-    render_spc_indicator_sections,
-    render_spc_decoration_admin,
+    render_spc_report_interaction,
 )
 from app.sections.inline_domain.spc.spc_export import render_spc_export
 from app.sections.inline_domain.spc.scroll_layout import render_spc_page_scroll_layout
@@ -169,60 +166,17 @@ except Exception:
     st.error("SPC 报表加载失败，请稍后重试。")
     st.stop()
 
-sheet_features_df = view_model.sheet_features_df
 raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
-period_capability_df = view_model.period_capability_df
 
 if raw_measurements_df.empty or indicator_df.empty:
     st.info("当前产品暂无可展示的 SPC 数据。")
     _render_saved_page_alerts(view_model)
     st.stop()
 
-selected_factory, selected_params, selected_steps, should_render_report = render_spc_filters(
-    indicator_df=indicator_df,
-    step_desc_map=step_desc_map,
-)
-
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
-if is_admin:
-    render_spc_decoration_admin(
-        getattr(view_model, "sheet_oos_decoration_result", None),
-        getattr(view_model, "cpk_decoration_result", None),
-        getattr(view_model, "cpm_decoration_result", None),
-    )
-    
-_render_saved_page_alerts(view_model)
-
-if not should_render_report:
-    st.info("当前筛选条件尚未查询。")
-    st.stop()
-
-filtered_period_capability_df = filter_spc_report(
-    report_df=period_capability_df,
-    selected_factory=selected_factory,
-    selected_params=selected_params,
-    selected_steps=selected_steps,
-)
-filtered_sheet_features_df = filter_spc_report(
-    report_df=sheet_features_df,
-    selected_factory=selected_factory,
-    selected_params=selected_params,
-    selected_steps=selected_steps,
-)
-filtered_raw_measurements_df = filter_spc_report(
-    report_df=raw_measurements_df,
-    selected_factory=selected_factory,
-    selected_params=selected_params,
-    selected_steps=selected_steps,
-)
-
-render_spc_indicator_sections(
-    period_capability_df=filtered_period_capability_df,
-    sheet_features_df=filtered_sheet_features_df,
-    raw_measurements_df=filtered_raw_measurements_df,
-    period_box_source=ConfigLoader.get_spc_period_box_source(),
-    step_desc_map=step_desc_map,
-    reference_date=default_end_dt.date(),
+render_spc_report_interaction(
+    view_model, product=current_product, reference_date=default_end_dt.date(),
+    step_desc_map=step_desc_map, is_admin=is_admin,
 )

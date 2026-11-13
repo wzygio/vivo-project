@@ -67,6 +67,13 @@ st.plotly_chart(
 
 ## 4. 后续维护约束
 
+2026-11-13 补充：SPC 的三级筛选、查询及对应结果由
+`spc_dashboard.py::render_spc_report_interaction` 的独立 fragment 承载，筛选事件不再
+触发整页产品报表加载。首次进入、产品切换和页头刷新仍加载完整产品输入，
+查询门控只决定手动图表是否展示。fragment 保持原控件 key 和“筛选→预警→手动结果”
+顺序，原生滚动布局的作用域不变。详细读取边界见
+[SPC 数据流](../../../domain/inline_domain/spc/data-flow-spc.md#53-建立级联筛选与查询门控)。
+
 新增或迁移上述报表的 Plotly 图表时，应显式保留 `scrollZoom=False`。新增其他 Plotly 配置项时合并到同一个 `config`，避免覆盖滚轮策略。
 
 SPC 页面应同时保留原生文档滚动布局的初始化调用。若筛选控件 key 改名，必须同步更新布局范围选择器并执行浏览器滚轴验收；不得将范围扩大到门户首页或其他报表。

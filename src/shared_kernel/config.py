@@ -252,6 +252,29 @@ class ConfigLoader:
         return days
 
     @classmethod
+    def get_inline_measurement_retention_start(cls, prod_code: str) -> date | None:
+        """Read an optional fixed source-history anchor for shared measurements."""
+        section = cls.load_domain_config("inline_domain").get("measurement_snapshots", {})
+        setting = "inline_domain.measurement_snapshots.retain_from"
+        if not isinstance(section, dict):
+            raise ValueError(f"{setting}: measurement_snapshots must be a mapping")
+        products = section.get("retain_from", {})
+        if not isinstance(products, dict):
+            raise ValueError(f"{setting} must be a mapping")
+        if prod_code not in products:
+            return None
+        value = products[prod_code]
+        if not isinstance(value, str):
+            raise ValueError(f"{setting}.{prod_code} must be a YYYY-MM-DD string")
+        try:
+            start = date.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError(f"{setting}.{prod_code} must be a valid YYYY-MM-DD date") from exc
+        if start.isoformat() != value:
+            raise ValueError(f"{setting}.{prod_code} must use YYYY-MM-DD")
+        return start
+
+    @classmethod
     def get_data_forward_policy(cls) -> DataForwardPolicy:
         """Load the global manufacturing source-time display policy."""
         yaml_path = cls.get_project_root() / "config" / "global.yaml"

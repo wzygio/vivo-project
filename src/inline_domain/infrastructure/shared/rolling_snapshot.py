@@ -92,18 +92,20 @@ def read_metadata(path: Path, policy: str, *, policy_file: bool = False) -> dict
         return None
 
 
-def is_fresh(metadata: dict | None, end: object, ttl_hours: float) -> bool:
+def is_fresh(metadata: dict | None, end: object, ttl_hours: float,
+             *, window_start: object | None = None) -> bool:
     if metadata is None:
         return False
-    start = inline_snapshot_window_start(end)
+    start = inline_snapshot_window_start(end) if window_start is None else pd.Timestamp(window_start)
     age = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(metadata["refreshed_at"])).total_seconds() / 3600
     return (pd.Timestamp(metadata["covered_from"]) == start
             and pd.Timestamp(metadata["covered_through"]) >= pd.Timestamp(end)
             and 0 <= age < ttl_hours)
 
 
-def incremental_start(metadata: dict | None, end: object) -> pd.Timestamp:
-    start = inline_snapshot_window_start(end)
+def incremental_start(metadata: dict | None, end: object,
+                      *, window_start: object | None = None) -> pd.Timestamp:
+    start = inline_snapshot_window_start(end) if window_start is None else pd.Timestamp(window_start)
     if metadata is None:
         return start
     covered_from = pd.Timestamp(metadata["covered_from"])
@@ -114,7 +116,8 @@ def incremental_start(metadata: dict | None, end: object) -> pd.Timestamp:
     return max(start, covered_through - pd.Timedelta(days=overlap_days))
 
 
-def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end: object) -> pd.DataFrame:
+def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end: object,
+                 *, window_start: object | None = None) -> pd.DataFrame:
     """Replace the entire queried interval, so removed/corrected records disappear.
 
     Deduplicate only identical complete facts: different RS quantities are not
@@ -130,10 +133,12 @@ def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end
     if old is not None and not old.empty:
         old = old.loc[pd.to_datetime(old.start_time).lt(pd.Timestamp(start))]
         new = pd.concat([old, new], ignore_index=True)
-    return new.loc[new.start_time.ge(inline_snapshot_window_start(end))].drop_duplicates().reset_index(drop=True)
+    retained_start = inline_snapshot_window_start(end) if window_start is None else pd.Timestamp(window_start)
+    return new.loc[new.start_time.ge(retained_start)].drop_duplicates().reset_index(drop=True)
 
 
-def publish_snapshots(items: list[tuple[Path, pd.DataFrame, str, object, bool]]) -> None:
+def publish_snapshots(items: list[tuple[Path, pd.DataFrame, str, object, bool]],
+                      *, window_start: object | None = None) -> None:
     """Stage every file first, roll back all replacements on publication failure.
 
     Metadata is the commit marker and binds to the exact parquet generation.
@@ -150,7 +155,8 @@ def publish_snapshots(items: list[tuple[Path, pd.DataFrame, str, object, bool]])
             staged[path] = temp
             frame.to_parquet(temp, index=False)
             stat = temp.stat()
-            metadata = {"policy_version": policy, "covered_from": inline_snapshot_window_start(end).date().isoformat(),
+            retained_start = inline_snapshot_window_start(end) if window_start is None else pd.Timestamp(window_start)
+            metadata = {"policy_version": policy, "covered_from": retained_start.date().isoformat(),
                         "covered_through": pd.Timestamp(end).date().isoformat(), "refreshed_at": datetime.now(timezone.utc).isoformat(),
                         "snapshot_size_bytes": stat.st_size, "snapshot_mtime_ns": stat.st_mtime_ns}
             if policy_file:

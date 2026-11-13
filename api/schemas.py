@@ -50,6 +50,17 @@ class AnomalyQuery(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=500)
     cursor: str | None = Field(default=None, min_length=1, max_length=2048)
 
+    @model_validator(mode='before')
+    @classmethod
+    def omit_blank_query_values(cls, values: object) -> object:
+        """Treat blank known query fields as omitted, before type validation."""
+        if not isinstance(values, dict):
+            return values
+        return {
+            name: value for name, value in values.items()
+            if not (name in cls.model_fields and isinstance(value, str) and not value.strip())
+        }
+
     @field_validator('start_date', 'end_date', mode='before')
     @classmethod
     def calendar_date(cls, value: object) -> object:

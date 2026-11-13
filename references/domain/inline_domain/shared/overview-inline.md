@@ -196,7 +196,8 @@ OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示
 [`architecture-inline-infrastructure.md`](architecture-inline-infrastructure.md)。要点：
 
 - `shared/`（原 `measurement/`，2026-08 按 shared 约束更名归位）拥有三厂测量 DAO、
-  参数元数据 DAO、产品级原始 Parquet 快照（3 个月滚动窗口、TTL 统一配置于
+  参数元数据 DAO、产品级原始 Parquet 快照（默认滚动窗口及产品固定保留起点，见
+  [快照保留规则](architecture-inline-infrastructure.md#21-共享测量快照保留起点)；TTL 统一配置于
   `config/global.yaml` 的 `application.cache_ttl_hours`、策略版本、原子写、
   失败降级）、共享制备管线（`measurement_preparation.py` + `measurement_preprocessor.py`）、
   主制程追溯（`main_process_history_repository.py` + `main_process_trace.py`）与

@@ -1,4 +1,4 @@
-# Start the existing per-user host; never stop services or replace credentials.
+# Restart this project's per-user API host, preserving deployment credentials.
 [CmdletBinding()]
 param([string]$ProjectRoot = '')
 
@@ -20,9 +20,10 @@ try {
         throw 'Deployment profile missing. First run tools\setup_anomaly_api_credentials.ps1 as the deployment user.'
     }
 
-    $apiStartOutput = & $apiPython $apiHostTool start
+    Write-Host 'Restarting the project API; existing requests and pagination may be interrupted.'
+    $apiStartOutput = & $apiPython $apiHostTool restart
     if ($LASTEXITCODE -ne 0) {
-        throw 'API host start failed. Check output\logs\anomaly-api; no existing service was stopped by this script.'
+        throw 'API host restart failed. Check output\logs\anomaly-api; the old instance may already be stopped.'
     }
     $apiStart = ($apiStartOutput -join [Environment]::NewLine) | ConvertFrom-Json
     if ($apiStart.status -notin @('ready', 'already_running')) {
@@ -34,7 +35,7 @@ try {
     }
     $apiStatus = ($apiStatusOutput -join [Environment]::NewLine) | ConvertFrom-Json
     if ($apiStatus.ready -ne $true -or $apiStatus.supervisor_alive -ne $true -or $apiStatus.listener_owned -ne $true) {
-        throw 'API is not ready. Check the host logs; existing processes were left unchanged.'
+        throw 'API is not ready after restart. Check the host logs.'
     }
     Write-Host ("API is ready (port {0}; {1})." -f $apiStatus.port, $apiStart.status)
     Write-Host ("Local health: http://127.0.0.1:{0}/health/live" -f $apiStatus.port)

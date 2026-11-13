@@ -1,3 +1,8 @@
+# 共享测量原始快照按源时间保留；未配置的产品继续使用默认滚动窗口。
+measurement_snapshots:
+  retain_from:
+    Z553: "2026-05-01"
+
 spc:
   # 先按原 USL/LSL 传统修饰，再在显示日期窗口内按中央区间专用修饰；两阶段保留 flag=False。
   # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
