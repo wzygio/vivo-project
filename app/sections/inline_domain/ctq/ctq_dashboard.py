@@ -141,6 +141,29 @@ def filter_ctq_report(
     )
 
 
+@st.fragment
+def render_ctq_report_interaction(
+    report: object, *, product: str, reference_date: date,
+    step_desc_map: dict[str, str] | None = None, is_admin: bool = False,
+) -> None:
+    """Keep interactive filtering outside the full-product preparation path."""
+    if is_admin:
+        render_ctq_decoration_admin(getattr(report, "sheet_oos_decoration_result", None))
+    factory, params, steps, queried = render_ctq_filters(
+        indicator_df=report.indicators_df, step_desc_map=step_desc_map,
+    )
+    render_saved_ctq_alerts(product, reference_date=reference_date, report=report, step_desc_map=step_desc_map)
+    if not queried:
+        st.info("当前筛选条件尚未查询。")
+        return
+    selection = dict(selected_factory=factory, selected_params=params, selected_steps=steps)
+    render_ctq_indicator_sections(
+        sheet_features_df=filter_ctq_report(report.sheet_features_df, **selection),
+        raw_measurements_df=filter_ctq_report(report.raw_measurements_df, **selection),
+        period_box_source=ConfigLoader.get_spc_period_box_source(), step_desc_map=step_desc_map,
+    )
+
+
 def render_ctq_decoration_admin(
     decoration_result: SheetOosDecorationResult | None,
 ) -> None:

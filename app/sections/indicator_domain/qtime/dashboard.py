@@ -163,6 +163,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
                             build_qtime_figure(product_details, title=str(product)),
                             width="stretch",
                             key=f"qtime_lot_chart_{index}_{product}",
+                            config={"scrollZoom": False},
                         )
 
 

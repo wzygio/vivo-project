@@ -73,26 +73,36 @@ def render_parts_filters(
         selected_factories=selected_factories,
         selected_equipment_types=[],
     )
+    equipment_key = "parts_filter_equipment_types"
+    if equipment_key in st.session_state:
+        st.session_state[equipment_key] = [
+            value for value in st.session_state[equipment_key] if value in available_equipment_types
+        ]
     with equipment_column:
         selected_equipment_types = st.multiselect(
             "设备类型",
             options=available_equipment_types,
             default=[],
             placeholder="全部设备类型",
-            key="parts_filter_equipment_types",
+            key=equipment_key,
         )
     _, _, available_part_types = build_cascading_filter_options(
         report_df,
         selected_factories=selected_factories,
         selected_equipment_types=selected_equipment_types,
     )
+    part_key = "parts_filter_part_types"
+    if part_key in st.session_state:
+        st.session_state[part_key] = [
+            value for value in st.session_state[part_key] if value in available_part_types
+        ]
     with part_column:
         selected_part_types = st.multiselect(
             "备件类型",
             options=available_part_types,
             default=[],
             placeholder="全部备件类型",
-            key="parts_filter_part_types",
+            key=part_key,
         )
     return selected_factories, selected_equipment_types, selected_part_types
 

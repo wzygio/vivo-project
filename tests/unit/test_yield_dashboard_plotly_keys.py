@@ -17,6 +17,7 @@ class _Context:
 class _FakeStreamlit:
     def __init__(self):
         self.plotly_keys = []
+        self.plotly_configs = []
         self.session_state = {}
         self.tab_defaults = []
 
@@ -48,6 +49,7 @@ class _FakeStreamlit:
 
     def plotly_chart(self, *args, **kwargs):
         self.plotly_keys.append(kwargs.get("key"))
+        self.plotly_configs.append(kwargs.get("config"))
         return SimpleNamespace(selection={"points": [{"x": "LOT-1"}]})
 
 
@@ -157,6 +159,7 @@ def test_compact_expander_assigns_unique_plotly_keys(monkeypatch):
 
     assert all(fake_st.plotly_keys)
     assert len(fake_st.plotly_keys) == len(set(fake_st.plotly_keys))
+    assert fake_st.plotly_configs and all(config == {"scrollZoom": False} for config in fake_st.plotly_configs)
 
 
 def test_compact_mapping_supports_legacy_streamlit_tabs(monkeypatch):

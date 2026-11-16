@@ -1,7 +1,6 @@
 param(
     [string]$ProjectRoot,
     [string]$EnvFile,
-    [string]$MailConfigPath,
     [switch]$InspectionOnly,
     [switch]$Apply
 )
@@ -19,11 +18,6 @@ foreach ($Target in @($Python, $PythonWindowless, $EnvFile)) {
 }
 $EnvFile = (Resolve-Path -LiteralPath $EnvFile).Path
 $SpecArgs = @('-m', 'api.inspection.scheduling', '--root', $ProjectRoot, '--env-file', $EnvFile)
-if ($MailConfigPath) {
-    if (-not (Test-Path -LiteralPath $MailConfigPath -PathType Leaf)) { throw 'Explicit mail credential file is missing.' }
-    $MailConfigPath = (Resolve-Path -LiteralPath $MailConfigPath).Path
-    $SpecArgs += @('--mail-config', $MailConfigPath)
-}
 Push-Location $ProjectRoot
 try {
     $SpecJson = & $Python @SpecArgs

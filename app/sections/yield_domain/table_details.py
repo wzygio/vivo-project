@@ -7,6 +7,29 @@ from dateutil.relativedelta import relativedelta
 from app.components.code_selector import create_code_selection_ui
 from app.charts.yield_domain.sheet_details_chart import render_lot_id_filter, render_sheet_id_query
 
+
+def _public_columns(frame: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """Project the public table before handing it to Streamlit or downloads."""
+    return frame.loc[:, [column for column in columns if column in frame.columns]].copy()
+
+
+@st.fragment
+def render_lot_details_dashboard(all_data: dict) -> None:
+    """Keep date/ID filters local while dependent sections receive the same scope."""
+    valid_ids = render_lot_group_summary_section(all_data)
+    if valid_ids:
+        render_lot_code_details_section(all_data, valid_ids)
+        render_lot_top20_section(all_data, valid_ids)
+
+
+@st.fragment
+def render_sheet_details_dashboard(all_data: dict) -> None:
+    """Reuse the preloaded Sheet report during local detail interactions."""
+    valid_ids = render_sheet_group_summary_section(all_data)
+    if valid_ids:
+        render_sheet_code_details_section(all_data, valid_ids)
+        render_sheet_top20_section(all_data, valid_ids)
+
 # ==============================================================================
 #  Lot 级明细区块 (For ByLot明细表)
 # ==============================================================================
@@ -17,6 +40,7 @@ def render_lot_group_summary_section(all_data: dict) -> list:
         st.error("未能加载Lot级别数据，请检查后台。")
         return []
         
+    group_summary_df_full = group_summary_df_full.copy()
     group_summary_df_full['warehousing_time'] = pd.to_datetime(group_summary_df_full['warehousing_time'], format='%Y%m%d', errors='coerce').dt.date
     
     st.markdown("### 📅 筛选条件")
@@ -44,7 +68,10 @@ def render_lot_group_summary_section(all_data: dict) -> list:
         st.warning("在您选择的筛选条件下没有数据。")
         return []
         
-    df_for_display = final_filtered_df.copy()
+    df_for_display = _public_columns(final_filtered_df, [
+        "lot_id", "warehousing_time", "array_input_time", "pass_rate",
+        "array_pixel_rate", "array_line_rate", "oled_mura_rate",
+    ])
     rate_cols = ["pass_rate", "array_pixel_rate", "array_line_rate", "oled_mura_rate"]
     for col in rate_cols:
         if col in df_for_display.columns:
@@ -62,11 +89,12 @@ def render_lot_group_summary_section(all_data: dict) -> list:
             "oled_mura_rate": st.column_config.NumberColumn("OLED_Mura不良率", format="%.2f%%"),
         },
         column_order=["lot_id", "warehousing_time", "array_input_time", "pass_rate", "array_pixel_rate", "array_line_rate", "oled_mura_rate"],
-        hide_index=True, use_container_width=True
+        hide_index=True, width="stretch"
     )
     st.divider()
     return final_filtered_df['lot_id'].unique().tolist()
 
+@st.fragment
 def render_lot_code_details_section(all_data: dict, valid_lot_ids: list):
     """渲染指定 Lot 的 Code 级详情"""
     st.markdown("### ✍️ By Lot ID查询Code级别详情")
@@ -94,7 +122,9 @@ def render_lot_code_details_section(all_data: dict, valid_lot_ids: list):
                 if detail_df is not None and not detail_df.empty:
                     filtered_df = detail_df[detail_df['lot_id'].isin(valid_lots)]
                     if not filtered_df.empty:
-                        df_display = filtered_df.copy()
+                        df_display = _public_columns(filtered_df, [
+                            "lot_id", "defect_desc", "defect_panel_count", "defect_rate",
+                        ])
                         df_display['defect_rate'] = df_display['defect_rate'] * 100
                         st.dataframe(
                             df_display.reset_index(drop=True),
@@ -105,12 +135,13 @@ def render_lot_code_details_section(all_data: dict, valid_lot_ids: list):
                                 "defect_rate": st.column_config.NumberColumn("Code不良率", format="%.2f%%")
                             },
                             column_order=("lot_id", "defect_desc", "defect_panel_count", "defect_rate"),
-                            hide_index=True, use_container_width=True
+                            hide_index=True, width="stretch"
                         )
                     else:
                         st.info(f"所选 Lot IDs 下无该类型不良。")
     st.divider()
 
+@st.fragment
 def render_lot_top20_section(all_data: dict, valid_lot_ids: list):
     """渲染某 Code 下 Top 20 严重 Lot 的统计"""
     st.header("🔬 ByCode查询Lot集中性")
@@ -132,7 +163,9 @@ def render_lot_top20_section(all_data: dict, valid_lot_ids: list):
         top_20 = result_df.sort_values(by="defect_rate", ascending=False).head(20)
         
         if not top_20.empty:
-            df_display = top_20.copy()
+            df_display = _public_columns(top_20, [
+                "lot_id", "defect_desc", "defect_panel_count", "defect_rate",
+            ])
             df_display['defect_rate'] *= 100
             st.dataframe(
                 df_display.reset_index(drop=True),
@@ -143,7 +176,7 @@ def render_lot_top20_section(all_data: dict, valid_lot_ids: list):
                     "defect_rate": st.column_config.NumberColumn("Code不良率", format="%.2f%%")
                 },
                 column_order=("lot_id", "defect_desc", "defect_panel_count", "defect_rate"),
-                hide_index=True, use_container_width=True
+                hide_index=True, width="stretch"
             )
         else:
             st.info("在当前数据范围内，没有找到该Code对应的不良Lot。")
@@ -158,6 +191,7 @@ def render_sheet_group_summary_section(all_data: dict) -> list:
         st.error("未能加载Group级别数据，请检查后台。")
         return []
         
+    group_summary_df_full = group_summary_df_full.copy()
     group_summary_df_full['warehousing_time'] = pd.to_datetime(group_summary_df_full['warehousing_time'], format='%Y%m%d', errors='coerce').dt.date
     st.markdown("### 📄 Group不良率明细表（By Sheet）")
 
@@ -180,7 +214,10 @@ def render_sheet_group_summary_section(all_data: dict) -> list:
         st.warning("在您选择的筛选条件下没有数据。")
         return []
         
-    df_for_display = final_filtered_df.copy()
+    df_for_display = _public_columns(final_filtered_df, [
+        "sheet_id", "lot_id", "warehousing_time", "array_input_time",
+        "array_pixel_rate", "array_line_rate", "oled_mura_rate",
+    ])
     rate_cols = ["array_pixel_rate", "array_line_rate", "oled_mura_rate"]
     for col in rate_cols:
         if col in df_for_display.columns:
@@ -198,24 +235,29 @@ def render_sheet_group_summary_section(all_data: dict) -> list:
             "oled_mura_rate": st.column_config.NumberColumn("OLED_Mura不良率", format="%.2f%%"),
         },
         column_order=["sheet_id", "lot_id", "warehousing_time", "array_input_time", "array_pixel_rate", "array_line_rate", "oled_mura_rate"],
-        hide_index=True, use_container_width=True
+        hide_index=True, width="stretch"
     )
     st.divider()
     return final_filtered_df['sheet_id'].unique().tolist()
 
+@st.fragment
 def render_sheet_code_details_section(all_data: dict, valid_sheet_ids: list):
     """渲染指定 Sheet 的 Code 级详情 (复用原有图表模块)"""
     st.markdown("### ✍️ By Sheet ID查询Code不良率")
     if len(valid_sheet_ids) > 0:
         code_details_dict = all_data.get("code_level_details")
         if code_details_dict:
-            render_sheet_id_query(valid_sheet_ids, code_details_dict)
+            public_details = {group: _public_columns(frame, [
+                "sheet_id", "defect_desc", "defect_panel_count", "defect_rate",
+            ]) for group, frame in code_details_dict.items() if isinstance(frame, pd.DataFrame)}
+            render_sheet_id_query(valid_sheet_ids, public_details)
         else:
             st.error("未能加载Code级别明细数据。")
     else:
         st.info("在当前筛选条件下无Sheet可供查询。")
     st.divider()
 
+@st.fragment
 def render_sheet_top20_section(all_data: dict, valid_sheet_ids: list):
     """渲染某 Code 下 Top 20 严重 Sheet 的统计"""
     st.header("🔬 ByCode查询Sheet集中性")
@@ -237,7 +279,9 @@ def render_sheet_top20_section(all_data: dict, valid_sheet_ids: list):
         top_20 = result_df.sort_values(by="defect_rate", ascending=False).head(20)
         
         if not top_20.empty:
-            df_display = top_20.copy()
+            df_display = _public_columns(top_20, [
+                "sheet_id", "lot_id", "defect_desc", "defect_panel_count", "defect_rate",
+            ])
             df_display['defect_rate'] *= 100
             st.dataframe(
                 df_display.reset_index(drop=True),
@@ -249,7 +293,7 @@ def render_sheet_top20_section(all_data: dict, valid_sheet_ids: list):
                     "defect_rate": st.column_config.NumberColumn("Code不良率", format="%.2f%%")
                 },
                 column_order=("sheet_id", "lot_id", "defect_desc", "defect_panel_count", "defect_rate"),
-                hide_index=True, use_container_width=True
+                hide_index=True, width="stretch"
             )
         else:
             st.info("在当前筛选条件下，没有找到该Code对应的不良Sheet。")

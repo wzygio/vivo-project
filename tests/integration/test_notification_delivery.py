@@ -146,6 +146,37 @@ def test_credentials_have_no_repr_and_reference_recipients_ignored(tmp_path):
     assert not hasattr(credentials, 'receivers')
 
 
+def test_project_identity_ignores_legacy_file(settings, tmp_path, monkeypatch):
+    config = replace(settings, smtp_user='project-account', smtp_sender='project@example.com')
+    from api.notification import settings as module
+    monkeypatch.setattr(module,'read_yaml',lambda _:pytest.fail('opened legacy configuration'))
+    credentials = load_mail_credentials(tmp_path/'missing.yaml', settings=config,
+                                        environ={'MAIL_PASSWORD':'fixture-password'})
+    assert credentials.user == 'project-account' and credentials.sender == 'project@example.com'
+    assert credentials.passwords == ('fixture-password',)
+    with pytest.raises(NotificationError):
+        load_mail_credentials(tmp_path/'missing.yaml', settings=config, environ={})
+
+
+def test_project_identity_only_requires_private_password(settings):
+    config = replace(settings, smtp_user='project-account', smtp_sender='project@example.com')
+    credentials = load_mail_credentials(settings=config, environ={'MAIL_PASSWORDS':'fixture-one,fixture-two'})
+    assert credentials.user == 'project-account' and credentials.sender == 'project@example.com'
+    assert credentials.passwords == ('fixture-one','fixture-two')
+    with pytest.raises(NotificationError):
+        load_mail_credentials(settings=config, environ={})
+
+
+@pytest.mark.parametrize('user,sender', [('bad\r\naccount','sender@example.com'),
+                                         ('account','invalid-address'),(None,'sender@example.com')])
+def test_invalid_project_sender_is_rejected_before_delivery(tmp_path, user, sender):
+    config = yaml.safe_load((ROOT/'config/domain/api_domain.yaml').read_text())
+    config['notification']['smtp'].update(user=user, sender=sender)
+    path = tmp_path/'config.yaml'
+    path.write_text(yaml.safe_dump(config), encoding='utf-8')
+    with pytest.raises(NotificationError): load_settings(path)
+
+
 def test_cli_defaults_preview_and_partial_exit(monkeypatch, capsys):
     from api.notification import __main__ as cli
     class Source:

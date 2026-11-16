@@ -25,12 +25,16 @@ render_cpk_monitor_section(Service(), ["M626", "M673"], ["ARRAY", "OLED"])
     assert len(app.dataframe) == 2  # Summary and latest project details.
     detail = app.dataframe[1].value
     assert "已修饰" not in detail.columns
-    assert detail["已达标"].tolist() == [True]
+    assert "已达标" not in detail.columns
+    assert "flag" not in detail.columns
     assert detail["判定状态"].tolist() == ["达标"]
     app.multiselect(key="cpk_monitor_factories").set_value([]).run()
     assert not app.exception
-    assert len(app.dataframe) == 2
+    assert len(app.dataframe) == 0
     assert not app.warning
+    assert app.session_state["calls"] == 1
+    app.button(key="cpk_monitor_query_submit").click().run()
+    assert len(app.dataframe) == 2
     assert app.session_state["calls"] == 2
     app.multiselect(key="cpk_monitor_products").set_value(["M626"]).run()
     assert not app.exception

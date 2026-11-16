@@ -72,6 +72,7 @@ def _render_point_trends(frame: pd.DataFrame) -> None:
                 st.plotly_chart(
                     build_evaporation_figure(group, characteristic=str(characteristic)),
                     width='stretch', key=f'iqc_evap_chart_{material}_{characteristic}',
+                    config={'scrollZoom': False},
                 )
                 missing = [column for column in ('规格上限', '规格下限') if group[column].isna().any()]
                 if missing:
@@ -106,6 +107,18 @@ def _render_automatic_alerts(
     enabled: tuple[str, ...], work_orders: tuple[str, ...],
     alert_store: EvaporationAlertStore | None,
 ) -> None:
+    title, start, end, update_failed = _prepare_automatic_alerts(
+        service, today=today, enabled=enabled, work_orders=work_orders, alert_store=alert_store,
+    )
+    _render_saved_automatic_alerts(today, title, start, end, update_failed=update_failed)
+
+
+def _prepare_automatic_alerts(
+    service: EvaporationReportService | None, *, today: date,
+    enabled: tuple[str, ...], work_orders: tuple[str, ...],
+    alert_store: EvaporationAlertStore | None,
+) -> tuple[str, date, date, bool]:
+    """Produce the independent previous-week result only on a full page run."""
     start, end = previous_week_window(today)
     week = start.isocalendar()
     title = f'蒸镀材料超规预警中心（上一周 {week.year}-W{week.week:02d}）'
@@ -123,7 +136,7 @@ def _render_automatic_alerts(
     except Exception as exc:
         logger.error('IQC_ALERT_UPDATE_UNAVAILABLE exception_type=%s', type(exc).__name__)
         update_failed = True
-    _render_saved_automatic_alerts(today, title, start, end, update_failed=update_failed)
+    return title, start, end, update_failed
 
 
 def _render_saved_automatic_alerts(
@@ -169,6 +182,23 @@ def render_evaporation_dashboard(
         st.session_state.pop("iqc_evap_products", None)
         st.info("暂无可查询的产品型号。")
         return
+    automatic_state = _prepare_automatic_alerts(
+        service, today=today, enabled=enabled, work_orders=work_orders, alert_store=alert_store,
+    )
+    render_evaporation_interaction(
+        service, today=today, previous_month_start=previous_month_start,
+        enabled=enabled, work_orders=work_orders, automatic_state=automatic_state,
+    )
+
+
+@st.fragment
+def render_evaporation_interaction(
+    service: EvaporationReportService | None, *, today: date, previous_month_start: date,
+    enabled: tuple[str, ...], work_orders: tuple[str, ...],
+    automatic_state: tuple[str, date, date, bool],
+) -> None:
+    """Keep manual selection reruns out of automatic alert source production."""
+    product_label = get_product_label_formatter()
     saved = st.session_state.get("iqc_evap_products", [])
     st.session_state["iqc_evap_products"] = [code for code in saved if code in enabled]
     with st.container(border=True):
@@ -185,9 +215,8 @@ def render_evaporation_dashboard(
             )
         with query_column:
             query = st.button("查询", type="primary", key="iqc_evap_query", width="stretch")
-    _render_automatic_alerts(
-        service, today=today, enabled=enabled, work_orders=work_orders, alert_store=alert_store,
-    )
+    title, start, end, update_failed = automatic_state
+    _render_saved_automatic_alerts(today, title, start, end, update_failed=update_failed)
     if len(dates) != 2:
         st.session_state.pop("iqc_evap_active", None)
         st.info("请选择完整的开始和结束日期。")

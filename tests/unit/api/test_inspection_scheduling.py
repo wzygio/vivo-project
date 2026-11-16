@@ -97,7 +97,7 @@ def test_running_gate_has_finite_timeout(tmp_path):
 
 
 def test_plan_replaces_repetition_and_logon_with_requested_times(tmp_path):
-    specs = build_task_specs(tmp_path, env_file=tmp_path / '.env', mail_config=tmp_path / 'private.yaml')
+    specs = build_task_specs(tmp_path, env_file=tmp_path / '.env')
     inspection, mail = specs
     assert inspection['name'] == 'vivo-project Yield IJP Alert Publication'
     assert inspection['module'] == 'api.inspection'
@@ -135,10 +135,10 @@ def test_scheduled_mail_calls_existing_entry_once_with_real_routes(tmp_path, mon
         print(json.dumps({'status': 'complete', 'record_count': 5, 'notification_count': 2,
                           'sent_count': 2, 'complete': True, 'failed_source_count': 0, 'dry_run': False}))
         return 0
-    code = scheduled.main(['--log-dir', str(tmp_path / 'logs'), '--mail-config', str(tmp_path / 'private.yaml')], sender=sender)
+    code = scheduled.main(['--log-dir', str(tmp_path / 'logs')], sender=sender)
     assert code == 0 and len(calls) == 1
     assert '--send' in calls[0] and '--test-mode' not in calls[0]
-    assert calls[0][calls[0].index('--mail-config') + 1] == str(tmp_path / 'private.yaml')
+    assert '--mail-config' not in calls[0]
     report = json.loads(next((tmp_path / 'logs').glob('*.json')).read_text())
     assert report['inspection_run_id'] == 'fixture-run' and report['sent_count'] == 2
 
@@ -170,12 +170,10 @@ def test_manual_scheduled_e2e_can_isolate_recipients(tmp_path, monkeypatch):
 def test_registration_plan_uses_future_boundaries_without_changing_tasks(tmp_path):
     root = Path(__file__).resolve().parents[3]
     environment = tmp_path / 'fixture.env'
-    credentials = tmp_path / 'fixture.yaml'
     environment.write_text('API_KEY=fixture-only\n', encoding='utf-8')
-    credentials.write_text('MAIL_USER: fixture-only\n', encoding='utf-8')
     completed = subprocess.run(['powershell.exe', '-NoProfile', '-File',
                                 str(root / 'api/inspection/register_tasks.ps1'),
-                                '-EnvFile', str(environment), '-MailConfigPath', str(credentials)],
+                                '-EnvFile', str(environment)],
                                capture_output=True, text=True, timeout=20)
     assert completed.returncode == 0, completed.stderr
     report = json.loads(completed.stdout)
@@ -196,7 +194,7 @@ def test_scheduled_check_never_reads_receipt_credentials_or_writes_log(tmp_path,
     monkeypatch.setattr(scheduled, 'enabled_products', lambda: PRODUCTS)
     monkeypatch.setattr(scheduled, 'wait_for_inspection', lambda *a, **kw: pytest.fail('check read receipt'))
     assert scheduled.main(['--check', '--receipt', str(tmp_path / 'absent'),
-                           '--log-dir', str(tmp_path / 'logs'), '--mail-config', str(tmp_path / 'secret.yaml')]) == 0
+                           '--log-dir', str(tmp_path / 'logs')]) == 0
     assert not (tmp_path / 'logs').exists()
 
 
@@ -236,3 +234,10 @@ def test_inspection_only_plan_merges_warmup_without_touching_mail(tmp_path):
                               str(root/'tools/register_alert_matrix_task.ps1'), '-Force'],
                              capture_output=True, text=True, timeout=20)
     assert retired.returncode != 0 and 'registrar is retired' in retired.stderr
+
+
+def test_scheduled_entry_rejects_removed_mail_config_before_sending():
+    from api.notification import scheduled
+    with pytest.raises(SystemExit) as stopped:
+        scheduled.main(['--mail-config', 'retired.yaml'], sender=lambda _: pytest.fail('sent mail'))
+    assert stopped.value.code == 2

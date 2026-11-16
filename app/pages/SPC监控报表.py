@@ -32,7 +32,7 @@ from app.sections.inline_domain.spc.spc_dashboard import (
     get_default_spc_start_date,
     render_spc_report_interaction,
 )
-from app.sections.inline_domain.spc.spc_export import render_spc_export
+from app.sections.inline_domain.spc.spc_export import render_spc_export_interaction as render_spc_export
 from app.sections.inline_domain.spc.scroll_layout import render_spc_page_scroll_layout
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map

@@ -115,6 +115,8 @@ def build_workbook(frame: pd.DataFrame, product: str, metadata: dict,
                 notes = {'产品': product, '点位数量': len(frame), '字段数': len(frame.columns),
                          '开始日期': metadata.get('start_date', ''),
                          '结束日期': metadata.get('end_date', ''),
+                         '明细开始时刻（含）': metadata.get('display_start', ''),
+                         '明细结束时刻（含）': metadata.get('display_end', ''),
                          '当日报表截止': metadata.get('cutoff', ''),
                          '数据口径': 'SPC 应用层修饰后、供绘图使用的完整点位明细'}
                 for number, row in enumerate(notes.items(), 1):

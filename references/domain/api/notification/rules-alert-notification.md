@@ -2,7 +2,7 @@
 
 实现入口：`python -m api.notification`。业务配置：
 [`config/domain/api_domain.yaml`](../../../../config/domain/api_domain.yaml)。
-需求：[预警信息推送服务](../../../../docs/dev_docs/dev_spec/aoi/task-预警信息推送服务.md)。
+需求：[预警信息推送服务](../../../../docs/dev_docs/dev_spec/api/task-预警信息推送服务.md)。
 
 ## 取数与分派
 
@@ -42,28 +42,32 @@ SMTP 失败保留此前已确认发送数量。SMTP 接受意味着服务器接�
 
 ## 凭证与一次运行
 
-在项目根目录执行，使用已准备好的 `.venv`。运行环境提供 `API_KEY`（兼容 `VIVO_API_KEY`）、
-`MAIL_USER`、`MAIL_SENDER` 及 `MAIL_PASSWORD` 或逗号分隔的 `MAIL_PASSWORDS`。
-凭证不放入业务 YAML 或命令行。模块导入不会取数或发信。
+在项目根目录执行，使用已准备好的 `.venv`。发件人和SMTP登录账户分别由当前项目
+`config/domain/api_domain.yaml`的`notification.smtp.sender`、`notification.smtp.user`管理。
+运行环境提供 `API_KEY`（兼容 `VIVO_API_KEY`）及 `MAIL_PASSWORD` 或逗号分隔的
+`MAIL_PASSWORDS`。密码不放入业务 YAML 或命令行。模块导入不会取数或发信。
 
 可通过 `--env-file` 显式读取本地环境文件，仅提取通知所需键，进程环境优先，
 不修改进程环境，不插值变量。无此参数不会自动读取 `.env`。
-`--mail-config` 可读取原邮件例程格式的私有 YAML，仅使用 `MAIL_USER`、`MAIL_SENDER`、
-`MAIL_PASSWORDS`／`MAIL_PASSWORD`，且优先于邮件环境变量；不会使用文件内的 SMTP 主机、端口或收件人。
+本项目已配置SMTP账户与发件人时，身份以业务YAML为准，密码从`--env-file`指定的
+本项目私有环境或进程环境读取。本地密码缺失时直接失败，不回退外部配置。
+通知命令、调度入口与注册程序均已移除旧外部邮件配置参数。
 SMTP 主机、端口、安全方式和超时统一由业务 YAML 的 `notification.smtp` 决定。
 
 ```powershell
 # 安全预览：实际取数和统计，不发送，不读取邮件凭证
 .venv\Scripts\python.exe -m api.notification --env-file .env --test-mode
 
-# 使用用户指定例程的现有私有邮件配置，所有收件人覆盖为测试邮箱
-.venv\Scripts\python.exe -m api.notification --env-file .env --mail-config D:\wzy\Python\array-projects\config\config.yaml --send --test-mode
+# 使用当前项目私有环境文件，所有收件人覆盖为测试邮箱
+.venv\Scripts\python.exe -m api.notification --env-file .env --send --test-mode
 
 # 正式推送：所有凭证已在任务进程环境中配置时
 .venv\Scripts\python.exe -m api.notification --send
 ```
 
-无需引用其它项目源码；私有 YAML 是可选输入，不是隐藏的跨项目依赖。
+新配置部署以本项目业务YAML和本项目私有环境为输入。
+2026-11-16已获用户授权迁移现有邮件密码至本项目Git忽略的`.env`，保留原有环境内容。
+计划任务保持原入口和执行时间，按用户后续要求移除跨项目配置参数，仅保留本项目环境文件。
 采用所提供例程的 `smtp.qiye.aliyun.com:587`，默认 STARTTLS 并校验证书。
 支持 `ssl` 或明确配置的 `plain`；不会在 TLS 失败后自动降级。
 仅认证拒绝时轮换候选密码，有限连接超时。收件人拒绝、断线或其它不确定投递不自动重试。

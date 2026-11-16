@@ -155,3 +155,17 @@ def render_aoi_rs_weekly_export(
                 st.error(status.message)
             else:
                 st.caption(status.message)
+
+
+@st.fragment
+def render_aoi_rs_weekly_export_interaction(
+    *, start_date: date, end_date: date, db_manager,
+    current_product: str,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Isolate export controls from unrelated report loading and other exports."""
+    render_aoi_rs_weekly_export(
+        start_date=start_date, end_date=end_date, db_manager=db_manager,
+        current_product=current_product,
+        step_desc_map=step_desc_map,
+    )

@@ -7,6 +7,18 @@ import logging
 import pandas as pd
 
 EXCLUDED_PARAM_NAME_KEYWORDS = ("LOSS",)
+EXCLUDED_MEASUREMENT_STEP_ID = "15690"
+
+
+def filter_excluded_steps(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Exclude the retired measurement station from fresh and saved facts."""
+    if dataframe.empty or "step_id" not in dataframe.columns:
+        return dataframe.copy()
+    steps = dataframe["step_id"].astype("string").str.strip().str.replace(
+        r"\.0+$", "", regex=True,
+    )
+    excluded = steps.eq(EXCLUDED_MEASUREMENT_STEP_ID).fillna(False)
+    return dataframe.loc[~excluded].copy()
 
 
 def keep_latest_measurements(

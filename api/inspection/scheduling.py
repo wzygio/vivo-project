@@ -128,12 +128,9 @@ def wait_for_inspection(path: Path, products: Sequence[str], reference_date: dat
         sleep(min(poll_seconds, remaining))
 
 
-def build_task_specs(root: Path = ROOT, *, env_file: Path | None = None,
-                     mail_config: Path | None = None) -> list[dict]:
+def build_task_specs(root: Path = ROOT, *, env_file: Path | None = None) -> list[dict]:
     root = Path(root).resolve()
     credentials = ['--env-file', str(Path(env_file).resolve())] if env_file is not None else []
-    if mail_config is not None:
-        credentials += ['--mail-config', str(Path(mail_config).resolve())]
     specs = [
         {'name': INSPECTION_TASK, 'module': 'api.inspection', 'parameters': [],
          'triggers': [{'kind': 'daily', 'time': '07:15'}]},
@@ -151,9 +148,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Print task definitions only; never register or run jobs.')
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--env-file', type=Path)
-    parser.add_argument('--mail-config', type=Path)
     args = parser.parse_args(argv)
-    print(json.dumps(build_task_specs(args.root, env_file=args.env_file, mail_config=args.mail_config)))
+    print(json.dumps(build_task_specs(args.root, env_file=args.env_file)))
     return 0
 
 

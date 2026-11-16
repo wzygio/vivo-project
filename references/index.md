@@ -60,12 +60,13 @@
 
 | 问题 / 关键词 | 首选文件 |
 |---|---|
+| Streamlit UI 开发、改造、排障、评审必读；预加载／按需查询、级联筛选、fragment、重复加载、缓存与刷新、Plotly 和页面滚动、浏览器验收 | [UI 交互与性能设计规范](design/shared_kernel/shared/interaction-streamlit-ui-standard.md) |
 | 数据修饰统一语义、原始事实 / 决策台账 / 报表投影、分层职责 | [数据修饰架构范式](design/shared_kernel/shared/architecture-data-decoration.md) |
 | Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间；Streamlit 定时启动/重启、Windows 计划任务及进程清理 | [系统数据刷新机制](design/shared_kernel/shared/data-flow-infrastructure-refresh.md) |
 | 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/shared_kernel/shared/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
 | 门户节点、Inline指标、寿命测试入口、专项资料合并、台账周报与解析报告上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
-| Inline 报表滚动、Plotly 滚轮缩放冲突、SPC 浏览器原生滚轴与页面布局约束 | [报表滚动交互设计](design/inline_domain/shared/interaction-inline-report-scroll.md) |
+| Inline / SPC 滚动入口、CSS 作用域和历史验收案例 | [UI 规范：页面滚动](design/shared_kernel/shared/interaction-streamlit-ui-standard.md#6-页面滚动与-plotly-交互) |
 | Inline 周度 PPT 输出设计、density 规格判定、红绿字体、八产品分页与共用数据契约 | [周度 PPT 输出设计规范](design/inline_domain/shared/architecture-weekly-summary-ppt.md) |
 
 共享工程标准按任务使用 `$ecc-production-rules`；文档职责与维护规则见 [CONTEXT.md](../CONTEXT.md#maintenance-and-document-ownership)。
@@ -89,7 +90,7 @@
 | `rules-` | 业务判定、不变量、例外及执行机制 | `rules-sheet-oos-decoration.md` |
 | `algorithm-` | 计算或数据处理过程 | `algorithm-mwd-trend.md` |
 | `mapping-` | 标识、分类或字段对应关系 | `mapping-step-id-data-type.json` |
-| `interaction-` | 用户操作、交互行为与约束 | `interaction-inline-report-scroll.md` |
+| `interaction-` | 用户操作、交互行为与约束 | `interaction-streamlit-ui-standard.md` |
 
 `GLOSSARY.md` 保留为已约定的术语入口；路由文件 `index.md` / `README.md` 使用入口名称。目录统一为 `<domain>/<submodule>/`，迁移保留现有文件名；文件命名规则不改变 Python 包、代码符号或资源文件名称。新增文档先按用途选择类型，再按实际范围选择主题；持久知识文件用 Git 追踪版本，文件名不添加日期、任务编号、`final` 或 `v2`。
 

@@ -33,13 +33,12 @@ from app.components.page_header import (
 )
 from app.sections.inline_domain.aoi_rs.aoi_rs_dashboard import (
     render_saved_aoi_rs_alerts,
-    filter_aoi_rs_report,
+    render_aoi_rs_report_interaction,
+    publish_aoi_rs_report_alerts,
     get_default_aoi_rs_start_date,
-    render_aoi_rs_filters,
-    render_aoi_rs_indicator_sections,
 )
-from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export
-from app.sections.inline_domain.aoi_rs.aoi_rs_weekly_export import render_aoi_rs_weekly_export
+from app.sections.inline_domain.aoi_rs.aoi_rs_export import render_aoi_rs_export_interaction as render_aoi_rs_export
+from app.sections.inline_domain.aoi_rs.aoi_rs_weekly_export import render_aoi_rs_weekly_export_interaction as render_aoi_rs_weekly_export
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -161,8 +160,6 @@ except Exception:
     st.stop()
 
 rs_details_df = view_model.rs_details_df
-pass_through_df = view_model.pass_through_df
-spec_df = view_model.spec_df
 indicator_df = view_model.indicators_df
 
 if rs_details_df.empty or indicator_df.empty:
@@ -170,24 +167,10 @@ if rs_details_df.empty or indicator_df.empty:
     _render_saved_page_alerts(view_model)
     st.stop()
 
-selected_factory, selected_codes, selected_steps, should_render_report = render_aoi_rs_filters(
-    indicator_df=indicator_df,
-    step_desc_map=step_desc_map,
+publication_failed = not publish_aoi_rs_report_alerts(
+    current_product, default_end_dt.date(), view_model,
 )
-
-_render_saved_page_alerts(view_model)
-
-if not should_render_report:
-    st.info("当前筛选条件尚未查询。")
-    st.stop()
-
-render_aoi_rs_indicator_sections(
-    rs_details_df=filter_aoi_rs_report(rs_details_df, selected_factory, selected_codes, selected_steps),
-    pass_through_df=filter_aoi_rs_report(pass_through_df, selected_factory, [], selected_steps),
-    spec_df=spec_df,
-    indicators_df=filter_aoi_rs_report(indicator_df, selected_factory, selected_codes, selected_steps),
-    lot_points_df=filter_aoi_rs_report(view_model.lot_points_df, selected_factory, selected_codes, selected_steps),
-    sheet_points_df=filter_aoi_rs_report(view_model.sheet_points_df, selected_factory, selected_codes, selected_steps),
-    end_date=default_end_dt.date(),
-    step_desc_map=step_desc_map,
+render_aoi_rs_report_interaction(
+    view_model, product=current_product, reference_date=default_end_dt.date(),
+    step_desc_map=step_desc_map, publication_failed=publication_failed,
 )

@@ -517,14 +517,14 @@ def test_yield_lot_loader_returns_none_is_no_data() -> None:
 # ---------------------------------------------------------------------------
 def _trend_data(spike: bool) -> tuple[dict, dict]:
     rates = [0.001, 0.01] if spike else [0.001, 0.0011]
-    monthly = pd.DataFrame(
+    weekly = pd.DataFrame(
         {
             "defect_group": ["OLED_Mura", "OLED_Mura"],
-            "time_period": ["2026-07", "2026-08"],
+            "time_period": ["2026-W34", "2026-W35"],
             "defect_rate": rates,
         }
     )
-    return {"monthly": monthly}, {"monthly": pd.DataFrame()}
+    return {"weekly": weekly}, {"weekly": pd.DataFrame()}
 
 
 def test_yield_trend_with_records_is_alert() -> None:
@@ -535,6 +535,18 @@ def test_yield_trend_with_records_is_alert() -> None:
 
 def test_yield_trend_without_records_is_ok() -> None:
     context = _make_context(yield_trend_loader=lambda prod: _trend_data(spike=False))
+
+    assert _evaluate("yield_trend_fluctuation", context)["state"] == CELL_STATE_OK
+
+
+def test_yield_monthly_only_trend_is_ok_even_with_spike() -> None:
+    # Monthly charts remain available, but alerts have been weekly-only since
+    # 2026-11-02. A monthly spike must not turn the matrix red.
+    groups, _codes = _trend_data(spike=True)
+    monthly = groups["weekly"].assign(time_period=["2026-07", "2026-08"])
+    context = _make_context(yield_trend_loader=lambda prod: (
+        {"monthly": monthly}, {"monthly": pd.DataFrame()},
+    ))
 
     assert _evaluate("yield_trend_fluctuation", context)["state"] == CELL_STATE_OK
 

@@ -26,9 +26,7 @@ from app.components.page_header import (
 
 # 引入区块渲染组件
 from app.sections.yield_domain.table_details import (
-    render_lot_group_summary_section,
-    render_lot_code_details_section,
-    render_lot_top20_section
+    render_lot_details_dashboard,
 )
 
 # --- 2. UI 界面布局 ---
@@ -92,14 +90,6 @@ except (
 
 # --- 4. 页面积木式调度 ---
 if all_data:
-    # 模块 1：渲染总表并获得在时间/选项范围内的有效 Lot ID 集合
-    valid_lot_ids = render_lot_group_summary_section(all_data)
-    
-    if valid_lot_ids:
-        # 模块 2：手动查询指定 Lot 的 Code 明细
-        render_lot_code_details_section(all_data, valid_lot_ids)
-        
-        # 模块 3：选择 Code，反查 Top 20 严重 Lot
-        render_lot_top20_section(all_data, valid_lot_ids)
+    render_lot_details_dashboard(all_data)
 else:
     st.info("当前查询窗口没有可供展示的 Lot 数据。")

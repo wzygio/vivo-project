@@ -31,12 +31,11 @@ from app.components.page_header import (
 )
 from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
     render_saved_aoi_tt_alerts,
-    filter_aoi_tt_report,
+    render_aoi_tt_report_interaction,
+    publish_aoi_tt_report_alerts,
     get_default_aoi_tt_start_date,
-    render_aoi_tt_filters,
-    render_aoi_tt_indicator_sections,
 )
-from app.sections.inline_domain.aoi_tt.aoi_tt_weekly_export import render_aoi_tt_weekly_export
+from app.sections.inline_domain.aoi_tt.aoi_tt_weekly_export import render_aoi_tt_weekly_export_interaction as render_aoi_tt_weekly_export
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
 from app.manager.session_manager import SessionManager
@@ -150,7 +149,6 @@ except Exception:
     st.stop()
 
 tt_details_df = view_model.tt_details_df
-spec_df = view_model.spec_df
 indicator_df = view_model.indicators_df
 
 if tt_details_df.empty or indicator_df.empty:
@@ -158,30 +156,10 @@ if tt_details_df.empty or indicator_df.empty:
     _render_saved_page_alerts(view_model)
     st.stop()
 
-(
-    selected_factory,
-    selected_codes,
-    selected_steps,
-    selected_particle_sizes,
-    should_render_report,
-) = render_aoi_tt_filters(indicator_df=indicator_df, step_desc_map=step_desc_map)
-
-_render_saved_page_alerts(view_model)
-
-if not should_render_report:
-    st.info("当前筛选条件尚未查询。")
-    st.stop()
-
-render_aoi_tt_indicator_sections(
-    tt_details_df=filter_aoi_tt_report(
-        tt_details_df,
-        selected_factory,
-        selected_codes,
-        selected_steps,
-        selected_particle_sizes,
-    ),
-    spec_df=spec_df,
-    indicators_df=filter_aoi_tt_report(indicator_df, selected_factory, selected_codes, selected_steps),
-    end_date=default_end_dt.date(),
-    step_desc_map=step_desc_map,
+publication_failed = not publish_aoi_tt_report_alerts(
+    current_product, default_end_dt.date(), view_model,
+)
+render_aoi_tt_report_interaction(
+    view_model, product=current_product, reference_date=default_end_dt.date(),
+    step_desc_map=step_desc_map, publication_failed=publication_failed,
 )

@@ -108,7 +108,7 @@ def render_macro_trend_section(
     ):
         with col:
             if fig is not None:
-                st.plotly_chart(fig, width="stretch", key=f"{key_prefix}_{period}")
+                st.plotly_chart(fig, width="stretch", key=f"{key_prefix}_{period}", config={"scrollZoom": False})
             else:
                 st.info(f"{title}数据暂无")
 
@@ -182,7 +182,7 @@ def render_micro_trend_section(mwd_code_data: dict, curr_code: str, curr_warning
                 if df is not None and not df.empty:
                     fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
                     if fig is not None:
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width="stretch", config={"scrollZoom": False})
                     else:
                         st.info(f"暂无{title}数据")
                 else:
@@ -240,7 +240,7 @@ def render_lot_distribution_section(lot_data: dict, curr_code: str, curr_warning
             st.warning("当前筛选条件下无 Lot 数据。")
         else:
             fig_lot = create_lot_defect_chart(df_lot_curr, x_lbl, df_lot_curr['lot_id'].tolist(), curr_warning)
-            event = st.plotly_chart(fig_lot, use_container_width=True, on_select="rerun", selection_mode="points")
+            event = st.plotly_chart(fig_lot, width="stretch", on_select="rerun", selection_mode="points", config={"scrollZoom": False})
             
             # Plotly 的空白点击会触发 rerun，但 points 为空；此时必须清除
             # 上一次选择，否则 Sheet 图表会一直沿用旧 Lot。
@@ -328,7 +328,7 @@ def render_sheet_distribution_section(sheet_data: dict, target_lot: str, curr_gr
         fig_sheet = create_sheet_defect_chart(
             df=df_sheet, xaxis_label="Sheet ID", sorted_sheet_ids=df_sheet['sheet_id'].tolist()
         )
-        st.plotly_chart(fig_sheet, use_container_width=True)
+        st.plotly_chart(fig_sheet, width="stretch", config={"scrollZoom": False})
  
 # ==============================================================================
 #  5. Mapping (Row D: 空间维度)
@@ -409,7 +409,7 @@ def render_mapping_section(
                     g_max,
                     mapping_layout=resolved_layout,
                 )
-                st.plotly_chart(fig_map, use_container_width=True)
+                st.plotly_chart(fig_map, width="stretch", config={"scrollZoom": False})
 
 
 # ==============================================================================
@@ -487,8 +487,9 @@ def _render_compact_trend_entries(entries: List[tuple], key_fragment: str) -> No
                 continue
             st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width="stretch",
                 key=f"compact_micro_trend_{key_fragment}_{period_keys[chart_index]}",
+                config={"scrollZoom": False},
             )
 
 
@@ -666,8 +667,9 @@ def _render_compact_mapping_payload(payload: dict) -> None:
         with tabs[i]:
             st.plotly_chart(
                 payload["figures"][i],
-                use_container_width=True,
+                width="stretch",
                 key=f"compact_mapping_{key_fragment}_{_state_key_fragment(batch_no)}",
+                config={"scrollZoom": False},
             )
 
 
@@ -767,10 +769,11 @@ def _render_compact_lot_payload(lot_payload: dict, key_fragment: str) -> str:
     selected_lot_key = f"compact_sheet_lot_{key_fragment}"
     event = st.plotly_chart(
         lot_payload["fig"],
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         selection_mode="points",
         key=f"compact_lot_chart_{key_fragment}",
+        config={"scrollZoom": False},
     )
 
     # 空白点击会产生 points=[]。显式清除选择，才能让联动的 Sheet 图表消失。
@@ -902,8 +905,9 @@ def _render_compact_sheet_chart(
     fragment = key_fragment or _state_key_fragment(curr_group, curr_code)
     st.plotly_chart(
         _apply_compact_chart_layout(fig_sheet, 300),
-        use_container_width=True,
+        width="stretch",
         key=f"compact_sheet_chart_{_state_key_fragment(fragment, target_lot)}",
+        config={"scrollZoom": False},
     )
 
 
@@ -959,7 +963,7 @@ def _render_compact_sheet_table(sheet_data: dict, curr_group: str, curr_code: st
 
     st.dataframe(
         df_display,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         height=300,
         column_config={
@@ -1077,8 +1081,9 @@ def _render_compact_sheet_from_payload(payload: dict, target_lot: str) -> None:
 
     st.plotly_chart(
         sheet_info["fig"],
-        use_container_width=True,
+        width="stretch",
         key=f"compact_sheet_chart_{_state_key_fragment(payload['key_fragment'], target_lot)}",
+        config={"scrollZoom": False},
     )
 
 

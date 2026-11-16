@@ -159,6 +159,7 @@ def test_render_filters_query_button_applies_signature_and_allows_render(monkeyp
         "ARRAY",
         ("11620",),
         ("DSUM_L", "TDSUM"),
+        ("Total", "S", "M", "L", "H"),
     )
 
 

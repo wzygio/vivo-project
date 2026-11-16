@@ -30,6 +30,8 @@ class Plan:
     replay: Path | None
     saved: dict | None
     check: bool
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
 
 def _project_path(value: str | Path) -> Path:
@@ -37,11 +39,20 @@ def _project_path(value: str | Path) -> Path:
     return (path if path.is_absolute() else ROOT / path).resolve()
 
 
+def _display_datetime(value: str) -> datetime:
+    result = datetime.fromisoformat(value)
+    if result.tzinfo is not None:
+        raise argparse.ArgumentTypeError('Use a local Asia/Shanghai timestamp without an offset')
+    return result
+
+
 def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--product', action='append', help='Enabled product; repeat for several. Default: all enabled.')
     parser.add_argument('--start-date', type=date.fromisoformat, help='YYYY-MM-DD, default first day of previous month.')
     parser.add_argument('--end-date', type=date.fromisoformat, help='YYYY-MM-DD, default today in Asia/Shanghai.')
+    parser.add_argument('--start-time', type=_display_datetime, help='Inclusive display timestamp, YYYY-MM-DD HH:MM[:SS], Asia/Shanghai.')
+    parser.add_argument('--end-time', type=_display_datetime, help='Inclusive display timestamp, YYYY-MM-DD HH:MM[:SS], Asia/Shanghai.')
     parser.add_argument('--output-dir', help='New output directory; relative paths are project-relative.')
     parser.add_argument('--from-export', help='Replay a prior export directory containing manifest.json and prepared Parquet points.')
     parser.add_argument('--check', action='store_true', help='Validate arguments only; no database, business reads or output writes.')
@@ -49,13 +60,29 @@ def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     current = today or datetime.now(ZoneInfo('Asia/Shanghai')).date()
     replay = _project_path(args.from_export) if args.from_export else None
     saved = json.loads((replay / 'manifest.json').read_text(encoding='utf-8')) if replay else None
-    end = args.end_date or (date.fromisoformat(saved['end_date']) if saved else current)
+    if args.start_time and args.start_date and args.start_time.date() != args.start_date:
+        raise ExportError('--start-date conflicts with --start-time')
+    if args.end_time and args.end_date and args.end_time.date() != args.end_date:
+        raise ExportError('--end-date conflicts with --end-time')
+    end = (args.end_time.date() if args.end_time else args.end_date) or (date.fromisoformat(saved['end_date']) if saved else current)
     default_start = (end.replace(day=1) - timedelta(days=1)).replace(day=1)
-    start = args.start_date or (date.fromisoformat(saved['start_date']) if saved else default_start)
+    start = (args.start_time.date() if args.start_time else args.start_date) or (date.fromisoformat(saved['start_date']) if saved else default_start)
     if end > current or start > end or (end - start).days > 93:
         raise ExportError('Use start <= end <= today and a window of at most 93 days')
     if saved and (start.isoformat() != saved['start_date'] or end.isoformat() != saved['end_date']):
         raise ExportError('A replay must retain the original export dates')
+    start_time = args.start_time or (datetime.fromisoformat(saved['display_start'])
+        if saved and saved.get('display_start') else datetime.combine(start, datetime.min.time()))
+    end_time = args.end_time or (datetime.fromisoformat(saved['display_end'])
+        if saved and saved.get('display_end') else datetime.combine(end, datetime.max.time()))
+    if end == current and not saved:
+        cutoff = ConfigLoader.get_report_cutoff_policy().boundary(now=pd.Timestamp(current)).to_pydatetime()
+        end_time = min(end_time, cutoff)
+    if start_time > end_time:
+        raise ExportError('Display start must not exceed the effective display end')
+    if saved and (saved.get('display_start') and start_time.isoformat() != saved['display_start']
+                  or saved.get('display_end') and end_time.isoformat() != saved['display_end']):
+        raise ExportError('A replay must retain the original display timestamp bounds')
     enabled = ConfigLoader.get_enabled_products()
     available = {row['product'] for row in saved['rows']} if saved else set(enabled)
     products = tuple(dict.fromkeys(args.product or [p for p in enabled if p in available]))
@@ -65,7 +92,7 @@ def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     output = _project_path(args.output_dir or f'output/reports/spc_point_export/{start}_{end}/{stamp}_{uuid4().hex[:8]}')
     if replay and (output == replay or output in replay.parents):
         raise ExportError('Use a new output directory separate from the replay source')
-    return Plan(products, start, end, output, replay, saved, args.check)
+    return Plan(products, start, end, output, replay, saved, args.check, start_time, end_time)
 
 
 def _replay_product(plan: Plan, product: str) -> pd.DataFrame:
@@ -93,14 +120,29 @@ def _validate_points(frame: pd.DataFrame, product: str, plan: Plan) -> None:
         raise ExportError(f'{product}: points contain a non-SPC data type')
 
 
+def _select_display_window(frame: pd.DataFrame, plan: Plan) -> pd.DataFrame:
+    """Select exact bounds only after the source completed every point decoration."""
+    if frame.empty:
+        return frame.copy(deep=False)
+    if 'sheet_start_time' not in frame:
+        raise ExportError('Decorated points are missing sheet_start_time')
+    timestamps = pd.to_datetime(frame['sheet_start_time'], errors='coerce')
+    start = pd.Timestamp(plan.start_time or plan.start)
+    end = pd.Timestamp(plan.end_time) if plan.end_time else pd.Timestamp(plan.end) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+    return frame.loc[timestamps.ge(start) & timestamps.le(end)].copy(deep=False)
+
+
 def _save_manifest(directory: Path, manifest: dict) -> None:
     (directory / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def run(plan: Plan, *, loader: Callable | None = None) -> int:
+    from src.inline_domain.core.spc.spc_calculator import get_period_window_start
     if plan.check:
         print(json.dumps({'status': 'validated', 'products': plan.products,
                           'start_date': plan.start.isoformat(), 'end_date': plan.end.isoformat(),
+                          'display_start': plan.start_time.isoformat() if plan.start_time else None,
+                          'display_end': plan.end_time.isoformat() if plan.end_time else None,
                           'source': 'prepared-export' if plan.replay else 'current-snapshots',
                           'output': str(plan.output)}, ensure_ascii=False))
         return 0
@@ -113,7 +155,11 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
     temporary.mkdir(parents=True, exist_ok=True)
     saved = plan.saved or {}
     manifest = {'status': 'running', 'products': plan.products,
+                'point_preparation_start': min(plan.start, get_period_window_start(plan.end)).isoformat(),
                 'start_date': plan.start.isoformat(), 'end_date': plan.end.isoformat(),
+                'display_start': (plan.start_time or datetime.combine(plan.start, datetime.min.time())).isoformat(),
+                'display_end': (plan.end_time or datetime.combine(plan.end, datetime.max.time())).isoformat(),
+                'point_contract': 'prepare_decorated_data(scope=spc).raw_measurements_df after traditional OOS and central-band point decoration',
                 'export_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
                 'cutoff': saved['cutoff'] if 'cutoff' in saved else str(ConfigLoader.get_report_cutoff_policy().boundary()),
                 'time_policy': saved['time_policy'] if 'time_policy' in saved else ConfigLoader.get_data_forward_policy().signature,
@@ -135,6 +181,7 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
                     frame = loader(product, plan.start, plan.end)
                 else:
                     frame = load_product(manager, product, plan.start, plan.end)
+                frame = _select_display_window(frame, plan)
                 _validate_points(frame, product, plan)
                 frame = frame.copy(deep=False)
                 frame.attrs = {}

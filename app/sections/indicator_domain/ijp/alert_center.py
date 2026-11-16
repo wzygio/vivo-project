@@ -87,4 +87,5 @@ def _render_alert_charts(frame: pd.DataFrame, alerts: pd.DataFrame, region: str)
         build = build_hole_figure if region == '孔区' else build_ijp_period_figure
         for group, rows in matched.groupby(GROUP_COLUMNS, sort=True):
             st.plotly_chart(build(rows, title=' / '.join(group)), width='stretch',
+                            config={'scrollZoom': False},
                             key=f'ijp_alert_{region}_{"_".join(group)}')

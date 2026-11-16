@@ -12,7 +12,7 @@ from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.ijp.chart import build_ijp_glass_figure
 from app.charts.indicator_domain.ijp.printer_chart import build_ijp_printer_figure
 from app.charts.indicator_domain.ijp.period_chart import build_ijp_period_figure
-from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
+from app.sections.indicator_domain.ijp.filters import get_ijp_region, render_ijp_filter_columns
 from app.utils.ijp_labels import format_ijp_code, get_ijp_code_descriptions
 from app.sections.indicator_domain.ijp.alert_center import render_ijp_alert_center
 from src.indicator_domain.application.ijp.dtos import IjpQuery
@@ -55,6 +55,7 @@ def build_ijp_table(details: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([table, pd.DataFrame([total])], ignore_index=True)
 
 
+@st.fragment
 def render_ijp_dashboard(service: IjpReportService) -> None:
     """Render filters, gated query results, and explicit operational states."""
     start_time, end_time = service.get_reporting_window()
@@ -62,6 +63,10 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
 
     with st.container(border=True):
         product_column, line_column, code_column, pici_column = render_ijp_filter_columns()
+        if get_ijp_region() != 'AA区':
+            # The other region uses a different service assembled by the page.
+            st.rerun()
+            return
         try:
             options = service.get_filter_options(
                 tuple(st.session_state.get("ijp_product_codes", [])),
@@ -82,6 +87,7 @@ def render_ijp_dashboard(service: IjpReportService) -> None:
                 format_func=get_product_label_formatter(),
             )
         with line_column:
+            _retain_available_multiselect_values("ijp_lines", options["lines"])
             lines = st.multiselect("线体", options=options["lines"], key="ijp_lines")
         with code_column:
             _retain_available_multiselect_values("ijp_codes", options["codes"])
@@ -242,6 +248,7 @@ def _render_grouped_glass_charts(
                                         title=str(printer),
                                     ),
                                     width="stretch",
+                                    config={"scrollZoom": False},
                                     key=(
                                         "ijp_glass_chart_"
                                         f"{product_index}_{line_index}_"

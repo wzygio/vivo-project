@@ -854,6 +854,7 @@ def _render_qtime_detail(
                 figure,
                 width="stretch",
                 key=f"{MATRIX_DETAIL_CHART_KEY_PREFIX}_qtime_{prod_code}_{step_key}",
+                config={"scrollZoom": False},
             )
 
 

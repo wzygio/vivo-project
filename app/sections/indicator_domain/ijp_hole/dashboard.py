@@ -5,7 +5,7 @@ import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.ijp_hole.chart import build_hole_figure
-from app.sections.indicator_domain.ijp.filters import render_ijp_filter_columns
+from app.sections.indicator_domain.ijp.filters import get_ijp_region, render_ijp_filter_columns
 from app.sections.indicator_domain.ijp.alert_center import render_ijp_alert_center
 from app.utils.ijp_labels import format_ijp_code, get_ijp_code_descriptions
 from src.indicator_domain.application.ijp.dtos import IjpQuery
@@ -18,11 +18,16 @@ RESULT_KEY = 'ijp_hole_result'
 REPORT_VERSION = 'hole-periods-v5'
 
 
+@st.fragment
 def render_ijp_hole_dashboard(service: IjpHoleReportService) -> None:
+    st.session_state.setdefault('ijp_region', '孔区')
     start, end = service.get_reporting_window()
     descriptions = get_ijp_code_descriptions('孔区')
     with st.container(border=True):
         filter_columns = render_ijp_filter_columns()
+        if get_ijp_region() != '孔区':
+            st.rerun()
+            return
         try:
             options = service.get_filter_options(tuple(st.session_state.get('ijp_hole_products', ())))
         except IjpDataAccessError:
@@ -93,4 +98,5 @@ def render_hole_charts(frame: pd.DataFrame) -> None:
                                     build_hole_figure(line_frame[line_frame.printer.eq(printer)],
                                                       title=str(printer)),
                                     width='stretch', key=f'ijp_hole_period_{product}_{line}_{printer}',
+                                    config={'scrollZoom': False},
                                 )

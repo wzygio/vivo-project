@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine, text
 
@@ -9,6 +10,27 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     RAW_MEASUREMENT_COLUMNS,
     load_raw_measurements,
 )
+
+
+def test_load_raw_measurements_excludes_15690_in_every_sql_branch(monkeypatch):
+    captured = {}
+
+    def read_sql(query, engine, *, params):
+        captured.update(query=str(query), params=params)
+        return pd.DataFrame(columns=RAW_MEASUREMENT_COLUMNS)
+
+    monkeypatch.setattr(pd, "read_sql", read_sql)
+    result = load_raw_measurements(
+        SimpleNamespace(engine=object()), "2026-08-01", "2026-08-10", "M678",
+    )
+
+    assert result.empty
+    assert captured["params"]["excluded_step_id"] == "15690"
+    branches = captured["query"].split(" UNION ALL ")
+    assert len(branches) == 4
+    for branch in branches:
+        assert "AND (T.step_id <> :excluded_step_id OR T.step_id IS NULL)" in branch
+        assert ">= :start_time" in branch and "<= :end_time" in branch
 
 
 def _database() -> SimpleNamespace:

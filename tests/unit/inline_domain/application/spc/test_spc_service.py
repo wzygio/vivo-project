@@ -36,6 +36,30 @@ def isolate_workbook_paths(monkeypatch, tmp_path):
     )
 
 
+def test_capability_workbook_version_changes_report_cache_identity(monkeypatch, tmp_path):
+    """Successful uploads refresh SPC without evicting unrelated shared caches."""
+    version = [100, 200]
+    seen = []
+    monkeypatch.setattr(spc_service, "resolve_product_resource_dir", lambda _: tmp_path)
+    monkeypatch.setattr(spc_service, "get_capability_decoration_signature", lambda *a, **kw: tuple(version))
+
+    def fetch(**kwargs):
+        seen.append(kwargs)
+        return SpcReportService._empty_payload()
+
+    monkeypatch.setattr(SpcReportService, "fetch_spc_report_payload", staticmethod(fetch))
+    query = SpcQueryConfig(prod_code="M626", start_date="2026-08-01", end_date="2026-11-13")
+    for stat in ((100, 200), (101, 220)):
+        version[:] = stat
+        SpcReportService.get_spc_report_data(
+            object(), query.model_dump_json(), snapshot_signature="same-source",
+        )
+
+    assert seen[0]["snapshot_signature"] == seen[1]["snapshot_signature"]
+    assert seen[0]["product_revision"] == seen[1]["product_revision"]
+    assert seen[0]["capability_decoration_signature"] != seen[1]["capability_decoration_signature"]
+
+
 class FakeSpcRepository:
     seen_data_type_filters: list[str] = []
 

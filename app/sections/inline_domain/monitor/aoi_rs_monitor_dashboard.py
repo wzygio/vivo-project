@@ -8,6 +8,7 @@ import re
 
 import pandas as pd
 import streamlit as st
+from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from app.components.product_labels import get_product_label_formatter
 from src.inline_domain.application.monitor.aoi_rs_monitor_service import AoiRsMonitorQuery
@@ -47,6 +48,7 @@ def _multiselect(label: str, options: list, suffix: str, **kwargs) -> list:
     return st.multiselect(label, options, key=key, **defaults, **kwargs)
 
 
+@st.fragment
 def render_aoi_rs_monitor_section(service, available_products) -> None:
     products_available = list(available_products)
     today = pd.Timestamp.today().normalize()
@@ -102,7 +104,8 @@ def render_aoi_rs_monitor_section(service, available_products) -> None:
                 st.session_state[f"{PREFIX}_query_signature"] = (*signature, service.presentation_signature(products))
                 # Rebuild station/Code options after the first successful publication.
                 if not step_options and not code_options and any(not frame.empty for frame in payload["tables"].values()):
-                    st.rerun()
+                    context = get_script_run_ctx()
+                    st.rerun(scope="fragment" if context and context.fragment_ids_this_run else "app")
             except Exception:
                 logger.exception("AOI_RS period dashboard query failed")
                 st.session_state.pop(f"{PREFIX}_query_signature", None)

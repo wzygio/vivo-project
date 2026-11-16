@@ -33,7 +33,6 @@ def main(argv: list[str] | None = None, *, sender: Callable[[list[str]], int] | 
     parser.add_argument('--receipt', type=Path, default=ROOT / 'output/logs/alert_inspection/latest.json')
     parser.add_argument('--log-dir', type=Path, default=ROOT / 'output/logs/alert_notification')
     parser.add_argument('--env-file', type=Path, default=ROOT / '.env')
-    parser.add_argument('--mail-config', type=Path)
     parser.add_argument('--wait-seconds', type=float, default=7200)
     parser.add_argument('--test-mode', action='store_true', help='Manual verification only: override every recipient; never present in deployed task definitions')
     parser.add_argument('--check', action='store_true', help='Check job scope only; no business reads, writes or sends')
@@ -57,8 +56,6 @@ def main(argv: list[str] | None = None, *, sender: Callable[[list[str]], int] | 
             command = ['--send', '--env-file', str(args.env_file)]
             if args.test_mode:
                 command.append('--test-mode')
-            if args.mail_config is not None:
-                command += ['--mail-config', str(args.mail_config)]
             if sender is None:
                 from api.notification.__main__ import main as sender
             output = StringIO()

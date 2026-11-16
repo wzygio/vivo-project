@@ -19,7 +19,18 @@ def _cpk_app():
 
     st.session_state.setdefault("monitor_query_signature", "oos-query")
     st.session_state.setdefault("alert_matrix_board_loaded", True)
-    render_cpk_monitor_section(Service(), ["M626"], ["ARRAY"])
+    render_cpk_monitor_section(Service(), ["M626"], ["ARRAY", "OLED"])
+
+
+def test_factory_change_requires_resubmitting_capability_query(monkeypatch):
+    monkeypatch.setattr(cpk_monitor_dashboard, "render_cpk_monitor_results", lambda view: None)
+    app = AppTest.from_function(_cpk_app).run()
+    app.button(key="cpk_monitor_query_submit").click().run()
+    assert app.session_state["cpk_loads"] == 1
+    app.multiselect(key="cpk_monitor_factories").set_value(["OLED"]).run()
+    assert app.session_state["cpk_loads"] == 1
+    app.button(key="cpk_monitor_query_submit").click().run()
+    assert app.session_state["cpk_loads"] == 2
 
 
 def test_cpk_data_refresh_is_independent(monkeypatch):

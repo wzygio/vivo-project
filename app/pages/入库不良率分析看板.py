@@ -22,7 +22,7 @@ from app.components.page_header import (
 from app.components.indicator_cache import build_indicator_product_cache_signature
 from src.yield_domain.application.alert_publication import generate_yield_alert_publications
 from src.yield_domain.composition import build_yield_alert_results
-from app.components.file_uploader import render_yield_config_uploader
+from app.components.file_uploader import render_yield_config_uploader_interaction as render_yield_config_uploader
 from app.charts.yield_domain.mwd_chart import (
     prepare_union_data_for_filter
 )

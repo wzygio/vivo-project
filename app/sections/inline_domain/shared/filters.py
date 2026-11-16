@@ -107,6 +107,7 @@ def render_cascade_filters(
     factory_options: list[str] | None = None,
     step_desc_map: dict[str, str] | None = None,
     additional_filter_renderer: Callable[[str], None] | None = None,
+    additional_signature: Callable[[], object] | None = None,
 ) -> tuple[str, list[str], list[str], bool]:
     """Render the cascade filters and return (factory, third_values, steps, should_render)."""
     with st.container(border=True):
@@ -181,6 +182,8 @@ def render_cascade_filters(
                 additional_filter_renderer(selected_factory)
 
         current_signature = filter_signature(selected_factory, selected_steps, selected_third)
+        if additional_signature is not None:
+            current_signature = (*current_signature, additional_signature())
         applied_signature_key = f"{key_prefix}_applied_filter_signature"
         can_query = bool(selected_factory and selected_steps and selected_third)
         with query_col:

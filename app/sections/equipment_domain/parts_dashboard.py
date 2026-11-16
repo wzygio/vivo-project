@@ -14,6 +14,27 @@ from src.equipment_domain.core.parts_alerts import PARTS_PUBLIC_COLUMNS
 PARTS_TABLE_COLUMN_ORDER = PARTS_PUBLIC_COLUMNS
 
 
+@st.fragment
+def render_parts_report_interaction(report_df: pd.DataFrame, *, last_update: str) -> None:
+    """Filter already loaded facts without repeating source reads or publication."""
+    from app.sections.equipment_domain.parts_filters import apply_parts_filters, render_parts_filters
+
+    factories, equipment_types, part_types = render_parts_filters(report_df)
+    filtered_df = apply_parts_filters(
+        report_df, selected_factories=factories, selected_equipment_types=equipment_types,
+        selected_part_types=part_types,
+    )
+    render_parts_metrics(
+        total_count=len(filtered_df),
+        over_count=int(filtered_df["预警状态"].eq("超规").sum()) if not filtered_df.empty else 0,
+        warning_count=int(filtered_df["预警状态"].eq("预警").sum()) if not filtered_df.empty else 0,
+        normal_count=int(filtered_df["预警状态"].eq("正常").sum()) if not filtered_df.empty else 0,
+        last_update=last_update,
+    )
+    st.markdown("### 📋 备件寿命明细列表")
+    render_parts_table(filtered_df)
+
+
 def render_parts_alert_center(alerts: pd.DataFrame, *, has_source_data: bool) -> None:
     with st.expander('超规备件预警中心（使用进度 > 100%）', expanded=not alerts.empty):
         if not alerts.empty:

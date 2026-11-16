@@ -87,20 +87,15 @@ AOI_TT_ALERT_KEY_MAP = {"厂别": "factory", "站点": "step_id", "TT名称": "t
 
 def render_saved_aoi_tt_alerts(
     product: str, *, reference_date: date, report: object | None = None,
-    step_desc_map: dict[str, str] | None = None,
+    step_desc_map: dict[str, str] | None = None, publish_report: bool = True,
 ) -> None:
     """Use committed Sheet/trend results; missing chart frames do not hide alerts."""
     from app.sections.shared.alert_results import read_alert_result
     from app.sections.inline_domain.aoi_tt.trend_alerts import render_aoi_tt_trend_alerts
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
-    if report is not None and hasattr(report, "trend_evaluation_df"):
-        from src.inline_domain.composition import build_trend_alert_results
-        try:
-            build_trend_alert_results("aoi_tt").publish(product, reference_date, report.trend_evaluation_df)
-        except Exception:
-            logger.exception("AOI TT trend result publication failed")
-            st.warning("趋势预警更新失败，请稍后重试。")
+    if publish_report and not publish_aoi_tt_report_alerts(product, reference_date, report):
+        st.warning("趋势预警更新失败，请稍后重试。")
     result = read_alert_result("aoi_tt_sheet_oos", product, reference_date)
     if result["state"] == "error":
         st.error("单片异常预警数据暂不可用，请稍后重试。")
@@ -128,6 +123,42 @@ def render_saved_aoi_tt_alerts(
             report, reference_date=reference_date, step_desc_map=step_desc_map,
             evaluation_df=trend.get("evaluation", trend["records"]),
         )
+
+
+def publish_aoi_tt_report_alerts(product: str, reference_date: date, report: object | None) -> bool:
+    """Publish normal production results without rerunning on local filters."""
+    if report is None or not hasattr(report, "trend_evaluation_df"):
+        return True
+    from src.inline_domain.composition import build_trend_alert_results
+    try:
+        build_trend_alert_results("aoi_tt").publish(product, reference_date, report.trend_evaluation_df)
+    except Exception:
+        logger.exception("AOI TT trend result publication failed")
+        return False
+    return True
+
+
+@st.fragment
+def render_aoi_tt_report_interaction(
+    report: object, *, product: str, reference_date: date,
+    step_desc_map: dict[str, str] | None = None, publication_failed: bool = False,
+) -> None:
+    factory, codes, steps, particles, queried = render_aoi_tt_filters(
+        indicator_df=report.indicators_df, step_desc_map=step_desc_map,
+    )
+    if publication_failed:
+        st.warning("趋势预警更新失败，请稍后重试。")
+    render_saved_aoi_tt_alerts(product, reference_date=reference_date, report=report,
+                             step_desc_map=step_desc_map, publish_report=False)
+    if not queried:
+        st.info("当前筛选条件尚未查询。")
+        return
+    render_aoi_tt_indicator_sections(
+        tt_details_df=filter_aoi_tt_report(report.tt_details_df, factory, codes, steps, particles),
+        spec_df=report.spec_df,
+        indicators_df=filter_aoi_tt_report(report.indicators_df, factory, codes, steps),
+        end_date=reference_date, step_desc_map=step_desc_map,
+    )
 
 
 def get_default_aoi_tt_start_date(end_date: date) -> date:
@@ -185,6 +216,7 @@ def render_aoi_tt_filters(
         factory_options=AOI_TT_FACTORY_OPTIONS,
         step_desc_map=step_desc_map,
         additional_filter_renderer=render_particle_size_filter,
+        additional_signature=lambda: tuple(selected_particle_sizes),
     )
     return factory, codes, steps, selected_particle_sizes, should_render
 

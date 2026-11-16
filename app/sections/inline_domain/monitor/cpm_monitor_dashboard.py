@@ -1,5 +1,6 @@
 """CPM dashboard uses the same layout with independent widget/query keys."""
 from collections.abc import Sequence
+import streamlit as st
 
 from app.sections.inline_domain.monitor.cpk_monitor_dashboard import (
     CpkDashboardService, render_capability_monitor_results, render_capability_monitor_section,
@@ -12,6 +13,7 @@ def render_cpm_monitor_results(view: CpkMonitorViewModel) -> None:
     render_capability_monitor_results(view, metric="cpm")
 
 
+@st.fragment
 def render_cpm_monitor_section(
     service: CpkDashboardService, available_products: Sequence[str],
     available_factories: Sequence[str],

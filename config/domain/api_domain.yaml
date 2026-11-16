@@ -5,6 +5,9 @@ notification:
   # abort: send nothing when any selected source is unavailable.
   incomplete_policy: notify
   smtp:
+    user: v3gyzhbgy01@visionox.com
+    sender: v3gyzhbgy01@visionox.com
+    # Passwords are supplied by this project's private environment, not this YAML.
     host: smtp.qiye.aliyun.com
     port: 587
     security: starttls  # starttls / ssl / plain; plain requires explicit choice

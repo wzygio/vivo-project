@@ -16,7 +16,6 @@ ROOT = Path(__file__).resolve().parents[2]
 def main(argv: list[str] | None = None) -> int:
     parser = SafeArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=ROOT / 'config/domain/api_domain.yaml')
-    parser.add_argument('--mail-config', type=Path, help='Explicit private reference-format credential YAML; never supplies recipients')
     parser.add_argument('--env-file', type=Path, help='Explicit API/mail environment file; process environment takes precedence')
     parser.add_argument('--send', action='store_true', help='Actually send; omitted means preview counts only')
     parser.add_argument('--test-mode', action='store_true', help='Override ALL recipients to wangzy03@visionox.com')
@@ -24,7 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = load_settings(args.config)
         env = load_environment(args.env_file)
-        delivery = SmtpDelivery(settings, load_mail_credentials(args.mail_config, environ=env)) if args.send else None
+        delivery = SmtpDelivery(settings, load_mail_credentials(environ=env,
+                                                              settings=settings)) if args.send else None
         report = run_notification(HttpAlertSource(settings, env['API_KEY'] or env['VIVO_API_KEY']), delivery, settings,
                                   test_mode=args.test_mode)
     except DeliveryFailure as exc:

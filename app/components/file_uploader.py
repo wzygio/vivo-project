@@ -11,6 +11,7 @@ from src.yield_domain.application.excel_service import ExcelService
 from src.yield_domain.core.mwd_trend.modifier_table import MODIFIER_TABLE_COLUMNS
 
 YIELD_MODIFIER_CONFIG_KEY = "yield_modifier_config"
+YIELD_UPLOAD_INDICATORS = ("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos", "yield_report_source")
 YIELD_MODIFIER_TEMPLATES = {
     "Group级": pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS),
     "Code级": pd.DataFrame(columns=MODIFIER_TABLE_COLUMNS),
@@ -19,6 +20,24 @@ YIELD_MODIFIER_TEMPLATES = {
 def _product_sheet_name(prod_code: str, template_sheet_name: str) -> str:
     """按汇总规则派生产品在共享工作簿中的 sheet 名：Sheet1 -> 产品号，其余 -> <产品号>_<原名>。"""
     return prod_code if template_sheet_name == "Sheet1" else f"{prod_code}_{template_sheet_name}"
+
+
+def _refresh_uploaded_config(config: AppConfig, config_key: str) -> None:
+    """Refresh affected Yield products through the existing revision/reset boundary."""
+    from app.components import page_header
+    from src.shared_kernel.config import ConfigLoader
+
+    current = config.data_source.product_code
+    products = ConfigLoader.get_enabled_products() if config_key == "mapping_config" else [current]
+    for product in products:
+        if product != current:
+            page_header.invalidate_page_cache(product_code=product, indicator_keys=YIELD_UPLOAD_INDICATORS)
+    page_header.perform_hard_reset(product_cache_scope=current, product_cache_indicators=YIELD_UPLOAD_INDICATORS)
+
+
+@st.fragment
+def render_yield_config_uploader_interaction(config: AppConfig, product_dir: Path) -> None:
+    render_yield_config_uploader(config, product_dir)
 
 def render_yield_config_uploader(config: AppConfig, product_dir: Path):
     """
@@ -225,7 +244,7 @@ def _render_file_manager_tab(
             data=output.getvalue(),
             file_name=file_name,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"dl_{config_key}" # 必须加前缀保证不同 Tab 间 Key 唯一
+            key=f"dl_{config_key}", on_click="ignore",
         )
         
     # ---------------- 📤 步骤 2: 上传覆写逻辑 ----------------
@@ -277,7 +296,7 @@ def _render_file_manager_tab(
                     
                     st.success(f"✅ 成功覆盖文件: {file_name}")
                     
-                    st.cache_data.clear()
+                    _refresh_uploaded_config(config, config_key)
                     st.rerun()
                     
                 except Exception as e:

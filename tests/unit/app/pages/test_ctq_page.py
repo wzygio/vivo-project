@@ -18,6 +18,8 @@ from src.shared_kernel.infrastructure import db_handler
 
 
 def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypatch) -> None:
+    monkeypatch.setattr(ctq_dashboard, "render_ctq_report_interaction",
+                        ctq_dashboard.render_ctq_report_interaction.__wrapped__)
     from app.sections.shared import alert_results
     monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
         "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(),

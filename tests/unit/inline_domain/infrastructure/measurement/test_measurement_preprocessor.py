@@ -4,9 +4,25 @@ import pandas as pd
 import pytest
 
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+    filter_excluded_steps,
     filter_excluded_param_names,
     keep_latest_measurements,
 )
+
+
+def test_excluded_step_preserves_other_steps_nulls_and_source() -> None:
+    source = pd.DataFrame({
+        "step_id": ["15690", 15690, 15690.0, " 15690 ", "11620", None, "15690A"],
+        "param_value": range(7),
+    })
+    source.attrs["spc_source_coverage"] = {"source_generation": "original"}
+    original = source.copy(deep=True)
+
+    result = filter_excluded_steps(source)
+
+    assert result.param_value.tolist() == [4, 5, 6]
+    assert result.attrs == original.attrs
+    pd.testing.assert_frame_equal(source, original)
 
 
 def test_preprocessor_excludes_loss_but_keeps_mt_ch_parameters() -> None:

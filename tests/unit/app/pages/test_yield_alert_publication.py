@@ -17,7 +17,7 @@ from src.yield_domain.application.alert_results import YieldAlertResults
 from src.yield_domain.infrastructure.alert_result_workbooks import YieldAlertWorkbookStore
 
 
-def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path):
+def test_page_publishes_results_and_defers_sheet_failure_until_details_requested(monkeypatch, tmp_path):
     analysis_module = importlib.import_module("yield_domain.application.yield_service")
     analysis = analysis_module.YieldAnalysisService
     today = datetime.now().astimezone()
@@ -48,6 +48,7 @@ def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path)
         sheet_calls.append(True)
         raise analysis_module.YieldDataLoadError("internal source failure")
     monkeypatch.setattr(analysis, "get_sheet_defect_rates", sheet_failure)
+    monkeypatch.setattr(analysis, "get_mapping_data", lambda *args, **kwargs: pd.DataFrame())
     page = Path(__file__).resolve().parents[4] / "app/pages/入库不良率分析看板.py"
     app = AppTest.from_file(str(page)).run(timeout=20)
     assert not app.exception
@@ -55,14 +56,23 @@ def test_page_publishes_both_results_before_sheet_failure(monkeypatch, tmp_path)
     assert (tmp_path / "trends.xlsx").exists()
     assert publisher.read("M678", "lot", day).status in {"no_data", "uncovered"}
     assert publisher.read("M678", "trend", day).status == "no_data"
-    assert app.error
+    assert not app.error
     assert not sheet_calls
     assert any('Group Level' in item.value for item in app.subheader)
     assert [item.label for item in app.expander[:2]] == [
-        'Lot 超规预警中心（上周，ISO周）', '趋势预警中心（周度，ISO周）',
+        'Lot 超规预警中心（周度，ISO周）', '趋势预警中心（周度，ISO周）',
     ]
     assert all("internal source failure" not in item.value for item in app.error)
     versions = {path.name: path.stat().st_mtime_ns for path in tmp_path.glob("*.xlsx")}
     app.run()
     assert not app.exception
     assert {path.name: path.stat().st_mtime_ns for path in tmp_path.glob("*.xlsx")} == versions
+    # Requesting details crosses the lazy boundary and reports the failed Sheet
+    # source locally, without relabelling it as a page/publication failure.
+    from app.sections.yield_domain.lazy_details import load_report_details
+    detail = load_report_details(
+        config, tmp_path, source_signature="fixture", cache_context=context,
+    )
+    assert sheet_calls == [True]
+    assert detail["sheet_data"] is None
+    assert detail["errors"] == ["Sheet 分布暂时无法加载，请稍后重试。"]

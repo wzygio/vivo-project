@@ -56,6 +56,7 @@ def _render_filters(
         st.session_state[applied_key] = (products, batches, statuses)
     if applied_key not in st.session_state:
         return None
+    draft = (products, batches, statuses)
     # Draft selectors remain linked, while results use the last submitted filters.
     products, batches, statuses = st.session_state[applied_key]
     products = [value for value in products if value in enabled_products]
@@ -64,6 +65,8 @@ def _render_filters(
     scope = filter_report(scope, [], [], statuses)
     batches = [value for value in batches if value in scope['批次号'].unique()]
     st.session_state[applied_key] = (products, batches, statuses)
+    if draft != (products, batches, statuses):
+        st.caption('筛选条件已修改，当前仍展示上次查询结果；点击“查询”更新。')
     return products, batches, statuses
 
 
@@ -102,7 +105,7 @@ def _render_screen_chart(
     if group[metric].notna().any():
         st.plotly_chart(build_lifetime_chart(group, metric=metric), width='stretch',
                         key=f'iqc_lifetime_chart_{chart_index}',
-                        config={'displayModeBar': False})
+                        config={'displayModeBar': False, 'scrollZoom': False})
     else:
         st.info(f'该组暂无有效{metric}测点。')
 
@@ -125,6 +128,12 @@ def render_lifetime_dashboard(service: LifetimeReportService | None = None) -> N
         return
     # Apply the allowlist even when "all" is selected; never send disabled facts to UI.
     frame = frame.loc[frame['产品型号'].isin(enabled_products)].copy()
+    render_lifetime_interaction(frame, enabled_products)
+
+
+@st.fragment
+def render_lifetime_interaction(frame: pd.DataFrame, enabled_products: list[str]) -> None:
+    """Reuse the page's loaded facts while editing the linked draft selectors."""
     filters = _render_filters(frame, enabled_products)
     if filters is None:
         st.info('请点击“查询”查看寿命测试数据。')

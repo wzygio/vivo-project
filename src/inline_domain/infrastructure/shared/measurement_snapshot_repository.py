@@ -16,6 +16,9 @@ import pandas as pd
 from src.inline_domain.infrastructure.shared.measurement_data_loader import (
     load_raw_measurements,
 )
+from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+    filter_excluded_steps,
+)
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
@@ -164,6 +167,7 @@ class InlineMeasurementSnapshotRepository:
                 return self._snapshot_result(
                     snapshot_path, self._fallback(snapshot_path, required_start=start_date), False
                 )
+            measurements = filter_excluded_steps(measurements)
             if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
             measurements = replace_tail(
@@ -201,7 +205,7 @@ class InlineMeasurementSnapshotRepository:
 
     @staticmethod
     def _read_snapshot(snapshot_path: Path) -> pd.DataFrame:
-        snapshot = pd.read_parquet(snapshot_path)
+        snapshot = filter_excluded_steps(pd.read_parquet(snapshot_path))
         snapshot["start_time"] = pd.to_datetime(snapshot["start_time"], errors="coerce")
         return snapshot
 

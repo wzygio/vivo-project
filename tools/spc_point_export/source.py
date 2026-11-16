@@ -182,11 +182,13 @@ class MeasurementSource:
     def get_measurements(self, product: str, end_date: str, force_refresh: bool = False) -> pd.DataFrame:
         from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import measurement_snapshot_coverage
         from src.inline_domain.infrastructure.shared.rolling_snapshot import is_fresh, read_metadata
+        from src.inline_domain.infrastructure.shared.snapshot_window import inline_measurement_snapshot_window_start
 
         path = self.adapter.snapshot_dir / f'inline_measurements_{product}.parquet'
         metadata = read_metadata(path, self.adapter.SNAPSHOT_POLICY_VERSION, policy_file=True)
         coverage = measurement_snapshot_coverage(path, self.adapter.data_forward_policy)
-        fresh = (is_fresh(metadata, self.end, self.adapter.SNAPSHOT_TTL_HOURS)
+        fresh = (is_fresh(metadata, self.end, self.adapter.SNAPSHOT_TTL_HOURS,
+                          window_start=inline_measurement_snapshot_window_start(product, self.end))
                  and coverage is not None and coverage['start_date'] <= self.start.isoformat()
                  and coverage['end_date'] >= self.end.isoformat())
         if fresh:
@@ -216,6 +218,7 @@ def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
     from src.inline_domain.application.spc.dtos import SpcQueryConfig
     from src.inline_domain.composition import build_raw_measurement_repository
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
+    from src.inline_domain.core.spc.spc_calculator import get_period_window_start
     from src.inline_domain.infrastructure.shared.main_process_history_repository import InlineMainProcessHistoryRepository
     from src.inline_domain.infrastructure.shared.measurement_metadata_loader import InlineMeasurementMetadataRepository
     from src.inline_domain.infrastructure.shared.measurement_preparation import InlineMeasurementPreparationRepository
@@ -226,13 +229,17 @@ def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
         def _apply_outlier_filters(self, frame: pd.DataFrame, prod_code: str) -> pd.DataFrame:
             return apply_outlier_filter_rules(frame, prod_code, manager.outlier_rules)
 
+    # Match the page's point-preparation scope before selecting the requested
+    # export interval. In particular, equipment history uses a lookback relative
+    # to this start: narrowing it here can change main-process point attributes.
+    preparation_start = min(start, get_period_window_start(end))
     repository = SpcRepository(ReadOnlyPreparation(
-        raw_measurements=MeasurementSource(build_raw_measurement_repository(manager, product), start, end),
+        raw_measurements=MeasurementSource(build_raw_measurement_repository(manager, product), preparation_start, end),
         metadata=InlineMeasurementMetadataRepository(manager),
         main_process_history=InlineMainProcessHistoryRepository(manager),
     ))
     points = repository.get_spc_measurements(SpcQueryConfig(
-        prod_code=product, start_date=start.isoformat(), end_date=end.isoformat(), data_type_filter='SPC'))
+        prod_code=product, start_date=preparation_start.isoformat(), end_date=end.isoformat(), data_type_filter='SPC'))
     specs = repository.get_spc_spec_limits(product)
     if points.empty:
         return points

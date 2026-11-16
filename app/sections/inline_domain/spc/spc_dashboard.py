@@ -528,6 +528,7 @@ def render_capability_decoration_admin(
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_download",
                 width="stretch",
+                on_click="ignore",
             )
 
         with c_upload:
@@ -561,7 +562,9 @@ def render_capability_decoration_admin(
                             st.error(f"保存 {metric_label} 修饰表失败：{write_result.error}")
                             return
                         st.success(f"{metric_label} 修饰表已覆盖，正在刷新缓存。")
-                        st.cache_data.clear()
+                        # The workbook stat participates in the report cache key;
+                        # the full rerun picks up that version without evicting
+                        # unrelated products or reports.
                         st.rerun()
                     except Exception as exc:
                         logging.getLogger(__name__).exception(

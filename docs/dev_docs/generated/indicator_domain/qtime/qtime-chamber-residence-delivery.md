@@ -79,7 +79,7 @@
 上传通过内存字节绕开测试机透明加密对Node读取文件的影响，下载实读使用既有解密包。
 这些操作只作用于隔离fixture，不保存生产台账。
 
-设计范式已写入 [多模块页面的 Fragment 隔离范式](../../../../../references/design/shared_kernel/shared/interaction-multi-module-fragments.md)，
+设计范式现统一维护于 [UI 交互与性能设计规范](../../../../../references/design/shared_kernel/shared/interaction-streamlit-ui-standard.md#3-fragment-隔离和状态所有权)，
 并加入 `references/index.md` 知识路由。本轮未重跑无关全套用例，上述初版全量限制仍保留。
 
 ## 点位图与界面精简验证

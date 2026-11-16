@@ -60,6 +60,40 @@ def _raw_measurements() -> pd.DataFrame:
     )
 
 
+@pytest.mark.parametrize("mode", ["fresh", "full", "incremental", "fallback"])
+def test_excluded_step_cannot_return_from_any_snapshot_path(tmp_path, mode):
+    source = pd.concat([
+        _raw_measurements(),
+        _raw_measurements().assign(step_id="15690", sheet_id="EXCLUDED"),
+    ], ignore_index=True)
+    path = tmp_path / "inline_measurements_M678.parquet"
+    source.to_parquet(path, index=False)
+    _write_coverage(path)
+    calls = []
+
+    def loader(*args):
+        calls.append(args)
+        if mode in {"fresh", "fallback"}:
+            raise RuntimeError("database unavailable")
+        return source
+
+    repository = InlineMeasurementSnapshotRepository(
+        tmp_path, SimpleNamespace(engine=object()), measurement_loader=loader,
+    )
+    result = repository.get_measurements(
+        "M678", "2026-08-14" if mode == "incremental" else "2026-08-13",
+        force_refresh=mode in {"full", "fallback"},
+    )
+
+    assert result.step_id.tolist() == ["11620"]
+    assert result.attrs["spc_source_coverage"] is not None
+    assert len(calls) == (0 if mode == "fresh" else 1)
+    if mode in {"full", "incremental"}:
+        assert pd.read_parquet(path).step_id.tolist() == ["11620"]
+    if mode == "fallback":
+        assert repository.last_refresh_from_db is False
+
+
 def test_partial_fallback_keeps_its_actual_coverage_and_old_payload_proof(tmp_path):
     fail = False
 

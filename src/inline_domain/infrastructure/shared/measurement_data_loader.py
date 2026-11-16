@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from sqlalchemy import text
 
+from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+    EXCLUDED_MEASUREMENT_STEP_ID,
+)
+
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -86,6 +90,7 @@ def load_raw_measurements(
             WHERE T.{time_column} >= :start_time
               AND T.{time_column} <= :end_time
               AND {product_column} = :prod_code
+              AND (T.step_id <> :excluded_step_id OR T.step_id IS NULL)
               {station_filter}
             """
             )
@@ -95,6 +100,7 @@ def load_raw_measurements(
         "end_time": f"{end_date} 23:59:59",
         "prod_code": prod_code,
         "mqc_step_id": MQC_PRODUCT_STEP_ID,
+        "excluded_step_id": EXCLUDED_MEASUREMENT_STEP_ID,
     }
     try:
         result = pd.read_sql(text(" UNION ALL ".join(selects)), db_manager.engine, params=params)

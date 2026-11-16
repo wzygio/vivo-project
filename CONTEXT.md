@@ -10,7 +10,7 @@ Tianzhu provides manufacturing quality reports for OLED/Array display production
 - Automatic alert displays consume published local results through one shared report/matrix reader and selection cache; original data processing and optional chart acquisition remain independent. New AOI trend evaluations and Q-Time alert projections are registered resource workbooks, separate from raw snapshots and manual decision ledgers. Missing or invalid published results never trigger raw-data analysis. See [display contract](references/design/inline_domain/shared/architecture-published-alert-display.md).
 - The independent authenticated anomaly API consumes published local results with the same release and public-visibility rules. SPC CPK/CPM are explicit complete-week capability events with separate visibility policies; their object IDs are complete Sheet ID arrays from the corresponding SPC By Sheet point population, while Sheet/Lot records retain scalar IDs. Normal SPC report production publishes rebuildable local weekly member snapshots, verified by the read-only SPC application query. HTTP requests never start producers, database fallbacks or maintenance writes. Its station dictionary is a maintained resource. Yield Lot factories are determined during publication from the configurable global Defect Group mapping; Yield station and layer are unknown and returned as null. API caches and pagination snapshots are process-local and rebuildable. Setup, field-completeness constraints and maintenance commands belong to the [API deployment guide](references/domain/api/guide-sheet-anomaly-api.md).
 - PostgreSQL supplies manufacturing facts. Local Parquet snapshots support reuse and defined fallback behavior. Workbooks can contain user-maintained decisions and historical baselines, not merely disposable exports.
-- Weekly outbound alert email is an independent `api.notification` job. It queries the published-anomaly HTTP API with no query parameters and routes public records by category/factory using `config/domain/api_domain.yaml`. Its credential inputs, test-recipient override, completeness policies and scheduling boundary are owned by the [notification rules](references/domain/api/notification/rules-alert-notification.md).
+- Weekly outbound alert email is an independent `api.notification` job. It queries the published-anomaly HTTP API with no query parameters; `config/domain/api_domain.yaml` owns recipient routes, SMTP parameters, account and sender identity. Passwords belong to private runtime inputs. Its credential inputs, test-recipient override, completeness policies and scheduling boundary are owned by the [notification rules](references/domain/api/notification/rules-alert-notification.md).
 - Independent dashboard alert production is owned by `api.inspection`, using existing domain application producers and atomic completion receipts. The same daily command then warms the display matrix; there is no separate matrix warmup schedule. Daily inspection and weekly scheduled email entry points and their runtime boundaries are documented in the [inspection guide](references/domain/api/architecture-automatic-inspection.md).
 - Yield publishes generated Lot/trend alert workbooks through its existing report workflow; matrix status consumers read these files without analysis fallback. Their lifecycle and validity are owned by [Yield alert result rules](references/domain/yield_domain/shared/rules-yield-alert-results.md); source snapshots and user-maintained decisions keep their existing lifecycle.
 - Global, domain, and product configuration controls runtime behavior. Resolve configuration and resource locations through the existing loaders and composition roots; do not assume every resource lives under a product-named directory.
@@ -25,6 +25,7 @@ Search by the **Domain Submodule Architecture** in [ARCHITECTURE.md](ARCHITECTUR
 | Project-specific instructions and task routes | This CONTEXT, including Project Agent Rules |
 | Domain/submodule ownership, dependencies and scoped lookup | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | Business terminology, rules, algorithms and current designs | [references/index.md](references/index.md); `references/{domain,design}/<domain>/<submodule>/`; preserve project-owned knowledge |
+| Streamlit UI interaction, loading/query boundaries, fragments, cache coordination and report scrolling | [UI interaction and performance standard](references/design/shared_kernel/shared/interaction-streamlit-ui-standard.md); canonical project UI requirements and verification routes |
 | Development requirements and implementation specifications | `docs/dev_docs/dev_spec/<domain>/<submodule>/`; retain authorized task descriptions |
 | Supplied development reference files, report templates and screenshots | `docs/project_files/<domain>/<submodule>/`; preserve original files and distinct versions; runtime resources remain under their configured resource locations |
 | Generated assessments and delivery evidence | `docs/dev_docs/generated/<domain>/<submodule>/`; state scope/date and distinguish proposals from verified behavior |
@@ -77,6 +78,13 @@ Promote verified durable knowledge into its owning `references` document and lin
 - Do not casually change the `DatabaseManager` singleton or retry lifecycle. Do not simplify snapshot refresh or database-failure fallback without authorization covering that behavior change.
 - Preserve the page data-cache boundary. Cache DataFrames, scalars, and native containers; construct project-defined ViewModels outside the cache. Detailed cache and health contracts are routed by `ARCHITECTURE.md`.
 
+### SPC Final Point Data Boundary
+
+- All current and future SPC point-data decoration must complete in the shared backend point pipeline **before the final point-data output** (`raw_measurements_df`). This includes point-value corrections, clipping, central-band decoration, time shifts, point-attribute replacements and business-rule point exclusions. Reports, charts and point exports must consume this same final point contract and preparation context; they must not maintain independent decoration formulas.
+- Treat the final point facts as immutable. Neither backend chart adapters nor frontend rendering may apply further point decoration, including modifying, replacing, scaling, clipping, synthesizing or perturbing point values or attributes for display. A new point-decoration requirement must be implemented upstream of the shared final point output; chart-specific exceptions are prohibited.
+- Plotting may select records using explicit user dimensions/time windows, sort/group them, format labels and derive genuine statistics such as Sheet means or box-plot statistics from the final points. These operations must not rewrite the underlying point facts or substitute decorated values for them. Text formatting may round displayed labels while preserving the underlying numeric values. CPK/CPM metric-level rules remain separate and must never feed modified values back into the point population.
+- Before changing any SPC backend, frontend or export path, verify that the last point-data decoration still precedes this shared output and that page and export consumers use it unchanged. The project-local [SPC point export skill](tools/spc_point_export/SKILL.md) consumes this boundary; its scope remains final point data rather than downstream metric or chart results.
+
 ### Non-administrator Presentation Boundary
 
 The default presentation mode applies when the URL does not set `admin=true`. This is the current display-mode convention; it does not by itself establish authenticated authorization.
@@ -113,9 +121,10 @@ AGENTS owns the shared DDD Python workflow. Update the appropriate owner and any
 affected routes together. This user-requested ownership model takes precedence
 over earlier template descriptions of where project instructions belong.
 
-- Before changing UI, operator messages, downloads or exports, read the
-  Non-administrator Presentation Boundary in this context; those constraints also
-  govern project-specific task execution.
+- Before developing, changing, debugging or reviewing Streamlit UI, read and
+  follow the [UI interaction and performance standard](references/design/shared_kernel/shared/interaction-streamlit-ui-standard.md).
+  Operator messages, downloads and exports must also follow the Non-administrator
+  Presentation Boundary in this context, including documented page exceptions.
 - Manufacturing terminology uses
   `references/domain/shared_kernel/shared/GLOSSARY.md`. Consult relevant `docs/ADR/`
   decisions before changing established architecture boundaries.

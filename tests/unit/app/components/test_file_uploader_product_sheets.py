@@ -2,13 +2,31 @@ import io
 from pathlib import Path
 
 import pandas as pd
+from types import SimpleNamespace
 
 from app.components.file_uploader import (
     YIELD_MODIFIER_CONFIG_KEY,
     YIELD_MODIFIER_TEMPLATES,
     _product_sheet_name,
+    _refresh_uploaded_config,
 )
 from src.shared_kernel.utils.excel_tools import read_workbook_sheet, replace_workbook_sheet
+
+
+def test_upload_refresh_is_product_scoped_and_shared_mapping_covers_other_products(monkeypatch):
+    from app.components import page_header
+    from src.shared_kernel.config import ConfigLoader
+    resets, invalidations = [], []
+    monkeypatch.setattr(page_header, "perform_hard_reset", lambda **kwargs: resets.append(kwargs))
+    monkeypatch.setattr(page_header, "invalidate_page_cache", lambda **kwargs: invalidations.append(kwargs))
+    monkeypatch.setattr(ConfigLoader, "get_enabled_products", lambda: ["M678", "Z553"])
+    config = SimpleNamespace(data_source=SimpleNamespace(product_code="Z553"))
+    _refresh_uploaded_config(config, "yield_modifier_config")
+    assert not invalidations
+    assert resets[-1]["product_cache_scope"] == "Z553"
+    _refresh_uploaded_config(config, "mapping_config")
+    assert [call["product_code"] for call in invalidations] == ["M678"]
+    assert "yield_report_source" in resets[-1]["product_cache_indicators"]
 
 
 def test_product_sheet_name_mapping() -> None:

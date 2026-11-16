@@ -70,19 +70,20 @@ API及页面继续读取这些结果，HTTP查询不会触发生产。无需有�
 .venv\Scripts\python.exe -m api.inspection
 
 # 仅打印将注册的任务，不执行任何任务或覆盖定义
-powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -MailConfigPath D:/wzy/Python/array-projects/config/config.yaml
+powershell.exe -NoProfile -File api/inspection/register_tasks.ps1
 
 # 明确应用：先备份，再更新两个指定任务并读回核验
-powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -MailConfigPath D:/wzy/Python/array-projects/config/config.yaml -Apply
+powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -Apply
 
 # 仅更新合并后的巡检任务，并撤销旧独立预热任务；先备份，不改邮件任务
 powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -InspectionOnly -Apply
 
 # 手动执行带完整性门禁的邮件任务；省略--test-mode即使用正式责任人配置
-.venv\Scripts\python.exe -m api.notification.scheduled --mail-config D:/wzy/Python/array-projects/config/config.yaml --test-mode
+.venv\Scripts\python.exe -m api.notification.scheduled --test-mode
 ```
 
-私有邮件YAML仅提供SMTP账户凭证，API密钥由显式环境文件或进程环境提供。
+发件人、SMTP账户及投递参数由本项目`api_domain.yaml`管理，API密钥和邮件密码由本项目
+私有环境文件或进程环境提供，不再支持外部邮件配置调度参数。
 任务定义只含凭证文件路径，不保存密码。登记时从未来的触发点开始，避免把已错过的今日时间
 当成需要立刻补跑的任务。旧 `tools/register_alert_result_publication_task.ps1` 已退役，
 不会再生成每30分钟任务；兼容的专用Q-Time注册入口转交 `api/inspection/register_qtime_task.ps1`。

@@ -120,4 +120,5 @@ def _render_results(details: pd.DataFrame, chambers: list[str], products: tuple[
                     st.plotly_chart(
                         build_chamber_figure(subset, chamber=chamber, product_order=products),
                         width='stretch', key=f'chamber_chart_{line}_{chamber}',
+                        config={'scrollZoom': False},
                     )

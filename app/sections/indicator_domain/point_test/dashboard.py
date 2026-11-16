@@ -22,7 +22,17 @@ def fetch_report_payload(path: str, version: tuple[int, int]) -> dict[str, dict[
     return build_point_test_service(Path(path)).read_report()
 
 
+@st.fragment
 def _render_tables(report: dict[str, dict[str, pd.DataFrame]]) -> None:
+    try:
+        _render_report_tables(report)
+    except Exception:
+        # Fragment reruns do not re-enter the outer loader's exception boundary.
+        logger.exception("Point-test report presentation could not be loaded")
+        st.error("暂时无法读取密集点测试数据，请稍后刷新重试。")
+
+
+def _render_report_tables(report: dict[str, dict[str, pd.DataFrame]]) -> None:
     report = {product: report[product] for product in ConfigLoader.get_enabled_products()
               if product in report}
     if st.session_state.get("point_test_product") not in report:
@@ -59,7 +69,8 @@ def _render_tables(report: dict[str, dict[str, pd.DataFrame]]) -> None:
             st.info("该产品暂无可用于箱线图的有效明细测量值。")
         for (step, parameter), figure in charts.items():
             with st.expander(f"{product} / {step} / {parameter}", expanded=len(charts) == 1):
-                st.plotly_chart(figure, width="stretch", key=f"point_test_box_{(product, step, parameter)!r}")
+                st.plotly_chart(figure, width="stretch", key=f"point_test_box_{(product, step, parameter)!r}",
+                                config={"scrollZoom": False})
     with detail_tab:
         if detail.empty:
             st.info("该产品暂无明细数据。")

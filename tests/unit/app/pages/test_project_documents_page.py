@@ -61,6 +61,8 @@ def test_same_named_reports_keep_independent_downloads_and_previews(document_dir
 
     assert not app.exception
     assert len(app.get("download_button")) == 2
+    metadata = app.session_state._state._new_widget_state.widget_metadata
+    assert metadata[app.selectbox(key="document_upload_source").id].fragment_id
     app.button(key="view_analysis_同名报告.pdf").click().run()
     assert not app.exception
     assert app.session_state.viewing_source == "analysis"

@@ -75,20 +75,15 @@ AOI_RS_ALERT_CHART_KIND_LABELS = {"lot": "By Lot", "sheet": "By Sheet"}
 
 def render_saved_aoi_rs_alerts(
     product: str, *, reference_date: date, report: object | None = None,
-    step_desc_map: dict[str, str] | None = None,
+    step_desc_map: dict[str, str] | None = None, publish_report: bool = True,
 ) -> None:
     """Read published Sheet and trend results independently of chart availability."""
     from app.sections.shared.alert_results import read_alert_result
     from app.sections.inline_domain.aoi_rs.trend_alerts import render_aoi_rs_trend_alerts
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
-    if report is not None and hasattr(report, "trend_evaluation_df"):
-        from src.inline_domain.composition import build_trend_alert_results
-        try:
-            build_trend_alert_results("aoi_rs").publish(product, reference_date, report.trend_evaluation_df)
-        except Exception:
-            logger.exception("AOI RS trend result publication failed")
-            st.warning("趋势预警更新失败，请稍后重试。")
+    if publish_report and not publish_aoi_rs_report_alerts(product, reference_date, report):
+        st.warning("趋势预警更新失败，请稍后重试。")
     result = read_alert_result("aoi_rs_sheet_oos", product, reference_date)
     if result["state"] == "error":
         st.error("单片异常预警数据暂不可用，请稍后重试。")
@@ -118,6 +113,45 @@ def render_saved_aoi_rs_alerts(
             report, reference_date=reference_date, step_desc_map=step_desc_map,
             evaluation_df=trend.get("evaluation", trend["records"]),
         )
+
+
+def publish_aoi_rs_report_alerts(product: str, reference_date: date, report: object | None) -> bool:
+    """Publish a freshly produced report once, outside filter-triggered reruns."""
+    if report is None or not hasattr(report, "trend_evaluation_df"):
+        return True
+    from src.inline_domain.composition import build_trend_alert_results
+    try:
+        build_trend_alert_results("aoi_rs").publish(product, reference_date, report.trend_evaluation_df)
+    except Exception:
+        logger.exception("AOI RS trend result publication failed")
+        return False
+    return True
+
+
+@st.fragment
+def render_aoi_rs_report_interaction(
+    report: object, *, product: str, reference_date: date,
+    step_desc_map: dict[str, str] | None = None, publication_failed: bool = False,
+) -> None:
+    factory, codes, steps, queried = render_aoi_rs_filters(
+        indicator_df=report.indicators_df, step_desc_map=step_desc_map,
+    )
+    if publication_failed:
+        st.warning("趋势预警更新失败，请稍后重试。")
+    render_saved_aoi_rs_alerts(product, reference_date=reference_date, report=report,
+                             step_desc_map=step_desc_map, publish_report=False)
+    if not queried:
+        st.info("当前筛选条件尚未查询。")
+        return
+    render_aoi_rs_indicator_sections(
+        rs_details_df=filter_aoi_rs_report(report.rs_details_df, factory, codes, steps),
+        pass_through_df=filter_aoi_rs_report(report.pass_through_df, factory, [], steps),
+        spec_df=report.spec_df,
+        indicators_df=filter_aoi_rs_report(report.indicators_df, factory, codes, steps),
+        lot_points_df=filter_aoi_rs_report(report.lot_points_df, factory, codes, steps),
+        sheet_points_df=filter_aoi_rs_report(report.sheet_points_df, factory, codes, steps),
+        end_date=reference_date, step_desc_map=step_desc_map,
+    )
 
 
 def get_default_aoi_rs_start_date(end_date: date) -> date:

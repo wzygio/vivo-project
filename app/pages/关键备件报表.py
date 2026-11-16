@@ -45,13 +45,8 @@ from app.components.page_header import (
     render_page_header,
 )
 from app.manager.session_manager import SessionManager
-from app.sections.equipment_domain.parts_filters import (
-    apply_parts_filters,
-    render_parts_filters,
-)
 from app.sections.equipment_domain.parts_dashboard import (
-    render_parts_metrics,
-    render_parts_table,
+    render_parts_report_interaction,
 )
 from app.sections.equipment_domain.parts_alerts import render_parts_alerts, render_saved_parts_alerts
 from src.equipment_domain.composition import create_parts_alert_store
@@ -138,34 +133,4 @@ render_parts_alerts(
 #  多维筛选
 # ==============================================================================
 
-selected_factories, selected_equipment_types, selected_part_types = (
-    render_parts_filters(view_model.report_df)
-)
-
-filtered_df = apply_parts_filters(
-    view_model.report_df,
-    selected_factories=selected_factories,
-    selected_equipment_types=selected_equipment_types,
-    selected_part_types=selected_part_types,
-)
-
-
-# ==============================================================================
-#  渲染概览统计
-# ==============================================================================
-
-render_parts_metrics(
-    total_count=len(filtered_df) if not filtered_df.empty else 0,
-    over_count=int((filtered_df["预警状态"] == "超规").sum()) if not filtered_df.empty else 0,
-    warning_count=int((filtered_df["预警状态"] == "预警").sum()) if not filtered_df.empty else 0,
-    normal_count=int((filtered_df["预警状态"] == "正常").sum()) if not filtered_df.empty else 0,
-    last_update=view_model.last_update,
-)
-
-
-# ==============================================================================
-#  渲染交互式数据表
-# ==============================================================================
-
-st.markdown("### 📋 备件寿命明细列表")
-render_parts_table(filtered_df)
+render_parts_report_interaction(view_model.report_df, last_update=view_model.last_update)

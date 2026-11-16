@@ -1,7 +1,9 @@
 """Independent report routes must not accidentally execute the full matrix."""
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from app.manager.session_manager import SessionManager
@@ -21,6 +23,11 @@ def isolated_pages(monkeypatch):
     monkeypatch.setattr(SessionManager, "AVAILABLE_PRODUCTS", ["M626"])
     monkeypatch.setattr(all_product_board.ConfigLoader, "get_enabled_products", lambda: ["M626"])
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", lambda: False)
+    # Catalog options are lightweight but still file-backed in production.
+    # Keep page-routing tests off maintained enterprise workbooks entirely.
+    monkeypatch.setattr(composition, "build_aoi_rs_monitor_service", lambda: SimpleNamespace(
+        read_catalog=lambda *args: pd.DataFrame(columns=["step_id", "rs_code"]),
+    ))
 
 
 def test_summary_route_shows_five_boards_without_loading_matrix(isolated_pages, monkeypatch):
@@ -40,6 +47,12 @@ def test_summary_route_shows_five_boards_without_loading_matrix(isolated_pages, 
     assert app.button(key="aoi_rs_monitor_query_submit")
     assert app.button(key="all_product_yield_query")
     assert not any(button.key == "btn_load_alert_matrix" for button in app.button)
+    metadata = app.session_state._state._new_widget_state.widget_metadata
+    query_keys = ["btn_monitor_query_submit", "cpk_monitor_query_submit", "cpm_monitor_query_submit",
+                  "aoi_rs_monitor_query_submit", "all_product_yield_query"]
+    fragments = [metadata[app.button(key=key).id].fragment_id for key in query_keys]
+    assert None not in fragments
+    assert len(set(fragments)) == 5
 
 
 def test_matrix_route_has_no_summary_service_dependency(isolated_pages, monkeypatch):

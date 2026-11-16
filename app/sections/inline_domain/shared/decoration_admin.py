@@ -73,6 +73,7 @@ def render_sheet_oos_decoration_admin(
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_oos_decoration_download",
                 width="stretch",
+                on_click="ignore",
             )
 
         with c_upload:

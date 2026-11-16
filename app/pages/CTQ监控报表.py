@@ -31,11 +31,8 @@ from app.components.page_header import (
 )
 from app.sections.inline_domain.ctq.ctq_dashboard import (
     render_saved_ctq_alerts,
-    filter_ctq_report,
     get_default_ctq_start_date,
-    render_ctq_decoration_admin,
-    render_ctq_filters,
-    render_ctq_indicator_sections,
+    render_ctq_report_interaction,
 )
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
@@ -149,7 +146,6 @@ except Exception:
     st.stop()
 
 sheet_features_df = view_model.sheet_features_df
-raw_measurements_df = view_model.raw_measurements_df
 indicator_df = view_model.indicators_df
 
 if sheet_features_df.empty or indicator_df.empty:
@@ -159,38 +155,7 @@ if sheet_features_df.empty or indicator_df.empty:
 
 query_params = st.query_params
 is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
-if is_admin:
-    render_ctq_decoration_admin(
-        getattr(view_model, "sheet_oos_decoration_result", None),
-    )
-
-selected_factory, selected_params, selected_steps, should_render_report = render_ctq_filters(
-    indicator_df=indicator_df,
-    step_desc_map=step_desc_map,
-)
-
-_render_saved_page_alerts(view_model)
-
-if not should_render_report:
-    st.info("当前筛选条件尚未查询。")
-    st.stop()
-
-filtered_sheet_features_df = filter_ctq_report(
-    report_df=sheet_features_df,
-    selected_factory=selected_factory,
-    selected_params=selected_params,
-    selected_steps=selected_steps,
-)
-filtered_raw_measurements_df = filter_ctq_report(
-    report_df=raw_measurements_df,
-    selected_factory=selected_factory,
-    selected_params=selected_params,
-    selected_steps=selected_steps,
-)
-
-render_ctq_indicator_sections(
-    sheet_features_df=filtered_sheet_features_df,
-    raw_measurements_df=filtered_raw_measurements_df,
-    period_box_source=ConfigLoader.get_spc_period_box_source(),
-    step_desc_map=step_desc_map,
+render_ctq_report_interaction(
+    view_model, product=current_product, reference_date=default_end_dt.date(),
+    step_desc_map=step_desc_map, is_admin=is_admin,
 )

@@ -24,6 +24,8 @@ from src.shared_kernel.infrastructure import db_handler
 
 @pytest.mark.parametrize("queried", [True, False])
 def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(monkeypatch, queried) -> None:
+    monkeypatch.setattr(aoi_rs_dashboard, "render_aoi_rs_report_interaction",
+                        aoi_rs_dashboard.render_aoi_rs_report_interaction.__wrapped__)
     from app.sections.shared import alert_results
     monkeypatch.setattr(alert_results, "read_alert_result", lambda *a: {
         "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(), "evaluation": pd.DataFrame(),
@@ -163,11 +165,7 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     monkeypatch.setattr(aoi_rs_dashboard.st, "stop", stop)
 
     page_path = Path(__file__).parents[4] / "app" / "pages" / "AOI_RS监控报表.py"
-    if queried:
-        runpy.run_path(str(page_path), run_name="__main__")
-    else:
-        with pytest.raises(StopException):
-            runpy.run_path(str(page_path), run_name="__main__")
+    runpy.run_path(str(page_path), run_name="__main__")
 
     assert [q.prod_code for q in loaded_queries] == ["M678"]
     # 固定窗口：上一自然月 1 日 ~ 当前日期（含当天）

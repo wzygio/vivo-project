@@ -63,6 +63,11 @@ def load_settings(path: Path) -> NotificationSettings:
         raise NotificationError('SMTP 配置无效。')
     host, port = smtp.get('host', 'smtp.qiye.aliyun.com'), smtp.get('port', 587)
     security, policy = smtp.get('security', 'starttls'), conf.get('incomplete_policy', 'notify')
+    user, sender = smtp.get('user'), smtp.get('sender')
+    if user is not None or sender is not None:
+        if not isinstance(user, str) or not user.strip() or any(c in user for c in '\r\n'):
+            raise NotificationError('SMTP 账户配置无效。')
+        sender = mailbox(sender)
     if (not isinstance(host, str) or not host or any(c.isspace() for c in host)
             or type(port) is not int or not 1 <= port <= 65535
             or security not in ('starttls', 'ssl', 'plain') or policy not in ('notify', 'abort')):
@@ -70,7 +75,7 @@ def load_settings(path: Path) -> NotificationSettings:
     return NotificationSettings(
         validate_base_url(conf.get('api_base_url', 'http://127.0.0.1:8890')),
         _seconds(conf.get('api_timeout_seconds', 120), 120), MappingProxyType(routes), policy,
-        host, port, security, _seconds(smtp.get('timeout_seconds', 30), 120))
+        host, port, security, _seconds(smtp.get('timeout_seconds', 30), 120), user, sender)
 
 
 @dataclass(frozen=True)
@@ -80,16 +85,19 @@ class MailCredentials:
     passwords: tuple[str, ...] = field(repr=False)
 
 
-def load_mail_credentials(path: Path | None = None, *, environ: Mapping[str, str] | None = None) -> MailCredentials:
-    """The optional reference-format YAML contributes credentials ONLY, never recipients."""
+def load_mail_credentials(path: Path | None = None, *, environ: Mapping[str, str] | None = None,
+                          settings: NotificationSettings | None = None) -> MailCredentials:
+    """Project SMTP identity uses private environment passwords; YAML is legacy-only."""
     env = os.environ if environ is None else environ
-    values = read_yaml(path) if path is not None else env
-    user, sender = values.get('MAIL_USER'), values.get('MAIL_SENDER')
+    project_identity = settings is not None and settings.smtp_user is not None and settings.smtp_sender is not None
+    values = env if project_identity or path is None else read_yaml(path)
+    user = settings.smtp_user if settings and settings.smtp_user is not None else values.get('MAIL_USER')
+    sender = settings.smtp_sender if settings and settings.smtp_sender is not None else values.get('MAIL_SENDER')
     raw = values.get('MAIL_PASSWORDS') or values.get('MAIL_PASSWORD')
     passwords = raw if isinstance(raw, list) else raw.split(',') if isinstance(raw, str) else []
     if (not isinstance(user, str) or not user or any(c in user for c in '\r\n')
             or not passwords or any(not isinstance(p, str) or not p for p in passwords)):
-        raise NotificationError('缺少有效 MAIL_USER／MAIL_PASSWORD(S) 邮件凭证。')
+        raise NotificationError('缺少有效SMTP账户或MAIL_PASSWORD(S)邮件密码。')
     return MailCredentials(user, mailbox(sender), tuple(passwords))
 
 

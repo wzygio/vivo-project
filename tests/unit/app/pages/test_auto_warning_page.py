@@ -70,6 +70,17 @@ MATRIX_FILTER_KEYS = (
 
 
 def _stub_page_dependencies(monkeypatch, clicked_keys: frozenset = frozenset()) -> dict:
+    from app.sections.inline_domain.monitor import (
+        oos_monitor_panel, cpk_monitor_dashboard, cpm_monitor_dashboard, aoi_rs_monitor_dashboard,
+    )
+    for module, name in (
+        (oos_monitor_panel, "render_oos_monitor_panel"),
+        (cpk_monitor_dashboard, "render_cpk_monitor_section"),
+        (cpm_monitor_dashboard, "render_cpm_monitor_section"),
+        (aoi_rs_monitor_dashboard, "render_aoi_rs_monitor_section"),
+    ):
+        function = getattr(module, name)
+        monkeypatch.setattr(module, name, getattr(function, "__wrapped__", function))
     # Import with the real decorator before stubbing page-local fragments, so
     # running this file alone cannot leave undecorated components in sys.modules.
     from app.sections.yield_domain import all_product_board

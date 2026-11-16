@@ -35,6 +35,8 @@ class NotificationSettings:
     smtp_port: int = 587
     smtp_security: str = 'starttls'
     smtp_timeout_seconds: float = 30
+    smtp_user: str | None = None
+    smtp_sender: str | None = None
 
 
 @dataclass(frozen=True)

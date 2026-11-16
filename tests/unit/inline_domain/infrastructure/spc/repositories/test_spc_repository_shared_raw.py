@@ -79,6 +79,15 @@ def test_spc_source_signature_changes_when_measurement_policy_changes(tmp_path, 
     assert spc_input_signature(tmp_path, "M626") != previous
 
 
+def test_spc_source_signature_includes_step_exclusion_policy(tmp_path, monkeypatch):
+    import src.inline_domain.infrastructure.spc.spc_repository as repository_module
+
+    previous = spc_input_signature(tmp_path, "M626")
+    monkeypatch.setattr(repository_module, "EXCLUDED_MEASUREMENT_STEP_ID", "another-step")
+
+    assert spc_input_signature(tmp_path, "M626") != previous
+
+
 class FakeMetadata:
     def get_parameter_catalog(self, prod_code: str) -> pd.DataFrame:
         return pd.DataFrame(

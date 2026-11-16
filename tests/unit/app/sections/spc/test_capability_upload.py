@@ -49,7 +49,7 @@ def test_capability_upload_refreshes_only_after_successful_write(monkeypatch, tm
     assert list(sheets) == [result.decoration_sheet]
     pd.testing.assert_frame_equal(sheets[result.decoration_sheet], uploaded)
     assert ui.success.called is written
-    assert ui.cache_data.clear.called is written
+    ui.cache_data.clear.assert_not_called()
     assert ui.rerun.called is written
     assert ui.error.called is not written
 

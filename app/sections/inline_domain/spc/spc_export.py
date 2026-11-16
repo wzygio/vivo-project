@@ -269,3 +269,15 @@ def render_spc_export(
             st.error(status["message"])
         elif status["message"]:
             st.caption(status["message"])
+
+
+@st.fragment
+def render_spc_export_interaction(
+    *, start_date: date, end_date: date, db_manager,
+    step_desc_map: dict[str, str] | None = None,
+) -> None:
+    """Isolate export controls from unrelated report loading and other exports."""
+    render_spc_export(
+        start_date=start_date, end_date=end_date, db_manager=db_manager,
+        step_desc_map=step_desc_map,
+    )

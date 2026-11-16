@@ -54,10 +54,11 @@ def render_capability_monitor_results(view: CpkMonitorViewModel, *, metric: str)
     })
     if "判定状态" in display:
         display["判定状态"] = display["判定状态"].replace("已修饰或达标", "达标")
-    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", name, "已达标", "判定状态") if column in display]
+    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", name, "判定状态") if column in display]
     st.dataframe(display[columns], hide_index=True, width="stretch")
 
 
+@st.fragment
 def render_cpk_monitor_section(
     service: CpkDashboardService, available_products: Sequence[str],
     available_factories: Sequence[str],
@@ -83,7 +84,7 @@ def render_capability_monitor_section(
         "厂别", available_factories, default=available_factories, key=f"{prefix}_factories",
     )
     clicked = columns[2].button("查询", type="primary", key=f"{prefix}_query_submit")
-    signature = tuple(sorted(products))
+    signature = (tuple(sorted(products)), tuple(sorted(factories)))
     refresh_data = render_board_refresh_controls(
         key=prefix, clear_cache=clear_cache,
         query_state_key=f"{prefix}_query_signature",

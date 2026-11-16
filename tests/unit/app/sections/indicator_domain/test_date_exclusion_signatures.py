@@ -9,24 +9,37 @@ from src.indicator_domain.application.qtime.chamber_cache import clear_chamber_c
 ROOT = Path(__file__).resolve().parents[5]
 
 
-@pytest.mark.parametrize('fixture,button', [
-    ('qtime_app.py', 'qtime_search'),
-    ('chamber_qtime_app.py', 'chamber_search'),
-    ('ijp_app.py', 'ijp_search'),
+@pytest.mark.parametrize('fixture,button,show_query_hint,signature_key', [
+    pytest.param('qtime_app.py', 'qtime_search', False, 'qtime_report_signature',
+                 id='qtime_app.py-qtime_search'),
+    pytest.param('chamber_qtime_app.py', 'chamber_search', False, 'chamber_qtime_signature',
+                 id='chamber_qtime_app.py-chamber_search'),
+    pytest.param('ijp_app.py', 'ijp_search', True, None, id='ijp_app.py-ijp_search'),
 ])
-def test_policy_change_hides_submitted_charts_until_requery(monkeypatch, fixture, button):
+def test_policy_change_hides_submitted_charts_until_requery(
+    monkeypatch, fixture, button, show_query_hint, signature_key,
+):
     state = {'exclusion': None}
     monkeypatch.setattr(ConfigLoader, 'get_indicator_data_exclusion', lambda: state['exclusion'])
     clear_chamber_cache()
     app = AppTest.from_file(str(ROOT / 'tests/e2e/fixtures' / fixture)).run()
     app.button(key=button).click().run()
     assert not app.exception and app.get('plotly_chart')
+    if signature_key is not None:
+        assert app.session_state[signature_key][-1] is None
     state['exclusion'] = ('2026-10-01', '2026-10-06')
     app.run()
     assert not app.exception and not app.get('plotly_chart')
-    assert any('点击“查询' in item.value for item in app.info)
+    # Q-Time explicitly suppresses query/empty/failure prompts (CONTEXT,
+    # 2026-11-05). Hidden stale charts and resubmission are the invariant;
+    # an info message is part of the IJP contract only.
+    assert any('点击“查询' in item.value for item in app.info) is show_query_hint
+    app.run()
+    assert not app.exception and not app.get('plotly_chart')
     app.button(key=button).click().run()
     assert not app.exception and app.get('plotly_chart')
+    if signature_key is not None:
+        assert app.session_state[signature_key][-1] == state['exclusion']
 
 
 def test_hole_policy_change_invalidates_submitted_session(monkeypatch):

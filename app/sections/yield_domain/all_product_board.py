@@ -125,6 +125,6 @@ def render_all_product_yield_board() -> None:
                 continue
             if chart.defect_rate.isna().any():
                 st.warning('部分周期数据暂不可用，空白表示暂无数据。')
-            st.plotly_chart(create_period_trend_chart(chart, chosen, product), width='stretch', key=f'all_product_yield_period_chart_{product}')
+            st.plotly_chart(create_period_trend_chart(chart, chosen, product), width='stretch', key=f'all_product_yield_period_chart_{product}', config={'scrollZoom': False})
             configs = {p: st.column_config.NumberColumn(p, format='percent', width='small') for p in chosen}
             st.dataframe(table, column_config=configs, hide_index=True, width='stretch', key=f'all_product_yield_period_table_{product}')
