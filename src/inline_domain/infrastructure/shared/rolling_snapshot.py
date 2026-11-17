@@ -138,7 +138,8 @@ def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end
 
 
 def publish_snapshots(items: list[tuple[Path, pd.DataFrame, str, object, bool]],
-                      *, window_start: object | None = None) -> None:
+                      *, window_start: object | None = None,
+                      extra_metadata: dict[str, object] | None = None) -> None:
     """Stage every file first, roll back all replacements on publication failure.
 
     Metadata is the commit marker and binds to the exact parquet generation.
@@ -159,6 +160,10 @@ def publish_snapshots(items: list[tuple[Path, pd.DataFrame, str, object, bool]],
             metadata = {"policy_version": policy, "covered_from": retained_start.date().isoformat(),
                         "covered_through": pd.Timestamp(end).date().isoformat(), "refreshed_at": datetime.now(timezone.utc).isoformat(),
                         "snapshot_size_bytes": stat.st_size, "snapshot_mtime_ns": stat.st_mtime_ns}
+            if extra_metadata:
+                if set(extra_metadata).intersection(metadata):
+                    raise ValueError("Extra snapshot metadata cannot replace coverage or file identity")
+                metadata.update(extra_metadata)
             if policy_file:
                 target = path.with_suffix(".policy")
                 staged[target] = target.with_name(f"{target.name}.{uuid4().hex}.tmp")

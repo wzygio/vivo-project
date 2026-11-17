@@ -5,7 +5,7 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 
-def _app(monkeypatch, tmp_path):
+def _app(monkeypatch, tmp_path, *, admin=True):
     from app.components import page_header
     from app.manager.session_manager import SessionManager
     from app.utils.app_setup import AppSetup
@@ -18,7 +18,10 @@ def _app(monkeypatch, tmp_path):
                          (SessionManager, "AVAILABLE_PRODUCTS"), (composition, "build_aoi_rs_monitor_service")]:
         monkeypatch.setattr(target, name, getattr(target, name))
     monkeypatch.setenv("VIVO_RS_MONITOR_FIXTURE_ROOT", str(tmp_path))
-    return AppTest.from_file(str(Path(__file__).parent / "fixtures/aoi_rs_monitor_app.py")).run(timeout=60)
+    app = AppTest.from_file(str(Path(__file__).parent / "fixtures/aoi_rs_monitor_app.py"))
+    if admin:
+        app.query_params["admin"] = "true"
+    return app.run(timeout=60)
 
 
 def test_actual_page_query_filters_products_and_failure(monkeypatch, tmp_path):
@@ -75,7 +78,7 @@ def test_policy_and_history_changes_hide_submitted_results(monkeypatch, tmp_path
     assert not app.dataframe and not app.exception
 
 
-def test_ordinary_empty_and_failure_states(monkeypatch, tmp_path):
+def test_admin_empty_and_failure_states(monkeypatch, tmp_path):
     app = _app(monkeypatch, tmp_path)
     app.selectbox(key="fixture_rs_mode").set_value("failure").run()
     app.button(key="aoi_rs_monitor_query_submit").click().run(timeout=60)
@@ -87,3 +90,17 @@ def test_ordinary_empty_and_failure_states(monkeypatch, tmp_path):
     app.button(key="aoi_rs_monitor_query_submit").click().run(timeout=60)
     assert not app.exception and not app.error and not app.dataframe
     assert any("暂无所选范围" in item.value for item in app.info)
+
+
+def test_leaving_admin_mode_removes_aoi_rs_results_and_download(monkeypatch, tmp_path):
+    app = _app(monkeypatch, tmp_path)
+    app.button(key="aoi_rs_monitor_query_submit").click().run(timeout=60)
+    assert len(app.dataframe) == 2
+    assert app.get("download_button")
+    app.query_params.clear()
+    app.run(timeout=60)
+    assert not app.exception and not app.error
+    assert not app.dataframe
+    assert not app.get("download_button")
+    assert not any("AOI_RS" in item.value for item in app.subheader)
+    assert not any(button.key.startswith("aoi_rs_monitor") for button in app.button if button.key)

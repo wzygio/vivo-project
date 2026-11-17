@@ -16,7 +16,7 @@ from app.sections.inline_domain.monitor import oos_monitor_dashboard as dashboar
 def render_oos_monitor_panel(*, available_products, factory_options, load_payload,
                              start_date_str, end_date_str, step_desc_map, is_admin):
     st.subheader("⚠️ 异常片预警看板")
-    with st.expander("Inline超规预警", expanded=True):
+    with st.expander("Inline超规预警", expanded=False):
         available_factories = factory_options
 
         # 4. 组装积木: 渲染控制台（「查询」按钮与筛选三件套同行最右列，

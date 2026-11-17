@@ -56,10 +56,12 @@ def render_aoi_rs_monitor_section(service, available_products) -> None:
         st.info("暂无可用产品。")
         return
     with st.container():
-        columns = st.columns([1, 3], vertical_alignment="bottom")
-        with columns[0]:
+        factory_column, product_column, step_column, code_column = st.columns(
+            [1, 3, 2, 3], vertical_alignment="bottom",
+        )
+        with factory_column:
             factory = st.selectbox("厂别", ["ARRAY", "OLED", "TP"], key=f"{PREFIX}_factory")
-        with columns[1]:
+        with product_column:
             products = _multiselect("产品型号", products_available, "products", format_func=get_product_label_formatter())
         products = products or products_available
         try:
@@ -68,12 +70,11 @@ def render_aoi_rs_monitor_section(service, available_products) -> None:
             logger.exception("AOI_RS monitor catalog read failed")
             st.error("AOI_RS 历史结果读取失败，请稍后重试。")
             return
-        columns = st.columns(2)
         step_options = sorted(catalog["step_id"].unique().tolist())
         code_options = sorted(catalog["rs_code"].unique().tolist())
-        with columns[0]:
+        with step_column:
             steps = _multiselect("站点", step_options, "steps", placeholder="全部站点（首次查询后可筛选）")
-        with columns[1]:
+        with code_column:
             codes = _multiselect("RSCode", code_options, "codes", placeholder="全部 RSCode（首次查询后可筛选）")
         columns = st.columns([1.3, 1.7, 3, 1])
         with columns[0]:

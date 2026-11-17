@@ -90,6 +90,8 @@ def test_cpk_latest_week_factory_filter_and_refresh_on_actual_page(monkeypatch, 
 
 def test_cpm_query_and_refresh_preserve_cpk_on_renamed_page(monkeypatch, tmp_path):
     app = _monitor_app(monkeypatch, tmp_path)
+    app.query_params["admin"] = "true"
+    app.run(timeout=60)
     app.button(key="cpk_monitor_query_submit").click().run(timeout=60)
     cpk_summary = app.dataframe[0].value.copy()
     app.button(key="cpm_monitor_query_submit").click().run(timeout=60)
@@ -104,6 +106,11 @@ def test_cpm_query_and_refresh_preserve_cpk_on_renamed_page(monkeypatch, tmp_pat
     assert not app.exception and not app.error
     assert "Fixture CPM warning total: 8" in {item.value for item in app.caption}
     assert "Fixture CPK warning total: 9" in {item.value for item in app.caption}
+    app.query_params.clear()
+    app.run(timeout=60)
+    assert not app.exception and not app.error
+    assert not any("CPM" in frame.value.columns for frame in app.dataframe)
+    assert not any(button.key == "cpm_monitor_query_submit" for button in app.button)
 
 
 def test_inline_excel_query_refresh_and_closed_periods(monkeypatch, tmp_path):

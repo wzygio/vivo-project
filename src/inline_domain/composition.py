@@ -323,6 +323,10 @@ def build_raw_measurement_repository(
     db_manager: DatabaseManager,
     prod_code: str,
 ) -> InlineMeasurementSnapshotRepository:
+    if prod_code == "Z622":
+        from src.inline_domain.infrastructure.spc.spc_repository import build_z622_measurement_repository
+
+        return build_z622_measurement_repository(db_manager)
     return InlineMeasurementSnapshotRepository(
         snapshot_dir=inline_measurement_directory(ConfigLoader.get_project_root() / "data"),
         db_manager=db_manager,
@@ -334,9 +338,15 @@ def build_measurement_preparation_repository(
     db_manager: DatabaseManager,
     prod_code: str,
 ) -> InlineMeasurementPreparationRepository:
+    if prod_code == "Z622":
+        from src.inline_domain.infrastructure.spc.spc_repository import build_z622_metadata_repository
+
+        metadata = build_z622_metadata_repository(db_manager)
+    else:
+        metadata = InlineMeasurementMetadataRepository(db_manager)
     return InlineMeasurementPreparationRepository(
         raw_measurements=build_raw_measurement_repository(db_manager, prod_code),
-        metadata=InlineMeasurementMetadataRepository(db_manager),
+        metadata=metadata,
         main_process_history=InlineMainProcessHistoryRepository(db_manager),
     )
 

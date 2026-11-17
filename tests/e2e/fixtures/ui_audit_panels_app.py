@@ -50,5 +50,5 @@ _patch=install(mode)
 st.session_state['fixture_page_runs']=st.session_state.get('fixture_page_runs',0)+1
 st.caption(f"Page runs: {st.session_state['fixture_page_runs']}")
 st.button('Fixture full page reload')
-name='专项资料-台账周报.py' if mode=='documents' else '超规预警看板.py'
+name='专项资料-台账周报.py' if mode=='documents' else '历史预警看板.py'
 runpy.run_path(str(ROOT/'app/pages'/name),run_name='__main__')

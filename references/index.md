@@ -14,7 +14,7 @@
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、Z553 固定历史保留起点、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
 | Inline data_exclusion、厂别日期排除、去重与修饰之前过滤、快照与历史保留 | [Inline 日期排除规则](domain/inline_domain/shared/rules-inline-date-exclusion.md) |
-| SPC 后端输入、分层处理、前端筛选、预警与图表数据流 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
+| SPC 后端输入、分层处理、前端筛选、预警与图表数据流；Z622 指定批次 PDS 测量接入与监控清单 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
 | SPC 超规片判定、人工决策台账、传统→专用点位修饰、中央规格区间、稳定哈希 margin、修饰与参数豁免/预警过滤的边界 | [SPC 超规片与点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界；OOS 点位修饰、OOC 清单筛选与能力不达标的先后关系 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-cpk&cpm.md) |
 | SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |

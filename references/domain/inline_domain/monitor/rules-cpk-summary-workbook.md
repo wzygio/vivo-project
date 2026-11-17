@@ -1,6 +1,8 @@
 # CPK / CPM 汇总工作簿更新规则
 
-核验日期：2026-10-10。范围为 `app/pages/超规预警看板.py` 下方的 CPK / CPM 汇总表和最新项目明细；原异常片区域标题为“异常片预警看板”。周度能力预警的 48 小时门槛与独立全指标矩阵及 SPC 主报表一致，详见 [能力明细工作簿规则](../spc/rules-spc-cpk&cpm-decoration.md)。
+核验日期：2026-10-10。范围为 `app/pages/历史预警看板.py` 下方的 CPK / CPM 汇总表和最新项目明细；原异常片区域标题为“异常片预警看板”。周度能力预警的 48 小时门槛与独立全指标矩阵及 SPC 主报表一致，详见 [能力明细工作簿规则](../spc/rules-spc-cpk&cpm-decoration.md)。
+
+历史预警看板中的 CPM 区域仅在 URL 参数 `admin=true` 时构建服务并显示，普通模式保留 CPK 区域；两者筛选 Expander 均默认折叠。此参数沿用项目展示模式约定。
 
 CPM 复用以下周期、统计、补零和日期排除规则，预警阈值同为 1.33。读取同一 `spc_cpk_cpm_decoration` 工作簿的 `<产品>_cpm` sheet，值字段为 `cpm_corrected`，规范化后的数值字段为 `cpm`。
 汇总保存到同一 `monitor_summary_workbook` 工作簿的 `<产品> CPM` sheet（兼容旧版统一 `CPM` sheet），总项目数和达标率列分别为 `CPM总项目数`、`Cpm≥1.33达标率`。CPK 与 CPM 的 sheet、列及查询状态分别管理，避免相互读取或覆盖；CPM 初始化同样不从异常台账推断总项目数。

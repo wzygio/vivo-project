@@ -12,7 +12,15 @@ async page => {
   const cpkQuery = () => page.locator(".st-key-cpk_monitor_query_submit button:visible").first();
   const expectText = text => page.getByText(text, { exact: true }).waitFor({ timeout: 60000 });
   const absent = text => page.getByText(text, { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
+  const openFilters = async () => {
+    for (const label of ['Inline超规预警', 'SPC CPK超规预警']) {
+      const panel = page.getByTestId('stExpander').filter({ hasText: label });
+      await panel.waitFor();
+      if (!await panel.locator('details').evaluate(node => node.open)) await panel.locator('summary').click();
+    }
+  };
   await page.goto(base);
+  await openFilters();
   await cpkQuery().waitFor({ timeout: 60000 });
   await absent("超规趋势");
   await absent("CPK 汇总表");
@@ -41,6 +49,7 @@ async page => {
   await expectText("Fixture year OOS: 100");
   await expectText("Fixture closed preserved: True");
   await page.goto(`${base}?admin=true`);
+  await openFilters();
   await oosQuery().click();
   await expectText("数据最后更新时间（管理员）");
   await cpkQuery().click();

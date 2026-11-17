@@ -100,10 +100,10 @@ def get_cached_oos_monitor_payload(
     }
 
 
-st.set_page_config(page_title="超规预警看板", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="历史预警看板", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 render_page_header(
-    title="超规预警看板",
+    title="历史预警看板",
     show_product_filter=False,
     show_data_refresh=False,
     cached_funcs=[
@@ -126,7 +126,7 @@ try:
         pd.Timestamp.today().date().isoformat()
     )
 except Exception:
-    logging.exception("超规预警看板初始化失败")
+    logging.exception("历史预警看板初始化失败")
     st.error("页面初始化失败，请稍后重试。")
     st.stop()
 
@@ -145,25 +145,27 @@ render_oos_monitor_panel(
 )
 
 st.subheader("📊 CPK预警看板")
-with st.expander("SPC CPK超规预警", expanded=True):
+with st.expander("SPC CPK超规预警", expanded=False):
     render_cpk_monitor_section(
         build_cpk_monitor_service(),
         SessionManager.AVAILABLE_PRODUCTS,
         MONITOR_FACTORY_OPTIONS,
     )
 
-st.subheader("📊 CPM预警看板")
-with st.expander("SPC CPM超规预警", expanded=True):
-    render_cpm_monitor_section(
-        build_cpm_monitor_service(),
-        SessionManager.AVAILABLE_PRODUCTS,
-        MONITOR_FACTORY_OPTIONS,
-    )
+if is_admin:
+    st.subheader("📊 CPM预警看板")
+    with st.expander("SPC CPM超规预警", expanded=False):
+        render_cpm_monitor_section(
+            build_cpm_monitor_service(),
+            SessionManager.AVAILABLE_PRODUCTS,
+            MONITOR_FACTORY_OPTIONS,
+        )
 
-st.subheader("📋 AOI_RS监控看板")
-with st.expander("AOI_RS 周期密度", expanded=True):
-    render_aoi_rs_monitor_section(
-        build_aoi_rs_monitor_service(), ConfigLoader.get_enabled_products(),
-    )
+if is_admin:
+    st.subheader("📋 AOI_RS监控看板")
+    with st.expander("AOI_RS 周期密度", expanded=False):
+        render_aoi_rs_monitor_section(
+            build_aoi_rs_monitor_service(), ConfigLoader.get_enabled_products(),
+        )
 
 render_all_product_yield_board()

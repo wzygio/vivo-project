@@ -3,7 +3,7 @@
 - 超规/CPK 页面共享页头刷新缓存，各子看板保留独立刷新数据入口；
 - 「超规片自动预警」区查询门控：未点击「查询」不执行签名预算与数据加载，
   点击后才执行（monkeypatch 计数）；
-- 模块化结构：每个模块 = st.subheader 标题 + st.expander（默认展开）；
+- 模块化结构：历史看板各模块的 st.expander 默认折叠；AOI_RS 仅管理员显示；
 - CPK 独立查询门控保留；未查询时不读取 Excel 或数据库；
 - 矩阵筛选条常驻模块 Expander（未加载也渲染，且只渲染一处），加载后
   由 render_alert_matrix_board 按同一选择切片（filter_selection 透传）。
@@ -60,7 +60,7 @@ from src.inline_domain import composition
 from src.shared_kernel.infrastructure import db_handler
 
 MATRIX_PAGE_PATH = Path(__file__).parents[4] / "app/pages/自动预警看板.py"
-PAGE_PATH = Path(__file__).parents[4] / "app/pages/超规预警看板.py"
+PAGE_PATH = Path(__file__).parents[4] / "app/pages/历史预警看板.py"
 QUERY_BUTTON_KEY = "btn_monitor_query_submit"
 MATRIX_FILTER_KEYS = (
     "alert_matrix_data_type",
@@ -284,7 +284,7 @@ def _run_page() -> None:
 
 def _assert_warning_header(trackers: dict) -> None:
     header = trackers["header_kwargs"]
-    assert header["title"] == "超规预警看板"
+    assert header["title"] == "历史预警看板"
     assert header["show_product_filter"] is False
     assert header["show_data_refresh"] is False
     assert {func.__name__ for func in header["cached_funcs"]} == {
@@ -293,18 +293,23 @@ def _assert_warning_header(trackers: dict) -> None:
 
 
 def _assert_module_structure(trackers: dict) -> None:
-    """两个页面合计五个独立查询模块，未查询时不额外展示提示。"""
+    """历史模块默认折叠，AOI_RS 仅在管理员模式渲染。"""
     assert trackers["infos"] == []
-    assert trackers["subheaders"] == [
-        "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板",
-        "📋 AOI_RS监控看板",
+    titles = [
+        "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK预警看板",
     ]
+    if st.query_params.get("admin") == "true":
+        titles.extend(["📊 CPM预警看板", "📋 AOI_RS监控看板"])
+    assert trackers["subheaders"] == titles
     module_expanders = [
-        item for item in trackers["expanders"] if item.get("expanded") is True
+        item for item in trackers["expanders"] if item["label"] in {
+            "Inline超规预警", "SPC CPK超规预警", "SPC CPM超规预警", "AOI_RS 周期密度",
+        }
     ]
-    assert len(module_expanders) == 5
+    assert len(module_expanders) == len(titles) - 1
+    assert all(item["expanded"] is False for item in module_expanders)
     # subheader 与 expander 文案不重复堆砌
-    for item, title in zip(module_expanders, trackers["subheaders"]):
+    for item, title in zip(module_expanders, titles[1:]):
         assert item["label"] != title
 
 
@@ -466,7 +471,7 @@ def test_shared_header_cache_refresh_clears_all_board_queries(monkeypatch, admin
     st.query_params.clear()
     if admin:
         st.query_params["admin"] = "true"
-    cache_key = "btn_clear_超规预警看板"
+    cache_key = "btn_clear_历史预警看板"
     trackers = _stub_page_dependencies(monkeypatch, clicked_keys={cache_key} if admin else frozenset())
     monkeypatch.setattr(page_header, "render_page_header", real_header)
     monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)

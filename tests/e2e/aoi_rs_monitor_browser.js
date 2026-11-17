@@ -15,8 +15,7 @@ const fs = require('node:fs');
     const choose = async (key, value) => {
       const combo = page.locator(`.st-key-${key}`).getByRole('combobox');
       await combo.scrollIntoViewIfNeeded();
-      await combo.focus();
-      await combo.press('ArrowDown');
+      await combo.click();
       await page.getByRole('option', { name: value, exact: true }).click();
     };
     const waitFor = async (condition, label) => {
@@ -27,7 +26,32 @@ const fs = require('node:fs');
       throw new Error(`Timed out: ${label}`);
     };
     await page.goto(process.env.VIVO_RS_BROWSER_URL);
-    await query.waitFor();
+    await page.getByRole('combobox', { name: 'Fixture scenario', exact: true }).waitFor();
+    await page.getByRole('heading', { name: '历史预警看板', exact: true }).waitFor();
+    if (await page.getByText('📋 AOI_RS监控看板', { exact: true }).count()) throw new Error('AOI_RS visible without admin');
+    if (await query.count()) throw new Error('AOI_RS controls visible without admin');
+    if (await page.getByText('📊 CPM预警看板', { exact: true }).count()) throw new Error('CPM visible without admin');
+    if (await page.locator('.st-key-cpm_monitor_query_submit').count()) throw new Error('CPM controls visible without admin');
+    if (await page.locator('[data-testid="stExpander"] details[open]').count()) throw new Error('Filters are expanded by default');
+    await page.screenshot({ path: path.join(output, 'ordinary-collapsed.png'), fullPage: true });
+    await page.goto(`${process.env.VIVO_RS_BROWSER_URL}/?admin=true`);
+    const aoiPanel = page.getByTestId('stExpander').filter({ hasText: 'AOI_RS 周期密度' });
+    await aoiPanel.waitFor();
+    await page.getByText('📊 CPM预警看板', { exact: true }).waitFor();
+    if (await page.locator('[data-testid="stExpander"] details[open]').count()) throw new Error('Admin filters are expanded by default');
+    await aoiPanel.locator('summary').click();
+    await query.waitFor({ state: 'visible' });
+    const firstRow = await Promise.all(['factory', 'products', 'steps', 'codes'].map(
+      suffix => page.locator(`.st-key-aoi_rs_monitor_${suffix}`).boundingBox(),
+    ));
+    if (firstRow.some(box => !box) || firstRow.some((box, index) => index && box.x <= firstRow[index - 1].x)) {
+      throw new Error('Factory/product/station/RSCode are not in one row');
+    }
+    if (Math.max(...firstRow.map(box => box.y + box.height)) - Math.min(...firstRow.map(box => box.y + box.height)) > 3) {
+      throw new Error('First-row controls are not bottom aligned');
+    }
+    const periods = await page.locator('.st-key-aoi_rs_monitor_halfyears').boundingBox();
+    if (!periods || periods.y < Math.max(...firstRow.map(box => box.y + box.height))) throw new Error('Period controls must be on second row');
     if (await tables.count()) throw new Error('Results appeared before query');
     await query.click();
     await waitFor(async () => await tables.count() === 2, 'two product tables');
@@ -80,7 +104,9 @@ const fs = require('node:fs');
     fs.writeFileSync(path.join(output, 'browser-result.json'), JSON.stringify({ passed: true, checks: [
       'actual page', 'query gate', 'two products', 'Excel download', 'filter invalidation',
       '1440/768/375 viewport fit', 'narrow-screen controls/table/download',
-      'narrow-screen period change and query', 'ordinary failure', 'empty result', 'no page errors',
+      'narrow-screen period change and query', 'admin failure', 'empty result', 'no page errors',
+      'historical page title', 'ordinary AOI_RS exclusion', 'all filters collapsed', 'two filter rows',
+      'CPM admin-only display',
     ] }, null, 2));
     console.log('AOI_RS browser E2E passed');
   } finally {

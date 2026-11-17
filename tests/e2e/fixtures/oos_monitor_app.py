@@ -194,7 +194,7 @@ SessionManager.AVAILABLE_PRODUCTS = ["M626"]
 SessionManager.get_active_config = staticmethod(lambda: {})
 
 # The Excel-only reports moved out of the cross-domain matrix page.
-runpy.run_path(str(PROJECT_ROOT / "app" / "pages" / "超规预警看板.py"), run_name="__main__")
+runpy.run_path(str(PROJECT_ROOT / "app" / "pages" / "历史预警看板.py"), run_name="__main__")
 records = summary_store.read()
 current_week_label = current_period_windows(today)[-1].time_label
 week = records.loc[

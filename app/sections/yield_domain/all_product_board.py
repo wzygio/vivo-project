@@ -59,11 +59,13 @@ def render_all_product_yield_board() -> None:
         st.info('暂无可展示的产品。')
         return
     now = datetime.now()
-    first, second = st.columns([5, 1], vertical_alignment='bottom')
-    with first:
-        selected = _select('产品型号', products, PRODUCTS_KEY, format_func=get_product_label_formatter())
-    with second:
-        query = st.button('查询', key='all_product_yield_query', type='primary')
+    filters = st.expander('良率筛选条件', expanded=False)
+    with filters:
+        first, second = st.columns([5, 1], vertical_alignment='bottom')
+        with first:
+            selected = _select('产品型号', products, PRODUCTS_KEY, format_func=get_product_label_formatter())
+        with second:
+            query = st.button('查询', key='all_product_yield_query', type='primary')
     if query:
         payloads = {}
         with st.spinner('正在加载不良率趋势…'):
@@ -88,19 +90,20 @@ def render_all_product_yield_board() -> None:
         st.info('产品选择已变更，请查询以加载新增产品。')
     valid = [v['rates'] for v in scoped.values() if v is not None]
     catalog = pd.concat(valid, ignore_index=True) if valid else pd.DataFrame(columns=['defect_group', 'defect_code'])
-    left, right = st.columns(2)
-    with left:
-        groups = _select('Defect Group', sorted(catalog.defect_group.dropna().unique()), 'all_product_yield_groups')
-    with right:
-        codes = _code_select(sorted(catalog.loc[catalog.defect_group.isin(groups), 'defect_code'].dropna().loc[lambda s: s.ne('')].unique()))
-    periods = list(period_months(now.year, now.month))
-    a, b, c = st.columns(3)
-    with a:
-        halves = _select('年度（上下半年）', [p for p in periods if '-H' in p], 'all_product_yield_halves')
-    with b:
-        quarters = _select('季度', [p for p in periods if '-Q' in p], 'all_product_yield_quarters')
-    with c:
-        months = _select('月度', [p for p in periods if '-H' not in p and '-Q' not in p], 'all_product_yield_months')
+    with filters:
+        left, right = st.columns(2)
+        with left:
+            groups = _select('Defect Group', sorted(catalog.defect_group.dropna().unique()), 'all_product_yield_groups')
+        with right:
+            codes = _code_select(sorted(catalog.loc[catalog.defect_group.isin(groups), 'defect_code'].dropna().loc[lambda s: s.ne('')].unique()))
+        periods = list(period_months(now.year, now.month))
+        a, b, c = st.columns(3)
+        with a:
+            halves = _select('年度（上下半年）', [p for p in periods if '-H' in p], 'all_product_yield_halves')
+        with b:
+            quarters = _select('季度', [p for p in periods if '-Q' in p], 'all_product_yield_quarters')
+        with c:
+            months = _select('月度', [p for p in periods if '-H' not in p and '-Q' not in p], 'all_product_yield_months')
     chosen = [p for p in periods if p in halves + quarters + months]
     st.caption('总不良与堆叠图按所选 Group 汇总；Code 仅筛选明细。季度、半年按月过货数加权。')
     tables, charts = {}, {}

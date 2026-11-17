@@ -12,7 +12,7 @@ const LINKS = {
     YIELD_TREND_MWD: "http://10.72.26.31:8503/入库不良率分析看板",
     PROJECT_FILES: "http://10.72.26.31:8503/专项资料-台账周报",
     WARNING_DASHBOARD: "http://10.72.26.31:8503/自动预警看板",
-    WARNING_SUMMARY: "http://10.72.26.31:8503/超规预警看板",
+    WARNING_SUMMARY: "http://10.72.26.31:8503/历史预警看板",
     CRITICAL_PARTS: "http://10.72.26.31:8503/关键备件报表",
     SPC_REPORT: "http://10.72.26.31:8503/SPC监控报表",
     CTQ_REPORT: "http://10.72.26.31:8503/CTQ监控报表",
@@ -56,7 +56,7 @@ const APP_CONFIG = {
             name: "自动预警",
             children: [
                 { name: "全指标预警看板", url: LINKS.WARNING_DASHBOARD },
-                { name: "历史看板", url: LINKS.WARNING_SUMMARY },
+                { name: "历史预警看板", url: LINKS.WARNING_SUMMARY },
             ]
         },
         { 

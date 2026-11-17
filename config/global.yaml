@@ -30,6 +30,7 @@ product_registry:
     - "Z517"
     - "Z576"
     - "Z553"
+    - "Z622"
 
   # 仅用于产品筛选框展示：M678（CPD2455）。缺失或留空时仅显示产品代码。
   # 此映射不控制产品启用范围，产品列表及顺序仍由 enabled_products 决定。
@@ -113,6 +114,7 @@ resources:
       scrap_sheets: resources/inline_domain/monitor/scrap_sheets.xlsx
       spc_cpk_cpm_decoration: resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx
       spc_outlier_filters: resources/inline_domain/spc/spc_outlier_filters.xlsx
+      spc_z622_monitoring: resources/inline_domain/spc/Z622监控站点参数.xlsx
       spc_sheet_oos_decoration: resources/inline_domain/spc/spc_sheet_oos_decoration.xlsx
       spc_sheet_ooc_decoration: resources/inline_domain/spc/spc_sheet_ooc_decoration.xlsx
       asset_compliance_config_xlsx_337c0336: resources/inline_domain/monitor/decrypted_files/compliance_config.xlsx

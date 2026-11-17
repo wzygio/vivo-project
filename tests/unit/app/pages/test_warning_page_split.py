@@ -30,7 +30,8 @@ def isolated_pages(monkeypatch):
     ))
 
 
-def test_summary_route_shows_five_boards_without_loading_matrix(isolated_pages, monkeypatch):
+@pytest.mark.parametrize("admin", [None, "false", "True", "true"])
+def test_history_route_scopes_boards_without_loading_matrix(isolated_pages, monkeypatch, admin):
     def forbidden(*args, **kwargs):
         raise AssertionError("Summary route must not load the matrix or query before clicking")
 
@@ -38,21 +39,35 @@ def test_summary_route_shows_five_boards_without_loading_matrix(isolated_pages, 
     monkeypatch.setattr(alert_matrix_snapshot, "has_daily_matrix_snapshot", forbidden)
     monkeypatch.setattr(OosMonitorService, "build_dashboard", forbidden)
     monkeypatch.setattr(all_product_board, "load_product_period_trends", forbidden)
-    app = AppTest.from_file(str(PAGES / "超规预警看板.py")).run()
+    if admin != "true":
+        monkeypatch.setattr(composition, "build_aoi_rs_monitor_service", forbidden)
+        monkeypatch.setattr(composition, "build_cpm_monitor_service", forbidden)
+    app = AppTest.from_file(str(PAGES / "历史预警看板.py"))
+    if admin is not None:
+        app.query_params["admin"] = admin
+    app.run()
     assert not app.exception
-    assert [item.value for item in app.subheader] == ["⚠️ 异常片预警看板", "📊 CPK预警看板", "📊 CPM预警看板", "📋 AOI_RS监控看板", "全产品良率看板"]
+    expected = ["⚠️ 异常片预警看板", "📊 CPK预警看板"]
+    if admin == "true":
+        expected.extend(["📊 CPM预警看板", "📋 AOI_RS监控看板"])
+    expected.append("全产品良率看板")
+    assert [item.value for item in app.subheader] == expected
+    assert len(app.expander) == len(expected)
+    assert all(not panel.proto.expanded for panel in app.expander)
     assert app.button(key="btn_monitor_query_submit")
     assert app.button(key="cpk_monitor_query_submit")
-    assert app.button(key="cpm_monitor_query_submit")
-    assert app.button(key="aoi_rs_monitor_query_submit")
+    assert any(button.key == "cpm_monitor_query_submit" for button in app.button) == (admin == "true")
+    assert any(button.key == "aoi_rs_monitor_query_submit" for button in app.button) == (admin == "true")
     assert app.button(key="all_product_yield_query")
     assert not any(button.key == "btn_load_alert_matrix" for button in app.button)
     metadata = app.session_state._state._new_widget_state.widget_metadata
-    query_keys = ["btn_monitor_query_submit", "cpk_monitor_query_submit", "cpm_monitor_query_submit",
-                  "aoi_rs_monitor_query_submit", "all_product_yield_query"]
+    query_keys = ["btn_monitor_query_submit", "cpk_monitor_query_submit",
+                  "all_product_yield_query"]
+    if admin == "true":
+        query_keys.extend(["cpm_monitor_query_submit", "aoi_rs_monitor_query_submit"])
     fragments = [metadata[app.button(key=key).id].fragment_id for key in query_keys]
     assert None not in fragments
-    assert len(set(fragments)) == 5
+    assert len(set(fragments)) == len(query_keys)
 
 
 def test_matrix_route_has_no_summary_service_dependency(isolated_pages, monkeypatch):
@@ -76,10 +91,10 @@ def test_summary_failure_preserves_cpk_entry_without_exposing_exception(isolated
         raise RuntimeError("private-source-debug-message")
 
     monkeypatch.setattr(composition, "build_oos_history_service", fail)
-    app = AppTest.from_file(str(PAGES / "超规预警看板.py")).run()
+    app = AppTest.from_file(str(PAGES / "历史预警看板.py")).run()
     app.button(key="btn_monitor_query_submit").click().run()
     assert not app.exception
     assert len(app.error) == 1
     assert "private-source-debug-message" not in app.error[0].value
     assert app.button(key="cpk_monitor_query_submit")
-    assert app.button(key="cpm_monitor_query_submit")
+    assert not any(button.key == "cpm_monitor_query_submit" for button in app.button)

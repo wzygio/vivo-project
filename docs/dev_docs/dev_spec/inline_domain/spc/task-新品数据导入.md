@@ -1,4 +1,4 @@
-# SPC监控报表
+# Task：SPC新品数据导入
 - 身份：我是一家OLED制造厂的员工，该项目是一个用于给客户展示厂内数据的报表。
 - 任务：现在需要优化`app\pages\SPC监控报表.py`，在其中导入一款新产品“Z622”的数据
 
@@ -68,7 +68,7 @@ LIMIT 10;
 - 该数据表巨大，任何语句都必须筛选分区字段“glass_start_time”
 
 ## Requirements
-1. 仅需修改spc模块的infrastructure层：`src\inline_domain\infrastructure\spc\spc_repository.py`，其余后端、前端逻辑同其它产品数据一致。
+1. 仅需修改spc模块的infrastructure层：`src\inline_domain\infrastructure\spc\spc_repository.py`及相关程序，其余后端、前端逻辑同其它产品数据一致。
 2. 以上sql语句仅供参考，可进行优化，复杂的数据处理逻辑可提取到内存中使用python计算。
 
 ## Workflow

@@ -68,7 +68,7 @@ def build_service():
 
 
 composition.build_aoi_rs_monitor_service = build_service
-runpy.run_path(str(ROOT / "app/pages/超规预警看板.py"), run_name="__main__")
+runpy.run_path(str(ROOT / "app/pages/历史预警看板.py"), run_name="__main__")
 
 mode = st.selectbox("Fixture scenario", ["normal", "empty", "failure"], key="fixture_rs_mode")
 st.caption(f"Fixture mode: {mode}")

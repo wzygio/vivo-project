@@ -56,6 +56,13 @@ async page => {
     await text('Evap publications: 2');changes.push('manual query isolated from automatic publication');
   }else if(mode==='warning'){
     await text('Page runs: 1');
+    const adminUrl = new URL(page.url());
+    adminUrl.searchParams.set('admin','true');
+    await page.goto(adminUrl.toString());
+    await text('Page runs: 1');
+    for(const label of ['SPC CPK超规预警','SPC CPM超规预警']){
+      await page.getByTestId('stExpander').filter({hasText:label}).locator('summary').click();
+    }
     await page.locator('.st-key-cpk_monitor_query_submit button').click();await text('CPK queries: 1');
     await page.locator('.st-key-cpm_monitor_query_submit button').click();await text('CPM queries: 1');
     await text('CPK queries: 1');await text('Page runs: 1');
