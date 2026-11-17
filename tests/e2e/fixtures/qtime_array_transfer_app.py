@@ -68,7 +68,7 @@ class Decisions:
 
 st.set_page_config(page_title="Q-Time fixed source E2E", layout="wide")
 mode = st.selectbox("测试数据", ["合成样本", "真实只读样本", "空结果", "读取失败"])
-decision = st.selectbox("测试规格与决策", ["不设置规格", "默认修饰", "保留预警", "删除记录"])
+decision = st.selectbox("测试规格与决策", ["不设置规格", "正式规格", "默认修饰", "保留预警", "删除记录"])
 identity = (mode, decision)
 if st.session_state.get("fixture_identity") != identity:
     for key in ("qtime_report_result", "qtime_report_signature", "fixture_publication"):
@@ -121,7 +121,9 @@ repository = QTimeRepository(
 publication = QTimeAlertResults(MemoryPublication(), ttl_seconds=ConfigLoader.get_cache_ttl_seconds())
 service = QTimeReportService(
     repository, Decisions(), constrain_display=True, alert_results=publication,
-    spec_overrides={"ARRAY/1A200/21100": 2.0} if decision != "不设置规格" else {},
+    spec_overrides=(ConfigLoader.load_domain_config("indicator_domain")["qtime"]["spec_overrides"]
+                    if decision == "正式规格" else
+                    {"ARRAY/1A200/21100": 2.0} if decision != "不设置规格" else {}),
 )
 
 

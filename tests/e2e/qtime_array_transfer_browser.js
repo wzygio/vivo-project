@@ -11,7 +11,7 @@ const path = require('node:path');
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.on('pageerror', error => pageErrors.push(error.message));
     await page.goto(process.env.VIVO_QTIME_BROWSER_URL);
-    await page.getByText('重点站点Q-Time监控', { exact: true }).waitFor();
+    await page.getByText(/^重点站点Q-?Time监控$/).waitFor();
     const query = () => page.getByRole('button', { name: '查询', exact: true }).click();
     const choose = async (label, value) => {
       await page.getByRole('combobox', { name: label, exact: true }).click();
@@ -23,6 +23,7 @@ const path = require('node:path');
     const figures = () => plots().evaluateAll(nodes => nodes.map(node => ({
       title: node.layout.title.text.replace(/<[^>]+>/g,''),
       y: node.calcdata[0].map(point => point.s ?? point.y),
+      specLines: (node.layout.shapes || []).map(shape => shape.y0),
       traces: node.data.map(trace => trace.type), scrollZoom: node._context.scrollZoom,
     })));
     const healthy = async () => {
@@ -61,12 +62,14 @@ const path = require('node:path');
     await query();
     await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 1);
     if ((await figures())[0].title !== 'M678') throw new Error('Delete did not use original decision path');
-    await choose('测试规格与决策','不设置规格');
+    await choose('测试规格与决策','正式规格');
     await choose('测试数据','真实只读样本');
     await query();
     await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length >= 6);
     const captured = await figures();
     if (captured.reduce((sum,item) => sum + item.y.length,0) < 100) throw new Error('Captured real data not rendered');
+    if (captured.some(item => item.specLines.length !== 1 || item.specLines[0] !== 200
+        || item.y.some(value => value >= 200))) throw new Error('Approved 200-hour specification/decoration not applied');
     await page.screenshot({path:path.join(output,'captured-real.png'),fullPage:true});
     for (const mode of ['空结果','读取失败']) {
       await choose('测试数据',mode);
@@ -83,7 +86,7 @@ const path = require('node:path');
     if (pageErrors.length) throw new Error(pageErrors.join('\n'));
     fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,
       scope:'bounded captured SQL transport -> real fixed source -> repository/snapshot/service -> existing page/charts',
-      scenarios:['synthetic intervals and product mapping','missing spec','True/False/Delete','captured real data','empty','failure','recovery','mobile','scroll'],
+      scenarios:['synthetic intervals and product mapping','missing spec','True/False/Delete','approved 200-hour specification','captured real data','empty','failure','recovery','mobile','scroll'],
       synthetic:actual,captured,pageErrors},null,2));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });
