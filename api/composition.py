@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +85,18 @@ def build_service() -> PublishedAnomalyService:
             return build_qtime_alert_results(workbook_reader=reader).read(query.product, day, shops=shops, **dates)
         if query.sub_domain == 'Yield':
             from src.yield_domain.composition import build_yield_alert_results
-            result = build_yield_alert_results(workbook_reader=reader).read(query.product, 'lot', day, **dates)
+            publication = build_yield_alert_results(workbook_reader=reader)
+            # Yield, like Inline, creates product publications only as needed.
+            # The store distinguishes true absence from unreadable workbooks
+            # and incomplete existing data/metadata/decision-sheet sets.
+            if publication.store.is_product_absent(query.product, 'lot'):
+                return empty_source()
+            result = publication.read(query.product, 'lot', day, **dates)
+            if result.status not in ('ready', 'no_data'):
+                logging.getLogger(__name__).warning(
+                    'API_PUBLICATION_UNAVAILABLE product=%s sub_domain=Yield status=%s',
+                    query.product, result.status,
+                )
             return {'state': 'ok' if result.status in ('ready', 'no_data') else 'error',
                     'records': result.records, 'release_records': result.release_records,
                     'release_evidence': result.release_evidence}

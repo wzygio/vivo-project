@@ -101,7 +101,8 @@ def test_plan_replaces_repetition_and_logon_with_requested_times(tmp_path):
     inspection, mail = specs
     assert inspection['name'] == 'vivo-project Yield IJP Alert Publication'
     assert inspection['module'] == 'api.inspection'
-    assert inspection['triggers'] == [{'kind': 'daily', 'time': '07:15'}]
+    assert inspection['triggers'] == [{'kind': 'daily', 'time': '07:15'},
+                                      {'kind': 'daily', 'time': '19:15'}]
     assert mail['module'] == 'api.notification.scheduled'
     assert mail['triggers'] == [
         {'kind': 'weekly', 'weekday': 'Monday', 'time': '07:20'},
@@ -182,7 +183,9 @@ def test_registration_plan_uses_future_boundaries_without_changing_tasks(tmp_pat
     assert inspection['Module'] == 'api.inspection'
     assert inspection['Triggers'][0]['Kind'] == 'daily'
     assert inspection['Triggers'][0]['Time'] == '07:15'
-    assert datetime.fromisoformat(inspection['Triggers'][0]['StartBoundary']) > datetime.now()
+    assert [trigger['Time'] for trigger in inspection['Triggers']] == ['07:15', '19:15']
+    assert all(trigger['Kind'] == 'daily' and datetime.fromisoformat(trigger['StartBoundary']) > datetime.now()
+               for trigger in inspection['Triggers'])
     assert [trigger['Weekday'] for trigger in mail['Triggers']] == ['Monday', 'Tuesday']
     assert [trigger['Time'] for trigger in mail['Triggers']] == ['07:20', '11:00']
     assert '--test-mode' not in mail['Arguments']

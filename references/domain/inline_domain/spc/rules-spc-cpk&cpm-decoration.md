@@ -1,10 +1,10 @@
 # SPC CPK/CPM 明细工作簿更新与预警规则
 
-本文维护 `spc_cpk_cpm_decoration.xlsx` 的字段语义、新增、刷新、历史保留、统一预警来源及筛选规则。核验日期：2026-10-16。能力计算公式及缺失值准入见 [SPC 能力计算规则](rules-spc-cpk&cpm.md)，服务调用路径见 [SPC 数据流](data-flow-spc.md)。
+本文维护 `spc_cpk_cpm_decoration.xlsx` 的字段语义、新增、刷新、历史保留、统一预警来源及筛选规则。核验日期：2026-11-17。能力计算公式及缺失值准入见 [SPC 能力计算规则](rules-spc-cpk&cpm.md)，服务调用路径见 [SPC 数据流](data-flow-spc.md)。
 
 ## 1. 工作簿用途与字段
 
-该工作簿保存能力值替换决策及其历史记录，不是每次重新生成的当前不达标清单。默认位置为 `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx`，实际路径由全局资源配置解析。
+该工作簿保存不达标项目的能力值替换决策及尚未解决的历史记录。2026-11-17起，正常持久化移除已确认达标（对应 corrected 值 ≥ 1.33）的行，不再将达标行当作历史决策长期保留；无法判定的空值行和未重新覆盖的不达标历史仍保留。默认位置为 `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx`，实际路径由全局资源配置解析。
 
 CPK 使用产品编码同名 sheet，例如 `M678`；CPM 使用 `<产品>_cpm`，例如 `M678_cpm`。两类指标独立匹配、独立维护。
 
@@ -44,15 +44,19 @@ CPK 使用产品编码同名 sheet，例如 `M678`；CPM 使用 `<产品>_cpm`�
 | 本次计算情况 | 已有记录如何处理 |
 |---|---|
 | 匹配到同一键，仍低于 `1.33` | 更新 `cpk_corrected` / `cpm_corrected`，保留记录和人工决策。 |
-| 匹配到同一键，已达到 `1.33` | 同样更新能力值；不因达标自动删除历史记录或改变 flag。 |
+| 匹配到同一键，已达到 `1.33` | 更新后从异常修饰台账移除，不再沿用该行 flag 替换已达标的计算值。 |
 | 匹配到同一键，新的能力值为缺失 | 新的缺失值覆盖旧能力值；记录和人工 flag 仍保留。 |
-| 本次计算没有该键 | 保留原记录和原能力值；不将未覆盖历史重算或置空。 |
+| 本次计算没有该键 | 不重算或置空；原值仍不达标或未知时保留。已存 corrected ≥ 1.33 的历史达标行也在本次保存前剔除。 |
 
-更新已有键不受“新增只取上一周”的限制：完整计算结果覆盖到旧周时，旧周数值也会刷新。已有 flag 和有效替换值保留；无效或缺失的替换目标会补齐并保存。工作簿内容未变化时不重复写入。
+更新已有键不受“新增只取上一周”的限制：完整计算结果覆盖到旧周时，旧周数值也会刷新。保留行的已有 flag 和有效替换值不变；无效或缺失的替换目标会补齐并保存。旧行全部达标被剔除时，仍会追加本次新发现的不达标项，不漏写。工作簿内容未变化时不重复写入；已有sheet删至零行时保留表头。
 
 历史刷新函数同时覆盖对应的 `cpk_corrected` / `cpm_corrected` 和 `period_start`、`period_end`，保证门槛使用与本次能力值一致的样本范围；`period_sort`、flag 和有效替换目标保留。未重新计算的历史时间可能仍是旧版本首次保存的范围，不能把这些字段当作最后刷新时间。
 
-例如某项目某周首次计算为 `0.9`，进入工作簿后，再次计算为 `1.6`，原行仍存在，但能力值变为 `1.6`；再次计算为空时，原行的能力值可以变为空。因此历史明细中可能同时存在不达标、已达标和数值缺失记录。
+例如某项目某周首次计算为 `0.9`，进入工作簿后，再次计算为 `1.6`，原行会被移除，最终能力值保留 `1.6`。如果尚存的异常行再次计算为空，则仍保留空值行供后续判定；不把空值视为达标。若已删除的项目再次不达标且满足上一周新增条件，将作为新异常写入，flag 默认 False。
+
+用户同日澄清：`flag=True` 的替换行为无需调整，故 `apply_capability_decoration()` 保留原有按flag匹配并应用replacement的逻辑，不增加计算值门槛。上述达标行的处理发生在保存台账时。`*_corrected`保存能力替换前的计算值，`*_replacement`保存替换目标；最终展示值不会因本次替换自动回写为corrected。例如 corrected=1.10、flag=True、replacement=1.37 时，最终能力为1.37，台账中的corrected仍为1.10。
+
+这是对旧“刷新达标值但保留历史行”规则的修正，并非统计窗口滚动导致结果自然改变。同一完整周在测量快照、去重后的有效点、规格、点位修饰决策／规则或统计配置变化后，重新计算值仍可能不同；输入与策略完全相同时结果不因日期推移变化。当前台账没有逐次变更审计，不能从现存值断言每一条达标行的历史原因。
 
 数值为空可能源于样本不足导致标准差无法计算、必要输入缺失或规格无效等情况。完全没有匹配计算行与“有匹配行但结果为空”是两种处理，前者保留旧值，后者覆盖为空。仅凭工作簿当前内容不能逐条还原历史变更原因。
 
@@ -85,15 +89,17 @@ SPC 页面、全指标矩阵和 CPK/CPM 监控统一读取 `spc_cpk_cpm_decorati
 |---|---|---|---|
 | 首次计算 | 0.9 / 18h | 不新增记录，能力结果仍保留 0.9 | 不预警 |
 | 后续数据覆盖扩大 | 0.9 / 48h | 新增该周明细 | 预警 |
-| 后续计算达标 | 1.6 / 72h | 原行更新为 1.6，并更新样本起止时间 | 停止预警 |
-| 后续再次不达标 | 0.8 / 72h | 原行更新为 0.8 | 恢复预警 |
+| 后续计算达标 | 1.6 / 72h | 原行删除，计算值保留 1.6 | 停止预警 |
+| 后续再次不达标 | 0.8 / 72h | 满足新增条件时重新写入，flag 默认 False | 恢复预警 |
 | 有匹配计算行但能力值为空 | 空值 / 72h | 空值覆盖原能力值，历史行保留 | 无法判定，不生成预警 |
 
 若本次计算没有匹配业务键，则沿用前述历史保留规则，不把“未重新计算”当作达标或空值。上述状态转换发生在明细成功保存后；预警入口读取保存后的结果。
 
 全指标矩阵和 CPK/CPM 监控通过 `normalize_latest_cpk()` 读取工作簿。历史周度行即使仍为 `flag=False`、值低于 1.33，跨度不足或无法确认时也标为“数据跨度不足”，不计入预警项目数、不生成矩阵预警详情。数值仍保留，历史行不自动删除。该规则不修改 Sheet OOS/OOC 的报警逻辑。
 
-能力结果缓存及矩阵源签名包含跨度策略，SPC 结果签名额外标识统一明细来源规则。Excel 原始内容按文件版本缓存，规范化及页面读取发生在能力计算缓存之外，保证保存后的明细或人工 flag 变化可被读取。本次代码调整不批量清理已有源工作簿或风险台账。
+能力结果缓存及矩阵源签名包含跨度策略，SPC 结果签名额外标识统一明细来源及异常专用台账规则。Excel 原始内容按文件版本缓存，规范化及页面读取发生在能力计算缓存之外，保证保存后的明细或人工 flag 变化可被读取。
+
+2026-11-17另按用户明确要求，对当前工作簿执行一次严格 `> 1.33` 的数据清理，等于 1.33、空值及其余记录在该次清理中不动；先做独立完整备份，在副本中用 Excel 原生删行并逐表验证后替换。此一次性阈值与之后正常保存的 `≥ 1.33` 达标剔除规则分别记录；不清理 replacement 字段、不更改能力公式、源快照或汇总历史。
 
 ## 4. 不达标风险台账的筛选口径
 
@@ -118,7 +124,7 @@ SPC 主服务启用 `strict_persistence=True`：已有工作簿或 sheet 清单�
 
 | 责任 | 实现 |
 |---|---|
-| 新增候选、flag 合并、替换值、历史数值刷新 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py)：`build_capability_anomaly_detail()`、`merge_capability_detail_with_decoration_flags()`、`refresh_existing_capability_values()`、`_append_missing_detail_rows()`。 |
+| 新增候选、flag 合并、替换值、历史数值刷新与达标剔除 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py)：`build_capability_anomaly_detail()`、`merge_capability_detail_with_decoration_flags()`、`refresh_existing_capability_values()`、`remove_passing_capability_rows()`、`_append_missing_detail_rows()`。 |
 | 传入完整计算结果及新增候选 | [capability_decoration_service.py](../../../../src/inline_domain/application/spc/capability_decoration_service.py)：`prepare_capability_decoration()`。 |
 | 加载、保留历史、追加、比较及保存 | [capability_decoration_repository.py](../../../../src/inline_domain/infrastructure/spc/capability_decoration_repository.py)：`persist_capability_decoration()`。 |
 | 查询截止日期与上一完整周范围 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)：`SpcReportService.fetch_spc_report_payload()`。 |

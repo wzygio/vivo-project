@@ -251,7 +251,7 @@ def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("value", [1.1, 1.6])
-def test_existing_capability_value_refreshes_even_when_passing_or_from_older_week(tmp_path, metric, value):
+def test_existing_capability_refresh_keeps_only_unresolved_anomalies(tmp_path, metric, value):
     sheet = resolve_capability_decoration_sheet("M678", metric)
     initial = _capability_frame(1.2).rename(columns={"cpk": metric})
     result = prepare_capability_decoration(initial, tmp_path, sheet_name=sheet, metric=metric)
@@ -265,10 +265,10 @@ def test_existing_capability_value_refreshes_even_when_passing_or_from_older_wee
         updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),
     )
     stored = pd.read_excel(path, sheet_name=sheet)
-    assert stored[f"{metric}_corrected"].tolist() == [value]
-    assert stored["flag"].tolist() == [True]
-    assert stored[f"{metric}_replacement"].tolist() == [1.372]
-    assert result.period_capability_df[metric].tolist() == [1.372, 1.8]
+    assert stored[f"{metric}_corrected"].tolist() == ([value] if value < 1.33 else [])
+    assert stored["flag"].tolist() == ([True] if value < 1.33 else [])
+    assert stored[f"{metric}_replacement"].tolist() == ([1.372] if value < 1.33 else [])
+    assert result.period_capability_df[metric].tolist() == [1.372 if value < 1.33 else value, 1.8]
     before = path.read_bytes()
     prepare_capability_decoration(
         updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),

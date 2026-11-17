@@ -133,7 +133,8 @@ def build_task_specs(root: Path = ROOT, *, env_file: Path | None = None) -> list
     credentials = ['--env-file', str(Path(env_file).resolve())] if env_file is not None else []
     specs = [
         {'name': INSPECTION_TASK, 'module': 'api.inspection', 'parameters': [],
-         'triggers': [{'kind': 'daily', 'time': '07:15'}]},
+         'triggers': [{'kind': 'daily', 'time': '07:15'},
+                      {'kind': 'daily', 'time': '19:15'}]},
         {'name': MAIL_TASK, 'module': 'api.notification.scheduled', 'parameters': credentials,
          'triggers': [{'kind': 'weekly', 'weekday': 'Monday', 'time': '07:20'},
                       {'kind': 'weekly', 'weekday': 'Tuesday', 'time': '11:00'}]},

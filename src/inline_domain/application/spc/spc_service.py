@@ -425,7 +425,7 @@ class SpcReportService:
         capability_signature = (
             str(capability_path.resolve()), *capability_stat,
             f"weekly_span_hours={alert_min_span_hours}",
-            "alerts_from_saved_records_v1",
+            "alerts_from_saved_records_v3_anomaly_only",
         )
         prepared_signature = f"{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}"
         if _sheet_membership_store is not None or sheet_membership_policy_signature:

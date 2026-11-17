@@ -59,7 +59,7 @@ def test_same_week_saved_lifecycle_matches_page_and_monitor(metric, tmp_path):
         if expected:
             assert alerts[f"{metric.upper()}值"].tolist() == [value]
         if hours >= 48:
-            assert len(pd.read_excel(path, sheet_name=sheet)) == 1
+            assert len(pd.read_excel(path, sheet_name=sheet)) == (0 if value is not None and value >= 1.33 else 1)
 
 
 def test_strict_update_failure_preserves_file_and_raises(tmp_path, monkeypatch):

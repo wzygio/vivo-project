@@ -111,7 +111,7 @@ try {
             -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
             -ExecutionTimeLimit (New-TimeSpan -Hours 2)
         $Description = if ($Spec.module -eq 'api.inspection') {
-            'All dashboard alert producers followed by alert matrix warmup daily at 07:15; requires logged-on user.'
+            'All dashboard alert producers followed by alert matrix warmup daily at 07:15 and 19:15; requires logged-on user.'
         } else {
             'Weekly alert email Monday 07:20 and Tuesday 11:00, only after complete current-day inspection.'
         }

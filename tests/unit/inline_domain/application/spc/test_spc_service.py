@@ -536,7 +536,7 @@ def test_same_week_snapshot_change_refreshes_saved_values_through_both_caches(mo
     assert second.period_capability_df["cpk"].iloc[0] >= 1.33
     assert latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8)).empty
     saved = pd.read_excel(path, sheet_name="M626")
-    assert len(saved) == 1 and saved["cpk_corrected"].iloc[0] >= 1.33
+    assert saved.empty
 
 
 def _decoration_payload_with_decisions() -> dict:

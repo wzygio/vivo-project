@@ -316,13 +316,13 @@ Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷
 
 `build_period_capability_report()` 输出 `mean_value`、`std_value`、`sigma_source`、`sample_count`、`point_count`、规格与 `cpk`、`cpm` 等字段。`period_start`、`period_end` 取有效 Sheet 组内最早/最晚时间，是实际样本时间，不是窗口的日历起止边界。
 
-服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、启用替换且有可用替换值时，覆盖对应的 `cpk` 或 `cpm`。这个步骤不重算 μ 或 σ，也不改变上述公式。
+服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、启用替换且有可用替换值时，覆盖对应的 `cpk` 或 `cpm`。2026-11-17起，保存前剔除 corrected ≥ 1.33 的达标行；按用户同日澄清，应用替换函数本身保留原行为，不新增计算值门槛。这个步骤不重算 μ 或 σ，也不改变上述公式。
 
 因此按 Sheet 和点位复算得到的是计算器结果；核对服务最终能力值时，还需考虑后续能力替换。台账匹配与状态规则由 [SPC 数据流](data-flow-spc.md) 维护。
 
 明细工作簿新增、数值刷新、历史保留和不达标风险台账筛选的完整规则见 [SPC 能力明细工作簿规则](rules-spc-cpk&cpm-decoration.md)。明细中的 `flag=False` 表示不启用能力值替换，不等同于指标小于 `1.33`。
 
-周度能力预警另要求有效 Sheet 的首末检出时间跨度至少 48 小时；少于 48 小时或无法确认跨度时不新增预警明细，也不在 SPC 页面或监控读取中预警。该门槛不参与能力公式或数值准入，短跨度仍正常计算并保留 CPK/CPM。
+周度能力预警另要求有效 Sheet 的首末检出时间跨度达到 `spc.spc_cpk.alert_min_span_hours`，默认48小时；2026-11-17当前配置为0，即取消最小时长限制，但时间边界仍需有效且顺序正确。低于所配置门槛或无法确认跨度时不新增预警明细，也不在 SPC 页面或监控读取中预警。该门槛不参与能力公式或数值准入，短跨度仍正常计算并保留 CPK/CPM。
 
 ## 9. 实现依据
 

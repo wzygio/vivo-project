@@ -135,6 +135,57 @@ def _assert_unchanged(snapshot: dict[Path, bytes]) -> None:
     assert all(path.read_bytes() == before for path, before in snapshot.items())
 
 
+@pytest.mark.parametrize('missing', ['workbook', 'product'])
+def test_yield_absent_publication_is_complete_empty_without_creating_sheets(published_files, missing):
+    files = published_files
+    path = files.paths[('yield_domain', 'lot_oos_results')]
+    if missing == 'workbook':
+        path.unlink()
+    else:
+        _write(path, {'ANOTHER_PRODUCT': pd.DataFrame({'note': ['untouched']})})
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': 'Yield', 'event_type': 'OOS'})
+    assert response.status_code == 200, response.text
+    assert response.json()['data'] == []
+    assert response.json()['meta']['complete'] is True
+    assert response.json()['meta']['failed_sources'] == []
+    _assert_unchanged(before)
+    if missing == 'workbook':
+        assert not path.exists()
+
+
+@pytest.mark.parametrize('missing_sheet', ['P1', 'P1__meta', 'P1__flags'])
+def test_yield_partially_missing_existing_publication_is_not_reported_as_empty(published_files, missing_sheet):
+    files = published_files
+    path = files.paths[('yield_domain', 'lot_oos_results')]
+    sheets = pd.read_excel(path, sheet_name=None, dtype=object)
+    del sheets[missing_sheet]
+    _write(path, sheets)
+    before = _bytes(files)
+    with TestClient(files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': 'Yield', 'event_type': 'OOS'})
+    assert response.status_code == 503
+    _assert_unchanged(before)
+
+
+def test_yield_expired_publication_remains_unavailable_and_logs_reason(published_files, monkeypatch, caplog):
+    from datetime import timedelta
+    from src.yield_domain import composition as yield_composition
+
+    service = published_files.yield_service()
+    service.ttl_seconds = 43200
+    service.clock = lambda: NOW + timedelta(hours=13)
+    monkeypatch.setattr(yield_composition, 'build_yield_alert_results', lambda **_: service)
+    with TestClient(published_files.app()) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                              params={'product': 'P1', 'sub_domain': 'Yield', 'event_type': 'OOS'})
+    assert response.status_code == 503
+    assert 'API_PUBLICATION_UNAVAILABLE' in caplog.text and 'status=stale' in caplog.text
+
+
 def _release_yield(files) -> None:
     path = files.paths[("yield_domain", "lot_oos_results")]
     decisions = pd.read_excel(path, sheet_name="P1__flags", dtype=object).assign(flag=False)

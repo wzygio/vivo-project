@@ -19,6 +19,7 @@ from src.inline_domain.core.spc.cpk_decoration import (
     ensure_capability_replacements,
     merge_capability_detail_with_decoration_flags,
     refresh_existing_capability_values,
+    remove_passing_capability_rows,
 )
 from src.shared_kernel.utils.excel_tools import (
     _is_missing_sheet_error,
@@ -120,9 +121,6 @@ def persist_capability_decoration(
         sheet_name is None or sheet_names is None or sheet_name in sheet_names
     )
     persisted = current
-    should_write = not sheet_exists and not current.empty
-    if sheet_exists and existing.empty:
-        should_write = not current.empty
     if sheet_exists and not existing.empty:
         refreshed = refresh_existing_capability_values(
             existing, computed_detail_df if computed_detail_df is not None else detail_df, metric,
@@ -130,7 +128,8 @@ def persist_capability_decoration(
         persisted = ensure_capability_replacements(
             _append_missing_detail_rows(refreshed, current, metric), metric,
         )
-        should_write = not persisted.equals(existing)
+    persisted = remove_passing_capability_rows(persisted, metric)
+    should_write = (not persisted.equals(existing)) if sheet_exists else not persisted.empty
     if should_write:
         # openpyxl cannot write pandas.NA/NaT objects into legacy missing fields.
         excel_frame = persisted.astype(object).where(pd.notna(persisted), None)

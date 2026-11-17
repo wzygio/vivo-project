@@ -267,6 +267,12 @@ def refresh_existing_capability_values(
     return result.drop(columns=[*renamed.values(), "_computed_match"])
 
 
+def remove_passing_capability_rows(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Keep anomaly decisions and unknown values, removing computed passing rows."""
+    values = pd.to_numeric(frame[capability_corrected_column(metric)], errors="coerce")
+    return frame.loc[~values.ge(CAPABILITY_ALERT_THRESHOLD)].reset_index(drop=True).copy()
+
+
 def _append_missing_detail_rows(
     existing_decoration_df: pd.DataFrame,
     current_decoration_df: pd.DataFrame,
@@ -280,7 +286,9 @@ def _append_missing_detail_rows(
     current_df = _normalize_key_columns(
         _ordered_existing_columns(current_decoration_df, decoration_columns)
     )
-    if existing_df.empty or current_df.empty:
+    if existing_df.empty:
+        return current_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last").reset_index(drop=True)
+    if current_df.empty:
         return existing_df
 
     existing_keys = pd.MultiIndex.from_frame(existing_df[CPK_KEY_COLUMNS])
