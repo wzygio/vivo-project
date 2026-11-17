@@ -71,7 +71,11 @@ def stop_recorded(identities: list[dict]) -> None:
             process.wait(timeout=5)
 
 
-def owned_run(app_path: Path, output: Path, *, scenario="normal", browser=True) -> dict:
+def owned_run(
+    app_path: Path, output: Path, *, scenario="normal", browser=True,
+    browser_script: str = "tests/e2e/z622_spc.js",
+    environment_overrides: dict[str, str] | None = None,
+) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     record_path = output / "processes.json"
     # Exact identities permit recovery following a forcibly interrupted runner.
@@ -115,6 +119,8 @@ def owned_run(app_path: Path, output: Path, *, scenario="normal", browser=True) 
     environment["VIVO_Z622_BROWSER_URL"] = f"http://127.0.0.1:{port}"
     environment["PLAYWRIGHT_MODULE_PATH"] = str(
         Path(os.environ["USERPROFILE"]) / ".npm-global/node_modules/@playwright/cli/node_modules/playwright")
+    environment.update(environment_overrides or {})
+    environment["VIVO_QTIME_BROWSER_URL"] = f"http://127.0.0.1:{port}"
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     outcome = "normal"
     with (output / "server.log").open("w", encoding="utf-8") as server_log, (output / "browser.log").open("w", encoding="utf-8") as browser_log:
@@ -146,7 +152,7 @@ def owned_run(app_path: Path, output: Path, *, scenario="normal", browser=True) 
             if scenario == "interruption":
                 raise KeyboardInterrupt("EXPECTED_LIFECYCLE_INTERRUPTION")
             if browser:
-                handles.append(subprocess.Popen(["node", "tests/e2e/z622_spc.js"], cwd=ROOT,
+                handles.append(subprocess.Popen(["node", browser_script], cwd=ROOT,
                     env=environment, stdout=browser_log, stderr=browser_log, creationflags=flags))
                 deadline = time.monotonic() + 420
                 while handles[-1].poll() is None:
@@ -155,9 +161,10 @@ def owned_run(app_path: Path, output: Path, *, scenario="normal", browser=True) 
                         raise TimeoutError("Z622 browser verification timed out")
                     time.sleep(0.15)
                 if handles[-1].returncode:
-                    raise RuntimeError("Z622 browser verification failed; inspect browser.log")
+                    raise RuntimeError(f"Browser verification failed ({browser_script}); inspect browser.log")
         except RuntimeError as exc:
             if scenario != "failure" or str(exc) != "EXPECTED_LIFECYCLE_FAILURE":
+                outcome = "failed"
                 raise
             outcome = "expected_failure"
         except KeyboardInterrupt as exc:

@@ -27,12 +27,17 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
 def build_qtime_repository(db_manager: DatabaseManager) -> QTimeRepository:
+    from src.indicator_domain.infrastructure.qtime.array_transfer_source import ArrayTransferQTimeSource
+
     return QTimeRepository(
         db_manager,
         snapshot_dir=(
             ConfigLoader.get_project_root() / "data" / "indicator_domain" / "qtime"
         ),
         snapshot_ttl_hours=ConfigLoader.get_snapshot_ttl_hours(),
+        supplemental_source=ArrayTransferQTimeSource(
+            db_manager.engine, enabled_products=tuple(ConfigLoader.get_enabled_products()),
+        ),
     )
 
 

@@ -56,11 +56,19 @@ class QTimeSnapshotStore:
     _locks_guard = threading.Lock()
     _snapshot_locks: ClassVar[dict[str, threading.Lock]] = {}
 
-    def __init__(self, snapshot_dir: Path, ttl_hours: int) -> None:
+    def __init__(
+        self, snapshot_dir: Path, ttl_hours: int, *,
+        policy_suffixes: dict[Shop, str] | None = None,
+    ) -> None:
         if ttl_hours <= 0:
             raise ValueError("Q-Time snapshot TTL must be positive")
         self._snapshot_dir = Path(snapshot_dir)
         self._ttl_hours = ttl_hours
+        self._policy_suffixes = dict(policy_suffixes or {})
+
+    def policy_for(self, shop: Shop) -> str:
+        suffix = self._policy_suffixes.get(shop)
+        return f"{self.POLICY_VERSION}:{suffix}" if suffix else self.POLICY_VERSION
 
     def source_path(self, shop: Shop) -> Path:
         return self._snapshot_dir / f"qtime_source_{shop.lower()}.parquet"
@@ -77,7 +85,7 @@ class QTimeSnapshotStore:
             return None
         try:
             metadata = self._read_metadata(source_path)
-            if metadata.policy != self.POLICY_VERSION or metadata.shop != shop:
+            if metadata.policy != self.policy_for(shop) or metadata.shop != shop:
                 return None
             if fresh_only and not self._is_fresh(metadata):
                 return None
@@ -109,7 +117,7 @@ class QTimeSnapshotStore:
         nonce = uuid4().hex
         temporary_source = source_path.with_name(f"{source_path.name}.{nonce}.tmp")
         metadata = QTimeSnapshotMetadata(
-            policy=self.POLICY_VERSION,
+            policy=self.policy_for(shop),
             shop=shop,
             source_start=pd.Timestamp(source_start).isoformat(),
             source_end=pd.Timestamp(source_end).isoformat(),

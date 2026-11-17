@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -28,6 +29,7 @@ from src.shared_kernel.data_health import attach_data_health, make_data_health
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+    from src.indicator_domain.infrastructure.qtime.array_transfer_source import ArrayTransferQTimeSource
 
 
 DETAIL_COLUMNS = [
@@ -56,8 +58,10 @@ class QTimeRepository:
         *,
         snapshot_dir: Path | None = None,
         snapshot_ttl_hours: int | None = None,
+        supplemental_source: ArrayTransferQTimeSource | None = None,
     ) -> None:
         self._engine = db_manager.engine
+        self._supplemental_source = supplemental_source
         self._data_forward_policy = ConfigLoader.get_data_forward_policy()
         ttl_hours = (
             ConfigLoader.get_snapshot_ttl_hours()
@@ -65,7 +69,11 @@ class QTimeRepository:
             else snapshot_ttl_hours
         )
         self._snapshot_store = (
-            QTimeSnapshotStore(Path(snapshot_dir), ttl_hours)
+            QTimeSnapshotStore(
+                Path(snapshot_dir), ttl_hours,
+                policy_suffixes={"ARRAY": hashlib.sha256(repr(supplemental_source.source_signature()).encode()).hexdigest()}
+                if supplemental_source is not None else None,
+            )
             if snapshot_dir is not None
             else None
         )
@@ -85,7 +93,7 @@ class QTimeRepository:
         if snapshot is not None:
             options = self._step_options_from_frame(snapshot.frame)
             if options:
-                return options
+                return self._with_supplemental_option(options, shop)
 
         statement = text(
             "SELECT DISTINCT step_desc, f_step, t_step FROM ("
@@ -97,15 +105,22 @@ class QTimeRepository:
             "ORDER BY step_desc, f_step, t_step"
         )
         try:
-            return self._step_options_from_frame(
+            return self._with_supplemental_option(self._step_options_from_frame(
                 self._read_frame(
                     statement, params={"shop": shop, "step_options_after": "20260101"}
                 )
-            )
+            ), shop)
         except QTimeDataAccessError:
             if snapshot is not None:
-                return self._step_options_from_frame(snapshot.frame)
+                return self._with_supplemental_option(self._step_options_from_frame(snapshot.frame), shop)
             raise
+
+    def _with_supplemental_option(
+        self, options: tuple[QTimeStepOption, ...], shop: Shop,
+    ) -> tuple[QTimeStepOption, ...]:
+        if self._supplemental_source is None or shop != "ARRAY":
+            return options
+        return tuple(dict.fromkeys((*options, self._supplemental_source.step_option)))
 
     def fetch_details(self, query: QTimeQuery) -> pd.DataFrame:
         if self._snapshot_store is None:
@@ -142,6 +157,8 @@ class QTimeRepository:
             QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature,
             ConfigLoader.get_report_cutoff_policy().signature,
             ConfigLoader.get_indicator_data_exclusion(),
+            self._supplemental_source.source_signature()
+            if shop == "ARRAY" and self._supplemental_source is not None else (),
         )
         if self._snapshot_store is None:
             return signature
@@ -185,7 +202,7 @@ class QTimeRepository:
             pd.Timestamp(query.start_time),
             pd.Timestamp(query.end_time),
         )
-        sql = f"{self._detail_select_sql()} AND step_desc IN :step_descriptions"
+        sql = f"{self._detail_select_sql(current_specs_only=self._supplemental_source is not None)} AND step_desc IN :step_descriptions"
         params: dict[str, object] = {
             "start_time": source_start.strftime("%Y%m%d%H%M%S"),
             "end_time": source_end.strftime("%Y%m%d%H%M%S"),
@@ -201,7 +218,7 @@ class QTimeRepository:
         if query.products:
             statement = statement.bindparams(bindparam("products", expanding=True))
         return self._normalize_source_details(
-            self._read_frame(statement, params=params)
+            self._read_source(statement, params=params)
         )
 
     def _load_shop_source(
@@ -257,11 +274,11 @@ class QTimeRepository:
             "shop": shop,
         }
         statement = text(
-            f"{self._detail_select_sql()} ORDER BY step_desc, lot_id, timekey"
+            f"{self._detail_select_sql(current_specs_only=self._supplemental_source is not None)} ORDER BY step_desc, lot_id, timekey"
         )
         try:
             refreshed = self._normalize_source_details(
-                self._read_frame(statement, params=params)
+                self._read_source(statement, params=params, supplemental_start=source_start)
             )
         except QTimeDataAccessError:
             if stale is None:
@@ -272,8 +289,13 @@ class QTimeRepository:
             )
             return _LoadedShopSource(stale.frame, stale, False, degraded=True)
 
+        existing = stale.frame if stale is not None else pd.DataFrame(columns=DETAIL_COLUMNS)
+        if self._supplemental_source is not None and shop == "ARRAY":
+            # All starts in the rolling window are rebuilt: a late target may
+            # complete a start older than the base source's incremental overlap.
+            existing = self._without_supplemental_route(existing)
         merged = self._merge_refresh(
-            stale.frame if stale is not None else pd.DataFrame(columns=DETAIL_COLUMNS),
+            existing,
             refreshed,
             refresh_start=refresh_start,
             source_start=source_start,
@@ -288,6 +310,34 @@ class QTimeRepository:
         )
         snapshot = QTimeSnapshot(frame=merged, metadata=metadata)
         return _LoadedShopSource(merged, snapshot, True)
+
+    def _without_supplemental_route(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+        option = self._supplemental_source.step_option
+        return frame.loc[~(frame["f_step"].eq(option.f_step) & frame["t_step"].eq(option.t_step))].copy()
+
+    def _read_source(
+        self, statement: object, *, params: dict[str, object],
+        supplemental_start: pd.Timestamp | None = None,
+    ) -> pd.DataFrame:
+        base = self._read_frame(statement, params=params)
+        source = self._supplemental_source
+        if source is None or params["shop"] != "ARRAY":
+            return base
+        base = self._without_supplemental_route(base)
+        steps = params.get("step_descriptions", ())
+        if steps and source.step_option.step_desc not in steps:
+            return base
+        extra = source.read(
+            start_time=supplemental_start if supplemental_start is not None else pd.Timestamp(params["start_time"]),
+            end_time=pd.Timestamp(params["end_time"]),
+        )
+        products = params.get("products", ())
+        if products:
+            extra = extra.loc[extra["prodcode"].isin(products)]
+        frames = [frame for frame in (base, extra) if not frame.empty]
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=DETAIL_COLUMNS)
 
     @staticmethod
     def _refresh_start(
@@ -346,8 +396,11 @@ class QTimeRepository:
         )
 
     @staticmethod
-    def _detail_select_sql() -> str:
-        return """
+    def _detail_select_sql(*, current_specs_only: bool = False) -> str:
+        # Production observes current maintained specifications, not just records
+        # updated inside the source-fact window. Keep injected legacy adapters compatible.
+        spec_time = "AND (spec.update_time IS NULL OR spec.update_time <= CURRENT_TIMESTAMP)" if current_specs_only else ""
+        return f"""
             SELECT
                 step_desc,
                 lot_id,
@@ -374,6 +427,7 @@ class QTimeRepository:
                   ON spec.productspecname = facts.prodcode
                  AND spec.f_step_id = facts.f_step
                  AND spec.t_step_id = facts.t_step
+                 {spec_time}
             ) AS qtime
             WHERE timekey >= :start_time
               AND timekey < :end_time
