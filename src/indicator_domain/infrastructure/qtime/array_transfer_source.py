@@ -169,7 +169,6 @@ class ArrayTransferQTimeSource:
         result["timekey"] = mapped["event_time"].dt.strftime("%Y%m%d%H%M%S%f")
         result["shop"] = "ARRAY"
         result["prodcode"] = mapped["productcode"]
-        keys = ["prodcode", "step_desc", "lot_id"]
-        if result.assign(_seconds=result["timekey"].str[:14]).duplicated([*keys, "_seconds"]).any():
-            raise ValueError("Fixed-path rows collide with the existing second-level decision key")
+        # The repository selects the earliest station/Lot before decision matching;
+        # same-second starts are valid raw facts, with precision retained above.
         return result.reindex(columns=DETAIL_COLUMNS).reset_index(drop=True)

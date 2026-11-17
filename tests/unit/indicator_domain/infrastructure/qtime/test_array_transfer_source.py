@@ -131,15 +131,16 @@ def test_negative_duration_is_unavailable_instead_of_rewriting_cpt_rule(monkeypa
         source.read(START, END)
 
 
-def test_different_microsecond_starts_cannot_silently_collide_with_decision_key(monkeypatch):
+def test_different_microsecond_starts_retain_precision_for_repository_selection(monkeypatch):
     events = pd.DataFrame([
         event("1A200", "2026-11-17 09:00:00.000001"),
         event("1A200", "2026-11-17 09:00:00.000002"),
         event("21100", "2026-11-17 11:30"),
     ])
     source, _ = reader(monkeypatch, events, pd.DataFrame([master()]))
-    with pytest.raises(QTimeDataAccessError):
-        source.read(START, END)
+    result = source.read(START, END)
+    assert result.timekey.tolist() == ["20261117090000000001", "20261117090000000002"]
+    assert len(result) == 2
 
 
 def test_missing_product_mapping_is_not_treated_as_an_empty_success(monkeypatch):

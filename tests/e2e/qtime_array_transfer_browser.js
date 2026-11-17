@@ -23,6 +23,9 @@ const path = require('node:path');
     const figures = () => plots().evaluateAll(nodes => nodes.map(node => ({
       title: node.layout.title.text.replace(/<[^>]+>/g,''),
       y: node.calcdata[0].map(point => point.s ?? point.y),
+      lots: node._fullData[0].customdata
+        ? Array.from(node._fullData[0].customdata, row => row[0])
+        : Array.from(node._fullData[0].x),
       renderedY: [...node.querySelectorAll('.barlayer .point path')].map(bar =>
         node._fullLayout.yaxis.p2l(bar.getBBox().y)),
       specLines: (node.layout.shapes || []).map(shape => shape.y0),
@@ -39,7 +42,8 @@ const path = require('node:path');
     await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 2
       && [...document.querySelectorAll('.js-plotly-plot')].every(node => node.calcdata?.[0]?.length));
     let actual = await figures();
-    if (actual[0].title !== 'M626' || actual[0].y[0] !== 2.5 || actual[1].y[0] !== 1) {
+    if (actual[0].title !== 'M626' || actual[0].y.length !== 1
+        || actual[0].y[0] !== 2.5 || actual[1].y[0] !== 1) {
       throw new Error('Source-to-page interval/mapping mismatch: ' + JSON.stringify(actual));
     }
     if (actual.some(item => item.traces.join(',') !== 'bar' || item.scrollZoom !== false)) {
@@ -69,6 +73,9 @@ const path = require('node:path');
     await query();
     await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length >= 6);
     const captured = await figures();
+    if (captured.some(item => new Set(item.lots).size !== item.lots.length)) {
+      throw new Error('Repeated station/Lot survived infrastructure deduplication');
+    }
     if (captured.some(item => !item.renderedY.length || item.renderedY.length !== item.y.length)) {
       throw new Error('Rendered bar geometry does not cover all source records');
     }
@@ -98,7 +105,7 @@ const path = require('node:path');
     if (pageErrors.length) throw new Error(pageErrors.join('\n'));
     fs.writeFileSync(path.join(output,'result.json'),JSON.stringify({passed:true,
       scope:'bounded captured SQL transport -> real fixed source -> repository/snapshot/service -> existing page/charts',
-      scenarios:['synthetic intervals and product mapping','missing spec','True/False/Delete','approved 200-hour specification','captured real data','empty','failure','recovery','mobile','scroll'],
+      scenarios:['synthetic intervals and product mapping','earliest station/Lot','missing spec','True/False/Delete','approved 200-hour specification','captured real data','empty','failure','recovery','mobile','scroll'],
       synthetic:actual,captured,pageErrors},null,2));
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

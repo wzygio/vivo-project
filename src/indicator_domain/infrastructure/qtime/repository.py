@@ -46,6 +46,7 @@ DETAIL_COLUMNS = [
     "prodcode",
 ]
 SAFE_DATA_ERROR = "Q-Time 数据读取失败，请联系系统管理员确认数据库权限。"
+OUTPUT_POLICY_VERSION = "qtime-earliest-station-lot-v1"
 logger = logging.getLogger(__name__)
 
 
@@ -154,7 +155,8 @@ class QTimeRepository:
 
     def cache_signature(self, shop: Shop) -> tuple[object, ...]:
         signature = (
-            QTimeSnapshotStore.POLICY_VERSION, self._data_forward_policy.signature,
+            QTimeSnapshotStore.POLICY_VERSION, OUTPUT_POLICY_VERSION,
+            self._data_forward_policy.signature,
             ConfigLoader.get_report_cutoff_policy().signature,
             ConfigLoader.get_indicator_data_exclusion(),
             self._supplemental_source.source_signature()
@@ -499,7 +501,16 @@ class QTimeRepository:
         if query.products:
             mask &= displayed["prodcode"].isin(query.products)
         displayed["timekey"] = display_time.dt.strftime("%Y%m%d%H%M%S")
-        return displayed.loc[mask].drop(columns=["_source_event_time"], errors="ignore").reset_index(drop=True)
+        eligible = displayed.loc[mask].reset_index(drop=True)
+        # Keep the earliest entry in the selected window for each station path/Lot.
+        # Preserve source precision and survivor ordering; raw L1 facts stay intact.
+        time_column = "_source_event_time" if "_source_event_time" in eligible else "timekey"
+        earliest = (
+            eligible.sort_values(time_column, kind="stable")
+            .drop_duplicates(["f_step", "t_step", "lot_id"], keep="first")
+            .sort_index()
+        )
+        return earliest.drop(columns=["_source_event_time"], errors="ignore").reset_index(drop=True)
 
     def _read_snapshot(
         self,

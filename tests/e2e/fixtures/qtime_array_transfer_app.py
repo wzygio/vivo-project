@@ -90,6 +90,11 @@ for product, spec, hours in (("M626", "FIXTURE_SPEC_626", 2.5), ("M678", "FIXTUR
             "prod_qty": 20,
         })
     master_rows.append({"productspecname": spec, "productspecversion": "00001", "productcode": product, "factoryname": "ARRAY"})
+# The same Lot re-enters later; only its earliest entry may reach the report.
+event_rows.append({
+    **event_rows[0], "event_time": base_time + pd.Timedelta(microseconds=1),
+    "event_timekey": (base_time + pd.Timedelta(microseconds=1)).strftime("%Y%m%d%H%M%S%f"),
+})
 events, master = pd.DataFrame(event_rows), pd.DataFrame(master_rows)
 if mode == "真实只读样本":
     capture = Path(os.environ["VIVO_QTIME_CAPTURE_ROOT"])

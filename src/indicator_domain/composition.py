@@ -21,7 +21,7 @@ from src.indicator_domain.infrastructure.ijp.alert_workbook import IjpAlertWorkb
 from src.indicator_domain.infrastructure.qtime.decoration_repository import (
     QTimeDecorationRepository,
 )
-from src.indicator_domain.infrastructure.qtime.repository import QTimeRepository
+from src.indicator_domain.infrastructure.qtime.repository import OUTPUT_POLICY_VERSION, QTimeRepository
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
@@ -68,7 +68,8 @@ def build_qtime_alert_results(*, workbook_reader=None) -> "QTimeAlertResults":
         QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts"), **kwargs),
         ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
         policy_signature=lambda: hashlib.sha256(repr((
-            "qtime-published-v1", ConfigLoader.get_indicator_data_exclusion(),
+            "qtime-published-v1", OUTPUT_POLICY_VERSION,
+            ConfigLoader.get_indicator_data_exclusion(),
             ConfigLoader.get_data_forward_policy().signature,
             ConfigLoader.get_report_cutoff_policy().signature,
             ConfigLoader.load_domain_config("indicator_domain").get("qtime", {}),
