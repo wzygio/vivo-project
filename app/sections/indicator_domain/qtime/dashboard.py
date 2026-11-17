@@ -49,7 +49,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
     同一组 L2 缓存条目），产品/站点筛选为内存过滤；本页不参与 Header
     单产品筛选（产品多选内聚在筛选区首列）。
     """
-    st.subheader("重点站点QTime监控", anchor=False, text_alignment="center")
+    st.subheader("重点站点Q-Time监控", anchor=False, text_alignment="center")
 
     with st.container(border=True):
         product_column, shop_column, path_column, search_column = st.columns(

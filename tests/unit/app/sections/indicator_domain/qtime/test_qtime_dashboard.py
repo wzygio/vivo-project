@@ -52,7 +52,7 @@ def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
 
-    assert app.subheader[0].value == "重点站点QTime监控"
+    assert app.subheader[0].value == "重点站点Q-Time监控"
     assert [widget.key for widget in app.multiselect] == [
         "qtime_products",
         "qtime_step_descriptions",

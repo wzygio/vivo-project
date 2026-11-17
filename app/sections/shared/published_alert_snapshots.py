@@ -41,12 +41,22 @@ def _source(row_key: str) -> tuple[Path, str, tuple[str, ...]]:
     return ConfigLoader.get_domain_resource_path(domain, key), sheet, columns
 
 
+def _empty_result(columns: tuple[str, ...]) -> dict:
+    return {'state': 'ok', 'alerts': pd.DataFrame(columns=columns),
+            'alert_factories': [], 'message': '', 'metadata': {'availability': 'missing'}}
+
+
 def read_published_alerts(row_key: str, product: str, reference_date: date) -> dict:
     """Validate publication scope/freshness, then slice public saved rows only."""
     try:
         path, sheet, columns = _source(row_key)
-        stat = path.stat()
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            return _empty_result(columns)
         frames = read_snapshot_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+        if sheet not in frames:
+            return _empty_result(columns)
         alerts = frames[sheet]
         meta = frames['__meta__']
         scoped_meta = meta.loc[meta.region.eq(sheet)] if row_key.startswith('ijp_') else meta
@@ -81,11 +91,12 @@ def read_published_alerts(row_key: str, product: str, reference_date: date) -> d
         else:
             if str(record.start_date) != start or str(record.end_date) != end:
                 raise ValueError('Invalid IQC window')
-            if product not in str(record.products).split('、'):
-                raise ValueError('Product outside publication scope')
-            alerts = alerts.loc[alerts['产品型号'].fillna('').astype(str).map(
+            product_mask = alerts['产品型号'].fillna('').astype(str).map(
                 lambda value: product in value.split('、'),
-            )]
+            )
+            if product not in str(record.products).split('、') and product_mask.any():
+                raise ValueError('Product outside publication scope')
+            alerts = alerts.loc[product_mask]
         public = alerts.loc[:, list(columns)].copy().reset_index(drop=True)
         if row_key.startswith('ijp_'):
             for column in ('ratio', 'minimum'):
@@ -112,7 +123,7 @@ def published_alert_signature(row_key: str, product: str, reference_date: date) 
         file_version = 'unavailable'
     # Revalidate age outside cell/detail caches, including unchanged files.
     state = read_published_alerts(row_key, product, reference_date)['state']
-    return f'published-alert-v2:{row_key}:{file_version}:{reference_date}:{state}'
+    return f'published-alert-v3:{row_key}:{file_version}:{reference_date}:{state}'
 
 
 def load_published_detail(row_key: str, product: str, reference_date: date) -> dict:

@@ -144,8 +144,8 @@ render_oos_monitor_panel(
     step_desc_map=step_desc_map, is_admin=is_admin,
 )
 
-st.subheader("📊 CPK预警看板")
-with st.expander("SPC CPK超规预警", expanded=False):
+st.subheader("📊 CPK达标率趋势图")
+with st.expander("CPK 筛选条件", expanded=False):
     render_cpk_monitor_section(
         build_cpk_monitor_service(),
         SessionManager.AVAILABLE_PRODUCTS,
@@ -153,8 +153,8 @@ with st.expander("SPC CPK超规预警", expanded=False):
     )
 
 if is_admin:
-    st.subheader("📊 CPM预警看板")
-    with st.expander("SPC CPM超规预警", expanded=False):
+    st.subheader("📊 CPM达标率趋势图")
+    with st.expander("CPM 筛选条件", expanded=False):
         render_cpm_monitor_section(
             build_cpm_monitor_service(),
             SessionManager.AVAILABLE_PRODUCTS,

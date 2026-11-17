@@ -68,6 +68,24 @@ def test_fresh_results_do_not_construct_or_call_producers():
     assert all(item["status"] == "current" for item in outcomes)
 
 
+def test_display_passing_for_missing_tables_does_not_skip_publication():
+    published = set()
+
+    def reader(row, product, reference):
+        return {"state": "ok", "metadata": {} if (row, product) in published else {"availability": "missing"}}
+
+    def publish_yield(product, *, kinds):
+        published.update(("yield_lot_oos" if kind == "lot" else "yield_trend_fluctuation", product) for kind in kinds)
+
+    def publish_ijp(row):
+        published.add((row, "Z622"))
+
+    outcomes = refresh_results(("Z622",), TODAY, reader=reader,
+        yield_producer=publish_yield, ijp_producer=publish_ijp)
+    assert len(published) == 4
+    assert all(item["status"] == "success" for item in outcomes)
+
+
 def test_yield_empty_success_is_current_but_ijp_unpublished_template_is_produced():
     done = set()
 

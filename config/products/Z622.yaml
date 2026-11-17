@@ -1,3 +1,3 @@
-# SPC PDS pilot lot; limits remain unknown until separately supplied.
+# SPC PDS pilot lot; specifications use the standard Z622 database records.
 data_source:
   product_code: Z622

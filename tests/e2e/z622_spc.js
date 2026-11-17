@@ -15,6 +15,7 @@ const path = require('node:path');
     await page.getByText(/Z622 · \d+ 条点位 · \d+ 个指标/).waitFor({ timeout: 180000 });
     const evidence = JSON.parse(fs.readFileSync(path.join(output, 'pipeline-normal.json'), 'utf8'));
     if (!evidence.enabled || !evidence.point_rows || !evidence.sql_calls) throw new Error('Pipeline did not use enabled Z622 and captured SQL transport');
+    if (!evidence.cpk_valid || !evidence.cpm_valid) throw new Error('Z622 capability analysis did not use native specifications');
     const selection = JSON.parse(fs.readFileSync(path.join(output, 'selection.json'), 'utf8'));
     const choose = async (key, value) => {
       const combo = page.locator(`.st-key-${key}`).getByRole('combobox');

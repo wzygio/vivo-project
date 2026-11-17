@@ -20,11 +20,13 @@ from src.inline_domain.infrastructure.shared.measurement_snapshot_repository imp
 )
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     EXCLUDED_MEASUREMENT_STEP_ID,
+    MEASUREMENT_VALIDITY_SIGNATURE,
+    filter_invalid_measurement_values,
 )
 from src.shared_kernel.snapshot_paths import inline_measurement_directory, snapshot_component
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.measurement_data_loader import RAW_MEASUREMENT_COLUMNS
-from src.inline_domain.infrastructure.shared.measurement_metadata_loader import SPEC_COLUMNS
+from src.inline_domain.infrastructure.shared.measurement_metadata_loader import load_parameter_specs
 from src.inline_domain.infrastructure.shared.rolling_snapshot import read_metadata, publish_snapshots
 from src.inline_domain.core.shared.measurement_correction import apply_spc_value_corrections
 
@@ -34,7 +36,9 @@ if TYPE_CHECKING:
 Z622_PRODUCT = "Z622"
 Z622_LOT = "L3ZB6BE03"
 Z622_SOURCE_START = pd.Timestamp("2026-10-01")
+# Retain the published raw-source identity; analysis evolves independently below.
 Z622_SOURCE_POLICY = "z622-array-pds-v1-measurements-only"
+Z622_ANALYSIS_POLICY = "z622-spc-native-specifications-v2"
 
 
 def _monitoring_path() -> Path:
@@ -143,7 +147,7 @@ def load_z622_measurements(
                     valid = (chunk.sheet_id.astype("string").str.startswith(Z622_LOT, na=False)
                              & chunk.start_time.ge(day) & chunk.start_time.lt(day_end)
                              & pairs.isin(allowed))
-                    frames.append(chunk.loc[valid])
+                    frames.append(filter_invalid_measurement_values(chunk.loc[valid]))
     if _z622_source_signature() != signature:
         raise ValueError("Z622 monitoring configuration changed during source read")
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=RAW_MEASUREMENT_COLUMNS)
@@ -191,7 +195,10 @@ def build_z622_measurement_repository(
 
 
 class _Z622MetadataRepository:
-    """Declare measured identities with unknown limits; never borrow specifications."""
+    """Keep the PDS monitoring catalog and consume Z622's own standard specifications."""
+
+    def __init__(self, db_manager: DatabaseManager | None) -> None:
+        self.db_manager = db_manager
 
     def get_parameter_catalog(self, prod_code: str) -> pd.DataFrame:
         if prod_code != Z622_PRODUCT:
@@ -202,18 +209,13 @@ class _Z622MetadataRepository:
     def get_parameter_specs(self, prod_code: str) -> pd.DataFrame:
         if prod_code != Z622_PRODUCT:
             raise ValueError("PDS metadata is restricted to Z622")
-        frame = _z622_monitoring()[["step_id", "param_name"]].copy()
-        frame["prod_code"] = Z622_PRODUCT
-        for column in ("usl", "lsl", "ucl", "lcl", "target"):
-            frame[column] = float("nan")
-        frame["param_type"] = "SPC"
-        frame["main_step_id"] = frame.step_id
-        frame["main_eqp_type"] = "EQP"
-        return frame.reindex(columns=SPEC_COLUMNS)
+        if self.db_manager is None:
+            raise ValueError("Z622 specifications require the standard database metadata source")
+        return load_parameter_specs(self.db_manager, prod_code, known_before=pd.Timestamp.now())
 
 
 def build_z622_metadata_repository(db_manager: DatabaseManager | None = None) -> _Z622MetadataRepository:
-    return _Z622MetadataRepository()
+    return _Z622MetadataRepository(db_manager)
 
 
 def spc_input_signature(project_root: Path, prod_code: str) -> str:
@@ -222,10 +224,12 @@ def spc_input_signature(project_root: Path, prod_code: str) -> str:
         f"inline_measurements_{snapshot_component(prod_code)}.parquet"
     )
     parts = [
+        MEASUREMENT_VALIDITY_SIGNATURE,
         InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION,
         f"excluded-step={EXCLUDED_MEASUREMENT_STEP_ID}",
     ]
     if prod_code == Z622_PRODUCT:
+        parts.append(Z622_ANALYSIS_POLICY)
         parts.append(_z622_source_signature())
     for source in [path, path.with_suffix(".policy")]:
         try:

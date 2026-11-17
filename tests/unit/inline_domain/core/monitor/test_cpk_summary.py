@@ -48,8 +48,8 @@ def test_legacy_counts_unknown_and_multi_product_rate_weighted():
     assert result.M9.tolist() == ["—"] * 4
 
 
-@pytest.mark.parametrize("rate, expected", [(0, "0.00%"), (None, "—")])
-def test_zero_denominator_displays_explicit_zero_rate_only_when_known(rate, expected):
+@pytest.mark.parametrize("rate, expected", [(0, "100.00%"), (None, "—")])
+def test_zero_denominator_displays_full_compliance_when_rate_is_known(rate, expected):
     rows = normalize_cpk_records(pd.DataFrame([
         {"产品": "M626", "周期类型": "周度", "时间标签": "2026-W40", "显示标签": "W40",
          "CPK总项目数": 0, "达标项目数": 0, "预警项目数": 0, "Cpk≥1.33达标率": rate}

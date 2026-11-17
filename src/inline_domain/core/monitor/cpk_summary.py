@@ -147,8 +147,8 @@ def build_cpk_summary_from_records(
         valid = complete and counts.notna().all() and rates[counts.gt(0)].notna().all()
         if valid and counts.sum() > 0:
             rate = f"{(counts * rates).sum() / counts.sum():.2%}"
-        elif valid and counts.eq(0).all() and rates.notna().all() and rates.eq(0).all():
-            rate = "0.00%"
+        elif valid and counts.eq(0).all() and rates.notna().all():
+            rate = "100.00%"
         else:
             rate = "—"
         values.append(rate)

@@ -4,10 +4,23 @@ import pandas as pd
 import pytest
 
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+    filter_invalid_measurement_values,
     filter_excluded_steps,
     filter_excluded_param_names,
     keep_latest_measurements,
 )
+
+
+def test_invalid_measurement_value_is_exact_and_preserves_other_negatives():
+    from decimal import Decimal
+    source = pd.DataFrame({"param_value": [-299.99, " -299.990 ", Decimal("-299.99"),
+                                            -299.9901, -300., -1., 0., 6024., None, "invalid"]})
+    original = source.copy(deep=True)
+    source.attrs["coverage"] = "original"
+    result = filter_invalid_measurement_values(source)
+    assert result.index.tolist() == list(range(3, 10))
+    assert result.attrs == source.attrs
+    pd.testing.assert_frame_equal(source, original)
 
 
 def test_excluded_step_preserves_other_steps_nulls_and_source() -> None:

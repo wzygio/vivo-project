@@ -13,7 +13,7 @@ async page => {
   const expectText = text => page.getByText(text, { exact: true }).waitFor({ timeout: 60000 });
   const absent = text => page.getByText(text, { exact: true }).waitFor({ state: "hidden", timeout: 10000 });
   const openFilters = async () => {
-    for (const label of ['Inline超规预警', 'SPC CPK超规预警']) {
+    for (const label of ['Inline超规预警', 'CPK 筛选条件']) {
       const panel = page.getByTestId('stExpander').filter({ hasText: label });
       await panel.waitFor();
       if (!await panel.locator('details').evaluate(node => node.open)) await panel.locator('summary').click();
@@ -66,7 +66,7 @@ async page => {
   await cpkQuery().click();
   await expectText("Fixture CPK warning total: 6");
   await expectText("Fixture CPK history preserved: True");
-  await expectText("CPK 预警趋势");
+  await page.locator(".st-key-cpk_monitor_pass_rate_chart").waitFor();
   if (errors.length) throw new Error(`Browser console errors: ${errors.join(" | ")}`);
   return "Excel-only queries, idempotence, Flag refresh, closed periods, CPK and admin visibility passed";
 }

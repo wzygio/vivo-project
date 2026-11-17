@@ -66,7 +66,7 @@ def _monitor_app(monkeypatch, tmp_path):
     return AppTest.from_file(str(fixture)).run(timeout=60)
 
 
-def test_cpk_latest_week_factory_filter_and_refresh_on_actual_page(monkeypatch, tmp_path):
+def test_cpk_summary_trend_and_refresh_on_actual_page(monkeypatch, tmp_path):
     app = _monitor_app(monkeypatch, tmp_path)
     assert not app.exception
     assert not app.error
@@ -74,11 +74,9 @@ def test_cpk_latest_week_factory_filter_and_refresh_on_actual_page(monkeypatch, 
     assert not app.exception
     assert not app.error
     assert "Fixture CPK warning total: 9" in {item.value for item in app.caption}
-    summary = app.dataframe[0].value.copy()
-    app.multiselect(key="cpk_monitor_factories").set_value([]).run(timeout=60)
-    assert not app.exception
     assert len(app.dataframe) == 1
-    assert app.dataframe[0].value.equals(summary)
+    assert not any(item.key == "cpk_monitor_factories" for item in app.multiselect)
+    assert len(app.get("plotly_chart")) == 2
     app.button(key="fixture_edit_cpk").click().run(timeout=60)
     app.button(key="fixture_refresh_cache").click().run(timeout=60)
     app.button(key="cpk_monitor_query_submit").click().run(timeout=60)
@@ -98,7 +96,7 @@ def test_cpm_query_and_refresh_preserve_cpk_on_renamed_page(monkeypatch, tmp_pat
     assert not app.exception and not app.error
     assert "Fixture CPM warning total: 9" in {item.value for item in app.caption}
     assert app.dataframe[0].value.equals(cpk_summary)
-    assert "CPM" in app.dataframe[-1].value
+    assert any("CPM总项目数" in frame.value["指标"].tolist() for frame in app.dataframe if "指标" in frame.value)
     app.button(key="fixture_edit_cpm").click().run(timeout=60)
     app.button(key="fixture_refresh_cache").click().run(timeout=60)
     assert "#### CPM 汇总表" not in {item.value for item in app.markdown}
@@ -157,4 +155,4 @@ def test_inline_excel_query_refresh_and_closed_periods(monkeypatch, tmp_path):
     app.button(key="fixture_refresh_cache").click().run(timeout=60)
     app.button(key="cpk_monitor_query_submit").click().run(timeout=60)
     check("Fixture CPK warning total: 8", "Fixture CPK history preserved: True")
-    assert "#### CPK 预警趋势" in headings()
+    assert app.get("plotly_chart")

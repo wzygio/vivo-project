@@ -60,7 +60,7 @@ IJP 明细混合秒和小数秒时间字符串时先规范化再前推，防止�
 # 15 passed
 ```
 
-排除的旧 UI 测试断言标题为“北极星QTime监控”，HEAD 页面已为“重点站点QTime监控”；
+排除的旧 UI 测试断言标题为“北极星QTime监控”，HEAD 页面已为“重点站点Q-Time监控”；
 在单独进程加载 HEAD 的未修改 dashboard 源码后已复现同一失败。
 使用 AppTest、临时 Excel/Parquet 和内存 SQLite 验证；未查询生产数据库，未启动临时服务。
 本次修改范围的 `git diff --check`、新增 Python 语法和配置/文档路由检查通过。

@@ -3,7 +3,7 @@ async page => {
   // 覆盖：初始查询门控、查询交互、预警中心 + 图像渲染、TP 失败时不显示功能异常。
   await page.goto("http://localhost:8513/");
   await page
-    .getByText("重点站点QTime监控", { exact: false })
+    .getByText("重点站点Q-Time监控", { exact: false })
     .first()
     .waitFor({ timeout: 120_000 });
 

@@ -98,11 +98,11 @@ PNL 指标规格的版本/产品收严离线分析工具已于 2026-09-24 按维
 汇总表以查询截止日构建当年、截至当前季度、
 最近三个月和当前 ISO 周的重叠列，行固定为过货量、OOC、SOOS=0、OOS 和 Total；
 OOC 三态决策入口及产品 × scope 更新时间只在 `?admin=true` 显示。
-报警率与 CPK 共用的持久化工作簿路径由 `config/global.yaml` 的
-`resources.inline_domain.files.monitor_summary_workbook` 注入；工作簿使用 `<产品>报警率` 与
-`<产品> CPK` 分页，基础设施读取器聚合各产品页后再交给应用服务筛选。
-2026-10-23 起，统一 `报警率`、`CPK` sheet 及其读取回退已移除；即使产品分表缺失，
-也不会读取旧统一页。缺失产品基线沿用现有的补零初始化规则，已有产品分表不变。
+报警率使用 `config/global.yaml` 的 `resources.inline_domain.files.monitor_summary_workbook`，
+CPK、CPM 使用独立的 `cpk_summary_workbook`、`cpm_summary_workbook`。
+三种文件分别使用原报警率产品页、`<产品> CPK`、`<产品> CPM` 页；读取器聚合后再按产品筛选。
+报警率补零和本周贡献替换沿用第 7 节，能力汇总采用完整周计数、周日归月及受影响月季年更新，
+详见 [CPK/CPM 汇总规则](../monitor/rules-cpk-summary-workbook.md)。
 
 ### 4.2 `spc/spc_service.py` — SPC 能力报表
 
@@ -368,7 +368,7 @@ Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见
 
 ### 7.7 工作簿、共享职责与源校正边界
 
-资源位置由 [inline_domain.yaml](../../../../config/domain/inline_domain.yaml) 注入，
+资源位置由 [global.yaml](../../../../config/global.yaml) 的全局资源注册表注入，
 下表路径均相对 `resources/inline_domain/`；OOS/OOC 文件通常每产品一个明细 sheet，
 另有供生成流程维护的决策页和刷新元数据。
 
@@ -379,7 +379,9 @@ Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见
 | CTQ 点位 / OOC 报警 | `ctq/ctq_sheet_oos_decoration.xlsx` / `ctq/ctq_sheet_ooc_decoration.xlsx` |
 | AOI_TT 数值决策 / OOC 报警 | `aoi_tt/aoi_tt_sheet_oos_decoration.xlsx` / `aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx` |
 | AOI_RS 图点 / OOC 空契约 | `aoi_rs/aoi_rs_sheet_oos_decoration.xlsx` / `aoi_rs/aoi_rs_sheet_ooc_decoration.xlsx` |
-| 报警及能力汇总 / 矩阵显示 | `monitor/北极星报警率与CPK汇总.xlsx` / `monitor/compliance_config.xlsx` |
+| 报警率汇总 | `monitor/北极星报警率汇总.xlsx` |
+| CPK / CPM 汇总 | `monitor/北极星CPK汇总.xlsx` / `monitor/北极星CPM汇总.xlsx` |
+| 矩阵显示 | `monitor/compliance_config.xlsx` |
 
 `application/shared` 负责加载决策、调用纯规则及保存明细，`core/shared` 负责三态与截断，
 `infrastructure/shared` 负责工作簿读写。数值修饰不回写数据库或原始 Parquet；

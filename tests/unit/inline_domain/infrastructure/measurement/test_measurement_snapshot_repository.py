@@ -94,6 +94,29 @@ def test_excluded_step_cannot_return_from_any_snapshot_path(tmp_path, mode):
         assert repository.last_refresh_from_db is False
 
 
+@pytest.mark.parametrize("mode", ["fresh", "fallback", "full", "incremental"])
+def test_invalid_values_never_reach_snapshot_consumers_or_correction(tmp_path, mode):
+    source = pd.concat([_raw_measurements(), _raw_measurements().assign(param_value=-299.99, sheet_id="INVALID")], ignore_index=True)
+    path = tmp_path / "inline_measurements_M678.parquet"
+    source.to_parquet(path, index=False)
+    _write_coverage(path)
+    original_bytes = path.read_bytes()
+    def loader(*args):
+        if mode in {"fresh", "fallback"}:
+            raise OSError("offline")
+        return source.copy()
+    def corrector(frame):
+        assert frame.param_value.ne(-299.99).all()
+        return frame
+    repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader, corrector)
+    result = repo.get_measurements("M678", "2026-08-14" if mode == "incremental" else "2026-08-13", force_refresh=mode in {"full", "fallback"})
+    assert result.sheet_id.tolist() == ["SHEET-1"]
+    if mode in {"fresh", "fallback"}:
+        assert path.read_bytes() == original_bytes
+    else:
+        assert pd.read_parquet(path).param_value.ne(-299.99).all()
+
+
 def test_partial_fallback_keeps_its_actual_coverage_and_old_payload_proof(tmp_path):
     fail = False
 

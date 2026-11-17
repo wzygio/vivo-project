@@ -59,7 +59,8 @@ def test_product_matching_global_parts_and_public_projection(snapshots):
         iqc = saved.read_published_alerts('iqc_evaporation_ng', product, date.today())
         assert iqc['state'] == 'alert' and len(iqc['alerts']) == 1
         assert 'flag' not in iqc['alerts']
-    assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['state'] == 'error'
+    assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['state'] == 'ok'
+    assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['alerts'].empty
 
 
 def test_shared_parts_reader_accepts_factory_wide_scope_without_a_product(snapshots):
@@ -90,13 +91,42 @@ def test_shared_ijp_aggregate_selects_enabled_products_and_distinguishes_empty_s
 
 def test_missing_stale_and_valid_empty_are_distinct(snapshots):
     for key in saved.PUBLISHED_ALERT_ROWS:
-        assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'error'
+        assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'ok'
     write_snapshots(snapshots, empty=True)
     for key in saved.PUBLISHED_ALERT_ROWS:
         assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'ok'
     write_snapshots(snapshots, updated=datetime.now() - timedelta(days=2))
     for key in saved.PUBLISHED_ALERT_ROWS:
         assert saved.read_published_alerts(key, 'M678', date.today())['state'] == 'error'
+
+
+def test_missing_snapshot_cache_is_invalidated_by_real_publication(snapshots):
+    from app.sections.shared.alert_results import alert_result_signature, read_alert_result
+
+    row = 'parts_oos'
+    before = alert_result_signature(row, 'M678', date.today())
+    empty = read_alert_result(row, 'M678', date.today())
+    assert empty['state'] == 'ok' and empty['metadata']['availability'] == 'missing'
+    assert not snapshots['parts_alerts'].exists()
+    write_snapshots(snapshots)
+    assert alert_result_signature(row, 'M678', date.today()) != before
+    assert read_alert_result(row, 'M678', date.today())['state'] == 'alert'
+
+
+@pytest.mark.parametrize('exception', [PermissionError, OSError, ValueError])
+def test_unreadable_workbook_is_not_misclassified_as_absent(snapshots, monkeypatch, exception):
+    write_snapshots(snapshots)
+    before = {path: path.read_bytes() for path in snapshots.values()}
+
+    def failed_read(*args):
+        raise exception('read failed')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(saved, 'read_snapshot_workbook', failed_read)
+        for row in saved.PUBLISHED_ALERT_ROWS:
+            result = saved.read_published_alerts(row, 'M678', date.today())
+            assert result['state'] == 'error' and result['alerts'].empty
+    assert {path: path.read_bytes() for path in snapshots.values()} == before
 
 
 def test_file_version_invalidates_parse_cache_and_signature(snapshots, monkeypatch):

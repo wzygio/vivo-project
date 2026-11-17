@@ -1,7 +1,7 @@
 from streamlit.testing.v1 import AppTest
 
 
-def test_cpk_cpm_queries_are_independent_and_public_cpm_details_hide_internal_columns():
+def test_cpk_cpm_queries_show_separate_summaries_and_no_latest_project_details():
     app = AppTest.from_string('''
 import pandas as pd
 import streamlit as st
@@ -30,14 +30,18 @@ render_cpm_monitor_section(Service("cpm"), ["M626"], ["ARRAY"])
     assert not app.exception
     assert app.session_state["cpm_calls"] == 1
     assert "cpk_calls" not in app.session_state
-    assert len(app.dataframe) == 2
-    detail = app.dataframe[1].value
-    assert "CPM" in detail and "CPK" not in detail
-    assert set(detail.columns) == {"产品", "厂别", "CPM", "已达标", "判定状态"}
+    assert len(app.dataframe) == 1
+    assert app.dataframe[0].value["指标"].tolist() == ["CPM总项目数"]
+    assert len(app.get("plotly_chart")) == 1
+    public_output = app.dataframe[0].value.to_json() + app.get("plotly_chart")[0].proto.spec
+    assert all(token not in public_output for token in ("flag", "replacement", "private", "internal-only"))
+    assert not any("最新项目明细" in item.value for item in app.markdown)
     assert not any("管理员" in item.value for item in app.markdown)
     app.button(key="cpk_monitor_query_submit").click().run()
     assert not app.exception
-    assert len(app.dataframe) == 4
+    assert len(app.dataframe) == 2
+    assert len(app.get("plotly_chart")) == 2
+    assert {frame.value["指标"].iloc[0] for frame in app.dataframe} == {"CPK总项目数", "CPM总项目数"}
 
 
 def test_cpm_failure_uses_safe_message():

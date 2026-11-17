@@ -25,7 +25,7 @@
 | API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/api/api-caller-guide-2026-11-03.md) |
 | API 程序架构、能力周期对象、查询流程、缓存与容量、安全边界 | [API 程序介绍](domain/api/architecture-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
-| CPK / CPM 汇总补零基线、最新周写回、厂别筛选与日期排除 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
+| CPK / CPM 独立汇总文件、快照分母、完整周向后归属、历史修复、最新周向上汇总与达标率柱线图 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |
 | AOI_RS监控看板、半年季度月周密度、周期历史复用、无L1取数、按产品Sheet下载 | [AOI_RS 周期监控规则](domain/inline_domain/monitor/rules-aoi-rs-period-monitor.md) |
 | SPC 主制程设备 / 腔室、最近 OUT、履历回退；2120A PPID 产品归属、MQC 映射、非 UNI 参数屏蔽 | [SPC 主制程数据源与 2120A 特殊处理](domain/inline_domain/spc/data-source-spc-main-process.md) |
 | AOI_TT 来源表、字段与取数口径 | [AOI_TT 数据源](domain/inline_domain/aoi_tt/data-source-aoi-tt.md) |

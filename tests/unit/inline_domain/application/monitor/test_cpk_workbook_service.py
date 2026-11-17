@@ -25,7 +25,7 @@ def test_factory_selection_changes_detail_only_and_excluded_summary_is_shown_as_
     array = service.build_dashboard(products=["M626"], factories=["ARRAY"], end_date="2026-10-09")
     oled = service.build_dashboard(products=["M626"], factories=["OLED"], end_date="2026-10-09")
     pd.testing.assert_frame_equal(array.summary_df, oled.summary_df)
-    assert array.summary_df.W40.tolist() == [0, 0, 0, "0.00%"]
+    assert array.summary_df.W40.tolist() == [0, 0, 0, "100.00%"]
     assert array.detail_df["factory"].tolist() == ["ARRAY"]
     assert oled.detail_df.empty
     assert store.read()["厂别"].eq("ALL").all()
@@ -64,7 +64,7 @@ def test_summary_counts_all_factories_and_exclusion_preserves_existing_year_quar
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion",
                         lambda: (("OLED", "TP"), "2026-10-01", "2026-10-06"))
     view = service.build_dashboard(products=["M626"], factories=[], end_date="2026-10-09")
-    assert view.summary_df.W40.tolist() == [0, 0, 0, "0.00%"]
+    assert view.summary_df.W40.tolist() == [0, 0, 0, "100.00%"]
     assert view.summary_df.M10.tolist() == [10, 8, 2, "80.00%"]
     assert view.summary_df.Q4.tolist() == [10, 8, 2, "80.00%"]
     assert view.summary_df.Y26.tolist() == [10, 8, 2, "80.00%"]

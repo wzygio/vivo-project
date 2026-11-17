@@ -1,0 +1,7 @@
+# Proposed registration to apply only after validated formal migration.
+resources:
+  inline_domain:
+    files:
+      monitor_summary_workbook: resources/inline_domain/monitor/北极星报警率汇总.xlsx
+      cpk_summary_workbook: resources/inline_domain/monitor/北极星CPK汇总.xlsx
+      cpm_summary_workbook: resources/inline_domain/monitor/北极星CPM汇总.xlsx

@@ -30,10 +30,11 @@ def _read_sql(
     db_manager: "DatabaseManager",
     sql: str,
     prod_code: str,
+    parameters: dict | None = None,
 ) -> pd.DataFrame:
     if db_manager.engine is None:
         raise ValueError("Database engine is not initialized.")
-    result = pd.read_sql(text(sql), db_manager.engine, params={"prod_code": prod_code})
+    result = pd.read_sql(text(sql), db_manager.engine, params={"prod_code": prod_code, **(parameters or {})})
     result.columns = result.columns.str.lower()
     return result
 
@@ -65,6 +66,7 @@ def load_parameter_catalog(
 def load_parameter_specs(
     db_manager: "DatabaseManager",
     prod_code: str,
+    *, known_before: object | None = None,
 ) -> pd.DataFrame:
     result = _read_sql(
         db_manager,
@@ -83,8 +85,9 @@ def load_parameter_specs(
             main_eqp_type
         FROM mdw.dwd_imp_dv_param_spec
         WHERE prod_code = :prod_code
-        """,
+        """ + (" AND (interface_time <= :known_before OR interface_time IS NULL)" if known_before is not None else ""),
         prod_code,
+        {"known_before": pd.Timestamp(known_before).to_pydatetime()} if known_before is not None else None,
     )
     if result.empty:
         return pd.DataFrame(columns=SPEC_COLUMNS)

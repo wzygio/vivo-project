@@ -26,6 +26,7 @@ from src.inline_domain.infrastructure.shared.main_process_trace import (
 )
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_param_names,
+    filter_invalid_measurement_values,
     keep_latest_measurements,
 )
 from src.inline_domain.infrastructure.shared.outlier_filter_rules import (
@@ -201,6 +202,7 @@ class InlineMeasurementPreparationRepository:
             prepared["param_value"], errors="coerce"
         )
         prepared = prepared.dropna(subset=["sheet_start_time", "param_value"])
+        prepared = filter_invalid_measurement_values(prepared)
         prepared = filter_excluded_param_names(prepared)
         # Factory/equipment are attributes of the winning measurement, not its identity.
         prepared = keep_latest_measurements(

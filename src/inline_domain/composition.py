@@ -41,7 +41,7 @@ from src.shared_kernel.snapshot_paths import (
     inline_measurement_directory, aoi_rs_snapshot_directory,
 )
 from src.inline_domain.infrastructure.shared.resource_paths import (
-    monitor_summary_workbook_path,
+    monitor_summary_workbook_path, capability_summary_workbook_path,
 )
 
 if TYPE_CHECKING:
@@ -215,15 +215,20 @@ def build_cpm_monitor_service(resource_dir: Path | None = None):
 
 def _build_capability_monitor_service(resource_dir: Path | None, *, metric: str):
     from src.inline_domain.application.monitor.cpk_workbook_service import CpkWorkbookMonitorService
-    from src.inline_domain.infrastructure.monitor.cpk_summary_workbook_store import CpkSummaryWorkbookStore
-    from src.inline_domain.infrastructure.monitor.cpm_summary_workbook_store import CpmSummaryWorkbookStore
+    from src.inline_domain.infrastructure.monitor.capability_summary_store import CapabilitySummaryStore
+    from src.inline_domain.infrastructure.monitor.capability_snapshot_source import SnapshotCapabilitySource
+    from src.inline_domain.infrastructure.monitor.capability_metadata_snapshot import CapabilityMetadataSnapshot
 
-    summary_store = CpkSummaryWorkbookStore if metric == "cpk" else CpmSummaryWorkbookStore
+    workbook_path = capability_summary_workbook_path(metric, resource_dir)
 
     return CpkWorkbookMonitorService(
-        summary_store(monitor_summary_workbook_path(resource_dir)),
+        CapabilitySummaryStore(workbook_path, metric=metric),
         latest_reader=build_capability_latest_reader(metric, resource_dir),
         metric=metric,
+        weekly_source=SnapshotCapabilitySource(
+            inline_measurement_directory(ConfigLoader.get_project_root() / "data"),
+            CapabilityMetadataSnapshot(),
+        ),
     )
 
 

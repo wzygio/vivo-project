@@ -20,6 +20,8 @@ def write_inline_resource_config(project_root: Path) -> Path:
         "compliance_config": str(resources / "compliance_config.xlsx"),
         "scrap_sheets": str(resources / "scrap_sheets.xlsx"),
         "monitor_summary_workbook": str(resources / "monitor-summary.xlsx"),
+        "cpk_summary_workbook": str(resources / "cpk-summary.xlsx"),
+        "cpm_summary_workbook": str(resources / "cpm-summary.xlsx"),
     })
     config_path = project_root / "config" / "global.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)

@@ -48,6 +48,7 @@ class CpkMonitorViewModel:
     summary_df: pd.DataFrame
     detail_df: pd.DataFrame
     refresh_status_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    product_summary_dfs: dict[str, pd.DataFrame] = field(default_factory=dict)
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=32, show_spinner=False)

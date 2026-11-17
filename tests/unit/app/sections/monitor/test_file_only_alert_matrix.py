@@ -25,7 +25,7 @@ def test_default_yield_cells_never_call_report_analysis(tmp_path, monkeypatch):
     day = date.today()
     context = cache.build_default_matrix_context(["M678"], reference_date=day)
     for key in ("yield_lot_oos", "yield_trend_fluctuation"):
-        assert matrix.MATRIX_ROW_MAP[key].evaluator("M678", context)["state"] == "error"
+        assert matrix.MATRIX_ROW_MAP[key].evaluator("M678", context)["state"] == "ok"
     publisher = build_yield_alert_results()
     now = datetime.now().astimezone()
     start = day - timedelta(days=30)

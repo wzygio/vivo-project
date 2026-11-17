@@ -1,4 +1,4 @@
-"""Query-gated CPK warning dashboard presentation."""
+"""Query-gated CPK/CPM project counts and pass-rate trends."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Protocol
 import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
+from app.charts.inline_domain.capability_trend_chart import create_capability_trend_chart
 from src.inline_domain.application.monitor.cpk_monitor_service import (
     CpkMonitorViewModel,
 )
@@ -31,31 +32,25 @@ def render_cpk_monitor_results(view: CpkMonitorViewModel) -> None:
 
 
 def render_capability_monitor_results(view: CpkMonitorViewModel, *, metric: str) -> None:
-    from app.sections.inline_domain.monitor.oos_monitor_dashboard import build_period_trend_chart
-
     name = metric.upper()
     st.markdown(f"#### {name} 汇总表")
     st.dataframe(view.summary_df.astype(str), hide_index=True, width="stretch")
-    st.markdown(f"#### {name} 预警趋势")
-    st.altair_chart(build_period_trend_chart(
-        view.summary_df, label_column="指标", metric_rows=("预警项目数",),
-    ), width="stretch")
+    st.markdown("#### 全产品汇总趋势图")
+    st.plotly_chart(
+        create_capability_trend_chart(view.summary_df, metric=metric),
+        width="stretch", key=f"{metric}_monitor_pass_rate_chart", config={"scrollZoom": False},
+    )
+    product_label = get_product_label_formatter()
+    for product, summary in view.product_summary_dfs.items():
+        st.markdown(f"#### {product_label(product)} {name} 达标率趋势图")
+        st.plotly_chart(
+            create_capability_trend_chart(summary, metric=metric),
+            width="stretch", key=f"{metric}_monitor_pass_rate_chart_{product}",
+            config={"scrollZoom": False},
+        )
     if st.query_params.get("admin") == "true" and not view.refresh_status_df.empty:
         st.markdown(f"#### {name} 数据更新状态（管理员）")
         st.dataframe(view.refresh_status_df, hide_index=True, width="stretch")
-    if view.detail_df.empty:
-        st.info(f"暂无所选最新周期的 {name} 项目明细。")
-        return
-    st.markdown(f"#### {name} 最新项目明细")
-    display = view.detail_df.rename(columns={
-        "prod_code": "产品", "factory": "厂别", "step_id": "站点",
-        "param_name": "参数", "period_label": "周期", "period_type": "周期类型",
-        f"{metric}_corrected": name, "flag": "已达标", "status": "判定状态",
-    })
-    if "判定状态" in display:
-        display["判定状态"] = display["判定状态"].replace("已修饰或达标", "达标")
-    columns = [column for column in ("周期类型", "周期", "产品", "厂别", "站点", "参数", name, "判定状态") if column in display]
-    st.dataframe(display[columns], hide_index=True, width="stretch")
 
 
 @st.fragment
@@ -75,16 +70,19 @@ def render_capability_monitor_section(
     clear_cache: Callable[[], None], render_results: Callable[[CpkMonitorViewModel], None],
 ) -> None:
     name, prefix = metric.upper(), f"{metric}_monitor"
-    columns = st.columns([2.6, 1.6, 0.8], vertical_alignment="bottom")
+    available_products = list(available_products)
+    product_key = f"{prefix}_products"
+    if product_key in st.session_state:
+        st.session_state[product_key] = [value for value in st.session_state[product_key] if value in available_products]
+    columns = st.columns([4.2, 0.8], vertical_alignment="bottom")
     products = columns[0].multiselect(
-        "产品型号", available_products, default=available_products, key=f"{prefix}_products",
+        "产品型号", available_products,
+        default=available_products if product_key not in st.session_state else None, key=product_key,
         format_func=get_product_label_formatter(),
     )
-    factories = columns[1].multiselect(
-        "厂别", available_factories, default=available_factories, key=f"{prefix}_factories",
-    )
-    clicked = columns[2].button("查询", type="primary", key=f"{prefix}_query_submit")
-    signature = (tuple(sorted(products)), tuple(sorted(factories)))
+    products = products or available_products
+    clicked = columns[1].button("查询", type="primary", key=f"{prefix}_query_submit")
+    signature = tuple(sorted(products))
     refresh_data = render_board_refresh_controls(
         key=prefix, clear_cache=clear_cache,
         query_state_key=f"{prefix}_query_signature",
@@ -98,8 +96,8 @@ def render_capability_monitor_section(
         st.warning("请至少选择一个产品。")
         return
     try:
-        with st.spinner(f"正在生成 {name} 预警看板…"):
-            view = service.build_dashboard(products=products, factories=factories)
+        with st.spinner(f"正在生成 {name} 达标率趋势图…"):
+            view = service.build_dashboard(products=products, factories=available_factories)
     except Exception:
         logger.exception("%s warning dashboard query failed", name)
         st.error(f"{name} 数据读取失败，请稍后重试。")

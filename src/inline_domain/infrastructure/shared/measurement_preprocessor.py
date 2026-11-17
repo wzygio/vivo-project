@@ -8,6 +8,17 @@ import pandas as pd
 
 EXCLUDED_PARAM_NAME_KEYWORDS = ("LOSS",)
 EXCLUDED_MEASUREMENT_STEP_ID = "15690"
+INVALID_MEASUREMENT_VALUE = -299.99
+MEASUREMENT_VALIDITY_SIGNATURE = "inline-point-validity-v1-exclude-minus29999"
+
+
+def filter_invalid_measurement_values(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Exclude the explicit invalid-value code without rejecting other negative values."""
+    if dataframe.empty or "param_value" not in dataframe.columns:
+        return dataframe.copy()
+    values = pd.to_numeric(dataframe["param_value"], errors="coerce")
+    invalid = values.eq(INVALID_MEASUREMENT_VALUE).fillna(False)
+    return dataframe.loc[~invalid].copy()
 
 
 def filter_excluded_steps(dataframe: pd.DataFrame) -> pd.DataFrame:

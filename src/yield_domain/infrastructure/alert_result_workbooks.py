@@ -80,6 +80,12 @@ class YieldAlertWorkbookStore:
                 "decisions": decisions.copy() if decisions is not None else None,
                 "controls_initialized": decisions is not None}
 
+    def is_product_absent(self, product: str, kind: str) -> bool:
+        """Missing workbook/product is normal; an unreadable or partial publication is not."""
+        names = {product, self._meta_sheet(product), self._flags_sheet(product)}
+        sheets = self._sheets(kind)
+        return names.isdisjoint(sheets)
+
     def initialize_lot_controls(self, product: str) -> bool:
         """Explicit operator migration; reading never initializes a decision sheet."""
         path = self.paths["lot"]

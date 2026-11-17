@@ -12,7 +12,7 @@ SCOPE_RESOURCE_KEYS = {
     "aoi_tt": {"oos": "aoi_tt_sheet_oos_decoration", "ooc": "aoi_tt_sheet_ooc_decoration"},
     "aoi_rs": {"oos": "aoi_rs_sheet_oos_decoration", "ooc": "aoi_rs_sheet_ooc_decoration"},
 }
-MONITOR_SUMMARY_FILE_NAME = "北极星报警率与CPK汇总.xlsx"
+MONITOR_SUMMARY_FILE_NAME = "北极星报警率汇总.xlsx"
 
 
 def scope_decoration_path(scope: str, alarm_type: str = "oos") -> Path:
@@ -32,11 +32,23 @@ def decision_workbook_paths(alarm_type: str = "oos") -> dict[str, Path]:
 
 
 def monitor_summary_workbook_path(resource_dir: Path | None = None) -> Path:
-    """Resolve the shared warning read model from Inline resource config."""
+    """Resolve the alarm-rate workbook, independent of capability summaries."""
     if resource_dir is not None:
         return Path(resource_dir) / "monitor" / MONITOR_SUMMARY_FILE_NAME
     return ConfigLoader.get_domain_resource_path(
         "inline_domain",
         "monitor_summary_workbook",
         f"monitor/{MONITOR_SUMMARY_FILE_NAME}",
+    )
+
+
+def capability_summary_workbook_path(metric: str, resource_dir: Path | None = None) -> Path:
+    """Resolve each capability's independently maintained summary workbook."""
+    if metric not in {"cpk", "cpm"}:
+        raise ValueError(f"Unsupported capability metric: {metric}")
+    filename = f"北极星{metric.upper()}汇总.xlsx"
+    if resource_dir is not None:
+        return Path(resource_dir) / "monitor" / filename
+    return ConfigLoader.get_domain_resource_path(
+        "inline_domain", f"{metric}_summary_workbook", f"monitor/{filename}",
     )

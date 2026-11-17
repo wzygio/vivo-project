@@ -47,9 +47,9 @@ def test_history_route_scopes_boards_without_loading_matrix(isolated_pages, monk
         app.query_params["admin"] = admin
     app.run()
     assert not app.exception
-    expected = ["⚠️ 异常片预警看板", "📊 CPK预警看板"]
+    expected = ["⚠️ 异常片预警看板", "📊 CPK达标率趋势图"]
     if admin == "true":
-        expected.extend(["📊 CPM预警看板", "📋 AOI_RS监控看板"])
+        expected.extend(["📊 CPM达标率趋势图", "📋 AOI_RS监控看板"])
     expected.append("全产品良率看板")
     assert [item.value for item in app.subheader] == expected
     assert len(app.expander) == len(expected)

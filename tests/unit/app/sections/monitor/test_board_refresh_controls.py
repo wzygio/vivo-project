@@ -15,22 +15,34 @@ def _cpk_app():
     class Service:
         def build_dashboard(self, **kwargs):
             st.session_state["cpk_loads"] = st.session_state.get("cpk_loads", 0) + 1
+            st.session_state["cpk_last_query"] = {
+                "products": list(kwargs["products"]), "factories": list(kwargs["factories"]),
+            }
             return object()
 
     st.session_state.setdefault("monitor_query_signature", "oos-query")
     st.session_state.setdefault("alert_matrix_board_loaded", True)
-    render_cpk_monitor_section(Service(), ["M626"], ["ARRAY", "OLED"])
+    render_cpk_monitor_section(Service(), ["M626", "M678"], ["ARRAY", "OLED", "TP"])
 
 
-def test_factory_change_requires_resubmitting_capability_query(monkeypatch):
+def test_product_change_requires_resubmitting_capability_query(monkeypatch):
     monkeypatch.setattr(cpk_monitor_dashboard, "render_cpk_monitor_results", lambda view: None)
     app = AppTest.from_function(_cpk_app).run()
+    assert not app.exception
+    assert "cpk_monitor_factories" not in [widget.key for widget in app.multiselect]
     app.button(key="cpk_monitor_query_submit").click().run()
     assert app.session_state["cpk_loads"] == 1
-    app.multiselect(key="cpk_monitor_factories").set_value(["OLED"]).run()
+    assert app.session_state["cpk_last_query"] == {
+        "products": ["M626", "M678"], "factories": ["ARRAY", "OLED", "TP"],
+    }
+    app.multiselect(key="cpk_monitor_products").set_value(["M678"]).run()
     assert app.session_state["cpk_loads"] == 1
     app.button(key="cpk_monitor_query_submit").click().run()
+    assert not app.exception
     assert app.session_state["cpk_loads"] == 2
+    assert app.session_state["cpk_last_query"] == {
+        "products": ["M678"], "factories": ["ARRAY", "OLED", "TP"],
+    }
 
 
 def test_cpk_data_refresh_is_independent(monkeypatch):

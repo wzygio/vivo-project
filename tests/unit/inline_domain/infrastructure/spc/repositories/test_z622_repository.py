@@ -86,7 +86,7 @@ def _facts(time="2026-11-11 10:00:00") -> pd.DataFrame:
         {"factory": "ARRAY", "prod_code": "Z622", "start_time": pd.Timestamp(time),
          "sheet_id": "L3ZB6BE0301", "lot_id": "L3ZB6BE03", "step_id": "11140",
          "param_name": "SE_L2T", "site_name": "88", "unit_id": "ARRAY-EQ1",
-         "param_value": -299.99},
+         "param_value": 3.0},
     ], columns=RAW_MEASUREMENT_COLUMNS)
 
 
@@ -95,6 +95,11 @@ def _record_queries(monkeypatch, frames=None):
 
     def read_sql(query, connection, *, params, chunksize=None, **kwargs):
         queries.append((str(query), dict(params), chunksize))
+        if "dwd_imp_dv_param_spec" in str(query):
+            return _monitoring()[["step_id", "param_name"]].assign(
+                prod_code="Z622", param_type="SPC", usl=10., lsl=1., ucl=9., lcl=2.,
+                target=5.5, main_step_id=None, main_eqp_type=None,
+            ).reindex(columns=SPEC_COLUMNS)
         result = [frame.copy() for frame in (frames or [pd.DataFrame(columns=RAW_MEASUREMENT_COLUMNS)])]
         return iter(result) if chunksize else pd.concat(result, ignore_index=True)
 
@@ -161,7 +166,7 @@ def test_raw_loader_preserves_retests_for_shared_preparation(monitoring, monkeyp
     )
 
     assert list(result.columns) == RAW_MEASUREMENT_COLUMNS
-    assert result.param_value.tolist() == [-299.99, 10.0]
+    assert result.param_value.tolist() == [3.0, 10.0]
     assert result.start_time.tolist() == [pd.Timestamp("2026-11-11 09:00:00"), pd.Timestamp("2026-11-11 12:00:00")]
     assert result.sheet_id.tolist() == ["L3ZB6BE0301", "L3ZB6BE0301"]
     assert result.lot_id.eq("L3ZB6BE03").all()
@@ -198,6 +203,7 @@ def test_pds_result_rejects_crossed_pairs_foreign_lots_and_outside_times(monitor
 
 
 def test_shared_preparation_keeps_latest_per_complete_point_identity(monitoring, monkeypatch):
+    _record_queries(monkeypatch)
     old = _facts("2026-11-11 09:00:00")
     latest = _facts("2026-11-11 12:00:00").assign(param_value=10.0)
     another_parameter = latest.assign(step_id="12200", param_name="CD1", param_value=20.0)
@@ -263,7 +269,7 @@ def test_invalid_monitoring_is_an_error_before_pds_query(monitoring, monkeypatch
     assert calls == []
 
 
-def test_metadata_comes_from_monitoring_without_invented_specifications(monitoring, monkeypatch):
+def test_metadata_uses_monitoring_catalog_and_native_product_specifications(monitoring, monkeypatch):
     calls = _record_queries(monkeypatch)
     metadata = module.build_z622_metadata_repository(_database())
 
@@ -274,10 +280,28 @@ def test_metadata_comes_from_monitoring_without_invented_specifications(monitori
     assert set(SPEC_COLUMNS).issubset(specs.columns)
     assert set(zip(specs.step_id, specs.param_name)) == {("11140", "SE_L2T"), ("12200", "CD1")}
     assert specs.prod_code.eq("Z622").all()
-    assert specs[["usl", "lsl", "ucl", "lcl", "target"]].isna().all().all()
-    assert specs.main_step_id.equals(specs.step_id)
+    assert specs.usl.eq(10.).all() and specs.lsl.eq(1.).all()
+    assert specs.main_step_id.tolist() == specs.step_id.tolist()
     assert specs.main_eqp_type.eq("EQP").all()
-    assert calls == []
+    assert len(calls) == 1
+    assert "interface_time <= :known_before" in calls[0][0]
+    assert calls[0][1]["prod_code"] == "Z622"
+
+
+def test_enabling_analysis_changes_cache_key_without_changing_raw_source(monitoring, monkeypatch, tmp_path):
+    old = module.spc_input_signature(tmp_path, "Z622")
+    raw_signature = module._z622_source_signature()
+    monkeypatch.setattr(module, "Z622_ANALYSIS_POLICY", "future-analysis-version")
+    assert module.spc_input_signature(tmp_path, "Z622") != old
+    assert module._z622_source_signature() == raw_signature
+
+
+def test_z622_spec_failure_is_not_replaced_by_empty_limits(monitoring, monkeypatch):
+    def fail(*args, **kwargs):
+        raise OSError("specifications unavailable")
+    monkeypatch.setattr(pd, "read_sql", fail)
+    with pytest.raises(OSError):
+        module.build_z622_metadata_repository(_database()).get_parameter_specs("Z622")
 
 
 def test_z622_snapshot_reuse_force_refresh_and_failed_refresh_preserve_source_time(monitoring, monkeypatch, tmp_path):
@@ -459,7 +483,7 @@ def test_composition_routes_z622_refresh_and_preserves_legacy_loader(monitoring,
     assert _generation_state(directory) == original
 
 
-def test_composed_preparation_get_spec_limits_uses_only_unknown_z622_limits(monitoring, monkeypatch, tmp_path):
+def test_composed_preparation_get_spec_limits_uses_native_z622_limits(monitoring, monkeypatch, tmp_path):
     from src.inline_domain import composition
 
     monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
@@ -471,8 +495,8 @@ def test_composed_preparation_get_spec_limits_uses_only_unknown_z622_limits(moni
     assert not specs.empty
     assert specs.prod_code.eq("Z622").all()
     assert set(zip(specs.step_id, specs.param_name)) == {("11140", "SE_L2T"), ("12200", "CD1")}
-    assert specs[["usl", "lsl", "ucl", "lcl", "target"]].isna().all().all()
-    assert calls == []
+    assert specs.usl.eq(10.).all() and specs.lsl.eq(1.).all()
+    assert len(calls) == 1
 
 
 def test_encrypted_monitoring_reader_cleans_outputs_and_uses_logical_source_identity(monitoring, monkeypatch, tmp_path):

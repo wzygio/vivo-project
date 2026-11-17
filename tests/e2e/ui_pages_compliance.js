@@ -60,7 +60,7 @@ async page => {
     adminUrl.searchParams.set('admin','true');
     await page.goto(adminUrl.toString());
     await text('Page runs: 1');
-    for(const label of ['SPC CPK超规预警','SPC CPM超规预警']){
+    for(const label of ['CPK 筛选条件','CPM 筛选条件']){
       await page.getByTestId('stExpander').filter({hasText:label}).locator('summary').click();
     }
     await page.locator('.st-key-cpk_monitor_query_submit button').click();await text('CPK queries: 1');

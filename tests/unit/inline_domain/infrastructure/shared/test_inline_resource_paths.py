@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.inline_domain.infrastructure.shared.resource_paths import (
     monitor_summary_workbook_path,
+    capability_summary_workbook_path,
     scope_decoration_path,
 )
 from src.shared_kernel.config import ConfigLoader
@@ -25,6 +26,8 @@ def test_non_alarm_inline_resources_resolve_to_owned_subdirectories() -> None:
         "compliance_config": "monitor",
         "scrap_sheets": "monitor",
         "monitor_summary_workbook": "monitor",
+        "cpk_summary_workbook": "monitor",
+        "cpm_summary_workbook": "monitor",
     }
     for key, folder in expected.items():
         path = ConfigLoader.get_domain_resource_path("inline_domain", key)
@@ -55,3 +58,23 @@ def test_monitor_summary_workbook_uses_configured_resource_path(
     )
 
     assert monitor_summary_workbook_path() == configured
+
+
+def test_capability_summary_workbooks_follow_independent_configured_paths(monkeypatch, tmp_path):
+    paths = {"cpk_summary_workbook": tmp_path / "custom" / "cpk.xlsx",
+             "cpm_summary_workbook": tmp_path / "elsewhere" / "cpm.xlsx"}
+    calls = []
+    def configured(_cls, domain, key, default_name=None):
+        calls.append((domain, key))
+        return paths[key]
+    monkeypatch.setattr(resource_paths.ConfigLoader, "get_domain_resource_path", classmethod(configured))
+    assert capability_summary_workbook_path("cpk") == paths["cpk_summary_workbook"]
+    assert capability_summary_workbook_path("cpm") == paths["cpm_summary_workbook"]
+    assert calls == [("inline_domain", "cpk_summary_workbook"), ("inline_domain", "cpm_summary_workbook")]
+
+
+def test_explicit_resource_root_keeps_three_summary_files_independent(tmp_path):
+    paths = [monitor_summary_workbook_path(tmp_path), capability_summary_workbook_path("cpk", tmp_path),
+             capability_summary_workbook_path("cpm", tmp_path)]
+    assert len(set(paths)) == 3
+    assert all(path.parent == tmp_path / "monitor" for path in paths)

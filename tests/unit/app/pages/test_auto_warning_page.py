@@ -296,14 +296,14 @@ def _assert_module_structure(trackers: dict) -> None:
     """历史模块默认折叠，AOI_RS 仅在管理员模式渲染。"""
     assert trackers["infos"] == []
     titles = [
-        "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK预警看板",
+        "🚦 全指标预警看板", "⚠️ 异常片预警看板", "📊 CPK达标率趋势图",
     ]
     if st.query_params.get("admin") == "true":
-        titles.extend(["📊 CPM预警看板", "📋 AOI_RS监控看板"])
+        titles.extend(["📊 CPM达标率趋势图", "📋 AOI_RS监控看板"])
     assert trackers["subheaders"] == titles
     module_expanders = [
         item for item in trackers["expanders"] if item["label"] in {
-            "Inline超规预警", "SPC CPK超规预警", "SPC CPM超规预警", "AOI_RS 周期密度",
+            "Inline超规预警", "CPK 筛选条件", "CPM 筛选条件", "AOI_RS 周期密度",
         }
     ]
     assert len(module_expanders) == len(titles) - 1

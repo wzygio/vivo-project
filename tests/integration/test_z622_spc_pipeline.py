@@ -85,11 +85,15 @@ def install_captured_case(monkeypatch, directory: Path, source: Path, *, mode="n
     original = captured_facts(source)
     # Use the production reader, including enterprise workbook normalization.
     # No direct pandas Excel read may bypass the captured root/decryption policy.
-    pairs = build_z622_metadata_repository().get_parameter_specs("Z622")[["step_id", "param_name"]]
+    from src.inline_domain.infrastructure.spc.spc_repository import _z622_monitoring
+    pairs = _z622_monitoring()[["step_id", "param_name"]]
     calls = []
 
     def read_sql(query, _connection, *, params=None, chunksize=None, **_kwargs):
         sql = str(query).lower()
+        if "dwd_imp_dv_param_spec" in sql:
+            assert params["prod_code"] == "Z622" and "known_before" in params
+            return pd.read_parquet(ROOT / "output/tmp/z622-analysis/specs.parquet")
         assert "array_pds_result_t" in sql, "Unexpected source access in captured pipeline"
         sql_words = " ".join(sql.split())
         assert "p.glass_start_time >= :start_time" in sql_words
@@ -149,11 +153,14 @@ def build_captured_report(monkeypatch, directory: Path, source: Path, *, mode="n
             "indicator_rows": len(report.indicators_df), "sql_calls": len(calls),
             "enabled": "Z622" in ConfigLoader.get_enabled_products(),
             "capture": str(source), "fixture_root": str(directory)}
+    info["capability_rows"] = len(report.period_capability_df)
+    for metric in ("cpk", "cpm"):
+        info[f"{metric}_valid"] = int(report.period_capability_df[metric].notna().sum()) if metric in report.period_capability_df else 0
     return report, info, original
 
 
 @pytest.mark.skipif(not CAPTURE.exists(), reason="Requires the task's bounded PDS capture")
-def test_captured_pds_reaches_real_report_and_chart_without_capability(tmp_path, monkeypatch):
+def test_captured_pds_reaches_real_report_with_specifications_and_capability(tmp_path, monkeypatch):
     from app.charts.inline_domain.spc_charts import iter_spc_chart_groups
     from src.shared_kernel.config import ConfigLoader
 
@@ -167,23 +174,35 @@ def test_captured_pds_reaches_real_report_and_chart_without_capability(tmp_path,
     assert points.sheet_id.str.startswith("L3ZB6BE03").all()
     keys = ["prod_code", "step_id", "param_name", "sheet_id", "site_name"]
     assert not points.duplicated(keys).any()
-    spec_columns = [column for column in ("usl", "lsl", "ucl", "lcl", "target") if column in points]
-    if spec_columns:
-        assert points[spec_columns].isna().all().all()
+    assert not report.period_capability_df.empty
     for metric in ("cpk", "cpm"):
-        if metric in report.period_capability_df:
-            assert report.period_capability_df[metric].dropna().empty
+        assert report.period_capability_df[metric].notna().any()
     offset = pd.Timedelta(days=ConfigLoader.get_data_forward_policy().effective_days)
     expected = source.assign(sheet_start_time=source.start_time + offset)
     expected = ConfigLoader.get_report_cutoff_policy().filter_frame(expected, "sheet_start_time")
     expected = expected.loc[pd.to_numeric(expected.param_value, errors="coerce").notna()]
+    expected = expected.loc[pd.to_numeric(expected.param_value, errors="coerce").ne(-299.99)]
+    assert points.param_value.ne(-299.99).all()
+    target = points.loc[points.step_id.eq("10140") & points.param_name.eq("SE_L1T")]
+    assert len(target) == 270
+    assert pd.to_numeric(target.site_name).between(1, 54).all()
     latest = expected.groupby(keys, dropna=False).sheet_start_time.max().rename("expected_latest")
     latest_check = points.merge(latest, on=keys, how="left")
     assert latest_check.sheet_start_time.eq(latest_check.expected_latest).all()
     identity = ["sheet_id", "step_id", "param_name", "site_name", "sheet_start_time"]
     compared = points.merge(expected[identity + ["param_value"]].drop_duplicates(),
-                            on=identity + ["param_value"], how="left", indicator=True)
-    assert compared._merge.eq("both").all(), "No-spec points must retain captured values"
+                            on=identity, how="left", suffixes=("", "_source"))
+    assert compared.param_value.ne(compared.param_value_source).any(), "Native specs must enable point decoration"
+    from src.inline_domain.composition import build_capability_alert_query
+    for metric in ("cpk", "cpm"):
+        alerts = build_capability_alert_query(metric).read("Z622", pd.Timestamp("2026-11-16").date())
+        if alerts["metadata"]["availability"] == "missing":
+            # With no failing project, the metric writer need not create a detail sheet.
+            valid_metrics = report.period_capability_df[metric].dropna()
+            assert not valid_metrics.empty and valid_metrics.ge(1.33).all()
+        else:
+            assert alerts["metadata"]["availability"] == "ready"
+            assert alerts["state"] in {"ok", "alert"}
     choice = report.indicators_df.iloc[0]
     selected = points.loc[points.step_id.eq(choice.step_id) & points.param_name.eq(choice.param_name)]
     groups = list(iter_spc_chart_groups(report.period_capability_df, report.sheet_features_df, selected,

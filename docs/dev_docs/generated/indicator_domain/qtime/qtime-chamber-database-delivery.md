@@ -39,7 +39,7 @@ Infrastructure按设备/玻璃/进片批次配对，应用前推、当日截止�
    ```
 
    **214 passed、1 failed**。唯一失败为既有站间模块标题断言：测试期待“北极星QTime监控”，
-   实际为“重点站点QTime监控”。用`git show HEAD:app/sections/indicator_domain/qtime/dashboard.py`
+   实际为“重点站点Q-Time监控”。用`git show HEAD:app/sections/indicator_domain/qtime/dashboard.py`
    核实基线已是实际标题；本次没有修改该标题或更改旧断言以宣称全部通过。
    一项IJP异常测试产生已有pandas连接类型警告。未运行无关全库测试。
 

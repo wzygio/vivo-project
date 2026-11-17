@@ -18,6 +18,7 @@ from src.inline_domain.infrastructure.shared.measurement_data_loader import (
 )
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_steps,
+    filter_invalid_measurement_values,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_forward import DataForwardPolicy
@@ -167,7 +168,7 @@ class InlineMeasurementSnapshotRepository:
                 return self._snapshot_result(
                     snapshot_path, self._fallback(snapshot_path, required_start=start_date), False
                 )
-            measurements = filter_excluded_steps(measurements)
+            measurements = filter_invalid_measurement_values(filter_excluded_steps(measurements))
             if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
             measurements = replace_tail(
@@ -205,7 +206,7 @@ class InlineMeasurementSnapshotRepository:
 
     @staticmethod
     def _read_snapshot(snapshot_path: Path) -> pd.DataFrame:
-        snapshot = filter_excluded_steps(pd.read_parquet(snapshot_path))
+        snapshot = filter_invalid_measurement_values(filter_excluded_steps(pd.read_parquet(snapshot_path)))
         snapshot["start_time"] = pd.to_datetime(snapshot["start_time"], errors="coerce")
         return snapshot
 

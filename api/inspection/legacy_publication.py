@@ -53,7 +53,10 @@ def refresh_results(products: Sequence[str], reference_date: date, *, reader: Ca
     outcomes = []
 
     def valid(row: str, product: str) -> bool:
-        state = reader(row, product, reference_date)["state"]
+        result = reader(row, product, reference_date)
+        if result.get("metadata", {}).get("availability") == "missing":
+            return False
+        state = result["state"]
         return state in ({"ok", "alert"} if row in IJP_ROWS else {"ok", "alert", "no_data"})
 
     for product in products:

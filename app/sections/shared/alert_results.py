@@ -65,7 +65,8 @@ def alert_result_signature(row_key: str, product: str, reference_date: date, **s
     elif row_key.startswith("yield_"):
         from src.yield_domain.composition import build_yield_alert_results
         kind = "lot" if row_key == "yield_lot_oos" else "trend"
-        parts = [build_yield_alert_results().source_signature(product, kind, reference_date, **selection)]
+        parts = ["yield-absent-product-display-v1",
+                 build_yield_alert_results().source_signature(product, kind, reference_date, **selection)]
     elif row_key == "qtime_sheet_oos":
         from src.indicator_domain.composition import qtime_alert_result_signature
         parts = [qtime_alert_result_signature(product, reference_date, **selection)]
@@ -74,7 +75,7 @@ def alert_result_signature(row_key: str, product: str, reference_date: date, **s
         parts = [build_trend_alert_results(row_key.removesuffix("_trend")).source_signature(product, reference_date)]
     else:
         raise ValueError(f"Unknown alert row: {row_key}")
-    return hashlib.sha256(repr(("saved-alert-v1", row_key, product, str(reference_date), parts, sorted(selection.items()))).encode()).hexdigest()
+    return hashlib.sha256(repr(("saved-alert-v2-missing-is-ok", row_key, product, str(reference_date), parts, sorted(selection.items()))).encode()).hexdigest()
 
 
 def _read_inline(row_key: str, product: str, reference_date: date) -> dict:
@@ -113,12 +114,15 @@ def _read_uncached(row_key: str, product: str, reference_date: date, selection: 
         return _read_capability(row_key, product, reference_date)
     if row_key in snapshots.PUBLISHED_ALERT_ROWS:
         result = snapshots.read_published_alerts(row_key, product, reference_date)
-        return {**result, "records": result["alerts"].copy(), "metadata": {}}
+        return {**result, "records": result["alerts"].copy(), "metadata": result.get("metadata", {})}
     if row_key.startswith("yield_"):
         from src.yield_domain.composition import build_yield_alert_results
         from src.yield_domain.application.alert_results import RESULT_COLUMNS
         kind = "lot" if row_key == "yield_lot_oos" else "trend"
-        result = build_yield_alert_results().read(product, kind, reference_date, **selection)
+        service = build_yield_alert_results()
+        result = service.read(product, kind, reference_date, **selection)
+        if result.status == "missing" and service.store.is_product_absent(product, kind):
+            return _result("ok", pd.DataFrame(columns=RESULT_COLUMNS[kind]), metadata={"availability": "missing"})
         if result.status not in ("ready", "no_data"):
             return _result("error", message=UNAVAILABLE, metadata=result.metadata)
         state = "no_data" if result.status == "no_data" else "alert" if len(result.records) else "ok"
