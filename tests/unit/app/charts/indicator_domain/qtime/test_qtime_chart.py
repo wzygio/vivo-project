@@ -70,3 +70,23 @@ def test_qtime_figure_keeps_selected_paths_visually_distinct() -> None:
     assert list(figure.data[3].x) == ["L003", "L004"]
     assert figure.data[2].showlegend is False
     assert figure.data[3].showlegend is False
+
+
+def test_repeated_lot_passages_have_separate_bars_without_changing_facts():
+    details = pd.DataFrame({
+        "lot_id": ["REPEATED_LOT", "REPEATED_LOT"],
+        "step_desc": ["1A200->21100", "1A200->21100"],
+        "timekey": ["20261101080000", "20261101180000"],
+        "wait_time": [130., 120.], "q_spec": [200., 200.],
+    })
+    before = details.copy(deep=True)
+
+    figure = build_qtime_figure(details)
+
+    assert len(set(figure.data[0].x)) == 2
+    assert list(figure.data[0].y) == [130., 120.]
+    assert list(figure.data[1].x) == list(figure.data[0].x)
+    assert list(figure.layout.xaxis.ticktext) == ["REPEATED_LOT", "REPEATED_LOT"]
+    assert [row[0] for row in figure.data[0].customdata] == ["REPEATED_LOT", "REPEATED_LOT"]
+    assert figure.layout.shapes[0].y0 == 200.
+    pd.testing.assert_frame_equal(details, before)

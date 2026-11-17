@@ -23,6 +23,8 @@ const path = require('node:path');
     const figures = () => plots().evaluateAll(nodes => nodes.map(node => ({
       title: node.layout.title.text.replace(/<[^>]+>/g,''),
       y: node.calcdata[0].map(point => point.s ?? point.y),
+      renderedY: [...node.querySelectorAll('.barlayer .point path')].map(bar =>
+        node._fullLayout.yaxis.p2l(bar.getBBox().y)),
       specLines: (node.layout.shapes || []).map(shape => shape.y0),
       traces: node.data.map(trace => trace.type), scrollZoom: node._context.scrollZoom,
     })));
@@ -67,9 +69,19 @@ const path = require('node:path');
     await query();
     await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length >= 6);
     const captured = await figures();
+    if (captured.some(item => !item.renderedY.length || item.renderedY.length !== item.y.length)) {
+      throw new Error('Rendered bar geometry does not cover all source records');
+    }
+    fs.writeFileSync(path.join(output,'rendered-boundaries.json'),JSON.stringify(captured.map(item => ({
+      product:item.title,maxValue:Math.max(...item.y),maxRenderedTop:Math.max(...item.renderedY),
+    })),null,2));
     if (captured.reduce((sum,item) => sum + item.y.length,0) < 100) throw new Error('Captured real data not rendered');
     if (captured.some(item => item.specLines.length !== 1 || item.specLines[0] !== 200
         || item.y.some(value => value >= 200))) throw new Error('Approved 200-hour specification/decoration not applied');
+    // SVG paths round pixel positions; tolerate sub-pixel conversion noise only.
+    if (captured.some(item => item.renderedY.some(value => value > 200 + 0.01))) {
+      throw new Error('Rendered bars exceed 200 although individual values are in range');
+    }
     await page.screenshot({path:path.join(output,'captured-real.png'),fullPage:true});
     for (const mode of ['空结果','读取失败']) {
       await choose('测试数据',mode);

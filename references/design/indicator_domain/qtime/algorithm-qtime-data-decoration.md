@@ -200,6 +200,16 @@ value = min(round(q_spec * ratio, 6), math.nextafter(q_spec, 0.0))
 - 读取时补齐缺失台账列，Core 再执行归一化；这不等同于重新走严格上传校验。
   工作簿读写失败通过 `QTimeDecorationAccessError` 暴露，不伪装为没有决策。
 
+## 同一 Lot 多次过站的绘图坐标
+
+取数结果可按 CPT 起点粒度保留同一 Lot 的多次进站记录。若一个路径中 Lot ID
+重复，柱状图必须为每条记录分配独立横轴坐标，标签仍显示 Lot ID，悬停补充对应的
+报表时间。不能直接将重复 Lot ID 作为同一 Bar trace 的类别坐标：Plotly 可能将这些
+记录累计，导致各条时长均在规格内、最终柱顶却超过规格线。
+
+该处理只调整绘图位置和标签，不加总、去重、裁剪或重新修饰等待时长，也不改变
+规格、人工台账、快照或预警证据。无重复 Lot 的图形保持既有坐标与交互。
+
 ## 缓存与验证入口
 
 [cached_monitoring.py](../../../../src/indicator_domain/application/qtime/cached_monitoring.py)
