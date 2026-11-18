@@ -2,9 +2,9 @@
 
 本文以 `app/pages/SPC监控报表.py` 和 `src/inline_domain/application/spc/spc_service.py` 为入口，梳理 SPC 从后端取数到前端展示的数据链路。后端按当前代码的 DDD 层级 **infrastructure、core、application** 组织，前端单列 **app** 展示层。各步骤说明处理逻辑、输入输出及相互关系，不展开 SQL 或逐行代码。
 
-核对日期：2026-09-21。分层按当前实现归属记录：清洗、异常点过滤和主制程追溯目前在 infrastructure；能力豁免和计算截止日选择目前在 application。
+CPK/CPM 链路核对日期为 2026-11-18。清洗、异常点过滤和主制程追溯归 infrastructure，能力豁免和计算截止日选择归 application。
 
-SPC 报表采用两个窗口：完整历史点位供第一幅月周日分布图使用；完整 Sheet 特征和后两幅图仅覆盖上周一至查询截止日，服务器当日截止 12:00（含）。CPK/CPM 仅计算上一完整 ISO 周。原始快照窗口和共享测量获取、清洗、追溯窗口保持原有规则。
+SPC 报表使用三个范围。第一幅月周日分布图可使用完整查询窗口内的点位，近期 Sheet 特征和后两幅图覆盖上周一至查询截止日，CPK/CPM 仅使用上一完整 ISO 周的数据。查询截止日为服务器当日时，点位取至 12:00（含）。
 
 ## 1. 链路概览
 
@@ -53,7 +53,10 @@ SPC 报表采用两个窗口：完整历史点位供第一幅月周日分布图�
    5.10 渲染结果、复用图表与回传人工决策
 ```
 
-实际数据流为：接收 SPC 查询 → 获取历史点位与规格 → infrastructure 转换显示时间并排除配置日期 → 清洗、最新点位去重与异常点过滤 → 仅汇总上周一之后的修饰前 Sheet 特征 → 读取布尔决策并直接修饰完整历史点位 → 仅重算上周一之后的 Sheet 特征 → 排除能力豁免参数 → 仅聚合上一完整周能力 → 依次应用 CPK、CPM 台账修饰 → 输出报表结果。
+SPC 接收查询后读取历史点位与规格，转换显示时间并排除配置日期，清洗数据、按 ISO 周保留最新点位并过滤异常点。随后生成近期修饰前 Sheet 特征，再读取 Sheet 决策并修饰完整查询窗口内的点位。修饰后的数据分两路使用。
+
+- 近期图表使用上周一至查询截止日的 Sheet 特征，月周日分布图可使用完整查询窗口内的最终点位。
+- 能力计算先排除豁免参数，再截取上一完整周的最终点位并重建该周 Sheet 特征。算出 CPK/CPM 后，分别读取对应台账、追加缺失异常键并应用已保存的修饰决策。
 
 源偏差校正在写入测量快照前执行；OOS/OOC 明细和过货事实使用修饰前数据，构成旁路。周期能力使用修饰后数据，能力修饰只改变匹配周期的能力值。
 
@@ -85,7 +88,7 @@ Z622 使用独立的 ARRAY PDS 来源，只读取 `glass_id` 前九位为 `L3ZB6
 
 制备入口先统一事件时间列并执行厂别日期排除，再剔除无法识别测量时间或测量值的记录，随后排除参数名包含 LOSS 的记录，匹配不区分大小写。日期排除先于最新点位选择，被排除的复测不会覆盖允许使用的旧测量。
 
-随后按“产品＋站点＋参数＋Sheet＋点位”（`prod_code + step_id + param_name + sheet_id + site_name`）识别重复测量，同一组合只保留 `sheet_start_time` 最新的一条；时间相同则按输入顺序保留最后一条。厂别和设备不参与去重键，随保留的记录一并保留。该规则由 SPC、CTQ 共用制备管线执行，在异常点过滤和 Sheet 汇总之前生效，原始快照仍保留源记录。
+随后按“产品＋站点＋参数＋Sheet＋点位”（`prod_code + step_id + param_name + sheet_id + site_name`）识别重复测量。SPC从2026-11-17起在每个ISO周内分别保留同一组合的最新记录，本周复测不能淘汰上周点位；CTQ及其他类型保留原全窗口最新规则。时间相同按输入顺序保留最后一条，厂别和设备仍作为获胜记录的属性。在异常点过滤和Sheet汇总之前完成，原始快照仍保留源记录，不在图表下游重新修饰最终点值。
 
 ### 2.3 匹配参数白名单与 SPC 分类
 
@@ -159,9 +162,9 @@ Sheet OOS 决策读取失败会向应用层报告错误，不当作空决策继�
 
 能力修饰工作簿为 `resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx`：CPK 使用产品编码命名的表，CPM 使用“产品编码＋_cpm”。
 
-本层读取已有记录，按产品、厂别、站点、参数、周期类型和周期标签匹配完整计算结果，更新已有行的 `cpk_corrected` / `cpm_corrected` 及对应样本起止时间，即使本次已达标或不属于上一周也参与刷新。2026-11-17起，保存前剔除 corrected ≥ 1.33 的达标行；保留行的 `flag` 和有效替换值不变。未覆盖的不达标或未知历史不重算、不置空。新增行仅追加上一完整 ISO 周低于 1.33、有效 Sheet 时间跨度达到配置门槛的异常（默认48小时，当前配置为0）。需要生成或补齐的替换值也在此保存，以供后续复用。
+自动流程读取已有记录，只为上一完整周符合新增条件的缺失业务键追加记录。已有 corrected、样本起止时间、flag、replacement 和人工扩展列保持原样。常规报表有新增候选时才创建工作表，巡检可为已验证的空结果创建缺失的表头。管理员主动确认上传时可覆盖对应产品及指标的 sheet，并与自动追加使用同一把工作簿锁。
 
-字段语义、达标或空值的刷新行为，以及风险台账同时按 flag 和指标值筛选的规则，由 [SPC 能力明细工作簿规则](rules-spc-cpk&cpm-decoration.md) 维护。不能仅用 `flag=False` 将所有历史明细认定为当前不达标项。
+已保存的能力值和样本边界供预警读取。字段语义、已有记录保护和预警筛选条件见 [SPC 能力明细工作簿规则](rules-spc-cpk&cpm-decoration.md)。
 
 SPC 主服务严格检查能力工作簿读写结果：读取或保存失败时保留原文件并使报表本次加载失败，不能将内存候选当作已成功保存的预警。兼容用例的默认降级策略与页面读取路径见 [SPC 能力明细工作簿规则](rules-spc-cpk&cpm-decoration.md)。
 
@@ -183,7 +186,7 @@ SPC 主服务严格检查能力工作簿读写结果：读取或保存失败时�
 
 将同“产品＋厂别＋Sheet＋站点＋参数”下的点位汇总为一条 Sheet 特征。计算前再次按点位保留最新记录，然后计算点位均值、最大值、最小值，并取保留点位中最早的测量时间作为该 Sheet 特征时间。
 
-按产品、站点和参数关联规格，输出包含统计值与规格线的 Sheet 特征。SPC 报表仅对上周一之后的点位在修饰前后各汇总一次：第一次供近期异常台账使用，第二次供近期图表和上周能力使用。历史点位修饰不再依赖这些聚合结果。
+按产品、站点和参数关联规格，输出包含统计值与规格线的 Sheet 特征。近期异常台账使用修饰前特征，近期图表使用修饰后特征。上一周能力计算另从该周最终点位重建 Sheet 特征，避免把同一 Sheet 的跨周复测归入上周。
 
 这里的“修饰前”已完成源校正、基础设施日期排除、清洗和异常点过滤，只是尚未应用 Sheet OOS 决策。
 
@@ -214,7 +217,7 @@ OOS 优先于 OOC，同一条已发生点位超规的 Sheet 指标不会在这�
 
 ### 3.5 构建月周日周期并汇总统计
 
-SPC 服务以查询截止日为参考，只构建上一完整 ISO 周（上周一零点至本周一零点，不含后者）。分组前截取该周，跳过月度、其他周度和日度能力统计；上周无数据时返回空能力表，不回退到更早周次。通用计算函数仍保留默认月周日模式供兼容调用。
+SPC 服务以查询截止日为参考，先从最终点位截取上一完整 ISO 周 `[上周一 00:00, 本周一 00:00)`，再做周内点位去重，重建 Sheet 均值和检出时间。上周无数据时返回空能力表。通用计算函数仍保留月周日模式供其他调用。
 
 按“产品＋厂别＋站点＋参数＋周期”分组，统计 Sheet 数量、均值、波动及规格。不同厂别不会混算；同一指标下不同设备或腔室不会在本步骤另行拆组。
 
@@ -222,8 +225,8 @@ SPC 服务以查询截止日为参考，只构建上一完整 ISO 周（上周�
 
 | 波动口径 | 处理逻辑 |
 |---|---|
-| Sheet 均值波动 | 衡量周期内各 Sheet 均值之间的差异。 |
-| 全部点位波动 | 衡量周期内所有有效测量点之间的差异，同时记录点位数。 |
+| Sheet 均值波动（`sheet_mean`） | 对周内各 Sheet 均值计算样本标准差（`ddof=1`）。 |
+| 全部点位波动（`point_value`） | 对周内有效点位值计算样本标准差（`ddof=1`），同时记录点位数。 |
 
 当前配置使用全部点位波动。即使选用该口径，周期均值仍保持 Sheet 等权平均。找不到相应点位统计时回退到 Sheet 均值波动；样本不足导致波动无法计算时，不把能力值强行填为零。
 
@@ -241,18 +244,18 @@ SPC 报表仅计算上一完整周的两项能力。零波动属于特殊情况�
 
 ### 3.7 筛选上一完整周能力异常
 
-接收应用层提供的参考日期，选取该日期的上一完整 ISO 周中 CPK 或 CPM 低于 1.33、第一片至最后一片有效 Sheet 检出时间跨度至少 48 小时的记录，输出能力修饰台账的新增候选。
+候选来自参考日期的上一完整 ISO 周，CPK 或 CPM 必须严格低于 `1.33`。各项目用有效 Sheet 的最早、最晚检出时间计算跨度，达到 `spc.spc_cpk.alert_min_span_hours` 才可新增。
 
-本周、月度、达标或缺失能力值不作为新增候选。少于 48 小时、起止缺失或颠倒也不新增；恰好 48 小时可新增。该筛选只决定哪些记录可以新进入台账，不负责保存，也不限制能力计算或已有月、周修饰记录的后续应用范围。
+当前配置为 `0` 小时，配置缺失时默认 `48` 小时。当前配置下，样本起止时间有效且结束时间不早于开始时间即可通过跨度检查，同一时间也满足。跨度条件只用于台账新增和预警判定，能力值仍按公式计算。
 
 ### 3.8 匹配并应用能力修饰
 
 按“产品＋厂别＋站点＋参数＋周期类型＋周期标签”匹配能力修饰，CPK 和 CPM 分别应用。
 
 - 未启用修饰、决策留空或无有效启用标记时，保留本次计算值。
-- flag=True 时使用对应 replacement 替换值。该值必须为有限数且严格介于 1.33 和 1.40 之间。2026-11-17按用户澄清保留此原有行为，不在应用替换时增加“本次计算值低于1.33”的门槛；达标行由保存前的台账清理规则处理。
-- 替换值缺失或越界时，生成 1.331～1.399 的三位小数，交由基础设施层保存后复用。
-- corrected 列随本次匹配的周期计算结果更新；2026-11-17起，保存前移除 corrected ≥ 1.33 的达标行，保留不达标或未知历史的决策。启用修饰时仍采用单独保存的 replacement 列。
+- 业务键匹配、`flag=True` 且保存的 replacement 为严格介于 `1.33` 和 `1.40` 之间的有限数时，使用该目标作为最终能力值。`1.33` 阈值用于筛选新增异常和预警，替换按已保存的决策执行。
+- 新建异常行时生成 `1.331～1.399` 的三位小数目标并保存。以后读取该值。已有目标缺失或无效时，保留本次计算值，修饰标记为 `False`。
+- corrected 保存创建记录时的计算值，replacement 保存能力替换目标。报表应用替换后的最终值只用于能力结果展示，台账继续保存原有 corrected。
 
 新增台账仅针对上一完整周，但已有的月、周记录仍可作用于当前结果中的匹配周期；历史日记录不参与能力修饰。
 
@@ -297,13 +300,15 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 
 能力计算以查询截止日确定上一完整周，不随最新 Sheet 日期向过去滚动；缺少上周数据时不生成其他周次的替代结果。
 
+在上周点位、规格和计算规则固定时，同一周内更改查询截止日、重新执行报表或新增本周复测，均得到相同的上周计算值。报表缓存及 Sheet 成员快照的策略签名包含周隔离规则。
+
 参数豁免与截止日选择目前直接位于 `spc_service.py`，因此按当前实现归入 application，不因它们包含业务判断就写成 core 的职责。
 
 ### 4.5 编排周期能力计算与两项能力修饰
 
-应用层读取能力波动口径，调用“3.5 构建月周日周期并汇总统计”和“3.6 判断规格准入并计算 CPK、CPM”。当前配置使用全部点位波动，因此同时传入修饰后点位；选择 Sheet 均值口径时使用 Sheet 特征计算。
+应用层读取波动配置，并将修饰后 Sheet 特征与上一完整周的最终点位一并传给计算器。两种波动配置均从周内点位重建 Sheet 特征，`period_sigma_source` 决定标准差使用点位值还是 Sheet 均值。当前配置为 `point_value`。
 
-得到能力表后，先处理 CPK，再处理 CPM。每次依次调用 core 筛选新增异常、infrastructure 读取并保存对应台账、core 应用能力修饰，最后将修饰后的能力表传给下一步。
+得到能力表后，先处理 CPK，再处理 CPM。每项依次筛选新增异常、读取对应台账、追加缺失业务键，再按已有决策应用能力替换。同一键已存在时，后续查询继续读取原记录。
 
 新增异常的参考日期固定采用查询截止日，而不是最新 Sheet 日期。例如查询截止日为 9 月 9 日，即使最后测量日更早，也不会将另一个更早的周自动当作上一完整周。
 
@@ -368,12 +373,12 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 
 ### 5.4 组装全产品能力与单片预警
 
-页面按 CPK、CPM、单片异常的顺序生成预警区，均读取当前产品全范围，不受手动查询条件限制。能力区在后端完成同周明细更新后，从配置的能力工作簿重新读取，与监控入口共用 reader、状态规范化和上一周筛选函数；计算结果不作为预警明细的替代来源。
+页面按 CPK、CPM、单片异常的顺序展示当前产品全范围的预警。能力区读取工作簿中已保存的明细，与监控入口共用工作簿读取、状态规范化和上一周筛选。手动图表筛选仅作用于查询结果。
 
 | 区域 | 输入与筛选 | 输出 |
 |---|---|---|
-| CPK 预警 | 能力明细工作簿的产品 CPK sheet；上一 ISO 周、flag=False、cpk_corrected < 1.33，且有效 Sheet 时间跨度至少 48 小时。 | 厂别、站点、参数、周次、已保存的 CPK 值。 |
-| CPM 预警 | 同一工作簿的产品 CPM sheet；上一 ISO 周、flag=False、cpm_corrected < 1.33，且有效 Sheet 时间跨度至少 48 小时。 | 厂别、站点、参数、周次、已保存的 CPM 值。 |
+| CPK 预警 | 产品同名 sheet 中的上一完整 ISO 周记录，`flag=False`、`cpk_corrected < 1.33`，且已保存的有效 Sheet 时间跨度达到配置门槛。 | 厂别、站点、参数、周次、已保存的 CPK 值。 |
+| CPM 预警 | 产品 `_cpm` sheet 中的上一完整 ISO 周记录，`flag=False`、`cpm_corrected < 1.33`，且已保存的有效 Sheet 时间跨度达到配置门槛。 | 厂别、站点、参数、周次、已保存的 CPM 值。 |
 | 单片异常预警 | 已发布SPC OOS Excel产品明细；上一 ISO 周且 flag=False，再排除命中独立预警过滤配置的参数。 | 厂别、站点、参数、Sheet、超规时间、超规类型。 |
 
 SPC 页面单片预警使用 `config/domain/inline_domain.yaml` 的
@@ -459,7 +464,7 @@ By 过货时间图的标签仅显示日期，不显示小时；点线模式的�
 | infrastructure | 2.1 | [measurement_snapshot_repository.py](../../../../src/inline_domain/infrastructure/shared/measurement_snapshot_repository.py)、[measurement_data_loader.py](../../../../src/inline_domain/infrastructure/shared/measurement_data_loader.py) |
 | infrastructure | 2.2～2.7 | [measurement_preparation.py](../../../../src/inline_domain/infrastructure/shared/measurement_preparation.py)、[main_process_trace.py](../../../../src/inline_domain/infrastructure/shared/main_process_trace.py)、[measurement_metadata_loader.py](../../../../src/inline_domain/infrastructure/shared/measurement_metadata_loader.py) |
 | infrastructure | 2.8 | [sheet_oos_decoration_repository.py](../../../../src/inline_domain/infrastructure/shared/sheet_oos_decoration_repository.py) |
-| infrastructure | 2.9 | [capability_decoration_repository.py](../../../../src/inline_domain/infrastructure/spc/capability_decoration_repository.py) |
+| infrastructure | 2.9 | [capability_decoration_repository.py](../../../../src/inline_domain/infrastructure/spc/capability_decoration_repository.py)、[capability_workbook_writer.py](../../../../src/inline_domain/infrastructure/spc/capability_workbook_writer.py) |
 | core | 3.1 | [measurement_correction.py](../../../../src/inline_domain/core/shared/measurement_correction.py) |
 | core | 3.2 | [monitor_calculator.py](../../../../src/inline_domain/core/monitor/monitor_calculator.py) |
 | core | 3.3～3.4 | [spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py)、[sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)、[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py) |
@@ -470,7 +475,7 @@ By 过货时间图的标签仅显示日期，不显示小时；点线模式的�
 | 组合与配置 | 依赖接入、资源路径和参数 | [composition.py](../../../../src/inline_domain/composition.py)、[inline_domain.yaml](../../../../config/domain/inline_domain.yaml) |
 | app | 5.1～5.2、5.4～5.6 | [SPC监控报表.py](../../../../app/pages/SPC监控报表.py)、[spc_dashboard.py](../../../../app/sections/inline_domain/spc/spc_dashboard.py) |
 | app | 5.3 | [filters.py](../../../../app/sections/inline_domain/shared/filters.py) |
-| app | 5.4 | [alert_center.py](../../../../app/sections/inline_domain/shared/alert_center.py)、[sheet_oos_alerts.py](../../../../src/inline_domain/core/shared/sheet_oos_alerts.py) |
+| app | 5.4 | [alert_results.py](../../../../app/sections/shared/alert_results.py)、[alert_center.py](../../../../app/sections/inline_domain/shared/alert_center.py)、[sheet_oos_alerts.py](../../../../src/inline_domain/core/shared/sheet_oos_alerts.py) |
 | app | 5.7～5.8 | [sheet_charts.py](../../../../app/charts/inline_domain/sheet_charts.py)、[sheet_axis.py](../../../../app/charts/inline_domain/sheet_axis.py)、[chart_type.py](../../../../app/charts/inline_domain/chart_type.py)、[constants.py](../../../../app/charts/inline_domain/constants.py) |
 | app | 5.9 | [spec_lines.py](../../../../app/charts/inline_domain/spec_lines.py) |
 | app | 5.10 | [render_gate.py](../../../../app/manager/render_gate.py)、[indicator_cache.py](../../../../app/components/indicator_cache.py)、[decoration_admin.py](../../../../app/sections/inline_domain/shared/decoration_admin.py)、[sheet_oos_admin.py](../../../../app/sections/inline_domain/shared/sheet_oos_admin.py) |
@@ -479,12 +484,9 @@ By 过货时间图的标签仅显示日期，不显示小时；点线模式的�
 
 ## 全指标预警矩阵中的 CPK 图像
 
-矩阵 CPK 详情只读 `spc_cpk_cpm_decoration.xlsx` 的产品 CPK sheet，按既有台账状态选择上一 ISO 周预警。
-周度记录还检查有效 Sheet 时间跨度是否至少 48 小时；不足或无法确认时保留数值，状态为“数据跨度不足”，不产生预警详情。
-详情自动展示这些厂别、站点、参数对应的历史周 CPK 图像，数值沿用规范化后的 `cpk_corrected`，
-红点按台账 `status` 标识，不根据图中数值重新决定人工修饰记录是否预警。
-历史限制为截至上周的周记录，不包含本周、未来周、月数据或其他未命中指标。
-缺失周不代表达标，图像保留空缺；只有一周记录时只显示一个点。
+矩阵的 CPK、CPM 状态和明细均读取 `spc_cpk_cpm_decoration.xlsx` 中对应产品及指标的 sheet。上一完整周的预警由已保存的 corrected、flag、时间跨度配置和日期排除规则共同决定。
+
+打开预警详情时，明细表显示台账保存的能力值。图像按命中的厂别、站点和参数加载 SPC 报表，复用周度能力表和三张 SPC 图，按各图自身的时间窗口展示。
 
 此入口不调用底层 SPC 测量分析、不回写台账，因此不会提供原始点位分布或控制图。
 详情数据随原有台账签名失效，新增图像使用独立图表 key；实现位于

@@ -4,9 +4,12 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
+from src.inline_domain.core.monitor.monitor_calculator import preprocess_sheet_features
+
 logger = logging.getLogger(__name__)
 
 PERIOD_SIGMA_SOURCE_SHEET_MEAN = "sheet_mean"
+SPC_WEEKLY_POINT_POLICY = "spc-week-isolated-points-v1"
 PERIOD_SIGMA_SOURCE_POINT_VALUE = "point_value"
 PERIOD_SIGMA_SOURCE_OPTIONS = {
     PERIOD_SIGMA_SOURCE_SHEET_MEAN,
@@ -352,6 +355,34 @@ def normalize_period_sigma_source(value: object) -> str:
     return PERIOD_SIGMA_SOURCE_SHEET_MEAN
 
 
+def _previous_week_sheet_inputs(
+    sheet_features: pd.DataFrame, points: pd.DataFrame | None, end_date: date,
+) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+    """Select the point population before latest-site/Sheet aggregation.
+
+    Preaggregated Sheet features may already include newer reinspections of
+    the same Sheet; their minimum event time cannot isolate a closed week.
+    Legacy callers without final site-level points retain their supplied facts.
+    """
+    keys = ["prod_code", "factory", "sheet_id", "step_id", "param_name"]
+    required = {*keys, "site_name", "sheet_start_time", "param_value"}
+    if points is None or not required.issubset(points.columns):
+        return sheet_features, points
+    weekly_points = _period_frame(points, end_date, previous_week_only=True)
+    weekly_points["param_value"] = pd.to_numeric(weekly_points["param_value"], errors="coerce")
+    weekly_points = weekly_points.dropna(subset=["param_value"])
+    weekly_points = weekly_points.sort_values("sheet_start_time", kind="stable").drop_duplicates(
+        [*keys, "site_name"], keep="last",
+    )
+    source = weekly_points if {"usl", "lsl"}.issubset(weekly_points) else sheet_features
+    spec_columns = [name for name in ("usl", "lsl", "ucl", "lcl", "target") if name in source]
+    specifications = source[[*keys, *spec_columns]].drop_duplicates(keys, keep="first")
+    weekly_features = preprocess_sheet_features(
+        weekly_points, specifications, filter_keys=[*keys, "site_name"], group_keys=keys, join_keys=keys,
+    )
+    return weekly_features, weekly_points
+
+
 def build_period_capability_report(
     sheet_features: pd.DataFrame,
     end_date: date,
@@ -386,6 +417,10 @@ def build_period_capability_report(
     if sheet_features.empty:
         return pd.DataFrame()
 
+    if previous_week_only:
+        sheet_features, raw_measurements = _previous_week_sheet_inputs(sheet_features, raw_measurements, end_date)
+        if sheet_features.empty:
+            return pd.DataFrame()
     df = sheet_features.copy()
     if "target" not in df.columns:
         df["target"] = np.nan

@@ -90,7 +90,7 @@ def test_cpk_decoration_matches_excel_numeric_step_id_to_runtime_string() -> Non
         period_capability_df=computed_df,
         product_dir=Path("."),
         persist_files=False,
-    ).decoration_df.assign(step_id=12140.0, cpk_corrected=pd.NA, flag=True)
+    ).decoration_df.assign(step_id=12140.0, cpk_corrected=pd.NA, cpk_replacement=1.372, flag=True)
 
     decorated_df = apply_cpk_decoration(computed_df, decoration_df)
 
@@ -176,7 +176,7 @@ def test_load_cpk_decoration_falls_back_to_excel_com_for_enterprise_encrypted_fi
     assert loaded_df.equals(expected_df)
 
 
-def test_prepare_cpk_decoration_refreshes_values_preserving_user_decisions(tmp_path: Path) -> None:
+def test_prepare_cpk_decoration_reads_existing_values_without_updating_user_decisions(tmp_path: Path) -> None:
     computed_df = _capability_frame(1.26)
     decoration_path = tmp_path / cpk_decoration.CPK_DECORATION_FILE_NAME
     existing_df = prepare_cpk_decoration(
@@ -196,7 +196,7 @@ def test_prepare_cpk_decoration_refreshes_values_preserving_user_decisions(tmp_p
     )
 
     stored = pd.read_excel(decoration_path, sheet_name="M678")
-    assert stored["cpk_corrected"].tolist() == [1.26]
+    assert stored["cpk_corrected"].tolist() == [1.72]
     assert stored["flag"].tolist() == ["TURE"]
     assert stored["cpk_replacement"].tolist() == [1.372]
     assert not (tmp_path / "spc_cpk_detail.xlsx").exists()
@@ -242,7 +242,7 @@ def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
 
     persisted_df = pd.read_excel(decoration_path, sheet_name="M678")
     assert persisted_df["period_label"].tolist() == ["2026-W30", "2026-W35"]
-    assert persisted_df["cpk_corrected"].tolist() == [1.26, 0.919]
+    assert persisted_df["cpk_corrected"].tolist() == [1.72, 0.919]
     assert persisted_df["flag"].tolist() == [True, False]
     assert result.period_capability_df["cpk_decorated"].tolist() == [True, False]
     other_loaded = pd.read_excel(decoration_path, sheet_name="OTHER")
@@ -251,7 +251,7 @@ def test_prepare_cpk_decoration_appends_new_periods_to_an_existing_user_sheet(
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("value", [1.1, 1.6])
-def test_existing_capability_refresh_keeps_only_unresolved_anomalies(tmp_path, metric, value):
+def test_existing_capability_record_is_read_without_value_refresh(tmp_path, metric, value):
     sheet = resolve_capability_decoration_sheet("M678", metric)
     initial = _capability_frame(1.2).rename(columns={"cpk": metric})
     result = prepare_capability_decoration(initial, tmp_path, sheet_name=sheet, metric=metric)
@@ -265,10 +265,10 @@ def test_existing_capability_refresh_keeps_only_unresolved_anomalies(tmp_path, m
         updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),
     )
     stored = pd.read_excel(path, sheet_name=sheet)
-    assert stored[f"{metric}_corrected"].tolist() == ([value] if value < 1.33 else [])
-    assert stored["flag"].tolist() == ([True] if value < 1.33 else [])
-    assert stored[f"{metric}_replacement"].tolist() == ([1.372] if value < 1.33 else [])
-    assert result.period_capability_df[metric].tolist() == [1.372 if value < 1.33 else value, 1.8]
+    assert stored[f"{metric}_corrected"].tolist() == [1.2]
+    assert stored["flag"].tolist() == [True]
+    assert stored[f"{metric}_replacement"].tolist() == [1.372]
+    assert result.period_capability_df[metric].tolist() == [1.372, 1.8]
     before = path.read_bytes()
     prepare_capability_decoration(
         updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=date(2026, 8, 31),
@@ -409,7 +409,7 @@ def test_existing_decision_survives_when_no_new_anomalies(tmp_path: Path) -> Non
         rows, tmp_path, sheet_name="M678", reference_date=date(2026, 8, 10),
     )
     stored = pd.read_excel(first.decoration_path, sheet_name="M678")
-    assert stored["cpk_corrected"].tolist() == [0.8]
+    assert stored["cpk_corrected"].tolist() == [1.72]
     assert stored["flag"].tolist() == [True]
     assert stored["cpk_replacement"].tolist() == [1.372]
     assert result.period_capability_df["cpk"].tolist() == [1.372]
@@ -417,18 +417,19 @@ def test_existing_decision_survives_when_no_new_anomalies(tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
-def test_enabled_legacy_anomaly_gets_persisted_passing_replacement(tmp_path: Path, metric: str) -> None:
+def test_enabled_legacy_anomaly_does_not_backfill_saved_replacement(tmp_path: Path, metric: str) -> None:
     rows = _capability_frame(1.084).rename(columns={"cpk": metric})
     first = prepare_capability_decoration(rows, tmp_path, sheet_name="M678", metric=metric)
     ledger = first.decoration_df.drop(columns=[f"{metric}_replacement"], errors="ignore").assign(flag=True)
     ledger.to_excel(first.decoration_path, sheet_name="M678", index=False)
+    before = first.decoration_path.read_bytes()
     result = prepare_capability_decoration(rows, tmp_path, sheet_name="M678", metric=metric)
     stored = pd.read_excel(first.decoration_path, sheet_name="M678")
     assert stored[f"{metric}_corrected"].tolist() == [1.084]
-    assert stored[f"{metric}_replacement"].iloc[0] > 1.33
-    assert result.period_capability_df[metric].iloc[0] == stored[f"{metric}_replacement"].iloc[0]
-    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [True]
-    before = first.decoration_path.read_bytes()
+    assert f"{metric}_replacement" not in stored
+    assert first.decoration_path.read_bytes() == before
+    assert result.period_capability_df[metric].tolist() == [1.084]
+    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [False]
     prepare_capability_decoration(rows, tmp_path, sheet_name="M678", metric=metric)
     assert first.decoration_path.read_bytes() == before
 
@@ -441,21 +442,21 @@ def test_replacement_is_passing_and_only_applied_when_enabled(metric: str, targe
         flag=True, **{f"{metric}_replacement": target},
     )
     result = apply_capability_decoration(rows, ledger, metric)
-    assert 1.33 < result[metric].iloc[0] < 1.4
-    if target == 1.372:
-        assert result[metric].iloc[0] == 1.372
+    assert result[metric].iloc[0] == (1.372 if target == 1.372 else 1.084)
+    assert bool(result[f"{metric}_decorated"].iloc[0]) == (target == 1.372)
     disabled = apply_capability_decoration(rows, ledger.assign(flag=False), metric)
     assert disabled[metric].iloc[0] == 1.084
 
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
-def test_legacy_value_outside_new_range_gets_random_replacement(metric: str) -> None:
+def test_legacy_missing_target_keeps_computed_value_without_repair(metric: str) -> None:
     rows = _capability_frame(1.084).rename(columns={"cpk": metric})
     ledger = rows.rename(columns={metric: f"{metric}_corrected"}).assign(
         flag=True, **{f"{metric}_corrected": 1.72},
     )
     result = apply_capability_decoration(rows, ledger, metric)
-    assert 1.33 < result[metric].iloc[0] < 1.4
+    assert result[metric].iloc[0] == 1.084
+    assert result[f"{metric}_decorated"].tolist() == [False]
     assert ledger[f"{metric}_corrected"].iloc[0] == 1.72
 
 
@@ -467,7 +468,8 @@ def test_random_replacements_exclude_endpoints_and_are_reused(monkeypatch) -> No
     ledger = pd.concat([_capability_frame(0.8)] * 2, ignore_index=True).rename(
         columns={"cpk": "cpk_corrected"},
     ).assign(flag=True)
-    generated = core.ensure_capability_replacements(ledger, "cpk")
+    generated = core.initialize_capability_replacements(ledger, "cpk")
     assert generated["cpk_replacement"].tolist() == [1.331, 1.399]
     # No further draws are available: valid persisted values must be reused.
-    pd.testing.assert_frame_equal(core.ensure_capability_replacements(generated, "cpk"), generated)
+    reused = core.merge_capability_detail_with_decoration_flags(ledger, generated, "cpk", create_replacements=False)
+    assert reused["cpk_replacement"].tolist() == [1.399, 1.399]  # Same business key uses the last saved decision.

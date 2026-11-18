@@ -1,4 +1,4 @@
-"""SPC alerts read saved capability records and updates must be durable."""
+"""SPC alerts read immutable saved capability records; new-key writes are durable."""
 from datetime import date
 from types import SimpleNamespace
 
@@ -44,7 +44,7 @@ def test_same_week_saved_lifecycle_matches_page_and_monitor(metric, tmp_path):
     sheet = "M626" if metric == "cpk" else "M626_cpm"
     reader = (CpkLatestExcelStore if metric == "cpk" else CpmLatestExcelStore)(path)
     build = build_weekly_cpk_alerts if metric == "cpk" else build_weekly_cpm_alerts
-    for value, hours, expected in [(.9, 18, 0), (.9, 48, 1), (1.5, 72, 0), (.8, 72, 1), (None, 72, 0)]:
+    for value, hours, expected in [(.9, 18, 0), (.9, 48, 1), (1.5, 72, 1), (.8, 72, 1), (None, 72, 1)]:
         result = prepare_capability_decoration(
             computed(metric, value, hours), tmp_path, workbook_path=path,
             sheet_name=sheet, metric=metric, reference_date=REFERENCE, strict_persistence=True,
@@ -57,24 +57,24 @@ def test_same_week_saved_lifecycle_matches_page_and_monitor(metric, tmp_path):
         alerts = build(detail, reference_date=REFERENCE)
         assert len(alerts) == expected
         if expected:
-            assert alerts[f"{metric.upper()}值"].tolist() == [value]
+            assert alerts[f"{metric.upper()}值"].tolist() == [.9]
         if hours >= 48:
-            assert len(pd.read_excel(path, sheet_name=sheet)) == (0 if value is not None and value >= 1.33 else 1)
+            assert len(pd.read_excel(path, sheet_name=sheet)) == 1
 
 
-def test_strict_update_failure_preserves_file_and_raises(tmp_path, monkeypatch):
+def test_strict_new_key_write_failure_preserves_file_and_raises(tmp_path, monkeypatch):
     path = tmp_path / "capability.xlsx"
     initial = prepare_capability_decoration(
         computed("cpk"), tmp_path, workbook_path=path, sheet_name="M626",
         reference_date=REFERENCE,
     )
     before = path.read_bytes()
-    monkeypatch.setattr(repository, "replace_workbook_sheets", lambda *args: SimpleNamespace(
+    monkeypatch.setattr(repository, "create_capability_rows", lambda *args: SimpleNamespace(
         written=False, error="locked workbook",
     ))
     with pytest.raises(RuntimeError, match="persist"):
         prepare_capability_decoration(
-            computed("cpk", 1.5), tmp_path, workbook_path=path, sheet_name="M626",
+            computed("cpk", .8).assign(param_name="NEW"), tmp_path, workbook_path=path, sheet_name="M626",
             reference_date=REFERENCE, strict_persistence=True,
         )
     assert initial.decoration_path.read_bytes() == before

@@ -205,11 +205,21 @@ class InlineMeasurementPreparationRepository:
         prepared = filter_invalid_measurement_values(prepared)
         prepared = filter_excluded_param_names(prepared)
         # Factory/equipment are attributes of the winning measurement, not its identity.
+        # SPC ended-week facts must survive a reinspection of the same Sheet/site
+        # in a later ISO week. Other domains retain their global-latest contract.
+        dedup_keys = ["prod_code", "step_id", "param_name", "sheet_id", "site_name"]
+        partition_spc_weeks = (config.data_type_filter or "ALL").upper() == "SPC"
+        if partition_spc_weeks:
+            iso = prepared["sheet_start_time"].dt.isocalendar()
+            prepared = prepared.assign(_spc_dedup_week=iso.year.astype(str) + "-" + iso.week.astype(str))
+            dedup_keys.append("_spc_dedup_week")
         prepared = keep_latest_measurements(
             prepared,
-            ["prod_code", "step_id", "param_name", "sheet_id", "site_name"],
+            dedup_keys,
             "sheet_start_time",
         )
+        if partition_spc_weeks:
+            prepared = prepared.drop(columns="_spc_dedup_week")
         catalog = self.metadata.get_parameter_catalog(config.prod_code)
         if catalog is None:
             prepared["data_type"] = "UNKNOWN"

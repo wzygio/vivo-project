@@ -59,8 +59,7 @@ vivo-project/
 │   │   ├── 入库不良率分析看板.py
 │   │   ├── 入库不良率ByLot明细表.py
 │   │   ├── 入库不良率BySheet明细表.py
-│   │   ├── 专项资料-台账周报.py
-│   │   └── 专项资料-解析报告.py
+│   │   └── 专项资料-台账周报.py
 │   ├── components/                   # 可复用 UI 组件
 │   │   ├── spc_sections.py
 │   │   ├── yield_sections.py

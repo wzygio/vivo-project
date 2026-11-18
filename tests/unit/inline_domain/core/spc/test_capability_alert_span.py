@@ -144,7 +144,7 @@ def test_short_span_does_not_append_anomaly_rows_and_keeps_capability(metric, tm
 
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
-def test_refreshes_span_with_value_and_preserves_historical_decisions(metric, tmp_path):
+def test_preserves_saved_span_and_value_without_refreshing_historical_decisions(metric, tmp_path):
     sheet = "M626" if metric == "cpk" else "M626_cpm"
     initial = capability(metric, START + pd.Timedelta(hours=48))
     result = prepare_capability_decoration(
@@ -162,13 +162,13 @@ def test_refreshes_span_with_value_and_preserves_historical_decisions(metric, tm
         updated, tmp_path, sheet_name=sheet, metric=metric, reference_date=REFERENCE,
     )
     stored = pd.read_excel(result.decoration_path, sheet_name=sheet)
-    assert stored[corrected].tolist() == [0.6, 0.51]
-    assert pd.Timestamp(stored.loc[0, "period_end"]) == START + pd.Timedelta(hours=18)
+    assert stored[corrected].tolist() == [0.51, 0.51]
+    assert pd.Timestamp(stored.loc[0, "period_end"]) == START + pd.Timedelta(hours=48)
     assert pd.Timestamp(stored.loc[1, "period_end"]) == START + pd.Timedelta(hours=48)
     assert stored["flag"].tolist() == [False, True]
     assert stored.loc[0, replacement] == 1.372
     assert normalize_latest_cpk(stored, "M626", metric=metric)["status"].tolist() == [
-        "数据跨度不足", "已修饰或达标",
+        "预警", "已修饰或达标",
     ]
     before = result.decoration_path.read_bytes()
     prepare_capability_decoration(

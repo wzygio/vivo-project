@@ -205,7 +205,7 @@ def test_source_window_must_be_proved_before_any_shared_production(monkeypatch):
         InlineProductionSession(object(), 'DEMO', DAY).refresh('spc')
 
 
-def test_empty_capability_headers_are_added_without_replacing_maintained_data(tmp_path, monkeypatch):
+def test_existing_capability_headers_are_read_without_automatic_repair(tmp_path, monkeypatch):
     from src.shared_kernel.config import ConfigLoader
     from src.inline_domain.core.spc.cpk_decoration import capability_decoration_columns, capability_detail_columns
 
@@ -215,11 +215,13 @@ def test_empty_capability_headers_are_added_without_replacing_maintained_data(tm
         pd.DataFrame(columns=[*capability_detail_columns('cpm'), 'legacy_note']).to_excel(writer, sheet_name='DEMO_cpm', index=False)
         pd.DataFrame({'manual': ['retained']}).to_excel(writer, sheet_name='OTHER', index=False)
     monkeypatch.setattr(ConfigLoader, 'get_domain_resource_path', lambda *args: path)
+    before = path.read_bytes()
     session = InlineProductionSession(object(), 'DEMO', DAY)
     session._spc_source_proof = {'start_date': '2026-10-01', 'end_date': '2026-11-12', 'source_generation': 'verified'}
     session._ensure_capability_headers()
     frames = pd.read_excel(path, sheet_name=None)
-    assert set(capability_decoration_columns('cpm')) <= set(frames['DEMO_cpm'])
+    assert path.read_bytes() == before
+    assert set(capability_decoration_columns('cpm')) - set(frames['DEMO_cpm'])
     assert 'legacy_note' in frames['DEMO_cpm'] and frames['DEMO_cpm'].empty
     assert frames['OTHER']['manual'].tolist() == ['retained']
 

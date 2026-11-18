@@ -1,6 +1,5 @@
 """合并资料页使用隔离文件验证，不访问数据库或维护中的资料。"""
 
-import runpy
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -9,6 +8,7 @@ import fitz
 import pandas as pd
 import pytest
 import streamlit as st
+import yaml
 from streamlit.testing.v1 import AppTest
 
 from src.shared_kernel.config import ConfigLoader
@@ -19,16 +19,26 @@ PAGE = Path(__file__).parents[4] / "app/pages/专项资料-台账周报.py"
 
 @pytest.fixture
 def document_dirs(tmp_path, monkeypatch):
-    project = tmp_path / "project"
-    analysis = tmp_path / "analysis"
-    project.mkdir()
-    analysis.mkdir()
-    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
-    monkeypatch.setattr(
-        ConfigLoader, "get_domain_resource_directory",
-        lambda domain, key: {("shared_kernel", "project_files"): project,
-                             ("yield_domain", "analysis_files"): analysis}[(domain, key)],
+    collection_keys = {
+        "ledger": "project_ledgers",
+        "weekly": "project_weekly_reports",
+        "analysis": "project_analysis_reports",
+        "archive": "project_archives",
+    }
+    directories = {source: tmp_path / f"custom-{source}" for source in collection_keys}
+    for directory in directories.values():
+        directory.mkdir()
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "global.yaml").write_text(
+        yaml.safe_dump({
+            "resources": {"shared_kernel": {"directories": {
+                key: str(directories[source]) for source, key in collection_keys.items()
+            }}},
+        }),
+        encoding="utf-8",
     )
+    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
     header = ModuleType("app.components.page_header")
     header.perform_hard_reset = lambda: None
     monkeypatch.setitem(sys.modules, header.__name__, header)
@@ -43,7 +53,7 @@ def document_dirs(tmp_path, monkeypatch):
     ppt = ModuleType("yield_domain.application.ppt_service")
     ppt.PPTService = object
     monkeypatch.setitem(sys.modules, ppt.__name__, ppt)
-    return project, analysis
+    return directories
 
 
 def write_pdf(path: Path, pages: int) -> None:
@@ -54,9 +64,8 @@ def write_pdf(path: Path, pages: int) -> None:
 
 
 def test_same_named_reports_keep_independent_downloads_and_previews(document_dirs):
-    project, analysis = document_dirs
-    write_pdf(project / "同名报告.pdf", 1)
-    write_pdf(analysis / "同名报告.pdf", 2)
+    write_pdf(document_dirs["archive"] / "同名报告.pdf", 1)
+    write_pdf(document_dirs["analysis"] / "同名报告.pdf", 2)
     app = AppTest.from_file(str(PAGE)).run()
 
     assert not app.exception
@@ -68,21 +77,22 @@ def test_same_named_reports_keep_independent_downloads_and_previews(document_dir
     assert app.session_state.viewing_source == "analysis"
     assert any("共加载 2 页内容" in item.value for item in app.info)
 
-    app.button(key="view_project_同名报告.pdf").click().run()
+    app.button(key="view_archive_同名报告.pdf").click().run()
     assert not app.exception
-    assert app.session_state.viewing_source == "project"
+    assert app.session_state.viewing_source == "archive"
     assert any("共加载 1 页内容" in item.value for item in app.info)
 
 
 def test_empty_analysis_group_and_excel_editing_still_render(document_dirs):
-    project, _ = document_dirs
-    (project / "测试台账.xlsx").write_bytes(b"isolated workbook fixture")
+    (document_dirs["ledger"] / "测试记录.xlsx").write_bytes(b"isolated workbook fixture")
+    (document_dirs["weekly"] / "测试记录.md").write_text("# 测试", encoding="utf-8")
     app = AppTest.from_file(str(PAGE)).run()
 
     assert not app.exception
     assert any("暂无解析报告" in item.value for item in app.info)
+    assert app.button(key="view_weekly_测试记录.md")
     assert not any("刷新缓存" in item.label for item in app.button)
-    app.button(key="view_project_测试台账.xlsx").click().run()
+    app.button(key="view_ledger_测试记录.xlsx").click().run()
     assert not app.exception
     assert app.session_state.viewing_type == "EXCEL"
     assert len(app.dataframe) == 1
@@ -90,7 +100,7 @@ def test_empty_analysis_group_and_excel_editing_still_render(document_dirs):
 
 
 def test_invalid_pdf_shows_safe_error_and_closes_preview(document_dirs):
-    _, analysis = document_dirs
+    analysis = document_dirs["analysis"]
     (analysis / "损坏.pdf").write_bytes(b"invalid pdf")
     app = AppTest.from_file(str(PAGE)).run()
     app.button(key="view_analysis_损坏.pdf").click().run()
@@ -102,28 +112,26 @@ def test_invalid_pdf_shows_safe_error_and_closes_preview(document_dirs):
     assert not app.subheader
 
 
-def test_analysis_upload_replaces_only_selected_source(document_dirs, monkeypatch):
-    project, analysis = document_dirs
-    (project / "同名报告.pdf").write_bytes(b"project original")
-    (analysis / "同名报告.pdf").write_bytes(b"analysis original")
-    uploaded = SimpleNamespace(name="同名报告.pdf", getbuffer=lambda: b"analysis replacement")
+@pytest.mark.parametrize("source", ["ledger", "weekly", "analysis", "archive"])
+def test_upload_replaces_only_selected_source(document_dirs, monkeypatch, source):
+    filename = "同名报告.pdf"
+    for directory in document_dirs.values():
+        (directory / filename).write_bytes(b"original")
+    uploaded = SimpleNamespace(name=filename, getbuffer=lambda: b"replacement")
     monkeypatch.setattr(
         st, "file_uploader",
-        lambda *args, **kwargs: [uploaded] if kwargs["key"].endswith("analysis") else [],
+        lambda *args, **kwargs: [uploaded] if kwargs["key"] == f"document_uploader_{source}" else [],
     )
     app = AppTest.from_file(str(PAGE)).run()
-    app.selectbox(key="document_upload_source").select("analysis").run()
+    app.selectbox(key="document_upload_source").select(source).run()
     next(button for button in app.button if "确认上传" in button.label).click().run()
 
     assert not app.exception
-    assert (project / "同名报告.pdf").read_bytes() == b"project original"
-    assert (analysis / "同名报告.pdf").read_bytes() == b"analysis replacement"
+    for category, directory in document_dirs.items():
+        assert (directory / filename).read_bytes() == (
+            b"replacement" if category == source else b"original"
+        )
 
 
-def test_legacy_analysis_link_redirects_to_merged_page(monkeypatch):
-    destinations = []
-    monkeypatch.setattr(st, "switch_page", destinations.append)
-
-    runpy.run_path(str(PAGE.with_name("专项资料-解析报告.py")))
-
-    assert destinations == ["pages/专项资料-台账周报.py"]
+def test_legacy_analysis_page_is_removed():
+    assert not PAGE.with_name("专项资料-解析报告.py").exists()

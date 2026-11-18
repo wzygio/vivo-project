@@ -6,10 +6,14 @@ import re
 def unregistered_resources(root: Path, files: set[Path], collections: set[Path]) -> set[Path]:
     registered = {path.resolve() for path in files}
     directories = {path.resolve() for path in collections}
+    resources_root = root / 'resources'
     unknown = set()
-    for entry in (root / 'resources').rglob('*'):
+    for entry in resources_root.rglob('*'):
         if not entry.is_file():
             continue
+        parts = entry.relative_to(resources_root).parts
+        if len(parts) > 3 and parts[2] == 'decrypted_files':
+            continue  # Historical extraction archive under a domain submodule.
         path = entry.resolve()
         if path in registered or any(path.is_relative_to(directory) for directory in directories):
             continue

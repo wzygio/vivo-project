@@ -279,11 +279,13 @@ def build_spc_sheet_membership_policy_signature() -> str:
     import hashlib
     import json
     from src.inline_domain.core.monitor.monitor_param_classifier import PARAM_CLASSIFICATION_SIGNATURE
+    from src.inline_domain.core.spc.spc_calculator import SPC_WEEKLY_POINT_POLICY
+    from src.inline_domain.application.spc.sheet_membership import MEMBERSHIP_POLICY
 
     rules = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters")
     stat = rules.stat()
     components = (
-        "spc-sheet-membership-v1", PARAM_CLASSIFICATION_SIGNATURE,
+        MEMBERSHIP_POLICY, SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE,
         repr(ConfigLoader.get_data_forward_policy()),
         repr(ConfigLoader.get_inline_data_exclusion()),
         str(rules.resolve()), stat.st_size, stat.st_mtime_ns,

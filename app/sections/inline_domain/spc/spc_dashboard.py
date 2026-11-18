@@ -554,10 +554,13 @@ def render_capability_decoration_admin(
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
                             return
 
-                        write_result = replace_workbook_sheets(
-                            decoration_result.decoration_path,
-                            {decoration_result.decoration_sheet: uploaded_df},
-                        )
+                        from src.shared_kernel.infrastructure.file_lock import publication_lock
+
+                        with publication_lock(decoration_result.decoration_path):
+                            write_result = replace_workbook_sheets(
+                                decoration_result.decoration_path,
+                                {decoration_result.decoration_sheet: uploaded_df},
+                            )
                         if not write_result.written:
                             st.error(f"保存 {metric_label} 修饰表失败：{write_result.error}")
                             return

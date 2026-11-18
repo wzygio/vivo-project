@@ -13,7 +13,6 @@ from src.inline_domain.core.spc.cpk_decoration import (
     CPK_DECORATION_FILE_NAME,
     apply_capability_decoration,
     build_capability_anomaly_detail,
-    build_capability_detail,
     merge_capability_detail_with_decoration_flags,
 )
 from src.inline_domain.application.shared.decoration_defaults import (
@@ -62,7 +61,6 @@ def prepare_capability_decoration(
     decoration = (
         persist_decoration(
             product_dir, detail, sheet_name, metric,
-            computed_detail_df=build_capability_detail(period_capability_df, metric),
             **({"raise_on_error": True} if strict_persistence else {}),
             **path_kwargs,
         )
@@ -71,6 +69,7 @@ def prepare_capability_decoration(
             detail,
             load_decoration(product_dir, sheet_name, metric, **path_kwargs),
             metric,
+            create_replacements=False,
         )
     )
     return CpkDecorationResult(

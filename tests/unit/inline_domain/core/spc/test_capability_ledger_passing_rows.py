@@ -1,4 +1,4 @@
-"""Passing ledger rows are removed; enabled replacement retains its original behavior."""
+"""Existing ledger rows are immutable; enabled replacement retains its original behavior."""
 from datetime import date
 
 import pandas as pd
@@ -18,7 +18,7 @@ def capability(metric, value):
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("passing_value", [1.33, 1.6, float("inf")])
-def test_recomputed_passing_row_is_removed_and_does_not_override_final_value(tmp_path, metric, passing_value):
+def test_recomputed_passing_value_cannot_update_or_remove_existing_ledger_row(tmp_path, metric, passing_value):
     sheet = resolve_capability_decoration_sheet("M678", metric)
     def prepare(frame):
         return prepare_capability_decoration(frame, tmp_path, sheet_name=sheet, metric=metric,
@@ -27,19 +27,20 @@ def test_recomputed_passing_row_is_removed_and_does_not_override_final_value(tmp
     initial = prepare(capability(metric, 0.8))
     initial.decoration_df.assign(flag=True, **{f"{metric}_replacement": 1.372}).to_excel(
         initial.decoration_path, sheet_name=sheet, index=False)
+    before = initial.decoration_path.read_bytes()
     result = prepare(capability(metric, passing_value))
     stored = pd.read_excel(initial.decoration_path, sheet_name=sheet)
-    assert stored.empty
-    assert result.decoration_df.empty
-    assert result.period_capability_df[metric].tolist() == [passing_value]
-    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [False]
-    before = initial.decoration_path.read_bytes()
+    assert stored[f"{metric}_corrected"].tolist() == [0.8]
+    assert result.decoration_df[f"{metric}_corrected"].tolist() == [0.8]
+    assert result.period_capability_df[metric].tolist() == [1.372]
+    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [True]
+    assert initial.decoration_path.read_bytes() == before
     prepare(capability(metric, passing_value))
     assert initial.decoration_path.read_bytes() == before
 
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
-def test_removing_last_resolved_anomaly_still_appends_new_failure(tmp_path, metric):
+def test_reading_existing_key_still_appends_new_failure(tmp_path, metric):
     sheet = resolve_capability_decoration_sheet("M678", metric)
     initial = prepare_capability_decoration(capability(metric, 0.8), tmp_path,
         sheet_name=sheet, metric=metric, reference_date=date(2026, 11, 17))
@@ -47,9 +48,9 @@ def test_removing_last_resolved_anomaly_still_appends_new_failure(tmp_path, metr
     result = prepare_capability_decoration(rows, tmp_path,
         sheet_name=sheet, metric=metric, reference_date=date(2026, 11, 17))
     stored = pd.read_excel(initial.decoration_path, sheet_name=sheet)
-    assert stored["param_name"].tolist() == ["NEW"]
-    assert stored[f"{metric}_corrected"].tolist() == [0.9]
-    assert stored["flag"].tolist() == [False]
+    assert stored["param_name"].tolist() == ["TEST", "NEW"]
+    assert stored[f"{metric}_corrected"].tolist() == [0.8, 0.9]
+    assert stored["flag"].tolist() == [False, False]
     assert result.period_capability_df[metric].tolist() == [1.6, 0.9]
 
 
@@ -80,8 +81,8 @@ def test_uncovered_failures_and_unknown_values_keep_their_decisions(tmp_path, me
     prepare_capability_decoration(capability(metric, 0.7).assign(param_name="NEW"), tmp_path,
         sheet_name=sheet, metric=metric, reference_date=date(2026, 11, 17))
     stored = pd.read_excel(path, sheet_name=sheet)
-    assert stored["param_name"].tolist() == ["HISTORY", "UNKNOWN", "NEW"]
-    assert stored["flag"].iloc[:2].tolist() == ["TURE", "TURE"]
-    assert stored[f"{metric}_replacement"].iloc[:2].tolist() == [1.372, 1.372]
+    assert stored["param_name"].tolist() == ["HISTORY", "UNKNOWN", "LEGACY_PASS", "NEW"]
+    assert stored["flag"].iloc[:3].tolist() == ["TURE", "TURE", "TURE"]
+    assert stored[f"{metric}_replacement"].iloc[:3].tolist() == [1.372, 1.372, 1.372]
     assert pd.isna(stored[f"{metric}_corrected"].iloc[1])
     pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="NOTES"), other)

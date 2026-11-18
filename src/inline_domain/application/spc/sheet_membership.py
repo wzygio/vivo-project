@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-MEMBERSHIP_POLICY = "spc-sheet-membership-v1"
+MEMBERSHIP_POLICY = "spc-sheet-membership-v2-week-isolated"
 POINT_COLUMNS = ("prod_code", "factory", "step_id", "param_name", "sheet_id", "sheet_start_time", "param_value")
 GROUP_COLUMNS = ("factory", "step_id", "param_name")
 

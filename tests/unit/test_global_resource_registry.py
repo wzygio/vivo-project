@@ -107,7 +107,7 @@ def test_registered_collections_allow_members_without_separate_file_entries(monk
         ConfigLoader.get_domain_resource_path('report', 'unregistered', 'first.md')
 
 
-def test_all_existing_resource_files_have_a_global_registry_entry():
+def test_all_maintained_resource_files_have_a_global_registry_entry():
     root = ConfigLoader.get_project_root()
     registry = yaml.safe_load((root / 'config/global.yaml').read_text(encoding='utf-8'))['resources']
     files = {ConfigLoader.get_domain_resource_path(domain, key)
@@ -126,6 +126,17 @@ def test_inventory_detects_unregistered_standalone_inputs(tmp_path, name, conten
     path.parent.mkdir()
     path.write_bytes(contents)
     assert unregistered_resources(tmp_path, set(), set()) == {path}
+
+
+def test_inventory_exempts_historical_decryption_archives_only(tmp_path: Path) -> None:
+    module = tmp_path / 'resources' / 'inline_domain' / 'spc'
+    archive = module / 'decrypted_files'
+    archive.mkdir(parents=True)
+    (archive / 'historical.xlsx').write_bytes(b'historical extraction')
+    maintained = module / 'maintained.xlsx'
+    maintained.write_bytes(b'maintained input')
+
+    assert unregistered_resources(tmp_path, set(), set()) == {maintained}
 
 
 def test_inventory_accepts_only_registered_collections_and_anchored_companions(tmp_path):

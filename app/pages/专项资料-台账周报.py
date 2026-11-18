@@ -1,6 +1,5 @@
 # src/vivo_project/app/pages/专项资料-台账周报.py
 import streamlit as st
-from pathlib import Path
 import logging
 import pandas as pd
 import time
@@ -20,12 +19,18 @@ st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 # --- 2. 获取动态上下文与路径 ---
 project_root = ConfigLoader.get_project_root()
 
-# 动态构建绝对路径 (取代全局变量)
-doc_source_dir = ConfigLoader.get_domain_resource_directory("shared_kernel", "project_files")
-doc_source_dir.mkdir(parents=True, exist_ok=True)
-analysis_source_dir = ConfigLoader.get_domain_resource_directory("yield_domain", "analysis_files")
-analysis_source_dir.mkdir(parents=True, exist_ok=True)
-document_sources = {"project": doc_source_dir, "analysis": analysis_source_dir}
+document_categories = (
+    ("ledger", "project_ledgers", "📂", "北极星台账"),
+    ("weekly", "project_weekly_reports", "📅", "北极星周报"),
+    ("analysis", "project_analysis_reports", "📊", "解析报告"),
+    ("archive", "project_archives", "🗃️", "其他归档"),
+)
+document_sources = {
+    source: ConfigLoader.get_domain_resource_directory("shared_kernel", directory_key)
+    for source, directory_key, _, _ in document_categories
+}
+for directory in document_sources.values():
+    directory.mkdir(parents=True, exist_ok=True)
 img_cache_rel_dir = "output/screenshots/document-preview"
 
 
@@ -38,37 +43,21 @@ def get_preview_cache_dir(source: str, filename: str) -> str:
 
 # --- 3. 状态管理初始化 (已清理掉不需要的 active_upload_file 状态) ---
 if 'viewing_file' not in st.session_state: st.session_state.viewing_file = None
-if 'viewing_source' not in st.session_state: st.session_state.viewing_source = "project"
+if 'viewing_source' not in st.session_state: st.session_state.viewing_source = "ledger"
 if 'viewing_type' not in st.session_state: st.session_state.viewing_type = None
 if 'editor_data' not in st.session_state: st.session_state.editor_data = None
 if 'editor_timestamp' not in st.session_state: st.session_state.editor_timestamp = 0.0
 if 'editor_file_ref' not in st.session_state: st.session_state.editor_file_ref = None
 
 # [防护机制]：如果正在预览的文件不存在，则清空状态
-if st.session_state.viewing_source not in document_sources:
-    st.session_state.viewing_source = "project"
-    st.session_state.viewing_file = None
-if st.session_state.viewing_file and not (
-    document_sources[st.session_state.viewing_source] / st.session_state.viewing_file
-).is_file():
+viewing_directory = document_sources.get(st.session_state.viewing_source)
+viewing_file = st.session_state.viewing_file
+if viewing_directory is None or (viewing_file and not (viewing_directory / viewing_file).is_file()):
+    st.session_state.viewing_source = "ledger"
     st.session_state.viewing_file = None
     st.session_state.editor_data = None
+    st.session_state.editor_timestamp = 0.0
     st.session_state.editor_file_ref = None
-
-# --- 4. 获取并分类文件 ---
-classified_files = FileManagerService.get_classified_files(str(doc_source_dir))
-analysis_files = sorted(
-    (path.name for path in analysis_source_dir.iterdir()
-     if path.is_file() and path.suffix.lower() in {".ppt", ".pptx", ".pdf"}),
-    reverse=True,
-)
-
-category_map = [
-    ("📂 北极星台账", "project", classified_files['ledger'], True),
-    ("📅 北极星周报", "project", classified_files['weekly'], False),
-    ("📊 解析报告", "analysis", analysis_files, False),
-    ("🗃️ 其他归档", "project", classified_files['others'], False),
-]
 
 # ==============================================================================
 #  界面区域 A: 统一上传接口
@@ -84,17 +73,27 @@ if st.query_params.get("admin") == "true":
 
 st.caption("浏览、下载或在线预览各产品的分析报告与台账。")
 
-render_document_upload(document_sources)
+render_document_upload(
+    document_sources, {source: title for source, _, _, title in document_categories},
+)
 
 st.divider()
 
 # ==============================================================================
 #  界面区域 B: 分类折叠列表 (已移除每行单文件的上传按钮)
 # ==============================================================================
-for title, source, files, default_expanded in category_map:
-    if not files and source != "analysis": continue
-    
-    with st.expander(f"{title} ({len(files)})", expanded=default_expanded):
+for source, _, category_icon, title in document_categories:
+    allowed_types = {"PPT", "PDF"} if source == "analysis" else {"EXCEL", "PPT", "PDF", "MARKDOWN"}
+    files = sorted(
+        (path.name for path in document_sources[source].iterdir()
+         if path.is_file() and not path.name.startswith("~$")
+         and FileManagerService.get_file_type(path.name) in allowed_types),
+        reverse=True,
+    )
+    if not files and source != "analysis":
+        continue
+
+    with st.expander(f"{category_icon} {title} ({len(files)})", expanded=source == "ledger"):
         if not files:
             st.info("暂无解析报告，请在上方上传文件。")
         for doc_file in files:
@@ -167,8 +166,9 @@ if st.session_state.viewing_file:
     try:
         if curr_type == 'EXCEL':
             abs_curr_file_path = current_source_dir / curr_file
+            editor_file_ref = str(abs_curr_file_path)
             
-            if st.session_state.editor_data is None or st.session_state.editor_file_ref != curr_file:
+            if st.session_state.editor_data is None or st.session_state.editor_file_ref != editor_file_ref:
                 with st.spinner("正在加载最新数据并校验版本..."):
                     df = ExcelService.load_and_clean_data(str(abs_curr_file_path), sheet_name="Sheet1")
                     status_mapping = {"Open": "🔴 Open", "Close": "🟢 Close", "Monitor": "🟡 Monitor"}
@@ -179,7 +179,7 @@ if st.session_state.viewing_file:
                     
                     st.session_state.editor_data = df
                     st.session_state.editor_timestamp = ExcelService.get_file_timestamp(str(abs_curr_file_path))
-                    st.session_state.editor_file_ref = curr_file
+                    st.session_state.editor_file_ref = editor_file_ref
 
             if st.session_state.editor_data is not None:
                 column_cfg = {
@@ -194,7 +194,7 @@ if st.session_state.viewing_file:
                     ),
                 }
 
-                with st.form(key=f"form_{curr_file}"):
+                with st.form(key=f"form_{curr_source}_{curr_file}"):
                     col_btn_add, col_btn_del, col_hint = st.columns([1, 1, 8])
                     with col_btn_add: btn_add = st.form_submit_button("➕ New", type="secondary", width="stretch")
                     with col_btn_del: btn_del = st.form_submit_button("🗑️ Delete", type="secondary", width="stretch")
@@ -202,7 +202,7 @@ if st.session_state.viewing_file:
 
                     edited_df = st.data_editor(
                         st.session_state.editor_data, height=600, width="stretch",
-                        hide_index=True, column_config=column_cfg, key=f"editor_{curr_file}"
+                        hide_index=True, column_config=column_cfg, key=f"editor_{curr_source}_{curr_file}"
                     )
                     
                     col_save, _ = st.columns([1, 5])

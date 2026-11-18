@@ -40,6 +40,8 @@ prod_code + factory + step_id + param_name
 
 当前服务传入共享特征管线输出的**修饰后 Sheet 特征及修饰后点位**。虽然参数名叫 `raw_measurements`，这里并非直接使用未经处理的数据库原始值；前面的源校正、基础设施日期排除、清洗、最新点位去重、异常点过滤、Sheet OOS 修饰已经影响输入。日期排除先于去重、Sheet 判定和修饰，排除点不会参与 μ、σ 或能力计算，见 [Inline 日期排除规则](../shared/rules-inline-date-exclusion.md)。完整规则由 [SPC 数据流](data-flow-spc.md) 和 [Sheet OOS 规则](../shared/rules-sheet-oos-decoration.md) 维护。
 
+2026-11-17修正跨周复测污染：SPC基础设施按ISO周分别保留每个Sheet／点位的最新测量；计算器先从最终点位截取上一完整周，再重建该周Sheet特征，不能先跨周汇总Sheet再以最早时间归周。本周复测不得替换上周点位或进入上周均值。服务在两种sigma模式下均传入最终点位，以保证周内均值一致；固定历史点和规则时，同周刷新或日期变化不改变CPK/CPM。
+
 能力豁免在计算前同时作用于两张表。配置 `spc.spc_cpk.exempt_param_name_contains` 按参数名包含普通文本、不区分大小写匹配；当前配置包含 `PPA`，命中参数不计算 Cpk/Cpm，但其点位和 Sheet 明细仍可供其他报表输出使用。
 
 ### 1.3 OOS/OOC 与 CPK/CPM 的先后关系
@@ -316,7 +318,7 @@ Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷
 
 `build_period_capability_report()` 输出 `mean_value`、`std_value`、`sigma_source`、`sample_count`、`point_count`、规格与 `cpk`、`cpm` 等字段。`period_start`、`period_end` 取有效 Sheet 组内最早/最晚时间，是实际样本时间，不是窗口的日历起止边界。
 
-服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、启用替换且有可用替换值时，覆盖对应的 `cpk` 或 `cpm`。2026-11-17起，保存前剔除 corrected ≥ 1.33 的达标行；按用户同日澄清，应用替换函数本身保留原行为，不新增计算值门槛。这个步骤不重算 μ 或 σ，也不改变上述公式。
+服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、flag启用且已有替换目标有效时，覆盖对应的 `cpk` 或 `cpm`，不新增计算值门槛。按用户2026-11-17最终要求，自动持久化仅创建缺失异常键，既有corrected、时间、flag和replacement均不更新、不删除；随机替换目标仅创建时生成，读到非法或缺失目标时不随机修补。这个步骤不重算μ或σ，也不改变上述公式。
 
 因此按 Sheet 和点位复算得到的是计算器结果；核对服务最终能力值时，还需考虑后续能力替换。台账匹配与状态规则由 [SPC 数据流](data-flow-spc.md) 维护。
 

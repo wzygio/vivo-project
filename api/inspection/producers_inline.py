@@ -350,43 +350,40 @@ class InlineProductionSession:
         from src.shared_kernel.config import ConfigLoader
         from src.inline_domain.infrastructure.shared.outlier_filter_rules import load_outlier_filter_rules
         from src.inline_domain.core.monitor.monitor_param_classifier import PARAM_CLASSIFICATION_SIGNATURE
+        from src.inline_domain.core.spc.spc_calculator import SPC_WEEKLY_POINT_POLICY
 
         path = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters")
         rules = load_outlier_filter_rules(path, ConfigLoader.get_project_root() / "output/decrypted_files")
-        policy = [PARAM_CLASSIFICATION_SIGNATURE, ConfigLoader.get_data_forward_policy().signature,
+        policy = [SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE, ConfigLoader.get_data_forward_policy().signature,
                   ConfigLoader.get_inline_data_exclusion(), str(path.resolve()),
                   rules.to_json(orient="split", index=False, date_format="iso")]
         return hashlib.sha256(json.dumps(policy, ensure_ascii=False).encode()).hexdigest()
 
     def _ensure_capability_headers(self) -> None:
-        """Add missing generated headers only; retain every existing value/sheet."""
+        """Create missing sheets only; existing headers require manual maintenance."""
         from src.shared_kernel.config import ConfigLoader
         from src.inline_domain.core.spc.cpk_decoration import capability_decoration_columns
-        from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+        from src.inline_domain.infrastructure.spc.capability_workbook_writer import create_capability_rows
+        from src.shared_kernel.infrastructure.file_lock import publication_lock
 
         if not isinstance(self._spc_source_proof, dict):
             raise ValueError("Prepared source coverage unavailable")
         path = ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration")
-        try:
-            stat = path.stat()
-        except FileNotFoundError:
-            sheets = {}
-        else:
-            sheets = self._readback(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
-        updates = {}
-        for metric in ("cpk", "cpm"):
-            name = self.product if metric == "cpk" else f"{self.product}_cpm"
-            frame = sheets.get(name)
-            columns = capability_decoration_columns(metric)
-            if frame is None:
-                updates[name] = pd.DataFrame(columns=columns)
-            elif frame.empty and set(columns) - set(frame):
-                updates[name] = frame.reindex(columns=[*frame.columns, *(key for key in columns if key not in frame)])
-        if updates:
-            result = replace_workbook_sheets(path, updates)
-            if not result.written:
-                raise OSError("Empty capability publication could not be saved")
-            self._readback.clear()
+        with publication_lock(path):
+            try:
+                stat = path.stat()
+            except FileNotFoundError:
+                sheets = {}
+            else:
+                sheets = self._readback(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+            for metric in ("cpk", "cpm"):
+                name = self.product if metric == "cpk" else f"{self.product}_cpm"
+                if name not in sheets:
+                    result = create_capability_rows(path, name,
+                        pd.DataFrame(columns=capability_decoration_columns(metric)))
+                    if not result.written:
+                        raise OSError("Empty capability publication could not be saved")
+                    self._readback.clear()
 
     def _finalize_membership_policy(self, report: object) -> None:
         """Republish current prepared points only for a proven physical-view shift."""

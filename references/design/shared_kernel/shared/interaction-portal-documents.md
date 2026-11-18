@@ -11,15 +11,20 @@
 
 ## 合并页
 
-`app/pages/专项资料-台账周报.py` 同时呈现两组配置资源，不搬移或覆盖已有资料：
+`app/pages/专项资料-台账周报.py` 按所在目录展示四类资料。默认目录位于
+`resources/shared_kernel/shared/project_files/`，分别由
+`resources.shared_kernel.directories` 下的配置项指定。
 
-- `shared_kernel.project_files` 按既有规则分类为北极星台账、北极星周报和其他归档。
-- `yield_domain.analysis_files` 中的 PPT、PPTX 和 PDF 显示在独立的“解析报告”折叠分组。
+| 页面模块 | 配置项 | 默认子目录 |
+| --- | --- | --- |
+| 北极星台账 | `project_ledgers` | `ledgers/` |
+| 北极星周报 | `project_weekly_reports` | `weekly_reports/` |
+| 解析报告 | `project_analysis_reports` | `analysis_reports/` |
+| 其他归档 | `project_archives` | `archives/` |
 
-上述目录均由 `ConfigLoader.get_domain_resource_directory()` 读取全局资源注册项。
-上传先选择资料类别，随后写入对应目录；解析报告类别仅接受 PPT、PPTX、PDF。
-文件下载、查看按钮和预览缓存以资料来源区分，两个目录的同名文件可以独立使用。
+页面通过 `ConfigLoader.get_domain_resource_directory()` 读取目录，动态列出支持的文件。
+上传先选择四类资料之一，随后写入对应目录。解析报告类别仅接受 PPT、PPTX、PDF。
+选择资料类别只更新上传区，成功上传后整页刷新资料列表。
+下载、查看和预览缓存按目录区分，各模块的同名文件可独立使用。
 Excel 台账继续使用既有编辑和保存流程；解析报告继续支持下载和逐页图片预览。
 空的解析报告分组提示上传；预览失败使用业务提示，技术原因写入日志。
-
-旧的 `app/pages/专项资料-解析报告.py` 仅跳转到合并页，保留历史链接可用性。

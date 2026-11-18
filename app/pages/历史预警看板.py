@@ -152,14 +152,13 @@ with st.expander("CPK 筛选条件", expanded=False):
         MONITOR_FACTORY_OPTIONS,
     )
 
-if is_admin:
-    st.subheader("📊 CPM达标率趋势图")
-    with st.expander("CPM 筛选条件", expanded=False):
-        render_cpm_monitor_section(
-            build_cpm_monitor_service(),
-            SessionManager.AVAILABLE_PRODUCTS,
-            MONITOR_FACTORY_OPTIONS,
-        )
+st.subheader("📊 CPM达标率趋势图")
+with st.expander("CPM 筛选条件", expanded=False):
+    render_cpm_monitor_section(
+        build_cpm_monitor_service(),
+        SessionManager.AVAILABLE_PRODUCTS,
+        MONITOR_FACTORY_OPTIONS,
+    )
 
 if is_admin:
     st.subheader("📋 AOI_RS监控看板")

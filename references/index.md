@@ -65,7 +65,7 @@
 | Infrastructure 刷新、原始快照、增量回读、TTL、强刷、中午截止、Yield 精确入库时间；Streamlit 定时启动/重启、Windows 计划任务及进程清理 | [系统数据刷新机制](design/shared_kernel/shared/data-flow-infrastructure-refresh.md) |
 | 多用户共享缓存、max_entries、同键并发、查询收起、定向失效与跨进程边界 | [看板共享缓存设计](design/shared_kernel/shared/architecture-shared-dashboard-cache.md) |
 | 数据健康、空窗口、失败降级、应用出站端口、缓存隔离与架构守卫 | [数据健康与出站端口](design/shared_kernel/shared/architecture-data-health-and-outbound-ports.md) |
-| 门户节点、Inline指标、寿命测试入口、专项资料合并、台账周报与解析报告上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
+| 门户节点、Inline指标、寿命测试入口、专项资料分组目录及上传/下载/预览 | [门户导航与专项资料](design/shared_kernel/shared/interaction-portal-documents.md) |
 | Inline / SPC 滚动入口、CSS 作用域和历史验收案例 | [UI 规范：页面滚动](design/shared_kernel/shared/interaction-streamlit-ui-standard.md#6-页面滚动与-plotly-交互) |
 | Inline 周度 PPT 输出设计、density 规格判定、红绿字体、八产品分页与共用数据契约 | [周度 PPT 输出设计规范](design/inline_domain/shared/architecture-weekly-summary-ppt.md) |
 

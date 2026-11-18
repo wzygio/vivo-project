@@ -13,6 +13,7 @@ from src.inline_domain.core.monitor.monitor_param_classifier import (
 )
 from src.inline_domain.core.spc.spc_calculator import (
     PERIOD_SIGMA_SOURCE_POINT_VALUE,
+    SPC_WEEKLY_POINT_POLICY,
     build_period_capability_report,
     normalize_period_sigma_source,
 )
@@ -319,9 +320,7 @@ class SpcReportService:
                 period_capability_df = build_period_capability_report(
                     sheet_features=capability_sheet_features_df,
                     end_date=capability_end_date,
-                    raw_measurements=capability_measurements_df
-                    if resolved_period_sigma_source == PERIOD_SIGMA_SOURCE_POINT_VALUE
-                    else None,
+                    raw_measurements=capability_measurements_df,
                     sigma_source=resolved_period_sigma_source,
                     previous_week_only=True,
                 )
@@ -425,9 +424,9 @@ class SpcReportService:
         capability_signature = (
             str(capability_path.resolve()), *capability_stat,
             f"weekly_span_hours={alert_min_span_hours}",
-            "alerts_from_saved_records_v3_anomaly_only",
+            "capability_create_read_v1_week_isolated_points",
         )
-        prepared_signature = f"{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}"
+        prepared_signature = f"{SPC_WEEKLY_POINT_POLICY}:{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}"
         if _sheet_membership_store is not None or sheet_membership_policy_signature:
             # Never relabel an old prepared-data cache with a newly changed
             # physical/time/member policy. This also reaches the shared cache.

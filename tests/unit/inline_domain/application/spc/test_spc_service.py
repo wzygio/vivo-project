@@ -494,7 +494,7 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     assert 1.33 < second.period_capability_df["cpm"].iloc[0] < 1.4
 
 
-def test_same_week_snapshot_change_refreshes_saved_values_through_both_caches(monkeypatch, tmp_path):
+def test_same_week_snapshot_change_does_not_update_saved_capability_values(monkeypatch, tmp_path):
     from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
     from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
     from src.inline_domain.core.monitor.cpk_latest import latest_capability_alerts
@@ -534,9 +534,9 @@ def test_same_week_snapshot_change_refreshes_saved_values_through_both_caches(mo
     )
     assert source.calls == 2
     assert second.period_capability_df["cpk"].iloc[0] >= 1.33
-    assert latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8)).empty
+    assert len(latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8))) == 1
     saved = pd.read_excel(path, sheet_name="M626")
-    assert saved.empty
+    assert saved["cpk_corrected"].tolist() == first.cpk_decoration_result.decoration_df["cpk_corrected"].tolist()
 
 
 def _decoration_payload_with_decisions() -> dict:

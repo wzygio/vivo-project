@@ -22,11 +22,6 @@ processing:
     enable: True
 
   defect_multipliers:
-    # Array_Line
-    # 'S向亮线': 0.6
-    # Array_Pixel
-    # Array_Mura
-    # OLED_Mura
 
 
   sheet_hotspot_config: 

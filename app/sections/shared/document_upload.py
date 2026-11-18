@@ -5,11 +5,13 @@ from pathlib import Path
 import streamlit as st
 
 @st.fragment
-def render_document_upload(document_sources: dict[str, Path]) -> None:
+def render_document_upload(
+    document_sources: dict[str, Path], labels: dict[str, str],
+) -> None:
     with st.expander("📤 上传新台账/周报/解析报告/专项资料", expanded=False):
         upload_source = st.selectbox(
-            "资料类别", options=["project", "analysis"],
-            format_func=lambda source: "解析报告" if source == "analysis" else "台账/周报/其他归档",
+            "资料类别", options=list(document_sources),
+            format_func=labels.__getitem__,
             key="document_upload_source",
         )
         uploaded_files = st.file_uploader(

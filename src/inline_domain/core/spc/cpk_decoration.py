@@ -127,22 +127,11 @@ def _parse_flag(value: object) -> bool:
     }
 
 
-def ensure_capability_replacements(decoration_df: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Keep saved targets; generate missing/out-of-range values in 1.331..1.399."""
+def initialize_capability_replacements(decoration_df: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Initialize targets once for newly created rows; saved rows never enter here."""
     result = _ordered_existing_columns(decoration_df, capability_decoration_columns(metric))
     replacement_column = capability_replacement_column(metric)
-    replacements = pd.to_numeric(result[replacement_column], errors="coerce")
-
-    def valid(value: float) -> bool:
-        return (
-            pd.notna(value) and isfinite(value)
-            and CAPABILITY_ALERT_THRESHOLD < value < CAPABILITY_REPLACEMENT_UPPER_BOUND
-        )
-
-    result[replacement_column] = [
-        target if valid(target) else randint(1331, 1399) / 1000
-        for target in replacements
-    ]
+    result[replacement_column] = [randint(1331, 1399) / 1000 for _ in range(len(result))]
     return result
 
 
@@ -208,6 +197,7 @@ def merge_capability_detail_with_decoration_flags(
     detail_df: pd.DataFrame,
     existing_decoration_df: pd.DataFrame,
     metric: str = CAPABILITY_METRIC_CPK,
+    *, create_replacements: bool = True,
 ) -> pd.DataFrame:
     """Attach saved flags and replacement targets while keeping freshly computed values."""
     _validate_metric(metric)
@@ -221,56 +211,23 @@ def merge_capability_detail_with_decoration_flags(
     if existing_decoration_df.empty or "flag" not in existing_decoration_df.columns:
         result = detail_df.copy()
         result["flag"] = False
-        return ensure_capability_replacements(result, metric)
+        if create_replacements:
+            return initialize_capability_replacements(result, metric)
+        result[replacement_column] = pd.NA
+        return result
 
     user_values_df = _normalize_key_columns(
         _ordered_existing_columns(existing_decoration_df, decoration_columns)
     )[[*CPK_KEY_COLUMNS, "flag", replacement_column]].copy()
     user_values_df["flag"] = user_values_df["flag"].apply(_parse_flag)
     user_values_df = user_values_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
-    result = detail_df.merge(user_values_df, on=CPK_KEY_COLUMNS, how="left")
+    result = detail_df.merge(user_values_df, on=CPK_KEY_COLUMNS, how="left", indicator="_saved")
     result["flag"] = result["flag"].apply(_parse_flag)
-    return ensure_capability_replacements(result, metric)
-
-
-def refresh_existing_capability_values(
-    existing: pd.DataFrame, computed: pd.DataFrame, metric: str,
-) -> pd.DataFrame:
-    """Refresh values and their sample bounds; retain uncovered historical decisions."""
-    if existing.empty or computed.empty:
-        return existing.copy()
-    column = capability_corrected_column(metric)
-    columns = [column, "period_start", "period_end"]
-    refreshed_columns = [name for name in columns if name in computed.columns]
-    renamed = {name: f"_computed_{name}" for name in refreshed_columns}
-    latest = _normalize_key_columns(computed)[[*CPK_KEY_COLUMNS, *refreshed_columns]].drop_duplicates(
-        CPK_KEY_COLUMNS, keep="last",
-    ).rename(columns=renamed)
-    result = _normalize_key_columns(existing).merge(
-        latest, on=CPK_KEY_COLUMNS, how="left", indicator="_computed_match",
-        validate="many_to_one",
-    )
-    matched = result["_computed_match"].eq("both")
-    for name in refreshed_columns:
-        if name not in result:
-            result[name] = pd.NA
-        # Excel can return strings while newly calculated bounds are Timestamps.
-        values = result.loc[matched, renamed[name]]
-        if name == column:
-            values = pd.to_numeric(values, errors="coerce")
-        if name in {"period_start", "period_end"}:
-            if pd.api.types.is_datetime64_any_dtype(result[name]):
-                values = pd.to_datetime(values, errors="coerce", format="mixed")
-            else:
-                result[name] = result[name].astype(object)
-        result.loc[matched, name] = values
-    return result.drop(columns=[*renamed.values(), "_computed_match"])
-
-
-def remove_passing_capability_rows(frame: pd.DataFrame, metric: str) -> pd.DataFrame:
-    """Keep anomaly decisions and unknown values, removing computed passing rows."""
-    values = pd.to_numeric(frame[capability_corrected_column(metric)], errors="coerce")
-    return frame.loc[~values.ge(CAPABILITY_ALERT_THRESHOLD)].reset_index(drop=True).copy()
+    new = result["_saved"].eq("left_only")
+    if create_replacements and new.any():
+        initialized = initialize_capability_replacements(result.loc[new], metric)
+        result.loc[new, replacement_column] = initialized[replacement_column]
+    return result.drop(columns="_saved")
 
 
 def _append_missing_detail_rows(
@@ -280,18 +237,16 @@ def _append_missing_detail_rows(
 ) -> pd.DataFrame:
     """Append current keys absent from the user ledger without changing prior decisions."""
     decoration_columns = capability_decoration_columns(metric)
-    existing_df = _normalize_key_columns(
-        _ordered_existing_columns(existing_decoration_df, decoration_columns)
-    )
+    existing_df = existing_decoration_df.copy()
     current_df = _normalize_key_columns(
         _ordered_existing_columns(current_decoration_df, decoration_columns)
     )
-    if existing_df.empty:
-        return current_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last").reset_index(drop=True)
     if current_df.empty:
         return existing_df
-
-    existing_keys = pd.MultiIndex.from_frame(existing_df[CPK_KEY_COLUMNS])
+    if existing_df.empty:
+        columns = list(existing_df.columns) or decoration_columns
+        return current_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last").reindex(columns=columns).reset_index(drop=True)
+    existing_keys = pd.MultiIndex.from_frame(_normalize_key_columns(existing_df)[CPK_KEY_COLUMNS])
     current_keys = pd.MultiIndex.from_frame(current_df[CPK_KEY_COLUMNS])
     missing_rows = current_df.loc[~current_keys.isin(existing_keys)].drop_duplicates(
         CPK_KEY_COLUMNS,
@@ -299,7 +254,7 @@ def _append_missing_detail_rows(
     )
     if missing_rows.empty:
         return existing_df
-    return pd.concat([existing_df, missing_rows], ignore_index=True)[decoration_columns]
+    return pd.concat([existing_df, missing_rows.reindex(columns=existing_df.columns)], ignore_index=True)
 
 
 def apply_capability_decoration(
@@ -321,6 +276,7 @@ def apply_capability_decoration(
         detail_df,
         decoration_df if decoration_df is not None else _empty_decoration_frame(metric),
         metric,
+        create_replacements=False,
     )
     if flags_df.empty:
         result[decorated_column] = False
@@ -331,7 +287,10 @@ def apply_capability_decoration(
     result = _normalize_key_columns(result).merge(selected_df, on=CPK_KEY_COLUMNS, how="left")
     result[decorated_column] = result[decorated_column].apply(_parse_flag)
     corrected_values = pd.to_numeric(result[corrected_column], errors="coerce")
-    decorated_mask = result[decorated_column] & corrected_values.notna()
+    valid_target = corrected_values.map(lambda value: pd.notna(value) and isfinite(value)
+                                       and CAPABILITY_ALERT_THRESHOLD < value < CAPABILITY_REPLACEMENT_UPPER_BOUND)
+    result[decorated_column] &= valid_target
+    decorated_mask = result[decorated_column]
     result.loc[decorated_mask, metric] = corrected_values[decorated_mask]
     return result.drop(columns=[corrected_column])
 
