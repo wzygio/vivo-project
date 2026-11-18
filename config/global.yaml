@@ -22,6 +22,7 @@ domain_config:
   iqc_domain: config/domain/iqc_domain.yaml
 
 product_registry:
+
   enabled_products:
     - "M626"
     - "M678"
@@ -120,16 +121,6 @@ resources:
       spc_z622_monitoring: resources/inline_domain/spc/Z622监控站点参数.xlsx
       spc_sheet_oos_decoration: resources/inline_domain/spc/spc_sheet_oos_decoration.xlsx
       spc_sheet_ooc_decoration: resources/inline_domain/spc/spc_sheet_ooc_decoration.xlsx
-      asset_aoi_rs_sheet_ooc_decoration_xlsx_bak_5364511f: resources/inline_domain/aoi_rs/aoi_rs_sheet_ooc_decoration.xlsx.bak
-      asset_aoi_rs_sheet_oos_decoration_xlsx_bak_23502872: resources/inline_domain/aoi_rs/aoi_rs_sheet_oos_decoration.xlsx.bak
-      asset_aoi_tt_sheet_ooc_decoration_xlsx_bak_9128d5e4: resources/inline_domain/aoi_tt/aoi_tt_sheet_ooc_decoration.xlsx.bak
-      asset_aoi_tt_sheet_oos_decoration_xlsx_bak_904ce8e0: resources/inline_domain/aoi_tt/aoi_tt_sheet_oos_decoration.xlsx.bak
-      asset_ctq_sheet_ooc_decoration_xlsx_bak_2498740b: resources/inline_domain/ctq/ctq_sheet_ooc_decoration.xlsx.bak
-      asset_ctq_sheet_oos_decoration_xlsx_bak_c91b385b: resources/inline_domain/ctq/ctq_sheet_oos_decoration.xlsx.bak
-      asset_cpk_xlsx_bak_ef2be5bf: resources/inline_domain/monitor/北极星报警率与CPK汇总.xlsx.bak
-      asset_spc_cpk_cpm_decoration_xlsx_bak_6a1a8e2d: resources/inline_domain/spc/spc_cpk_cpm_decoration.xlsx.bak
-      asset_spc_sheet_ooc_decoration_xlsx_bak_6dce11d5: resources/inline_domain/spc/spc_sheet_ooc_decoration.xlsx.bak
-      asset_spc_sheet_oos_decoration_xlsx_bak_4d74fdb4: resources/inline_domain/spc/spc_sheet_oos_decoration.xlsx.bak
   yield_domain:
     dir: resources/yield_domain
     files:
