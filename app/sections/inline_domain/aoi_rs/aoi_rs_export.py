@@ -18,7 +18,7 @@ import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.aoi_rs_charts import iter_aoi_rs_chart_groups
-from app.charts.inline_domain.aoi_rs_pdf import AoiRsPdfReport
+from app.charts.inline_domain.aoi_rs_pdf import AoiRsPdfReport, format_aoi_rs_pdf_figure
 from app.components.indicator_cache import (
     build_indicator_product_cache_signature,
     get_indicator_product_revision,
@@ -189,22 +189,7 @@ def build_aoi_rs_pdf(
             count = 0
             for group in iter_aoi_rs_chart_groups(**frames, end_date=end_date):
                 for slot, source in group.figures:
-                    figure = go.Figure(source)
-                    figure.update_layout(
-                        template="plotly_white",
-                        title={"font": {"size": 17}},
-                        font={
-                            "family": "Microsoft YaHei, Noto Sans CJK SC, Arial",
-                            "size": 15,
-                        },
-                        paper_bgcolor="white",
-                        plot_bgcolor="white",
-                        margin={"l": 65, "r": 60, "t": 65, "b": 125},
-                    )
-                    if slot == "trend":
-                        figure.update_layout(legend={"y": -0.42})
-                        figure.update_xaxes(title_standoff=8)
-                    figures.append(figure)
+                    figures.append(format_aoi_rs_pdf_figure(source, slot))
                 rows.append(
                     (
                         product,

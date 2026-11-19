@@ -142,7 +142,7 @@ defect_rate = defect_count / total_input
 从 Panel ID 的固定片段读取膜位：
 
 - 行码 `1A..1E, 2A..2E` 映射为 0..9；
-- 列码 `A0..S0` 映射为 0..18；
+- 标准 19 列的列码 `A0–H0、J0–N0、P0–U0` 依次映射为 0..18。坐标解析和热力图使用同一布局，膜位标签也用于图表悬浮信息。
 - 格式无效时返回 `None`。
 
 ### `reconstruct_panel_id`

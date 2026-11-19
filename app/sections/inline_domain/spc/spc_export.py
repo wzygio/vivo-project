@@ -15,7 +15,7 @@ import pymupdf
 import streamlit as st
 
 from app.components.product_labels import get_product_label_formatter
-from app.charts.inline_domain.indicator_pdf import IndicatorPdfReport
+from app.charts.inline_domain.indicator_pdf import IndicatorPdfReport, format_spc_pdf_figure
 from app.charts.inline_domain.spc_charts import iter_spc_chart_groups
 from app.components.indicator_cache import build_indicator_product_cache_signature
 from app.sections.inline_domain.shared.constants import INLINE_FACTORY_OPTIONS
@@ -125,18 +125,7 @@ def build_spc_pdf(
                 if len(group.figures) != 3:
                     raise ValueError("Each SPC indicator must contain three charts")
                 for title, source in zip(chart_titles, group.figures):
-                    figure = go.Figure(source)
-                    figure.update_layout(
-                        template="plotly_white",
-                        title={"text": title, "font": {"size": 17}},
-                        font={"family": "Microsoft YaHei, Noto Sans CJK SC, Arial", "size": 13},
-                        paper_bgcolor="white", plot_bgcolor="white",
-                        margin={"l": 65, "r": 30, "t": 65, "b": 120},
-                        legend={"orientation": "h", "yanchor": "top", "y": -0.4,
-                                "xanchor": "left", "x": 0, "font": {"size": 10}},
-                    )
-                    figure.update_xaxes(title_standoff=8)
-                    figures.append(figure)
+                    figures.append(format_spc_pdf_figure(source, title))
                 rows.append((product, group.factory, group.title))
                 count += 1
                 if len(figures) >= EXPORT_BATCH_SIZE:

@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -205,7 +204,8 @@ def create_mapping_heatmap(
     """绘制 Mapping 热力图"""
     layout = resolve_mapping_layout(mapping_layout)
     fig = px.imshow(
-        matrix_df, text_auto=True, aspect="auto",
+        matrix_df.to_numpy(), x=layout.column_labels, y=layout.row_labels,
+        text_auto=True, aspect="auto",
         color_continuous_scale=MAPPING_HEATMAP_COLOR_SCALE,
         labels=dict(x="列 (Column)", y="行 (Row)", color="不良数"), title=title,
         zmin=0, zmax=max(1, global_max_value)
@@ -213,12 +213,12 @@ def create_mapping_heatmap(
     fig.update_layout(
         xaxis=dict(
             tickmode='array',
-            tickvals=list(range(len(layout.column_labels))),
+            tickvals=list(layout.column_labels),
             ticktext=list(layout.column_labels),
         ),
         yaxis=dict(
             tickmode='array',
-            tickvals=list(range(len(layout.row_labels))),
+            tickvals=list(layout.row_labels),
             ticktext=list(layout.row_labels),
         ),
         xaxis_side='top', height=450

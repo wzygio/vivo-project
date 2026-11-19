@@ -8,6 +8,7 @@ from streamlit_echarts import st_echarts
 # [Phase 1] 调试追踪专用 Logger
 trace_logger = logging.getLogger("trace")
 from pydantic import BaseModel, Field
+from app.charts.inline_domain.monitor.station_chart import build_top_station_echarts_option
 from app.charts.inline_domain.monitor_chart import get_spc_summary_echarts_option
 from app.components.product_labels import get_product_label_formatter
 from app.manager.compliance_manager import get_compliance_file_signature
@@ -850,44 +851,12 @@ def _build_station_top10_payload(
     # ==========================================
     # 0. Echarts 垂直堆叠柱状图
     # ==========================================
-    chart_df = top_station_df.copy()
-    x_data = [format_step_label(step, step_desc_map) for step in chart_df['step_id'].tolist()]
-
-    option = {
-        "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
-        "legend": {"data": ["报废片数"] if is_scrap else ["OOC片数", "SOOS片数", "OOS片数"], "bottom": 0},
-        "grid": {"left": "3%", "right": "3%", "bottom": "15%", "containLabel": True},
-        "xAxis": {
-            "type": "category",
-            "data": x_data,
-            "axisLabel": {"interval": 0, "fontWeight": "bold"}
-        },
-        "yAxis": {"type": "value", "name": "报废总片数" if is_scrap else "报警总片数"},
-        "series": []
-    }
-
-    if 'OOC片数' in actual_count_cols:
-        option["series"].append({
-            "name": "报废片数" if is_scrap else "OOC片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
-            "itemStyle": {"color": "#F9D976"},
-            "data": chart_df['OOC片数'].tolist()
-        })
-    if 'SOOS片数' in actual_count_cols:
-        option["series"].append({
-            "name": "SOOS片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
-            "itemStyle": {"color": "#81D8D0"},
-            "data": chart_df['SOOS片数'].tolist()
-        })
-    if 'OOS片数' in actual_count_cols:
-        option["series"].append({
-            "name": "OOS片数", "type": "bar", "stack": "总量", "barMaxWidth": 80,
-            "itemStyle": {"color": "#7B9CE1"},
-            "data": chart_df['OOS片数'].tolist()
-        })
 
     payload: dict[str, object] = {
         "status": "ok",
-        "option": option,
+        "option": build_top_station_echarts_option(
+            top_station_df, is_scrap=is_scrap, step_desc_map=step_desc_map,
+        ),
     }
 
     if not show_tables:

@@ -10,8 +10,8 @@
 另含单片异常（Sheet OOS）预警：只读加载修饰工作簿中上一 ISO 周 flag=FALSE 明细，
 并按预警键自动过滤出图（见 docs/PRD/PRD-2026-08-25-Inline自动预警中心.md）。
 
-公共筛选与绘图管线位于 ``app.sections.inline_domain.shared``，本模块只保留
-TT 业务差异：USL/UCL 双上限规格线（虚线/点线）与检测片数文案。
+公共筛选位于 ``app.sections.inline_domain.shared``，TT 绘图位于
+``app.charts.inline_domain.aoi_tt``。
 """
 
 from __future__ import annotations
@@ -22,14 +22,12 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from src.shared_kernel.config import ConfigLoader
-from app.charts.inline_domain import (
-    AoiSpecLine,
-    create_aoi_period_trend_chart,
-    create_aoi_point_chart,
+from app.charts.inline_domain.aoi_tt.chart import (
+    create_aoi_tt_point_chart,
+    create_aoi_tt_trend_chart,
 )
 from app.sections.inline_domain.shared import (
     INLINE_FACTORY_OPTIONS,
@@ -68,8 +66,6 @@ from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 logger = logging.getLogger(__name__)
 
 AOI_TT_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
-USL_COLOR = "#dc2626"
-UCL_COLOR = "#f59e0b"
 
 # 单片异常预警展示列（中文）与过滤键映射（中文列 → 报表英文列）
 AOI_TT_ALERT_COLUMN_MAP = {
@@ -239,73 +235,6 @@ def filter_aoi_tt_report(
     if selected_particle_sizes is not None and "particle_size" in filtered.columns:
         filtered = filtered[filtered["particle_size"].isin(selected_particle_sizes)]
     return filtered
-
-
-# ---------------------------------------------------------------------------
-# 图表
-# ---------------------------------------------------------------------------
-
-
-def _usl_ucl_spec_lines(usl: float | None, ucl: float | None) -> list[AoiSpecLine]:
-    """TT 双上限规格线：USL 虚线、UCL 点线；缺省值由 shared 跳过。"""
-    return [
-        AoiSpecLine(usl, "USL", USL_COLOR, "dash"),
-        AoiSpecLine(ucl, "UCL", UCL_COLOR, "dot"),
-    ]
-
-
-def create_aoi_tt_trend_chart(
-    *,
-    trend_df: pd.DataFrame,
-    throughput_df: pd.DataFrame,
-    usl: float | None,
-    ucl: float | None,
-    code_name: str,
-    title: str,
-) -> go.Figure:
-    """单 TT 月周天趋势图：双 Y 轴（左=TT/片比值线+USL/UCL，右=检测片数柱）。
-
-    x 轴按 period_sort 排列（2月→3周→7天），月/周/天组间插入零宽空格留白，
-    柱状按 period_type 分组配色以区分粒度。
-    """
-    return create_aoi_period_trend_chart(
-        trend_df=trend_df,
-        throughput_df=throughput_df,
-        spec_lines=_usl_ucl_spec_lines(usl, ucl),
-        code_name=code_name,
-        title=title,
-        line_value_label="TT/片",
-        bar_unit_name="检测片数",
-        y_title="平均每片 TT 个数",
-    )
-
-
-def create_aoi_tt_point_chart(
-    *,
-    point_df: pd.DataFrame,
-    id_col: str,
-    code_specs: dict[str, tuple[float | None, float | None]],
-    title: str,
-    y_title: str,
-    y_col: str = "tt_qty",
-) -> go.Figure:
-    """By Lot / By Sheet 点线图：x 按首次过货时间排序，每个 TT 一条线 + USL/UCL。
-
-    y_col 指定纵轴列：By Sheet 用 "tt_qty"（每片个数），By Lot 用 "value"（Lot 内平均每片）。
-    """
-    spec_lines = {
-        code: _usl_ucl_spec_lines(usl, ucl)
-        for code, (usl, ucl) in code_specs.items()
-    }
-    return create_aoi_point_chart(
-        point_df=point_df,
-        id_col=id_col,
-        code_column="tt_name",
-        code_specs=spec_lines,
-        title=title,
-        y_title=y_title,
-        y_col=y_col,
-    )
 
 
 # ---------------------------------------------------------------------------

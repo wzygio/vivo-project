@@ -6,15 +6,14 @@ import hashlib
 import logging
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 from app.manager.render_gate import RenderGate
 from app.charts.inline_domain import (
-    create_period_overview_chart,
     create_sheet_points_box_charts,
     resolve_chart_type,
 )
+from app.charts.inline_domain.ctq.chart import create_ctq_period_overview_chart
 from app.sections.inline_domain.shared import (
     INLINE_FACTORY_OPTIONS,
     apply_report_filter,
@@ -178,22 +177,6 @@ def render_ctq_decoration_admin(
             report_name="CTQ",
             key_prefix="ctq",
         )
-
-
-def create_ctq_period_overview_chart(
-    sheet_features_df: pd.DataFrame,
-    raw_measurements_df: pd.DataFrame,
-    title: str,
-    period_box_source: str = "point_value",
-) -> go.Figure:
-    """Create a capability-free CTQ month/week/day distribution figure."""
-    return create_period_overview_chart(
-        sheet_features_df=sheet_features_df,
-        period_capability_df=pd.DataFrame(),
-        raw_measurements_df=raw_measurements_df,
-        period_box_source=period_box_source,
-        title=title,
-    )
 
 
 def _build_ctq_indicator_render_payload(

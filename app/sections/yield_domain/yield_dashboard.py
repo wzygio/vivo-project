@@ -12,7 +12,7 @@ from app.components.code_selector import DEFAULT_MONTHLY_RATE_THRESHOLD, build_b
 from app.manager.render_gate import RenderGate
 from app.sections.yield_domain.resource_config import get_array_time_query_enabled
 
-# 引入现有的绘图函数
+from app.charts.yield_domain.compact_layout import apply_compact_chart_layout
 from app.charts.yield_domain.mwd_chart import (
     create_group_trend_chart, 
     create_code_trend_chart,
@@ -415,18 +415,6 @@ def render_mapping_section(
 # ==============================================================================
 #  6. Code 批量展示紧凑布局
 # ==============================================================================
-def _apply_compact_chart_layout(fig: go.Figure, height: int) -> go.Figure:
-    fig.update_layout(
-        height=height,
-        margin=dict(l=10, r=10, t=34, b=26),
-        title_font_size=13,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    fig.update_xaxes(tickfont=dict(size=10))
-    fig.update_yaxes(tickfont=dict(size=10))
-    return fig
-
-
 def _state_key_fragment(*parts: str) -> str:
     return "_".join(
         "".join(ch if ch.isalnum() else "_" for ch in str(part))
@@ -469,7 +457,7 @@ def _prepare_compact_trend_figures(
         if df is not None and not df.empty:
             fig = create_code_trend_chart(df, title, c_ylim, curr_warning)
             if fig is not None:
-                fig = _apply_compact_chart_layout(fig, 345)
+                fig = apply_compact_chart_layout(fig, 345)
         entries.append((title, fig))
     return entries
 
@@ -617,7 +605,7 @@ def _prepare_compact_mapping_payload(
         return payload
 
     figures = [
-        _apply_compact_chart_layout(
+        apply_compact_chart_layout(
             create_mapping_heatmap(
                 matrices_cache[batch_no],
                 f"批次 {batch_no} 热力图",
@@ -748,7 +736,7 @@ def _prepare_compact_lot_figure(
     df_lot_curr = _prepare_lot_code_dataframe(lot_data, curr_code)
     if df_lot_curr.empty:
         return None
-    return _apply_compact_chart_layout(
+    return apply_compact_chart_layout(
         create_lot_defect_chart(
             df_lot_curr,
             "Lot ID",
@@ -870,7 +858,7 @@ def _prepare_compact_sheet_figure(
     df_sheet = _prepare_sheet_chart_dataframe(sheet_data, target_lot, curr_group, curr_code)
     if df_sheet.empty:
         return None
-    return _apply_compact_chart_layout(
+    return apply_compact_chart_layout(
         create_sheet_defect_chart(
             df=df_sheet,
             xaxis_label="Sheet ID",
@@ -904,7 +892,7 @@ def _render_compact_sheet_chart(
     )
     fragment = key_fragment or _state_key_fragment(curr_group, curr_code)
     st.plotly_chart(
-        _apply_compact_chart_layout(fig_sheet, 300),
+        apply_compact_chart_layout(fig_sheet, 300),
         width="stretch",
         key=f"compact_sheet_chart_{_state_key_fragment(fragment, target_lot)}",
         config={"scrollZoom": False},

@@ -46,7 +46,7 @@ def _mapping_data(panel_id: str) -> pd.DataFrame:
 
 def test_default_mapping_layout_remains_ten_by_nineteen() -> None:
     _, matrices, _, _ = _prepare_mapping_matrices(
-        mapping_data=_mapping_data("SHEET0000012ES0"),
+        mapping_data=_mapping_data("SHEET0000012EU0"),
         curr_group="Array_Line",
         curr_code="CodeA",
         hotspot_scripts=[],
@@ -57,6 +57,27 @@ def test_default_mapping_layout_remains_ten_by_nineteen() -> None:
     matrix = matrices["2026/07/01"]
     assert matrix.shape == (10, 19)
     assert matrix.iloc[9, 18] == 1
+
+
+def test_default_heatmap_skips_i_and_o_and_aligns_panel_counts() -> None:
+    columns = ("H0", "J0", "N0", "P0", "S0", "U0")
+    mapping_data = pd.concat(
+        [_mapping_data(f"SHEET0000012E{column}") for column in columns],
+        ignore_index=True,
+    )
+    _, matrices, global_max, _ = _prepare_mapping_matrices(
+        mapping_data, "Array_Line", "CodeA", [], "M673",
+    )
+    figure = create_mapping_heatmap(matrices["2026/07/01"], "Standard Mapping", global_max)
+
+    expected = tuple(f"{letter}0" for letter in "ABCDEFGHJKLMNPQRSTU")
+    assert tuple(figure.layout.xaxis.ticktext) == expected
+    heatmap = figure.data[0]
+    assert tuple(heatmap.x) == expected
+    assert tuple(heatmap.y)[9] == "2E"
+    assert {column for column, count in zip(heatmap.x, heatmap.z[9]) if count} == set(columns)
+    assert parse_panel_id_to_coords("SHEET0000012EI0") is None
+    assert parse_panel_id_to_coords("SHEET0000012EO0") is None
 
 
 def test_z517_mapping_layout_keeps_2d_l0_at_last_cell() -> None:
@@ -139,7 +160,7 @@ def test_compact_mapping_section_passes_resolved_layout_to_heatmap(monkeypatch) 
     )
     monkeypatch.setattr(
         yield_dashboard,
-        "_apply_compact_chart_layout",
+        "apply_compact_chart_layout",
         lambda figure, _height: figure,
     )
 

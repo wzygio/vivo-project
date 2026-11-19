@@ -168,6 +168,8 @@ On Windows, [the user-session API host](tools/anomaly_api_service.py) injects ca
 | `tools/` | Refresh, diagnostics, offline analysis, and scheduled entry points; independent offline tools need not become report-domain services |
 | `tests/` | Unit, architecture, integration, and browser evidence; both mirrored directories and flat test names exist |
 
+Reusable figure builders, chart options and figure styles belong in `app/charts/`. Domain and submodule adapters reuse shared builders there. Sections own report selection, render payload coordination and Streamlit display.
+
 The daily `api.inspection` command runs [matrix warmup](api/inspection/matrix_warmup.py) after domain production, reusing app-level cross-domain display assembly. Its app-level snapshot adapter stores native JSON status under `output/cache/alert_matrix/`; consumers validate freshness and signatures and reread published results for missing or invalid items. The former `tools/warm_alert_matrix.py` is a compatibility entry; the separate warmup schedule is retired. The [snapshot adapter](app/sections/inline_domain/monitor/alert_matrix_snapshot.py) remains presentation-owned. Warmup does not refresh source data or publish domain alerts.
 
 The independent `api.inspection` production job covers all dashboard indicators:

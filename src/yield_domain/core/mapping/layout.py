@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from string import ascii_uppercase
 from typing import Any, Mapping
 
 
@@ -15,9 +16,8 @@ DEFAULT_MAPPING_ROW_LABELS = (
     "2E",
 )
 DEFAULT_MAPPING_COLUMN_LABELS = tuple(
-    f"{chr(ord('A') + index)}0"
-    for index in range(19)
-)
+    f"{letter}0" for letter in ascii_uppercase if letter not in "IO"
+)[:19]
 
 
 @dataclass(frozen=True)

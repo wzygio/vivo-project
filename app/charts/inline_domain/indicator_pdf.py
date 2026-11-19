@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
+import plotly.graph_objects as go
 import pymupdf
 
 PAGE_WIDTH, PAGE_HEIGHT = 1191, 842
@@ -122,3 +123,19 @@ class IndicatorPdfReport:
         self.document.set_metadata({"title": f"{self.report_name}监控报表", "subject": self.period})
         self.document.subset_fonts()
         return self.document.tobytes(garbage=4, deflate=True)
+
+
+def format_spc_pdf_figure(source: go.Figure, title: str) -> go.Figure:
+    """Apply the PDF style to a copy of the figure."""
+    figure = go.Figure(source)
+    figure.update_layout(
+        template="plotly_white",
+        title={"text": title, "font": {"size": 17}},
+        font={"family": "Microsoft YaHei, Noto Sans CJK SC, Arial", "size": 13},
+        paper_bgcolor="white", plot_bgcolor="white",
+        margin={"l": 65, "r": 30, "t": 65, "b": 120},
+        legend={"orientation": "h", "yanchor": "top", "y": -0.4,
+                "xanchor": "left", "x": 0, "font": {"size": 10}},
+    )
+    figure.update_xaxes(title_standoff=8)
+    return figure
