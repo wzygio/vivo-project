@@ -291,7 +291,9 @@ complete、returned_count、failed_sources：
 
 只需修改第 1 节的 `base_url`，运行同一份 Python 程序即可。当前主机访问内网地址成功，不能代替另一台设备的网络验证。
 
-如需人工查看结果，按文档开头的 `uv run` 指令运行 [fetch_sheet_anomalies.py](../../../tools/fetch_sheet_anomalies.py)。填地址和密钥，选择条件后点击“查询完整结果”，再点击“下载全部明细(CSV)”选择保存位置；也可用“保存完整响应(JSON)”保留查询说明。高级筛选请使用第 1 节的函数调用。
+运行调试程序，填写地址和密钥后，可在窗口组合产品、分类、事件、厂别、站点、层别、监控参数、对象类型、对象编号和起止日期。点击“查询完整结果”可预览并下载 CSV 或 JSON。例如查询 Z576 的周能力项目，可选 SPC、CPM、ARRAY、站点 `1W450`、监控参数 `OVL1_Y` 和对象类型 `capability`，日期填 2026-11-09 至 2026-11-15。[调试程序](../../../tools/fetch_sheet_anomalies.py)
+
+核对分页时，在“每页行数”填写 `limit`，清空游标并点击“查询单页”。如果返回 `has_more=true`，将预览中的 `next_cursor` 填入“分页游标”，保留原筛选条件和每页行数，再点击“查询单页”。单页模式只预览当前页。从第一页自动取全并下载时，清空游标并点击“查询完整结果”。
 
 窗口只预览前 20 行，下载保存本次查询已取得的**全部明细**，不按 20 行或每页 500 行截断。“每页行数”留空为一次取全；填写后程序自动取完所有页再允许下载。部分来源失败时，按钮显示“下载可用部分(CSV)”，文件名默认含 `partial`；CSV 旁的同名 `.csv.meta.json` 记录实际条数、完整性和失败来源。不能把可用部分当成完整统计。
 
@@ -418,7 +420,7 @@ except ApiCallError as exc:
 
 | 函数 | 功能及使用方式 |
 |---|---|
-| `launch_gui(defaults=None)` | 打开 Tkinter 查询窗口并等待关闭，正常关闭返回 `0`。在 Python 中用 `launch_gui()` 即可；默认地址为本机 8890。可传 `argparse.Namespace` 预填 `base_url`、`product`、`sub_domain`、`event_type`、`start_date`、`end_date`、`page_size`，并设置请求 `timeout`。密钥从环境变量或窗口取得；保存位置和格式在窗口选择，高级筛选需改用 `fetch_anomalies` |
+| `launch_gui(defaults=None)` | 打开 Tkinter 查询窗口并等待关闭，正常关闭返回 `0`。默认地址为本机 8890。可传 `argparse.Namespace` 预填 `base_url`、全部业务筛选字段、`page_size` 和单页调试的 `cursor`，并设置请求 `timeout`。密钥从环境变量或窗口取得，保存位置和格式在窗口选择。 |
 | `main(argv=None)` | 解析程序参数，调用窗口或执行查询并保存。`None` 读取实际命令行；`main([])` 打开窗口；`main(["--gui", "--base-url", "http://10.72.26.31:8890"])` 打开预填内网地址的窗口。提供参数但未写 `--gui` 时走命令行查询，可用 `--cli` 明确指定；密钥从环境或隐藏输入取得，没有密钥命令行参数 |
 
 可在自己的 Python 文件中这样打开窗口；不要在服务器后台或没有图形桌面的环境调用：
@@ -437,8 +439,8 @@ launch_gui(Namespace(base_url="http://10.72.26.31:8890", sub_domain="SPC"))
 | 函数及所在位置 | 功能／触发方式 |
 |---|---|
 | `launch_gui.show_text(text)` | 替换只读结果预览文本，由查询及结果处理调用 |
-| `launch_gui.run_query()` | “查询完整结果”按钮触发；读取条件、清除旧结果与密钥输入，启动工作线程并暂时禁用查询和下载 |
-| `launch_gui.run_query.work()` | 工作线程入口，执行 `fetch_anomalies`，将结果或安全错误放入消息队列 |
+| `launch_gui.run_query(single_page=False)` | 两个查询按钮按所选模式读取条件、清除旧结果与密钥输入，启动工作线程并暂时禁用查询和下载 |
+| `launch_gui.run_query.work()` | 工作线程按模式查询完整结果或单页，将结果或安全错误放入消息队列 |
 | `launch_gui.poll()` | 主窗口每 100 毫秒检查队列，更新状态、最多 20 行预览和下载按钮；完整结果保存在内存 |
 | `launch_gui.export(format='json')` | 保存按钮触发；弹出文件选择框并调用 JSON 或 CSV 导出。部分来源结果的建议文件名带 `partial` |
 
@@ -460,6 +462,6 @@ launch_gui(Namespace(base_url="http://10.72.26.31:8890", sub_domain="SPC"))
 
 ## Appendix H 部署、架构与验证记录
 
-- [API 服务部署说明](guide-sheet-anomaly-api.md)：服务安装、启动和来源准备。
+- [API 服务部署说明](interaction-sheet-anomaly-api-deployment.md)：服务安装、启动和来源准备。
 - [API 程序介绍](architecture-sheet-anomaly-api.md)：架构、缓存及运行边界。
 - [CPK／CPM正式验收](../../../docs/ADR/0040-api-capability-deployment-2026-11-04.md)：当时的真实取数、完整导出与来源状态。

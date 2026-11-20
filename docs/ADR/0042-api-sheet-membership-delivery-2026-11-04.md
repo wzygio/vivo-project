@@ -52,7 +52,7 @@ uv run --no-sync python -m pytest -p output.tmp.no_live_office_pytest tests/unit
 
 ## 文件与证据
 
-- [调用说明](../../../../../references/domain/inline_domain/api/api-caller-guide-2026-11-03.md)、[部署说明](../../../../../references/domain/inline_domain/api/guide-sheet-anomaly-api.md)、[程序介绍](../../../../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。
+- [调用说明](../../references/domain/api/interaction-sheet-anomaly-api-client.md)、[部署说明](../../references/domain/api/interaction-sheet-anomaly-api-deployment.md)、[程序介绍](../../../../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。
 - [规格与任务](../../../../../.scratch/anomaly-api-sheet-membership/PRD.md)、[ADR-0037](../../../../ADR/0037-published-anomaly-api.md)。
 - `output/test-results/api-sheet-membership-gate/{junit.xml,coverage.json}`：536 项整合验证及覆盖。
 - `output/test-results/api-sheet-membership-e2e/`：网络 E2E、完整／部分导出与生命周期记录。

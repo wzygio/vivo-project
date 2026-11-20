@@ -73,10 +73,12 @@
 `Process identity changed before shutdown` 且没有新进程 PID。该错误可在旧进程
 已关闭之后中断重启；逐个复核、逐个结束的旧流程不能作为安全关闭整个进程组的依据。
 
-本机 `3.天柱北极星专项报表` 的操作改为系统 `wscript.exe` 调用项目根目录
-`run_hidden.vbs`，起始目录为项目根目录；VBS 等待 BAT 完成启动检查并传回退出码。
-保留现有每天 09:00、每周二 13:00 两个触发器，以及原账户的 `InteractiveToken`
-登录方式；账户必须已登录（锁屏不等于注销）。启用错过后尽快执行和唤醒设置，
+2026-11-20 读回本机任务 `3.天柱北极星专项报表`，两个触发器为每天 07:00 和 13:00。任务按顺序执行两个动作，工作目录均为项目根目录。
+
+1. 系统 `wscript.exe` 调用 `run_hidden.vbs`。VBS 等待 `start_streamlit.bat` 完成 Streamlit 启动检查后退出。
+2. 系统 PowerShell 隐藏、非交互执行 `tools/start_anomaly_api.ps1`，重启 8890 并核对 API 就绪状态。手动入口 `start_anomaly_api.cmd` 调用同一个脚本，随后等待按键。
+
+任务使用原账户的 `InteractiveToken` 登录方式，账户必须已登录（可锁屏）。启用错过后尽快执行和唤醒设置，
 保留失败重试和原有并发策略。此配置不宣称支持账户已注销或电脑已关机时启动。
 
 单元回归入口为 `tests/unit/tools/test_streamlit_startup.py`，覆盖进程组关闭竞态、

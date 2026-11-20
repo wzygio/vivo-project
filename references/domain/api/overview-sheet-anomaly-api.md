@@ -2,7 +2,7 @@
 
 编写日期：2026-10-27。面向第一次接触 API 的项目负责人。
 
-本文是2026-10-27编写的入门说明，下面的请求与JSON是教学示例。2026-11-02已开始按获批需求实现；当前接口参数与中文字段以 [API调用说明](api-caller-guide-2026-11-03.md) 为准，维护步骤见 [部署说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md)，部署状态以交付记录为准。方案见 [异常片明细 API 开发方案](sheet-anomaly-api-development-plan.md)。
+本文是2026-10-27编写的入门说明，下面的请求与JSON是教学示例。2026-11-02已开始按获批需求实现；当前接口参数与中文字段以 [API调用说明](interaction-sheet-anomaly-api-client.md) 为准，维护步骤见 [部署说明](interaction-sheet-anomaly-api-deployment.md)，部署状态以交付记录为准。方案见 [异常片明细 API 开发方案](../../../docs/PRD/PRD-2026-11-02-sheet-anomaly.md)。
 
 ## 1. 你要开发的东西是什么
 
@@ -74,7 +74,7 @@ JSON 示例：
 
 可以复用看板背后的结果读取与筛选规则。页面文件负责界面，不能把整个页面当作 API 执行入口。
 
-本项目已将预警生产和展示分开：原报表负责分析、识别异常并发布 Excel；自动预警看板读取已经发布的结果。共同入口是 `read_alert_result()`，详见 [看板架构](../../../../../references/domain/inline_domain/monitor/architecture-alert-dashboard.md) 和 [共同展示设计](../../../../../references/design/inline_domain/shared/architecture-published-alert-display.md)。
+本项目已将预警生产和展示分开：原报表负责分析、识别异常并发布 Excel；自动预警看板读取已经发布的结果。共同入口是 `read_alert_result()`，详见 [看板架构](../inline_domain/monitor/architecture-alert-dashboard.md) 和 [共同展示设计](../../design/inline_domain/shared/architecture-published-alert-display.md)。
 
 所以，“别人调用 API”可以只做读取，而不重新计算异常、不查询原始量测数据库。没有结果时应说明暂不可用，由原生产流程更新结果。
 

@@ -2,7 +2,7 @@
 
 更新日期：2026-11-11。说明当前实现的功能、架构和处理流程，适用 API 1.4.0。
 
-部署操作见 [服务部署说明](guide-sheet-anomaly-api.md)，参数、字段及实测步骤见 [调用说明](api-caller-guide-2026-11-03.md)。架构决定见 [ADR-0037](../../../docs/ADR/0037-published-anomaly-api.md)。
+部署操作见 [服务部署说明](interaction-sheet-anomaly-api-deployment.md)，参数、字段及实测步骤见 [调用说明](interaction-sheet-anomaly-api-client.md)。架构决定见 [ADR-0037](../../../docs/ADR/0037-published-anomaly-api.md)。
 
 ## 1. 程序负责什么
 

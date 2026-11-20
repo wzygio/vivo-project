@@ -27,7 +27,10 @@ try {
 finally { Pop-Location }
 if ($Specs.Count -ne 2) { throw 'Expected exactly the inspection and notification task definitions.' }
 if ($InspectionOnly) { $Specs = @($Specs | Where-Object { $_.module -eq 'api.inspection' }) }
-$WarmupTaskName = 'vivo-project Alert Matrix Warmup'
+$RetiredActions = [ordered]@{
+    'vivo-project Alert Matrix Warmup' = '"' + (Join-Path $ProjectRoot 'tools\warm_alert_matrix.py') + '"'
+    'vivo-project Yield IJP Alert Publication' = '-m api.inspection'
+}
 
 function Get-FutureBoundary($Trigger) {
     $Now = [datetime]::Now
@@ -55,26 +58,26 @@ $Plan = @($Specs | ForEach-Object {
     }
 })
 if (-not $Apply) {
-    [PSCustomObject]@{Status='plan';Tasks=$Plan;RetireTasks=@($WarmupTaskName)} | ConvertTo-Json -Depth 6
+    [PSCustomObject]@{Status='plan';Tasks=$Plan;RetireTasks=@($RetiredActions.Keys)} | ConvertTo-Json -Depth 6
     return
 }
 
 $BackupDirectory = Join-Path $ProjectRoot ('output\logs\alert_inspection\task-backups\' + [datetime]::Now.ToString('yyyyMMdd-HHmmss-ffff'))
 New-Item -ItemType Directory -Path $BackupDirectory -Force | Out-Null
 $Backups = @{}
-$WarmupTask = Get-ScheduledTask -TaskName $WarmupTaskName -ErrorAction SilentlyContinue
-if ($WarmupTask) {
-    $Actions = @($WarmupTask.Actions)
-    $LegacyScript = Join-Path $ProjectRoot 'tools\warm_alert_matrix.py'
-    if ($WarmupTask.State -eq 'Running' -or $Actions.Count -ne 1 -or
+foreach ($Name in $RetiredActions.Keys) {
+    $OldTask = Get-ScheduledTask -TaskPath '\' -TaskName $Name -ErrorAction SilentlyContinue
+    if (-not $OldTask) { continue }
+    $Actions = @($OldTask.Actions)
+    if ($OldTask.State -eq 'Running' -or $Actions.Count -ne 1 -or
         $Actions[0].WorkingDirectory.TrimEnd('\') -ne $ProjectRoot.TrimEnd('\') -or
         $Actions[0].Execute -ne $PythonWindowless -or
-        $Actions[0].Arguments -ne ('"' + $LegacyScript + '"')) {
-        throw 'Warmup task is running or its identity does not match; nothing was registered.'
+        $Actions[0].Arguments -ne $RetiredActions[$Name]) {
+        throw "Retired task is running or its identity does not match: $Name"
     }
-    $Xml = Export-ScheduledTask -TaskName $WarmupTaskName
-    $Backups[$WarmupTaskName] = $Xml
-    [IO.File]::WriteAllText((Join-Path $BackupDirectory ($WarmupTaskName + '.xml')), $Xml)
+    $Xml = Export-ScheduledTask -TaskPath '\' -TaskName $Name
+    $Backups[$Name] = $Xml
+    [IO.File]::WriteAllText((Join-Path $BackupDirectory ($Name + '.xml')), $Xml)
 }
 foreach ($Spec in $Specs) {
     $Existing = Get-ScheduledTask -TaskName $Spec.name -ErrorAction SilentlyContinue
@@ -145,11 +148,16 @@ try {
             }
         }
     }
-    if ($WarmupTask) {
-        $Changed.Add($WarmupTaskName)
-        Unregister-ScheduledTask -TaskName $WarmupTaskName -Confirm:$false
-        if (Get-ScheduledTask -TaskName $WarmupTaskName -ErrorAction SilentlyContinue) {
-            throw 'Retired warmup task is still registered.'
+    foreach ($Name in $RetiredActions.Keys) {
+        if (-not $Backups.ContainsKey($Name)) { continue }
+        if ((Get-ScheduledTask -TaskPath '\' -TaskName $Name).State -eq 'Running' -or
+            (Export-ScheduledTask -TaskPath '\' -TaskName $Name) -cne $Backups[$Name]) {
+            throw "Retired task changed during registration: $Name"
+        }
+        Unregister-ScheduledTask -TaskPath '\' -TaskName $Name -Confirm:$false
+        $Changed.Add($Name)
+        if (Get-ScheduledTask -TaskPath '\' -TaskName $Name -ErrorAction SilentlyContinue) {
+            throw "Retired task is still registered: $Name"
         }
     }
 }

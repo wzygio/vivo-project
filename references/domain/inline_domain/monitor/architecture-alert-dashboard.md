@@ -155,8 +155,7 @@ Q-Time缺表沿用2026-11-10已授权的表头初始化：缺结果文件或厂�
 另生产AOI_TT／AOI_RS趋势和API使用的OOC；各域继续使用原application规则。
 统一入口为 `python -m api.inspection`，命令行 `--check` 仅检查范围、不执行生产。
 
-任务仍保留名称 `vivo-project Yield IJP Alert Publication`，执行内容已扩展，
-改为每天07:15运行，不再每30分钟巡检，也不在登录时自动触发。
+全量巡检任务名为 `vivo-project Alert Inspection`，每天 07:15 和 19:15 运行。
 新邮件任务每周一07:20及每周二11:00执行，先核验当天完整巡检回执。
 源码组织、来源完整性、任务注册、失败处理和运行条件由
 [自动巡检说明](../../api/architecture-automatic-inspection.md)统一维护。

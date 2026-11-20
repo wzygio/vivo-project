@@ -68,6 +68,44 @@ def test_check_does_not_load_or_create_output(tmp_path):
     assert not output.exists()
 
 
+def test_written_points_include_both_requested_times_and_exclude_other_rows(tmp_path):
+    start = '2026-11-11 12:00:00'
+    end = '2026-11-20 12:00:00'
+
+    def loader(product, _start, _end):
+        return pd.DataFrame({
+            'prod_code': [product] * 5,
+            'sheet_start_time': pd.to_datetime([
+                '2026-10-01 00:00:00', '2026-11-11 11:59:59', start, end, '2026-11-20 12:00:01',
+            ]),
+            'param_value': [1, 2, 3, 4, 5],
+        })
+
+    output = tmp_path / 'result'
+    assert main(['--product', 'P1', '--start-time', start, '--end-time', end,
+                 '--output-dir', str(output)], loader=loader, today=date(2026, 11, 20)) == 0
+    points = pd.read_parquet(output / 'points' / 'P1.parquet')
+    assert points['sheet_start_time'].tolist() == [pd.Timestamp(start), pd.Timestamp(end)]
+    assert points['param_value'].tolist() == [3, 4]
+    manifest = json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
+    assert manifest['rows'][0]['row_count'] == 2
+
+
+def test_pds_read_guard_requires_the_bounded_adapter_filters():
+    from datetime import datetime
+    from tools.spc_point_export.source import TemporalReadGuard
+
+    guard = TemporalReadGuard('SELECT 1', datetime(2026, 11, 20, 12))
+    query = ('SELECT p.glass_start_time FROM eda.array_pds_result_t p '
+             'WHERE p.glass_start_time >= :start_time AND p.glass_start_time < :end_time '
+             'AND p.glass_id LIKE :lot_prefix AND (p.step_id = :step AND p.param_name = :param)')
+    assert guard(None, None, query, {}, None, False) == (query, {})
+    for predicate in (' AND p.glass_start_time < :end_time', ' AND p.glass_id LIKE :lot_prefix',
+                      ' AND p.param_name = :param'):
+        with pytest.raises(ExportError, match='PDS query is missing'):
+            guard(None, None, query.replace(predicate, ''), {}, None, False)
+
+
 def test_from_export_inherits_dates_and_cannot_relabel(tmp_path):
     (tmp_path/'manifest.json').write_text(json.dumps({'start_date':'2026-10-01','end_date':'2026-11-10',
         'products':['P1'],'rows':[{'product':'P1','row_count':0,'columns':['prod_code']}]}))

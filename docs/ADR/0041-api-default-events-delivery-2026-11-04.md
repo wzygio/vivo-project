@@ -37,4 +37,4 @@
 
 证据：`output/test-results/api-default-events/{deployment,formal-verification}.json`；临时默认事件监听记录为同目录 `listener-*.json`。本轮没有启动数据库生产或维护工作簿。
 
-当前使用方法见 [调用说明](../../../../../references/domain/inline_domain/api/api-caller-guide-2026-11-03.md)、[部署说明](../../../../../references/domain/inline_domain/api/guide-sheet-anomaly-api.md) 和 [程序介绍](../../../../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。
+当前使用方法见 [调用说明](../../references/domain/api/interaction-sheet-anomaly-api-client.md)、[部署说明](../../references/domain/api/interaction-sheet-anomaly-api-deployment.md) 和 [程序介绍](../../../../../references/domain/inline_domain/api/architecture-sheet-anomaly-api.md)。

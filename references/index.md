@@ -8,11 +8,13 @@
 
 | 问题 / 关键词 | 首选文件 |
 |---|---|
+| 巡检如何向异常 API、邮件和页面供数、07:15／19:15 与 12 小时有效期、各报表复用哪些结果 | [异常 API、巡检、邮件与报表页面的数据流](domain/api/data-flow-anomaly-api.md) |
 | 自动巡检、无人访问仍生产预警、全看板模块、每日07:15、周一／周二邮件调度 | [自动巡检说明](domain/api/architecture-automatic-inspection.md) |
 | 预警邮件推送、责任人分派、测试收件人覆盖、SMTP、定时任务及失败重试 | [预警邮件规则](domain/api/notification/rules-alert-notification.md) |
 | Lot、Sheet、Glass、Panel、膜位、厂别等制造术语 | [术语表](domain/GLOSSARY.md) |
 | Inline 范围、SPC / CTQ / Monitor / AOI 职责 | [Inline 概览](domain/inline_domain/shared/overview-inline.md) |
 | Inline 共享测量、制备管线、快照、Z553 固定历史保留起点、薄投影与装配 | [Inline 基础设施架构](domain/inline_domain/shared/architecture-inline-infrastructure.md) |
+| SPC 按日过货、能力元数据、周度 Sheet 成员和历史副本的字段、读写入口及点位定位 | [SPC 本地快照的用途与结构](domain/inline_domain/shared/data-source-spc-snapshots.md) |
 | Inline data_exclusion、厂别日期排除、去重与修饰之前过滤、快照与历史保留 | [Inline 日期排除规则](domain/inline_domain/shared/rules-inline-date-exclusion.md) |
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流；Z622 指定批次 PDS 测量接入与监控清单 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
 | SPC 超规片判定、人工决策台账、传统→专用点位修饰、中央规格区间、稳定哈希 margin、修饰与参数豁免/预警过滤的边界 | [SPC 超规片与点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
@@ -21,8 +23,9 @@
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照、Yield/IJP 独立生产巡检、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | 按项目 / domain / sub_domain 汇总当前矩阵各模块触发条件、阈值、优先级及未接入项（2026-11-11 核对快照） | [模块预警方案 Excel](domain/inline_domain/monitor/模块预警方案.xlsx) |
-| API 概念、服务部署、一键启动、进程关系与重复启动排查、凭证配置、站点字典、Yield厂别映射、CPK/CPM来源和公开政策 | [API 服务部署说明](domain/api/guide-sheet-anomaly-api.md) |
-| API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/api/api-caller-guide-2026-11-03.md) |
+| 异常明细 API 入门、HTTP 查询原理、与看板的关系 | [API 基础知识与技术原理](domain/api/overview-sheet-anomaly-api.md) |
+| API 服务部署、一键启动、进程关系与重复启动排查、凭证配置、站点字典、Yield厂别映射、CPK/CPM来源和公开政策 | [API 服务部署说明](domain/api/interaction-sheet-anomaly-api-deployment.md) |
+| API 调用、Python 查询程序、完整CSV下载、跨设备测试、分页、OOS/OOC与CPK/CPM完整周查询 | [API 调用说明](domain/api/interaction-sheet-anomaly-api-client.md) |
 | API 程序架构、能力周期对象、查询流程、缓存与容量、安全边界 | [API 程序介绍](domain/api/architecture-sheet-anomaly-api.md)；[ADR-0037](../docs/ADR/0037-published-anomaly-api.md) |
 | 预警展示解耦、报表与矩阵共用结果读取／筛选／内存缓存、生产与图像隔离、Q-Time与AOI趋势结果发布 | [已发布结果预警展示设计](design/inline_domain/shared/architecture-published-alert-display.md) |
 | CPK / CPM 独立汇总文件、快照分母、完整周向后归属、历史修复、最新周向上汇总与达标率柱线图 | [CPK / CPM 汇总工作簿规则](domain/inline_domain/monitor/rules-cpk-summary-workbook.md) |

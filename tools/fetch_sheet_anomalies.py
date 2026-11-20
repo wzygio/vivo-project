@@ -153,6 +153,35 @@ def _validate_page(payload: Any) -> tuple[list[dict], dict]:
     return rows, meta
 
 
+def _prepare_request(base_url, api_key, params, page_size, timeout):
+    base = validate_base_url(base_url)
+    if (not isinstance(api_key, str) or not api_key or len(api_key) > 1024
+            or any(not 33 <= ord(char) <= 126 for char in api_key)):
+        raise ApiCallError('请输入有效原始 API Key。')
+    if page_size is not None and (type(page_size) is not int or not 1 <= page_size <= 500):
+        raise ApiCallError('每页行数应为 1～500；留空表示不分页。')
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 1 <= timeout <= 120:
+        raise ApiCallError('请求超时须为 1～120 秒。')
+    query = dict(params or {})
+    if any(name not in FILTERS or not isinstance(value, str) or not value for name, value in query.items()):
+        raise ApiCallError('筛选字段无效；全部范围请省略相应字段。')
+    if page_size is not None:
+        query['limit'] = page_size
+    return base, query
+
+
+def _fetch_debug_page(base_url, api_key, params, *, page_size, cursor, timeout):
+    """Read exactly one page, preserving the API's pagination metadata."""
+    base, query = _prepare_request(base_url, api_key, params, page_size, timeout)
+    if cursor:
+        if page_size is None:
+            raise ApiCallError('使用分页游标时，请填写原查询的每页行数。')
+        query['cursor'] = cursor
+    payload, request_id = _read_page(direct_opener(), base, api_key, query, timeout)
+    _validate_page(payload)
+    return payload, request_id
+
+
 def fetch_anomalies(base_url: str, api_key: str, params: dict[str, str] | None = None, *,
                     page_size: int | None = None, timeout: float = DEFAULT_TIMEOUT_SECONDS,
                     opener=None, max_pages: int = 10000) -> dict:
@@ -164,21 +193,9 @@ def fetch_anomalies(base_url: str, api_key: str, params: dict[str, str] | None =
     count result rows, not individual IDs; entity_id filters one Sheet ID while
     the server still returns the complete matching capability row.
     """
-    base = validate_base_url(base_url)
-    if (not isinstance(api_key, str) or not api_key or len(api_key) > 1024
-            or any(not 33 <= ord(char) <= 126 for char in api_key)):
-        raise ApiCallError('请输入有效原始 API Key。')
-    if page_size is not None and (type(page_size) is not int or not 1 <= page_size <= 500):
-        raise ApiCallError('每页行数应为 1～500；留空表示不分页。')
-    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 1 <= timeout <= 120:
-        raise ApiCallError('请求超时须为 1～120 秒。')
+    base, query = _prepare_request(base_url, api_key, params, page_size, timeout)
     if type(max_pages) is not int or max_pages < 1:
         raise ApiCallError('分页读取次数上限无效。')
-    query = dict(params or {})
-    if any(name not in FILTERS or not isinstance(value, str) or not value for name, value in query.items()):
-        raise ApiCallError('筛选字段无效；全部范围请省略相应字段。')
-    if page_size is not None:
-        query['limit'] = page_size
     opener = opener if opener is not None else direct_opener()
     records, ids, seen = [], [], set()
     first_meta, context = None, None
@@ -321,37 +338,48 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
     frame = ttk.Frame(root, padding=16)
     frame.pack(fill='both', expand=True)
     fields = {}
-    values = [('base_url', 'API 地址', getattr(defaults, 'base_url', 'http://127.0.0.1:8890')),
-              ('api_key', 'API Key（原始密钥）', configured_api_key()),
-              ('product', '产品（留空为全部授权产品）', getattr(defaults, 'product', '') or ''),
-              ('sub_domain', '分类', getattr(defaults, 'sub_domain', '') or '全部'),
-              ('event_type', '异常事件', getattr(defaults, 'event_type', None) or '全部'),
-              ('start_date', '开始日期 YYYY-MM-DD（可空）', getattr(defaults, 'start_date', '') or ''),
-              ('end_date', '截止日期 YYYY-MM-DD（可空）', getattr(defaults, 'end_date', '') or ''),
-              ('page_size', '每页行数（留空为不分页）', str(getattr(defaults, 'page_size', '') or ''))]
-    for row, (name, label, initial) in enumerate(values):
-        ttk.Label(frame, text=label).grid(row=row, column=0, sticky='w', pady=4)
-        var = tk.StringVar(value=initial)
-        fields[name] = var
-        if name in ('sub_domain', 'event_type'):
-            widget = ttk.Combobox(frame, textvariable=var, state='readonly',
-                                  values=('全部', *DOMAINS) if name == 'sub_domain' else ('全部', 'OOS', 'OOC', 'CPK', 'CPM'))
-        else:
-            widget = ttk.Entry(frame, textvariable=var, show='*' if name == 'api_key' else '')
-        widget.grid(row=row, column=1, sticky='ew', pady=4)
-    ttk.Label(frame, text='本机地址用 127.0.0.1；其它设备填维护者提供的内网地址。日期留空为上周。'
-              'CPK/CPM是SPC周统计项，请选择SPC或全部；仅返回日期内完整ISO周，发生时间为统计截止日期。'
-              '其对象编号为完整Sheet ID列表，分页按统计项行数计算；CSV列表单元格为JSON文本。'
-              '预览仅20行，下载包含本次收到的全部明细。',
-              wraplength=880).grid(row=8, column=0, columnspan=2, sticky='w', pady=8)
+    choices = {'sub_domain': DOMAINS, 'event_type': ('OOS', 'OOC', 'CPK', 'CPM'),
+               'entity_type': ('sheet', 'lot', 'capability')}
+    rows = (
+        (('base_url', 'API 地址'), ('api_key', 'API Key（原始密钥）')),
+        (('product', '产品'), ('factory', '厂别')),
+        (('sub_domain', '分类'), ('event_type', '异常事件')),
+        (('step_id', '发生站点'), ('layer', '层别')),
+        (('parameter_name', '监控参数'), ('entity_type', '对象类型')),
+        (('start_date', '开始日期 YYYY-MM-DD'), ('end_date', '截止日期 YYYY-MM-DD')),
+        (('entity_id', '对象编号（Sheet／Lot ID）'), ('page_size', '每页行数（1～500）')),
+        (('cursor', '分页游标（单页调试）'),),
+    )
+    for row, pair in enumerate(rows):
+        for column, (name, label) in enumerate(pair):
+            initial = getattr(defaults, name, '')
+            if name == 'base_url':
+                initial = initial or 'http://127.0.0.1:8890'
+            elif name == 'api_key':
+                initial = configured_api_key()
+            else:
+                initial = initial if initial is not None and initial != '' else ('全部' if name in choices else '')
+            ttk.Label(frame, text=label).grid(row=row, column=column * 2, sticky='w', padx=(0 if column == 0 else 12, 6), pady=4)
+            var = tk.StringVar(value=initial)
+            fields[name] = var
+            if name in choices:
+                widget = ttk.Combobox(frame, name=name, textvariable=var, state='readonly',
+                                      values=('全部', *choices[name]))
+            else:
+                widget = ttk.Entry(frame, name=name, textvariable=var, show='*' if name == 'api_key' else '')
+            widget.grid(row=row, column=column * 2 + 1, columnspan=3 if name == 'cursor' else 1, sticky='ew', pady=4)
+    ttk.Label(frame, text='筛选留空表示不限，日期留空为上周。CPK/CPM 是 SPC 周统计项，日期需覆盖完整周一至周日；对象编号可填一个 Sheet ID。'
+              '完整查询会自动翻页。单页调试可填写每页行数，首次留空游标，续页时填入上一页的 next_cursor。',
+              wraplength=880).grid(row=8, column=0, columnspan=4, sticky='w', pady=8)
     status = tk.StringVar(value='可从 API_KEY／VIVO_API_KEY 环境变量自动填入密钥，或手动输入；密钥不保存到文件。')
-    ttk.Label(frame, textvariable=status, wraplength=880).grid(row=10, column=0, columnspan=2, sticky='w', pady=8)
-    view = tk.Text(frame, wrap='none', height=18, state='disabled')
-    view.grid(row=11, column=0, columnspan=2, sticky='nsew')
+    ttk.Label(frame, textvariable=status, wraplength=880).grid(row=10, column=0, columnspan=4, sticky='w', pady=8)
+    view = tk.Text(frame, wrap='char', height=18, state='disabled')
+    view.grid(row=11, column=0, columnspan=4, sticky='nsew')
     scroll = ttk.Scrollbar(frame, orient='vertical', command=view.yview)
-    scroll.grid(row=11, column=2, sticky='ns')
+    scroll.grid(row=11, column=4, sticky='ns')
     view.configure(yscrollcommand=scroll.set)
     frame.columnconfigure(1, weight=1)
+    frame.columnconfigure(3, weight=1)
     frame.rowconfigure(11, weight=1)
     messages = queue.Queue()
     state = {'result': None, 'busy': False}
@@ -362,15 +390,19 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
         view.insert('1.0', text)
         view.configure(state='disabled')
 
-    def run_query():
+    def run_query(single_page=False):
         if state['busy']:
             return
         state['result'] = None
         csv_button.configure(state='disabled', text='下载全部明细(CSV)')
         save_button.configure(state='disabled')
         show_text('')
-        params = {name: fields[name].get().strip() for name in ('product', 'sub_domain', 'event_type', 'start_date', 'end_date')
-                  if fields[name].get().strip() and fields[name].get() != '全部'}
+        params = {name: value for name in FILTERS if (value := fields[name].get().strip())
+                  and not (name in choices and value == '全部')}
+        cursor = fields['cursor'].get().strip()
+        if cursor and not single_page:
+            status.set('如需从该游标续查，请点击“查询单页”；从第一页查询完整结果时请清空游标。')
+            return
         try:
             size = int(fields['page_size'].get()) if fields['page_size'].get().strip() else None
         except ValueError:
@@ -381,12 +413,16 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
         fields['api_key'].set('')
         state.update(result=None, busy=True)
         query_button.configure(state='disabled')
+        page_button.configure(state='disabled')
         status.set('正在读取，请稍候……')
 
         def work():
             try:
-                messages.put(('ok', fetch_anomalies(base, key, params, page_size=size,
-                                                    timeout=getattr(defaults, 'timeout', DEFAULT_TIMEOUT_SECONDS))))
+                timeout = getattr(defaults, 'timeout', DEFAULT_TIMEOUT_SECONDS)
+                if single_page:
+                    messages.put(('page', _fetch_debug_page(base, key, params, page_size=size, cursor=cursor, timeout=timeout)))
+                else:
+                    messages.put(('ok', fetch_anomalies(base, key, params, page_size=size, timeout=timeout)))
             except ApiCallError as exc:
                 messages.put(('error', str(exc)))
             except Exception:
@@ -401,8 +437,16 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
             return
         state['busy'] = False
         query_button.configure(state='normal')
+        page_button.configure(state='normal')
         if kind == 'error':
             status.set(value)
+        elif kind == 'page':
+            payload, request_id = value
+            status.set(f"本页收到 {len(payload['data'])} 条，" + ('还有下一页。' if payload['meta']['has_more'] else '已到末页。')
+                       + ('部分来源不可用。' if not payload['meta']['complete'] else '')
+                       + (f' 请求编号：{request_id}' if request_id else ''))
+            show_text(json.dumps({'meta': payload['meta'], '明细预览（最多20行）': payload['data'][:20]},
+                                 ensure_ascii=False, indent=2))
         else:
             state['result'] = value
             meta = value['meta']
@@ -438,9 +482,11 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
             messagebox.showerror('保存失败', str(exc), parent=root)
 
     buttons = ttk.Frame(frame)
-    buttons.grid(row=9, column=0, columnspan=2, sticky='w')
+    buttons.grid(row=9, column=0, columnspan=4, sticky='w')
     query_button = ttk.Button(buttons, text='查询完整结果', command=run_query)
     query_button.pack(side='left')
+    page_button = ttk.Button(buttons, text='查询单页', command=lambda: run_query(single_page=True))
+    page_button.pack(side='left', padx=(8, 0))
     csv_button = ttk.Button(buttons, text='下载全部明细(CSV)', command=lambda: export('csv'), state='disabled')
     csv_button.pack(side='left', padx=12)
     save_button = ttk.Button(buttons, text='保存完整响应(JSON)', command=export, state='disabled')
@@ -469,9 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--format', choices=('json', 'csv'), default='json', help='CLI下载格式；CSV同时保存完整性说明文件')
     args = parser.parse_args(argv)
     if not argv or args.gui:
-        advanced = ('factory', 'step_id', 'layer', 'parameter_name', 'entity_type', 'entity_id', 'output')
-        if any(getattr(args, field) is not None for field in advanced) or args.format != 'json':
-            parser.exit(2, '图形窗口暂不支持指定的高级筛选、--output 或 --format，请改用 --cli；本次未发送查询。\n')
+        if args.output is not None or args.format != 'json':
+            parser.exit(2, '图形窗口中可选择下载位置和格式；指定 --output 或 --format 请使用 --cli。\n')
         try:
             return launch_gui(args)
         except Exception:

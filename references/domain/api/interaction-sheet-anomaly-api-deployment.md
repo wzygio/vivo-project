@@ -2,7 +2,7 @@
 
 更新日期：2026-11-11。面向安装、启动和维护服务的人员。
 
-本文维护 API 概念、部署配置、启动操作与数据准备步骤。请求参数、返回字段和跨设备测试统一见 [API 调用说明](api-caller-guide-2026-11-03.md)；程序组成与处理流程见 [API 程序介绍](architecture-sheet-anomaly-api.md)。
+本文维护 API 概念、部署配置、启动操作与数据准备步骤。请求参数、返回字段和跨设备测试统一见 [API 调用说明](interaction-sheet-anomaly-api-client.md)；程序组成与处理流程见 [API 程序介绍](architecture-sheet-anomaly-api.md)。
 
 ## 1. API 与部署方式
 
@@ -44,6 +44,8 @@ API 与 Streamlit 报表独立运行。关闭报表页面不等于关闭 API；�
 3. 启动新实例，检查监督进程、监听归属及 `/health/ready`，全部正常才提示 `API is ready`。
 
 **每次双击都会重启已有 API，并加载当前磁盘上的代码和部署授权。** 重启会短暂中断调用，旧分页游标会失效。成功后 API 在后台运行，关闭启动窗口不会停止服务；脚本保留已有密钥和监听配置，不安装依赖。
+
+本机计划任务 `3.天柱北极星专项报表` 每天 07:00 和 13:00 依次执行 Streamlit 和 API 重启。第二个动作直接运行同一 PowerShell 脚本，适用于无人操作的计划任务。[任务动作与运行条件](../../design/shared_kernel/shared/data-flow-infrastructure-refresh.md)
 
 缺少或无效配置、部署身份不一致时，在停止旧实例前报错；旧进程无法清理时，不启动第二套服务。端口被其它程序占用时不会结束对方进程。旧实例已经停止而新实例启动失败时，API 可能暂时不可用，按第 7 节检查日志后重试。
 
@@ -145,7 +147,7 @@ uv run --no-sync python tools/anomaly_api_service.py start --install-startup
 | 本机存活 | `http://127.0.0.1:8890/health/live` | 预期 `{"status":"ok"}`，不访问数据库 |
 | 本机就绪 | `http://127.0.0.1:8890/health/ready` | 检查凭证和启用产品配置 |
 | 其它设备访问 | `http://10.72.26.31:8890/health/live` | 必须在另一台设备验证，不能用本机结果代替 |
-| 业务取数 | 按 [调用说明](api-caller-guide-2026-11-03.md) 执行 | 带密钥，并核对来源完整性与一条真实记录 |
+| 业务取数 | 按 [调用说明](interaction-sheet-anomaly-api-client.md) 执行 | 带密钥，并核对来源完整性与一条真实记录 |
 
 健康接口不需要密钥。业务接口及 `/openapi.json` 需要密钥；当前没有 `/docs`、`/redoc` 交互页面。
 
@@ -198,7 +200,7 @@ uv run --no-sync python tools/fetch_sheet_anomalies.py
 
 需要测试默认全选时，再清空产品、将分类和事件都选“全部”，日期留空后查询。这会查询全部授权范围的上周数据，可能出现更多缺资料的来源组合；只要窗口明确显示 `complete=false` 和失败来源，就表示返回的是可用部分，不能将缺资料解释为没有异常。
 
-完成后关闭查询窗口即可，后台正式 API 会继续运行。本机测试不能替代其它设备的网络访问测试；在其它 Python 程序中调用的方法见 [调用说明](api-caller-guide-2026-11-03.md)。
+完成后关闭查询窗口即可，后台正式 API 会继续运行。本机测试不能替代其它设备的网络访问测试；在其它 Python 程序中调用的方法见 [调用说明](interaction-sheet-anomaly-api-client.md)。
 
 ## 4. 调用方凭证与授权配置
 
@@ -436,7 +438,7 @@ uv run --no-sync python tools/sync_spc_sheet_membership.py --product M626
 | 401／403 | 核对调用密钥及授权，确认工作进程加载的是预期配置 |
 | 503／部分来源失败 | 核对正式发布、日期覆盖、释放决定、站点字典、Yield 厂别和启用范围 |
 | `read_timeout`／503 | 端口可用不代表业务读取已完成；按请求编号查 `API_READ_TIMEOUT`，核对首次加载、文件更新及 Office 耗时，可缩小产品／分类后重试 |
-| CPK／CPM 503 | 核对公开政策、产品能力工作表、请求完整周及匹配的片号快照；必要时正常生成 SPC 报表或运行 5.6 同步，不把缺资料当成无不达项 |
+| CPK／CPM 返回 `result_unavailable`（含部分成功） | 先核对 API 工作进程是否已加载生成片号快照的对应版本。若当前代码能读取同一份快照，按第 3.3 节重启 API；若当前代码同样无法校验，再核对公开政策、能力工作表和统计周，必要时按第 5.6 节同步 |
 | 请求超时／读取忙 | 看日志与并发使用情况，检查文件和 Office；不要快速无限重试 |
 
 不要用假站点、统一修改全部释放标记或删除元数据来绕过不可用状态。错误反馈应包含时间、状态码及 `X-Request-ID`，不包含密钥。

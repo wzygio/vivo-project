@@ -20,7 +20,7 @@ DIMENSIONS = {
     'eda.imp_spc_tzbjx_mqc': ('update_time', 'ppid, prodcode'),
     'mdw.dwr_mes_productspec': ('interface_time', 'productspecname, productcode'),
     'mdw.dwd_imp_dv_param_spec': ('interface_time',
-        'prod_code, step_id, param_name, param_type, usl, lsl, ucl, lcl, target, main_step_id, main_eqp_type'),
+        'prod_code, step_id, param_name, param_type, usl, lsl, ucl, lcl, target, main_step_id, main_eqp_type, interface_time'),
     'mdw.dwr_mes_machinespec': ('interface_time', 'machinename, detailmachinetype, factoryname'),
     'mdw.dwr_mes_tpfopolicy': ('interface_time', 'processoperationname, conditionid, factoryname, productspecname'),
     'mdw.dwr_mes_posmachine_bk': ('interface_time', 'conditionid, machinename'),
@@ -33,6 +33,9 @@ ROUTE_VIEW = 'mdw.dwd_mes_oled_oper_layer_v'
 MEASUREMENTS = {'eda.spc_tzbjx_array': 'sheet_start_time',
                 'eda.spc_tzbjx_oled': 'glass_start_time',
                 'eda.spc_tzbjx_tsp': 'glass_start_time'}
+PDS_SOURCE = 'eda.array_pds_result_t'
+EXPORT_TIMEOUT = "SET LOCAL statement_timeout = '180s'"
+PDS_TIMEOUT = "SET LOCAL statement_timeout = '30s'"
 SCHEMA_SQL = """
 WITH RECURSIVE sources AS (
   SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -53,7 +56,7 @@ JOIN pg_attribute a ON a.attrelid=s.oid AND a.attnum>0 AND NOT a.attisdropped
 
 def audit_schema(connection) -> str:
     """Inspect columns, view dependencies and low-cost row estimates without scans."""
-    expected = set(DIMENSIONS) | HISTORY | set(MEASUREMENTS) | {ROUTE_VIEW}
+    expected = set(DIMENSIONS) | HISTORY | set(MEASUREMENTS) | {ROUTE_VIEW, PDS_SOURCE}
     rows = connection.execute(text(SCHEMA_SQL), {'names': sorted(expected)}).mappings().all()
     columns: dict[str, dict[str, str]] = {}
     for row in rows:
@@ -68,6 +71,8 @@ def audit_schema(connection) -> str:
         raise ExportError('History source has no verified time filter')
     if any('timestamp' not in columns[source].get(column, '') for source, column in MEASUREMENTS.items()):
         raise ExportError('Measurement source has no verified timestamp filter')
+    if 'timestamp' not in columns[PDS_SOURCE].get('glass_start_time', ''):
+        raise ExportError('PDS source has no verified timestamp filter')
     return connection.execute(text(
         "SELECT pg_get_viewdef('mdw.dwd_mes_oled_oper_layer_v'::regclass, true)"
     )).scalar_one().strip().rstrip(';')
@@ -98,6 +103,8 @@ class TemporalReadGuard:
         return sql
 
     def __call__(self, conn, cursor, statement, parameters, context, executemany):
+        if statement in {EXPORT_TIMEOUT, PDS_TIMEOUT}:
+            return statement, parameters
         if not re.match(r'^\s*(SELECT|WITH)\b', statement, re.I):
             raise ExportError('Export permits read queries only')
         if 'dwt_inout_' in statement.lower() and not re.search(r'date_timekey\s+BETWEEN', statement, re.I):
@@ -107,6 +114,13 @@ class TemporalReadGuard:
                     re.search(rf'T\.{column}\s*>=', statement, re.I)
                     and re.search(rf'T\.{column}\s*<=', statement, re.I)):
                 raise ExportError('Measurement query is missing its bounded time window')
+        if PDS_SOURCE in statement.lower() and not all(
+            re.search(predicate, statement, re.I) for predicate in (
+                r'p\.glass_start_time\s*>=', r'p\.glass_start_time\s*<(?![=])',
+                r'p\.glass_id\s+LIKE\s+', r'p\.step_id\s*=', r'p\.param_name\s*=',
+            )
+        ):
+            raise ExportError('PDS query is missing its time, lot or monitoring-pair filter')
         bounded = self.bound_dimensions(statement)
         # The inserted PostgreSQL view is already bounded. Escape literal '%' for DBAPI.
         bounded = re.sub(r'(?i)mdw\.dwd_mes_oled_oper_layer_v\b',
@@ -122,16 +136,19 @@ def readonly_source():
     if engine is None:
         raise ExportError('Database unavailable; check the project connection environment')
     try:
-        with engine.connect().execution_options(postgresql_readonly=True) as connection:
-            connection.execute(text("SET LOCAL statement_timeout = '180s'"))
-            view = audit_schema(connection)
-            rules = read_outlier_rules()
-            guard = TemporalReadGuard(view, datetime.now(ZoneInfo('Asia/Shanghai')).replace(tzinfo=None))
-            event.listen(connection, 'before_cursor_execute', guard, retval=True)
-            try:
-                yield SimpleNamespace(engine=connection, outlier_rules=rules)
-            finally:
-                event.remove(connection, 'before_cursor_execute', guard)
+        with engine.connect().execution_options(postgresql_readonly=True) as catalog_connection:
+            catalog_connection.exec_driver_sql(EXPORT_TIMEOUT)
+            view = audit_schema(catalog_connection)
+        rules = read_outlier_rules()
+        guard = TemporalReadGuard(view, datetime.now(ZoneInfo('Asia/Shanghai')).replace(tzinfo=None))
+        # The PDS loader opens its own read-only connection for daily batches.
+        event.listen(engine, 'before_cursor_execute', guard, retval=True)
+        try:
+            with engine.connect().execution_options(postgresql_readonly=True) as connection:
+                connection.exec_driver_sql(EXPORT_TIMEOUT)
+                yield SimpleNamespace(engine=connection, measurement_engine=engine, outlier_rules=rules)
+        finally:
+            event.remove(engine, 'before_cursor_execute', guard)
     finally:
         engine.dispose()
 
@@ -176,33 +193,43 @@ def read_outlier_rules() -> pd.DataFrame:
 class MeasurementSource:
     """Reuse fresh snapshots or query only the selected source window in memory."""
 
-    def __init__(self, adapter, start: date, end: date) -> None:
+    def __init__(self, adapter, start: date, end: date, *, query_manager) -> None:
         self.adapter, self.start, self.end = adapter, start, end
+        self.query_manager = query_manager
 
     def get_measurements(self, product: str, end_date: str, force_refresh: bool = False) -> pd.DataFrame:
         from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import measurement_snapshot_coverage
+        from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
+            filter_excluded_steps,
+            filter_invalid_measurement_values,
+        )
         from src.inline_domain.infrastructure.shared.rolling_snapshot import is_fresh, read_metadata
         from src.inline_domain.infrastructure.shared.snapshot_window import inline_measurement_snapshot_window_start
 
         path = self.adapter.snapshot_dir / f'inline_measurements_{product}.parquet'
         metadata = read_metadata(path, self.adapter.SNAPSHOT_POLICY_VERSION, policy_file=True)
         coverage = measurement_snapshot_coverage(path, self.adapter.data_forward_policy)
+        window_start = inline_measurement_snapshot_window_start(product, self.end)
         fresh = (is_fresh(metadata, self.end, self.adapter.SNAPSHOT_TTL_HOURS,
-                          window_start=inline_measurement_snapshot_window_start(product, self.end))
+                          window_start=window_start)
                  and coverage is not None and coverage['start_date'] <= self.start.isoformat()
                  and coverage['end_date'] >= self.end.isoformat())
-        if fresh:
-            source = pd.read_parquet(path)
+        source = self.adapter._try_read_fresh(
+            path, pd.Timestamp(self.end), window_start=window_start,
+        ) if fresh else None
+        if source is not None:
             if read_metadata(path, self.adapter.SNAPSHOT_POLICY_VERSION, policy_file=True) != metadata:
                 raise ExportError(f'{product}: source snapshot changed during the read; retry the export')
         else:
+            fresh = False
             display_end = ConfigLoader.get_report_cutoff_policy().cap_end(
                 pd.Timestamp(self.end) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
             source_start, source_end = self.adapter.data_forward_policy.to_source_window(
                 pd.Timestamp(self.start), display_end)
             print(f'SOURCE {product}: read-only query {source_start.date()} to {source_end.date()}', flush=True)
-            source = self.adapter.measurement_loader(self.adapter.db_manager,
+            source = self.adapter.measurement_loader(self.query_manager,
                 source_start.strftime('%Y-%m-%d'), source_end.strftime('%Y-%m-%d'), product)
+            source = filter_invalid_measurement_values(filter_excluded_steps(source))
             if self.adapter.measurement_corrector is not None and not source.empty:
                 source = self.adapter.measurement_corrector(source)
         # Reuse the repository's sole source-time/display-time output boundary.
@@ -216,14 +243,12 @@ class MeasurementSource:
 def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
     from src.inline_domain.application.shared.decorated_data import prepare_decorated_data
     from src.inline_domain.application.spc.dtos import SpcQueryConfig
-    from src.inline_domain.composition import build_raw_measurement_repository
+    from src.inline_domain.composition import build_measurement_preparation_repository
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
     from src.inline_domain.core.spc.spc_calculator import get_period_window_start
-    from src.inline_domain.infrastructure.shared.main_process_history_repository import InlineMainProcessHistoryRepository
-    from src.inline_domain.infrastructure.shared.measurement_metadata_loader import InlineMeasurementMetadataRepository
     from src.inline_domain.infrastructure.shared.measurement_preparation import InlineMeasurementPreparationRepository
     from src.inline_domain.infrastructure.shared.outlier_filter_rules import apply_outlier_filter_rules
-    from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository
+    from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository, Z622_PRODUCT
 
     class ReadOnlyPreparation(InlineMeasurementPreparationRepository):
         def _apply_outlier_filters(self, frame: pd.DataFrame, prod_code: str) -> pd.DataFrame:
@@ -233,10 +258,13 @@ def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
     # export interval. In particular, equipment history uses a lookback relative
     # to this start: narrowing it here can change main-process point attributes.
     preparation_start = min(start, get_period_window_start(end))
+    report_preparation = build_measurement_preparation_repository(manager, product)
+    query_manager = SimpleNamespace(engine=manager.measurement_engine) if product == Z622_PRODUCT else manager
     repository = SpcRepository(ReadOnlyPreparation(
-        raw_measurements=MeasurementSource(build_raw_measurement_repository(manager, product), preparation_start, end),
-        metadata=InlineMeasurementMetadataRepository(manager),
-        main_process_history=InlineMainProcessHistoryRepository(manager),
+        raw_measurements=MeasurementSource(report_preparation.raw_measurements, preparation_start, end,
+                                           query_manager=query_manager),
+        metadata=report_preparation.metadata,
+        main_process_history=report_preparation.main_process_history,
     ))
     points = repository.get_spc_measurements(SpcQueryConfig(
         prod_code=product, start_date=preparation_start.isoformat(), end_date=end.isoformat(), data_type_filter='SPC'))

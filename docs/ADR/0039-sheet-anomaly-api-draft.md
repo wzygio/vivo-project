@@ -50,6 +50,6 @@ Excel／Office读取依旧具有平台和账号约束。缓存和并发受限，
 - 需求：[feat-API](../../../dev_spec/inline_domain/monitor/feat-API.md)、[获批规格](../../../../../.scratch/sheet-anomaly-api/PRD.md)、[执行计划](../../../../../.planning/2026-11-02-sheet-anomaly-api/task_plan.md)。
 - 实现：[HTTP入口](../../../../../api/main.py)、[跨域组合](../../../../../api/composition.py)、[公开投影](../../../../../api/service.py)、[Inline共同查询](../../../../../src/inline_domain/application/monitor/sheet_alert_query.py)、[公开规则](../../../../../src/shared_kernel/core/alert_visibility.py)、[本地维护元数据](../../../../../src/shared_kernel/infrastructure/api_alert_metadata.py)。
 - 测试：[本地文件到HTTP集成](../../../../../tests/integration/test_anomaly_api_files.py)、[Inline查询](../../../../../tests/unit/inline_domain/application/monitor/test_sheet_alert_query.py)、[元数据](../../../../../tests/unit/shared_kernel/test_api_alert_metadata.py)、[缓存](../../../../../tests/unit/shared_kernel/test_api_workbook_cache.py)、[依赖守卫](../../../../../tests/architecture/test_backend_dependencies.py)。
-- 使用：[异常片／Lot API使用说明](../../../../../references/domain/inline_domain/monitor/guide-sheet-anomaly-api.md)。
+- 使用：[异常片／Lot API使用说明](../../references/domain/api/interaction-sheet-anomaly-api-deployment.md)。
 
 最终测试结果、评审关闭情况、提交和合并证据由实际交付记录补齐，本草案不预先声称通过。

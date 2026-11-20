@@ -8,7 +8,7 @@
     - 数据库链接例程：`tools\db_handler.py`
     - 数据库探查例程：`references\templates\data_loader.py`
 	- 数据库链接凭证：`.env`
-3. API相关信息：`references\domain\api\api-caller-guide-2026-11-03.md`
+3. API相关信息：`references\domain\api\interaction-sheet-anomaly-api-client.md`
 4. 邮件推送例程：`D:\wzy\Python\array-projects\src\array_ELA\services\ela_report_notification`
 
 # Requirements

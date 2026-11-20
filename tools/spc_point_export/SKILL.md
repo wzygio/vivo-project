@@ -45,6 +45,7 @@ description: 导出当前项目 SPC 所有点位修饰完成后的完整点位�
 
 - **出口是最终点位，不是最终图表**：取 `SpcRepository` 的点位准备结果，经 `prepare_decorated_data(scope="spc", persist=False)` 输出 `raw_measurements_df`。保留日期前推、当日截止、厂别/日期排除、最新点去重、参数过滤、主制程追溯、规格覆盖、传统 OOS 与 SPC 专用点位修饰。
 - 与报表同源的调用链：`core/spc/spc_point_decoration.py:apply_spc_point_decoration` → `application/shared/decorated_data.py:prepare_decorated_data` → `decorated_features.py` → `spc_service.py` → 报表 `raw_measurements_df`。后两层当前原样传递最终点位；skill 直接调用同一共享修饰函数，避免复制点位修饰公式。默认包含全部已启用产品及全部厂别/站点/参数，不套用页面当前的交互筛选。
+- 复用报表的产品数据源装配。Z622 使用其 PDS 批次和监控组合，快照读取会校验来源签名，规格读取沿用该产品的报表口径。
 - 核查日期为 2026-11-16：有效 `param_value` 的最后一次数值修饰是传统 OOS 修饰之后的 SPC 中央规格区间修饰。后续绘图层不再对有效点位进行缩放、裁剪、四舍五入回写或抽样。悬浮文字 `.4f` 只是显示格式，导出保留底层数值。
 - 全部历史点位用于月周日图；Sheet 特征仍按现有服务限定为上周一起。导出保留用户选择的完整点位窗口，不缩短到后两幅图的近期窗口。
 - 点位准备起点沿用报表的上个月一日（若请求更早则使用更早的起点），以保留相同的最新点选择和设备／腔室履历追溯上下文。准备和点位修饰完成后，才按用户指定的精确时间截取；额外上下文不会写入交付的点位表，也不因此生成图表或能力结果。

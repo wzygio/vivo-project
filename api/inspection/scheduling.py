@@ -18,7 +18,7 @@ from api.inspection.application import MODULES, required_keys
 
 ZONE = ZoneInfo('Asia/Shanghai')
 ROOT = Path(__file__).resolve().parents[2]
-INSPECTION_TASK = 'vivo-project Yield IJP Alert Publication'
+INSPECTION_TASK = 'vivo-project Alert Inspection'
 MAIL_TASK = 'vivo-project Alert Email Push'
 
 

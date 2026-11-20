@@ -99,7 +99,7 @@ def test_running_gate_has_finite_timeout(tmp_path):
 def test_plan_replaces_repetition_and_logon_with_requested_times(tmp_path):
     specs = build_task_specs(tmp_path, env_file=tmp_path / '.env')
     inspection, mail = specs
-    assert inspection['name'] == 'vivo-project Yield IJP Alert Publication'
+    assert inspection['name'] == 'vivo-project Alert Inspection'
     assert inspection['module'] == 'api.inspection'
     assert inspection['triggers'] == [{'kind': 'daily', 'time': '07:15'},
                                       {'kind': 'daily', 'time': '19:15'}]
@@ -232,7 +232,10 @@ def test_inspection_only_plan_merges_warmup_without_touching_mail(tmp_path):
     report = json.loads(result.stdout)
     assert report['Status'] == 'plan' and len(report['Tasks']) == 1
     assert report['Tasks'][0]['Arguments'] == '-m api.inspection'
-    assert report['RetireTasks'] == ['vivo-project Alert Matrix Warmup']
+    assert report['Tasks'][0]['Name'] == 'vivo-project Alert Inspection'
+    assert set(report['RetireTasks']) == {
+        'vivo-project Alert Matrix Warmup', 'vivo-project Yield IJP Alert Publication',
+    }
     retired = subprocess.run(['powershell.exe', '-NoProfile', '-File',
                               str(root/'tools/register_alert_matrix_task.ps1'), '-Force'],
                              capture_output=True, text=True, timeout=20)

@@ -481,13 +481,20 @@ def test_no_arguments_open_gui_and_help_does_not(monkeypatch):
 
 
 @pytest.mark.parametrize('field', [
-    'factory', 'step-id', 'layer', 'parameter-name', 'entity-type', 'entity-id', 'output',
+    'factory', 'step-id', 'layer', 'parameter-name', 'entity-type', 'entity-id',
 ])
-def test_gui_rejects_unsupported_filters_instead_of_silently_widening_scope(field, monkeypatch, capsys):
+def test_gui_accepts_filter_defaults(field, monkeypatch):
+    opened = []
+    monkeypatch.setattr(client, 'launch_gui', lambda args: opened.append(args) or 0)
+    assert client.main(['--gui', '--' + field, 'fixture']) == 0
+    assert getattr(opened[0], field.replace('-', '_')) == 'fixture'
+
+
+def test_gui_rejects_cli_output_path(monkeypatch, capsys):
     opened = []
     monkeypatch.setattr(client, 'launch_gui', lambda args: opened.append(args) or 0)
     with pytest.raises(SystemExit) as failure:
-        client.main(['--gui', '--' + field, 'PRIVATE_INPUT'])
+        client.main(['--gui', '--output', 'PRIVATE_INPUT'])
     assert failure.value.code == 2 and not opened
     text = capsys.readouterr().err
     assert '--cli' in text
@@ -511,6 +518,68 @@ def test_gui_timeout_is_forwarded_by_main(monkeypatch):
     monkeypatch.setattr(client, 'launch_gui', lambda args: opened.append(args) or 0)
     assert client.main(['--gui', '--timeout', '12.5']) == 0
     assert opened[0].timeout == 12.5
+
+
+@pytest.mark.parametrize('cursor', ['', 'next+token/='])
+def test_gui_debug_page_sends_all_api_fields_and_never_exports_a_page(monkeypatch, cursor):
+    tk = pytest.importorskip('tkinter')
+    from types import SimpleNamespace
+    from api.schemas import AnomalyQuery
+
+    filters = dict(product='Z576', sub_domain='SPC', event_type='CPM', factory='ARRAY', step_id='1W450',
+                   parameter_name='OVL1_Y', entity_type='capability', entity_id='0001', layer='M3',
+                   start_date='2026-11-09', end_date='2026-11-15')
+    assert set(filters) | {'limit', 'cursor'} == set(AnomalyQuery.model_fields)
+    opener = Opener(response([capability_record(event_type='CPM')], more=True, cursor='following-page'))
+    monkeypatch.setattr(client, 'direct_opener', lambda: opener)
+    monkeypatch.setenv('API_KEY', FAKE_KEY)
+    real_tk = tk.Tk
+    observations = []
+
+    def factory():
+        root = real_tk()
+        root.withdraw()
+
+        def submit():
+            frame = root.winfo_children()[0]
+            buttons = next(w for w in frame.winfo_children() if w.winfo_class() == 'TFrame')
+            full, page, csv_button, save_button = buttons.winfo_children()
+            if cursor:
+                full.invoke()
+                assert not opener.requests
+            page.invoke()
+
+            def inspect():
+                if str(page['state']) == 'disabled':
+                    root.after(50, inspect)
+                    return
+                view = next(w for w in frame.winfo_children() if w.winfo_class() == 'Text')
+                observations.append((view.get('1.0', 'end'), str(csv_button['state']), str(save_button['state'])))
+                root.destroy()
+            root.after(50, inspect)
+
+        root.after(10, submit)
+        root.after(5000, root.destroy)
+        return root
+
+    monkeypatch.setattr(tk, 'Tk', factory)
+    assert client.launch_gui(SimpleNamespace(**filters, page_size=1, cursor=cursor)) == 0
+    assert len(opener.requests) == 1
+    expected = dict(filters, limit='1')
+    if cursor:
+        expected['cursor'] = cursor
+    assert parse_qs(urlsplit(opener.requests[0][0].full_url).query) == {k: [v] for k, v in expected.items()}
+    preview, csv_state, json_state = observations[0]
+    assert json.loads(preview)['meta']['next_cursor'] == 'following-page'
+    assert csv_state == json_state == 'disabled'
+
+
+def test_debug_cursor_requires_page_size_before_request(monkeypatch):
+    opener = Opener()
+    monkeypatch.setattr(client, 'direct_opener', lambda: opener)
+    with pytest.raises(client.ApiCallError, match='每页行数'):
+        client._fetch_debug_page('http://localhost', FAKE_KEY, {}, page_size=None, cursor='next', timeout=10)
+    assert not opener.requests
 
 
 @pytest.mark.parametrize('complete', [True, False])
@@ -549,26 +618,30 @@ def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path:
         def check():
             try:
                 frame = root.winfo_children()[0]
-                inputs = {int(w.grid_info()['row']): w for w in frame.winfo_children()
+                inputs = {w.winfo_name(): w for w in frame.winfo_children()
                           if w.winfo_class() in ('TEntry', 'TCombobox')}
                 buttons = next(w for w in frame.winfo_children() if w.winfo_class() == 'TFrame')
-                query_button, csv_button, save_button = buttons.winfo_children()
+                query_button, page_button, csv_button, save_button = buttons.winfo_children()
                 assert root.title() == '异常明细查询'
-                assert tuple(inputs[4]['values']) == ('全部', 'OOS', 'OOC', 'CPK', 'CPM')
-                assert inputs[4].get() == '全部'
+                assert tuple(inputs['event_type']['values']) == ('全部', 'OOS', 'OOC', 'CPK', 'CPM')
+                assert inputs['event_type'].get() == '全部'
                 labels = ' '.join(str(w['text']) for w in frame.winfo_children() if w.winfo_class() == 'TLabel')
                 assert 'CPK/CPM' in labels and 'SPC' in labels and '周统计项' in labels
                 assert csv_button['text'] == '下载全部明细(CSV)'
                 assert save_button['text'] == '保存完整响应(JSON)'
                 if event_type is None:
-                    assert inputs[1].get() == FAKE_KEY and inputs[1]['show'] == '*'
+                    assert inputs['api_key'].get() == FAKE_KEY and inputs['api_key']['show'] == '*'
                 else:
-                    inputs[1].insert(0, FAKE_KEY)
-                inputs[2].insert(0, 'M626')
+                    inputs['api_key'].insert(0, FAKE_KEY)
+                inputs['product'].insert(0, 'M626')
                 if capability:
-                    inputs[3].set('SPC')
+                    inputs['sub_domain'].set('SPC')
+                    inputs['entity_type'].set('capability')
+                    for field, value in {'step_id': '1W450', 'factory': 'ARRAY', 'parameter_name': 'OVL1_Y',
+                                         'layer': 'M3', 'entity_id': '000123'}.items():
+                        inputs[field].insert(0, value)
                 if event_type is not None:
-                    inputs[4].set(event_type)
+                    inputs['event_type'].set(event_type)
                 query_button.invoke()
 
                 def finish():
@@ -576,13 +649,14 @@ def test_hidden_gui_queries_previews_and_exports_without_retaining_key(tmp_path:
                         if str(save_button['state']) != 'normal':
                             root.after(50, finish)
                             return
-                        assert inputs[1].get() == ''
+                        assert inputs['api_key'].get() == ''
                         assert calls[0][1] == FAKE_KEY
                         expected = {'product': 'M626'}
                         if event_type is not None:
                             expected['event_type'] = event_type
                         if capability:
-                            expected['sub_domain'] = 'SPC'
+                            expected.update(sub_domain='SPC', step_id='1W450', factory='ARRAY', parameter_name='OVL1_Y',
+                                            layer='M3', entity_type='capability', entity_id='000123')
                         assert calls[0][2] == expected
                         assert calls[0][3]['timeout'] == 12.5
                         view = next(w for w in frame.winfo_children() if w.winfo_class() == 'Text')
@@ -659,21 +733,21 @@ def test_hidden_gui_failed_new_query_disables_old_downloads(failure_kind, monkey
         def poll_test():
             try:
                 frame = root.winfo_children()[0]
-                inputs = {int(w.grid_info()['row']): w for w in frame.winfo_children()
+                inputs = {w.winfo_name(): w for w in frame.winfo_children()
                           if w.winfo_class() in ('TEntry', 'TCombobox')}
                 buttons = next(w for w in frame.winfo_children() if w.winfo_class() == 'TFrame')
-                query, csv_download, json_download = buttons.winfo_children()
+                query, page_button, csv_download, json_download = buttons.winfo_children()
                 if not phase:
-                    inputs[1].insert(0, FAKE_KEY)
+                    inputs['api_key'].insert(0, FAKE_KEY)
                     query.invoke()
                     phase.append('first')
                 elif phase[0] == 'first' and str(csv_download['state']) == 'normal':
-                    inputs[1].insert(0, FAKE_KEY)
+                    inputs['api_key'].insert(0, FAKE_KEY)
                     if failure_kind == 'invalid_page_size':
-                        inputs[7].insert(0, 'not-an-integer')
+                        inputs['page_size'].insert(0, 'not-an-integer')
                     elif failure_kind == 'unsupported_capability_source':
-                        inputs[3].set('Yield')
-                        inputs[4].set('CPK')
+                        inputs['sub_domain'].set('Yield')
+                        inputs['event_type'].set('CPK')
                     query.invoke()
                     phase[0] = 'second'
                 elif phase[0] == 'second' and str(query['state']) == 'normal':
