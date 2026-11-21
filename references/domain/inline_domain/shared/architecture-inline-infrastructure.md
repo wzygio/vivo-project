@@ -51,7 +51,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 ### 2.1 共享测量快照保留起点
 
 2026-11-13 确认：共享测量默认从请求结束日第三个前序自然月的月初保留；
-`config/domain/inline_domain.yaml` 的 `measurement_snapshots.retain_from` 可按产品
+`config/domain/inline_domain/shared.yaml` 的 `measurement_snapshots.retain_from` 可按产品
 配置固定源日期（严格 `YYYY-MM-DD` 字符串）。当前 Z553 配置为 `2026-05-01`。
 实际起点取默认滚动起点与配置日期的较早者，因此配置只扩展保留范围，不缩短历史请求窗口。
 未配置的产品和独立 AOI_RS 快照继续使用默认滚动规则。
@@ -74,8 +74,8 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 对外两方法：
 
 - `get_prepared_measurements(config: SpcQueryConfig, force_refresh=False)`
-- `get_spec_limits(prod_code)`（DB 规格 + `config/products/<prod>.yaml` 的
-  `spc_spec_override` 三重匹配覆盖，键名保留兼容）
+- `get_spec_limits(prod_code)`（DB 规格 + `config/domain/inline_domain/shared.yaml` 的
+  `spec_overrides_by_product` 三重匹配覆盖）
 
 ### 3.1 管线顺序（行为契约，变更视为口径变更）
 
@@ -122,7 +122,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
 | spc | `spc/spc_repository.py`（约 30 行） | 委托制备 port，`data_type_filter="SPC"` 由应用层固定 |
 | ctq | `ctq/ctq_repository.py` | 委托制备 port，`data_type_filter="CTQ"` 在 repository 注入 |
 | aoi_tt | `aoi_tt/aoi_tt_repository.py` | 直接用快照 + 规格 DAO；规格表 `param_type IS NULL` 识别 TT；保留 lot；不走白名单/异常点/追溯/覆盖 |
-| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/inline_domain/scrap_sheets.xlsx`（全产品单文件）+ `config/scrap_factory_mapping.yaml` 厂别推断，伪装为 OOC 行 |
+| monitor | `monitor/monitor_repository.py`（门面）+ `monitor/scrap_repository.py`（报废） | 制备 port 传 `data_type_filter="ALL"`；报废读 `resources/inline_domain/scrap_sheets.xlsx`（全产品单文件）+ `config/domain/inline_domain.yaml → monitor.scrap_factory_mapping` 厂别推断，伪装为 OOC 行 |
 | aoi_rs | `aoi_rs/data_loader.py` | 独立 DAO，不在共享体系内 |
 
 **注意**：monitor 的 AOI 与 aoi_tt 不是同一份数据（参数识别、lot 粒度、语义均不同），

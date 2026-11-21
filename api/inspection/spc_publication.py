@@ -51,13 +51,13 @@ def publish_product(product: str, start: date, reference: date) -> dict:
             query_config_json=config.model_dump_json(),
             snapshot_signature=build_spc_input_signature(product),
             _sheet_membership_store=store,
-            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(),
+            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(product),
             _sheet_membership_coverage=build_spc_sheet_membership_coverage(product),
         )
         previous_monday = reference - timedelta(days=reference.weekday() + 7)
         published = store.read(product, previous_monday)
         if (published is None
-                or published.get("policy_signature") != build_spc_sheet_membership_policy_signature()):
+                or published.get("policy_signature") != build_spc_sheet_membership_policy_signature(product)):
             raise ValueError("Target SPC member week was not published")
         year, week, _ = previous_monday.isocalendar()
         return {"product": product, "status": "success",

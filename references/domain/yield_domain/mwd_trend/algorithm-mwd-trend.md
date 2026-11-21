@@ -110,7 +110,7 @@ Mapping 入口再次应用同一倍率边界；非有限值或无法解析的倍
 
 看板的手动 Code 筛选与自动预警缺陷图像共用月均不良率门槛：取当前展示窗口
 （近三个月）最终月度不良率的算术平均，要求 `月均 >= 门槛`。配置项为
-`config/domain/yield_domain.yaml` 的 `dashboard.code_monthly_rate_threshold`，
+`config/domain/yield_domain/shared.yaml` 的 `dashboard.code_monthly_rate_threshold`，
 默认 `0.0001`（0.01%）。自动区还必须命中趋势或 Lot 预警。没有月度数据的 Code
 不满足门槛，即使存在 Mapping 也不展示；默认阈值下，三个月全为零也不展示。
 

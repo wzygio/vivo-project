@@ -1640,7 +1640,7 @@ def test_spc_sheet_alert_exclusions_do_not_change_source_or_manual_queries(tmp_p
         "spc": {"sheet_oos_alerts": {"excluded_param_name_contains": ["PPA"]}},
         "auto_decoration": {"exempt_param_name_contains": ["4PP"]},
     }
-    monkeypatch.setattr(spc_dashboard.ConfigLoader, "load_domain_config", lambda _: config)
+    monkeypatch.setattr(spc_dashboard.ConfigLoader, "load_domain_config", lambda *_: config)
     detail = pd.DataFrame([
         _sheet_oos_decoration_row("PPA", "2026-08-18 10:00:00", False, param_name="test_pPa_X"),
         _sheet_oos_decoration_row("KEEP", "2026-08-19 10:00:00", False),

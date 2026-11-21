@@ -73,7 +73,7 @@ def test_configured_annotations_are_shared_by_selectors_and_charts(monkeypatch):
     from src.shared_kernel.config import ConfigLoader
     import pandas as pd
 
-    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda domain: {
+    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda *_: {
         'ijp_hole': {'code_descriptions': {'C3RA0': '自定义说明'}},
         'ijp': {'code_descriptions': {'C3DM1': '自定义AA'}},
     })

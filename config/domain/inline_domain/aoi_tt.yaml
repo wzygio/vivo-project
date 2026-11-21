@@ -1,0 +1,15 @@
+# AOI_TT Particle Size：默认按站点比例稳定生成；关闭后改读 ARRAY/TP 缺陷明细表。
+aoi_tt:
+  # 与 AOI_RS 独立配置；以 UCL 为基准，先修饰 Total，再生成粒径明细。
+  special_decoration:
+    enabled: true
+    sheet_threshold_ratio: 0.5
+    sheet_replacement_ratio: 0.25
+    factories:
+      - "OLED"
+    start_date: "2026-09-21"
+    end_date: "today"
+  particle_size:
+    generate_from_ratios: true
+    # 各 Sheet 相对规格比例的最大扰动幅度；0.10 表示 ±10%，随后归一化。
+    ratio_jitter: 0.10

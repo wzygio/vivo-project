@@ -15,7 +15,7 @@ from src.shared_kernel.data_forward import DataForwardPolicy
 @pytest.fixture
 def retention(monkeypatch):
     config = {"measurement_snapshots": {"retain_from": {"Z553": "2026-05-01"}}}
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: config)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: config)
     monkeypatch.setattr(ConfigLoader, "get_data_forward_policy", lambda: DataForwardPolicy())
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
     monkeypatch.setattr(ConfigLoader, "get_incremental_refresh_days", lambda: 7)
@@ -98,7 +98,7 @@ def test_failure_fallback_requires_retained_coverage(tmp_path, retention, has_hi
 
 @pytest.mark.parametrize("value", [None, True, 123, [], {}, "2026-02-30", "20260501", "2026-05-01T00:00:00"])
 def test_invalid_retention_date_fails_before_query(monkeypatch, value):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "measurement_snapshots": {"retain_from": {"Z553": value}},
     })
     with pytest.raises(ValueError, match="measurement_snapshots.retain_from"):
@@ -114,7 +114,7 @@ def test_retention_extends_default_window_and_does_not_move_with_years(retention
 
 @pytest.mark.parametrize("config", [{}, {"measurement_snapshots": {}}, {"measurement_snapshots": {"retain_from": {"OTHER": "2026-01-01"}}}])
 def test_absent_product_retention_keeps_default(monkeypatch, config):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: config)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: config)
     assert ConfigLoader.get_inline_measurement_retention_start("Z553") is None
 
 
@@ -125,6 +125,6 @@ def test_absent_product_retention_keeps_default(monkeypatch, config):
     {"measurement_snapshots": {"retain_from": []}},
 ])
 def test_invalid_retention_mapping_is_rejected(monkeypatch, config):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: config)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: config)
     with pytest.raises(ValueError, match="measurement_snapshots.retain_from"):
         ConfigLoader.get_inline_measurement_retention_start("Z553")

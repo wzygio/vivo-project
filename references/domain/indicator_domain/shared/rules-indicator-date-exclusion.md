@@ -4,7 +4,7 @@
 
 ## 配置与时间口径
 
-`config/domain/indicator_domain.yaml` 的 `data_exclusion` 是唯一配置入口：
+`config/domain/indicator_domain/shared.yaml` 的 `data_exclusion` 是唯一配置入口：
 
 ```yaml
 data_exclusion:

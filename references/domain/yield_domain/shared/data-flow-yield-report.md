@@ -70,7 +70,7 @@
 
 ## 4. Array 时间开关
 
-唯一开关为 `config/domain/yield_domain.yaml → array_input_time.query_enabled`，当前是 **false**。ConfigLoader 将校验后的布尔值装配进运行配置。
+唯一开关为 `config/domain/yield_domain/sheet_lot.yaml → array_input_time.query_enabled`，当前是 **false**。ConfigLoader 将校验后的布尔值装配进运行配置。
 
 - `_get_array_times` 在访问数据端口前返回含列名的空表；不会查询 Array 历史视图，也不执行自定义 Array 时间替代逻辑。
 - Lot／Sheet 仍正常计算，阵列投入时间保持空值，不用入库时间等其他日期伪造。

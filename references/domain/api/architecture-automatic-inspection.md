@@ -86,7 +86,7 @@ powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -InspectionOnl
 .venv\Scripts\python.exe -m api.notification.scheduled --test-mode
 ```
 
-发件人、SMTP账户及投递参数由本项目`api_domain.yaml`管理，API密钥和邮件密码由本项目
+发件人、SMTP账户及投递参数由本项目`config/domain/api/notification.yaml`管理，API密钥和邮件密码由本项目
 私有环境文件或进程环境提供，不再支持外部邮件配置调度参数。
 任务定义只含凭证文件路径，不保存密码。登记时从未来的触发点开始，避免把已错过的今日时间
 当成需要立刻补跑的任务。旧 `tools/register_alert_result_publication_task.ps1` 已退役，

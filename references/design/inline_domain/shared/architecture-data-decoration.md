@@ -98,7 +98,7 @@ Infrastructure；必须有独立策略版本和回归测试，不能借“源校
 ## 6. AOI_RS 顺序修饰（2026-09-24）
 
 - 特殊规则独立位于 `core/aoi_rs/aoi_rs_special_decoration.py`；厂别范围由
-  `config/domain/inline_domain.yaml` 的 `aoi_rs.special_decoration.factories` 配置，
+  `config/domain/inline_domain/aoi_rs.yaml` 的 `aoi_rs.special_decoration.factories` 配置，
   默认 `["OLED"]`，`[]` 表示全部关闭，可列出多个厂别。名称去除首尾空格并忽略大小写。
   以下顺序规则仅适用于名单内厂别；其余厂别继续在 Sheet/Lot 图各自执行原有三态
   截断（月周天仍用源明细，不受 Sheet/Lot 回写和 1.3 倍限幅影响）。
@@ -119,7 +119,7 @@ Infrastructure；必须有独立策略版本和回归测试，不能借“源校
 
 ## 7. Inline 全域厂别日期过滤（2026-10-06）
 
-- 全域共用 `config/domain/inline_domain.yaml` 的 `data_exclusion`：`factories`
+- 全域共用 `config/domain/inline_domain/shared.yaml` 的 `data_exclusion`：`factories`
   为厂别列表，`start_date` 为 ISO 日期，`end_date` 为 ISO 日期或 `today`
   （服务器当天）。空厂别列表或缺配置关闭过滤；兼容旧 `aoi_data_exclusion`，
   新字段存在时优先使用新字段。厂别忽略大小写和首尾空格，按仓储输出的报表事件时间

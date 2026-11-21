@@ -18,7 +18,7 @@ aoi_rs:
 
 `enabled` 默认 `false`（省略时也关闭），仅显式设置布尔值 `true` 才启用专用规则；厂别集合为空时也关闭。关闭时所有厂别沿用普通单边修饰，不执行专用明细投影与周/日限幅。开启时未选厂别和窗口外图点沿用普通单边修饰。日期为报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。无效日期、反向区间和错误配置结构报错。
 
-两个比例位于 `config/domain/inline_domain.yaml` 的 `aoi_rs.special_decoration` 下：`sheet_threshold_ratio` 为 Sheet 触发阈值相对于规格的倍数，默认 `0.5`；`sheet_replacement_ratio` 为稳定哈希值上限相对于规格的倍数，默认 `0.25`。省略时采用默认值；两项都必须是有限非负数，不接受布尔值、字符串、空值、负数或非有限数。触发条件为严格大于阈值，恰好等于阈值时保留原值。哈希种子沿用产品、厂别、站点、RS Code、图类型与图点 ID，改变上限比例只缩放相同图点的哈希值。
+两个比例位于 `config/domain/inline_domain/aoi_rs.yaml` 的 `aoi_rs.special_decoration` 下：`sheet_threshold_ratio` 为 Sheet 触发阈值相对于规格的倍数，默认 `0.5`；`sheet_replacement_ratio` 为稳定哈希值上限相对于规格的倍数，默认 `0.25`。省略时采用默认值；两项都必须是有限非负数，不接受布尔值、字符串、空值、负数或非有限数。触发条件为严格大于阈值，恰好等于阈值时保留原值。哈希种子沿用产品、厂别、站点、RS Code、图类型与图点 ID，改变上限比例只缩放相同图点的哈希值。
 
 这是修饰窗口，不是数据排除窗口：区间外数据仍参与报表。全域 `data_exclusion` 先在基础设施排除命中的数据，见 [日期排除规则](../shared/rules-inline-date-exclusion.md)。
 

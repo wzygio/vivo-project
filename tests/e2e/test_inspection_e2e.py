@@ -167,7 +167,7 @@ def test_all_domain_publications_receipt_http_and_mail(acquired_publications, tm
     evidence = EVIDENCE / 'fixture-flow'
     with smtp_server(evidence / 'smtp-listener.json') as (port, messages):
         with _live_server(files.app(), evidence / 'http-listener.json') as base:
-            settings = replace(load_settings(ROOT / 'config/domain/api_domain.yaml'), api_base_url=base,
+            settings = replace(load_settings(ROOT / 'config/domain/api/notification.yaml'), api_base_url=base,
                                smtp_host='127.0.0.1', smtp_port=port, smtp_security='plain')
             result = run_notification(HttpAlertSource(settings, FIXTURE_KEY),
                 SmtpDelivery(settings, MailCredentials('fixture', 'sender@example.com', ('fixture',))),

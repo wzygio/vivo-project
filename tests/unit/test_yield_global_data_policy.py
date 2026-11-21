@@ -12,10 +12,11 @@ def test_active_config_reloads_when_global_config_changes(
     tmp_path, monkeypatch
 ) -> None:
     config_dir = tmp_path / "config"
-    product_dir = config_dir / "products"
+    product_dir = config_dir / "domain/yield_domain"
     product_dir.mkdir(parents=True)
     global_path = config_dir / "global.yaml"
-    product_path = product_dir / "M678.yaml"
+    product_path = product_dir / "shared.yaml"
+    product_dir.with_suffix(".yaml").write_text("submodules: [shared]", encoding="utf-8")
 
     def write_global(groups: list[str]) -> None:
         global_path.write_text(
@@ -35,7 +36,7 @@ def test_active_config_reloads_when_global_config_changes(
 
     write_global(["Array_Line"])
     product_path.write_text(
-        yaml.safe_dump({"data_source": {"product_code": "M678"}}),
+        yaml.safe_dump({"product_overrides": {"M678": {"processing": {"threshold": 1}}}}),
         encoding="utf-8",
     )
     monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
@@ -54,3 +55,6 @@ def test_active_config_reloads_when_global_config_changes(
 
     reloaded = SessionManager.get_active_config()
     assert reloaded.data_source.target_defect_groups == ["OLED_Mura"]
+
+    product_path.write_text("product_overrides: {M678: {processing: {threshold: 20}}}", encoding="utf-8")
+    assert SessionManager.get_active_config().processing["threshold"] == 20

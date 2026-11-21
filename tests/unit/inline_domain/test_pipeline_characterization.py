@@ -411,22 +411,15 @@ def _build_spec_df() -> pd.DataFrame:
 
 
 def test_spec_limits_apply_yaml_overrides(monkeypatch, tmp_path: Path) -> None:
-    product_config_dir = tmp_path / "config" / "products"
-    product_config_dir.mkdir(parents=True)
-    (product_config_dir / f"{PROD}.yaml").write_text(
-        "spc_spec_override:\n"
-        "  - prod_code: M678\n"
-        '    step_id: "100"\n'
-        "    param_name: THK\n"
-        "    ucl: 55.0\n"
-        "    lcl: 45.0\n"
-        '  - step_id: "200"\n'
-        "    param_name: THK\n"
-        "    usl: 99.0\n"
-        "  - prod_code: M626\n"
-        '    step_id: "100"\n'
-        "    param_name: THK\n"
-        "    ucl: 1.0\n",
+    module = tmp_path / "config/domain/inline_domain/shared.yaml"
+    module.parent.mkdir(parents=True)
+    module.parent.with_suffix(".yaml").write_text("submodules: [shared]", encoding="utf-8")
+    module.write_text(
+        "spec_overrides_by_product:\n"
+        "  M678:\n"
+        "    - {prod_code: M678, step_id: '100', param_name: THK, ucl: 55.0, lcl: 45.0}\n"
+        "    - {step_id: '200', param_name: THK, usl: 99.0}\n"
+        "    - {prod_code: M626, step_id: '100', param_name: THK, ucl: 1.0}\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -497,8 +490,9 @@ def test_scrap_data_transforms_excel_into_ooc_contract(
     _write_scrap_excel(tmp_path / "resources" / "inline_domain" / "scrap_sheets.xlsx")
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
-    (config_dir / "scrap_factory_mapping.yaml").write_text(
-        'mappings:\n  "21230": ARRAY\ndefault_prefix_rules:\n  "31": OLED\n',
+    (config_dir / "domain").mkdir()
+    (config_dir / "domain/inline_domain.yaml").write_text(
+        'monitor:\n  scrap_factory_mapping:\n    mappings: {"21230": ARRAY}\n    default_prefix_rules: {"31": OLED}\n',
         encoding="utf-8",
     )
     (config_dir / "global.yaml").write_text(

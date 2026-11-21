@@ -78,30 +78,12 @@ class InlineMeasurementPreparationRepository:
         return spec_df
 
     def _load_spec_overrides_from_yaml(self, prod_code: str) -> list:
-        """
-        从产品的 YAML 配置文件中读取 spc_spec_override 配置。
-
-        Returns:
-            list: 规格覆盖配置列表，每个元素为 dict 包含 step_id, param_name, ucl/lcl/usl/lsl 等
-        """
-        try:
-            project_root = ConfigLoader.get_project_root()
-            product_yaml_path = project_root / "config" / "products" / f"{prod_code}.yaml"
-
-            if not product_yaml_path.exists():
-                return []
-
-            yaml_config = ConfigLoader._load_yaml(product_yaml_path)
-            overrides = yaml_config.get('spc_spec_override', [])
-
-            if overrides:
-                logging.info(f"[SpcRepo] 从 YAML 加载到 {len(overrides)} 条规格覆盖配置")
-
-            return overrides if isinstance(overrides, list) else []
-
-        except Exception as e:
-            logging.warning(f"[SpcRepo] 读取规格覆盖配置失败: {e}")
-            return []
+        """Read product-specific overrides shared by Inline measurement consumers."""
+        policy = ConfigLoader.load_domain_config("inline_domain", "shared")
+        overrides = policy.get("spec_overrides_by_product", {}).get(prod_code, [])
+        if not isinstance(overrides, list):
+            raise ValueError(f"spec_overrides_by_product.{prod_code} must be a list")
+        return overrides
 
     def _apply_spec_overrides(
         self,

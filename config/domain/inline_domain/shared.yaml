@@ -1,0 +1,26 @@
+# 共享测量原始快照按源时间保留；未配置的产品继续使用默认滚动窗口。
+measurement_snapshots:
+  retain_from:
+    Z553: "2026-05-01"
+# AOI_TT/AOI_RS 参数豁免：命中后 OOS/OOC 产品明细 flag=False，保留真实值。
+# 按普通文本、不区分大小写匹配；显式 Delete 优先，人工 __flags 决策保持原样。
+auto_decoration:
+  exempt_param_name_contains:
+    - "PPA"
+
+# Inline 全域日期过滤：按各模块事件时间（报表时间）排除，首尾日期均包含。
+# factories: [] 关闭；end_date 支持 "today"（服务器当天）或 "YYYY-MM-DD"。
+data_exclusion:
+  factories:
+    - "OLED"
+    - "TP"
+  start_date: "2026-10-01"
+  end_date: "2026-10-06"
+
+# 共享测量规格覆盖，供 SPC、CTQ 和监控读取。
+spec_overrides_by_product:
+  M626:
+  - prod_code: M626
+    step_id: 1L650
+    param_name: CD1
+    ucl: 5.45

@@ -10,7 +10,7 @@ def test_spc_sheet_alert_exclusions_are_independent_of_decoration_exemptions(mon
         "spc": {"sheet_oos_alerts": {"excluded_param_name_contains": [" PPA ", "", None]}},
         "auto_decoration": {"exempt_param_name_contains": ["THK"]},
     }
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: config)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: config)
     assert ConfigLoader.get_spc_sheet_oos_alert_param_exclusions() == ["PPA"]
     assert ConfigLoader.get_auto_decoration_param_exemptions() == ["THK"]
     config["spc"] = {}
@@ -29,13 +29,13 @@ def test_capability_alert_span_reads_domain_yaml(tmp_path, monkeypatch, value, e
 
 
 def test_capability_alert_span_defaults_to_48_hours(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {})
     assert ConfigLoader.get_spc_capability_alert_min_span_hours() == 48
 
 
 @pytest.mark.parametrize("value", [-1, True, None, "bad", float("nan"), float("inf")])
 def test_invalid_capability_alert_span_is_rejected(monkeypatch, value):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "spc": {"spc_cpk": {"alert_min_span_hours": value}},
     })
     with pytest.raises(ValueError, match="alert_min_span_hours"):
@@ -43,7 +43,7 @@ def test_invalid_capability_alert_span_is_rejected(monkeypatch, value):
 
 
 def test_spc_point_policy_resolves_dates_and_ratio(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"spc": {"point_decoration": {
         "enabled": True, "central_fraction": .5, "start_date": "2026-10-05", "end_date": "today",
     }}})
     assert ConfigLoader.get_spc_point_decoration_policy(today=date(2026, 10, 10)) == (.5, "2026-10-05", "2026-10-10")
@@ -51,13 +51,13 @@ def test_spc_point_policy_resolves_dates_and_ratio(monkeypatch):
 
 @pytest.mark.parametrize("section", [{}, {"enabled": False}])
 def test_missing_or_disabled_point_policy_keeps_legacy_mode(monkeypatch, section):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": section}})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"spc": {"point_decoration": section}})
     assert ConfigLoader.get_spc_point_decoration_policy() is None
 
 
 @pytest.mark.parametrize("ratio", [0, -1, 1.1, float("nan"), True])
 def test_invalid_point_fraction_is_rejected(monkeypatch, ratio):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"spc": {"point_decoration": {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"spc": {"point_decoration": {
         "enabled": True, "central_fraction": ratio, "start_date": "2026-10-05",
     }}})
     with pytest.raises(ValueError, match="central_fraction"):
@@ -168,3 +168,19 @@ spc:
     monkeypatch.setattr(ConfigLoader, "get_project_root", staticmethod(lambda: tmp_path))
 
     assert ConfigLoader.get_spc_period_box_source() == "point_value"
+
+
+def test_spc_reads_only_its_routed_module(tmp_path, monkeypatch):
+    config = tmp_path / "config"
+    config.mkdir()
+    (config / "global.yaml").write_text("domain_config: {inline_domain: policies/custom.yaml}", encoding="utf-8")
+    module_dir = tmp_path / "policies/custom"
+    module_dir.mkdir(parents=True)
+    module_dir.with_suffix(".yaml").write_text("submodules: [spc, aoi_tt]", encoding="utf-8")
+    spc = module_dir / "spc.yaml"
+    spc.write_text("spc: {z622_pds: {lot_ids: [L3ZB6BE04]}}", encoding="utf-8")
+    monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
+    assert ConfigLoader.get_z622_pds_lot_ids() == ("L3ZB6BE04",)
+    assert ConfigLoader.get_domain_config_paths("inline_domain", "spc") == (module_dir.with_suffix(".yaml"), spc)
+    with pytest.raises(FileNotFoundError, match="aoi_tt.yaml"):
+        ConfigLoader.load_domain_config("inline_domain")

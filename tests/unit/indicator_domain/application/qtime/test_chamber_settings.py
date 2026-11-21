@@ -25,7 +25,7 @@ def test_yaml_target_controls_report_and_invalidates_cache(monkeypatch):
     source = SimpleNamespace(cache_signature=lambda: ('settings-fixture',), read=lambda **_: payload)
     settings = {'qtime': {'chamber_target_seconds': 50}}
     monkeypatch.setattr(composition, 'DatabaseChamberQTimeRepository', lambda *args, **kwargs: source)
-    monkeypatch.setattr(composition.ConfigLoader, 'load_domain_config', lambda domain: settings)
+    monkeypatch.setattr(composition.ConfigLoader, 'load_domain_config', lambda *_: settings)
     monkeypatch.setattr(composition.ConfigLoader, 'get_enabled_products', lambda: ['M626'])
     clear_chamber_cache()
     try:
@@ -102,7 +102,7 @@ def test_decoration_today_window_and_config_changes_invalidate_cached_payload(mo
         'enabled': True, 'mode': 'random', 'start_date': '2026-10-12', 'end_date': 'today',
     }}}
     monkeypatch.setattr(composition, 'DatabaseChamberQTimeRepository', lambda *args, **kwargs: source)
-    monkeypatch.setattr(composition.ConfigLoader, 'load_domain_config', lambda _: settings)
+    monkeypatch.setattr(composition.ConfigLoader, 'load_domain_config', lambda *_: settings)
     monkeypatch.setattr(composition.ConfigLoader, 'get_enabled_products', lambda: ['M626'])
     clear_chamber_cache()
     try:

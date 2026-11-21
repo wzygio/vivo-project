@@ -33,7 +33,7 @@
 
 ## 按天点位修饰
 
-配置位于 `config/domain/indicator_domain.yaml` 的 `qtime.chamber_point_decoration`。
+配置位于 `config/domain/indicator_domain/qtime.yaml` 的 `qtime.chamber_point_decoration`。
 `enabled` 控制开关，`start_date` 默认2026-10-12，`end_date` 默认 `today`（本次报表当天），
 首尾日期均包含，可改为固定ISO日期。`threshold_seconds` 默认300秒，作为检测阈值。
 `mode` 当前为 `remove`；原随机算法仍保留，配置为 `random` 可恢复。

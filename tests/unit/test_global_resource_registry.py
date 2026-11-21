@@ -74,14 +74,16 @@ def test_runtime_yield_paths_are_hydrated_without_changing_product_sheets(monkey
             "yield_modifier_table": "resources/yield_domain/mwd_trend/targets-renamed.xlsx",
         },
     }})
-    (config_dir / "products").mkdir()
+    domain = config_dir / "domain" / "yield_domain"
+    domain.mkdir(parents=True)
+    domain.with_suffix(".yaml").write_text("submodules: [shared]", encoding="utf-8")
     for product in ("P1", "P2"):
-        (config_dir / "products" / f"{product}.yaml").write_text(
-            yaml.safe_dump({"paths": {
+        (domain / "shared.yaml").write_text(
+            yaml.safe_dump({"product_overrides": {product: {"paths": {
                 "static_warning_lines": {"sheet_name": product},
                 "rate_override_config": {"sheet_name": product},
                 "yield_modifier_config": {},
-            }}), encoding="utf-8",
+            }}}}), encoding="utf-8",
         )
         config = ConfigLoader.load_config(product)
         assert config.paths["static_warning_lines"].sheet_name == product

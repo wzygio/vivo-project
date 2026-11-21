@@ -62,7 +62,7 @@ def test_each_explicit_query_signature_detects_specification_changes(monkeypatch
 
 def test_monitor_policy_signature_detects_both_sheet_ratio_changes(monkeypatch):
     section = {"sheet_threshold_ratio": 0.5, "sheet_replacement_ratio": 0.25}
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": section},
     })
     monkeypatch.setattr(module, "get_scope_decision_signature", lambda *args: "fixture")

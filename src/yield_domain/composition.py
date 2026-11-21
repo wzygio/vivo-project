@@ -17,7 +17,7 @@ def build_period_trend_service(db_manager=None):
 
     modifier = ConfigLoader.get_domain_resource_path('yield_domain', 'yield_modifier_table')
     history = ConfigLoader.get_domain_resource_path('yield_domain', 'period_trend_history')
-    policy = ConfigLoader.load_domain_config('yield_domain').get('period_trend', {})
+    policy = ConfigLoader.load_domain_config('yield_domain', 'mwd_trend').get('period_trend', {})
     return PeriodTrendService(PeriodTrendDatabaseSource(modifier, db_manager=db_manager),
         PeriodTrendWorkbook(history), maintained_start=policy['maintained_rate_start'],
         ttl_seconds=ConfigLoader.get_cache_ttl_seconds())
@@ -27,26 +27,25 @@ def yield_alert_policy_signature(product: str) -> str:
     """Hash Yield policy content; unrelated config edits never expire results."""
     import hashlib
     import json
-    import yaml
     from src.shared_kernel.config import ConfigLoader
     from src.yield_domain.application.alert_results import RESULT_SCHEMA_VERSION
 
-    root = ConfigLoader.get_project_root()
-    def read_mapping(path: Path) -> dict:
-        with path.open(encoding="utf-8") as stream:
-            value = yaml.safe_load(stream)
-        if not isinstance(value, dict):
-            raise ValueError("Yield alert policy requires mapping configuration")
-        return value
-
-    global_config = read_mapping(root / "config/global.yaml")
-    product_config = read_mapping(root / "config/products" / f"{product}.yaml")
+    global_config = ConfigLoader._load_resource_global_config()
+    domain = ConfigLoader.load_domain_config("yield_domain")
+    if not domain:
+        raise ValueError("Missing Yield alert policy")
+    overrides = domain.pop("product_overrides", {})
+    enabled = global_config.get("product_registry", {}).get("enabled_products", [])
+    if product not in overrides and product not in enabled:
+        raise ValueError(f"Unknown Yield product: {product}")
+    product_config = overrides.get(product, {})
     policy = {
         "schema": RESULT_SCHEMA_VERSION,
         "global": {key: global_config.get(key) for key in ("data_source", "data_forward", "report_cutoff")},
         "resources": global_config.get("resources", {}).get("yield_domain"),
-        "product": {key: product_config.get(key) for key in ("data_source", "paths", "processing")},
-        "domain": read_mapping(ConfigLoader.get_domain_config_path("yield_domain")),
+        "product": {"data_source": {**product_config.get("data_source", {}), "product_code": product},
+                    "paths": product_config.get("paths"), "processing": product_config.get("processing")},
+        "domain": domain,
     }
     encoded = json.dumps(policy, sort_keys=True, ensure_ascii=False, default=str, allow_nan=False)
     return "yield-alert-policy-v2:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()

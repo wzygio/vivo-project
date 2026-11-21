@@ -11,7 +11,7 @@ from src.yield_domain.composition import yield_alert_policy_signature
 def policy_files(tmp_path, monkeypatch):
     paths = {
         'global': tmp_path / 'config/global.yaml',
-        'product': tmp_path / 'config/products/P1.yaml',
+        'product': tmp_path / 'config/domain/yield_domain/shared.yaml',
         'domain': tmp_path / 'config/domain/yield_domain.yaml',
     }
     values = {
@@ -19,8 +19,8 @@ def policy_files(tmp_path, monkeypatch):
                    'report_cutoff': {'latest_day_time': '12:00:00'}, 'data_source': {'factory': 'ARRAY'},
                    'resources': {'yield_domain': {'files': {'static_warning_lines': 'spec.xlsx'}},
                                  'inline_domain': {'files': {}}, 'indicator_domain': {'files': {}}}},
-        'product': {'data_source': {'product_code': 'P1'}, 'processing': {'threshold': .1}},
-        'domain': {'dashboard': {'enabled': True}},
+        'product': {'product_overrides': {'P1': {'processing': {'threshold': .1}}, 'P2': {}}},
+        'domain': {'submodules': ['shared'], 'dashboard': {'enabled': True}},
     }
     for key, path in paths.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -46,7 +46,7 @@ def test_real_yield_policy_changes_still_invalidate_results(policy_files, part):
     paths, values = policy_files
     before = yield_alert_policy_signature('P1')
     if part == 'product':
-        values['product']['processing']['threshold'] = .2
+        values['product']['product_overrides']['P1']['processing']['threshold'] = .2
         key = 'product'
     elif part == 'domain':
         values['domain']['dashboard']['enabled'] = False
@@ -62,3 +62,11 @@ def test_real_yield_policy_changes_still_invalidate_results(policy_files, part):
         key = 'global'
     paths[key].write_text(yaml.safe_dump(values[key]), encoding='utf-8')
     assert yield_alert_policy_signature('P1') != before
+
+
+def test_editing_another_product_keeps_published_signature(policy_files):
+    paths, values = policy_files
+    before = yield_alert_policy_signature('P1')
+    values['product']['product_overrides']['P2'] = {'processing': {'threshold': .5}}
+    paths['product'].write_text(yaml.safe_dump(values['product']), encoding='utf-8')
+    assert yield_alert_policy_signature('P1') == before

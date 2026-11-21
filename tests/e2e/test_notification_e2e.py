@@ -123,7 +123,7 @@ def test_real_http_routing_smtp_attachment(partial):
     label = 'partial' if partial else 'complete'
     with smtp_server(EVIDENCE / f'{label}-smtp.json') as (port, messages):
         with _live_server(app, EVIDENCE / f'{label}-http.json') as base:
-            settings = replace(load_settings(ROOT / 'config/domain/api_domain.yaml'),
+            settings = replace(load_settings(ROOT / 'config/domain/api/notification.yaml'),
                                api_base_url=base, smtp_host='127.0.0.1', smtp_port=port, smtp_security='plain')
             report = run_notification(HttpAlertSource(settings, 'fixture-key'),
                                       SmtpDelivery(settings, MailCredentials('fixture', 'sender@example.com', ('fixture',))),

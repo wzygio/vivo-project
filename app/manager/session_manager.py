@@ -61,16 +61,17 @@ class SessionManager:
                 
         except Exception as e:
             logging.warning(f"检查配置文件更新失败: {e}")
+            return True
             
         return False
 
     @staticmethod
-    def _get_config_version(product_code: str) -> tuple[int, int]:
-        """返回全局配置与当前产品配置各自的纳秒级版本。"""
+    def _get_config_version(product_code: str) -> tuple[int, ...]:
+        """返回全局和 Yield 各配置文件的纳秒级版本。"""
         root = ConfigLoader.get_project_root()
         config_paths = (
             root / "config" / "global.yaml",
-            root / "config" / "products" / f"{product_code}.yaml",
+            *ConfigLoader.get_domain_config_paths("yield_domain"),
         )
         return tuple(
             path.stat().st_mtime_ns if path.exists() else 0

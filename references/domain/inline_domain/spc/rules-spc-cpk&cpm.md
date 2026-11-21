@@ -148,7 +148,7 @@ $$
 
 ### 4.1 当前配置与选择顺序
 
-[inline_domain.yaml](../../../../config/domain/inline_domain.yaml) 当前设置：
+[spc.yaml](../../../../config/domain/inline_domain/spc.yaml) 当前设置：
 
 ```yaml
 spc:
@@ -214,7 +214,7 @@ $$
 
 ## 5. USL、LSL、规格中点与目标值
 
-规格最初由 `load_parameter_specs()` 从 `mdw.dwd_imp_dv_param_spec` 读取；USL、LSL、UCL、LCL、`target` 转为数值，不能转换的内容视为缺失。产品 `spc_spec_override` 可覆盖已匹配的规格字段，具体取数和覆盖机制见 [SPC 数据流](data-flow-spc.md)。
+规格最初由 `load_parameter_specs()` 从 `mdw.dwd_imp_dv_param_spec` 读取；USL、LSL、UCL、LCL、`target` 转为数值，不能转换的内容视为缺失。产品 `spec_overrides_by_product` 可覆盖已匹配的规格字段，具体取数和覆盖机制见 [SPC 数据流](data-flow-spc.md)。
 
 Sheet 特征按 `prod_code + step_id + param_name` 左连接规格。周期聚合在有效 Sheet 行中分别取 `usl`、`lsl` 的 `first`，不会对规格求平均，不按设备/腔室或历史规格版本拆组，也不会逐条验证组内规格是否一致。
 
@@ -336,7 +336,7 @@ Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷
 | OOS/OOC 清单分类与 SPC 点位改值 | [sheet_oos_decoration.py](../../../../src/inline_domain/core/shared/sheet_oos_decoration.py)：`build_sheet_oos_detail()`；[spc_point_decoration.py](../../../../src/inline_domain/core/spc/spc_point_decoration.py)：`normalize_spc_decisions()`、`apply_spc_point_decoration()`；[sheet_ooc_decoration.py](../../../../src/inline_domain/core/shared/sheet_ooc_decoration.py)：`build_sheet_ooc_detail()` |
 | 上一完整周、能力豁免、配置选择和后处理编排 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)：`exclude_cpm_cpk_parameters()`、`SpcReportService.fetch_spc_report_payload()` |
 | 规格读取与覆盖 | [measurement_metadata_loader.py](../../../../src/inline_domain/infrastructure/shared/measurement_metadata_loader.py)：`load_parameter_specs()`；[measurement_preparation.py](../../../../src/inline_domain/infrastructure/shared/measurement_preparation.py)：`get_spec_limits()` |
-| 当前标准差口径 | [inline_domain.yaml](../../../../config/domain/inline_domain.yaml)：`spc.spc_cpk.period_sigma_source`；[config.py](../../../../src/shared_kernel/config.py)：`ConfigLoader.get_spc_period_sigma_source()` |
+| 当前标准差口径 | [spc.yaml](../../../../config/domain/inline_domain/spc.yaml)：`spc.spc_cpk.period_sigma_source`；[config.py](../../../../src/shared_kernel/config.py)：`ConfigLoader.get_spc_period_sigma_source()` |
 | 能力值替换 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py)：`apply_capability_decoration()` |
 | 现有算法验证 | [test_spc_calculator.py](../../../../tests/unit/inline_domain/core/spc/test_spc_calculator.py) |
 | OOC 分类与 SPC 修饰验证 | [test_sheet_ooc_decoration.py](../../../../tests/unit/inline_domain/core/shared/test_sheet_ooc_decoration.py)、[test_decorated_data.py](../../../../tests/unit/inline_domain/application/shared/test_decorated_data.py) |

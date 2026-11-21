@@ -13,7 +13,7 @@ from yield_domain.application.excel_service import ExcelService
 
 def get_code_monthly_rate_threshold() -> float:
     """Load the shared image visibility threshold as a fractional monthly rate."""
-    dashboard = ConfigLoader.load_domain_config("yield_domain").get("dashboard", {})
+    dashboard = ConfigLoader.load_domain_config("yield_domain", "shared").get("dashboard", {})
     if not isinstance(dashboard, dict):
         raise ValueError("Yield dashboard settings must be a mapping")
     value = dashboard.get("code_monthly_rate_threshold", DEFAULT_MONTHLY_RATE_THRESHOLD)
@@ -29,7 +29,7 @@ def get_code_monthly_rate_threshold() -> float:
 
 
 def get_array_time_query_enabled() -> bool:
-    value = ConfigLoader.load_domain_config('yield_domain').get('array_input_time', {}).get('query_enabled', False)
+    value = ConfigLoader.load_domain_config('yield_domain', 'sheet_lot').get('array_input_time', {}).get('query_enabled', False)
     if not isinstance(value, bool):
         raise ValueError('Yield Array-time switch must be boolean')
     return value

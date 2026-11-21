@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main(argv: list[str] | None = None) -> int:
     parser = SafeArgumentParser(description=__doc__)
-    parser.add_argument('--config', type=Path, default=ROOT / 'config/domain/api_domain.yaml')
+    parser.add_argument('--config', type=Path, default=ROOT / 'config/domain/api/notification.yaml')
     parser.add_argument('--env-file', type=Path, help='Explicit API/mail environment file; process environment takes precedence')
     parser.add_argument('--send', action='store_true', help='Actually send; omitted means preview counts only')
     parser.add_argument('--test-mode', action='store_true', help='Override ALL recipients to wangzy03@visionox.com')

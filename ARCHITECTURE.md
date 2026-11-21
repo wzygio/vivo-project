@@ -39,6 +39,12 @@ src
 `-- shared_kernel                  cross-domain support, not a business domain
 ```
 
+Business policy follows these same owners under `config/domain/<domain>/<submodule>.yaml`.
+The corresponding domain entry lists its `submodules`. Cross-module settings use `shared.yaml`;
+Yield assembles the selected product's `product_overrides` from these files. The Inline entry
+also holds `monitor.scrap_factory_mapping`. Equipment keeps its domain-level policy, and the
+independent API notification job reads `config/domain/api/notification.yaml`.
+
 ### Submodule Responsibilities and Collaboration
 
 | Domain | Submodule | Business responsibility and relationship |

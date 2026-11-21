@@ -1,0 +1,71 @@
+dashboard:
+  # 月均不良率图像门槛，两处共用：手动 Code 筛选、自动预警缺陷图像。
+  # 使用小数比例：0.0001 = 0.01%；自动图像还必须命中预警。
+  code_monthly_rate_threshold: 0.0001
+
+product_overrides:
+  M626:
+    paths:
+      static_warning_lines:
+        sheet_name: M626
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_M626.parquet
+      defect_multipliers: null
+  M673:
+    paths:
+      static_warning_lines:
+        sheet_name: M673
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_M673.parquet
+      defect_multipliers:
+        S向亮线: 0.6
+        暗点: 0.7
+        B暗点: 0.7
+        群亮点: 0.5
+        S向ELA Mura: 0
+        G向ELA Mura: 0
+        G向带状Mura: 0
+        彩斑Mura: 0.4
+        大面积片状彩斑Mura: 0
+  M678:
+    paths:
+      static_warning_lines:
+        sheet_name: M678
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_M678.parquet
+      defect_multipliers: null
+  Z517:
+    paths:
+      static_warning_lines:
+        sheet_name: Z517
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_Z517.parquet
+      defect_multipliers: null
+  Z553:
+    paths:
+      static_warning_lines:
+        sheet_name: Z553
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_Z553.parquet
+      defect_multipliers: null
+  Z571:
+    paths:
+      static_warning_lines:
+        sheet_name: Z571
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_Z571.parquet
+      defect_multipliers: null
+  Z576:
+    paths:
+      static_warning_lines:
+        sheet_name: Z576
+    processing:
+      use_local_snapshot: true
+      snapshot_path: data/snapshot_Z576.parquet
+      defect_multipliers: null

@@ -10,7 +10,7 @@ from src.shared_kernel.config import ConfigLoader
     ({"sheet_threshold_ratio": 1, "sheet_replacement_ratio": 0.4}, (1.0, 0.4)),
 ])
 def test_special_sheet_ratios(monkeypatch, section, expected):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": section},
     })
     assert ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios() == expected
@@ -19,7 +19,7 @@ def test_special_sheet_ratios(monkeypatch, section, expected):
 @pytest.mark.parametrize("key", ["sheet_threshold_ratio", "sheet_replacement_ratio"])
 @pytest.mark.parametrize("value", [None, True, False, "0.5", -0.1, float("nan"), float("inf"), [], {}])
 def test_invalid_special_sheet_ratios_are_rejected(monkeypatch, key, value):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": {key: value}},
     })
     with pytest.raises(ValueError, match=key):
@@ -37,13 +37,13 @@ def test_invalid_special_sheet_ratios_are_rejected(monkeypatch, key, value):
     ({"special_decoration": {"enabled": True, "factories": [" OLED ", "array", "OLED"]}}, ["OLED", "ARRAY"]),
 ])
 def test_special_decoration_factories(monkeypatch, section, expected):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"aoi_rs": section})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"aoi_rs": section})
     assert ConfigLoader.get_aoi_rs_special_decoration_factories() == expected
 
 
 @pytest.mark.parametrize("factories", ["OLED", None, [None], [1], [""]])
 def test_invalid_factory_configuration_is_rejected(monkeypatch, factories):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": {"enabled": True, "factories": factories}},
     })
     with pytest.raises(ValueError, match="factories"):
@@ -52,7 +52,7 @@ def test_invalid_factory_configuration_is_rejected(monkeypatch, factories):
 
 @pytest.mark.parametrize("enabled", ["false", "true", None, 0, 1])
 def test_special_decoration_enabled_requires_boolean(monkeypatch, enabled):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": {"enabled": enabled}},
     })
     with pytest.raises(ValueError, match="enabled"):
@@ -61,7 +61,7 @@ def test_special_decoration_enabled_requires_boolean(monkeypatch, enabled):
 
 def test_special_window_defaults_to_september_21_through_today(monkeypatch):
     from datetime import date
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {"aoi_rs": {}})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"aoi_rs": {}})
     assert ConfigLoader.get_aoi_rs_special_decoration_window(today=date(2026, 10, 10)) == (
         "2026-09-21", "2026-10-10",
     )
@@ -74,7 +74,7 @@ def test_special_window_defaults_to_september_21_through_today(monkeypatch):
 ])
 def test_invalid_special_window_is_rejected(monkeypatch, section):
     from datetime import date
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "aoi_rs": {"special_decoration": section},
     })
     with pytest.raises(ValueError, match="date"):

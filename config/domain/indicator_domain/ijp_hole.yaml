@@ -1,0 +1,6 @@
+ijp_hole:
+  code_descriptions:
+    C3RA0: Ink未到DAM
+    C3RA1: Ink到DAM
+    C3RA2: Ink溢流出DAM
+    C3RA3: 溢流

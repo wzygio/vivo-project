@@ -34,9 +34,7 @@ if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 Z622_PRODUCT = "Z622"
-Z622_LOT = "L3ZB6BE03"
 Z622_SOURCE_START = pd.Timestamp("2026-10-01")
-# Retain the published raw-source identity; analysis evolves independently below.
 Z622_SOURCE_POLICY = "z622-array-pds-v1-measurements-only"
 Z622_ANALYSIS_POLICY = "z622-spc-native-specifications-v2"
 
@@ -45,11 +43,13 @@ def _monitoring_path() -> Path:
     return ConfigLoader.get_domain_resource_path("inline_domain", "spc_z622_monitoring")
 
 
-def _z622_source_signature() -> str:
+def _z622_source_signature(lot_ids: tuple[str, ...] | None = None) -> str:
+    if lot_ids is None:
+        lot_ids = ConfigLoader.get_z622_pds_lot_ids()
     path = _monitoring_path()
     configuration = _z622_monitoring().sort_values(["step_id", "param_name"]).to_csv(index=False)
     digest = hashlib.sha256(configuration.encode("utf-8")).hexdigest()
-    return f"{Z622_SOURCE_POLICY}:{Z622_LOT}:{path.resolve()}:{digest}"
+    return f"{Z622_SOURCE_POLICY}:{','.join(lot_ids)}:{path.resolve()}:{digest}"
 
 
 def _z622_monitoring() -> pd.DataFrame:
@@ -102,7 +102,8 @@ def load_z622_measurements(
     """Fetch bounded daily PDS windows; shared preparation keeps latest points."""
     if prod_code != Z622_PRODUCT:
         raise ValueError("PDS source is restricted to Z622")
-    signature = _z622_source_signature()
+    lot_ids = ConfigLoader.get_z622_pds_lot_ids()
+    signature = _z622_source_signature(lot_ids)
     monitoring = _z622_monitoring()
     start = max(pd.Timestamp(start_date).normalize(), Z622_SOURCE_START)
     end = pd.Timestamp(end_date).normalize() + pd.Timedelta(days=1)
@@ -113,22 +114,29 @@ def load_z622_measurements(
     if db_manager.engine is None:
         raise ValueError("Database engine is not initialized")
     pair_predicates = []
-    params = {"prod_code": Z622_PRODUCT, "lot_id": Z622_LOT,
-              "lot_prefix": Z622_LOT + "%"}
+    params = {"prod_code": Z622_PRODUCT}
+    lot_predicates = []
+    for i, lot_id in enumerate(lot_ids):
+        parameter = f"lot_prefix_{i}"
+        lot_predicates.append(f"p.glass_id LIKE :{parameter}")
+        params[parameter] = lot_id + "%"
     for i, row in enumerate(monitoring.itertuples(index=False)):
         pair_predicates.append(f"(p.step_id = :step_{i} AND p.param_name = :param_{i})")
         params[f"step_{i}"] = row.step_id
         params[f"param_{i}"] = row.param_name
-    sql = text("""
+    lot_filter = " OR ".join(lot_predicates)
+    pair_filter = " OR ".join(pair_predicates)
+    sql = text(f"""
         SELECT 'ARRAY' AS factory, :prod_code AS prod_code,
                p.glass_start_time AS start_time, p.glass_id AS sheet_id,
-               :lot_id AS lot_id, p.step_id, p.param_name, p.site_name,
+               LEFT(p.glass_id, 9) AS lot_id, p.step_id, p.param_name, p.site_name,
                p.sub_equip_id AS unit_id, p.value AS param_value
         FROM eda.array_pds_result_t p
         WHERE p.glass_start_time >= :start_time
           AND p.glass_start_time < :end_time
-          AND p.glass_id LIKE :lot_prefix
-          AND (""" + " OR ".join(pair_predicates) + ")")
+          AND ({lot_filter})
+          AND ({pair_filter})
+    """)
     frames = []
     allowed = pd.MultiIndex.from_frame(monitoring[["step_id", "param_name"]])
     with db_manager.engine.connect().execution_options(postgresql_readonly=True) as connection:
@@ -144,12 +152,14 @@ def load_z622_measurements(
                     chunk["start_time"] = pd.to_datetime(chunk["start_time"], errors="coerce")
                     chunk["param_value"] = pd.to_numeric(chunk["param_value"], errors="coerce")
                     pairs = pd.MultiIndex.from_frame(chunk[["step_id", "param_name"]])
-                    valid = (chunk.sheet_id.astype("string").str.startswith(Z622_LOT, na=False)
+                    lot = chunk.sheet_id.astype("string").str[:9]
+                    chunk["lot_id"] = lot.astype(object)
+                    valid = (lot.isin(lot_ids)
                              & chunk.start_time.ge(day) & chunk.start_time.lt(day_end)
                              & pairs.isin(allowed))
                     frames.append(filter_invalid_measurement_values(chunk.loc[valid]))
     if _z622_source_signature() != signature:
-        raise ValueError("Z622 monitoring configuration changed during source read")
+        raise ValueError("Z622 source configuration changed during source read")
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=RAW_MEASUREMENT_COLUMNS)
     result.attrs["z622_source_signature"] = signature
     return result

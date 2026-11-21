@@ -1,6 +1,6 @@
 # Inline 厂别与日期排除规则
 
-核验日期：2026-10-10。配置入口为 `config/domain/inline_domain.yaml` 的 `data_exclusion`。
+核验日期：2026-10-10。配置入口为 `config/domain/inline_domain/shared.yaml` 的 `data_exclusion`。
 
 ## 1. 执行边界与顺序
 

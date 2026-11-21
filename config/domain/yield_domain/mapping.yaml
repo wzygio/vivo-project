@@ -1,0 +1,25 @@
+product_overrides:
+  Z517:
+    processing:
+      mapping_layout:
+        row_labels:
+        - 1A
+        - 1B
+        - 1C
+        - 1D
+        - 2A
+        - 2B
+        - 2C
+        - 2D
+        column_labels:
+        - A0
+        - B0
+        - C0
+        - D0
+        - E0
+        - F0
+        - G0
+        - H0
+        - J0
+        - K0
+        - L0

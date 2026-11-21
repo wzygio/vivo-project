@@ -74,6 +74,9 @@ def monitoring(tmp_path, monkeypatch):
         return path
 
     monkeypatch.setattr(ConfigLoader, "get_domain_resource_path", resource)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "spc": {"z622_pds": {"lot_ids": ["L3ZB6BE03", "L3ZB6BE04"]}},
+    })
     monkeypatch.setattr(ConfigLoader, "get_data_forward_policy", lambda: DataForwardPolicy())
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", lambda: None)
     monkeypatch.setattr(ConfigLoader, "get_snapshot_ttl_hours", lambda: 12)
@@ -125,8 +128,8 @@ def test_pds_query_is_partition_bounded_lot_scoped_and_streamed(monitoring, monk
         assert "array_pds_result_t" in sql.lower()
         assert re.search(r"glass_start_time\s*>=\s*:\w+", sql, re.I)
         assert re.search(r"glass_start_time\s*<\s*:\w+", sql, re.I)
-        assert re.search(r"glass_id\s+LIKE\s*:\w+", sql, re.I)
-        assert "L3ZB6BE03%" in params.values()
+        prefixes = re.findall(r"glass_id\s+LIKE\s*:(\w+)", sql, re.I)
+        assert [params[key] for key in prefixes] == ["L3ZB6BE03%", "L3ZB6BE04%"]
         assert "ORDER BY" not in sql.upper()
         assert "LIMIT" not in sql.upper()
         assert chunksize == 50000
@@ -185,8 +188,10 @@ def test_z622_loader_rejects_other_products_before_query(monitoring, monkeypatch
 
 def test_pds_result_rejects_crossed_pairs_foreign_lots_and_outside_times(monitoring, monkeypatch):
     valid = _facts()
+    second_lot = valid.assign(sheet_id="L3ZB6BE0401")
     result_rows = pd.concat([
         valid,
+        second_lot,
         valid.assign(param_name="CD1"),  # Allowed parameter, wrong station.
         valid.assign(step_id="12200"),  # Allowed station, wrong parameter.
         valid.assign(sheet_id="ANOTHERLOT01"),
@@ -199,7 +204,20 @@ def test_pds_result_rejects_crossed_pairs_foreign_lots_and_outside_times(monitor
         _database(), "2026-11-11", "2026-11-11", "Z622",
     )
 
-    pd.testing.assert_frame_equal(result, valid)
+    expected = pd.concat([valid, second_lot.assign(lot_id="L3ZB6BE04")], ignore_index=True)
+    pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("lot_ids", [None, [], "L3ZB6BE03", ["L3ZB6BE0_"], ["L3ZB6BE03", "L3ZB6BE03"]])
+def test_invalid_configured_lots_fail_before_pds_query(monitoring, monkeypatch, lot_ids):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "spc": {"z622_pds": {"lot_ids": lot_ids}},
+    })
+    calls = _record_queries(monkeypatch)
+
+    with pytest.raises(ValueError, match=r"spc\.z622_pds\.lot_ids"):
+        module.load_z622_measurements(_database(), "2026-11-11", "2026-11-11", "Z622")
+    assert calls == []
 
 
 def test_shared_preparation_keeps_latest_per_complete_point_identity(monitoring, monkeypatch):
@@ -339,13 +357,19 @@ def test_z622_snapshot_reuse_force_refresh_and_failed_refresh_preserve_source_ti
 
 
 @pytest.mark.parametrize("new_instance", [False, True])
-def test_z622_changed_monitoring_cannot_reuse_or_fallback_to_old_source(monitoring, monkeypatch, tmp_path, new_instance):
+@pytest.mark.parametrize("change", ["monitoring", "lot_ids"])
+def test_z622_changed_configuration_cannot_reuse_or_fallback_to_old_source(
+    monitoring, monkeypatch, tmp_path, new_instance, change,
+):
     _record_queries(monkeypatch, [_facts()])
     repository = module.build_z622_measurement_repository(_database(), snapshot_dir=tmp_path / "snapshots")
     repository.get_measurements("Z622", "2026-11-11")
-    updated = _monitoring()
-    updated.loc[0, "param_name"] = "DIFFERENT_PARAM"
-    updated.to_excel(monitoring, sheet_name="monitoring", index=False)
+    if change == "monitoring":
+        updated = _monitoring()
+        updated.loc[0, "param_name"] = "DIFFERENT_PARAM"
+        updated.to_excel(monitoring, sheet_name="monitoring", index=False)
+    else:
+        monkeypatch.setattr(ConfigLoader, "get_z622_pds_lot_ids", lambda: ("L3ZB6BE04",))
 
     def unavailable(*args, **kwargs):
         raise OSError("source unavailable")

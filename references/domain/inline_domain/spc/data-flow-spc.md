@@ -72,7 +72,7 @@ OOS/OOC 清单筛选、点位修饰与 CPK/CPM 不达标的关系已于 2026-10-
 
 产品归属通常通过测量记录的 `product_spec` 关联产品字典；OLED `2120A` 使用 PPID 映射确定产品。该例外的完整关联、无映射行为及适用范围由 [2120A 产品归属规则](data-source-spc-main-process.md#81-按-ppid-确定产品型号) 维护。
 
-Z622 使用独立的 ARRAY PDS 来源，只读取 `glass_id` 前九位为 `L3ZB6BE03` 的指定批次，源时间从 2026-10-01 起；查询按日限定 `glass_start_time` 的上下界，并按配置中的“站点＋参数”完整组合筛选，以 50,000 行分块读取，不在数据库排序或提前截断点位。监控清单通过全局资源键 `spc_z622_monitoring` 解析；其 `monitoring` Sheet 来源为 M626 在 2026-09-01 至 2026-11-16 的实际三厂测量与 SPC 白名单交集，其中仅 ARRAY 组合接入 PDS，OLED／TP 组合保留供来源核对。Z622 将 PDS 的 Glass、事件时间、设备和测量值映射为现有点位契约，沿用共享制备的完整点位键最新去重、显示时间、日期排除、异常过滤及最终点位输出。2026-11-17 起，既有规格表已补入 Z622 自身规格，原仅测量限制废止：读取标准数据库规格，沿用正常点位修饰、Sheet 统计、能力分析及 CPK／CPM 预警；不借用 M626 阈值。离线能力元数据和周度统计同样纳入 Z622，目录继续使用 PDS 监控清单，与报表范围一致。组装层确保首次加载、页头强刷和快照复用调用同一来源，快照及输入缓存签名绑定 PDS 来源和监控工作簿；配置变更后的旧快照不能作为回退。决定和边界见 [ADR-0045](../../../../docs/ADR/0045-z622-spc-pds-source.md)，本次导入与验证记录见 [交付记录](../../../../docs/dev_docs/generated/inline_domain/spc/z622-pds-import-delivery.md)。
+Z622 使用独立的 ARRAY PDS 来源，按 `config/domain/inline_domain/spc.yaml` 的 `spc.z622_pds.lot_ids` 限定批次。当前配置为 `L3ZB6BE03` 和 `L3ZB6BE04`，使用 `glass_id` 前九位匹配并回填每行的 `lot_id`。源时间从 2026-10-01 起；查询按日限定 `glass_start_time` 的上下界，并按配置中的“站点＋参数”完整组合筛选，以 50,000 行分块读取，不在数据库排序或提前截断点位。监控清单通过全局资源键 `spc_z622_monitoring` 解析；自 2026-11-21 起，`monitoring` Sheet 以 Z576 规格统计的去重「厂别＋站点＋参数」组合为来源，执行既有站点及 LOSS 参数排除规则。仅 ARRAY 组合接入 PDS，OLED／TP 组合保留供参考。Z622 将 PDS 的 Glass、事件时间、设备和测量值映射为现有点位契约，沿用共享制备的完整点位键最新去重、显示时间、日期排除、异常过滤及最终点位输出。2026-11-17 起，既有规格表已补入 Z622 自身规格，原仅测量限制废止：读取标准数据库规格，沿用正常点位修饰、Sheet 统计、能力分析及 CPK／CPM 预警；不借用 M626 阈值。离线能力元数据和周度统计同样纳入 Z622，目录继续使用 PDS 监控清单，与报表范围一致。组装层确保首次加载、页头强刷和快照复用调用同一来源，原始快照及输入缓存签名绑定 PDS 来源、批次清单和监控工作簿；配置变更后的旧快照不能作为回退。Z622 的周度 Sheet 成员签名也绑定批次清单。决定和边界见 [ADR-0045](../../../../docs/ADR/0045-z622-spc-pds-source.md)，本次导入与验证记录见 [交付记录](../../../../docs/dev_docs/generated/inline_domain/spc/z622-pds-import-delivery.md)。
 
 自 2026-11-16 起，`step_id=15690` 不再读取。共享测量 SQL 的各厂别分支均在源头排除该站点；共享快照读取（含缓存命中与断库回退）及新数据写入前执行同一排除规则，在点位制备、修饰及最终 `raw_measurements_df` 输出之前生效。SPC 输入缓存签名包含该排除策略。既有共享测量快照和 `data/inline_domain/spc/sheet_membership/` 周度成员快照同步定向清理该站点，其他站点与过货快照保留。
 
@@ -381,7 +381,7 @@ SPC 服务通过数据端口获取测量与规格，组合根 `composition.py` �
 | CPM 预警 | 产品 `_cpm` sheet 中的上一完整 ISO 周记录，`flag=False`、`cpm_corrected < 1.33`，且已保存的有效 Sheet 时间跨度达到配置门槛。 | 厂别、站点、参数、周次、已保存的 CPM 值。 |
 | 单片异常预警 | 已发布SPC OOS Excel产品明细；上一 ISO 周且 flag=False，再排除命中独立预警过滤配置的参数。 | 厂别、站点、参数、Sheet、超规时间、超规类型。 |
 
-SPC 页面单片预警使用 `config/domain/inline_domain.yaml` 的
+SPC 页面单片预警使用 `config/domain/inline_domain/spc.yaml` 的
 `spc.sheet_oos_alerts.excluded_param_name_contains`，按参数名作不区分大小写的普通文本包含匹配；
 当前配置为 `PPA`，空列表关闭过滤。命中项不进入预警明细及对应自动预警图。
 该配置与 `auto_decoration.exempt_param_name_contains`、能力计算参数豁免相互独立：
@@ -472,7 +472,7 @@ By 过货时间图的标签仅显示日期，不显示小时；点线模式的�
 | core | 3.7～3.8 | [cpk_decoration.py](../../../../src/inline_domain/core/spc/cpk_decoration.py) |
 | application | 4.1、4.4～4.6 | [spc_service.py](../../../../src/inline_domain/application/spc/spc_service.py)、[capability_decoration_service.py](../../../../src/inline_domain/application/spc/capability_decoration_service.py) |
 | application | 4.2～4.3 | [decorated_features.py](../../../../src/inline_domain/application/shared/decorated_features.py)、[decorated_data.py](../../../../src/inline_domain/application/shared/decorated_data.py)、[sheet_oos_decoration_service.py](../../../../src/inline_domain/application/shared/sheet_oos_decoration_service.py) |
-| 组合与配置 | 依赖接入、资源路径和参数 | [composition.py](../../../../src/inline_domain/composition.py)、[inline_domain.yaml](../../../../config/domain/inline_domain.yaml) |
+| 组合与配置 | 依赖接入、资源路径和参数 | [composition.py](../../../../src/inline_domain/composition.py)、[spc.yaml](../../../../config/domain/inline_domain/spc.yaml) |
 | app | 5.1～5.2、5.4～5.6 | [SPC监控报表.py](../../../../app/pages/SPC监控报表.py)、[spc_dashboard.py](../../../../app/sections/inline_domain/spc/spc_dashboard.py) |
 | app | 5.3 | [filters.py](../../../../app/sections/inline_domain/shared/filters.py) |
 | app | 5.4 | [alert_results.py](../../../../app/sections/shared/alert_results.py)、[alert_center.py](../../../../app/sections/inline_domain/shared/alert_center.py)、[sheet_oos_alerts.py](../../../../src/inline_domain/core/shared/sheet_oos_alerts.py) |

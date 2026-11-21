@@ -1,7 +1,7 @@
 # 预警邮件自动推送
 
 实现入口：`python -m api.notification`。业务配置：
-[`config/domain/api_domain.yaml`](../../../../config/domain/api_domain.yaml)。
+[`config/domain/api/notification.yaml`](../../../../config/domain/api/notification.yaml)。
 需求：[预警信息推送服务](../../../../docs/dev_docs/dev_spec/api/task-预警信息推送服务.md)。
 
 ## 取数与分派
@@ -43,7 +43,7 @@ SMTP 失败保留此前已确认发送数量。SMTP 接受意味着服务器接�
 ## 凭证与一次运行
 
 在项目根目录执行，使用已准备好的 `.venv`。发件人和SMTP登录账户分别由当前项目
-`config/domain/api_domain.yaml`的`notification.smtp.sender`、`notification.smtp.user`管理。
+`config/domain/api/notification.yaml`的`notification.smtp.sender`、`notification.smtp.user`管理。
 运行环境提供 `API_KEY`（兼容 `VIVO_API_KEY`）及 `MAIL_PASSWORD` 或逗号分隔的
 `MAIL_PASSWORDS`。密码不放入业务 YAML 或命令行。模块导入不会取数或发信。
 

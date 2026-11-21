@@ -39,4 +39,4 @@ Lot、Sheet 通过同一共享输入代次、参数规范化和有界缓存复�
 
 覆盖表解析在 Lot／Sheet 间共享。普通 XLSX 直读；公式（含数组公式）与企业保护文件保留只读 Excel COM 计算／读取，失败不能返回合法空覆盖。缺产品 Sheet 仍表示没有覆盖，覆盖公式、百分比、缺值、合法 Sheet 补行与 Group 重聚合语义保持。
 
-`config/domain/yield_domain.yaml:array_input_time.query_enabled` 当前为 false：Array 时间端口不会被调用，Lot／Sheet 的 `array_input_time` 保持空值。按阵列时间排序的选项关闭，Sheet 默认按 ID 排序；原查询、自定义时间和排序代码保留供显式重新启用。详见 [报表数据流](../shared/data-flow-yield-report.md)。
+`config/domain/yield_domain/sheet_lot.yaml:array_input_time.query_enabled` 当前为 false：Array 时间端口不会被调用，Lot／Sheet 的 `array_input_time` 保持空值。按阵列时间排序的选项关闭，Sheet 默认按 ID 排序；原查询、自定义时间和排序代码保留供显式重新启用。详见 [报表数据流](../shared/data-flow-yield-report.md)。

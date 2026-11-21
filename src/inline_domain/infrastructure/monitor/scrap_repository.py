@@ -93,7 +93,8 @@ class InlineScrapRepository:
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L5] dropna 后: {before_dropna} -> {len(df)} 条, 时间样本: {df['sheet_start_time'].head(3).tolist()}")
 
             # 6. 推断厂别
-            df['factory'] = df['step_id'].astype(str).apply(self._infer_factory_from_step)
+            mapping = ConfigLoader.get_scrap_factory_mapping()
+            df['factory'] = df['step_id'].astype(str).apply(self._infer_factory_from_step, args=(mapping,))
             trace_logger.info(f"🚧 [ScrapTrace][Repo-L6] 厂别推断: {df['factory'].unique().tolist()}")
 
             # 7. 状态伪装（伪装成 OOC，使 aggregate_spc_metrics 无感知处理）
@@ -124,13 +125,12 @@ class InlineScrapRepository:
             return pd.DataFrame()
 
     @staticmethod
-    def _infer_factory_from_step(step_id: str) -> str:
+    def _infer_factory_from_step(step_id: str, config: dict) -> str:
         """
         根据报废站点代码推断厂别。
         优先级：精确映射 > 前缀推断 > UNKNOWN
         """
         try:
-            config = ConfigLoader.get_scrap_factory_mapping()
             step = str(step_id).strip().upper()
 
             # 1. 精确匹配

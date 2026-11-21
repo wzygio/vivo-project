@@ -126,7 +126,7 @@ repository = QTimeRepository(
 publication = QTimeAlertResults(MemoryPublication(), ttl_seconds=ConfigLoader.get_cache_ttl_seconds())
 service = QTimeReportService(
     repository, Decisions(), constrain_display=True, alert_results=publication,
-    spec_overrides=(ConfigLoader.load_domain_config("indicator_domain")["qtime"]["spec_overrides"]
+    spec_overrides=(ConfigLoader.load_domain_config("indicator_domain", "qtime")["qtime"]["spec_overrides"]
                     if decision == "正式规格" else
                     {"ARRAY/1A200/21100": 2.0} if decision != "不设置规格" else {}),
 )

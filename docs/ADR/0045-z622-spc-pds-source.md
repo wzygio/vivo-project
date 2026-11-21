@@ -10,10 +10,12 @@
 
 既有 `SpcRepository` 委托共享测量制备管线，页头强刷则从组装层直接获取 raw repository。仅替换前者会让刷新走回旧来源。用户已确认允许组装层增加新品分发，并确认 Z622 当前仅导入测量，不采用 M626 的规格、不计算能力指标。
 
+2026-11-21 变更：Z622 的 ARRAY PDS 批次改由 Inline 域配置的 `spc.z622_pds.lot_ids` 管理，初始包含 `L3ZB6BE03` 和 `L3ZB6BE04`。按 Glass ID 前九位匹配并填写 Lot ID，批次清单参与原始快照、SPC 输入缓存与 Z622 周度 Sheet 成员签名。下文的单批次描述记录最初的接入口径。
+
 ## 决定
 
 1. 新来源由 SPC infrastructure 拥有，组装层为 Z622 绑定专用 raw 与元数据 adapter；其他产品保留原装配。首次加载、强刷、增量更新和断库回退复用现有快照生命周期。
-2. M626 仅作为监控组合参考。以 2026-09-01（含）至 2026-11-17（不含）的实际三厂观测结果与 SPC 参数白名单求交集，排除既有站点／参数排除项，形成受维护的监控工作簿。全局资源注册表拥有位置，产品配置只声明新品身份。
+2. M626 仅作为监控组合参考。以 2026-09-01（含）至 2026-11-17（不含）的实际三厂观测结果与 SPC 参数白名单求交集，排除既有站点／参数排除项，形成受维护的监控工作簿。全局资源注册表管理位置，启用产品清单包含 Z622。
 3. PDS 只供 ARRAY 组合，批次由 `glass_id LIKE 'L3ZB6BE03%'` 确定，不通过产品字典推断。读取窗口从源时间 2026-10-01 起，并按日传递 `glass_start_time >= start AND glass_start_time < end`，每批传输 50,000 行，数据库会话只读且查询超时 30 秒。
 4. 数据库只做范围和站点参数完整组合筛选；原始记录保留复测事实。共享制备按 `prod_code + step_id + param_name + sheet_id + site_name` 选择最新记录，避免只用 Glass／点位导致跨站点或跨参数误删。后续显示时间、日期排除、异常点过滤和最终点位输出继续使用现有实现。
 5. 元数据提供监控组合的标识行，`usl`、`lsl`、`ucl`、`lcl`、`target` 全部未知。标识行不代表已配置规格；现有能力准入会排除缺规格数据，不能据此产生 CPK／CPM。未来引入规格属于单独的业务决定。
@@ -41,7 +43,7 @@ Z622 的有效数据范围是指定批次、ARRAY 及已维护监控组合，不
 - 适配器与输入签名：[`spc_repository.py`](../../src/inline_domain/infrastructure/spc/spc_repository.py)。
 - 装配与刷新入口：[`composition.py`](../../src/inline_domain/composition.py)。
 - 原子发布及附加来源证明：[`rolling_snapshot.py`](../../src/inline_domain/infrastructure/shared/rolling_snapshot.py)。
-- 配置：[`global.yaml`](../../config/global.yaml)、[`Z622.yaml`](../../config/products/Z622.yaml)。
+- 配置：[`global.yaml`](../../config/global.yaml)、[`spc.yaml`](../../config/domain/inline_domain/spc.yaml)。
 - 单元契约：[`test_z622_repository.py`](../../tests/unit/inline_domain/infrastructure/spc/repositories/test_z622_repository.py)。
 - 完整验收范围、实测计数及浏览器证据：[交付记录](../dev_docs/generated/inline_domain/spc/z622-pds-import-delivery.md)。
 

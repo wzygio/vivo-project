@@ -4,7 +4,7 @@
 
 ## 配置与规格
 
-- `config/domain/indicator_domain.yaml` 的 `ijp.code_descriptions`、`ijp_hole.code_descriptions` 分别拥有 AA 区、孔区注释。筛选项、图例、hover、预警清单使用同一配置；缺少注释的 CODE 仅显示代码，查询值始终保持原始 CODE。
+- `config/domain/indicator_domain/ijp.yaml` 的 `ijp.code_descriptions` 和同目录 `ijp_hole.yaml` 的 `ijp_hole.code_descriptions` 分别拥有 AA 区、孔区注释。筛选项、图例、hover、预警清单使用同一配置；缺少注释的 CODE 仅显示代码，查询值始终保持原始 CODE。
 - 孔区的四类代码为 C3RA0、C3RA1、C3RA2、C3RA3；其默认注释在配置中维护，统计规则由 [孔区月周规则](../ijp_hole/rules-hole-period-report.md) 拥有。
 - AA 区 C3DM1 占比严格小于 90%，或孔区 C3RA1 占比严格小于 90%，触发预警。恰好 90% 不触发；无数据周期不触发。
 - 以服务器当天为参考，取上一 ISO 周的周一到周日，按产品、线体和 Printer 独立判断。月汇总、当前周、前两周不参与此次预警。

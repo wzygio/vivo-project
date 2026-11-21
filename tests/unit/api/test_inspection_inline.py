@@ -243,7 +243,7 @@ def test_only_physical_rule_view_change_republishes_same_prepared_generation(mon
     proof = {'start_date': '2026-10-01', 'end_date': '2026-11-12', 'source_generation': 'generation-1'}
     session._spc_source_proof = proof
     monkeypatch.setattr(session, '_logical_membership_policy', lambda: 'same-rules')
-    monkeypatch.setattr(composition, 'build_spc_sheet_membership_policy_signature', lambda: 'plain-view-hash')
+    monkeypatch.setattr(composition, 'build_spc_sheet_membership_policy_signature', lambda _: 'plain-view-hash')
     monkeypatch.setattr(composition, 'build_spc_sheet_membership_coverage', lambda product: lambda: proof)
     monkeypatch.setattr(composition, 'build_spc_sheet_membership_store', lambda: object())
     points, capabilities = pd.DataFrame({'point': [1]}), pd.DataFrame({'metric': [1]})
@@ -269,7 +269,7 @@ def test_physical_view_change_still_rejects_a_different_raw_generation(monkeypat
     proof = {'start_date': '2026-10-01', 'end_date': '2026-11-12', 'source_generation': 'generation-1'}
     session._spc_source_proof = proof
     monkeypatch.setattr(session, '_logical_membership_policy', lambda: 'same-rules')
-    monkeypatch.setattr(composition, 'build_spc_sheet_membership_policy_signature', lambda: 'plain-view-hash')
+    monkeypatch.setattr(composition, 'build_spc_sheet_membership_policy_signature', lambda _: 'plain-view-hash')
     monkeypatch.setattr(composition, 'build_spc_sheet_membership_coverage', lambda product: lambda: {**proof, 'source_generation': 'generation-2'})
     monkeypatch.setattr(sheet_membership, 'publish_spc_sheet_memberships', lambda *args, **kwargs: pytest.fail('must not republish'))
     with pytest.raises(SpcReportBuildError):

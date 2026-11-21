@@ -109,7 +109,7 @@ CPK、CPM 使用独立的 `cpk_summary_workbook`、`cpm_summary_workbook`。
 - 在服务边界强制 `data_type_filter = "SPC"`。
 - 生成 Sheet/点位分布、月/周/日 CPM/CPK、CPK 预警及 OOS/CPK 修饰结果。
 - CPK/CPM 共用同一条能力计算准入规则：仅双边有效规格参与计算；`LSL` 为空或为 `0`
-  均视为仅上限规格。参数名豁免列表由 `inline_domain.yaml` 的
+  均视为仅上限规格。参数名豁免列表由 `config/domain/inline_domain/shared.yaml` 的
   `spc.spc_cpk.exempt_param_name_contains` 配置，被豁免参数仍保留分布图数据。
 - 应用服务不返回图表样式；SPC/CTQ Sheet 点位图由前端 `app/charts/inline/chart_type.py`
   按 `inline_config.yaml` 的 `spc.chart.line_param_name_contains` 统一选择折线或箱线（ADR-0016）。
@@ -241,7 +241,7 @@ OOC 工作簿存在或其中 `flag=True`，不代表测量值已经被拉回 UCL
 | monitor | 读取各模块 OOS/OOC Excel 产品页的明细及 `flag` | 只有 `False` 进入报警结果 | 不重新截断测量值；按过滤后的报警更新本周汇总贡献 |
 
 入口与当前配置见 [decorated_features.py](../../../../src/inline_domain/application/shared/decorated_features.py)、
-[inline_domain.yaml](../../../../config/domain/inline_domain.yaml)。目前没有独立的 OOC 数值修饰总开关；
+[shared.yaml](../../../../config/domain/inline_domain/shared.yaml)。目前没有独立的 OOC 数值修饰总开关；
 是否执行由各服务调用路径、规格和记录级决策决定。
 
 ### 7.2 SPC 与 CTQ：Sheet OOS 点位修饰

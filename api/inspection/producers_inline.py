@@ -235,7 +235,7 @@ class InlineProductionSession:
             # file view and change stat size without changing logical rules.
             # Resolve that view before taking the ordinary membership signature.
             self._spc_logical_policy = self._logical_membership_policy()
-            self._spc_policy = inline.build_spc_sheet_membership_policy_signature()
+            self._spc_policy = inline.build_spc_sheet_membership_policy_signature(self.product)
             owner = self
             class PreparedPort:
                 def __getattr__(self, name): return getattr(port, name)
@@ -339,13 +339,13 @@ class InlineProductionSession:
                 raise ValueError("Generated capability result did not validate")
         self._finalize_membership_policy(report)
         members = inline.build_spc_sheet_membership_store().read(self.product, previous_monday)
-        if (members is None or members.get("policy_signature") != inline.build_spc_sheet_membership_policy_signature()
+        if (members is None
+                or members.get("policy_signature") != inline.build_spc_sheet_membership_policy_signature(self.product)
                 or members.get("coverage_start") != previous_monday.isoformat()
                 or members.get("coverage_end_exclusive") != (previous_monday + timedelta(days=7)).isoformat()):
             raise ValueError("SPC complete-week membership did not validate")
 
-    @staticmethod
-    def _logical_membership_policy() -> str:
+    def _logical_membership_policy(self) -> str:
         """Compare actual preparation rules, independent of protected stat views."""
         from src.shared_kernel.config import ConfigLoader
         from src.inline_domain.infrastructure.shared.outlier_filter_rules import load_outlier_filter_rules
@@ -357,6 +357,8 @@ class InlineProductionSession:
         policy = [SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE, ConfigLoader.get_data_forward_policy().signature,
                   ConfigLoader.get_inline_data_exclusion(), str(path.resolve()),
                   rules.to_json(orient="split", index=False, date_format="iso")]
+        if self.product == "Z622":
+            policy.append(ConfigLoader.get_z622_pds_lot_ids())
         return hashlib.sha256(json.dumps(policy, ensure_ascii=False).encode()).hexdigest()
 
     def _ensure_capability_headers(self) -> None:
@@ -395,7 +397,7 @@ class InlineProductionSession:
             return  # Read-only diagnostic callers do not republish anything.
         if self._logical_membership_policy() != self._spc_logical_policy:
             raise ValueError("SPC logical preparation policy changed during production")
-        final = inline.build_spc_sheet_membership_policy_signature()
+        final = inline.build_spc_sheet_membership_policy_signature(self.product)
         if final == self._spc_policy:
             return
         coverage = inline.build_spc_sheet_membership_coverage(self.product)

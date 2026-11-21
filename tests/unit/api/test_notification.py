@@ -33,7 +33,7 @@ def row(domain='SPC', factory='ARRAY', **fields):
 
 @pytest.fixture
 def settings():
-    return load_settings(ROOT / 'config/domain/api_domain.yaml')
+    return load_settings(ROOT / 'config/domain/api/notification.yaml')
 
 
 @pytest.mark.parametrize('domain,factory,email', [

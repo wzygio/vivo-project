@@ -25,7 +25,7 @@
 load_config(product_code)
   → 加载 .env
   → 加载 global.yaml
-  → 加载 products/{product_code}.yaml
+  → 从 Yield 各子模块的 product_overrides 读取所选产品的差异
   → _deep_merge 深度合并
   → AppConfig.model_validate() Pydantic 校验
 ```

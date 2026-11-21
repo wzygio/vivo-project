@@ -130,8 +130,8 @@ class SnapshotCapabilitySource:
         root = ConfigLoader.get_project_root()
         snapshot = self.snapshot_dir / f"inline_measurements_{product}.parquet"
         paths = [snapshot, snapshot.with_suffix(".snapshot.json"), snapshot.with_suffix(".policy"),
-                 root / "config/global.yaml", root / "config/domain/inline_domain.yaml",
-                 root / "config/products" / f"{product}.yaml"]
+                 root / "config/global.yaml",
+                 *ConfigLoader.get_domain_config_paths("inline_domain", "shared", "spc")]
         for key, default in (("spc_sheet_oos_decoration", "spc_sheet_oos_decoration.xlsx"),
                              ("spc_outlier_filters", "spc_outlier_filters.csv")):
             paths.append(ConfigLoader.get_domain_resource_path("inline_domain", key, default))

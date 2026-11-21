@@ -112,7 +112,7 @@ def build_service() -> PublishedAnomalyService:
     def sheet_membership(query: AnomalyQuery, row: dict) -> list[str]:
         from src.inline_domain.composition import build_spc_sheet_membership_query
 
-        return build_spc_sheet_membership_query().sheet_ids(
+        return build_spc_sheet_membership_query(query.product).sheet_ids(
             product=query.product, factory=str(row['factory']).upper(),
             step_id=str(row['step_id']), parameter_name=str(row['param_name']),
             start_date=row['calendar_start'], end_date=row['calendar_end'],

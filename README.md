@@ -87,8 +87,7 @@ vivo-project/
 │   └── integration/                  # 集成测试
 │
 ├── config/                           # 配置文件
-│   ├── products/                     # 各机型的产品配置 (M626.yaml, M678.yaml)
-│   ├── compliance_config.yaml
+│   ├── domain/                       # 按领域及业务子模块管理策略和产品差异
 │   └── global.yaml
 │
 ├── docs/                             # 项目文档 & 报表模板
@@ -152,7 +151,7 @@ run_hidden.vbs
 
 ### 3. 代码提交建议
 - 保持单次提交聚焦于一个领域变更（SPC 或 Yield），避免跨层大改。
-- 配置文件（`config/products/*.yaml`）修改需同步验证对应机型的集成测试。
+- 配置文件（`config/domain/<domain>/<submodule>.yaml`）修改需同步验证对应机型的集成测试。
 
 ---
 

@@ -6,13 +6,13 @@ from app.sections.yield_domain import resource_config
 
 @pytest.mark.parametrize("settings,expected", [({}, 0.0001), ({"dashboard": {"code_monthly_rate_threshold": 0.0002}}, 0.0002)])
 def test_threshold_uses_domain_configuration(monkeypatch, settings, expected):
-    monkeypatch.setattr(resource_config.ConfigLoader, "load_domain_config", lambda domain: settings)
+    monkeypatch.setattr(resource_config.ConfigLoader, "load_domain_config", lambda *_: settings)
     assert resource_config.get_code_monthly_rate_threshold() == expected
 
 
 @pytest.mark.parametrize("value", [-0.1, 1.1, "invalid", None, True, float("nan"), float("inf")])
 def test_invalid_threshold_fails_explicitly(monkeypatch, value):
-    monkeypatch.setattr(resource_config.ConfigLoader, "load_domain_config", lambda domain: {
+    monkeypatch.setattr(resource_config.ConfigLoader, "load_domain_config", lambda *_: {
         "dashboard": {"code_monthly_rate_threshold": value},
     })
     with pytest.raises(ValueError):

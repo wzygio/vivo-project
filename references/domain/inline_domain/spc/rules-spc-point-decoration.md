@@ -4,7 +4,7 @@
 
 ## 1. 配置与执行顺序
 
-配置入口为 `config/domain/inline_domain.yaml`。核验时配置为 `central_fraction: 0.5`（中央50%），计算始终服从实际配置：
+配置入口为 `config/domain/inline_domain/spc.yaml`。核验时配置为 `central_fraction: 0.5`（中央50%），计算始终服从实际配置：
 
 ```yaml
 spc:

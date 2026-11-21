@@ -71,7 +71,7 @@ def test_active_rule_rejects_missing_time_instead_of_silently_showing_data():
 
 
 def test_config_resolves_today_and_normalizes_factories(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: {
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
         "data_exclusion": {
             "factories": [" OLED ", "array", "OLED"],
             "start_date": "2026-10-01", "end_date": "today",
@@ -84,7 +84,7 @@ def test_config_resolves_today_and_normalizes_factories(monkeypatch):
 
 @pytest.mark.parametrize("section", [{}, {"factories": []}])
 def test_missing_or_disabled_config_does_not_filter(monkeypatch, section):
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: {"data_exclusion": section})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"data_exclusion": section})
     assert ConfigLoader.get_inline_data_exclusion() is None
 
 
@@ -94,7 +94,7 @@ def test_missing_or_disabled_config_does_not_filter(monkeypatch, section):
 ])
 def test_invalid_config_is_rejected(monkeypatch, overrides):
     section = {"factories": ["OLED"], "start_date": "2026-10-01", "end_date": "2026-10-06", **overrides}
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: {"data_exclusion": section})
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {"data_exclusion": section})
     with pytest.raises(ValueError, match="data_exclusion"):
         ConfigLoader.get_inline_data_exclusion()
 
@@ -109,7 +109,7 @@ def test_all_inline_event_columns_share_the_same_exclusion(time_column):
 def test_legacy_config_remains_usable_and_new_config_takes_precedence(monkeypatch):
     rule = {"factories": ["TP"], "start_date": "2026-10-01", "end_date": "2026-10-06"}
     domain = {"aoi_data_exclusion": rule}
-    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda _domain: domain)
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: domain)
     assert ConfigLoader.get_inline_data_exclusion() == (("TP",), "2026-10-01", "2026-10-06")
     domain["data_exclusion"] = {"factories": []}
     assert ConfigLoader.get_inline_data_exclusion() is None

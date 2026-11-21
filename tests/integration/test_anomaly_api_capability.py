@@ -80,7 +80,7 @@ def capability_files(published_files, monkeypatch):
     files.member_points = pd.DataFrame(points)
     publish_membership(files.member_points)
     monkeypatch.setattr(composition, 'build_spc_sheet_membership_query',
-        lambda: SpcSheetMembershipQuery(files.membership_store, policy_signature='fixture-policy'))
+        lambda _: SpcSheetMembershipQuery(files.membership_store, policy_signature='fixture-policy'))
     return files
 
 

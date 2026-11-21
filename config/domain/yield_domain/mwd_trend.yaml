@@ -1,0 +1,13 @@
+period_trend:
+  maintained_rate_start: '2026-06'
+
+product_overrides:
+  M626: &modifier_workbook
+    paths:
+      yield_modifier_config: {}
+  M673: *modifier_workbook
+  M678: *modifier_workbook
+  Z517: *modifier_workbook
+  Z553: *modifier_workbook
+  Z571: *modifier_workbook
+  Z576: *modifier_workbook

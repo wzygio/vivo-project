@@ -4,7 +4,7 @@
 
 ## 1. 独立配置
 
-`config/domain/inline_domain.yaml`：
+`config/domain/inline_domain/aoi_tt.yaml`：
 
 ```yaml
 aoi_tt:

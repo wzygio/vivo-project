@@ -40,7 +40,7 @@ class AoiRsMonitorSource:
         return hashlib.sha256(value.encode()).hexdigest()
 
     def policy_signature(self, product: str) -> str:
-        domain = ConfigLoader.load_domain_config("inline_domain")
+        domain = ConfigLoader.load_domain_config("inline_domain", "shared", "aoi_rs")
         signature = {
             "version": "aoi-rs-monitor-v1", "decoration_version": AOI_RS_DECORATION_POLICY_VERSION,
             "exclusion": domain.get("data_exclusion"),

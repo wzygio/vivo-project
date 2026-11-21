@@ -1,6 +1,8 @@
 # src\shared_kernel\config.py
 import yaml
 import logging
+import re
+from functools import lru_cache
 from math import isfinite
 from pathlib import Path
 from datetime import date
@@ -11,6 +13,19 @@ from dotenv import load_dotenv
 from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.data_forward import DataForwardPolicy
 from src.shared_kernel.report_cutoff import ReportCutoffPolicy
+
+@lru_cache(maxsize=16)
+def _domain_routes(path: Path, mtime_ns: int, size: int) -> dict:
+    """Keep session hot-reload checks cheap; a new file version reloads the routes."""
+    with path.open(encoding="utf-8") as stream:
+        config = yaml.safe_load(stream) or {}
+    if not isinstance(config, dict):
+        raise ValueError(f"{path}: expected a YAML mapping")
+    routes = config.get("domain_config", {})
+    if not isinstance(routes, dict):
+        raise ValueError(f"{path}: domain_config must be a mapping")
+    return routes
+
 
 class ConfigLoader:
     """
@@ -159,43 +174,17 @@ class ConfigLoader:
 
     @classmethod
     def load_config(cls, product_code: str) -> AppConfig:
-        """
-        [核心入口] 加载指定产品的完整配置对象。
-        
-        Args:
-            product_code (str): 产品代码，如 "M678"。这将决定加载哪个 YAML 文件。
-            
-        Returns:
-            AppConfig: 校验通过的 Pydantic 配置对象。
-        """
-        root_dir = cls.get_project_root()
-        config_dir = root_dir / "config"
-        
-        # 1. 路径组装
-        global_yaml_path = config_dir / "global.yaml"
-        product_yaml_path = config_dir / "products" / f"{product_code}.yaml"
-        env_path = root_dir / ".env"
-
-        logging.info(f"正在构建配置对象 (Product: {product_code})...")
-
-        # 2. 加载 .env 环境变量 (如有)
+        """Build the selected product's runtime configuration from global and Yield policies."""
+        env_path = cls.get_project_root() / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path, override=True)
 
-        # 3. 加载 YAML
         global_conf = cls._load_resource_global_config()
-        product_conf = cls._load_yaml(product_yaml_path)
-
-        if not global_conf and not product_conf:
-            msg = f"未找到任何有效配置！请检查路径: {config_dir}"
-            logging.error(msg)
-            # 在这一步抛出异常是合理的，因为没有配置程序无法运行
-            raise FileNotFoundError(msg)
-
-        # 4. 深度合并 (Global < Product)
+        yield_domain = cls.load_domain_config("yield_domain")
+        product_conf = yield_domain.get("product_overrides", {}).get(product_code, {})
         merged_conf = cls._deep_merge(global_conf, product_conf)
         # Yield's optional Array-time query has one domain-owned opt-in switch.
-        yield_policy = cls.load_domain_config("yield_domain").get("array_input_time", {})
+        yield_policy = yield_domain.get("array_input_time", {})
         query_enabled = yield_policy.get("query_enabled", False)
         if not isinstance(query_enabled, bool):
             raise ValueError("yield_domain.array_input_time.query_enabled must be boolean")
@@ -217,13 +206,11 @@ class ConfigLoader:
                 paths[alias] = metadata
             merged_conf["paths"] = paths
 
-        # 5. 数据源一致性强制覆盖
-        # 即使 YAML 里写错了 product_code，也以传入参数为准
+        # The selected product supplies its identity.
         if 'data_source' not in merged_conf:
             merged_conf['data_source'] = {}
         merged_conf['data_source']['product_code'] = product_code
 
-        # 6. Pydantic 实例化与校验
         try:
             config_obj = AppConfig.model_validate(merged_conf)
             logging.info(f"✅ 配置加载完成: {product_code}")
@@ -254,7 +241,7 @@ class ConfigLoader:
     @classmethod
     def get_inline_measurement_retention_start(cls, prod_code: str) -> date | None:
         """Read an optional fixed source-history anchor for shared measurements."""
-        section = cls.load_domain_config("inline_domain").get("measurement_snapshots", {})
+        section = cls.load_domain_config("inline_domain", "shared").get("measurement_snapshots", {})
         setting = "inline_domain.measurement_snapshots.retain_from"
         if not isinstance(section, dict):
             raise ValueError(f"{setting}: measurement_snapshots must be a mapping")
@@ -331,17 +318,56 @@ class ConfigLoader:
         config/domain/<domain>.yaml 约定路径。
         """
         root_dir = cls.get_project_root()
-        router = cls._load_yaml(root_dir / "config" / "global.yaml").get("domain_config", {})
-        configured = router.get(domain) if isinstance(router, dict) else None
+        global_path = root_dir / "config/global.yaml"
+        try:
+            stat = global_path.stat()
+        except FileNotFoundError:
+            configured = None
+        else:
+            configured = _domain_routes(global_path, stat.st_mtime_ns, stat.st_size).get(domain)
         if configured:
             path = Path(str(configured))
-            return path if path.is_absolute() else root_dir / path
+            entry = path if path.is_absolute() else root_dir / path
+            if not entry.is_file():
+                raise FileNotFoundError(f"Missing configured domain entry: {entry}")
+            return entry
         return root_dir / "config" / "domain" / f"{domain}.yaml"
 
     @classmethod
-    def load_domain_config(cls, domain: str) -> Dict[str, Any]:
-        """加载指定 domain 的 YAML 配置（路径由 global.yaml 路由决定）。"""
-        return cls._load_yaml(cls.get_domain_config_path(domain))
+    def _domain_sources(cls, domain: str, submodules: tuple[str, ...]) -> tuple[Path, dict, list[Path]]:
+        entry = cls.get_domain_config_path(domain)
+        # Some installations only configure global resources for this domain.
+        config = cls._read_config_mapping(entry) if entry.exists() else {}
+        modules = config.pop("submodules", [])
+        if (not isinstance(modules, list) or any(
+            not isinstance(name, str) or not name.isidentifier() for name in modules
+        ) or len(modules) != len(set(modules))):
+            raise ValueError(f"{entry}: submodules must be a list of unique module names")
+        paths = [entry.with_suffix("") / f"{name}.yaml" for name in modules
+                 if not submodules or name in submodules]
+        return entry, config, paths
+
+    @classmethod
+    def get_domain_config_paths(cls, domain: str, *submodules: str) -> tuple[Path, ...]:
+        """Files whose changes invalidate a consumer of the selected policies."""
+        entry, _, paths = cls._domain_sources(domain, submodules)
+        return (entry, *paths)
+
+    @staticmethod
+    def _read_config_mapping(path: Path) -> dict:
+        with path.open(encoding="utf-8") as stream:
+            value = yaml.safe_load(stream)
+        if not isinstance(value, dict):
+            raise ValueError(f"{path}: expected a YAML mapping")
+        return value
+
+    @classmethod
+    def load_domain_config(cls, domain: str, *submodules: str) -> Dict[str, Any]:
+        """Load domain settings and the requested module files, or all when omitted."""
+        _, config, paths = cls._domain_sources(domain, submodules)
+        for path in paths:
+            config = cls._deep_merge(config, cls._read_config_mapping(path))
+        return config
 
     @classmethod
     def _load_resource_global_config(cls) -> Dict[str, Any]:
@@ -449,10 +475,26 @@ class ConfigLoader:
         return {"rules": []}
 
     @classmethod
+    def get_z622_pds_lot_ids(cls) -> tuple[str, ...]:
+        """Read the Z622 PDS allowlist without a default that broadens the query."""
+        domain = cls.load_domain_config("inline_domain", "spc")
+        spc = domain.get("spc") if isinstance(domain, dict) else None
+        pds = spc.get("z622_pds") if isinstance(spc, dict) else None
+        lot_ids = pds.get("lot_ids") if isinstance(pds, dict) else None
+        if (not isinstance(lot_ids, list) or not lot_ids or any(
+            not isinstance(lot_id, str) or re.fullmatch(r"[A-Z0-9]{9}", lot_id) is None
+            for lot_id in lot_ids
+        )):
+            raise ValueError("spc.z622_pds.lot_ids must contain nine-character uppercase alphanumeric Lot IDs")
+        if len(set(lot_ids)) != len(lot_ids):
+            raise ValueError("spc.z622_pds.lot_ids contains duplicate Lot IDs")
+        return tuple(sorted(lot_ids))
+
+    @classmethod
     def get_spc_capability_alert_min_span_hours(cls) -> float:
         """Read the weekly alert coverage gate; capability calculations are unaffected."""
         path = "spc.spc_cpk.alert_min_span_hours"
-        spc = cls.load_domain_config("inline_domain").get("spc", {})
+        spc = cls.load_domain_config("inline_domain", "spc").get("spc", {})
         if not isinstance(spc, dict):
             raise ValueError("spc must be a mapping")
         section = spc.get("spc_cpk", {})
@@ -473,7 +515,7 @@ class ConfigLoader:
     def get_spc_period_sigma_source(cls) -> str:
         """Read the SPC capability period sigma source from the inline domain config."""
         try:
-            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain", "spc").get("spc", {})
             report_conf = spc_conf.get("spc_cpk", {})
             return str(report_conf.get("period_sigma_source", "sheet_mean")).strip().lower()
         except Exception as e:
@@ -485,7 +527,7 @@ class ConfigLoader:
         cls, *, today: date | None = None,
     ) -> tuple[float, str, str] | None:
         """Resolve the optional central specification band and its display dates."""
-        report = cls.load_domain_config("inline_domain").get("spc", {})
+        report = cls.load_domain_config("inline_domain", "spc").get("spc", {})
         if not isinstance(report, dict):
             raise ValueError("spc must be a mapping")
         section = report.get("point_decoration", {})
@@ -514,7 +556,7 @@ class ConfigLoader:
     def get_spc_period_box_source(cls) -> str:
         """Read the SPC capability period boxplot sample source from the inline domain config."""
         try:
-            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain", "spc").get("spc", {})
             report_conf = spc_conf.get("spc_cpk", {})
             source = str(report_conf.get("period_box_source", "point_value")).strip().lower()
             return source if source in {"sheet_mean", "point_value"} else "point_value"
@@ -526,7 +568,7 @@ class ConfigLoader:
     def get_spc_capability_param_exemptions(cls) -> list[str]:
         """Read parameter-name tokens excluded from both SPC capability metrics."""
         try:
-            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain", "spc").get("spc", {})
             capability_conf = spc_conf.get("spc_cpk", {})
             configured_values = capability_conf.get("exempt_param_name_contains", [])
             if not isinstance(configured_values, list):
@@ -543,7 +585,7 @@ class ConfigLoader:
     @classmethod
     def get_spc_sheet_oos_alert_param_exclusions(cls) -> list[str]:
         """Read SPC Sheet alert exclusions independently of decoration exemptions."""
-        spc = cls.load_domain_config("inline_domain").get("spc", {})
+        spc = cls.load_domain_config("inline_domain", "spc").get("spc", {})
         section = spc.get("sheet_oos_alerts", {})
         values = section.get("excluded_param_name_contains", [])
         if not isinstance(values, list):
@@ -554,7 +596,7 @@ class ConfigLoader:
     def get_spc_line_chart_param_name_contains(cls) -> list[str]:
         """Read parameter-name tokens rendered as SPC Sheet point line charts."""
         try:
-            spc_conf = cls.load_domain_config("inline_domain").get("spc", {})
+            spc_conf = cls.load_domain_config("inline_domain", "spc").get("spc", {})
             chart_conf = spc_conf.get("chart", {})
             configured_values = chart_conf.get("line_param_name_contains", [])
             if not isinstance(configured_values, list):
@@ -572,7 +614,7 @@ class ConfigLoader:
     def get_auto_decoration_param_exemptions(cls) -> list[str]:
         """Read parameter-name tokens that bypass automatic value clipping."""
         try:
-            decoration_conf = cls.load_domain_config("inline_domain").get("auto_decoration", {})
+            decoration_conf = cls.load_domain_config("inline_domain", "shared").get("auto_decoration", {})
             configured_values = decoration_conf.get(
                 "exempt_param_name_contains",
                 [],
@@ -593,7 +635,7 @@ class ConfigLoader:
         cls, *, today: date | None = None,
     ) -> tuple[str, str] | None:
         """Resolve inclusive Indicator display dates; missing policy is disabled."""
-        section = cls.load_domain_config("indicator_domain").get("data_exclusion", {})
+        section = cls.load_domain_config("indicator_domain", "shared").get("data_exclusion", {})
         if not isinstance(section, dict):
             raise ValueError("indicator_domain.data_exclusion must be a mapping")
         enabled = section.get("enabled", False)
@@ -616,7 +658,7 @@ class ConfigLoader:
         cls, *, today: date | None = None,
     ) -> tuple[tuple[str, ...], str, str] | None:
         """Resolve the domain-wide projection exclusion, including legacy AOI config."""
-        domain = cls.load_domain_config("inline_domain")
+        domain = cls.load_domain_config("inline_domain", "shared")
         section = domain.get("data_exclusion", domain.get("aoi_data_exclusion", {}))
         if not isinstance(section, dict):
             raise ValueError("data_exclusion must be a mapping")
@@ -658,7 +700,7 @@ class ConfigLoader:
 
     @classmethod
     def _aoi_special_decoration_section(cls, report_name: str) -> dict:
-        report = cls.load_domain_config("inline_domain").get(report_name, {})
+        report = cls.load_domain_config("inline_domain", report_name).get(report_name, {})
         if not isinstance(report, dict):
             raise ValueError(f"{report_name} must be a mapping")
         special = report.get("special_decoration", {})
@@ -748,7 +790,7 @@ class ConfigLoader:
     def get_aoi_tt_particle_size_generation_enabled(cls) -> bool:
         """Return whether AOI_TT Particle Size values are generated from ratios."""
         try:
-            report_conf = cls.load_domain_config("inline_domain").get("aoi_tt", {})
+            report_conf = cls.load_domain_config("inline_domain", "aoi_tt").get("aoi_tt", {})
             particle_conf = report_conf.get("particle_size", {})
             return bool(particle_conf.get("generate_from_ratios", True))
         except Exception as exc:
@@ -759,7 +801,7 @@ class ConfigLoader:
     def get_aoi_tt_particle_size_ratio_jitter(cls) -> float:
         """Return the bounded relative jitter used by stable ratio generation."""
         try:
-            report_conf = cls.load_domain_config("inline_domain").get("aoi_tt", {})
+            report_conf = cls.load_domain_config("inline_domain", "aoi_tt").get("aoi_tt", {})
             particle_conf = report_conf.get("particle_size", {})
             configured = float(particle_conf.get("ratio_jitter", 0.1))
             return min(max(configured, 0.0), 1.0)
@@ -778,23 +820,15 @@ class ConfigLoader:
 
     @classmethod
     def get_scrap_factory_mapping(cls) -> dict:
-        """
-        [新增] 获取报废站点 → 厂别映射配置
-        """
-        root_dir = cls.get_project_root()
-        yaml_path = root_dir / "config" / "scrap_factory_mapping.yaml"
-        
+        """Station-to-factory rules owned by the Inline monitor."""
         try:
-            if yaml_path.exists():
-                result = cls._load_yaml(yaml_path)
-                # 防御：确保 mappings 不为 None（YAML 空节点解析为 None）
-                if result.get('mappings') is None:
-                    result['mappings'] = {}
-                return result
-        except Exception as e:
-            logging.error(f"❌ 读取 scrap_factory_mapping.yaml 失败: {e}")
-            
-        return {"default_prefix_rules": {}, "mappings": {}}
+            config = cls.load_domain_config("inline_domain", "monitor")
+            mapping = config.get("monitor", {}).get("scrap_factory_mapping", {})
+            return {"default_prefix_rules": mapping.get("default_prefix_rules") or {},
+                    "mappings": mapping.get("mappings") or {}}
+        except (OSError, ValueError, AttributeError, yaml.YAMLError) as exc:
+            logging.warning("Cannot infer scrap factories from Inline monitor settings: %s", exc)
+            return {"default_prefix_rules": {}, "mappings": {}}
 
     @classmethod
     def get_equipment_config(cls) -> dict[str, Any]:

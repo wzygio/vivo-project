@@ -13,7 +13,7 @@ from src.shared_kernel.data_forward import DataForwardPolicy
 @pytest.fixture
 def config(monkeypatch):
     section = {'enabled': True, 'start_date': '2026-10-01', 'end_date': '2026-10-06'}
-    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda domain: {'data_exclusion': section})
+    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda *_: {'data_exclusion': section})
     return section
 
 
@@ -43,7 +43,7 @@ def test_config_supports_today_missing_and_disabled(monkeypatch, config):
     {'enabled': True, 'start_date': '2026-10-07', 'end_date': '2026-10-06'},
 ])
 def test_invalid_config_is_rejected(monkeypatch, section):
-    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda domain: {'data_exclusion': section})
+    monkeypatch.setattr(ConfigLoader, 'load_domain_config', lambda *_: {'data_exclusion': section})
     with pytest.raises(ValueError, match='data_exclusion'):
         ConfigLoader.get_indicator_data_exclusion()
 

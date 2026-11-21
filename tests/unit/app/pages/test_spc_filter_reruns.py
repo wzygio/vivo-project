@@ -65,7 +65,7 @@ def page(monkeypatch):
     monkeypatch.setattr(composition, "build_spc_repository", lambda *args: object())
     monkeypatch.setattr(composition, "build_spc_input_signature", lambda *args: "test-snapshot")
     monkeypatch.setattr(composition, "build_spc_sheet_membership_store", lambda: object())
-    monkeypatch.setattr(composition, "build_spc_sheet_membership_policy_signature", lambda: "test-policy")
+    monkeypatch.setattr(composition, "build_spc_sheet_membership_policy_signature", lambda _: "test-policy")
     monkeypatch.setattr(composition, "build_spc_sheet_membership_coverage", lambda *args: None)
     monkeypatch.setattr(SpcReportService, "get_spc_report_data", staticmethod(load))
     monkeypatch.setattr(spc_dashboard, "render_spc_indicator_sections", charts)

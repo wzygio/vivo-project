@@ -1,6 +1,6 @@
 # 0043 — API 预警周报邮件推送
 
-2026-11-16配置归属更新：SMTP身份迁入本项目`api_domain.yaml`，密码经用户明确授权
+2026-11-16配置归属更新：SMTP身份迁入本项目`config/domain/api/notification.yaml`，密码经用户明确授权
 迁入Git忽略的本项目`.env`。项目身份配置启用后，旧`--mail-config`不再访问外部文件，
 本地密码缺失直接失败；兼容参数保留，使计划任务入口、参数与执行时间均无需修改。
 
@@ -16,7 +16,7 @@
 Core 负责纯路由与公开投影；Application 编排取数和投递；Infrastructure 适配现有 HTTP 客户端、
 SMTP 和 MIME 格式；Settings 加载经过校验的路由和显式凭证输入；`__main__` 为一次性调度入口。
 
-业务配置和收件人由 `config/domain/api_domain.yaml` 唯一维护，凭证通过进程环境、
+业务配置和收件人由 `config/domain/api/notification.yaml` 唯一维护，凭证通过进程环境、
 显式环境文件或原例程格式的私有邮件 YAML 注入。邮件头和 SMTP 信封使用同一收件人；
 测试模式在分组前统一覆盖，禁止私有配置携带其它收件人、抄送或密送。
 

@@ -89,7 +89,7 @@ def _produce_ijp(module: str, products: tuple[str, ...], reference: date) -> int
         service = IjpReportService(build_ijp_repository(manager),
             enabled_product_codes=products, work_order_types=orders,
             today_provider=lambda: reference, alert_store=store,
-            settings=IjpSettings.model_validate(ConfigLoader.load_domain_config('indicator_domain').get('ijp', {})))
+            settings=IjpSettings.model_validate(ConfigLoader.load_domain_config('indicator_domain', 'ijp').get('ijp', {})))
     else:
         service = IjpHoleReportService(IjpHoleRepository(manager), enabled_products=products,
             work_order_types=orders, today_provider=lambda: reference, alert_store=store)

@@ -75,12 +75,9 @@ def install_captured_case(monkeypatch, directory: Path, source: Path, *, mode="n
     config["resources"]["inline_domain"]["directories"] = {}
     config_dir = directory / "config"
     (config_dir / "domain").mkdir(parents=True, exist_ok=True)
-    (config_dir / "products").mkdir(exist_ok=True)
     (config_dir / "global.yaml").write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     shutil.copy2(ROOT / "config/domain/inline_domain.yaml", config_dir / "domain/inline_domain.yaml")
-    product = ROOT / "config/products/Z622.yaml"
-    if product.exists():
-        shutil.copy2(product, config_dir / "products/Z622.yaml")
+    shutil.copytree(ROOT / "config/domain/inline_domain", config_dir / "domain/inline_domain", dirs_exist_ok=True)
     monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: directory)
     original = captured_facts(source)
     # Use the production reader, including enterprise workbook normalization.
@@ -99,7 +96,8 @@ def install_captured_case(monkeypatch, directory: Path, source: Path, *, mode="n
         assert "p.glass_start_time >= :start_time" in sql_words
         assert "p.glass_start_time < :end_time" in sql_words
         params = params or {}
-        assert params.get("lot_prefix") == "L3ZB6BE03%"
+        prefixes = [value for name, value in params.items() if name.startswith("lot_prefix_")]
+        assert prefixes == ["L3ZB6BE03%", "L3ZB6BE04%"]
         transmitted_pairs = pd.DataFrame([
             {"step_id": value, "param_name": params[f"param_{key.removeprefix('step_')}"]}
             for key, value in params.items() if key.startswith("step_")
@@ -109,7 +107,7 @@ def install_captured_case(monkeypatch, directory: Path, source: Path, *, mode="n
         if mode == "failure":
             raise OSError("CAPTURED_PDS_TRANSPORT_FAILURE")
         selected = original.merge(transmitted_pairs.drop_duplicates(), on=["step_id", "param_name"], how="inner")
-        selected = selected.loc[selected.lot_id.eq("L3ZB6BE03")]
+        selected = selected.loc[selected.sheet_id.str.startswith(tuple(value[:-1] for value in prefixes))]
         # Respect every transmitted source-time boundary, independently of its bind name.
         for name, value in params.items():
             lowered = name.lower()

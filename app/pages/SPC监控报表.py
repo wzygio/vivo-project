@@ -146,7 +146,7 @@ try:
             product_revision=product_revision,
             decision_signature=decision_signature,
             _sheet_membership_store=build_spc_sheet_membership_store(),
-            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(),
+            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(current_product),
             _sheet_membership_coverage=build_spc_sheet_membership_coverage(current_product),
         )
 except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):

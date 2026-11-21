@@ -19,7 +19,6 @@ domain_config:
   yield_domain: config/domain/yield_domain.yaml
   equipment_domain: config/domain/equipment_domain.yaml
   indicator_domain: config/domain/indicator_domain.yaml
-  iqc_domain: config/domain/iqc_domain.yaml
 
 product_registry:
 

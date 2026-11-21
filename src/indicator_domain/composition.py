@@ -42,7 +42,7 @@ def build_qtime_repository(db_manager: DatabaseManager) -> QTimeRepository:
 
 
 def build_qtime_service(db_manager: DatabaseManager) -> QTimeReportService:
-    settings = ConfigLoader.load_domain_config("indicator_domain").get("qtime", {})
+    settings = ConfigLoader.load_domain_config("indicator_domain", "qtime").get("qtime", {})
     decoration_path = ConfigLoader.get_domain_resource_path(
         "indicator_domain",
         "qtime_oos_decoration",
@@ -72,7 +72,7 @@ def build_qtime_alert_results(*, workbook_reader=None) -> "QTimeAlertResults":
             ConfigLoader.get_indicator_data_exclusion(),
             ConfigLoader.get_data_forward_policy().signature,
             ConfigLoader.get_report_cutoff_policy().signature,
-            ConfigLoader.load_domain_config("indicator_domain").get("qtime", {}),
+            ConfigLoader.load_domain_config("indicator_domain", "qtime").get("qtime", {}),
             _qtime_decision_signature(),
         )).encode()).hexdigest(),
     )
@@ -98,7 +98,7 @@ def qtime_alert_result_signature(product: str, reference_date: date, **selection
 
 
 def build_chamber_qtime_service(db_manager: DatabaseManager) -> ChamberQTimeService:
-    settings = ConfigLoader.load_domain_config('indicator_domain')['qtime']
+    settings = ConfigLoader.load_domain_config('indicator_domain', 'qtime')['qtime']
     return ChamberQTimeService(
         DatabaseChamberQTimeRepository(db_manager, target_seconds=settings['chamber_target_seconds']),
         enabled_products=tuple(ConfigLoader.get_enabled_products()),
@@ -120,7 +120,7 @@ def build_ijp_service(db_manager: DatabaseManager) -> IjpReportService:
         enabled_product_codes=tuple(ConfigLoader.get_enabled_products()),
         work_order_types=tuple(ConfigLoader.get_work_order_types()),
         settings=IjpSettings.model_validate(
-            ConfigLoader.load_domain_config("indicator_domain").get("ijp", {})
+            ConfigLoader.load_domain_config("indicator_domain", "ijp").get("ijp", {})
         ),
         alert_store=build_ijp_alert_store(),
     )

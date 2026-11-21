@@ -17,7 +17,7 @@ from tests.unit.api.test_notification import ROOT, TEST_INBOX, result, row
 
 @pytest.fixture
 def settings():
-    return load_settings(ROOT / 'config/domain/api_domain.yaml')
+    return load_settings(ROOT / 'config/domain/api/notification.yaml')
 
 
 class FakeSmtp:
@@ -122,7 +122,7 @@ def test_abort_and_bad_route_before_any_delivery(settings):
 
 @pytest.mark.parametrize('change', ['duplicate', 'missing', 'unknown', 'invalid_email', 'timeout', 'security'])
 def test_invalid_configuration_fails_closed(tmp_path, change):
-    config = yaml.safe_load((ROOT / 'config/domain/api_domain.yaml').read_text())
+    config = yaml.safe_load((ROOT / 'config/domain/api/notification.yaml').read_text())
     conf = config['notification']
     if change == 'duplicate': conf['routes'].append(conf['routes'][0])
     if change == 'missing': conf['routes'].pop()
@@ -170,7 +170,7 @@ def test_project_identity_only_requires_private_password(settings):
 @pytest.mark.parametrize('user,sender', [('bad\r\naccount','sender@example.com'),
                                          ('account','invalid-address'),(None,'sender@example.com')])
 def test_invalid_project_sender_is_rejected_before_delivery(tmp_path, user, sender):
-    config = yaml.safe_load((ROOT/'config/domain/api_domain.yaml').read_text())
+    config = yaml.safe_load((ROOT/'config/domain/api/notification.yaml').read_text())
     config['notification']['smtp'].update(user=user, sender=sender)
     path = tmp_path/'config.yaml'
     path.write_text(yaml.safe_dump(config), encoding='utf-8')

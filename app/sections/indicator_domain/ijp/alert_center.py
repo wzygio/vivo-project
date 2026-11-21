@@ -36,7 +36,8 @@ def render_ijp_alert_center(service: IjpAlertSource, region: str, *, produce: bo
             signature = (
                 'ijp-alert-v1', region, start, end, type(service).__module__, type(service).__qualname__,
                 tuple(ConfigLoader.get_enabled_products()), tuple(ConfigLoader.get_work_order_types()),
-                repr(ConfigLoader.load_domain_config('indicator_domain')),
+                repr(ConfigLoader.load_domain_config('indicator_domain', 'shared',
+                                                     'ijp_hole' if region == '孔区' else 'ijp')),
                 ConfigLoader.get_data_forward_policy().signature, load_report_cutoff_policy().signature,
                 str(ConfigLoader.get_domain_resource_path('indicator_domain', 'ijp_alerts', 'ijp/ijp_alerts.xlsx')),
             )

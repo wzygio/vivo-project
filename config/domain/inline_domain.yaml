@@ -1,82 +1,10 @@
-# 共享测量原始快照按源时间保留；未配置的产品继续使用默认滚动窗口。
-measurement_snapshots:
-  retain_from:
-    Z553: "2026-05-01"
+submodules: [shared, spc, aoi_rs, aoi_tt]
 
-spc:
-  # 先按原 USL/LSL 传统修饰，再在显示日期窗口内按中央区间专用修饰；两阶段保留 flag=False。
-  # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
-  point_decoration:
-    enabled: true
-    central_fraction: 0.5
-    start_date: "2026-10-05"
-    end_date: "today"
-  spc_cpk:
-    # 周度预警的最小有效 Sheet 时间跨度（小时）；不影响 CPK/CPM 计算。
-    # 恰好达到门槛可预警；0 取消最小时长限制，但起止时间仍须有效且顺序正确。
-    alert_min_span_hours: 0
-    # sheet_mean: original mode, sigma uses period Sheet Mean std.
-    # point_value: hidden comparison mode, sigma uses period point-level param_value std.
-    period_sigma_source: "point_value"
-    period_box_source: "point_value"
-    # 参数名包含任一普通文本时，不计算 CPK/CPM；匹配不区分大小写。
-    exempt_param_name_contains:
-      - "PPA"
-
-  # SPC 页面单片预警过滤：仅排除预警明细及对应自动预警图，不改变修饰决策或常规查询。
-  # 独立于参数修饰豁免；按参数名普通文本包含关系匹配，不区分大小写；[] 关闭。
-  sheet_oos_alerts:
-    excluded_param_name_contains:
-      - "PPA"
-
-  # Sheet 点位图样式：使用折线图而非箱线图；匹配不区分大小写，按普通文本处理
-  chart:
-    line_param_name_contains:
-      - "UNI"
-
-# AOI_TT/AOI_RS 参数豁免：命中后 OOS/OOC 产品明细 flag=False，保留真实值。
-# 按普通文本、不区分大小写匹配；显式 Delete 优先，人工 __flags 决策保持原样。
-auto_decoration:
-  exempt_param_name_contains:
-    - "PPA"
-
-# Inline 全域日期过滤：按各模块事件时间（报表时间）排除，首尾日期均包含。
-# factories: [] 关闭；end_date 支持 "today"（服务器当天）或 "YYYY-MM-DD"。
-data_exclusion:
-  factories:
-    - "OLED"
-    - "TP"
-  start_date: "2026-10-01"
-  end_date: "2026-10-06"
-
-# AOI_RS 特殊顺序修饰：Sheet 按规格比例修饰 → Lot 归零 → 周/日限幅。
-# 默认关闭；enabled=true 时仅对列表中的厂别启用，[] 也关闭特殊修饰。
-# 关闭时及其他厂别沿用常规修饰。
-aoi_rs:
-  special_decoration:
-    enabled: true
-    # 严格超过 sheet_threshold_ratio × spec 时触发，哈希值位于 [0, sheet_replacement_ratio × spec]。
-    sheet_threshold_ratio: 0.5
-    sheet_replacement_ratio: 0.25
-    factories:
-      - "OLED"
-    # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。
-    start_date: "2026-09-21"
-    end_date: "today"
-
-# AOI_TT Particle Size：默认按站点比例稳定生成；关闭后改读 ARRAY/TP 缺陷明细表。
-aoi_tt:
-  # 与 AOI_RS 独立配置；以 UCL 为基准，先修饰 Total，再生成粒径明细。
-  special_decoration:
-    enabled: true
-    sheet_threshold_ratio: 0.5
-    sheet_replacement_ratio: 0.25
-    factories:
-      - "OLED"
-    start_date: "2026-09-21"
-    end_date: "today"
-  particle_size:
-    generate_from_ratios: true
-    # 各 Sheet 相对规格比例的最大扰动幅度；0.10 表示 ±10%，随后归一化。
-    ratio_jitter: 0.10
-# 资源文件路径配置（dir 相对项目根目录；files 值为纯文件名时相对 dir 解析）
+monitor:
+  scrap_factory_mapping:
+    # 五位报废站点代码优先取精确映射，其次按前缀推断厂别。
+    default_prefix_rules:
+      "1": ARRAY
+      "2": OLED
+      "3": TP
+    mappings: {}  # 示例：{"A0001": "ARRAY"}

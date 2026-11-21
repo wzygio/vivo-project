@@ -1,0 +1,36 @@
+spc:
+  # Z622 仅从 ARRAY PDS 读取以下批次，按 Glass ID 的前 9 位匹配。
+  z622_pds:
+    lot_ids:
+      - "L3ZB6BE03"
+      - "L3ZB6BE04"
+
+  # 先按原 USL/LSL 传统修饰，再在显示日期窗口内按中央区间专用修饰；两阶段保留 flag=False。
+  # central_fraction=0.5：midpoint ± (USL-LSL)×0.25；关闭后沿用常规 OOS 修饰。
+  point_decoration:
+    enabled: true
+    central_fraction: 0.5
+    start_date: "2026-10-05"
+    end_date: "today"
+  spc_cpk:
+    # 周度预警的最小有效 Sheet 时间跨度（小时）；不影响 CPK/CPM 计算。
+    # 恰好达到门槛可预警；0 取消最小时长限制，但起止时间仍须有效且顺序正确。
+    alert_min_span_hours: 0
+    # sheet_mean: original mode, sigma uses period Sheet Mean std.
+    # point_value: hidden comparison mode, sigma uses period point-level param_value std.
+    period_sigma_source: "point_value"
+    period_box_source: "point_value"
+    # 参数名包含任一普通文本时，不计算 CPK/CPM；匹配不区分大小写。
+    exempt_param_name_contains:
+      - "PPA"
+
+  # SPC 页面单片预警过滤：仅排除预警明细及对应自动预警图，不改变修饰决策或常规查询。
+  # 独立于参数修饰豁免；按参数名普通文本包含关系匹配，不区分大小写；[] 关闭。
+  sheet_oos_alerts:
+    excluded_param_name_contains:
+      - "PPA"
+
+  # Sheet 点位图样式：使用折线图而非箱线图；匹配不区分大小写，按普通文本处理
+  chart:
+    line_param_name_contains:
+      - "UNI"

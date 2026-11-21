@@ -9,7 +9,7 @@ Code 默认用“全部 Defect Code”单个选项表示全选，避免数百个
 - 入口仍为 `MWDTrendProcessor`，新增 `create_period_monthly_rates` 处理历史月率，不运行日度随机分配。`core/mwd_trend/period_trend.py` 只计算，不读文件或数据库。
 - 分母是当前启用产品及其工单范围内、`last_flag=Y` 的独立入库 Panel 数，按 `first_ship_date` 分月。Defect 表不参与分母查询；Group/Code 筛选均不改变分母。
 - 沿用全局日期前推和今日中午截止。历史业务日保留全天；今日业务日要求有效的实际入库时间不晚于截止，比较保留六位小数秒。源日期按显示日期反推；不改写原有滚动 Panel 快照。
-- 维护分界在 `config/domain/yield_domain.yaml:period_trend.maintained_rate_start`，当前为 2026-06。此前按单月、产品、工单读取目标 Group 下各缺陷名称的去重 Panel 数，套用配置倍率后向下取整，再除以独立物理分母；Group 为 Code 月率之和。源聚合不拉全量 Panel 明细，也不改变其他报表的修饰算法。
+- 维护分界在 `config/domain/yield_domain/mwd_trend.yaml:period_trend.maintained_rate_start`，当前为 2026-06。此前按单月、产品、工单读取目标 Group 下各缺陷名称的去重 Panel 数，套用配置倍率后向下取整，再除以独立物理分母；Group 为 Code 月率之和。源聚合不拉全量 Panel 明细，也不改变其他报表的修饰算法。
 - 自分界月起，**不查询 Defect 事实**，只读取全局资源注册表指向的“入库良率修饰表”。Code 沿用“当月指定 → 最近更早指定 → 当月参考”解析；无可用值记缺失。Group 使用当月指定，空白则使用该行当月参考值，绝不由 Code 重算，也不沿用历史 Group 指定。这是年度历史板的直接维护月率口径；原有 MWD 日／周算法不变。
 - 同名缺陷的历史 Code 别名以 ` / ` 连接，只保留一份月率，避免重复统计。维护表中无数据库映射且解析目标全部为零的名称不进入 Code 清单并记录告警；非零孤立名称使查询失败，禁止猜测实际 Code。
 - 零过货月不良率为零；正过货缺月／缺值保持 NaN，不能伪装成零不良。季度和半年为 `Σ(月率×月过货)/Σ(月过货)`，其中任何正投入月缺值会使对应汇总缺失。

@@ -82,7 +82,7 @@ apply_qtime_decoration
 追溯列记录的是本次调用前的值；重复调用会重新赋值，不能用它反复覆盖来恢复最初来源。
 
 2026-11-17 用户确认 `1A200 → 21100` 所有产品统一为 200 小时。
-当前[领域配置](../../../../config/domain/indicator_domain.yaml)通过
+当前[领域配置](../../../../config/domain/indicator_domain/qtime.yaml)通过
 `qtime.spec_overrides.ARRAY/1A200/21100: 200` 启用既有路径规格覆盖；
 规格线、超规识别、三态修饰和独立展示限幅共用该准备后的数值。
 源规格为空不影响该覆盖；原始时长及原始规格追溯列保持不变。

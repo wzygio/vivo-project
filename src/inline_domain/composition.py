@@ -274,7 +274,7 @@ def build_spc_sheet_membership_store():
     return SpcSheetMembershipJsonStore(directory / "sheet_membership")
 
 
-def build_spc_sheet_membership_policy_signature() -> str:
+def build_spc_sheet_membership_policy_signature(product: str | None = None) -> str:
     """Invalidate published member projections when membership policies change."""
     import hashlib
     import json
@@ -284,22 +284,26 @@ def build_spc_sheet_membership_policy_signature() -> str:
 
     rules = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters")
     stat = rules.stat()
+    # Excel and the read-only API can see different sizes for the same
+    # enterprise-protected workbook. Its modification time survives both views.
     components = (
         MEMBERSHIP_POLICY, SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE,
         repr(ConfigLoader.get_data_forward_policy()),
         repr(ConfigLoader.get_inline_data_exclusion()),
-        str(rules.resolve()), stat.st_size, stat.st_mtime_ns,
+        str(rules.resolve()), stat.st_mtime_ns,
     )
+    if product == "Z622":
+        components += (ConfigLoader.get_z622_pds_lot_ids(),)
     return hashlib.sha256(json.dumps(components, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
-def build_spc_sheet_membership_query():
+def build_spc_sheet_membership_query(product: str):
     """Read published By Sheet membership; never construct a producer or DB."""
     from src.inline_domain.application.spc.sheet_membership import SpcSheetMembershipQuery
 
     return SpcSheetMembershipQuery(
         build_spc_sheet_membership_store(),
-        policy_signature=build_spc_sheet_membership_policy_signature,
+        policy_signature=lambda: build_spc_sheet_membership_policy_signature(product),
     )
 
 

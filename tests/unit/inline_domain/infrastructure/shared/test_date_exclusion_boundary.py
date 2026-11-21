@@ -179,7 +179,7 @@ def test_scrap_adapter_excludes_shifted_dates_without_changing_source(tmp_path, 
     before = path.read_bytes()
     monkeypatch.setattr(ConfigLoader, "get_domain_resource_path", lambda *_a: path)
     monkeypatch.setattr(
-        InlineScrapRepository, "_infer_factory_from_step", staticmethod(lambda _step: "OLED"),
+        InlineScrapRepository, "_infer_factory_from_step", staticmethod(lambda _step, _config: "OLED"),
     )
     result = InlineScrapRepository().get_scrap_data("P")
     assert result.sheet_id.tolist() == ["BEFORE", "AFTER"]
