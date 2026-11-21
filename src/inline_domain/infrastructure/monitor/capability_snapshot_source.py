@@ -26,7 +26,11 @@ from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
     filter_excluded_steps, filter_invalid_measurement_values, MEASUREMENT_VALIDITY_SIGNATURE,
 )
 from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import InlineMeasurementSnapshotRepository
-from src.inline_domain.infrastructure.shared.outlier_filter_rules import apply_outlier_filter_rules
+from src.inline_domain.infrastructure.shared.outlier_filter_rules import (
+    OUTLIER_FILTER_POLICY,
+    apply_outlier_filter_rules,
+    outlier_filter_workbook_path,
+)
 from src.inline_domain.infrastructure.shared.rolling_snapshot import read_metadata, snapshot_process_lock
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.snapshot_paths import snapshot_component
@@ -132,9 +136,10 @@ class SnapshotCapabilitySource:
         paths = [snapshot, snapshot.with_suffix(".snapshot.json"), snapshot.with_suffix(".policy"),
                  root / "config/global.yaml",
                  *ConfigLoader.get_domain_config_paths("inline_domain", "shared", "spc")]
-        for key, default in (("spc_sheet_oos_decoration", "spc_sheet_oos_decoration.xlsx"),
-                             ("spc_outlier_filters", "spc_outlier_filters.csv")):
-            paths.append(ConfigLoader.get_domain_resource_path("inline_domain", key, default))
+        paths.append(ConfigLoader.get_domain_resource_path(
+            "inline_domain", "spc_sheet_oos_decoration", "spc_sheet_oos_decoration.xlsx",
+        ))
+        paths.append(outlier_filter_workbook_path())
         signatures = []
         for path in paths:
             try:
@@ -146,7 +151,7 @@ class SnapshotCapabilitySource:
             from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
 
             signatures.append(spc_input_signature(root, product))
-        return (MEASUREMENT_VALIDITY_SIGNATURE, provider_signature([product]), *signatures)
+        return (MEASUREMENT_VALIDITY_SIGNATURE, OUTLIER_FILTER_POLICY, provider_signature([product]), *signatures)
 
     def _read_weekly_totals(
         self, product: str, weeks: Iterable[str], *, metric: str, as_of: object,

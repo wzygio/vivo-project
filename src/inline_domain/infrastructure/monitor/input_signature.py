@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.measurement_preprocessor import MEASUREMENT_VALIDITY_SIGNATURE
+from src.inline_domain.infrastructure.shared.outlier_filter_rules import OUTLIER_FILTER_POLICY
 
 
 def monitor_input_signature(
@@ -34,7 +35,7 @@ def monitor_input_signature(
             *(ConfigLoader.get_domain_resource_path("inline_domain", key, name)
               for key, name in (
                   ("spc_cpk_cpm_decoration", "spc_cpk_cpm_decoration.xlsx"),
-                  ("spc_outlier_filters", "spc_outlier_filters.csv"),
+                  ("spc_outlier_filters", "spc_outlier_filters.xlsx"),
                   ("aoi_tt_particle_size_ratio_spec", "aoi_tt_particle_size_ratio_spec.xlsx"),
                   ("compliance_config", "compliance_config.yaml"),
                   ("scrap_sheets", "scrap_sheets.xlsx"),
@@ -55,7 +56,7 @@ def monitor_input_signature(
         if root.exists():
             paths.update(root.glob("inline_measurements*"))
             paths.update(root.glob("aoi_rs_*"))
-    parts = [MEASUREMENT_VALIDITY_SIGNATURE, ConfigLoader.get_report_cutoff_policy().signature]
+    parts = [MEASUREMENT_VALIDITY_SIGNATURE, OUTLIER_FILTER_POLICY, ConfigLoader.get_report_cutoff_policy().signature]
     for path in sorted(paths):
         stat = path.stat()
         parts.append(f"{path.resolve()}:{stat.st_mtime_ns}:{stat.st_size}")

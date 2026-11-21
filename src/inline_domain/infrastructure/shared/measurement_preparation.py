@@ -32,6 +32,7 @@ from src.inline_domain.infrastructure.shared.measurement_preprocessor import (
 from src.inline_domain.infrastructure.shared.outlier_filter_rules import (
     apply_outlier_filter_rules,
     load_outlier_filter_rules,
+    outlier_filter_workbook_path,
 )
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
@@ -248,17 +249,12 @@ class InlineMeasurementPreparationRepository:
         return apply_main_process_history(routed, history)
 
     def _apply_outlier_filters(self, df: pd.DataFrame, prod_code: str) -> pd.DataFrame:
-        """Load mandatory rules and physically remove matching measurements."""
+        """Load workbook rules for exclusions and offsets before Sheet aggregation."""
         if df.empty:
             return df.copy()
         project_root = ConfigLoader.get_project_root()
-        rule_file = ConfigLoader.get_domain_resource_path(
-            "inline_domain",
-            "spc_outlier_filters",
-            "spc_outlier_filters.xlsx",
-        )
         rules = load_outlier_filter_rules(
-            rule_file,
+            outlier_filter_workbook_path(),
             project_root / "output" / "decrypted_files",
         )
         return apply_outlier_filter_rules(df, prod_code, rules)

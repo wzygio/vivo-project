@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from os import utime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -60,6 +61,47 @@ def test_parameter_rule_keeps_existing_inclusive_boundary_semantics() -> None:
     result = apply_outlier_filter_rules(_measurements(), "M678", rules)
 
     assert result["param_name"].tolist() == ["PARAM_B", "PARAM_A"]
+
+
+def test_offset_uses_product_scope_and_combines_matching_rules() -> None:
+    measurements = _measurements()
+    common_rule = {"step_col": "100", "param_col": "PARAM_A", "lower_col": "-4"}
+    rules = pd.DataFrame([
+        {**common_rule, "prod_code": " all ", "offset": "2.5"},
+        {**common_rule, "prod_code": " m678 ", "prod_col": "OTHER", "offset": "-1"},
+        {**common_rule, "prod_code": "Z622", "offset": "1"},
+    ])
+
+    m678 = apply_outlier_filter_rules(measurements, "M678", rules)
+    z622 = apply_outlier_filter_rules(measurements, "Z622", rules)
+
+    assert m678["param_value"].tolist() == [-1.5, 8.0, 5.0]
+    assert z622["param_value"].tolist() == [0.5, 8.0, 5.0]
+    assert measurements["param_value"].tolist() == [-3.0, 8.0, 5.0]
+
+
+@pytest.mark.parametrize("offset", ["invalid", "inf"])
+def test_invalid_nonempty_offset_fails_fast(offset: str) -> None:
+    rules = pd.DataFrame([
+        {"step_col": "100", "param_col": "PARAM_A", "lower_col": "-4", "offset": offset},
+    ])
+
+    with pytest.raises(OutlierFilterConfigurationError, match="offset"):
+        apply_outlier_filter_rules(_measurements(), "M678", rules)
+
+
+def test_rule_input_signature_changes_when_workbook_is_saved(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    source = tmp_path / "rules.xlsx"
+    source.touch()
+    monkeypatch.setattr(outlier_filter_rules, "outlier_filter_workbook_path", lambda: source)
+    initial_signature = outlier_filter_rules.outlier_filter_input_signature()
+
+    stat = source.stat()
+    utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns + 2_000_000_000))
+
+    assert outlier_filter_rules.outlier_filter_input_signature() != initial_signature
 
 
 def test_encrypted_workbook_is_decrypted_before_excel_read(

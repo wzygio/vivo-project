@@ -86,7 +86,7 @@ param_name, site_name, unit_id, param_value`。**任何派生规则不回写原�
   → 排除参数过滤（LOSS 关键字）
   → 按 sheet_start_time 稳定升序排序去重（prod/step/param/sheet/site 五键 keep="last"，同时间保留输入末条）
   → 白名单 merge（classify_param_type 分类）+ data_type 注入 + data_type_filter 过滤
-  → 异常点过滤（resources/inline_domain/spc_outlier_filters.xlsx，参数级或整站规则）
+  → 异常点过滤与保留点位偏移（resources/inline_domain/spc/spc_outlier_filters.xlsx）
   → 时间窗口 [start, end+1d) + factory/step_id/param_name 维度过滤
   → 主制程追溯（attach_main_process_spec → 履历查询 → apply_main_process_history）
 ```

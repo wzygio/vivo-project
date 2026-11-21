@@ -45,6 +45,7 @@ from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from src.inline_domain.application.shared.decorated_features import fetch_decorated_features
 from src.inline_domain.application.shared.decision_signature import get_scope_decision_signature
 from src.inline_domain.composition import build_ctq_repository, refresh_raw_measurements
+from src.inline_domain.infrastructure.shared.outlier_filter_rules import outlier_filter_input_signature
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
@@ -131,7 +132,7 @@ try:
         view_model = CtqReportService.get_ctq_report_data(
             _data_port=ctq_data_port,
             query_config_json=query_config.model_dump_json(),
-            snapshot_signature=product_cache_signature,
+            snapshot_signature=f"{product_cache_signature}:{outlier_filter_input_signature()}",
             product_revision=product_revision,
             decision_signature=decision_signature,
         )

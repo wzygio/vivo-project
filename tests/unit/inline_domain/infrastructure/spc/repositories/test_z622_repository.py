@@ -70,8 +70,9 @@ def monitoring(tmp_path, monkeypatch):
     _monitoring().to_excel(path, sheet_name="monitoring", index=False)
 
     def resource(domain, key, *args, **kwargs):
-        assert domain == "inline_domain" and key == "spc_z622_monitoring"
-        return path
+        assert domain == "inline_domain"
+        return {"spc_z622_monitoring": path,
+                "spc_outlier_filters": tmp_path / "spc_outlier_filters.xlsx"}[key]
 
     monkeypatch.setattr(ConfigLoader, "get_domain_resource_path", resource)
     monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {

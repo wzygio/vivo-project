@@ -281,13 +281,14 @@ def build_spc_sheet_membership_policy_signature(product: str | None = None) -> s
     from src.inline_domain.core.monitor.monitor_param_classifier import PARAM_CLASSIFICATION_SIGNATURE
     from src.inline_domain.core.spc.spc_calculator import SPC_WEEKLY_POINT_POLICY
     from src.inline_domain.application.spc.sheet_membership import MEMBERSHIP_POLICY
+    from src.inline_domain.infrastructure.shared.outlier_filter_rules import OUTLIER_FILTER_POLICY
 
     rules = ConfigLoader.get_domain_resource_path("inline_domain", "spc_outlier_filters")
     stat = rules.stat()
     # Excel and the read-only API can see different sizes for the same
     # enterprise-protected workbook. Its modification time survives both views.
     components = (
-        MEMBERSHIP_POLICY, SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE,
+        MEMBERSHIP_POLICY, SPC_WEEKLY_POINT_POLICY, PARAM_CLASSIFICATION_SIGNATURE, OUTLIER_FILTER_POLICY,
         repr(ConfigLoader.get_data_forward_policy()),
         repr(ConfigLoader.get_inline_data_exclusion()),
         str(rules.resolve()), stat.st_mtime_ns,

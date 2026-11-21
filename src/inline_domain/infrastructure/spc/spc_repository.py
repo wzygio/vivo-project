@@ -27,6 +27,7 @@ from src.shared_kernel.snapshot_paths import inline_measurement_directory, snaps
 from src.shared_kernel.config import ConfigLoader
 from src.inline_domain.infrastructure.shared.measurement_data_loader import RAW_MEASUREMENT_COLUMNS
 from src.inline_domain.infrastructure.shared.measurement_metadata_loader import load_parameter_specs
+from src.inline_domain.infrastructure.shared.outlier_filter_rules import outlier_filter_input_signature
 from src.inline_domain.infrastructure.shared.rolling_snapshot import read_metadata, publish_snapshots
 from src.inline_domain.core.shared.measurement_correction import apply_spc_value_corrections
 
@@ -229,12 +230,13 @@ def build_z622_metadata_repository(db_manager: DatabaseManager | None = None) ->
 
 
 def spc_input_signature(project_root: Path, prod_code: str) -> str:
-    """Detect updated product snapshots before cached Sheet/capability computations."""
+    """Track snapshots and rule changes before cached Sheet/capability computations."""
     path = inline_measurement_directory(project_root / "data") / (
         f"inline_measurements_{snapshot_component(prod_code)}.parquet"
     )
     parts = [
         MEASUREMENT_VALIDITY_SIGNATURE,
+        outlier_filter_input_signature(),
         InlineMeasurementSnapshotRepository.SNAPSHOT_POLICY_VERSION,
         f"excluded-step={EXCLUDED_MEASUREMENT_STEP_ID}",
     ]

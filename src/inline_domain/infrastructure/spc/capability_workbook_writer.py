@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import gc
 from math import isinf
 import os
@@ -13,6 +13,8 @@ from typing import Iterator
 import zipfile
 
 import openpyxl
+from openpyxl.compat.strings import safe_string
+from openpyxl.utils.datetime import from_excel, to_excel
 import pandas as pd
 import psutil
 
@@ -37,6 +39,27 @@ def _cell(value: object) -> object:
     if isinstance(value, float) and isinf(value):
         return "inf" if value > 0 else "-inf"
     return value
+
+
+def _openxml_value(value: object, epoch: datetime) -> object:
+    """Compare against the same numeric precision and date serial Excel can store."""
+    if isinstance(value, float):
+        return float(safe_string(value))
+    if isinstance(value, datetime):
+        serial = float(safe_string(to_excel(value, epoch)))
+        return from_excel(serial, epoch)
+    return value
+
+
+def _verify_rows(actual, expected, columns: list[str], first_row: int) -> None:
+    if len(actual) != len(expected):
+        raise ValueError("Capability appended row count failed verification")
+    for row_number, (saved, intended) in enumerate(zip(actual, expected), start=first_row):
+        if len(saved) != len(intended):
+            raise ValueError(f"Capability row {row_number} width failed verification")
+        for name, value, target in zip(columns, saved, intended):
+            if value != target or isinstance(value, bool) != isinstance(target, bool):
+                raise ValueError(f"Capability row {row_number} column {name} failed verification")
 
 
 def _append_openxml(staged: Path, sheet: str, columns: list[str], rows: list[tuple]) -> bool:
@@ -67,8 +90,8 @@ def _append_openxml(staged: Path, sheet: str, columns: list[str], rows: list[tup
     try:
         actual = list(check[sheet].iter_rows(min_row=first_row, max_row=first_row + len(rows) - 1,
                                            values_only=True)) if rows else []
-        if actual != rows:
-            raise ValueError("Capability appended rows failed verification")
+        expected = [tuple(_openxml_value(value, check.epoch) for value in row) for row in rows]
+        _verify_rows(actual, expected, columns, first_row)
     finally:
         check.close()
     return True
@@ -152,10 +175,14 @@ def _append_excel(staged: Path, sheet: str, columns: list[str], rows: list[tuple
                             worksheet.Cells(first_row + row_offset, column_offset + 1).NumberFormat = "@"
                 target = worksheet.Range(worksheet.Cells(first_row, 1),
                     worksheet.Cells(first_row + len(rows) - 1, len(columns)))
-                target.Value = tuple(rows)
+                # Excel dates are wall-clock values. Avoid pywin32 interpreting a
+                # naive timestamp in the host timezone and shifting it to UTC.
+                target.Value = tuple(tuple(
+                    value.replace(tzinfo=timezone.utc) if isinstance(value, datetime) else value
+                    for value in row
+                ) for row in rows)
                 actual = tuple(tuple(_normalize_excel_com_value(value) for value in row) for row in target.Value)
-                if actual != tuple(rows):
-                    raise ValueError("Capability appended rows failed verification")
+                _verify_rows(actual, rows, columns, first_row)
             workbook.Save()
             return True
         finally:

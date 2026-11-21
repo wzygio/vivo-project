@@ -1,5 +1,6 @@
 """Native capability append preserves maintained workbook cells and formulas."""
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -58,6 +59,39 @@ def test_new_sheet_and_new_file_are_created_without_replacing_existing_sheets(tm
         assert book["M678"]["B2"].value == .9
     finally:
         book.close()
+
+
+def test_excel_precision_roundtrip_for_capability_rows(tmp_path):
+    path = tmp_path / "capabilities.xlsx"
+    inputs = pd.DataFrame({"prod_code": ["Z622"], "cpk_corrected": [1.3266644783890635],
+                           "sample_start": [datetime(2026, 11, 12, 14, 39, 45, 123456)]})
+    result = writer.create_capability_rows(path, "Z622", inputs)
+    assert result.written, result.error
+    book = openpyxl.load_workbook(path)
+    try:
+        assert tuple(book["Z622"].values)[1] == (
+            "Z622", 1.326664478389064, datetime(2026, 11, 12, 14, 39, 45, 123000),
+        )
+    finally:
+        book.close()
+
+
+def test_excel_com_persists_sample_wall_time_after_reopen(tmp_path):
+    pytest.importorskip("win32com.client")
+    path = tmp_path / "capability.xlsx"
+    workbook = openpyxl.Workbook()
+    workbook.save(path)
+    workbook.close()
+    wall_time = datetime(2026, 11, 12, 14, 39, 45)
+    assert writer._append_excel(path, "Z622", ["step_id", "sample_start"], [("00123", wall_time)])
+    with writer._excel_application() as excel:
+        reopened = excel.Workbooks.Open(str(path), ReadOnly=True, UpdateLinks=0)
+        try:
+            saved = reopened.Worksheets("Z622").Range("A2:B2").Value[0]
+            assert saved[0] == "00123"
+            assert writer._normalize_excel_com_value(saved[1]) == wall_time
+        finally:
+            reopened.Close(SaveChanges=False)
 
 
 def test_bad_existing_header_and_empty_append_do_not_touch_file(tmp_path):
@@ -122,7 +156,13 @@ def test_encrypted_append_uses_native_ranges_and_closes_owned_workbook(tmp_path,
     monkeypatch.setattr(writer, "_excel_application", application)
     result = writer.create_capability_rows(path, "M678", pd.DataFrame({"prod_code": [new_values[0]], "cpk_corrected": [new_values[1]]}))
     assert result.written is not fail_save
-    assert target.Value == (tuple(writer._cell(value) for value in new_values),)
+    expected = tuple(writer._cell(value) for value in new_values)
+    if isinstance(new_values[1], pd.Timestamp):
+        # pywin32 converts naive datetimes from the host timezone before dispatch.
+        assert target.Value[0][1].tzinfo is timezone.utc
+        assert target.Value[0][1].replace(tzinfo=None) == expected[1]
+    else:
+        assert target.Value == (expected,)
     sheet.Range.assert_any_call(cells[(4, 1)], cells[(4, 2)])
     assert cells[(4, 1)].NumberFormat == '@'
     if isinstance(new_values[1], pd.Timestamp):

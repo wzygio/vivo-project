@@ -1,20 +1,40 @@
-"""Load and apply physical outlier-filter rules for Inline measurements."""
+"""Load and apply workbook exclusions and offsets for Inline measurements."""
 
 from __future__ import annotations
 
 import logging
+from math import isfinite
 from pathlib import Path
 
 import pandas as pd
 from fr_file_decryption import decrypt_file, is_encrypted_file
 
+from src.shared_kernel.config import ConfigLoader
+
 logger = logging.getLogger(__name__)
 
 REQUIRED_RULE_COLUMNS = frozenset({"step_col", "param_col"})
+OUTLIER_FILTER_POLICY = "inline-outlier-filter-v2-offset"
 
 
 class OutlierFilterConfigurationError(RuntimeError):
     """Raised when mandatory outlier-filter rules cannot be loaded safely."""
+
+
+def outlier_filter_workbook_path() -> Path:
+    return ConfigLoader.get_domain_resource_path(
+        "inline_domain", "spc_outlier_filters", "spc_outlier_filters.xlsx",
+    )
+
+
+def outlier_filter_input_signature() -> str:
+    """Track saved workbook edits without relying on the protected file's byte view."""
+    path = outlier_filter_workbook_path().resolve()
+    try:
+        generation = path.stat().st_mtime_ns
+    except FileNotFoundError:
+        generation = "missing"
+    return f"{OUTLIER_FILTER_POLICY}:{path}:{generation}"
 
 
 def load_outlier_filter_rules(rule_file: Path, decrypted_dir: Path) -> pd.DataFrame:
@@ -61,7 +81,7 @@ def apply_outlier_filter_rules(
     prod_code: str,
     rules: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Apply parameter bounds or unconditional step-level exclusions."""
+    """Filter points by their input values, then offset the retained points."""
     if measurements.empty or rules.empty:
         return measurements.copy()
 
@@ -76,9 +96,10 @@ def apply_outlier_filter_rules(
     step_ids = measurements["step_id"].astype(str).str.strip()
     param_names = measurements["param_name"].astype(str).str.upper()
     outlier_mask = pd.Series(False, index=measurements.index)
+    offsets: pd.Series | None = None
 
     for _, rule in rules.fillna("").iterrows():
-        rule_prod = _rule_text(rule, "prod_col", default="ALL").upper()
+        rule_prod = (_rule_text(rule, "prod_code") or _rule_text(rule, "prod_col")).upper()
         rule_step = _rule_text(rule, "step_col")
         rule_param = _rule_text(rule, "param_col")
         if not rule_step:
@@ -93,6 +114,7 @@ def apply_outlier_filter_rules(
                 "参数级异常值过滤规则必须至少配置一个有效数值边界: "
                 f"prod={rule_prod or 'ALL'}, step={rule_step}, param={rule_param}"
             )
+        offset = _rule_offset(rule, rule_prod, rule_step, rule_param) if rule_param else 0.0
 
         step_mask = step_ids.isin(_step_variants(rule_step))
         if not step_mask.any():
@@ -110,15 +132,38 @@ def apply_outlier_filter_rules(
             outlier_mask |= target_mask & values.le(lower)
         if not pd.isna(upper):
             outlier_mask |= target_mask & values.ge(upper)
+        if offset:
+            if offsets is None:
+                offsets = pd.Series(0.0, index=measurements.index)
+            offsets.loc[target_mask] += offset
 
     dropped_count = int(outlier_mask.sum())
     logger.info("Inline outlier filters removed %s measurement rows", dropped_count)
-    return measurements.loc[~outlier_mask].copy()
+    retained = ~outlier_mask
+    result = measurements.loc[retained].copy()
+    if offsets is not None:
+        retained_offsets = offsets.loc[retained]
+        shifted = retained_offsets.ne(0)
+        if shifted.any():
+            original = result["param_value"]
+            if pd.api.types.is_extension_array_dtype(original.dtype):
+                dtype = float if pd.api.types.is_numeric_dtype(original.dtype) else object
+                original = original.astype(dtype)
+            result["param_value"] = original.where(~shifted, values.loc[retained] + retained_offsets)
+    return result
 
 
-def _rule_text(rule: pd.Series, column: str, default: str = "") -> str:
-    value = rule[column] if column in rule.index else default
-    return str(value).strip()
+def _rule_offset(rule: pd.Series, product: str, step: str, param: str) -> float:
+    offset = pd.to_numeric(_rule_text(rule, "offset") or "0", errors="coerce")
+    if not isfinite(offset):
+        raise OutlierFilterConfigurationError(
+            f"异常值过滤规则的 offset 必须为有限数值: prod={product or 'ALL'}, step={step}, param={param}"
+        )
+    return float(offset)
+
+
+def _rule_text(rule: pd.Series, column: str) -> str:
+    return str(rule.get(column, "")).strip()
 
 
 def _step_variants(step: str) -> tuple[str, ...]:

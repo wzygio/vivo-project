@@ -381,7 +381,7 @@ class SpcReportService:
                 "SPC sheet OOS decoration workbook could not be read."
             ) from exc
         except Exception as e:
-            logger.error("[CPM] report generation failed: %s", e, exc_info=True)
+            logger.error("[SPC] report generation failed: %s", e, exc_info=True)
             raise SpcReportBuildError("SPC report generation failed.") from e
 
     @staticmethod

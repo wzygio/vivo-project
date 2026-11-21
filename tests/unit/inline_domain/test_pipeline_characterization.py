@@ -297,8 +297,9 @@ def test_pipeline_missing_catalog_marks_all_rows_unknown(monkeypatch) -> None:
     assert set(result["data_type"]) == {"UNKNOWN"}
 
 
-def test_pipeline_outlier_filter_drops_out_of_bounds_values(
-    monkeypatch, tmp_path: Path
+@pytest.mark.parametrize(("offset", "expected"), [(0, 4.2), (100, 104.2), (-5, -0.8)])
+def test_pipeline_outlier_filter_checks_bounds_before_offset(
+    monkeypatch, tmp_path: Path, offset: int, expected: float
 ) -> None:
     """Exercise the real outlier-filter loader through a standard workbook."""
     from tests.helpers.inline_resources import write_inline_resource_registry
@@ -309,11 +310,12 @@ def test_pipeline_outlier_filter_drops_out_of_bounds_values(
     pd.DataFrame(
         [
             {
-                "prod_col": "ALL",
+                "prod_code": "ALL",
                 "step_col": "100",
                 "param_col": "SPC_PARAM",
                 "lower_col": 1.0,
                 "upper_col": 100.0,
+                "offset": offset,
             }
         ]
     ).to_excel(rules_file, index=False)
@@ -341,7 +343,8 @@ def test_pipeline_outlier_filter_drops_out_of_bounds_values(
 
     # value <= lower (0.5) and value >= upper (150.0) are physically removed.
     assert result["sheet_id"].tolist() == ["S1"]
-    assert result["param_value"].tolist() == [4.2]
+    assert result["param_value"].tolist() == pytest.approx([expected])
+    assert raw_df["param_value"].tolist() == [4.2, 0.5, 150.0]
 
 
 def test_pipeline_step_only_outlier_rule_removes_all_parameters(

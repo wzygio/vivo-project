@@ -20,7 +20,6 @@ def filter_invalid_measurement_values(dataframe: pd.DataFrame) -> pd.DataFrame:
     invalid = values.eq(INVALID_MEASUREMENT_VALUE).fillna(False)
     return dataframe.loc[~invalid].copy()
 
-
 def filter_excluded_steps(dataframe: pd.DataFrame) -> pd.DataFrame:
     """Exclude the retired measurement station from fresh and saved facts."""
     if dataframe.empty or "step_id" not in dataframe.columns:
@@ -30,7 +29,6 @@ def filter_excluded_steps(dataframe: pd.DataFrame) -> pd.DataFrame:
     )
     excluded = steps.eq(EXCLUDED_MEASUREMENT_STEP_ID).fillna(False)
     return dataframe.loc[~excluded].copy()
-
 
 def keep_latest_measurements(
     dataframe: pd.DataFrame, key_columns: list[str], time_column: str,

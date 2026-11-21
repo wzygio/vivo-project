@@ -25,7 +25,10 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
         "state": "no_data", "alerts": pd.DataFrame(), "records": pd.DataFrame(),
     })
     from src.inline_domain.application.shared import decision_signature
+    from src.inline_domain.infrastructure.shared import outlier_filter_rules
+
     monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *_args: "test-decisions")
+    monkeypatch.setattr(outlier_filter_rules, "outlier_filter_input_signature", lambda: "test-outlier-rules")
     events: list[str] = []
     loaded_queries: list[SpcQueryConfig] = []
     loaded_signatures: list[str] = []
@@ -105,7 +108,7 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
     runpy.run_path(str(page_path), run_name="__main__")
 
     assert [query.data_type_filter for query in loaded_queries] == ["CTQ"]
-    assert loaded_signatures == ["ctq_distribution_report_v1|scoped=M678"]
+    assert loaded_signatures == ["ctq_distribution_report_v1|scoped=M678:test-outlier-rules"]
     assert header_kwargs["product_cache_scope"] == "M678"
     assert events == ["filters", "charts"]
     assert not hasattr(report, "period_capability_df")
