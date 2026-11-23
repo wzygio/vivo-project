@@ -223,7 +223,7 @@ def _build_capability_monitor_service(resource_dir: Path | None, *, metric: str)
 
     return CpkWorkbookMonitorService(
         CapabilitySummaryStore(workbook_path, metric=metric),
-        latest_reader=build_capability_latest_reader(metric, resource_dir),
+        latest_reader=build_capability_latest_reader(metric, resource_dir, require_workbook=True),
         metric=metric,
         weekly_source=SnapshotCapabilitySource(
             inline_measurement_directory(ConfigLoader.get_project_root() / "data"),
@@ -233,7 +233,8 @@ def _build_capability_monitor_service(resource_dir: Path | None, *, metric: str)
 
 
 def build_capability_latest_reader(metric: str, resource_dir: Path | None = None, *,
-                                   workbook_reader=None, strict_empty: bool = False):
+                                   workbook_reader=None, strict_empty: bool = False,
+                                   require_workbook: bool = False):
     """Use one configured capability workbook reader for SPC and monitoring."""
     from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
     from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
@@ -245,7 +246,8 @@ def build_capability_latest_reader(metric: str, resource_dir: Path | None = None
             if resource_dir is not None else ConfigLoader.get_domain_resource_path(
                 "inline_domain", "spc_cpk_cpm_decoration", "spc/spc_cpk_cpm_decoration.xlsx",
             ))
-    return reader(path, workbook_reader=workbook_reader, strict_empty=strict_empty)
+    return reader(path, workbook_reader=workbook_reader, strict_empty=strict_empty,
+                  require_workbook=require_workbook)
 
 
 def build_capability_alert_query(metric: str, *, workbook_reader=None):

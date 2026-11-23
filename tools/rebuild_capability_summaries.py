@@ -245,7 +245,7 @@ def main() -> None:
         if args.prepared_weekly:
             weekly = pd.read_parquet(args.prepared_weekly / f"{metric}-weekly.parquet")
         else:
-            reader = reader_type(ledger_path, workbook_reader=lambda *_args: ledger)
+            reader = reader_type(ledger_path, workbook_reader=lambda *_args: ledger, require_workbook=True)
             weekly = compute_weekly_records(totals_source, reader, products=products,
                                             weeks=weeks, metric=metric, as_of=as_of)
         weekly = validate_weekly_scope(weekly, products=products, weeks=weeks, metric=metric)
@@ -281,7 +281,7 @@ def main() -> None:
                 rows = pd.read_parquet(directory / f"{metric}-weekly.parquet")
             else:
                 reader_type = CpkLatestExcelStore if metric == "cpk" else CpmLatestExcelStore
-                reader = reader_type(ledger_path, workbook_reader=lambda *_args: ledger)
+                reader = reader_type(ledger_path, workbook_reader=lambda *_args: ledger, require_workbook=True)
                 rows = compute_weekly_records(extra_source, reader, products=[product],
                                                weeks=weeks, metric=metric, as_of=as_of)
             rows = validate_weekly_scope(rows, products=[product], weeks=weeks, metric=metric)

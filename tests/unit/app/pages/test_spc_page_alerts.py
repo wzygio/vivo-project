@@ -16,7 +16,6 @@ from app.utils.app_setup import AppSetup
 from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
-from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 
 
 @pytest.mark.parametrize("saved_value", [.9, 1.6, None, "unreadable"])
@@ -116,11 +115,8 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M673"))),
     )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
-    monkeypatch.setattr(
-        MonitorAnalysisService,
-        "get_time_window",
-        staticmethod(lambda: (pd.Timestamp("2026-05-01"), pd.Timestamp("2026-07-28"))),
-    )
+    from src.shared_kernel.report_cutoff import ReportCutoffPolicy
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-07-28 12:00"))
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
         indicator_cache,

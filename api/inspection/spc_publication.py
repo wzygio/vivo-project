@@ -78,7 +78,7 @@ def main(argv: Sequence[str] | None = None, *, producer: Callable | None = None,
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--product", action="append", help="Enabled product; repeat to select several. Default: all enabled products.")
     parser.add_argument("--reference-date", type=date.fromisoformat,
-                        help="Report reference day (YYYY-MM-DD), default today. Capability week is its previous ISO week.")
+                        help="Membership reference day (YYYY-MM-DD), default today. Live capability uses the last completed ISO week.")
     parser.add_argument("--start-date", type=date.fromisoformat,
                         help="Prepared point window start, default first day of previous month; maximum 93 days.")
     parser.add_argument("--check", action="store_true", help="Validate selection and dates only, without business reads, DB or writes.")

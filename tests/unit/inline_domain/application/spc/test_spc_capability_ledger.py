@@ -1,4 +1,4 @@
-"""SPC alerts read immutable saved capability records; new-key writes are durable."""
+"""SPC alerts read the weekly reconciliation published to the workbook."""
 from datetime import date
 from types import SimpleNamespace
 
@@ -44,7 +44,7 @@ def test_same_week_saved_lifecycle_matches_page_and_monitor(metric, tmp_path):
     sheet = "M626" if metric == "cpk" else "M626_cpm"
     reader = (CpkLatestExcelStore if metric == "cpk" else CpmLatestExcelStore)(path)
     build = build_weekly_cpk_alerts if metric == "cpk" else build_weekly_cpm_alerts
-    for value, hours, expected in [(.9, 18, 0), (.9, 48, 1), (1.5, 72, 1), (.8, 72, 1), (None, 72, 1)]:
+    for value, hours, expected in [(.9, 18, 0), (.9, 48, 1), (1.5, 72, 0), (.8, 72, 1), (None, 72, 1)]:
         result = prepare_capability_decoration(
             computed(metric, value, hours), tmp_path, workbook_path=path,
             sheet_name=sheet, metric=metric, reference_date=REFERENCE, strict_persistence=True,
@@ -57,9 +57,9 @@ def test_same_week_saved_lifecycle_matches_page_and_monitor(metric, tmp_path):
         alerts = build(detail, reference_date=REFERENCE)
         assert len(alerts) == expected
         if expected:
-            assert alerts[f"{metric.upper()}值"].tolist() == [.9]
+            assert alerts[f"{metric.upper()}值"].tolist() == [.8 if value is None else value]
         if hours >= 48:
-            assert len(pd.read_excel(path, sheet_name=sheet)) == 1
+            assert len(pd.read_excel(path, sheet_name=sheet)) == expected
 
 
 def test_strict_new_key_write_failure_preserves_file_and_raises(tmp_path, monkeypatch):
@@ -69,7 +69,7 @@ def test_strict_new_key_write_failure_preserves_file_and_raises(tmp_path, monkey
         reference_date=REFERENCE,
     )
     before = path.read_bytes()
-    monkeypatch.setattr(repository, "create_capability_rows", lambda *args: SimpleNamespace(
+    monkeypatch.setattr(repository, "write_capability_rows", lambda *args: SimpleNamespace(
         written=False, error="locked workbook",
     ))
     with pytest.raises(RuntimeError, match="persist"):

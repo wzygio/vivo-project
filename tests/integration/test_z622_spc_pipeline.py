@@ -128,6 +128,7 @@ def install_captured_case(monkeypatch, directory: Path, source: Path, *, mode="n
 
 
 def build_captured_report(monkeypatch, directory: Path, source: Path, *, mode="normal"):
+    from src.shared_kernel.report_cutoff import ReportCutoffPolicy
     from src.inline_domain.application.spc.dtos import SpcQueryConfig
     from src.inline_domain.application.spc.spc_service import SpcReportService
     from src.inline_domain.infrastructure.shared.measurement_preparation import InlineMeasurementPreparationRepository
@@ -137,6 +138,7 @@ def build_captured_report(monkeypatch, directory: Path, source: Path, *, mode="n
     from src.shared_kernel.config import ConfigLoader
 
     db, original, calls = install_captured_case(monkeypatch, directory, source, mode=mode)
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-11-16 12:00"))
     raw = build_z622_measurement_repository(db, snapshot_dir=directory / "data/inline_domain/shared")
     metadata = build_z622_metadata_repository(db)
     history = SimpleNamespace(get_main_process_history=lambda *_args, **_kwargs: pd.DataFrame())

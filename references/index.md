@@ -19,7 +19,7 @@
 | SPC 后端输入、分层处理、前端筛选、预警与图表数据流；Z622 指定批次 PDS 测量接入与监控清单 | [SPC 数据流](domain/inline_domain/spc/data-flow-spc.md) |
 | SPC 超规片判定、人工决策台账、传统→专用点位修饰、中央规格区间、稳定哈希 margin、修饰与参数豁免/预警过滤的边界 | [SPC 超规片与点位修饰规则](domain/inline_domain/spc/rules-spc-point-decoration.md) |
 | SPC Cpk / Cpm、Sheet 均值 μ、点位标准差 σ、规格与能力计算边界；OOS 点位修饰、OOC 清单筛选与能力不达标的先后关系 | [SPC 能力计算规则](domain/inline_domain/spc/rules-spc-cpk&cpm.md) |
-| SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、历史数值刷新、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
+| SPC CPK / CPM 明细字段、同周更新与缓存失效、统一 Excel 预警来源、可配置跨度门槛（默认 48h）、上周重算更新及严格大于 1.33 的匹配行删除、flag 与风险台账筛选 | [SPC 能力明细工作簿规则](domain/inline_domain/spc/rules-spc-cpk&cpm-decoration.md) |
 | 简要介绍 Cpk / Cpm 公式及各指标的计算方式 | [Cpk / Cpm 计算简要版](domain/inline_domain/spc/北极星-cpk_cpm计算公式.md) |
 | 全指标预警矩阵、计划任务、跨进程预计算快照、Yield/IJP 独立生产巡检、IJP/关键备件/IQC 已发布 Excel 状态与详情直读 | [预警看板架构](domain/inline_domain/monitor/architecture-alert-dashboard.md) |
 | 按项目 / domain / sub_domain 汇总当前矩阵各模块触发条件、阈值、优先级及未接入项（2026-11-11 核对快照） | [模块预警方案 Excel](domain/inline_domain/monitor/模块预警方案.xlsx) |

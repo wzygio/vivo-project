@@ -20,12 +20,14 @@ from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository imp
 )
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
 from tests.unit.inline_domain.application.resource_fixtures import write_inline_resource_config
+from src.shared_kernel.report_cutoff import ReportCutoffPolicy
 
 
 @pytest.fixture(autouse=True)
 def isolate_workbook_paths(monkeypatch, tmp_path):
     """Report-service fixtures must never read or write maintained workbooks."""
     write_inline_resource_config(tmp_path)
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-06-08 12:00"))
     original = spc_service.ConfigLoader.get_domain_resource_path
     monkeypatch.setattr(
         spc_service.ConfigLoader, "get_domain_resource_path",
@@ -494,7 +496,40 @@ def test_excel_flag_save_invalidates_capability_cache(monkeypatch, tmp_path: Pat
     assert 1.33 < second.period_capability_df["cpm"].iloc[0] < 1.4
 
 
-def test_same_week_snapshot_change_does_not_update_saved_capability_values(monkeypatch, tmp_path):
+def test_capability_week_uses_calendar_today_across_historical_cutoffs_and_week_rollover(monkeypatch, tmp_path):
+    today = [pd.Timestamp("2026-06-08 12:00")]  # Monday, so June 1–7 is the last complete week.
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: today[0])
+    monkeypatch.setattr(spc_service.ConfigLoader, "get_project_root", lambda: tmp_path)
+    monkeypatch.setattr(spc_service.ConfigLoader, "get_spc_capability_alert_min_span_hours", lambda: 0)
+    fetch_decorated_features.clear()
+    SpcReportService.fetch_spc_report_payload.clear()
+    class WideSpreadSource(FakeSpcRepository):
+        def get_spc_measurements(self, config, force_refresh=False):
+            return super().get_spc_measurements(config, force_refresh).assign(param_value=[46., 54., 46., 54.])
+
+    source = WideSpreadSource(tmp_path, True, None)
+
+    def report(end):
+        query = SpcQueryConfig(prod_code="M626", start_date="2026-05-25", end_date=end)
+        return SpcReportService.get_spc_report_data(source, query.model_dump_json(),
+                                                    period_sigma_source="point_value",
+                                                    snapshot_signature="calendar-week-fixture")
+
+    assert report("2026-06-04").period_capability_df.empty  # Partial week cannot publish.
+    complete = report("2026-06-07")
+    assert complete.period_capability_df["period_label"].tolist() == ["2026-W23"]
+    ledger = complete.cpk_decoration_result.decoration_path
+    assert len(pd.read_excel(ledger, sheet_name="M626")) == 1
+    report("2026-06-07")  # Warm the cache with the saved file's version.
+    before = ledger.read_bytes()
+    today[0] += pd.Timedelta(days=7)
+    replay = report("2026-06-07")
+    assert not replay.raw_measurements_df.empty
+    assert replay.period_capability_df.empty
+    assert ledger.read_bytes() == before
+
+
+def test_same_week_recalculation_removes_resolved_alert(monkeypatch, tmp_path):
     from src.inline_domain.infrastructure.spc.spc_repository import spc_input_signature
     from src.inline_domain.infrastructure.monitor.cpk_latest_excel_store import CpkLatestExcelStore
     from src.inline_domain.core.monitor.cpk_latest import latest_capability_alerts
@@ -534,9 +569,8 @@ def test_same_week_snapshot_change_does_not_update_saved_capability_values(monke
     )
     assert source.calls == 2
     assert second.period_capability_df["cpk"].iloc[0] >= 1.33
-    assert len(latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8))) == 1
-    saved = pd.read_excel(path, sheet_name="M626")
-    assert saved["cpk_corrected"].tolist() == first.cpk_decoration_result.decoration_df["cpk_corrected"].tolist()
+    assert latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8)).empty
+    assert pd.read_excel(path, sheet_name="M626").empty
 
 
 def _decoration_payload_with_decisions() -> dict:

@@ -12,7 +12,9 @@ from src.inline_domain.core.spc.cpk_decoration import (
     CAPABILITY_METRIC_CPK,
     CPK_DECORATION_FILE_NAME,
     apply_capability_decoration,
-    build_capability_anomaly_detail,
+    build_capability_detail,
+    capability_anomaly_candidates,
+    previous_week_detail,
     merge_capability_detail_with_decoration_flags,
 )
 from src.inline_domain.application.shared.decoration_defaults import (
@@ -43,9 +45,10 @@ def prepare_capability_decoration(
     workbook_path: Path | None = None,
     strict_persistence: bool = False,
 ) -> CpkDecorationResult:
-    detail = build_capability_anomaly_detail(
-        period_capability_df, metric, reference_date or date.today(),
-        min_span_hours=ConfigLoader.get_spc_capability_alert_min_span_hours(),
+    reference_date = reference_date or date.today()
+    weekly = previous_week_detail(build_capability_detail(period_capability_df, metric), reference_date)
+    detail = capability_anomaly_candidates(
+        weekly, metric, ConfigLoader.get_spc_capability_alert_min_span_hours(),
     )
     persist_decoration = (
         decoration_port.persist_capability_decoration
@@ -61,6 +64,7 @@ def prepare_capability_decoration(
     decoration = (
         persist_decoration(
             product_dir, detail, sheet_name, metric,
+            computed_detail_df=weekly, reference_date=reference_date,
             **({"raise_on_error": True} if strict_persistence else {}),
             **path_kwargs,
         )

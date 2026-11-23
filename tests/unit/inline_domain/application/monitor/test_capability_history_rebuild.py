@@ -68,10 +68,10 @@ def test_rebuild_counts_released_projects_without_threshold_or_span_reinterpreta
     assert result[f"{metric.capitalize()}≥1.33达标率"].tolist() == [.9]
 
 
-def test_missing_ledger_is_not_a_zero_alert_result_for_monitored_projects():
-    with pytest.raises(ValueError, match="history unavailable"):
-        compute_weekly_records(Source(), Ledger(None), products=["M626"], weeks=["2026-W46"],
-                               metric="cpk", as_of="2026-11-17")
+def test_missing_product_sheet_in_readable_ledger_has_no_warnings():
+    result = compute_weekly_records(Source(), Ledger(None), products=["M626"], weeks=["2026-W46"],
+                                    metric="cpk", as_of="2026-11-17")
+    assert result[["达标项目数", "预警项目数", "Cpk≥1.33达标率"]].iloc[0].tolist() == [10, 0, 1.0]
 
 
 def test_zero_monitored_projects_have_full_compliance_without_a_ledger_sheet():

@@ -196,7 +196,7 @@ def test_prepare_cpk_decoration_reads_existing_values_without_updating_user_deci
     )
 
     stored = pd.read_excel(decoration_path, sheet_name="M678")
-    assert stored["cpk_corrected"].tolist() == [1.72]
+    assert stored["cpk_corrected"].tolist() == [1.26]
     assert stored["flag"].tolist() == ["TURE"]
     assert stored["cpk_replacement"].tolist() == [1.372]
     assert not (tmp_path / "spc_cpk_detail.xlsx").exists()

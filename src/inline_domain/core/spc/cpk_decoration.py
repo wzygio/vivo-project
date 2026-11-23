@@ -172,25 +172,26 @@ def capability_alert_span_mask(
     return (end - start).ge(pd.Timedelta(hours=min_span_hours))
 
 
-def build_capability_anomaly_detail(
-    period_capability_df: pd.DataFrame,
-    metric: str,
-    reference_date: date,
-    *,
-    min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
-) -> pd.DataFrame:
-    """Select previous complete week failures with sufficient Sheet coverage."""
-    detail = build_capability_detail(period_capability_df, metric)
+def previous_week_detail(detail: pd.DataFrame, reference_date: date) -> pd.DataFrame:
     start, _ = previous_iso_week_range(reference_date)
     iso = start.isocalendar()
     label = f"{iso.year}-W{iso.week:02d}"
+    return detail.loc[detail["period_type"].eq("week") & detail["period_label"].eq(label)]
+
+
+def capability_anomaly_candidates(detail: pd.DataFrame, metric: str, min_span_hours: float) -> pd.DataFrame:
     values = pd.to_numeric(detail[capability_corrected_column(metric)], errors="coerce")
     return detail.loc[
-        detail["period_type"].eq("week")
-        & detail["period_label"].eq(label)
-        & values.lt(CAPABILITY_ALERT_THRESHOLD)
-        & capability_alert_span_mask(detail, min_span_hours)
+        values.lt(CAPABILITY_ALERT_THRESHOLD) & capability_alert_span_mask(detail, min_span_hours)
     ].reset_index(drop=True)
+
+
+def build_capability_anomaly_detail(
+    period_capability_df: pd.DataFrame, metric: str, reference_date: date,
+    *, min_span_hours: float = CAPABILITY_ALERT_MIN_SPAN_HOURS,
+) -> pd.DataFrame:
+    weekly = previous_week_detail(build_capability_detail(period_capability_df, metric), reference_date)
+    return capability_anomaly_candidates(weekly, metric, min_span_hours)
 
 
 def merge_capability_detail_with_decoration_flags(

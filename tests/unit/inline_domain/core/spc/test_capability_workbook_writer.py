@@ -61,6 +61,39 @@ def test_new_sheet_and_new_file_are_created_without_replacing_existing_sheets(tm
         book.close()
 
 
+@pytest.mark.parametrize("native_excel", [False, True])
+def test_weekly_edits_use_original_row_positions_and_retain_operator_cells(tmp_path, native_excel):
+    path = tmp_path / "weekly.xlsx"
+    columns = ["param_name", "corrected", "period_end", "note"]
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.title = "P"
+    sheet.append(columns)
+    for name in ("PASS_ONE", "HISTORY", "PASS_TWO", "RECALCULATED"):
+        sheet.append([name, 0.8, None, "operator note"])
+    sheet["D5"] = "=1+2"
+    book.create_sheet("P_cpm")["A1"] = "independent"
+    book.save(path)
+    book.close()
+    timestamp = datetime(2026, 11, 19, 23, 30)
+    edits = writer.CapabilityRowEdits(updates={5: {"corrected": 1.33, "period_end": timestamp}},
+                                      deletes=[2, 4])
+    rows = [("NEW", 0.7, timestamp, None)]
+    if native_excel:
+        pytest.importorskip("win32com.client")
+        assert writer._append_excel(path, "P", columns, rows, edits)
+    else:
+        assert writer._append_openxml(path, "P", columns, rows, edits)
+    book = openpyxl.load_workbook(path)
+    try:
+        assert list(book["P"].values)[1:] == [
+            ("HISTORY", 0.8, None, "operator note"), ("RECALCULATED", 1.33, timestamp, "=1+2"), *rows,
+        ]
+        assert book["P_cpm"]["A1"].value == "independent"
+    finally:
+        book.close()
+
+
 def test_excel_precision_roundtrip_for_capability_rows(tmp_path):
     path = tmp_path / "capabilities.xlsx"
     inputs = pd.DataFrame({"prod_code": ["Z622"], "cpk_corrected": [1.3266644783890635],
@@ -117,7 +150,7 @@ def test_source_change_during_append_is_not_overwritten(tmp_path, monkeypatch):
         return changed
     monkeypatch.setattr(writer, "_append_openxml", competing_write)
     result = writer.create_capability_rows(path, "M678", pd.DataFrame({"value": [2]}))
-    assert not result.written and "changed during append" in result.error
+    assert not result.written and "changed during publication" in result.error
     assert path.read_bytes() == external
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -70,7 +70,8 @@ class CapabilityDecorationPort(Protocol):
     def persist_capability_decoration(
         self, product_dir: Path, detail_df: pd.DataFrame,
         sheet_name: str | None = None, metric: str = CAPABILITY_METRIC_CPK,
-        *, computed_detail_df: pd.DataFrame | None = None, workbook_path: Path | None = None,
+        *, computed_detail_df: pd.DataFrame | None = None, reference_date: date | None = None,
+        workbook_path: Path | None = None,
         raise_on_error: bool = False,
     ) -> pd.DataFrame: ...
 

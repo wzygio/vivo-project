@@ -303,6 +303,7 @@ def test_partial_native_coverage_is_rejected_before_capability_decisions_are_wri
     try:
         with pytest.raises(service.SpcReportBuildError):
             service.SpcReportService.fetch_spc_report_payload(_data_port=object(), query_config_json=config.model_dump_json(),
+                current_iso_monday=date(2026, 11, 2),
                 _sheet_membership_coverage=lambda: native, _require_native_sheet_membership_coverage=True)
     finally:
         service.SpcReportService.fetch_spc_report_payload.clear()

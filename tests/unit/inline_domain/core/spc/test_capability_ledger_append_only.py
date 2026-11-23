@@ -1,4 +1,5 @@
-"""Automatic capability publication creates keys and reads existing decisions only."""
+"""History and user decisions survive previous-week reconciliation."""
+from datetime import date
 import pandas as pd
 import pytest
 
@@ -17,7 +18,7 @@ def detail(metric, value=0.9, name="EXISTING"):
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("new_value", [0.7, 1.6, None])
-def test_existing_key_never_refreshes_or_deletes_saved_cells(tmp_path, monkeypatch, metric, new_value):
+def test_out_of_scope_recalculation_never_edits_saved_cells(tmp_path, monkeypatch, metric, new_value):
     path = tmp_path / "capability.xlsx"
     sheet = core.resolve_capability_decoration_sheet("M678", metric)
     existing = detail(metric, 0.9).assign(flag="TURE", **{f"{metric}_replacement": 1.372, "note": "keep"})
@@ -26,7 +27,7 @@ def test_existing_key_never_refreshes_or_deletes_saved_cells(tmp_path, monkeypat
     candidate = detail(metric, new_value).assign(period_start="2026-11-10", period_end="2026-11-15")
     monkeypatch.setattr(core, "randint", lambda *_: pytest.fail("existing key regenerated a target"))
     persist_capability_decoration(tmp_path, candidate, sheet_name=sheet, metric=metric,
-        computed_detail_df=candidate, workbook_path=path, raise_on_error=True)
+        computed_detail_df=candidate, reference_date=date(2026, 11, 23), workbook_path=path, raise_on_error=True)
     assert path.read_bytes() == before
 
 
@@ -58,7 +59,7 @@ def test_existing_legacy_target_is_not_repaired_automatically(tmp_path, monkeypa
 
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
-def test_append_only_keeps_legacy_rows_unknowns_and_extra_columns(tmp_path, monkeypatch, metric):
+def test_refresh_and_append_preserve_legacy_rows_unknowns_and_extra_columns(tmp_path, monkeypatch, metric):
     path = tmp_path / "capability.xlsx"
     sheet = core.resolve_capability_decoration_sheet("M678", metric)
     existing = pd.DataFrame([
@@ -77,8 +78,9 @@ def test_append_only_keeps_legacy_rows_unknowns_and_extra_columns(tmp_path, monk
     monkeypatch.setattr(core, "randint", draw)
     candidates = pd.concat([detail(metric, 0.7), detail(metric, 0.8, "NEW")], ignore_index=True)
     persist_capability_decoration(tmp_path, candidates, sheet_name=sheet, metric=metric,
-        computed_detail_df=candidates, workbook_path=path, raise_on_error=True)
+        computed_detail_df=candidates, reference_date=date(2026, 11, 17), workbook_path=path, raise_on_error=True)
     after = pd.read_excel(path, sheet_name=sheet)
+    before.loc[2, f"{metric}_corrected"] = 0.7
     pd.testing.assert_frame_equal(after.iloc[:len(before)].reset_index(drop=True), before)
     assert after["param_name"].tolist() == ["LEGACY_PASS", "UNKNOWN", "EXISTING", "NEW"]
     assert after.iloc[-1]["flag"] == False

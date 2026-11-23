@@ -10,7 +10,7 @@
 
 ### 1.1 当前报表计算上一完整 ISO 周
 
-`SpcReportService.fetch_spc_report_payload()` 调用 `build_period_capability_report(..., previous_week_only=True)`，以查询截止日 `end_date` 所在周为参考，计算：
+`SpcReportService.fetch_spc_report_payload()` 调用 `build_period_capability_report(..., previous_week_only=True)`，以服务器今天所在 ISO 周为参考，计算：
 
 ```text
 [上周一 00:00:00，本周一 00:00:00)
@@ -18,7 +18,7 @@
 
 包含上周一，不包含本周一；不是向前滚动 7 天，也不是最近有数据的一周。上周没有有效输入时返回空能力表，不回退到更早周。
 
-例如查询截止日为 2026-10-08，能力窗口为 `[2026-09-28 00:00:00, 2026-10-05 00:00:00)`，周期标签为 `2026-W40`。
+例如今天是 2026-10-08，能力窗口为 `[2026-09-28 00:00:00, 2026-10-05 00:00:00)`，周期标签为 `2026-W40`。
 
 分组键为：
 
@@ -318,7 +318,7 @@ Cpm 的零标准差分支直接返回 `+inf`，不再计算偏移折减。无穷
 
 `build_period_capability_report()` 输出 `mean_value`、`std_value`、`sigma_source`、`sample_count`、`point_count`、规格与 `cpk`、`cpm` 等字段。`period_start`、`period_end` 取有效 Sheet 组内最早/最晚时间，是实际样本时间，不是窗口的日历起止边界。
 
-服务随后依次调用 Cpk 和 Cpm 的 `prepare_capability_decoration()`。`apply_capability_decoration()` 默认保留计算值；命中能力台账键、flag启用且已有替换目标有效时，覆盖对应的 `cpk` 或 `cpm`，不新增计算值门槛。按用户2026-11-17最终要求，自动持久化仅创建缺失异常键，既有corrected、时间、flag和replacement均不更新、不删除；随机替换目标仅创建时生成，读到非法或缺失目标时不随机修补。这个步骤不重算μ或σ，也不改变上述公式。
+服务随后分别维护 Cpk、Cpm 的上周台账。新增异常键时生成 replacement。已有键取得有效重算值后，严格大于 `1.33` 时删除该行，否则刷新 corrected 和样本起止时间。对留存的匹配行，`apply_capability_decoration()` 在 flag 启用且 replacement 有效时将目标值用于展示。点位、μ 和 σ 继续用于原公式计算。
 
 因此按 Sheet 和点位复算得到的是计算器结果；核对服务最终能力值时，还需考虑后续能力替换。台账匹配与状态规则由 [SPC 数据流](data-flow-spc.md) 维护。
 

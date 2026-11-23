@@ -79,6 +79,8 @@ def test_saved_alerts_remain_visible_when_producer_fails(
     monkeypatch.setattr(MonitorAnalysisService, "get_time_window", staticmethod(
         lambda: (pd.Timestamp("2026-09-01"), pd.Timestamp("2026-10-27")),
     ))
+    from src.shared_kernel.report_cutoff import ReportCutoffPolicy
+    monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-10-27 12:00"))
     monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *a: "test")
     monkeypatch.setattr(composition, f"build_{scope}_repository", lambda *a: object())
     service_module = importlib.import_module(f"src.inline_domain.application.{scope}.{scope}_service")

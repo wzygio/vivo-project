@@ -1,7 +1,8 @@
-"""Create/append capability rows without rebuilding maintained worksheets."""
+"""Edit capability rows on a staged copy of the maintained worksheet."""
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import gc
 from math import isinf
@@ -21,7 +22,7 @@ import psutil
 from src.shared_kernel.utils.excel_tools import WorkbookWriteResult, _normalize_excel_com_value
 
 
-def _version(path: Path) -> tuple[int, int] | None:
+def workbook_version(path: Path) -> tuple[int, int] | None:
     try:
         stat = path.stat()
     except FileNotFoundError:
@@ -62,7 +63,18 @@ def _verify_rows(actual, expected, columns: list[str], first_row: int) -> None:
                 raise ValueError(f"Capability row {row_number} column {name} failed verification")
 
 
-def _append_openxml(staged: Path, sheet: str, columns: list[str], rows: list[tuple]) -> bool:
+@dataclass
+class CapabilityRowEdits:
+    """Physical Excel rows, numbered before any deletions."""
+    updates: dict[int, dict[str, object]] = field(default_factory=dict)
+    deletes: list[int] = field(default_factory=list)
+
+    def __bool__(self) -> bool:
+        return bool(self.updates or self.deletes)
+
+
+def _append_openxml(staged: Path, sheet: str, columns: list[str], rows: list[tuple],
+                    edits: CapabilityRowEdits) -> bool:
     workbook = openpyxl.load_workbook(staged) if staged.stat().st_size else openpyxl.Workbook()
     try:
         if sheet in workbook.sheetnames:
@@ -70,8 +82,13 @@ def _append_openxml(staged: Path, sheet: str, columns: list[str], rows: list[tup
             headers = [cell.value for cell in worksheet[1]]
             if headers != columns:
                 raise ValueError("Existing capability headers require explicit manual maintenance")
-            if not rows:
+            if not rows and not edits:
                 return False
+            for number, fields in edits.updates.items():
+                for name, value in fields.items():
+                    worksheet.cell(number, columns.index(name) + 1).value = _cell(value)
+            for number in reversed(edits.deletes):
+                worksheet.delete_rows(number)
         else:
             if staged.stat().st_size == 0:
                 workbook.remove(workbook.active)
@@ -142,7 +159,8 @@ def _excel_application() -> Iterator[object]:
                 pythoncom.CoUninitialize()
 
 
-def _append_excel(staged: Path, sheet: str, columns: list[str], rows: list[tuple]) -> bool:
+def _append_excel(staged: Path, sheet: str, columns: list[str], rows: list[tuple],
+                  edits: CapabilityRowEdits | None = None) -> bool:
     with _excel_application() as excel:
         workbook = None
         try:
@@ -158,9 +176,21 @@ def _append_excel(staged: Path, sheet: str, columns: list[str], rows: list[tuple
                 headers = worksheet.Range(worksheet.Cells(1, 1), worksheet.Cells(1, len(columns))).Value
                 if list(headers[0]) != columns:
                     raise ValueError("Existing capability headers require explicit manual maintenance")
-                if not rows:
+                if not rows and not edits:
                     return False
                 first_row = used.Rows.Count + 1
+                if edits:
+                    for number, fields in edits.updates.items():
+                        for name, value in fields.items():
+                            cell = worksheet.Cells(number, columns.index(name) + 1)
+                            value = _cell(value)
+                            if isinstance(value, datetime):
+                                cell.NumberFormat = "yyyy-mm-dd hh:mm:ss"
+                                value = value.replace(tzinfo=timezone.utc)
+                            cell.Value = value
+                    for number in reversed(edits.deletes):
+                        worksheet.Rows(number).Delete()
+                    first_row -= len(edits.deletes)
             else:
                 worksheet = workbook.Worksheets.Add(After=workbook.Worksheets(workbook.Worksheets.Count))
                 worksheet.Name = sheet
@@ -191,27 +221,33 @@ def _append_excel(staged: Path, sheet: str, columns: list[str], rows: list[tuple
 
 
 def create_capability_rows(path: Path, sheet_name: str, new_rows: pd.DataFrame) -> WorkbookWriteResult:
-    """Publish new records atomically; caller holds the workbook publication lock."""
+    return write_capability_rows(path, sheet_name, new_rows, CapabilityRowEdits(), workbook_version(path))
+
+
+def write_capability_rows(path: Path, sheet_name: str, new_rows: pd.DataFrame,
+                          edits: CapabilityRowEdits, version: tuple[int, int] | None) -> WorkbookWriteResult:
+    """Publish one locked read/modify/write, using the version captured before reading."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    version = _version(path)
     descriptor, name = tempfile.mkstemp(prefix=f".{path.stem}-append-", suffix=".xlsx", dir=path.parent)
     os.close(descriptor)
     staged = Path(name)
     backup_stage = None
     try:
+        if workbook_version(path) != version:
+            raise RuntimeError("Capability workbook changed before staging")
         if version is not None:
             shutil.copy2(path, staged)
         columns = list(new_rows.columns)
         rows = [tuple(_cell(value) for value in row) for row in new_rows.itertuples(index=False, name=None)]
         if version is None or zipfile.is_zipfile(staged):
-            changed = _append_openxml(staged, sheet_name, columns, rows)
+            changed = _append_openxml(staged, sheet_name, columns, rows, edits)
         else:
-            changed = _append_excel(staged, sheet_name, columns, rows)
+            changed = _append_excel(staged, sheet_name, columns, rows, edits)
         if not changed:
             return WorkbookWriteResult(False, path, ())
-        if _version(path) != version:
-            raise RuntimeError("Capability workbook changed during append; original retained")
+        if workbook_version(path) != version:
+            raise RuntimeError("Capability workbook changed during publication; original retained")
         if version is not None:
             descriptor, name = tempfile.mkstemp(prefix=f".{path.stem}-backup-", suffix=".tmp", dir=path.parent)
             os.close(descriptor)
@@ -221,7 +257,7 @@ def create_capability_rows(path: Path, sheet_name: str, new_rows: pd.DataFrame) 
         os.replace(staged, path)
         return WorkbookWriteResult(True, path, (sheet_name,))
     except Exception as exc:
-        return WorkbookWriteResult(False, path, (), f"Capability row creation failed: {exc}")
+        return WorkbookWriteResult(False, path, (), f"Capability row publication failed: {exc}")
     finally:
         staged.unlink(missing_ok=True)
         if backup_stage is not None:

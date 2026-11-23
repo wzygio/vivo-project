@@ -15,10 +15,11 @@ class CpkLatestExcelStore:
     sheet_suffix = ""
 
     def __init__(self, path: Path | str, *, workbook_reader: Callable | None = None,
-                 strict_empty: bool = False) -> None:
+                 strict_empty: bool = False, require_workbook: bool = False) -> None:
         self.path = Path(path)
         self._workbook_reader = workbook_reader or read_cached_alarm_workbook
         self._strict_empty = strict_empty
+        self._require_workbook = require_workbook
 
     def source_updated_at(self) -> str | None:
         try:
@@ -38,9 +39,12 @@ class CpkLatestExcelStore:
             return f"{self.path.resolve()}:missing"
 
     def read_product(self, product: str) -> pd.DataFrame | None:
+        """With require_workbook enabled, None means a readable workbook lacks the sheet."""
         try:
             stat = self.path.stat()
         except FileNotFoundError:
+            if self._require_workbook:
+                raise
             return None
         sheets = self._workbook_reader(str(self.path.resolve()), stat.st_mtime_ns, stat.st_size)
         sheet_name = f"{product}{self.sheet_suffix}"

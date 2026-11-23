@@ -26,7 +26,7 @@ const fs = require('node:fs');
     };
     await page.goto(base);
     await text('📊 CPK达标率趋势图');
-    if (await query('cpm').count()) throw Error('CPM present without admin mode');
+    if (!await query('cpm').count()) throw Error('CPM unavailable in ordinary mode');
     if (await plots.count()) throw Error('Chart created before query');
     if (await page.locator('[data-testid="stExpander"] details[open]').count()) throw Error('Filters not collapsed');
     await open('cpk');
@@ -108,7 +108,7 @@ const fs = require('node:fs');
     await text('Page runs: 4');
     if (errors.length) throw Error(errors.join('\n'));
     fs.writeFileSync(path.join(output, 'browser-result.json'), JSON.stringify({ passed: true, plot, checks: [
-      'actual history page', 'query gate', 'CPM admin-only', 'collapsed filters', 'bar counts and rate line',
+      'actual history page', 'query gate', 'CPM available in ordinary mode', 'collapsed filters', 'bar counts and rate line',
       'four period colors', 'lines split at period boundaries', 'zero count 100%', 'three months/four weeks',
       'fragment isolation and retained sibling result', 'failure safe UI', 'empty data', '1440/768/375 layouts',
       'wheel over chart scrolls page without zooming',

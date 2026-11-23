@@ -253,6 +253,8 @@ class SpcReportService:
         spc_point_policy: SpcPointDecorationPolicy | None = None,
         _sheet_membership_coverage: Callable[[], tuple[date, date]] | None = None,
         _require_native_sheet_membership_coverage: bool = False,
+        *,
+        current_iso_monday: date,
     ) -> dict[str, object]:
         """Cache native CPK and midpoint-based CPM (Cp / (1 + abs(Ca))) payloads.
 
@@ -271,7 +273,8 @@ class SpcReportService:
             raise SpcReportBuildError("SPC query config is invalid.") from e
 
         try:
-            previous_week_start, previous_week_end = previous_iso_week_range(pd.Timestamp(query_config.end_date))
+            chart_week_start, _ = previous_iso_week_range(pd.Timestamp(query_config.end_date))
+            previous_week_start, previous_week_end = previous_iso_week_range(current_iso_monday)
             # Historical points feed the overview; only recent points need Sheet features.
             features_payload = fetch_decorated_features(
                 _features_source=_data_port,
@@ -282,17 +285,23 @@ class SpcReportService:
                 snapshot_signature=snapshot_signature,
                 product_revision=product_revision,
                 decision_signature=decision_signature,
-                sheet_features_start_date=previous_week_start.strftime("%Y-%m-%d"),
+                sheet_features_start_date=chart_week_start.strftime("%Y-%m-%d"),
                 date_exclusion=date_exclusion,
                 spc_point_policy=spc_point_policy,
                 point_decoration_signature=SPC_POINT_DECORATION_SIGNATURE,
             )
+            covered_start = pd.Timestamp(query_config.start_date).date()
+            covered_end = pd.Timestamp(query_config.end_date).date()
+            source_coverage = features_payload.get("spc_source_coverage")
             if _sheet_membership_coverage is not None or _require_native_sheet_membership_coverage:
                 # Verify after the source load (it may establish coverage), but
                 # before capability publication can replace a saved metric.
-                _verified_membership_window(query_config, _sheet_membership_coverage,
-                    source_coverage=features_payload.get("spc_source_coverage"),
+                covered_start, covered_end = _verified_membership_window(query_config, _sheet_membership_coverage,
+                    source_coverage=source_coverage,
                     require_native=_require_native_sheet_membership_coverage)
+            elif source_coverage is not None:
+                covered_start = max(covered_start, pd.Timestamp(source_coverage["start_date"]).date())
+                covered_end = min(covered_end, pd.Timestamp(source_coverage["end_date"]).date())
             if features_payload["raw_measurements_df"].empty or features_payload["spec_empty"]:
                 return SpcReportService._empty_payload(features_payload.get("spc_source_coverage"))
 
@@ -308,9 +317,11 @@ class SpcReportService:
                 measurements_df.loc[point_times.ge(previous_week_start) & point_times.lt(previous_week_end)],
                 capability_exempt_param_name_contains,
             )
-            capability_end_date = pd.Timestamp(query_config.end_date).date()
-
-            if capability_sheet_features_df.empty or capability_end_date is None:
+            covers_capability_week = (
+                covered_start <= previous_week_start.date()
+                and covered_end >= (previous_week_end - pd.Timedelta(days=1)).date()
+            )
+            if capability_sheet_features_df.empty or not covers_capability_week:
                 period_capability_df = pd.DataFrame()
             else:
                 resolved_period_sigma_source = normalize_period_sigma_source(
@@ -319,7 +330,7 @@ class SpcReportService:
                 # CPK 仅基于修饰后的点位/特征计算，不再保留真实值口径
                 period_capability_df = build_period_capability_report(
                     sheet_features=capability_sheet_features_df,
-                    end_date=capability_end_date,
+                    end_date=current_iso_monday,
                     raw_measurements=capability_measurements_df,
                     sigma_source=resolved_period_sigma_source,
                     previous_week_only=True,
@@ -332,7 +343,7 @@ class SpcReportService:
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpk"),
                 metric="cpk",
                 strict_persistence=True,
-                reference_date=pd.Timestamp(query_config.end_date).date(),
+                reference_date=current_iso_monday,
             )
             period_capability_df = cpk_decoration_result.period_capability_df
             cpm_decoration_result = prepare_capability_decoration(
@@ -342,7 +353,7 @@ class SpcReportService:
                 sheet_name=resolve_capability_decoration_sheet(query_config.prod_code, "cpm"),
                 metric="cpm",
                 strict_persistence=True,
-                reference_date=pd.Timestamp(query_config.end_date).date(),
+                reference_date=current_iso_monday,
             )
             period_capability_df = cpm_decoration_result.period_capability_df
             indicators_df = (
@@ -413,6 +424,8 @@ class SpcReportService:
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
             spc_point_policy = ConfigLoader.get_spc_point_decoration_policy()
             alert_min_span_hours = ConfigLoader.get_spc_capability_alert_min_span_hours()
+            today = ConfigLoader.get_report_cutoff_policy().boundary()
+            _, this_monday = previous_iso_week_range(today)
         except ValueError as exc:
             logger.exception("[SPC] invalid report date exclusion configuration")
             raise SpcReportBuildError("SPC report configuration is invalid.") from exc
@@ -424,7 +437,7 @@ class SpcReportService:
         capability_signature = (
             str(capability_path.resolve()), *capability_stat,
             f"weekly_span_hours={alert_min_span_hours}",
-            "capability_create_read_v1_week_isolated_points",
+            "capability_weekly_reconciliation_v2_week_isolated_points",
         )
         prepared_signature = f"{SPC_WEEKLY_POINT_POLICY}:{PARAM_CLASSIFICATION_SIGNATURE}:{SPC_POINT_DECORATION_SIGNATURE}:{snapshot_signature}"
         if _sheet_membership_store is not None or sheet_membership_policy_signature:
@@ -434,6 +447,7 @@ class SpcReportService:
         payload = SpcReportService.fetch_spc_report_payload(
             _data_port=_data_port,
             query_config_json=query_config_json,
+            current_iso_monday=this_monday.date(),
             snapshot_signature=prepared_signature,
             period_sigma_source=period_sigma_source,
             product_revision=product_revision,

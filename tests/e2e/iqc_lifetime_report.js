@@ -38,7 +38,7 @@ async page => {
   await expander.locator('summary').click();
   if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
   const charts = await page.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => ({
-    traces: el.data.filter(t => t.mode !== 'markers+text').map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate,
+    traces: el.data.filter(t => t.mode !== 'markers').map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate,
       predicted: t.showlegend === false, color: t.line.color, dash: t.line.dash,
       group: t.legendgroup, labels: t.customdata })),
     xaxis: el.layout.xaxis.title.text, yaxis: el.layout.yaxis.title.text,

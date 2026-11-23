@@ -36,8 +36,6 @@ def compute_weekly_records(source, latest_reader, *, products: Iterable[str],
                 or not totals.prod_code.eq(product).all()):
             raise ValueError(f"Incomplete weekly project totals for {product}")
         detail = latest_reader.read_product(product)
-        if detail is None and totals.total_projects.gt(0).any():
-            raise ValueError(f"Published capability history unavailable for {product}/{metric}")
         for item in totals.itertuples(index=False):
             total = int(item.total_projects)
             if total < 0 or total != item.total_projects:

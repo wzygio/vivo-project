@@ -65,6 +65,7 @@ def test_spc_service_fetches_only_spc_parameters() -> None:
         _data_port=_SpcOnlyFakeRepository(Path("data"), True, object()),
         query_config_json=query.model_dump_json(),
         snapshot_signature="spc-fetches-spc-only",
+        current_iso_monday=pd.Timestamp("2026-06-08").date(),
     )
 
     assert _SpcOnlyFakeRepository.requested_data_types == ["SPC"]

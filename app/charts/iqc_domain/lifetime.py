@@ -61,10 +61,10 @@ def build_lifetime_chart(
             color = COLORS[(number - 1) % len(COLORS)]
             value = point['规格点数值']
             figure.add_trace(go.Scatter(
-                x=[point['规格时间(H)']], y=[value], mode='markers+text',
+                x=[point['规格时间(H)']], y=[value], mode='markers',
                 name=f'{number}（规格点）', legendgroup=str(number), showlegend=False,
                 marker={'symbol': 'diamond', 'color': color, 'size': 8},
-                text=[_spec_value_label(value)], textposition='middle right' if number % 2 else 'middle left',
+                text=[_spec_value_label(value)],
                 customdata=[point['取值方式']],
                 hovertemplate=(f'样品编号：{number}<br>规格时间：%{{x:g}}H'
                                f'<br>{metric}（%{{customdata}}）：%{{text}}<extra></extra>'),

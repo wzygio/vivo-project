@@ -126,8 +126,9 @@ def test_capability_decoration_uses_manual_value_from_memory_port(tmp_path, pers
             self.reads += 1
             return self.decisions.copy()
 
-        def persist_capability_decoration(self, product_dir, detail, sheet, metric, *, computed_detail_df=None):
-            assert computed_detail_df is None  # No full-value refresh payload is sent.
+        def persist_capability_decoration(self, product_dir, detail, sheet, metric, *, computed_detail_df, reference_date):
+            assert computed_detail_df["period_label"].tolist() == ["2026-W30"]
+            assert reference_date == date(2026, 7, 27)
             self.writes.append(detail)
             return self.decisions.copy()
 

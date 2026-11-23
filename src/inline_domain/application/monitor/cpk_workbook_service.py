@@ -139,8 +139,6 @@ class CpkWorkbookMonitorService:
         totals = totals.loc[totals["period_label"].isin(weeks)].copy()
         if set(totals["period_label"]) != set(weeks):
             raise ValueError(f"Incomplete weekly capability totals for {product}")
-        if ledger is None and pd.to_numeric(totals["total_projects"], errors="coerce").gt(0).any():
-            raise ValueError(f"Missing capability alert history for monitored product {product}")
         warnings = pd.Series(dtype="int64")
         if ledger is not None and not ledger.empty:
             if missing := {*CPK_KEY_COLUMNS, "flag"} - set(ledger.columns):
@@ -178,6 +176,8 @@ class CpkWorkbookMonitorService:
         label = f"{iso.year}-W{iso.week:02d}"
         month = week_owner_month(label)
         updates, complete_months, statuses, details = [], [], [], []
+        if products and self._latest_reader is None:
+            raise ValueError("Capability alert workbook reader unavailable")
         for product in products:
             baseline = current.loc[current["产品"].eq(product) & current["监控类型"].eq("SPC")
                                    & current["厂别"].eq("ALL")]
@@ -189,7 +189,7 @@ class CpkWorkbookMonitorService:
             elif set(self._owned_completed_weeks(month, as_of)).issubset(
                     set(baseline.loc[baseline["周期类型"].eq("周度"), "时间标签"])):
                 complete_months.append((product, "SPC", "ALL", month))
-            ledger = self._latest_reader.read_product(product) if self._latest_reader is not None else None
+            ledger = self._latest_reader.read_product(product)
             updates.append(self._weekly_rows(product, weeks, ledger, as_of))
             if ledger is not None and not ledger.empty:
                 details.append(ledger.loc[ledger["period_type"].eq("week") & ledger["period_label"].eq(label)])

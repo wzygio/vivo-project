@@ -101,17 +101,27 @@ def test_warning_count_above_total_is_rejected_before_any_write(tmp_path):
     assert store.workbook_path.read_bytes() == before
 
 
-def test_missing_alert_sheet_does_not_turn_monitored_projects_into_full_compliance(tmp_path):
-    store = CapabilitySummaryStore(tmp_path / "history.xlsx")
-    seed(store)
+def test_missing_alert_sheet_counts_zero_but_missing_workbook_fails(tmp_path):
+    from src.inline_domain.infrastructure.monitor.cpm_latest_excel_store import CpmLatestExcelStore
+
+    store = CapabilitySummaryStore(tmp_path / "history.xlsx", metric="cpm")
+    seed(store, metric="cpm")
+    ledger = tmp_path / "ledger.xlsx"
+    service = CpkWorkbookMonitorService(
+        store, latest_reader=CpmLatestExcelStore(ledger, require_workbook=True),
+        weekly_source=WeeklySource(), metric="cpm",
+    )
     before = store.workbook_path.read_bytes()
-    class MissingLedger:
-        def read_product(self, product):
-            return None
-    service = CpkWorkbookMonitorService(store, latest_reader=MissingLedger(), weekly_source=WeeklySource())
-    with pytest.raises(ValueError, match="Missing capability alert history"):
+    with pytest.raises(FileNotFoundError):
         service.build_dashboard(products=["M626"], factories=[], end_date="2026-11-17")
     assert store.workbook_path.read_bytes() == before
+
+    # A CPK sheet can exist before this product's first CPM warning.
+    pd.DataFrame({"flag": [False]}).to_excel(ledger, sheet_name="M626", index=False)
+    workbook_before = ledger.read_bytes()
+    view = service.build_dashboard(products=["M626"], factories=[], end_date="2026-11-17")
+    assert view.summary_df.W46.tolist() == [10, 10, 0, "100.00%"]
+    assert ledger.read_bytes() == workbook_before
 
 
 @pytest.mark.parametrize("sheet_exists", [False, True])

@@ -317,7 +317,7 @@ def test_forecasts_render_in_two_by_two_grid_without_adding_detail_rows():
         chart = json.loads(element.proto.spec)
         forecasts = [t for t in chart['data'] if t.get('line', {}).get('dash') == 'dash']
         assert len(forecasts) == 2 and all(t['x'] == [400, 1200] for t in forecasts)
-        markers = [t for t in chart['data'] if t['mode'] == 'markers+text']
+        markers = [t for t in chart['data'] if t['mode'] == 'markers']
         if chart['layout']['yaxis']['title']['text'] == 'JNCD':
             assert not markers
         else:
@@ -327,7 +327,7 @@ def test_forecasts_render_in_two_by_two_grid_without_adding_detail_rows():
     assert len(app.dataframe[-1].value) == 32
     assert app.dataframe[-1].value['测试时间'].max() == 400
     white = json.loads(manual_expanders(app)[1].get('plotly_chart')[0].proto.spec)
-    marker = next(t for t in white['data'] if t['mode'] == 'markers+text')
+    marker = next(t for t in white['data'] if t['mode'] == 'markers')
     assert marker['x'] == [660] and marker['text'] == ['0.9481']
     assert marker['customdata'] == ['预测']
 
@@ -347,14 +347,14 @@ def test_alert_center_reads_saved_result_before_manual_query_and_on_report_failu
     assert any('暂时无法读取' in error.value for error in app.error)
 
 
-def test_threshold_adjacent_values_keep_their_side_in_labels_hover_and_alert_table():
+def test_threshold_adjacent_values_keep_their_side_in_hover_and_alert_table():
     app = AppTest.from_string(APP)
     app.session_state['mode'] = 'near_threshold'
     app.run()
     app.button(key='iqc_lifetime_query').click().run()
     assert not app.exception
     white = json.loads(manual_expanders(app)[1].get('plotly_chart')[0].proto.spec)
-    markers = [t for t in white['data'] if t['mode'] == 'markers+text']
+    markers = [t for t in white['data'] if t['mode'] == 'markers']
     assert [t['text'][0] for t in markers] == ['0.949978', '0.950022']
     assert all('%{text}' in t['hovertemplate'] for t in markers)
     table = app.expander[0].dataframe[0]

@@ -50,7 +50,6 @@ from src.inline_domain.composition import (
     build_spc_sheet_membership_policy_signature,
     build_spc_sheet_membership_coverage,
 )
-from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
 )
@@ -89,7 +88,7 @@ product_cache_signature = build_indicator_product_cache_signature(
     current_product,
     PRODUCT_CACHE_INDICATORS,
 )
-_, default_end_dt = MonitorAnalysisService.get_time_window()
+default_end_dt = ConfigLoader.get_report_cutoff_policy().boundary()
 step_desc_map = {}
 try:
     db_manager = DatabaseManager()

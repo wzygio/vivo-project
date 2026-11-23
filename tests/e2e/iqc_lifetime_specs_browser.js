@@ -26,7 +26,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH);
       })));
       assert.equal(charts.length, hours.length * 2 + 1);
       for (const [i, chart] of charts.entries()) {
-        const markers = chart.traces.filter(t => t.mode === 'markers+text');
+        const markers = chart.traces.filter(t => t.mode === 'markers');
         if (chart.metric === 'JNCD') {
           assert.equal(markers.length, 0);
           continue;
@@ -36,7 +36,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE_PATH);
         assert.deepEqual(marker.x, [hour]);
         const expected = chart.metric === '效率衰减' ? 0.965 - 0.000065 * (hour - 400) : 1.0084;
         assert.ok(Math.abs(marker.y[0] - expected) < 1e-10);
-        assert.ok(chart.texts.includes(expected.toFixed(4)));
+        assert.deepEqual(chart.texts, []);
+        assert.deepEqual(marker.text, [expected.toFixed(4)]);
+        assert.ok(marker.hovertemplate.includes('%{text}'));
         assert.ok(chart.labels.some(item => item.text === '规格 ' + hour + 'H'));
         assert.ok(chart.labels.some(item => item.text === '0.95'));
         const forecast = chart.traces.find(t => t.line?.dash === 'dash');
