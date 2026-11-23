@@ -38,6 +38,10 @@ def test_read_uses_read_only_transaction_and_complete_columns(monkeypatch):
 
         def execute(self, statement):
             commands.append(str(statement))
+            return self
+
+        def one(self):
+            return ('r', False, 2532, 7077888)
 
     connection = Connection()
 
@@ -45,19 +49,40 @@ def test_read_uses_read_only_transaction_and_complete_columns(monkeypatch):
         def connect(self):
             return nullcontext(connection)
 
-    def read_query(query, conn):
+    def read_query(query, conn, *, chunksize):
         assert conn is connection
+        assert chunksize == 5_000
         commands.append(str(query))
-        return pd.DataFrame({'test_time': ['100']})
+        return iter([pd.DataFrame({'test_time': ['100']})])
 
     monkeypatch.setattr(pd, 'read_sql_query', read_query)
     assert LifetimeRepository(Engine()).read_report().test_time.tolist() == ['100']
     assert commands[0] == 'SET TRANSACTION READ ONLY'
     assert 'statement_timeout' in commands[1]
     assert 'm3dwd.dwd_panel_eff_dec_enter' in commands[2]
-    selected_columns = commands[2].partition('FROM')[0].removeprefix('SELECT').split(',')
+    assert 'pg_total_relation_size' in commands[2]
+    selected_columns = commands[3].partition('FROM')[0].removeprefix('SELECT').split(',')
     assert 'jncd' in [column.strip() for column in selected_columns]
-    assert 'LIMIT' not in commands[2] and 'ext_user' not in commands[2]
+    assert 'WHERE ext_time <= LOCALTIMESTAMP' in commands[3] and 'LIMIT 100001' in commands[3]
+
+
+@pytest.mark.parametrize('metadata', [
+    ('v', False, 10, 1024), ('r', True, 10, 1024),
+    ('r', False, 100_001, 1024), ('r', False, 1, 65 * 1024**2),
+])
+def test_unreviewed_source_size_or_shape_stops_before_business_read(monkeypatch, metadata):
+    from unittest.mock import MagicMock
+
+    connection = MagicMock()
+    engine = MagicMock()
+    engine.connect.return_value = nullcontext(connection)
+    connection.begin.return_value = nullcontext()
+    connection.execute.return_value.one.return_value = metadata
+    read_query = MagicMock()
+    monkeypatch.setattr(pd, 'read_sql_query', read_query)
+    with pytest.raises(LifetimeSourceUnavailable):
+        LifetimeRepository(engine).read_report()
+    read_query.assert_not_called()
 
 
 def test_database_failure_is_sanitized_and_retried(caplog):

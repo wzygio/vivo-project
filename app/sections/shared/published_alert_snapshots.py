@@ -10,22 +10,25 @@ import streamlit as st
 from src.indicator_domain.core.ijp.alerts import ALERT_COLUMNS
 from src.equipment_domain.core.parts_alerts import PARTS_PUBLIC_COLUMNS
 from src.iqc_domain.core.eva_materials.evaporation import REPORT_COLUMNS
+from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import read_workbook_sheets
 
 logger = logging.getLogger(__name__)
-PUBLISHED_ALERT_ROWS = ('ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng')
 _SOURCES = {
     'ijp_aa_oos': ('indicator_domain', 'ijp_alerts', 'AA区', tuple(ALERT_COLUMNS)),
     'ijp_hole_oos': ('indicator_domain', 'ijp_alerts', '孔区', tuple(ALERT_COLUMNS)),
     'parts_oos': ('equipment_domain', 'parts_alerts', '超规备件', PARTS_PUBLIC_COLUMNS),
     'iqc_evaporation_ng': ('iqc_domain', 'evaporation_alerts', '超规材料', REPORT_COLUMNS),
+    'iqc_lifetime_oos': ('iqc_domain', 'lifetime_alerts', '寿命预警', LIFETIME_ALERT_COLUMNS),
 }
+PUBLISHED_ALERT_ROWS = tuple(_SOURCES)
 _EMPTY_METADATA_COLUMNS = {
     'ijp_aa_oos': ('region', 'reference_date', 'period_start', 'period_end', 'updated_at', 'alert_count', 'status'),
     'ijp_hole_oos': ('region', 'reference_date', 'period_start', 'period_end', 'updated_at', 'alert_count', 'status'),
     'parts_oos': ('as_of_date', 'last_update', 'updated_at', 'alert_count', 'status'),
     'iqc_evaporation_ng': ('start_date', 'end_date', 'products', 'updated_at', 'alert_count', 'status'),
+    'iqc_lifetime_oos': ('reference_date', 'products', 'updated_at', 'alert_count', 'status'),
 }
 UNAVAILABLE = '预警结果暂不可用，请更新对应报表后重试。'
 EMPTY_TEMPLATE_MESSAGE = '当前暂无预警记录。'
@@ -88,6 +91,12 @@ def read_published_alerts(row_key: str, product: str, reference_date: date) -> d
         elif row_key == 'parts_oos':
             if str(record.as_of_date) != str(reference_date):
                 raise ValueError('Invalid parts scope')
+        elif row_key == 'iqc_lifetime_oos':
+            products = str(record.products).split('、')
+            if (str(record.reference_date) != str(reference_date)
+                    or not alerts['产品型号'].isin(products).all()):
+                raise ValueError('Invalid lifetime product or reference date')
+            alerts = alerts.loc[alerts['产品型号'].eq(product)]
         else:
             if str(record.start_date) != start or str(record.end_date) != end:
                 raise ValueError('Invalid IQC window')

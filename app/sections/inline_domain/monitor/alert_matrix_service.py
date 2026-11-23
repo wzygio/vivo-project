@@ -557,6 +557,8 @@ MATRIX_ROWS: tuple[AlertMatrixRow, ...] = (
                    _published_evaluator('parts_oos')),
     AlertMatrixRow('iqc_evaporation_ng', 'IQC 蒸镀材料NG', 'iqc', _PREVIOUS_WEEK_SCOPE,
                    _published_evaluator('iqc_evaporation_ng'), supports_factory_filter=False),
+    AlertMatrixRow('iqc_lifetime_oos', 'IQC 寿命规格预警', 'iqc', '当前寿命测试结果',
+                   _published_evaluator('iqc_lifetime_oos'), supports_factory_filter=False),
 )
 
 MATRIX_ROW_MAP: dict[str, AlertMatrixRow] = {row.row_key: row for row in MATRIX_ROWS}

@@ -4,7 +4,7 @@ async page => {
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.goto('http://localhost:8521');
-  const table = page.getByTestId('stDataFrame');
+  const table = page.locator('.st-key-iqc_lifetime_manual_results').getByTestId('stDataFrame');
   await page.getByRole('combobox', { name: '批次号', exact: true }).waitFor({ timeout: 60000 });
   await page.getByRole('combobox', { name: '批次号', exact: true }).click();
   await page.getByRole('option', { name: '未填写批次', exact: true }).click();
@@ -12,7 +12,7 @@ async page => {
   await page.getByRole('button', { name: '查询', exact: true }).click();
   await table.waitFor({ timeout: 60000 });
   await page.waitForFunction(() => {
-    const labels = [...document.querySelectorAll('[data-testid="stExpander"]')]
+    const labels = [...document.querySelectorAll('.st-key-iqc_lifetime_manual_results [data-testid="stExpander"]')]
       .filter(el => !el.parentElement.closest('[data-testid="stExpander"]'))
       .map(el => el.querySelector('summary'));
     return labels.length > 0 && labels.every(el => el.textContent.includes('未填写批次'));

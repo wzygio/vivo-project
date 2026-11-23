@@ -153,6 +153,8 @@ resources:
     dir: resources/iqc_domain
     files:
       evaporation_alerts: resources/iqc_domain/eva_materials/evaporation_alerts.xlsx
+      lifetime_specs: resources/iqc_domain/lifetime/北极星寿命测试规格.xlsx
+      lifetime_alerts: resources/iqc_domain/lifetime/lifetime_alerts.xlsx
       demo_inspection: resources/iqc_domain/shared/demo/inspection.json
       demo_lifetime: resources/iqc_domain/shared/demo/lifetime.json
   shared_kernel:

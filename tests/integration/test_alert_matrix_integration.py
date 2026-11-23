@@ -268,7 +268,7 @@ def test_matrix_degrades_missing_product_without_blocking_others(tmp_path: Path)
 
     assert cells[("spc_sheet_oos", "M678")]["state"] == "alert"
     for row in payload["rows"]:
-        if row['row_key'] in ('ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng'):
+        if row['row_key'] in ('ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng', 'iqc_lifetime_oos'):
             assert cells[(row['row_key'], 'Z571')]['state'] == 'error'
             continue
         assert cells[(row["row_key"], "Z571")]["state"] in {"no_data", "ok"}, row["row_key"]

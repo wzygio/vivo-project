@@ -36,13 +36,13 @@ def produce_qtime(products: tuple[str, ...], reference_date: date) -> list[dict]
 
 def build_jobs(products: tuple[str, ...], reference_date: date) -> list[InspectionJob]:
     from api.inspection.producers_inline import produce_inline
-    from api.inspection.producers_auxiliary import produce_auxiliary
+    from api.inspection.producers_auxiliary import MODULES as auxiliary_modules, produce_auxiliary
     jobs = [InspectionJob('inline:'+product,
                           tuple((module, product) for module in ('spc','ctq','aoi_tt','aoi_rs')),
                           partial(produce_inline, product, reference_date)) for product in products]
     jobs.extend(InspectionJob('yield:'+product, (('yield',product),),
                               partial(produce_yield, product, reference_date)) for product in products)
     jobs.append(InspectionJob('qtime', (('qtime',''),), partial(produce_qtime, products, reference_date)))
-    jobs.append(InspectionJob('auxiliary', tuple((module,'') for module in ('ijp_aa','ijp_hole','parts','iqc_evaporation')),
+    jobs.append(InspectionJob('auxiliary', tuple((module,'') for module in auxiliary_modules),
                               partial(produce_auxiliary, products, reference_date)))
     return jobs

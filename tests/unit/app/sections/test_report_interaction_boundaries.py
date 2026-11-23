@@ -10,8 +10,10 @@ def fragment_of(app, widget):
 def test_lifetime_filters_and_query_share_a_fragment(monkeypatch):
     from app.sections.iqc_domain.lifetime import lifetime_dashboard as dashboard
     monkeypatch.setattr(dashboard.ConfigLoader, 'get_enabled_products', lambda **kw: ['Z553'])
-    monkeypatch.setattr(dashboard, '_render_trends', lambda frame: None)
+    monkeypatch.setattr(dashboard, '_render_trends', lambda frame, specs: None)
     monkeypatch.setattr(dashboard, '_render_details', lambda frame: None)
+    monkeypatch.setattr(dashboard, 'load_lifetime_specs', dict)
+    monkeypatch.setattr(dashboard, 'read_alert_result', lambda *args: {'state': 'ok'})
     app = AppTest.from_string('''
 import pandas as pd
 from app.sections.iqc_domain.lifetime.lifetime_dashboard import render_lifetime_dashboard

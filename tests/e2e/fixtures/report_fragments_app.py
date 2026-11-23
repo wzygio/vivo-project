@@ -94,6 +94,7 @@ def install_fixture():
     from app.manager.session_manager import SessionManager
     from app.sections.indicator_domain.ijp import dashboard as aa_ui
     from app.sections.indicator_domain.ijp_hole import dashboard as hole_ui
+    from app.sections.iqc_domain.lifetime import lifetime_dashboard
     from app.utils.app_setup import AppSetup
     from src.indicator_domain import composition
     from src.shared_kernel.config import ConfigLoader
@@ -101,6 +102,7 @@ def install_fixture():
     from src.shared_kernel.infrastructure import db_handler
 
     patch = pytest.MonkeyPatch()
+    patch.setattr(lifetime_dashboard, 'load_lifetime_specs', dict)
     patch.setattr(AppSetup, 'initialize_app', lambda: None)
     patch.setattr(SessionManager, 'get_active_config', lambda: {})
     patch.setattr(page_header, 'render_page_header', lambda *a, **kw: None)
@@ -158,7 +160,9 @@ if mode == 'lifetime':
     from app.sections.iqc_domain.lifetime.lifetime_dashboard import render_lifetime_dashboard
     from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 
-    render_lifetime_dashboard(LifetimeReportService(LifetimeSource()))
+    from tests.e2e.fixtures.lifetime_forecast import fixture_alert_result
+    render_lifetime_dashboard(LifetimeReportService(LifetimeSource()),
+                              saved_alert_result=fixture_alert_result('normal'))
 elif mode == 'point':
     from app.sections.indicator_domain.point_test.dashboard import render_point_test_dashboard
     from src.indicator_domain.application.point_test.service import PointTestReportService

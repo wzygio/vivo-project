@@ -27,7 +27,7 @@ async page => {
     "yield_lot_oos",
     "yield_trend_fluctuation",
     "qtime_sheet_oos",
-    'ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng',
+    'ijp_aa_oos', 'ijp_hole_oos', 'parts_oos', 'iqc_evaporation_ng', 'iqc_lifetime_oos',
   ];
   const products = ["M678", "Z571"];
   const rowLabels = [
@@ -40,7 +40,7 @@ async page => {
     "Yield 单片异常（Lot 超规）",
     "Yield 趋势波动",
     "Q-Time 单片异常",
-    'IJP AA区超规', 'IJP 孔区超规', '关键备件超规（全厂共用）', 'IQC 蒸镀材料NG',
+    'IJP AA区超规', 'IJP 孔区超规', '关键备件超规（全厂共用）', 'IQC 蒸镀材料NG', 'IQC 寿命规格预警',
   ];
   const bodyText = await page.evaluate(() => document.body.innerText);
   for (const label of [...rowLabels, "M678", "Z571", "监控参数"]) {
@@ -49,7 +49,7 @@ async page => {
     }
   }
 
-  // ---- 2. 单元格分布（无数据按达标展示：🔴×4 ⚪×0 ⬜×1 🟢×13）----
+  // ---- 2. 单元格分布 ----
   const cellStates = await page.evaluate(
     ({ rowKeys, products }) => {
       const states = {};

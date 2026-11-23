@@ -29,7 +29,10 @@ def test_live_lifetime_public_report_matches_source():
                    test_time, bu, luminance, lumi_decay, cie_x, cie_xy,
                    iss, curr_decay, efficiency, eff_decay, jncd
             FROM m3dwd.dwd_panel_eff_dec_enter
+            WHERE ext_time <= LOCALTIMESTAMP OR ext_time IS NULL
+            LIMIT 100001
         '''), connection)
+        assert len(raw) <= 100_000
     actual = build_lifetime_service().get_report()
     raw = raw.loc[raw.product_group.isin(ConfigLoader.get_enabled_products(strict=True))].copy()
     raw['date_key'] = raw['date_key'].map(

@@ -8,11 +8,13 @@ from src.shared_kernel.config import ConfigLoader
 from src.indicator_domain.core.ijp.alerts import ALERT_COLUMNS
 from src.equipment_domain.core.parts_alerts import PARTS_PUBLIC_COLUMNS
 from src.iqc_domain.core.eva_materials.evaporation import REPORT_COLUMNS
+from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
 
 
 @pytest.fixture
 def snapshots(tmp_path, monkeypatch):
-    paths = {key: tmp_path / f'{key}.xlsx' for key in ('ijp_alerts', 'parts_alerts', 'evaporation_alerts')}
+    paths = {key: tmp_path / f'{key}.xlsx'
+             for key in ('ijp_alerts', 'parts_alerts', 'evaporation_alerts', 'lifetime_alerts')}
     original = ConfigLoader.get_domain_resource_path
     monkeypatch.setattr(ConfigLoader, 'get_domain_resource_path',
         lambda domain, key, default=None: paths[key] if key in paths else original(domain, key, default))
@@ -45,6 +47,14 @@ def write_snapshots(paths, *, empty=False, updated=None):
         iqc.to_excel(writer, sheet_name='超规材料', index=False)
         pd.DataFrame([dict(start_date=str(start), end_date=str(end), products='M678、M626', updated_at=now,
             alert_count=len(iqc), status='success')]).to_excel(writer, sheet_name='__meta__', index=False)
+    lifetime = pd.DataFrame([] if empty else [{
+        '产品型号': 'M678', '批次号': 'L1', '测试画面': 'W', '样品编号': 1, '指标': '亮度衰减',
+        '规格时间(H)': 660, '规格点数值': .92, '取值方式': '预测', '判定阈值': .95,
+    }], columns=LIFETIME_ALERT_COLUMNS)
+    with pd.ExcelWriter(paths['lifetime_alerts']) as writer:
+        lifetime.to_excel(writer, sheet_name='寿命预警', index=False)
+        pd.DataFrame([dict(reference_date=str(today), products='M678、M626', updated_at=now,
+            alert_count=len(lifetime), status='success')]).to_excel(writer, sheet_name='__meta__', index=False)
 
 
 def test_product_matching_global_parts_and_public_projection(snapshots):
@@ -61,6 +71,9 @@ def test_product_matching_global_parts_and_public_projection(snapshots):
         assert 'flag' not in iqc['alerts']
     assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['state'] == 'ok'
     assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['alerts'].empty
+    lifetime = saved.read_published_alerts('iqc_lifetime_oos', 'M678', date.today())
+    assert lifetime['state'] == 'alert' and lifetime['alerts']['规格点数值'].tolist() == [.92]
+    assert saved.read_published_alerts('iqc_lifetime_oos', 'M626', date.today())['state'] == 'ok'
 
 
 def test_shared_parts_reader_accepts_factory_wide_scope_without_a_product(snapshots):
@@ -113,6 +126,31 @@ def test_missing_snapshot_cache_is_invalidated_by_real_publication(snapshots):
     assert read_alert_result(row, 'M678', date.today())['state'] == 'alert'
 
 
+def test_lifetime_inspection_warmup_persists_product_cells_and_invalidates_on_republication(
+    snapshots, tmp_path, monkeypatch,
+):
+    from api.inspection.matrix_warmup import main
+    from app.sections.inline_domain.monitor import alert_matrix_cache as cache, alert_matrix_service as matrix
+    from app.sections.inline_domain.monitor.alert_matrix_snapshot import DailyMatrixSnapshot
+
+    write_snapshots(snapshots)
+    row = 'iqc_lifetime_oos'
+    monkeypatch.setattr(matrix, 'MATRIX_ROWS', (matrix.MATRIX_ROW_MAP[row],))
+    store = DailyMatrixSnapshot(tmp_path / 'daily.json')
+    def load(**kwargs):
+        return cache.get_cached_alert_matrix(**kwargs, _snapshot_store=store)
+
+    day = date.today()
+    products = ('M678', 'M626')
+    assert main([], loader=load, store=store, log_dir=tmp_path / 'logs',
+                reference_date=day, products=products) == 0
+    cells = store.read(day, 3600)['cells']
+    assert cells[row, 'M678']['state'] == 'alert' and cells[row, 'M626']['state'] == 'ok'
+    write_snapshots(snapshots, empty=True)
+    current = load(reference_date=day, products=products)['cells'][row, 'M678']
+    assert current['state'] == 'ok' and current['cache_signature'] != cells[row, 'M678']['cache_signature']
+
+
 @pytest.mark.parametrize('exception', [PermissionError, OSError, ValueError])
 def test_unreadable_workbook_is_not_misclassified_as_absent(snapshots, monkeypatch, exception):
     write_snapshots(snapshots)
@@ -141,12 +179,12 @@ def test_file_version_invalidates_parse_cache_and_signature(snapshots, monkeypat
     for key in saved.PUBLISHED_ALERT_ROWS:
         for product in ('M678', 'M626'):
             saved.read_published_alerts(key, product, date.today())
-    assert len(calls) == 3
+    assert len(calls) == 4
     saved.clear_published_snapshot('ijp_aa_oos')
     saved.read_published_alerts('ijp_hole_oos', 'M678', date.today())
     saved.read_published_alerts('parts_oos', 'M678', date.today())
     saved.read_published_alerts('iqc_evaporation_ng', 'M678', date.today())
-    assert len(calls) == 4  # Only the shared IJP workbook was reparsed.
+    assert len(calls) == 5  # Only the shared IJP workbook was reparsed.
     write_snapshots(snapshots, empty=True)
     after = saved.published_alert_signature('ijp_aa_oos', 'M678', date.today())
     assert before != after
@@ -159,11 +197,13 @@ def test_new_matrix_rows_and_details_never_run_report_applications(snapshots, mo
     from src.indicator_domain.application.ijp_hole.service import IjpHoleReportService
     from src.equipment_domain.application.parts_service import PartsReportService
     from src.iqc_domain.application.eva_materials.evaporation import EvaporationReportService
+    from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
     write_snapshots(snapshots)
     def forbidden(*args, **kwargs):
         pytest.fail('snapshot consumer ran application or SQL')
     for owner, name in ((IjpReportService, 'get_alert_report'), (IjpHoleReportService, 'get_alert_report'),
-                        (PartsReportService, 'get_report_data'), (EvaporationReportService, 'get_report')):
+                        (PartsReportService, 'get_report_data'), (EvaporationReportService, 'get_report'),
+                        (LifetimeReportService, 'get_report')):
         monkeypatch.setattr(owner, name, forbidden)
     monkeypatch.setattr(cache, 'DatabaseManager', forbidden)
     monkeypatch.setattr(pd, 'read_sql', forbidden)
@@ -198,7 +238,7 @@ from app.sections.inline_domain.monitor.alert_matrix_detail import render_alert_
 payload = get_cached_alert_matrix(reference_date=date.today(), products=('M678','M626'), _revision_provider=lambda *a: 'test')
 render_alert_matrix_section(payload)
 render_alert_matrix_detail(payload)
-''').run()
+''', default_timeout=30).run()
     assert not app.exception and not app.dataframe
     assert app.button(key='matrix_cell_ijp_aa_oos_M678').label == '🔴'
     assert app.button(key='matrix_cell_ijp_aa_oos_M626').label == '🟢'
@@ -250,6 +290,10 @@ def test_invalid_publication_is_unavailable(snapshots, broken):
 
 def write_empty_templates(paths):
     specs = {
+        'lifetime_alerts': (
+            {'寿命预警': LIFETIME_ALERT_COLUMNS},
+            ['reference_date', 'products', 'updated_at', 'alert_count', 'status'],
+        ),
         'ijp_alerts': (
             {'AA区': ALERT_COLUMNS, '孔区': ALERT_COLUMNS},
             ['region', 'reference_date', 'period_start', 'period_end', 'updated_at', 'alert_count', 'status'],

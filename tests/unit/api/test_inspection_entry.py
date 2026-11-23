@@ -23,7 +23,7 @@ def test_composition_runs_each_real_boundary_once_for_complete_scope(monkeypatch
     def auxiliary(scope,reference):
         assert scope==products and reference==day
         calls.append(('auxiliary',scope))
-        return [{'module':m,'status':'success'} for m in ('ijp_aa','ijp_hole','parts','iqc_evaporation')]
+        return [{'module':m,'status':'success'} for m in ('ijp_aa','ijp_hole','parts','iqc_evaporation','iqc_lifetime')]
     monkeypatch.setattr(producers_inline,'produce_inline',inline)
     monkeypatch.setattr(producers_auxiliary,'produce_auxiliary',auxiliary)
     monkeypatch.setattr(composition,'produce_yield',lambda product,reference:one('yield',product))
@@ -59,14 +59,14 @@ def test_cli_actual_registry_result_controls_exit_code(monkeypatch,tmp_path,caps
     calls=[]
     def warm(argv, **kwargs):
         receipt=json.loads((tmp_path/'output/logs/alert_inspection/latest.json').read_text())
-        assert receipt['finished_at'] and len(receipt['outcomes'])==10
+        assert receipt['finished_at'] and len(receipt['outcomes'])==11
         calls.append(kwargs)
         print('warmup-summary')
         return warmup_code
     monkeypatch.setattr(matrix_warmup,'main',warm)
     assert cli.main([])==int(partial or warmup_code != 0)
     response=json.loads(capsys.readouterr().out)
-    assert response['total']==10 and response['completed']==(9 if partial else 10)
+    assert response['total']==11 and response['completed']==(10 if partial else 11)
     assert response['matrix_warmup_exit_code']==warmup_code
     assert calls==[{'reference_date':date.today(),'products':('P1',)}]
     assert json.loads((tmp_path/'output/logs/alert_inspection/latest.json').read_text())['status']==('partial' if partial else 'success')

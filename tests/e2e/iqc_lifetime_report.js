@@ -5,7 +5,8 @@ async page => {
   page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width: 1365, height: 1000 });
   await page.goto('http://localhost:8521');
-  const table = page.getByTestId('stDataFrame');
+  const manual = page.locator('.st-key-iqc_lifetime_manual_results');
+  const table = manual.getByTestId('stDataFrame');
   await page.getByText('请点击“查询”查看寿命测试数据。', { exact: true }).waitFor({ timeout: 90000 });
   if (await table.count() || await page.locator('.js-plotly-plot').count()) throw new Error('Results shown before query');
   await page.getByRole('button', { name: '查询', exact: true }).click();
@@ -13,7 +14,7 @@ async page => {
   await page.waitForFunction(() => document.querySelectorAll('.js-plotly-plot').length === 9);
   if (await page.getByRole('combobox').count() !== 3) throw new Error('Expected product, status and batch filters');
   if (await page.getByRole('button', { name: /刷新数据|刷新缓存/ }).count()) throw new Error('Normal view exposes maintenance controls');
-  const expanders = page.getByTestId('stExpander');
+  const expanders = manual.getByTestId('stExpander');
   if (await expanders.count() !== 4) throw new Error('Expected one product/batch expander and three metric children');
   const jncd = expanders.nth(3);
   if (await jncd.locator('.js-plotly-plot').count() !== 1 ||
@@ -37,7 +38,7 @@ async page => {
   await expander.locator('summary').click();
   if (await page.getByRole('spinbutton').count()) throw new Error('Manual pagination remains');
   const charts = await page.locator('.js-plotly-plot').evaluateAll(elements => elements.map(el => ({
-    traces: el.data.map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate,
+    traces: el.data.filter(t => t.mode !== 'markers+text').map(t => ({ name: t.name, x: t.x, y: t.y, hover: t.hovertemplate,
       predicted: t.showlegend === false, color: t.line.color, dash: t.line.dash,
       group: t.legendgroup, labels: t.customdata })),
     xaxis: el.layout.xaxis.title.text, yaxis: el.layout.yaxis.title.text,
@@ -53,7 +54,8 @@ async page => {
       if (trace.x.join(',') !== '0,100,200,300,400') throw new Error('Time order changed');
       if (!trace.hover.includes('样品编号')) throw new Error('Hover lacks anonymous identity');
       const forecast = predicted.find(item => item.group === trace.group);
-      const expected = trace.y[4] + (trace.y[4] - trace.y[1]) / (400 - 100) * (1200 - 400);
+      const slope = [-150, -50, 50, 150].reduce((sum, weight, i) => sum + weight * trace.y[i + 1], 0) / 50000;
+      const expected = trace.y[4] + slope * 800;
       if (!forecast || forecast.x.join(',') !== '400,1200' ||
           Math.abs(forecast.y[1] - expected) > 1e-10 || forecast.dash !== 'dash' ||
           forecast.color !== trace.color || forecast.labels[1] !== '预测') throw new Error('Wrong 1200H forecast');

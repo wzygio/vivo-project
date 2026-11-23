@@ -1,5 +1,7 @@
 """Project source measurements to anonymous, numerically ordered public facts."""
 
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
 
@@ -14,7 +16,7 @@ REPORT_FIELDS = {
 GROUP_COLUMNS = ['产品型号', '批次号', '测试画面']
 MEASUREMENT_COLUMNS = list(REPORT_FIELDS.values())[7:]
 SOURCE_GROUP = ['product_group', 'date_key', 'bu']
-FORECAST_ANCHOR_HOURS = (100, 400)
+FORECAST_ANCHOR_HOURS = (100, 200, 300, 400)
 FORECAST_TARGET_HOURS = 1200
 
 
@@ -22,17 +24,24 @@ class LifetimeDataInvalid(ValueError):
     """Measurements cannot be assigned to unambiguous lifetime curves."""
 
 
-def predict_lifetime_value(points: pd.DataFrame, *, metric: str) -> float | None:
-    """Extrapolate one sample's metric using its exact 100H and 400H points."""
+def predict_lifetime_value(
+    points: pd.DataFrame, *, metric: str, target_hour: float = FORECAST_TARGET_HOURS,
+) -> float | None:
+    """Extend the measured 400H value with the four-point least-squares slope."""
     anchors = points.loc[points['测试时间'].isin(FORECAST_ANCHOR_HOURS)]
-    if len(anchors) != 2 or anchors['测试时间'].nunique() != 2:
+    if len(anchors) != len(FORECAST_ANCHOR_HOURS) or anchors['测试时间'].duplicated().any():
         return None
-    values = anchors.set_index('测试时间')[metric].reindex(FORECAST_ANCHOR_HOURS)
-    if not np.isfinite(values.to_numpy(dtype=float)).all():
+    values = anchors.sort_values('测试时间')[metric].to_numpy(dtype=float)
+    if not np.isfinite(values).all():
         return None
-    start, end = FORECAST_ANCHOR_HOURS
-    slope = (float(values.loc[end]) - float(values.loc[start])) / (end - start)
-    prediction = float(values.loc[end]) + slope * (FORECAST_TARGET_HOURS - end)
+    # Decimal arithmetic preserves equality at decimal decision limits such as 0.95.
+    mean_hour = Decimal(sum(FORECAST_ANCHOR_HOURS)) / len(FORECAST_ANCHOR_HOURS)
+    centered_hours = [hour - mean_hour for hour in FORECAST_ANCHOR_HOURS]
+    measurements = [Decimal(str(value)) for value in values]
+    # For ordinary least squares, sum(x - mean_x) = 0 cancels the mean_y term.
+    slope = sum(x * y for x, y in zip(centered_hours, measurements)) / sum(x * x for x in centered_hours)
+    elapsed = Decimal(str(target_hour)) - FORECAST_ANCHOR_HOURS[-1]
+    prediction = float(measurements[-1] + slope * elapsed)
     return prediction if np.isfinite(prediction) else None
 
 

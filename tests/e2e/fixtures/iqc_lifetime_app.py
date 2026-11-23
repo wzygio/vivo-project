@@ -18,6 +18,7 @@ from app.sections.iqc_domain.lifetime.lifetime_dashboard import (
 from app.utils.app_setup import AppSetup
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from tests.unit.test_iqc_lifetime import source_frame
+from tests.e2e.fixtures.lifetime_forecast import fixture_alert_result, forecast_source
 
 
 class ScenarioSource:
@@ -26,6 +27,10 @@ class ScenarioSource:
         if scenario == 'failure':
             raise RuntimeError('private SQL connection credentials')
         frame = source_frame()
+        if scenario == 'spec':
+            samples = forecast_source(frame.loc[frame.panel_id.eq('private-a')])
+            other = samples.loc[samples.bu.eq('W')].assign(product_group='M626')
+            return pd.concat([samples, other], ignore_index=True)
         if scenario == 'empty':
             return frame.iloc[:0]
         if scenario == 'missing':
@@ -57,4 +62,7 @@ render_page_header(
     title='寿命测试报表', show_product_filter=False,
     show_data_refresh=False, cached_funcs=[fetch_report_payload],
 )
-render_lifetime_dashboard(LifetimeReportService(ScenarioSource()))
+render_lifetime_dashboard(
+    LifetimeReportService(ScenarioSource()),
+    saved_alert_result=fixture_alert_result(st.query_params.get('scenario', 'normal')),
+)

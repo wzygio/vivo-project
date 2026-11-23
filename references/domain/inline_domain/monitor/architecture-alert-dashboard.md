@@ -1,6 +1,6 @@
 # 全指标预警看板：By Domain / By 指标实现说明
 
-更新日期：2026-11-10。顶部矩阵十三行的预警状态与明细统一调用 `app/sections/shared/alert_results.py::read_alert_result()`，与对应监控报表共用已发布Excel的读取、预警筛选和进程内结果缓存。共享范围仅为预警显示，原始处理、修饰、统计与结果生产仍由各报表负责；缺结果文件或缓存miss不触发分析补齐。图像详情独立、按需加载，图像失败不能遮蔽预警表。范围不包含下方 Inline／CPK／CPM 历史汇总看板。通用设计由 [已发布结果展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md) 维护。
+更新日期：2026-11-23。顶部矩阵十四行的预警状态与明细统一调用 `app/sections/shared/alert_results.py::read_alert_result()`，与对应监控报表共用已发布Excel的读取、预警筛选和进程内结果缓存。共享范围仅为预警显示，原始处理、修饰、统计与结果生产仍由各报表负责；缺结果文件或缓存miss不触发分析补齐。图像详情独立、按需加载，图像失败不能遮蔽预警表。范围不包含下方 Inline／CPK／CPM 历史汇总看板。通用设计由 [已发布结果展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md) 维护。
 
 ## 共同预警展示入口
 
@@ -12,7 +12,7 @@
 
 - **A：本地结果直读**：读取其他模块已产出的 Excel，做字段投影、时间筛选与预警存在性判断，不重新分析原始量测。
 - **B：application 管路复用**：调用报表已有服务和缓存；只有函数及参与哈希的参数一致，才共享同一缓存条目。
-- **C：独立分析管路**：另建原始数据分析引擎。当前十三行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
+- **C：独立分析管路**：另建原始数据分析引擎。当前十四行没有这类引擎；轻量状态归约、组合和显示适配不是另一套业务算法。
 
 | Domain | 指标键／显示名称 | 状态灯 | 红灯详情 |
 |---|---|---|---|
@@ -29,6 +29,7 @@
 | indicator_domain | ijp_hole_oos／IJP 孔区超规 | A：IJP Excel 的 孔区 sheet | A：同一快照公开明细，无 application 图像加载 |
 | equipment_domain | parts_oos／关键备件超规（全厂共用） | A：备件 Excel | A：同一快照公开明细 |
 | iqc_domain | iqc_evaporation_ng／IQC 蒸镀材料NG | A：蒸镀材料 Excel | A：同一快照公开明细 |
+| iqc_domain | iqc_lifetime_oos／IQC 寿命规格预警 | A：寿命预警 Excel | A：按产品筛选的规格点评估异常 |
 
 Domain 仅用于文档分类和界面分组，**不参与刷新标识维度**。
 
@@ -60,7 +61,7 @@ TT 结果读取遵守 [SPC 参数分类规则](../spc/data-flow-spc.md#23-匹配
 
 ### AOI 报表中的趋势预警（不新增矩阵行）
 
-AOI_RS／AOI_TT报表的昨日密度预警也使用共同展示服务，分别以 `aoi_rs_trend`、`aoi_tt_trend` 读取独立发布的完整评估。算法、Total筛选和分母保持原域实现；不通过OOS文件重建趋势。这两个报表预警不属于上表十三行，当前矩阵不额外增加行。结果文件与失败隔离见 [共同展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md)。
+AOI_RS／AOI_TT报表的昨日密度预警也使用共同展示服务，分别以 `aoi_rs_trend`、`aoi_tt_trend` 读取独立发布的完整评估。算法、Total筛选和分母保持原域实现；不通过OOS文件重建趋势。这两个报表预警不属于上表十四行，当前矩阵不额外增加行。结果文件与失败隔离见 [共同展示设计](../../../design/inline_domain/shared/architecture-published-alert-display.md)。
 
 ## yield_domain
 
@@ -95,17 +96,18 @@ Q-Time缺表沿用2026-11-10已授权的表头初始化：缺结果文件或厂�
 | IJP AA／孔区 | `resources.indicator_domain.files.ijp_alerts` | `resources/indicator_domain/ijp/ijp_alerts.xlsx` 的 `AA区` / `孔区` |
 | 关键备件 | `resources.equipment_domain.files.parts_alerts` | `resources/equipment_domain/parts/parts_alerts.xlsx` 的 `超规备件` |
 | IQC 蒸镀材料 | `resources.iqc_domain.files.evaporation_alerts` | `resources/iqc_domain/eva_materials/evaporation_alerts.xlsx` 的 `超规材料` |
+| IQC 寿命 | `resources.iqc_domain.files.lifetime_alerts` | `resources/iqc_domain/lifetime/lifetime_alerts.xlsx` 的 `寿命预警` |
 
 - 每个读取版本以绝对路径、mtime_ns 和大小缓存整本 Excel，最多 16 项；IJP 两区及多个产品复用一次解析。该缓存只缓存文件解析，不是业务 application 缓存。
-- 校验 `__meta__` 的成功状态、条数与公开 schema；发布时间必须为当前参考日，且距当前时刻不超过全局缓存 TTL，不接受未来时间。IJP 和 IQC 校验上一完整周范围，备件校验报告日；IQC 另校验该产品在发布范围内。
+- 校验 `__meta__` 的成功状态、条数与公开 schema；发布时间必须为当前参考日，且距当前时刻不超过全局缓存 TTL，不接受未来时间。IJP 和蒸镀材料校验上一完整周范围，备件及寿命预警校验报告日。寿命预警按产品型号精确筛选，并核验记录中的产品都在发布范围内。
 - 正式发布的有效空清单为 `ok`。2026-11-17起，文件或对应业务sheet缺失按正常无异常返回 `ok`；所选产品没有预警记录同样达标，IQC不再因产品未列入发布范围而单独报错，但已存在该产品记录却未被元数据覆盖仍属损坏。元数据缺失、读取失败、陈旧、周期不符或发布不完整仍为 `error`。明确初始化的仅表头空表按下条规则识别为 `no_data`。不回退运行应用服务、不修补源文件，不将旧快照当作本期结果。
 - 2026-10-27 用户要求预建空表，并确认“暂无数据”也显示绿色（无异常）。三本快照可仅有业务表头及空的 `__meta__` 表头，没有业务或发布记录；这些明确初始化的空表为 `no_data`，矩阵显示绿色，悬停和点击提示“当前暂无预警记录”。初始化空表不伪造成功状态、发布时间或周期，也不套用真实发布的有效期；随后产生正式发布元数据时恢复完整有效期检查。IJP 首次只发布其中一个区域时，另一个仍仅有表头的区域保持 `no_data`。所有已保存记录都必须有有效元数据，不能用删除元数据来掩盖非空预警；损坏及陈旧的正式发布仍为 `error`，缺文件按上述新约定显示达标。
 - IJP 按 `productcode` 精确匹配；IQC 按“产品型号”中以“、”分隔的产品代码精确匹配，支持一条检验关联多个产品，避免 `M67` 误匹配 `M678`。
 - 备件快照没有产品归属；此行明确标为全厂共用，各产品列复用同一全厂状态和明细，不虚构产品映射。按真实“厂别”支持筛选，详情也按当前厂别切片。IJP/IQC 不将线体或 WMS 工厂编码擅自映射为矩阵 ARRAY/OLED/TP，行声明不支持厂别细分。
 - 来源签名包含文件版本、参考日和即时有效性；即使文件未改写，过期也会使单元格及跨进程快照失效。点击详情再次检查文件有效性，详情只展示公开白名单；不构建旧报表图像 loader，不传递原始测量值、flag 或其他内部字段。
-- 管理员定向刷新只清除对应文件版本的解析条目并推进所选单元格 revision，不触发报表计算。页面只在原有报表图像详情需要时才获取数据库对象和站点说明；新增四行详情不需要这些依赖。
+- 管理员定向刷新只清除对应文件版本的解析条目并推进所选单元格 revision，不触发报表计算。页面只在原有报表图像详情需要时才获取数据库对象和站点说明；这些快照行的详情不需要这些依赖。
 
-结果发布规则由 [IJP 预警规则](../../indicator_domain/ijp/rules-ijp-alerts.md)、[关键备件数据流](../../equipment_domain/parts/data-flow-critical-parts.md#53-自动超规预警与-excel-快照)、[蒸镀材料规则](../../iqc_domain/eva_materials/rules-evaporation-product-scope.md#自动-ng-预警与本地快照) 分别拥有；矩阵只消费这些结果。
+结果发布规则由 [IJP 预警规则](../../indicator_domain/ijp/rules-ijp-alerts.md)、[关键备件数据流](../../equipment_domain/parts/data-flow-critical-parts.md#53-自动超规预警与-excel-快照)、[蒸镀材料规则](../../iqc_domain/eva_materials/rules-evaporation-product-scope.md#自动-ng-预警与本地快照) 和[寿命规格规则](../../iqc_domain/lifetime/rules-lifetime-monitoring.md) 分别拥有；矩阵只消费这些结果。
 
 ## 缓存与刷新机制
 
@@ -139,7 +141,7 @@ Q-Time缺表沿用2026-11-10已授权的表头初始化：缺结果文件或厂�
 
 - app/sections/inline_domain/monitor/alert_matrix_cache.py：来源、单元格键、惰性装配。
 - app/sections/shared/alert_results.py：报表／矩阵共同预警显示服务与缓存；同目录published_alert_snapshots.py负责IJP／备件／IQC的只读文件验证。
-- 同目录 alert_matrix_service.py：十三行声明与 CPK / CPM 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情；published_alert_snapshots.py：IJP/备件/IQC 本地快照直读及有效性检查。
+- 同目录 alert_matrix_service.py：十四行声明与 CPK / CPM 结果投影；alert_matrix.py／alert_matrix_detail.py：管理员、显示、详情；published_alert_snapshots.py：IJP/备件/IQC 本地快照直读及有效性检查。
 - app/components/indicator_cache.py／page_header.py：共享标识与产品页刷新。
 - tests/unit/app/sections/monitor/test_matrix_cell_isolation.py：跨指标／产品与 CPK 直读。
 - tests/unit/app/sections/monitor/test_shared_alert_results.py：PPA过滤、文件／配置失效、同参数结果缓存复用、图像失败保留预警及内容变化在TTL内发布；tests/unit/app/pages/test_inline_saved_alerts.py验证报表初始化／生产失败仍显示保存结果。

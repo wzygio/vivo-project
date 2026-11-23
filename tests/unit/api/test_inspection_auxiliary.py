@@ -28,6 +28,7 @@ def runtime(calls, failing=None):
         ijp=produce,
         parts=lambda products, reference: produce('parts', products, reference),
         iqc=lambda products, reference: produce('iqc_evaporation', products, reference),
+        lifetime=lambda products, reference: produce('iqc_lifetime', products, reference),
         verify=verify,
     )
 
@@ -38,7 +39,7 @@ def test_each_domain_runs_once_full_scope_and_verifies_even_zero_alerts():
     outcomes = module.produce_auxiliary(PRODUCTS, reference, runtime=runtime(calls))
     assert [r['module'] for r in outcomes] == list(module.MODULES)
     assert all(r['status'] == 'success' and r['alert_count'] == 0 for r in outcomes)
-    assert [c[0] for c in calls] == ['produce', 'verify'] * 4
+    assert [c[0] for c in calls] == ['produce', 'verify'] * len(module.MODULES)
     assert all(c[2] == PRODUCTS and c[3] == reference for c in calls)
 
 
@@ -90,6 +91,21 @@ def test_real_empty_iqc_workbook_is_verified_with_correct_products_and_week(tmp_
         module._verify_saved('iqc_evaporation', ('M626',), date.today(), 0, started)
     with pytest.raises(ValueError, match='NOT_CURRENT_RUN'):
         module._verify_saved('iqc_evaporation', PRODUCTS, date.today(), 0, started + timedelta(minutes=1))
+
+
+def test_lifetime_receipt_checks_current_publication_and_entire_product_scope(tmp_path, monkeypatch):
+    from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
+    from src.iqc_domain.infrastructure.lifetime.workbooks import LifetimeAlertWorkbook
+
+    path = tmp_path / 'lifetime.xlsx'
+    started = datetime.now()
+    day = started.date()
+    LifetimeAlertWorkbook(path).save(pd.DataFrame(columns=LIFETIME_ALERT_COLUMNS),
+                                     reference_date=day, products=PRODUCTS)
+    monkeypatch.setattr(module, '_source', lambda name: (path, '寿命预警'))
+    module._verify_saved('iqc_lifetime', PRODUCTS, day, 0, started)
+    with pytest.raises(ValueError, match='SCOPE_MISMATCH'):
+        module._verify_saved('iqc_lifetime', PRODUCTS[:1], day, 0, started)
 
 
 def test_parts_workbook_readback_checks_real_record_count(tmp_path, monkeypatch):

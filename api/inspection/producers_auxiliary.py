@@ -1,4 +1,4 @@
-"""Headless publication for IJP, critical parts and evaporation IQC.
+"""Headless publication for IJP, critical parts and IQC.
 
 The domain services retain all calculations. This adapter selects complete scopes,
 rejects swallowed source failures and verifies actual saved publications.
@@ -15,12 +15,13 @@ import re
 import pandas as pd
 
 
-MODULES = ('ijp_aa', 'ijp_hole', 'parts', 'iqc_evaporation')
+MODULES = ('ijp_aa', 'ijp_hole', 'parts', 'iqc_evaporation', 'iqc_lifetime')
 _PUBLICATIONS = {
     'ijp_aa': ('indicator_domain', 'ijp_alerts', 'AA区'),
     'ijp_hole': ('indicator_domain', 'ijp_alerts', '孔区'),
     'parts': ('equipment_domain', 'parts_alerts', '超规备件'),
     'iqc_evaporation': ('iqc_domain', 'evaporation_alerts', '超规材料'),
+    'iqc_lifetime': ('iqc_domain', 'lifetime_alerts', '寿命预警'),
 }
 
 
@@ -60,6 +61,13 @@ def _verify_saved(module: str, products: tuple[str, ...], reference: date,
     if module == 'parts':
         if str(meta['as_of_date']) != str(reference):
             raise ValueError('INSPECTION_PARTS_SCOPE_MISMATCH')
+    elif module == 'iqc_lifetime':
+        from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
+        if (str(meta['reference_date']) != str(reference)
+                or tuple(str(meta['products']).split('、')) != products
+                or not set(LIFETIME_ALERT_COLUMNS) <= set(alerts)
+                or not alerts['产品型号'].isin(products).all()):
+            raise ValueError('INSPECTION_LIFETIME_SCOPE_MISMATCH')
     else:
         start, end = _week(reference)
         fields = ('period_start', 'period_end') if module.startswith('ijp_') else ('start_date', 'end_date')
@@ -187,12 +195,23 @@ def _produce_iqc(products: tuple[str, ...], reference: date) -> int:
                                         start=start, end=end, products=products))
 
 
+def _produce_lifetime(products: tuple[str, ...], reference: date) -> int:
+    from src.iqc_domain.application.lifetime.alerts import publish_lifetime_alerts
+    from src.iqc_domain.composition import build_lifetime_alert_store, build_lifetime_service, load_lifetime_specs
+
+    specs = load_lifetime_specs()
+    report = build_lifetime_service(enabled_products=products).get_report()
+    return len(publish_lifetime_alerts(report, specs, store=build_lifetime_alert_store(),
+                                       reference_date=reference, products=products))
+
+
 @dataclass(frozen=True)
 class AuxiliaryRuntime:
     ijp: Callable = _produce_ijp
     parts: Callable = _produce_parts
     iqc: Callable = _produce_iqc
     verify: Callable = _verify_saved
+    lifetime: Callable = _produce_lifetime
 
 
 def produce_auxiliary(products: tuple[str, ...], reference_date: date, *,
@@ -207,9 +226,12 @@ def produce_auxiliary(products: tuple[str, ...], reference_date: date, *,
         outcome = {'module': module}
         started = datetime.now()
         try:
-            count = (runtime.ijp(module, products, reference_date) if module.startswith('ijp_')
-                     else runtime.parts(products, reference_date) if module == 'parts'
-                     else runtime.iqc(products, reference_date))
+            if module.startswith('ijp_'):
+                count = runtime.ijp(module, products, reference_date)
+            else:
+                producer = {'parts': runtime.parts, 'iqc_evaporation': runtime.iqc,
+                            'iqc_lifetime': runtime.lifetime}[module]
+                count = producer(products, reference_date)
             runtime.verify(module, products, reference_date, count, started)
             outcome.update(status='success', alert_count=count)
         except Exception as exc:

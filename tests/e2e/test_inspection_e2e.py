@@ -48,7 +48,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
         path.unlink()
     for key in [('inline_domain', 'aoi_tt_trend_alerts'), ('inline_domain', 'aoi_rs_trend_alerts'),
                 ('indicator_domain', 'ijp_alerts'), ('equipment_domain', 'parts_alerts'),
-                ('iqc_domain', 'evaporation_alerts')]:
+                ('iqc_domain', 'evaporation_alerts'), ('iqc_domain', 'lifetime_alerts')]:
         files.paths[key] = tmp_path / (key[1] + '.xlsx')
 
     # Fail on any DB or Office fallback, even when a library catches its error.
@@ -105,6 +105,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
         from src.indicator_domain.infrastructure.ijp import alert_workbook as ijp
         from src.equipment_domain.infrastructure import parts_alert_workbook as parts
         from src.iqc_domain.infrastructure.eva_materials import alert_workbook as iqc
+        from src.iqc_domain.infrastructure import alert_workbook as iqc_writer
         from app.sections.shared import published_alert_snapshots as snapshots
 
         class Clock(datetime):
@@ -118,7 +119,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
         def fixture_workbook(path):
             assert Path(path).resolve().is_relative_to(tmp_path.resolve())
             return pd.read_excel(path, sheet_name=None)
-        for adapter in (ijp, parts, iqc):
+        for adapter in (ijp, parts, iqc_writer):
             monkeypatch.setattr(adapter, 'datetime', Clock)
             monkeypatch.setattr(adapter, 'read_workbook_sheets', fixture_workbook)
         monkeypatch.setattr(snapshots, 'pd', SimpleNamespace(Timestamp=Stamp, DataFrame=pd.DataFrame, to_numeric=pd.to_numeric))
@@ -134,7 +135,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
             parts.PartsAlertWorkbook(files.paths[('equipment_domain', 'parts_alerts')]).save(
                 pd.DataFrame(columns=PARTS_PUBLIC_COLUMNS), as_of_date=str(NOW.date()), last_update=NOW.isoformat())
             row_key = 'parts_oos'
-        else:
+        elif module == 'iqc_evaporation':
             from src.iqc_domain.core.eva_materials.evaporation import REPORT_COLUMNS
             from datetime import timedelta
             monday = NOW.date() - timedelta(days=NOW.weekday())
@@ -142,7 +143,26 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
                 pd.DataFrame(columns=REPORT_COLUMNS), start=monday-timedelta(days=7),
                 end=monday-timedelta(days=1), products=('P1',))
             row_key = 'iqc_evaporation_ng'
-        assert snapshots.read_published_alerts(row_key, 'P1', NOW.date())['state'] == 'ok'
+        else:
+            from api.inspection.producers_auxiliary import _produce_lifetime
+            from src.iqc_domain import composition
+            from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
+            from tests.unit.test_iqc_lifetime import MemorySource, source_frame
+
+            sample = source_frame().iloc[[0]].assign(product_group='P1', bu='W', lumi_decay=1.)
+            raw = pd.concat([sample.assign(test_time=hour, eff_decay=value) for hour, value in
+                             ((100, 1.), (200, .98), (300, .97), (400, .96))])
+            monkeypatch.setattr(composition, 'build_lifetime_service', lambda **kw:
+                                LifetimeReportService(MemorySource(raw), **kw))
+            monkeypatch.setattr(composition, 'load_lifetime_specs', lambda: {('P1', 'W'): 660})
+            assert _produce_lifetime(('P1',), NOW.date()) == 1
+            row_key = 'iqc_lifetime_oos'
+        result = snapshots.read_published_alerts(row_key, 'P1', NOW.date())
+        if module == 'iqc_lifetime':
+            assert result['state'] == 'alert'
+            assert result['alerts']['规格点数值'].tolist() == pytest.approx([.9262])
+        else:
+            assert result['state'] == 'ok'
         return [{'module': module, 'status': 'success'}]
 
     jobs = [InspectionJob(scope, ((scope, 'P1'),), lambda scope=scope: inline(scope))
@@ -150,7 +170,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
     jobs += [InspectionJob('yield', (('yield', 'P1'),), yield_results),
              InspectionJob('qtime', (('qtime', ''),), qtime)]
     jobs += [InspectionJob(scope, ((scope, ''),), lambda scope=scope: auxiliary(scope))
-             for scope in ('ijp_aa', 'ijp_hole', 'parts', 'iqc_evaporation')]
+             for scope in ('ijp_aa', 'ijp_hole', 'parts', 'iqc_evaporation', 'iqc_lifetime')]
     yield files, jobs
     assert attempts == []
 

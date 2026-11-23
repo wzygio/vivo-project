@@ -8,6 +8,7 @@ from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
 from src.iqc_domain.infrastructure.lifetime.lifetime_repository import LifetimeRepository
 from src.iqc_domain.infrastructure.lifetime.m3_database import get_m3_engine
+from src.iqc_domain.infrastructure.lifetime.workbooks import LifetimeAlertWorkbook, read_lifetime_specs
 
 
 def build_evaporation_service(
@@ -37,3 +38,11 @@ def build_evaporation_alert_store() -> EvaporationAlertWorkbook:
     return EvaporationAlertWorkbook(ConfigLoader.get_domain_resource_path(
         'iqc_domain', 'evaporation_alerts', 'eva_materials/evaporation_alerts.xlsx',
     ))
+
+
+def load_lifetime_specs() -> dict[tuple[str, str], float]:
+    return read_lifetime_specs(ConfigLoader.get_domain_resource_path('iqc_domain', 'lifetime_specs'))
+
+
+def build_lifetime_alert_store() -> LifetimeAlertWorkbook:
+    return LifetimeAlertWorkbook(ConfigLoader.get_domain_resource_path('iqc_domain', 'lifetime_alerts'))

@@ -14,10 +14,12 @@ from zoneinfo import ZoneInfo
 
 import psutil
 
+from api.inspection.producers_auxiliary import MODULES as AUXILIARY_MODULES
 from src.shared_kernel.infrastructure.file_lock import publication_lock
 
 PRODUCT_MODULES = ('spc', 'ctq', 'aoi_tt', 'aoi_rs', 'yield')
-GLOBAL_MODULES = ('qtime', 'ijp_aa', 'ijp_hole', 'parts', 'iqc_evaporation')
+
+GLOBAL_MODULES = ('qtime', *AUXILIARY_MODULES)
 MODULES = (*PRODUCT_MODULES, *GLOBAL_MODULES)
 
 

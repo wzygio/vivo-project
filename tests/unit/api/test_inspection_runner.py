@@ -22,7 +22,7 @@ def jobs(products, failure=None):
 
 def test_all_modules_products_atomic_receipt(tmp_path):
     report=run_inspection(('P1','P2'),DAY,jobs(('P1','P2')),tmp_path)
-    assert report['status']=='success' and len(report['outcomes'])==15
+    assert report['status']=='success' and len(report['outcomes'])==16
     assert json.loads((tmp_path/'latest.json').read_text())==report
     assert (tmp_path/(report['run_id']+'.json')).exists()
     assert report['coverage_start']=='2026-11-02' and report['runner_created']>0
@@ -30,7 +30,7 @@ def test_all_modules_products_atomic_receipt(tmp_path):
 
 def test_failure_isolated_and_diagnostics_safe(tmp_path):
     report=run_inspection(('P1',),DAY,jobs(('P1',),failure='spc'),tmp_path)
-    assert report['status']=='partial' and len(report['outcomes'])==10
+    assert report['status']=='partial' and len(report['outcomes'])==11
     assert 'secret' not in json.dumps(report)
     assert sum(row['status']=='failed' for row in report['outcomes'])==1
 
