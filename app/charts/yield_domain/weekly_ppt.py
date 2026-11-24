@@ -7,6 +7,7 @@ from unicodedata import east_asian_width
 
 import plotly.graph_objects as go
 import plotly.io as pio
+import streamlit as st
 from pptx import Presentation
 from pptx.enum.text import MSO_AUTO_SIZE
 from pptx.util import Pt
@@ -18,29 +19,47 @@ _SLOT_NAMES = (
     ("标题 1", "汇总语句1", "月周天趋势图1"),
     ("标题 2", "汇总语句2", "月周天趋势图2"),
 )
-_CHART_WIDTHS = (0.29, 0.27, 0.44)
+_CHARTS_PER_PRODUCT = 3
+_CHART_WIDTH, _CHART_HEIGHT = 480, 292
+# The dashboard resolves Streamlit color placeholders in the browser. Kaleido
+# needs the concrete categorical sequence used by the project's light theme.
+_LIGHT_CHART_COLORS = (
+    "#0068c9", "#83c9ff", "#ff2b2b", "#ffabab", "#29b09d",
+    "#7defa1", "#ff8700", "#ffd16a", "#6d3fc0", "#d5dae5",
+)
 
 
 def _static_charts(trends: dict | None) -> tuple[go.Figure, ...]:
     data = trends or {}
     monthly = data.get("monthly")
     groups = sorted(monthly["defect_group"].unique()) if monthly is not None and not monthly.empty else []
-    charts = prepare_group_trend_figures(data, groups, {"defect_group": groups})
+    charts = prepare_group_trend_figures(
+        data, groups, {"defect_group": groups},
+        color_sequence=st.get_option("theme.chartCategoricalColors") or _LIGHT_CHART_COLORS,
+    )
     figures = []
-    for (title, figure), width in zip(charts, _CHART_WIDTHS, strict=True):
+    background = st.get_option("theme.backgroundColor") or "#ffffff"
+    for title, figure in charts:
+        daily = title == "日度趋势"
         if figure is None:
             figure = go.Figure()
             figure.update_xaxes(visible=False)
             figure.update_yaxes(visible=False)
             figure.add_annotation(text="暂无数据", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False)
         figure.update_layout(
-            template="plotly_white", width=round(1440 * width), height=292,
+            template="plotly_white", width=_CHART_WIDTH, height=_CHART_HEIGHT,
+            paper_bgcolor=background, plot_bgcolor=background,
             title=dict(text=title, x=0.04, y=0.98, font_size=16),
-            margin=dict(l=58 if title == "月度趋势" else 18, r=16, t=35, b=25),
-            font=dict(family="Microsoft YaHei, Arial, sans-serif", size=13),
-            legend=dict(orientation="h", x=0, y=-0.24, yanchor="top", font_size=11, title_text=""),
+            margin=dict(l=58 if title == "月度趋势" else 12, r=105 if daily else 12, t=40, b=50),
+            font=dict(family="Microsoft YaHei, Arial, sans-serif", size=13,
+                      color=st.get_option("theme.textColor") or "#334155"),
+            legend=dict(orientation="v", x=1.02, xanchor="left", y=1, yanchor="top",
+                        font_size=11, title_text="Group", traceorder="normal"),
         )
-        figure.update_xaxes(automargin=True)
+        if daily:
+            figure.update_traces(width=0.7, selector=dict(type="bar"))
+        figure.update_traces(cliponaxis=False, textfont_size=10, selector=dict(type="scatter"))
+        figure.update_xaxes(automargin=False)
         figures.append(figure)
     return tuple(figures)
 
@@ -49,7 +68,7 @@ def _render_charts(figures: list[go.Figure], temp_root: Path) -> list[bytes]:
     temp_root.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix="yield_weekly_charts_", dir=temp_root) as directory:
         paths = [Path(directory) / f"{index}.png" for index in range(len(figures))]
-        pio.write_images(figures, paths, format="png", scale=2)
+        pio.write_images(figures, paths, format="png", width=_CHART_WIDTH, height=_CHART_HEIGHT, scale=2)
         return [path.read_bytes() for path in paths]
 
 
@@ -86,8 +105,8 @@ def _fill_slot(slide, shapes: tuple, product: str, summary: str, images: list[by
     summary_box.height += extra_height
     left = max(0, chart.left)
     width = min(chart.width, slide_width - left)
-    for ratio, image in zip(_CHART_WIDTHS, images, strict=True):
-        image_width = int(width * ratio)
+    image_width = width // _CHARTS_PER_PRODUCT
+    for image in images:
         slide.shapes.add_picture(
             BytesIO(image), left, chart.top + extra_height,
             width=image_width, height=chart_height - extra_height,
@@ -122,7 +141,7 @@ def build_weekly_yield_ppt(
             product = products[index]
             _fill_slot(
                 slide, shapes, product, f"{product} - {week_label}不良率，{conclusions[product]}",
-                images[index * len(_CHART_WIDTHS):(index + 1) * len(_CHART_WIDTHS)], deck.slide_width,
+                images[index * _CHARTS_PER_PRODUCT:(index + 1) * _CHARTS_PER_PRODUCT], deck.slide_width,
             )
     drop_slide(deck, 2)
     drop_slide(deck, 1)

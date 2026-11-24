@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from app.constants import COLOR_MAP
 from src.shared_kernel.config import ConfigLoader
 
+
 # -----------------------------------------------------------------------------
 #  绘图辅助函数
 # -----------------------------------------------------------------------------
@@ -54,7 +55,8 @@ def create_group_trend_chart(
     color_map: dict, 
     category_orders_map: dict, 
     warning_line_value: Optional[float] = None,
-    show_input_count: bool = False # [新增] 控制开关
+    show_input_count: bool = False,
+    *, color_sequence=None,
 ) -> go.Figure | None:
     """
     [全能版 V2] 绘制 Group 级堆叠柱状图
@@ -84,6 +86,7 @@ def create_group_trend_chart(
         df, x='time_period', y='defect_rate', color='defect_group', 
         title=title,
         color_discrete_map=color_map,
+        color_discrete_sequence=color_sequence,
         category_orders=category_orders_map,
         labels={"time_period": "时间", "defect_rate": "不良率", "defect_group": "Group"},
         hover_data={'defect_rate': ':.2%', 'total_panels': True} if has_panel_count else {'defect_rate': ':.2%'} 
@@ -163,6 +166,7 @@ def prepare_group_trend_figures(
     mwd_group_data: dict,
     sel_grps_macro: list,
     dynamic_category_orders: dict,
+    *, color_sequence=None,
 ) -> list[tuple[str, go.Figure | None]]:
     """Build Group charts with the dashboard time windows and one defect-rate scale."""
     df_m = slice_recent_data(mwd_group_data.get('monthly'), 3)
@@ -196,7 +200,7 @@ def prepare_group_trend_figures(
             title,
             create_group_trend_chart(
                 df, title, show_slider, show_count, y_limit, COLOR_MAP,
-                dynamic_category_orders, show_input_count=True
+                dynamic_category_orders, show_input_count=True, color_sequence=color_sequence,
             ),
         ))
     return figures

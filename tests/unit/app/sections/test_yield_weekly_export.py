@@ -32,6 +32,21 @@ def test_static_chart_windows_match_dashboard_windows():
         assert tuple(fig.layout.yaxis.range) == (0, 0.024)
 
 
+def test_export_group_colors_and_daily_legend_match_dashboard():
+    expected = {"Array_Line": "#1930ff", "Array_Mura": "#ff8700", "Array_Pixel": "#6fb9ff",
+                "OLED_Mura": "#c9c7c7", "TP 容值NG": "#ffd16a", "TP_Short NG": "#6d3fc0"}
+    frame = pd.DataFrame({"defect_group": list(expected), "time_period": "P1", "defect_rate": 0.01})
+    figures = weekly_ppt._static_charts(dict.fromkeys(("monthly", "weekly", "daily"), frame))
+    for figure in figures:
+        assert {bar.name: bar.marker.color for bar in figure.select_traces(dict(type="bar"))} == expected
+    assert len({figure.layout.width for figure in figures}) == 1
+    month, week, day = figures
+    assert not month.layout.showlegend and not week.layout.showlegend and day.layout.showlegend
+    assert (day.layout.legend.orientation, day.layout.legend.xanchor) == ("v", "left")
+    assert day.layout.legend.x > 1
+    assert all(bar.width == 0.7 for bar in day.select_traces(dict(type="bar")))
+
+
 def test_deck_preserves_cover_and_fills_two_product_slots(monkeypatch, tmp_path):
     template = Presentation()
     layout = template.slide_layouts[6]
