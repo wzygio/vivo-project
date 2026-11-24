@@ -204,7 +204,8 @@ def test_published_member_files_reach_real_http_caller_and_complete_exports(capa
         oos_rows.iloc[[0]].assign(sheet_id='NULL_BOUNDARY', oos_type=None),
         oos_rows.iloc[[0]].assign(sheet_id='LOWER_BOUNDARY', oos_type='lower'),
     ], ignore_index=True)})
-    _write(files.policy_path, {'全指标预警看板': files.policy.assign(P2=False)})
+    # P2 has no publication decision. A query spanning both products must report its missing policy.
+    _write(files.policy_path, {'全指标预警看板': files.policy.drop(columns='P2', errors='ignore')})
     monkeypatch.setattr(ConfigLoader, 'get_enabled_products', lambda **_: ['P1', 'P2'])
     principal = ApiClient('e2e-fixture', hashlib.sha256(FIXTURE_KEY.encode()).hexdigest(),
                           ('P1', 'P2'), ('ARRAY', 'CELL'))

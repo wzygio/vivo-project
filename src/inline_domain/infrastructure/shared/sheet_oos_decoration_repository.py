@@ -29,7 +29,7 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     merge_detail_with_decoration_flags,
     should_regenerate_detail,
 )
-from src.inline_domain.core.spc.spc_point_decoration import normalize_spc_decisions
+from src.shared_kernel.infrastructure.file_lock import publication_lock
 from src.shared_kernel.utils.excel_tools import (
     _read_encrypted_xlsx_via_com,
     list_workbook_sheet_names,
@@ -65,7 +65,7 @@ def load_sheet_oos_decoration(
     if not path.exists():
         return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
     try:
-        frame = pd.read_excel(path, sheet_name=sheet_name or 0, engine="openpyxl")
+        frame = pd.read_excel(path, sheet_name=sheet_name or 0, engine="openpyxl", dtype=object)
     except ValueError:
         return _empty_decoration_frame() if key_columns is None else pd.DataFrame()
     except Exception as excel_exc:
@@ -114,7 +114,7 @@ def load_sheet_oos_decisions(
     if decision_sheet not in names:
         return _empty_decisions_frame(keys)
     try:
-        frame = read_workbook_sheet(path, decision_sheet)
+        frame = read_workbook_sheet(path, decision_sheet, preserve_text=True)
     except Exception as exc:
         raise SheetOosDecorationReadError(
             f"Unable to read existing Sheet OOS decision sheet [{decision_sheet}]: {path}"
@@ -189,82 +189,91 @@ def persist_sheet_oos_decoration_outcome(
     """Merge decisions and atomically persist generated detail/metadata sheets."""
     product_dir.mkdir(parents=True, exist_ok=True)
     path = get_sheet_oos_decoration_path(product_dir, file_name)
-    sheet = sheet_name or "Sheet1"
-    keys = _resolve_key_columns(key_columns)
-    decision_sheet = get_decision_sheet_name(sheet)
-    sheet_names = list_workbook_sheet_names(path)
-    decisions = load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
-    # Alarm semantics are independent from a configurable workbook basename.
-    # Keep the filename inference only for legacy direct adapter callers.
-    is_oos = alarm_type == "oos" or (alarm_type is None and file_name == OOS_DECORATION_FILE_NAME)
-    if scope == "spc" and is_oos:
-        decisions = normalize_spc_decisions(decisions)
-    merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
-    exemptions = tuple(sorted({
-        str(value).strip().casefold()
-        for value in exempt_param_name_contains or ()
-        if value is not None and str(value).strip()
-    }))
-    merged = release_exempt_parameter_flags(merged, parameter_column, exemptions)
-    detail_signature = hashlib.sha256(
-        merged.to_json(orient="split", date_format="iso", index=False).encode("utf-8")
-    ).hexdigest()
-    effective_now = now or datetime.now()
-    effective_revision = "" if product_revision is None else str(product_revision)
-    effective_signature = decision_signature or compute_decision_signature(decisions, keys)
-    if parameter_column is not None:
-        # Exemptions affect the generated product sheet, not the manual __flags ledger.
-        # Config changes must rewrite it even before the detail refresh TTL expires.
-        effective_signature = hashlib.sha256(
-            repr((effective_signature, parameter_column, exemptions)).encode("utf-8")
+    with publication_lock(path):
+        sheet = sheet_name or "Sheet1"
+        keys = _resolve_key_columns(key_columns)
+        decision_sheet = get_decision_sheet_name(sheet)
+        sheet_names = list_workbook_sheet_names(path)
+        decisions = load_sheet_oos_decisions(product_dir, file_name, sheet_name, keys)
+        # Alarm semantics are independent from a configurable workbook basename.
+        # Keep the filename inference only for legacy direct adapter callers.
+        default_rows = merge_detail_with_decoration_flags(detail_df, pd.DataFrame(), keys)
+        exemptions = tuple(sorted({
+            str(value).strip().casefold()
+            for value in exempt_param_name_contains or ()
+            if value is not None and str(value).strip()
+        }))
+        default_rows = release_exempt_parameter_flags(default_rows, parameter_column, exemptions)
+        decision_columns = [*keys, DECISION_FLAG_COLUMN]
+        # Import decisions from a pre-ledger detail sheet before initializing new keys.
+        previous = read_workbook_sheet(path, sheet, preserve_text=True) if sheet_names and sheet in sheet_names else pd.DataFrame()
+        sources = [decisions]
+        if set(decision_columns).issubset(previous):
+            sources.append(_normalize_key_columns(previous, keys)[decision_columns].drop_duplicates(keys, keep="last"))
+        sources.append(default_rows[decision_columns])
+        ledger = pd.concat(sources, ignore_index=True).drop_duplicates(keys, keep="first")
+        additions = len(ledger) != len(decisions)
+        decisions = ledger
+        merged = merge_detail_with_decoration_flags(detail_df, decisions, keys)
+        detail_signature = hashlib.sha256(
+            merged.to_json(orient="split", date_format="iso", index=False).encode("utf-8")
         ).hexdigest()
-    meta = load_refresh_meta(product_dir, file_name, scope, prod_code or sheet) if scope else None
-    refresh = should_regenerate_detail(
-        current_sheet_exists=sheet_names is not None and sheet in sheet_names,
-        last_generated_at=meta["last_generated_at"] if meta else None,
-        stored_product_revision=meta["product_revision"] if meta else None,
-        current_product_revision=effective_revision,
-        stored_decision_signature=meta["decision_signature"] if meta else None,
-        current_decision_signature=effective_signature,
-        now=effective_now,
-    )
-    if force or scope is None:
-        refresh = RefreshDecision(True, refresh.reason)
-    elif (not refresh.should_write and meta.get("detail_signature")
-          and meta["detail_signature"] != detail_signature):
-        # Displays now read the committed file. Never return fresh memory while
-        # leaving changed result rows hidden behind an unchanged input revision.
-        refresh = RefreshDecision(True, "detail_changed")
-    if refresh.should_write:
-        sheets: dict[str, pd.DataFrame] = {sheet: merged}
-        if sheet_names is None or decision_sheet not in sheet_names:
-            sheets[decision_sheet] = decisions
-        if scope is not None:
-            meta_row = build_refresh_meta_row(
-                scope,
-                prod_code or sheet,
-                effective_now,
-                effective_revision,
-                effective_signature,
-                len(merged),
-                detail_signature=detail_signature,
-            )
-            existing_meta = read_workbook_sheet(path, REFRESH_META_SHEET_NAME)
-            sheets[REFRESH_META_SHEET_NAME] = _upsert_refresh_meta_row(existing_meta, meta_row)
-        result = replace_workbook_sheets(path, sheets)
-        if not result.written:
-            raise SheetOosDecorationWriteError(
-                f"Failed to persist Sheet OOS decoration workbook {path}: {result.error}"
-            )
-    logger.info(
-        "Inline decoration refresh: product=%s scope=%s reason=%s write=%s rows=%s",
-        prod_code or sheet,
-        scope,
-        refresh.reason,
-        refresh.should_write,
-        len(merged),
-    )
-    return SheetOosPersistOutcome(merged, decisions, refresh)
+        effective_now = now or datetime.now()
+        effective_revision = "" if product_revision is None else str(product_revision)
+        effective_signature = decision_signature or compute_decision_signature(decisions, keys)
+        if parameter_column is not None:
+            # Exemptions affect the generated product sheet, not the manual __flags ledger.
+            # Config changes must rewrite it even before the detail refresh TTL expires.
+            effective_signature = hashlib.sha256(
+                repr((effective_signature, parameter_column, exemptions)).encode("utf-8")
+            ).hexdigest()
+        meta = load_refresh_meta(product_dir, file_name, scope, prod_code or sheet) if scope else None
+        refresh = should_regenerate_detail(
+            current_sheet_exists=sheet_names is not None and sheet in sheet_names,
+            last_generated_at=meta["last_generated_at"] if meta else None,
+            stored_product_revision=meta["product_revision"] if meta else None,
+            current_product_revision=effective_revision,
+            stored_decision_signature=meta["decision_signature"] if meta else None,
+            current_decision_signature=effective_signature,
+            now=effective_now,
+        )
+        if force or scope is None or additions:
+            refresh = RefreshDecision(True, refresh.reason)
+        elif (not refresh.should_write and meta.get("detail_signature")
+              and meta["detail_signature"] != detail_signature):
+            # Displays now read the committed file. Never return fresh memory while
+            # leaving changed result rows hidden behind an unchanged input revision.
+            refresh = RefreshDecision(True, "detail_changed")
+        if refresh.should_write:
+            sheets: dict[str, pd.DataFrame] = {sheet: merged}
+            if additions or sheet_names is None or decision_sheet not in sheet_names:
+                sheets[decision_sheet] = decisions
+            if scope is not None:
+                meta_row = build_refresh_meta_row(
+                    scope,
+                    prod_code or sheet,
+                    effective_now,
+                    effective_revision,
+                    effective_signature,
+                    len(merged),
+                    detail_signature=detail_signature,
+                )
+                existing_meta = read_workbook_sheet(path, REFRESH_META_SHEET_NAME)
+                sheets[REFRESH_META_SHEET_NAME] = _upsert_refresh_meta_row(existing_meta, meta_row)
+            result = replace_workbook_sheets(path, sheets)
+            if not result.written:
+                raise SheetOosDecorationWriteError(
+                    f"Failed to persist Sheet OOS decoration workbook {path}: {result.error}"
+                )
+        logger.info(
+            "Inline decoration refresh: product=%s scope=%s reason=%s write=%s rows=%s",
+            prod_code or sheet,
+            scope,
+            refresh.reason,
+            refresh.should_write,
+            len(merged),
+        )
+        return SheetOosPersistOutcome(merged, decisions, refresh)
 
 
 def persist_sheet_oos_decoration(

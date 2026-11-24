@@ -125,11 +125,11 @@ Q-Time缺表沿用2026-11-10已授权的表头初始化：缺结果文件或厂�
 
 输入签名统一由共同展示服务提供：四个OOS工作簿及PPA／日期过滤、CPK／CPM能力工作簿与跨度策略、Yield结果与有效性、Q-Time已发布结果与源政策身份，以及IJP／备件／IQC文件有效性。共享工作簿修改可能使多个依赖单元格重新读取；手动推进某指标／产品revision则不会推进其他标识。
 
-仅 ?admin=true 可见“指标缓存管理（管理员）”、定向刷新按钮、刷新标识和状态计算时间。聚合页关闭旧通用全量刷新入口。七个实际单产品 header 页面已迁移；多输出页显式声明其指标集合，刷新仅作用当前产品，图像 memo 同步跟踪新版本。见 [产品页面缓存审查](../../../../docs/dev_docs/generated/shared_kernel/shared/application-cache-design-audit-by-domain.md)。
+管理员模式（`?admin=true` 或 `?admin=ture`）可见“指标缓存管理（管理员）”、定向刷新按钮、刷新标识和状态计算时间。聚合页关闭旧通用全量刷新入口。七个实际单产品 header 页面已迁移；多输出页显式声明其指标集合，刷新仅作用当前产品，图像 memo 同步跟踪新版本。见 [产品页面缓存审查](../../../../docs/dev_docs/generated/shared_kernel/shared/application-cache-design-audit-by-domain.md)。
 
 ## 显示与安全边界
 
-后台保留 ok／alert／no_data／error。前端将 no_data 显示达标；compliance 对应单元格 True 时，显示和点击详情同为达标，不运行红灯 loader、不改原缓存。未修饰加载错误仍展示错误。
+后台保留 ok／alert／no_data／error。前端将 no_data 显示达标；compliance 对应单元格 True 时，显示和点击详情同为达标，不运行红灯 loader、不改原缓存。对应格为 False 时沿用指标的有效发布状态，Delete 隐去单元格并关闭其下钻。全局显示台账无法读取时提示失败。管理员可在本页“预警中心 · 矩阵显示台账”逐个指标和产品维护，日巡检预热只补齐新键。业务行级决定由对应报表的预警中心维护。
 
 2026-11-17统一缺失语义：十三项指标缺文件／业务或产品sheet时均为绿色达标，业务判定只区分有无预警；读取失败及已有发布结果失效仍作为独立故障提示保留。共同展示签名版本变化使旧单元格和每日快照失效。缺失展示保留`metadata.availability=missing`，旧兼容生产命令拒绝将其视为已完成发布；当前独立巡检仍直接核验域生产结果。
 

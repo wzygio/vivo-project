@@ -29,6 +29,7 @@ def build_lifetime_service(
 ) -> LifetimeReportService:
     return LifetimeReportService(
         LifetimeRepository(get_m3_engine()),
+        sample_numberer=build_lifetime_alert_store().sample_numbers,
         enabled_products=(tuple(ConfigLoader.get_enabled_products(strict=True))
                           if enabled_products is None else enabled_products),
     )

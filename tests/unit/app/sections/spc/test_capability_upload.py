@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from app.sections.inline_domain.spc import spc_dashboard
-from src.shared_kernel.utils.excel_tools import WorkbookWriteResult
 
 
 def _setup_upload(monkeypatch, tmp_path, metric: str):
@@ -35,19 +34,15 @@ def _setup_upload(monkeypatch, tmp_path, metric: str):
 @pytest.mark.parametrize("written", [False, True])
 def test_capability_upload_refreshes_only_after_successful_write(monkeypatch, tmp_path, metric, written):
     ui, result, uploaded = _setup_upload(monkeypatch, tmp_path, metric)
-    writer = MagicMock(return_value=WorkbookWriteResult(
-        written, result.decoration_path, (result.decoration_sheet,) if written else (),
-        None if written else "请关闭 Excel 后重试",
-    ))
-    monkeypatch.setattr(spc_dashboard, "replace_workbook_sheets", writer)
+    writer = MagicMock(side_effect=None if written else OSError("file in use"))
+    monkeypatch.setattr(spc_dashboard, "update_capability_decisions", writer)
 
     spc_dashboard.render_capability_decoration_admin(result, metric_label=metric, show_expander=False)
 
     writer.assert_called_once()
-    path, sheets = writer.call_args.args
-    assert path == result.decoration_path
-    assert list(sheets) == [result.decoration_sheet]
-    pd.testing.assert_frame_equal(sheets[result.decoration_sheet], uploaded)
+    path, sheet, indicator, edits = writer.call_args.args
+    assert (path, sheet, indicator) == (result.decoration_path, result.decoration_sheet, metric.lower())
+    pd.testing.assert_frame_equal(edits, uploaded, check_dtype=False)
     assert ui.success.called is written
     ui.cache_data.clear.assert_not_called()
     assert ui.rerun.called is written
@@ -63,7 +58,7 @@ def test_invalid_upload_never_writes_or_refreshes(monkeypatch, tmp_path, failure
     )
     writer = MagicMock()
     monkeypatch.setattr(spc_dashboard, "read_uploaded_excel_sheet", reader)
-    monkeypatch.setattr(spc_dashboard, "replace_workbook_sheets", writer)
+    monkeypatch.setattr(spc_dashboard, "update_capability_decisions", writer)
 
     spc_dashboard.render_capability_decoration_admin(result, show_expander=False)
 

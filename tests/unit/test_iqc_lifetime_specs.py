@@ -1,4 +1,5 @@
 from datetime import date
+from io import BytesIO
 
 import pandas as pd
 import pytest
@@ -67,7 +68,8 @@ def test_publish_scoped_lifetime_values_then_clear(tmp_path):
     assert pd.read_excel(store.path, sheet_name='__meta__').iloc[0].alert_count == 1
     publish_lifetime_alerts(report.iloc[:0], specs, **params)
     sheets = pd.read_excel(store.path, sheet_name=None)
-    assert sheets['寿命预警'].empty and sheets['__meta__'].iloc[0].alert_count == 0
+    assert sheets['寿命预警']['本期状态'].tolist() == ['未判定']
+    assert sheets['__meta__'].iloc[0].alert_count == 0
 
 
 def test_malformed_maintained_spec_is_not_an_empty_publication(tmp_path):
@@ -75,3 +77,32 @@ def test_malformed_maintained_spec_is_not_an_empty_publication(tmp_path):
     pd.DataFrame([{'产品型号': 'M678'}]).to_excel(path, sheet_name='800nit寿命规格', index=False)
     with pytest.raises(ValueError, match='LIFETIME_SPEC_SCHEMA_INVALID'):
         read_lifetime_specs(path)
+
+
+def test_suppressed_sample_survives_recovery_missing_data_and_relapse(tmp_path):
+    store = LifetimeAlertWorkbook(tmp_path / 'alerts.xlsx')
+    params = dict(store=store, reference_date=date.today(), products=('M678',))
+    specs = {('M678', 'W'): 660}
+    source = curves().assign(批次号='001', 效率衰减=0.94)
+    assert len(publish_lifetime_alerts(source, specs, **params)) == 1
+    # Simulate a decision saved while the next run is preparing its measurements.
+    rows = pd.read_excel(store.path, sheet_name='寿命预警', dtype={'批次号': str})
+    rows['Flag'] = True
+    edited = BytesIO()
+    payload, version = store.download()
+    with pd.ExcelWriter(edited) as writer:
+        rows.to_excel(writer, sheet_name='寿命预警', index=False)
+        pd.read_excel(BytesIO(payload), sheet_name='决策版本').to_excel(writer, sheet_name='决策版本', index=False)
+    store.replace_uploaded(edited.getvalue(), products=('M678',), expected_digest=version)
+
+    for report, expected_state, value in [
+        (source.assign(效率衰减=0.95), '达标', 0.95),
+        (source.iloc[:0], '未判定', 0.95),
+        (source.assign(效率衰减=0.93), '超规', 0.93),
+    ]:
+        assert publish_lifetime_alerts(report, specs, **params).empty
+        sheets = pd.read_excel(store.path, sheet_name=None, dtype={'批次号': str})
+        assert sheets['寿命预警'][['批次号', '本期状态', '规格点数值', 'Flag']].values.tolist() == [
+            ['001', expected_state, value, True],
+        ]
+        assert sheets['__meta__'][['ledger_count', 'alert_count']].values.tolist() == [[1, 0]]

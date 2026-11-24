@@ -108,6 +108,36 @@ def test_lifetime_receipt_checks_current_publication_and_entire_product_scope(tm
         module._verify_saved('iqc_lifetime', PRODUCTS[:1], day, 0, started)
 
 
+@pytest.mark.parametrize('ledger_count,alert_count,release_product,expected_error', [
+    (3, 1, 'M626', None),
+    (2, 1, 'M626', 'LEDGER_COUNT_MISMATCH'),
+    (3, 2, 'M626', 'RELEASE_COUNT_MISMATCH'),
+    (3, 1, 'DISABLED', 'SCOPE_MISMATCH'),
+])
+def test_lifetime_verification_checks_ledger_and_released_rows_separately(
+    tmp_path, monkeypatch, ledger_count, alert_count, release_product, expected_error,
+):
+    path = tmp_path / 'lifetime.xlsx'
+    started = datetime.now()
+    day = started.date()
+    current = {'产品型号': release_product, '批次号': 'L1', '测试画面': 'W', '样品编号': 1,
+               '指标': '亮度衰减', '规格时间(H)': 660, '规格点数值': .94, '取值方式': '预测',
+               '判定阈值': .95, 'Flag': False, '本期状态': '超规'}
+    ledger = pd.DataFrame([current, {**current, '样品编号': 2, 'Flag': True},
+                           {**current, '产品型号': 'DISABLED', '样品编号': 3, '本期状态': '未判定'}])
+    meta = dict(reference_date=str(day), products='、'.join(PRODUCTS), updated_at=started.isoformat(),
+                ledger_count=ledger_count, alert_count=alert_count, status='success')
+    with pd.ExcelWriter(path) as writer:
+        ledger.to_excel(writer, sheet_name='寿命预警', index=False)
+        pd.DataFrame([meta]).to_excel(writer, sheet_name='__meta__', index=False)
+    monkeypatch.setattr(module, '_source', lambda name: (path, '寿命预警'))
+    if expected_error:
+        with pytest.raises(ValueError, match=expected_error):
+            module._verify_saved('iqc_lifetime', PRODUCTS, day, alert_count, started)
+    else:
+        module._verify_saved('iqc_lifetime', PRODUCTS, day, alert_count, started)
+
+
 def test_parts_workbook_readback_checks_real_record_count(tmp_path, monkeypatch):
     path = tmp_path / 'parts.xlsx'
     started = datetime.now()

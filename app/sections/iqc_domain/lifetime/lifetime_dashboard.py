@@ -10,8 +10,9 @@ import streamlit as st
 from app.components.product_labels import get_product_label_formatter
 from app.charts.iqc_domain.lifetime import build_lifetime_chart
 from app.sections.shared.alert_results import read_alert_result
+from app.sections.iqc_domain.lifetime.ledger_admin import render_lifetime_ledger_admin
 from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
-from src.iqc_domain.composition import build_lifetime_service, load_lifetime_specs
+from src.iqc_domain.composition import build_lifetime_alert_store, build_lifetime_service, load_lifetime_specs
 from src.iqc_domain.core.lifetime.alerts import LIFETIME_THRESHOLD, evaluate_lifetime_specs
 from src.iqc_domain.core.lifetime.lifetime import filter_report
 from src.shared_kernel.config import ConfigLoader
@@ -20,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 @st.cache_data(ttl=ConfigLoader.get_cache_ttl_seconds(), max_entries=1, show_spinner=False)
-def fetch_report_payload(enabled_products: tuple[str, ...] | None = None) -> pd.DataFrame:
+def fetch_report_payload(enabled_products: tuple[str, ...] | None = None,
+                         numbering_version: tuple[str, int, int] | None = None) -> pd.DataFrame:
     """Cache anonymous public facts including JNCD. Failed reads are never cached."""
     service = (build_lifetime_service() if enabled_products is None
                else build_lifetime_service(enabled_products=enabled_products))
@@ -150,13 +152,14 @@ def _render_alert_center(result: dict) -> None:
 def render_lifetime_dashboard(
     service: LifetimeReportService | None = None, *, saved_alert_result: dict | None = None,
 ) -> None:
+    render_lifetime_ledger_admin()
     _render_alert_center(saved_alert_result if saved_alert_result is not None
                          else read_alert_result('iqc_lifetime_oos', '', date.today()))
     try:
         enabled_products = list(dict.fromkeys(ConfigLoader.get_enabled_products(strict=True)))
         with st.spinner('正在读取寿命测试数据…'):
             frame = (service.get_report() if service is not None
-                     else fetch_report_payload(tuple(enabled_products)))
+                     else fetch_report_payload(tuple(enabled_products), build_lifetime_alert_store().numbering_version()))
     except Exception as exc:
         logger.error('LIFETIME_REPORT_UNAVAILABLE exception_type=%s', type(exc).__name__)
         st.error('寿命测试数据暂时无法读取，请稍后刷新重试。')
@@ -186,7 +189,7 @@ def render_lifetime_interaction(
     if selected.empty:
         st.info('没有符合筛选条件的寿命测试记录，请调整筛选条件或稍后刷新。')
         return
-    st.caption('样品编号按产品型号、批次号、测试画面分别编排；衰减值按比例展示。')
+    st.caption('样品按产品型号、批次号和测试画面分别编号。新样品在首次巡检发布前显示临时编号。衰减值按比例展示。')
     with st.container(key='iqc_lifetime_manual_results'):
         _render_trends(selected, specs)
         _render_details(selected)

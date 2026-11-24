@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from datetime import date, timedelta
+from collections.abc import Callable
 
 import pandas as pd
 from pydantic import ValidationError
@@ -13,6 +14,7 @@ import streamlit as st
 from app.components.product_labels import get_product_label_formatter
 from app.charts.indicator_domain.qtime.chart import build_qtime_figure
 from app.manager.session_manager import SessionManager
+from app.utils.admin_mode import is_admin_mode
 from app.sections.indicator_domain.qtime.alert_center import render_qtime_alert_center
 from app.sections.indicator_domain.qtime.decoration_admin import (
     render_qtime_decoration_admin,
@@ -42,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 @st.fragment
-def render_qtime_dashboard(service: QTimeReportService) -> None:
+def render_qtime_dashboard(service: QTimeReportService, *, alert_reader: Callable | None = None) -> None:
     """Render filters, gated query results, and explicit operational states.
 
     数据侧按厂别全量取数（``get_cached_shop_monitoring``，与预警矩阵共享
@@ -50,6 +52,17 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
     单产品筛选（产品多选内聚在筛选区首列）。
     """
     st.subheader("重点站点Q-Time监控", anchor=False, text_alignment="center")
+
+    def maintain():
+        def refresh_submitted():
+            st.session_state["qtime_requery"] = st.session_state.pop(RESULT_STATE_KEY, None) is not None
+            st.session_state.pop(SIGNATURE_STATE_KEY, None)
+
+        render_qtime_decoration_admin(service, st.session_state.get(RESULT_STATE_KEY), on_saved=refresh_submitted)
+
+    alert_options = {"maintenance": maintain} if is_admin_mode() else {}
+    if alert_reader is not None:
+        alert_options["alert_reader"] = alert_reader
 
     with st.container(border=True):
         product_column, shop_column, path_column, search_column = st.columns(
@@ -81,6 +94,7 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             render_saved_qtime_alerts(
                 selected_products, shop=shop,
                 step_descriptions=tuple(option.step_desc for option in previous_paths),
+                **alert_options,
             )
             return
 
@@ -103,7 +117,14 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
             )
 
     signature = _filter_signature(shop, step_options, selected_products)
-    if should_query:
+    generation = (str(service.decoration_path), get_qtime_decision_file_stat(service.decoration_path))
+    published_signature = st.session_state.get(SIGNATURE_STATE_KEY)
+    decisions_changed = (
+        isinstance(published_signature, tuple) and published_signature[1:] == signature
+        and published_signature[0] != generation
+    )
+    requery = st.session_state.pop("qtime_requery", False) or decisions_changed
+    if should_query or (requery and selected_products and step_options):
         _run_query(
             service,
             shop=shop,
@@ -116,11 +137,12 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
     render_saved_qtime_alerts(
         selected_products, shop=shop,
         step_descriptions=tuple(option.step_desc for option in step_options),
+        **alert_options,
     )
 
     stored_signature = st.session_state.get(SIGNATURE_STATE_KEY)
     monitoring = st.session_state.get(RESULT_STATE_KEY)
-    if stored_signature != signature or monitoring is None:
+    if not stored_signature or stored_signature[1:] != signature or monitoring is None:
         return
     details = monitoring.details
     health = monitoring.data_health
@@ -134,18 +156,6 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
         logger.warning("Q-Time report health: %s health=%s", message, health)
     if details.empty:
         return
-
-    if st.query_params.get("admin") == "true" and render_qtime_decoration_admin(service, monitoring):
-        _run_query(
-            service,
-            shop=shop,
-            step_options=step_options,
-            selected_products=selected_products,
-            signature=signature,
-        )
-        # The save button is inside this fragment. Rebuild its download payload
-        # as well as the charts without rerunning the independent chamber report.
-        st.rerun(scope="fragment")
 
     for index, step_option in enumerate(step_options):
         step_details = details.loc[details["step_desc"] == step_option.step_desc]
@@ -170,12 +180,17 @@ def render_qtime_dashboard(service: QTimeReportService) -> None:
 def render_saved_qtime_alerts(
     products: list[str], *, shop: Shop,
     step_descriptions: tuple[str, ...] = (), reference_date: date | None = None,
+    maintenance: Callable[[], None] | None = None,
+    alert_reader: Callable | None = None,
 ) -> None:
     """Share the saved consumer with the matrix, retaining this report's scope."""
     from app.sections.shared.alert_results import read_alert_result
 
     reference = reference_date or date.today()
     if not step_descriptions:
+        if maintenance is not None:
+            with st.expander("Q-Time 超规预警中心"):
+                maintenance()
         return
     selected = products or list(SessionManager.AVAILABLE_PRODUCTS)
     frames: list[pd.DataFrame] = []
@@ -183,7 +198,7 @@ def render_saved_qtime_alerts(
     total_lots = 0
     start = (reference.replace(day=1) - timedelta(days=1)).replace(day=1)
     for product in selected:
-        result = read_alert_result(
+        result = (alert_reader or read_alert_result)(
             "qtime_sheet_oos", product, reference, shops=(shop,),
             step_descriptions=step_descriptions, start_date=start.isoformat(),
             end_date=reference.isoformat(),
@@ -199,7 +214,10 @@ def render_saved_qtime_alerts(
     if frames or not failures:
         st.caption(f"自动预警范围：{start} 至 {reference}，按当前产品、厂别和站点筛选。")
         alerts = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-        render_qtime_alert_center(alerts, total_lots=total_lots)
+        render_qtime_alert_center(alerts, total_lots=total_lots, **({"maintenance": maintenance} if maintenance else {}))
+    elif maintenance is not None:
+        with st.expander("Q-Time 超规预警中心"):
+            maintenance()
 
 
 def refresh_qtime_data(service: QTimeReportService) -> bool:
@@ -299,7 +317,7 @@ def _run_query(
         products=tuple(selected_products),
         step_descriptions=tuple(option.step_desc for option in step_options),
     )
-    st.session_state[SIGNATURE_STATE_KEY] = signature
+    st.session_state[SIGNATURE_STATE_KEY] = ((str(service.decoration_path), file_stat), *signature)
 
 
 def _filter_signature(

@@ -12,7 +12,7 @@ from src.iqc_domain.core.eva_materials.alerts import build_evaporation_alerts
 class EvaporationAlertStore(Protocol):
     def save(
         self, alerts: pd.DataFrame, *, start: date, end: date, products: tuple[str, ...],
-    ) -> None: ...
+    ) -> pd.DataFrame | None: ...
 
 
 def publish_evaporation_alerts(
@@ -21,5 +21,5 @@ def publish_evaporation_alerts(
 ) -> pd.DataFrame:
     validate_dates(start, end)
     alerts = build_evaporation_alerts(report)
-    store.save(alerts, start=start, end=end, products=products)
-    return alerts
+    public = store.save(alerts, start=start, end=end, products=products)
+    return alerts if public is None else public

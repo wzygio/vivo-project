@@ -3,7 +3,6 @@
 import sys
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
 
 import pandas as pd
 import streamlit as st
@@ -14,7 +13,7 @@ for path in (root, root / 'src'):
         sys.path.insert(0, str(path))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from qtime_app import FixtureQTimeService
+from qtime_app import FixtureQTimeService, fixture_saved_alerts
 from app.sections.indicator_domain.qtime.dashboard import render_qtime_dashboard
 from app.sections.indicator_domain.qtime.chamber_dashboard import render_chamber_dashboard, clear_chamber_result
 from src.indicator_domain.application.qtime.chamber_cache import clear_chamber_cache
@@ -111,10 +110,7 @@ st.caption(f"page-executions: {st.session_state['fixture_page_runs']}")
 if st.button('刷新单腔缓存', key='fixture_refresh'):
     clear_chamber_cache()
     clear_chamber_result()
-# Chamber tests exercise the station controls, not published station alerts.
-# Keep that independent display seam isolated from maintained result files.
-with patch('app.sections.indicator_domain.qtime.dashboard.render_saved_qtime_alerts'):
-    render_qtime_dashboard(CountingStationService())
+render_qtime_dashboard(CountingStationService(), alert_reader=fixture_saved_alerts)
 render_chamber_dashboard(CountingChamberService(
     FixtureSource(), enabled_products=('M678',) if st.query_params.get('restricted') else ('M626', 'M678'),
     cache_namespace='isolated-browser-fixture',

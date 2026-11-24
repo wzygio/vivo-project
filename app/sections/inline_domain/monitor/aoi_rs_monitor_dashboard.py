@@ -8,6 +8,8 @@ import re
 
 import pandas as pd
 import streamlit as st
+
+from app.utils.admin_mode import is_admin_mode
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 from app.components.product_labels import get_product_label_formatter
@@ -87,7 +89,7 @@ def render_aoi_rs_monitor_section(service, available_products) -> None:
             weeks = st.number_input("周数", min_value=1, max_value=53, value=5, step=1, key=f"{PREFIX}_weeks")
         clicked = st.button("查询", type="primary", key=f"{PREFIX}_query_submit")
         force = False
-        if st.query_params.get("admin") == "true":
+        if is_admin_mode(st.query_params):
             force = st.button("刷新数据", key=f"{PREFIX}_refresh_data")
         query = AoiRsMonitorQuery(
             products=tuple(products), factory=factory, halfyears=tuple(halves), quarters=tuple(quarters),

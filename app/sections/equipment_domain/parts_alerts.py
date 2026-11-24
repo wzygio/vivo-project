@@ -11,6 +11,8 @@ from app.sections.equipment_domain.parts_dashboard import render_parts_alert_cen
 from src.equipment_domain.application.parts_alert_service import publish_parts_alerts
 from src.equipment_domain.application.ports import PartsAlertStore
 from app.sections.shared.alert_results import read_alert_result
+from app.sections.shared.auxiliary_decision_admin import render_decision_admin
+from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,7 @@ def render_parts_alerts(
 
 def render_saved_parts_alerts(reference_date: date | None = None) -> None:
     """Display only committed alert rows, including when the report cannot load."""
+    render_decision_admin(PARTS_DECISIONS, 'equipment_domain', 'parts_alerts')
     result = read_alert_result('parts_oos', '', reference_date or date.today())
     if result['state'] == 'error':
         with st.expander('超规备件预警中心', expanded=True):

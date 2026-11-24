@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 import streamlit as st
+
+from app.utils.admin_mode import is_admin_mode
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.config_model import AppConfig
 from app.manager.session_manager import SessionManager
@@ -182,7 +184,7 @@ def render_page_header(
     # 检测只置位提示标记，绝不打断当前 run；两个刷新按钮均可手动应用代码/配置/缓存更新。
     detect_project_changes()
 
-    is_admin = st.query_params.get("admin") == "true"
+    is_admin = is_admin_mode(st.query_params)
 
     # Admin 隐身模式 (Stealth Mode)
     # 只要 URL 中没有 ?admin=true，就利用 CSS 抹除侧边栏中的特定页面

@@ -99,14 +99,10 @@ def prepare_aoi_rs_decoration(
             prod_code,
             AOI_RS_OOS_KEY_COLUMNS,
         )
-        decoration = merge_detail_with_decoration_flags(
-            detail,
-            decisions,
-            AOI_RS_OOS_KEY_COLUMNS,
-        )
-    decoration = release_exempt_parameter_flags(
-        decoration, "rs_code", exempt_param_name_contains,
-    )
+        defaults = merge_detail_with_decoration_flags(detail, pd.DataFrame(), AOI_RS_OOS_KEY_COLUMNS)
+        defaults = release_exempt_parameter_flags(defaults, "rs_code", exempt_param_name_contains)
+        flags = pd.concat([defaults, decisions], ignore_index=True)
+        decoration = merge_detail_with_decoration_flags(detail, flags, AOI_RS_OOS_KEY_COLUMNS)
     lot_decorated, sheet_decorated = apply_factory_scoped_decoration(
         lot_points_df,
         sheet_points_df,

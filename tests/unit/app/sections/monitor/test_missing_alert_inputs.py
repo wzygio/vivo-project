@@ -1,4 +1,4 @@
-"""All thirteen matrix indicators treat absent result files/tables as passing."""
+"""All registered matrix indicators treat absent result files/tables as passing."""
 from datetime import date
 
 import pandas as pd
@@ -55,12 +55,13 @@ def test_all_matrix_indicators_with_absent_inputs_render_green(isolated_resource
             ("indicator_domain", "ijp_alerts"),
             ("equipment_domain", "parts_alerts"),
             ("iqc_domain", "evaporation_alerts"),
+            ("iqc_domain", "lifetime_alerts"),
         ):
             pd.DataFrame().to_excel(resource(domain, key), sheet_name="other", index=False)
     paths_before = {path: path.read_bytes() for path in resource("unused", "unused").parent.glob("*.xlsx")}
     payload = cache.get_cached_alert_matrix(reference_date=date.today(), products=["Z622"],
         _revision_provider=lambda *args: "isolated-missing")
-    assert len(payload["cells"]) == 13
+    assert set(payload["cells"]) == {(row.row_key, "Z622") for row in matrix.MATRIX_ROWS}
     assert all(cell["state"] in {"ok", "no_data"} for cell in payload["cells"].values()), payload["cells"]
 
     app = AppTest.from_string('''
@@ -75,7 +76,7 @@ render_alert_matrix_detail(payload)
     app.run()
     assert not app.exception
     cells = [button for button in app.button if str(button.key).startswith("matrix_cell_")]
-    assert len(cells) == 13 and all(button.label == "🟢" for button in cells)
+    assert len(cells) == len(matrix.MATRIX_ROWS) and all(button.label == "🟢" for button in cells)
     for row in matrix.MATRIX_ROWS:
         app.button(key=f"matrix_cell_{row.row_key}_Z622").click().run()
         assert not app.exception and not app.error and not app.dataframe

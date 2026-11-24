@@ -16,6 +16,8 @@ RESULT_SCHEMA_VERSION = 1
 TREND_ALERT_SCOPES = ("weekly",)
 LOT_RELEASE_KEYS = ["超规 Lot ID", "异常 Code", "入库时间"]
 LOT_RELEASE_COLUMNS = [*LOT_RELEASE_KEYS, "flag"]
+TREND_RELEASE_KEYS = ["level", "defect_group", "defect_desc", "time_period", "period_scope"]
+RELEASE_KEYS = {"lot": LOT_RELEASE_KEYS, "trend": TREND_RELEASE_KEYS}
 
 
 def is_lot_released(value: object) -> bool:
@@ -25,14 +27,21 @@ def is_lot_released(value: object) -> bool:
     return str(value).strip().lower() in {"false", "0", "0.0", "no", "n"}
 
 
-def _release_keys(frame: pd.DataFrame) -> pd.DataFrame:
-    if set(LOT_RELEASE_KEYS) - set(frame.columns):
+def _release_keys(frame: pd.DataFrame, kind: str) -> pd.DataFrame:
+    keys = RELEASE_KEYS[kind]
+    if set(keys) - set(frame.columns):
         raise ValueError("Incomplete Yield release identity")
     result = frame.copy()
-    for column in LOT_RELEASE_KEYS:
+    for column in keys:
         result[column] = result[column].astype("string").str.strip()
-        if result[column].isna().any() or result[column].eq("").any():
+        missing = result[column].isna() | result[column].eq("")
+        if column == "defect_desc":
+            missing &= result["level"].ne("group")
+        if missing.any():
             raise ValueError("Invalid Yield release identity")
+    if kind == "trend":
+        result["defect_desc"] = result["defect_desc"].fillna("")
+        return result
     dates = pd.to_datetime(result["入库时间"], format="mixed", errors="coerce")
     if dates.isna().any():
         raise ValueError("Invalid Yield release event date")
@@ -44,26 +53,33 @@ def merge_lot_release_controls(
     records: pd.DataFrame, decisions: pd.DataFrame | None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Merge authoritative decisions, retaining history and denying every new key."""
-    source = _release_keys(records)
+    return merge_release_controls("lot", records, decisions)
+
+
+def merge_release_controls(
+    kind: str, records: pd.DataFrame, decisions: pd.DataFrame | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    keys = RELEASE_KEYS[kind]
+    columns = [*keys, "flag"]
+    source = _release_keys(records, kind)
     if decisions is None:
-        history = pd.DataFrame(columns=LOT_RELEASE_COLUMNS)
+        history = pd.DataFrame(columns=columns)
     else:
-        if set(LOT_RELEASE_COLUMNS) - set(decisions.columns):
+        if set(columns) - set(decisions.columns):
             raise ValueError("Incomplete Yield release decisions")
-        history = _release_keys(decisions).reindex(columns=LOT_RELEASE_COLUMNS)
-        if history.duplicated(LOT_RELEASE_KEYS).any():
+        history = _release_keys(decisions, kind).reindex(columns=columns)
+        if history.duplicated(keys).any():
             raise ValueError("Duplicate Yield release decisions")
-    new_keys = source[LOT_RELEASE_KEYS].drop_duplicates()
-    existing = set(history[LOT_RELEASE_KEYS].itertuples(index=False, name=None))
+    new_keys = source[keys].drop_duplicates()
+    existing = set(history[keys].itertuples(index=False, name=None))
     unseen = [key not in existing for key in new_keys.itertuples(index=False, name=None)]
-    additions = new_keys.loc[unseen].assign(flag=True)
+    additions = new_keys.loc[unseen].assign(flag=kind == "lot")
     if history.empty:
         history = additions.reset_index(drop=True)
     elif not additions.empty:
         history = pd.concat([history, additions], ignore_index=True)
     effective = source.drop(columns="flag", errors="ignore").merge(
-        history.assign(flag=~history["flag"].map(is_lot_released)),
-        on=LOT_RELEASE_KEYS, how="left", validate="many_to_one", sort=False,
+        history, on=keys, how="left", validate="many_to_one", sort=False,
     )
     return effective, history
 
@@ -230,10 +246,10 @@ class YieldAlertResults:
             frame = frame.loc[frame["is_current"].eq(True)].reset_index(drop=True)
         release_records = None
         release_evidence = False
-        if kind == "lot" and meta.get("release_schema_version") == 1:
+        if meta.get("release_schema_version") == 1:
             if not payload.get("controls_initialized") or "flag" not in frame:
                 raise ValueError("Missing Yield release controls")
-            effective, _ = merge_lot_release_controls(frame, payload["decisions"])
+            effective, _ = merge_release_controls(kind, frame, payload["decisions"])
             release_records = effective.loc[effective["flag"].map(is_lot_released)].reset_index(drop=True)
             frame = release_records.drop(columns="flag")
             release_evidence = True

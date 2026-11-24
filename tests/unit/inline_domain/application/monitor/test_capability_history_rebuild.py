@@ -53,8 +53,8 @@ def test_rebuild_counts_released_projects_without_threshold_or_span_reinterpreta
     frame = pd.DataFrame([
         {"prod_code": "M626", "factory": "ARRAY", "step_id": "1", "param_name": name,
          "period_type": "week", "period_label": "2026-W46", "flag": flag,
-         f"{metric}_corrected": 999, "period_start": "2026-11-15", "period_end": "2026-11-15"}
-        for name, flag in [("released", False), ("released", False), ("hidden", True)]
+         f"{metric}_corrected": 1.6 if name == "passed" else 0.9, "period_start": "2026-11-15", "period_end": "2026-11-15"}
+        for name, flag in [("released", False), ("released", False), ("hidden", True), ("passed", False)]
     ])
     other_product = frame.iloc[[0]].assign(prod_code="M678", param_name="another-product")
     frame = pd.concat([frame, other_product], ignore_index=True)

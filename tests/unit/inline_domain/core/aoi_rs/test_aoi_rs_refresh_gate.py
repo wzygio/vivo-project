@@ -124,14 +124,9 @@ def test_prepare_aoi_rs_decoration_without_scope_keeps_legacy_always_write(
     assert write_calls == [("M678", "M678__flags"), ("M678",)]
 
 
-def test_prepare_aoi_rs_decoration_does_not_inherit_legacy_product_sheet_flags(
+def test_prepare_aoi_rs_decoration_migrates_legacy_product_sheet_flags(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """全局语义（2026-09-01 起，所有 scope）：不从旧产品 sheet 迁移 flag（__flags 只记人为决策）。
-
-    旧产品 sheet 中即使存在 flag=False 的行也不继承——该键按默认 True 修饰，
-    且首次写入生成的 __flags 为空台账。
-    """
     _spy_writes(monkeypatch)
     legacy = pd.DataFrame(
         [
@@ -165,11 +160,9 @@ def test_prepare_aoi_rs_decoration_does_not_inherit_legacy_product_sheet_flags(
         now=NOW,
     )
 
-    # 旧表中的 False 不继承：该键按默认 True（自动截断）处理
     sheet_row = result.decoration_df[result.decoration_df["chart_kind"] == "sheet"]
-    assert sheet_row["flag"].tolist() == [True]
-    # __flags 为空台账（只记人为决策，不搬旧表噪声）
+    assert sheet_row["flag"].tolist() == [False]
     decisions = sheet_oos_decoration.load_sheet_oos_decisions(
         tmp_path, "aoi_rs_sheet_oos_decoration.xlsx", "M678"
     )
-    assert decisions.empty
+    assert decisions["flag"].tolist().count(False) == 1

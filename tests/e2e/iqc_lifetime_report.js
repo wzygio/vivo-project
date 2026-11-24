@@ -50,7 +50,8 @@ async page => {
     if (observed.length !== 5 || predicted.length !== 5 || chart.xaxis !== '测试时间' || !['效率衰减', '亮度衰减', 'JNCD'].includes(chart.yaxis)) throw new Error('Wrong axes or traces');
     if (chart.dtick !== 100 || chart.tickformat !== '.0f') throw new Error('Wrong time tick precision');
     for (const [index, trace] of observed.entries()) {
-      if (trace.name !== String(index + 1)) throw new Error('Non-numeric sample legend');
+      if (!/^[1-9]\d*$/.test(trace.name) ||
+          (index && Number(trace.name) <= Number(observed[index - 1].name))) throw new Error('Invalid sample legend');
       if (trace.x.join(',') !== '0,100,200,300,400') throw new Error('Time order changed');
       if (!trace.hover.includes('样品编号')) throw new Error('Hover lacks anonymous identity');
       const forecast = predicted.find(item => item.group === trace.group);

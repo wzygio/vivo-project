@@ -11,5 +11,5 @@ def publish_parts_alerts(
     as_of_date: str, last_update: str,
 ) -> pd.DataFrame:
     alerts = build_parts_alerts(report_df)
-    store.save(alerts, as_of_date=as_of_date, last_update=last_update)
-    return alerts
+    public = store.save(alerts, as_of_date=as_of_date, last_update=last_update)
+    return alerts if public is None else public

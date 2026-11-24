@@ -32,6 +32,7 @@ from src.inline_domain.application.shared.decorated_features import (
 from src.inline_domain.application.spc.spc_service import SpcReportService
 from src.shared_kernel.config import ConfigLoader
 from tests.helpers.inline_resources import write_inline_resource_registry
+from src.inline_domain.infrastructure.shared import alert_decisions
 from src.shared_kernel.utils.excel_tools import (
     WorkbookWriteResult,
     replace_workbook_sheets,
@@ -40,7 +41,7 @@ from src.shared_kernel.utils.excel_tools import (
 
 def _decision_row(flag=True, sheet_id: str = "S1") -> dict:
     return {
-        "prod_code": "P1",
+        "prod_code": "M678",
         "step_id": "15260",
         "param_name": "4PP_Rs",
         "sheet_id": sheet_id,
@@ -58,7 +59,7 @@ def _decoration_df() -> pd.DataFrame:
         [
             {
                 "factory": "ARRAY",
-                "prod_code": "P1",
+                "prod_code": "M678",
                 "step_id": "15260",
                 "param_name": "4PP_Rs",
                 "sheet_id": "S1",
@@ -110,7 +111,7 @@ def test_download_sheets_contain_detail_and_decision_ledger(tmp_path: Path) -> N
 
     sheets = build_decision_download_sheets(result)
 
-    assert list(sheets) == ["当前明细", "决策台账"]
+    assert list(sheets) == ["当前明细", "决策台账", "决策版本"]
     assert list(sheets["当前明细"].columns) == OOS_DECORATION_COLUMNS
     assert len(sheets["当前明细"]) == 1
     assert list(sheets["决策台账"].columns) == DECISION_DOWNLOAD_COLUMNS
@@ -134,7 +135,7 @@ def test_download_bytes_do_not_contain_refresh_meta(tmp_path: Path) -> None:
     data = decoration_admin.excel_bytes(build_decision_download_sheets(result))
     parsed = pd.read_excel(BytesIO(data), sheet_name=None)
 
-    assert set(parsed) == {"当前明细", "决策台账"}
+    assert set(parsed) == {"当前明细", "决策台账", "决策版本"}
     assert "__refresh_meta__" not in parsed
 
 
@@ -234,7 +235,7 @@ def test_parse_unreadable_bytes_returns_error() -> None:
 
 
 def test_apply_writes_flags_sheet_and_keeps_product_sheet(tmp_path: Path) -> None:
-    sentinel = pd.DataFrame({"prod_code": ["ORIGINAL"], "flag": [True]})
+    sentinel = _decision_df(False).assign(memo="ORIGINAL")
     workbook = tmp_path / "spc_sheet_oos_decoration.xlsx"
     write = replace_workbook_sheets(
         workbook, {"M678": sentinel, "M678__flags": _decision_df(False)}
@@ -247,7 +248,7 @@ def test_apply_writes_flags_sheet_and_keeps_product_sheet(tmp_path: Path) -> Non
     assert outcome.status == "success"
     sheets = pd.read_excel(workbook, sheet_name=None)
     # 产品明细 sheet 不得被覆盖
-    assert sheets["M678"]["prod_code"].tolist() == ["ORIGINAL"]
+    assert sheets["M678"]["memo"].tolist() == ["ORIGINAL"]
     flags = sheets["M678__flags"]
     assert flags["flag"].tolist() == ["Delete"]
     assert set(flags.columns) == set(DECISION_DOWNLOAD_COLUMNS)
@@ -261,7 +262,7 @@ def test_apply_identical_content_skips_rewrite(tmp_path: Path, monkeypatch) -> N
     result = _make_result(tmp_path, decision_df=_decision_df(True))
     calls: list = []
     monkeypatch.setattr(
-        sheet_oos_admin,
+        alert_decisions,
         "replace_workbook_sheets",
         lambda *args, **kwargs: calls.append((args, kwargs)),
     )
@@ -275,7 +276,7 @@ def test_apply_identical_content_skips_rewrite(tmp_path: Path, monkeypatch) -> N
     assert workbook.stat().st_mtime_ns == mtime_before
 
 
-def test_apply_empty_upload_clears_flags(tmp_path: Path) -> None:
+def test_apply_empty_upload_preserves_flags(tmp_path: Path) -> None:
     workbook = tmp_path / "spc_sheet_oos_decoration.xlsx"
     write = replace_workbook_sheets(workbook, {"M678__flags": _decision_df(True, "Delete")})
     assert write.written
@@ -283,17 +284,17 @@ def test_apply_empty_upload_clears_flags(tmp_path: Path) -> None:
 
     outcome = apply_decision_upload(result, pd.DataFrame(columns=DECISION_DOWNLOAD_COLUMNS))
 
-    assert outcome.status == "success"
-    assert "清空" in outcome.message
+    assert outcome.status == "unchanged"
     flags = pd.read_excel(workbook, sheet_name="M678__flags")
-    assert flags.empty
+    assert flags["flag"].tolist() == [True, "Delete"]
     assert list(flags.columns) == DECISION_DOWNLOAD_COLUMNS
 
 
 def test_apply_write_failure_returns_error(tmp_path: Path, monkeypatch) -> None:
     result = _make_result(tmp_path, decision_df=_decision_df(False))
+    replace_workbook_sheets(result.decoration_path, {"M678__flags": _decision_df(False)})
     monkeypatch.setattr(
-        sheet_oos_admin,
+        alert_decisions,
         "replace_workbook_sheets",
         lambda path, sheets: WorkbookWriteResult(
             written=False,
@@ -375,9 +376,10 @@ def test_admin_upload_failure_shows_error_without_rerun(monkeypatch, tmp_path: P
     result = _make_result(tmp_path, decision_df=_decision_df(False))
     messages: dict[str, list] = {"success": [], "error": [], "info": [], "rerun": []}
     upload = _FakeUpload(_xlsx_bytes({"决策台账": _decision_df(True)}))
+    replace_workbook_sheets(result.decoration_path, {"M678__flags": _decision_df(False)})
     _patch_admin_st(monkeypatch, upload, messages)
     monkeypatch.setattr(
-        sheet_oos_admin,
+        alert_decisions,
         "replace_workbook_sheets",
         lambda path, sheets: WorkbookWriteResult(
             written=False,

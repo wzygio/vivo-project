@@ -25,7 +25,7 @@ def test_snapshot_overwrites_clears_and_preserves_on_write_failure(tmp_path, mon
     original = path.read_bytes()
     def fail(*args):
         raise PermissionError('locked')
-    monkeypatch.setattr('src.equipment_domain.infrastructure.parts_alert_workbook.os.replace', fail)
+    monkeypatch.setattr('src.shared_kernel.infrastructure.alert_workbook.os.replace', fail)
     with pytest.raises(PermissionError):
         store.save(alerts, as_of_date='2026-10-26', last_update='')
     assert path.read_bytes() == original

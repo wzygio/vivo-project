@@ -20,6 +20,7 @@ import pandas as pd
 
 from app.manager.session_manager import SessionManager
 from app.utils.app_setup import AppSetup
+from app.sections.inline_domain.monitor.matrix_decision_admin import render_matrix_decision_admin
 from app.utils.step_labels import get_cached_step_description_map
 from app.sections.inline_domain.monitor.alert_matrix import (
     MATRIX_SELECTION_STATE_KEY,
@@ -88,6 +89,7 @@ def render_alert_matrix_panel() -> None:
         st.session_state[ALERT_MATRIX_AUTO_OPENED_KEY] = today_label
 
     st.subheader("🚦 全指标预警看板")
+    render_matrix_decision_admin()
     with st.expander("全指标状态总览", expanded=True):
         # 筛选、查询、刷新和详情控件都在同一 fragment 内创建，交互只重跑矩阵。
         matrix_filter_selection = render_alert_matrix_filter_bar(

@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 import pandas as pd
 import streamlit as st
@@ -164,5 +163,4 @@ def fixture_saved_alerts(row_key, product, reference_date, **selection):
 
 if __name__ == '__main__':
     st.set_page_config(page_title="Q-Time E2E", layout="wide")
-    with patch("app.sections.shared.alert_results.read_alert_result", fixture_saved_alerts):
-        render_qtime_dashboard(FixtureQTimeService())
+    render_qtime_dashboard(FixtureQTimeService(), alert_reader=fixture_saved_alerts)

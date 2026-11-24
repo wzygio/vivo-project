@@ -41,13 +41,23 @@ def _verify_saved(module: str, products: tuple[str, ...], reference: date,
     from src.shared_kernel.utils.excel_tools import read_workbook_sheets
 
     path, sheet = _source(module)
-    frames = read_workbook_sheets(path)
+    frames = read_workbook_sheets(path, preserve_text=True)
     alerts, metadata = frames[sheet], frames['__meta__']
     if module.startswith('ijp_'):
         metadata = metadata.loc[metadata['region'].eq(sheet)]
     if len(metadata) != 1:
         raise ValueError('INSPECTION_PUBLICATION_MISSING_METADATA')
     meta = metadata.iloc[0]
+    if module == 'iqc_lifetime':
+        from src.iqc_domain.infrastructure.lifetime.publication import read_lifetime_publication
+        alerts = read_lifetime_publication(alerts, meta)
+    else:
+        from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS
+        from src.indicator_domain.infrastructure.ijp.alert_workbook import ijp_decisions
+        from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EVAPORATION_DECISIONS
+        layout = (ijp_decisions(sheet) if module.startswith('ijp_') else
+                  PARTS_DECISIONS if module == 'parts' else EVAPORATION_DECISIONS)
+        alerts = layout.read(frames, meta, verify_publication=True)
     if meta['status'] != 'success' or int(meta['alert_count']) != count or len(alerts) != count:
         raise ValueError('INSPECTION_PUBLICATION_COUNT_MISMATCH')
     published = pd.Timestamp(meta['updated_at'])
@@ -62,10 +72,8 @@ def _verify_saved(module: str, products: tuple[str, ...], reference: date,
         if str(meta['as_of_date']) != str(reference):
             raise ValueError('INSPECTION_PARTS_SCOPE_MISMATCH')
     elif module == 'iqc_lifetime':
-        from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
         if (str(meta['reference_date']) != str(reference)
                 or tuple(str(meta['products']).split('、')) != products
-                or not set(LIFETIME_ALERT_COLUMNS) <= set(alerts)
                 or not alerts['产品型号'].isin(products).all()):
             raise ValueError('INSPECTION_LIFETIME_SCOPE_MISMATCH')
     else:
@@ -200,8 +208,9 @@ def _produce_lifetime(products: tuple[str, ...], reference: date) -> int:
     from src.iqc_domain.composition import build_lifetime_alert_store, build_lifetime_service, load_lifetime_specs
 
     specs = load_lifetime_specs()
-    report = build_lifetime_service(enabled_products=products).get_report()
-    return len(publish_lifetime_alerts(report, specs, store=build_lifetime_alert_store(),
+    store = build_lifetime_alert_store()
+    report = build_lifetime_service(enabled_products=products).get_report(sample_numberer=store.reserve_sample_numbers)
+    return len(publish_lifetime_alerts(report, specs, store=store,
                                        reference_date=reference, products=products))
 
 

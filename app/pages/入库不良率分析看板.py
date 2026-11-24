@@ -1,5 +1,7 @@
 from app.sections.yield_domain.data_health import render_yield_data_health
 import streamlit as st
+
+from app.utils.admin_mode import is_admin_mode
 import pandas as pd
 import numpy as np
 import logging
@@ -86,8 +88,7 @@ render_page_header(
 )
 
 # [Refactor] 4. 渲染 Yield 配置文件上传组件
-query_params = st.query_params
-if query_params.get("admin") == "true":
+if is_admin_mode(st.query_params):
     render_yield_config_uploader(active_config, product_dir)
 try:
     active_config = get_dashboard_resource_config(active_config, source_signature)

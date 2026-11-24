@@ -16,6 +16,8 @@ import plotly.io as pio
 import pymupdf
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+
 from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.aoi_rs_charts import iter_aoi_rs_chart_groups
 from app.charts.inline_domain.aoi_rs_pdf import AoiRsPdfReport, format_aoi_rs_pdf_figure
@@ -222,7 +224,7 @@ def render_aoi_rs_export(
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Render only for the repository's explicit administrator display mode."""
-    if st.query_params.get("admin") != "true":
+    if not is_admin_mode(st.query_params):
         return
     enabled = ConfigLoader.get_enabled_products()
     if not enabled:

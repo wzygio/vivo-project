@@ -8,6 +8,7 @@ import re
 
 import pandas as pd
 
+from src.inline_domain.core.monitor.capability_trend import week_owner_month
 from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD, capability_summary_columns
 from src.inline_domain.core.monitor.period_summary import _period_windows
 from src.inline_domain.core.shared.date_exclusion import InlineDateExclusion, exclude_inline_period_records
@@ -38,9 +39,9 @@ def normalize_latest_cpk(
     if not result["prod_code"].eq(product).all():
         raise ValueError(f"{product} {name} 明细混入其他产品")
     flags = result["flag"].astype("string").str.strip().str.lower().fillna("")
-    if not flags.isin(["false", "0", "0.0", "true", "1", "1.0", "delete", ""]).all():
+    if not flags.isin(["false", "0", "0.0", "true", "ture", "1", "1.0", "delete", ""]).all():
         raise ValueError(f"{product} {name} 明细 flag 无效")
-    result["flag"] = flags.replace({"0": "false", "0.0": "false", "1": "true", "1.0": "true"})
+    result["flag"] = flags.replace({"0": "false", "0.0": "false", "1": "true", "1.0": "true", "ture": "true"})
     result[metric] = pd.to_numeric(result[value_column], errors="coerce")
     for _, group in result.groupby(CPK_KEY_COLUMNS, dropna=False):
         if len(group[[metric, "flag"]].drop_duplicates()) > 1:
@@ -53,6 +54,54 @@ def normalize_latest_cpk(
     result.loc[insufficient_span, "status"] = "数据跨度不足"
     unknown = result["flag"].isin(["false", "0", "0.0"]) & result[metric].isna()
     result.loc[unknown, "status"] = "无法判定"
+    return result
+
+
+def released_capability_mask(rows: pd.DataFrame, metric: str) -> pd.Series:
+    flags = rows["flag"].astype("string").str.strip().str.lower()
+    eligible = (rows["status"].eq("预警") if "status" in rows else
+                pd.to_numeric(rows[f"{metric}_corrected"], errors="coerce").lt(CPK_THRESHOLD))
+    return flags.isin(["false", "0", "0.0"]) & eligible
+
+
+def public_capability_history(records: pd.DataFrame, ledger: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Apply decisions to display counts while preserving the maintained denominator."""
+    if records.empty or ledger.empty or "flag" not in ledger:
+        return records
+    weeks = ledger.loc[ledger["period_type"].eq("week")].drop_duplicates(CPK_KEY_COLUMNS)
+    if weeks.empty:
+        return records
+    weeks = weeks.copy()
+    values = weeks.get(f"{metric}_corrected", weeks.get(metric, pd.Series(index=weeks.index, dtype=float)))
+    weeks["hidden"] = weeks["flag"].astype(str).str.strip().str.lower().eq("delete") & pd.to_numeric(values, errors="coerce").notna()
+    weeks["released"] = released_capability_mask(weeks, metric)
+    counts = weeks.groupby(["prod_code", "period_label"])[["hidden", "released"]].sum()
+    previous_warnings = records.loc[records["周期类型"].eq("周度")].set_index(["产品", "时间标签"])["预警项目数"]
+    changes: dict[tuple[str, str, str], tuple[int, int]] = {}
+    for (product, week), (hidden, released) in counts.iterrows():
+        if not hidden:
+            continue
+        previous = previous_warnings.get((product, week))
+        adjustment = int(released) - int(previous) if pd.notna(previous) else 0
+        month = week_owner_month(week)
+        year = month[:4]
+        quarter = (int(month[-2:]) - 1) // 3 + 1
+        for kind, label in (("周度", week), ("月度", month), ("季度", f"{year}-Q{quarter}"), ("年度", year)):
+            key = (product, kind, label)
+            prior_hidden, prior_adjustment = changes.get(key, (0, 0))
+            changes[key] = (prior_hidden + int(hidden), prior_adjustment + adjustment)
+    result = records.copy()
+    total_col, rate_col = capability_summary_columns(metric)[6:8]
+    for index, row in result.iterrows():
+        change = changes.get((row["产品"], row["周期类型"], row["时间标签"]))
+        if change is None or pd.isna(row[total_col]) or pd.isna(row["预警项目数"]):
+            continue
+        hidden, adjustment = change
+        total = max(0, int(row[total_col]) - hidden)
+        warnings = min(total, max(0, int(row["预警项目数"]) + adjustment))
+        result.loc[index, [total_col, "达标项目数", "预警项目数", rate_col]] = [
+            total, total - warnings, warnings, (total - warnings) / total if total else 1.0,
+        ]
     return result
 
 

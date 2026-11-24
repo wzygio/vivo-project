@@ -7,12 +7,13 @@ from streamlit.testing.v1 import AppTest
 
 
 @pytest.fixture(autouse=True)
-def isolate_workbooks(monkeypatch):
+def isolate_workbooks(monkeypatch, tmp_path):
     from app.sections.iqc_domain.lifetime import lifetime_dashboard as dashboard
     from tests.e2e.fixtures.lifetime_forecast import fixture_alert_result
 
     specs = {('M678', screen): hour for screen, hour in zip('WRGB', (660, 535, 665, 420))}
     monkeypatch.setattr(dashboard, 'load_lifetime_specs', lambda: specs)
+    monkeypatch.setattr(dashboard.ConfigLoader, 'get_domain_resource_path', lambda *args: tmp_path / 'alerts.xlsx')
     monkeypatch.setattr(dashboard, 'read_alert_result', lambda *args: fixture_alert_result('normal'))
 
 

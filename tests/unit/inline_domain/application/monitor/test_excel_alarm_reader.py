@@ -30,12 +30,15 @@ def reader(path, alarm="oos", scope="spc"):
 
 
 @pytest.mark.parametrize("flag,expected", [(False, 1), ("False", 1), (0, 1), (0.0, 1), (True, 0), ("TRUE", 0), (1, 0), ("Delete", 0), (None, 0)])
-def test_product_sheet_flags_are_authoritative(tmp_path, flag, expected):
+def test_product_sheet_flags_without_a_ledger(tmp_path, flag, expected):
     path = tmp_path / "alarms.xlsx"
-    write_book(path, detail(flag).rename(columns={"flag": "Flag"}), M626__flags=pd.DataFrame({"flag": [True]}))
+    write_book(path, detail(flag).rename(columns={"flag": "Flag"}))
     result = reader(path).read_product("spc", "M626")
     assert result.source == "excel"
     assert len(result.alerts_df) == expected
+    if flag == "Delete":
+        assert result.decorated_df.empty
+        return
     assert result.decorated_df.iloc[0]["event_time"] == pd.Timestamp("2026-09-08")
     assert result.decorated_df.iloc[0]["observed_value"] == 1
 

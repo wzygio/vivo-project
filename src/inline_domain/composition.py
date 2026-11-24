@@ -70,6 +70,30 @@ def build_trend_alert_results(scope: str):
         policy=trend_policy_signature(ConfigLoader.get_inline_data_exclusion()))
 
 
+def build_alert_decision_workbook(scope: str, kind: str):
+    from src.inline_domain.infrastructure.shared.alert_decisions import AlertDecisionWorkbook
+    from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+    from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+    if kind == "trend":
+        if scope not in ("aoi_rs", "aoi_tt"):
+            raise ValueError("Unsupported trend scope")
+        path = ConfigLoader.get_domain_resource_path("inline_domain", f"{scope}_trend_alerts")
+        keys = ["prod_code", "factory", "step_id", "rs_code" if scope == "aoi_rs" else "tt_name", "target_date"]
+        return AlertDecisionWorkbook(path, keys, default=False)
+    return AlertDecisionWorkbook(scope_decoration_path(scope, kind),
+                                 list(OosHistoryStore.contract_for(scope).key_columns), default=True)
+
+
+def read_capability_admin_ledger(product: str, metric: str):
+    from src.inline_domain.application.spc.capability_decoration_service import CpkDecorationResult
+    from src.inline_domain.infrastructure.spc.capability_decoration_repository import load_capability_decoration
+    import pandas as pd
+    path = ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration")
+    sheet = product if metric == "cpk" else f"{product}_cpm"
+    frame = load_capability_decoration(path.parent, sheet, metric, workbook_path=path, raise_on_error=True)
+    return CpkDecorationResult(pd.DataFrame(), frame, path, sheet)
+
+
 def build_oos_history_service(resource_dir: Path | None = None):
     """Assemble the shared OOS use case at the composition boundary."""
     resolved_resources = resource_dir or ConfigLoader.get_domain_resource_dir("inline_domain")

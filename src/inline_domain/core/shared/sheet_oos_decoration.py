@@ -93,7 +93,7 @@ def _parse_flag(value: object) -> bool:
     if isinstance(value, bool):
         return value
     text = str(value).strip().lower()
-    if text in {"false", "0", "no", "n", "否", "不修饰", "不截断"}:
+    if text in {"false", "0", "0.0", "no", "n", "否", "不修饰", "不截断"}:
         return False
     return True
 
@@ -278,7 +278,8 @@ def _exclude_delete_flagged_measurements(
 ) -> pd.DataFrame:
     keys = _resolve_key_columns(key_columns)
     required_columns = set(keys)
-    if not required_columns.issubset(raw_measurements_df.columns):
+    if (not required_columns.issubset(raw_measurements_df.columns) or decoration_df is None
+            or decoration_df.empty or not {*keys, "flag"}.issubset(decoration_df.columns)):
         return raw_measurements_df.copy()
 
     delete_keys = decoration_df.loc[

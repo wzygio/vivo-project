@@ -64,17 +64,32 @@ def build_qtime_alert_results(*, workbook_reader=None) -> "QTimeAlertResults":
     from src.indicator_domain.infrastructure.qtime.alert_workbook import QTimeAlertWorkbook
 
     kwargs = {"workbook_reader": workbook_reader} if workbook_reader is not None else {}
-    return QTimeAlertResults(
-        QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts"), **kwargs),
-        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
-        policy_signature=lambda: hashlib.sha256(repr((
+    decision_path = ConfigLoader.get_domain_resource_path(
+        "indicator_domain", "qtime_oos_decoration", "qtime_oos_decoration.xlsx",
+    )
+    decisions = QTimeDecorationRepository(decision_path, **kwargs)
+
+    def policy_signature(*extra) -> str:
+        settings = (
             "qtime-published-v1", OUTPUT_POLICY_VERSION,
             ConfigLoader.get_indicator_data_exclusion(),
             ConfigLoader.get_data_forward_policy().signature,
             ConfigLoader.get_report_cutoff_policy().signature,
             ConfigLoader.load_domain_config("indicator_domain", "qtime").get("qtime", {}),
-            _qtime_decision_signature(),
-        )).encode()).hexdigest(),
+            *extra,
+        )
+        return hashlib.sha256(repr(settings).encode()).hexdigest()
+
+    return QTimeAlertResults(
+        QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts"), **kwargs),
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
+        policy_signature=policy_signature,
+        legacy_policy_matches=lambda digest: any(
+            digest == policy_signature(version) for version in
+            (None, _qtime_decision_signature(), decisions.legacy_file_version())
+        ),
+        decisions_provider=decisions.load_decisions,
+        decision_signature=lambda: (str(decision_path), _qtime_decision_signature()),
     )
 
 

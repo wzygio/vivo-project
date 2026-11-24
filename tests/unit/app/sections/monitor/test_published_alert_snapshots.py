@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from io import BytesIO
 
 import pandas as pd
 import pytest
@@ -13,6 +14,12 @@ from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
 
 @pytest.fixture
 def snapshots(tmp_path, monkeypatch):
+    from src.shared_kernel.utils import excel_tools
+
+    def forbid_office(path):
+        pytest.fail(f'Fixture workbook unexpectedly requested Office: {path.name}')
+
+    monkeypatch.setattr(excel_tools, '_read_all_sheets_via_com', forbid_office)
     paths = {key: tmp_path / f'{key}.xlsx'
              for key in ('ijp_alerts', 'parts_alerts', 'evaporation_alerts', 'lifetime_alerts')}
     original = ConfigLoader.get_domain_resource_path
@@ -48,7 +55,7 @@ def write_snapshots(paths, *, empty=False, updated=None):
         pd.DataFrame([dict(start_date=str(start), end_date=str(end), products='M678、M626', updated_at=now,
             alert_count=len(iqc), status='success')]).to_excel(writer, sheet_name='__meta__', index=False)
     lifetime = pd.DataFrame([] if empty else [{
-        '产品型号': 'M678', '批次号': 'L1', '测试画面': 'W', '样品编号': 1, '指标': '亮度衰减',
+        '产品型号': 'M678', '批次号': '00042', '测试画面': 'W', '样品编号': 1, '指标': '亮度衰减',
         '规格时间(H)': 660, '规格点数值': .92, '取值方式': '预测', '判定阈值': .95,
     }], columns=LIFETIME_ALERT_COLUMNS)
     with pd.ExcelWriter(paths['lifetime_alerts']) as writer:
@@ -73,6 +80,7 @@ def test_product_matching_global_parts_and_public_projection(snapshots):
     assert saved.read_published_alerts('iqc_evaporation_ng', 'M67', date.today())['alerts'].empty
     lifetime = saved.read_published_alerts('iqc_lifetime_oos', 'M678', date.today())
     assert lifetime['state'] == 'alert' and lifetime['alerts']['规格点数值'].tolist() == [.92]
+    assert lifetime['alerts']['批次号'].tolist() == ['00042']
     assert saved.read_published_alerts('iqc_lifetime_oos', 'M626', date.today())['state'] == 'ok'
 
 
@@ -146,9 +154,24 @@ def test_lifetime_inspection_warmup_persists_product_cells_and_invalidates_on_re
                 reference_date=day, products=products) == 0
     cells = store.read(day, 3600)['cells']
     assert cells[row, 'M678']['state'] == 'alert' and cells[row, 'M626']['state'] == 'ok'
-    write_snapshots(snapshots, empty=True)
-    current = load(reference_date=day, products=products)['cells'][row, 'M678']
-    assert current['state'] == 'ok' and current['cache_signature'] != cells[row, 'M678']['cache_signature']
+    path = snapshots['lifetime_alerts']
+    sheets = pd.read_excel(path, sheet_name=None, dtype=object)
+    current = sheets['寿命预警'].assign(本期状态='超规')
+    history = current.assign(产品型号='DISABLED', 本期状态='未判定', Flag=False)
+    signature = cells[row, 'M678']['cache_signature']
+    for suppressed, state in [(True, 'ok'), (False, 'alert')]:
+        ledger = pd.concat([current.assign(Flag=suppressed), history], ignore_index=True)
+        with pd.ExcelWriter(path) as writer:
+            ledger.to_excel(writer, sheet_name='寿命预警', index=False)
+            sheets['__meta__'].assign(ledger_count=2, alert_count=int(not suppressed)).to_excel(
+                writer, sheet_name='__meta__', index=False)
+        cell = load(reference_date=day, products=products)['cells'][row, 'M678']
+        detail = saved.load_published_detail(row, 'M678', day)
+        assert cell['state'] == detail['state'] == state
+        assert cell['cache_signature'] != signature
+        assert detail['alerts']['产品型号'].tolist() == ([] if suppressed else ['M678'])
+        assert tuple(detail['alerts']) == LIFETIME_ALERT_COLUMNS
+        signature = cell['cache_signature']
 
 
 @pytest.mark.parametrize('exception', [PermissionError, OSError, ValueError])
@@ -171,9 +194,9 @@ def test_file_version_invalidates_parse_cache_and_signature(snapshots, monkeypat
     write_snapshots(snapshots)
     calls = []
     original = saved.read_workbook_sheets
-    def read(path):
+    def read(path, **options):
         calls.append(path)
-        return original(path)
+        return original(path, **options)
     monkeypatch.setattr(saved, 'read_workbook_sheets', read)
     before = saved.published_alert_signature('ijp_aa_oos', 'M678', date.today())
     for key in saved.PUBLISHED_ALERT_ROWS:
@@ -223,6 +246,13 @@ def test_matrix_filters_and_real_detail_clicks_are_file_only(snapshots, monkeypa
     from streamlit.testing.v1 import AppTest
     from app.sections.inline_domain.monitor import alert_matrix_cache as cache, alert_matrix_service as matrix, alert_matrix_detail as detail
     write_snapshots(snapshots)
+    # Keep the fixture XLSX bytes readable across UI reruns on managed Windows
+    # hosts that asynchronously wrap temporary workbooks with Office protection.
+    payloads = {path: path.read_bytes() for path in snapshots.values()}
+    def read_fixture(path, *, preserve_text=False):
+        return pd.read_excel(BytesIO(payloads[path]), sheet_name=None,
+                             dtype=object if preserve_text else None, keep_default_na=not preserve_text)
+    monkeypatch.setattr(saved, 'read_workbook_sheets', read_fixture)
     monkeypatch.setattr(matrix, 'MATRIX_ROWS', tuple(matrix.MATRIX_ROW_MAP[key] for key in saved.PUBLISHED_ALERT_ROWS))
     def forbidden(*args, **kwargs):
         pytest.fail('snapshot detail tried to assemble report services')

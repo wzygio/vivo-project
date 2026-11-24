@@ -570,7 +570,9 @@ def test_same_week_recalculation_removes_resolved_alert(monkeypatch, tmp_path):
     assert source.calls == 2
     assert second.period_capability_df["cpk"].iloc[0] >= 1.33
     assert latest_capability_alerts(reader.read_product("M626"), date(2026, 6, 8)).empty
-    assert pd.read_excel(path, sheet_name="M626").empty
+    retained = pd.read_excel(path, sheet_name="M626")
+    assert retained["cpk_corrected"].iloc[0] >= 1.33
+    assert retained["flag"].tolist() == [False]
 
 
 def _decoration_payload_with_decisions() -> dict:

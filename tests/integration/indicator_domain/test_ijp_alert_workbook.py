@@ -23,7 +23,7 @@ def test_region_replacement_empty_success_and_failure_preservation(tmp_path, mon
     original = path.read_bytes()
     def fail(*args):
         raise PermissionError('locked')
-    monkeypatch.setattr('src.indicator_domain.infrastructure.ijp.alert_workbook.os.replace', fail)
+    monkeypatch.setattr('src.shared_kernel.infrastructure.alert_workbook.os.replace', fail)
     with pytest.raises(PermissionError):
         store.save('孔区', rows('孔区'), date(2026, 10, 26))
     assert path.read_bytes() == original

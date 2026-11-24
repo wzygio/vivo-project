@@ -33,7 +33,9 @@ class IjpHoleReportService:
         frame = self.get_report(IjpQuery(start_time=start, end_time=end))['day']
         alerts = build_weekly_alerts(frame, '孔区', end.date())
         if self._alert_store is not None:
-            self._alert_store.save('孔区', alerts, end.date())
+            published = self._alert_store.save('孔区', alerts, end.date())
+            if published is not None:
+                alerts = published
         return {'alerts': alerts, 'ratios': frame}
 
     def get_reporting_window(self) -> tuple[datetime, datetime]:

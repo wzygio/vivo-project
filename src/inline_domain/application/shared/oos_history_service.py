@@ -109,6 +109,8 @@ class OosHistoryService:
     @classmethod
     def project_detail(cls, scope: str, frame: pd.DataFrame) -> pd.DataFrame:
         """Project already-decided detail without merging flags or computing facts."""
+        if "flag" in frame:
+            frame = frame.loc[~frame["flag"].astype(str).str.strip().str.casefold().eq("delete")]
         return cls._project(scope, frame)
 
     def read_product(self, scope: str, prod_code: str) -> OosProductRead:

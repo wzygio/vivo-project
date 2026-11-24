@@ -74,7 +74,7 @@ def test_manual_preservation_has_priority_over_band(flag):
     source = points([3., 11.])
     decisions = source[OOS_KEY_COLUMNS].drop_duplicates().assign(flag=flag)
     result = apply_spc_point_decoration(source, specs(), decisions, point_policy=POLICY)
-    assert result.param_value.tolist() == [3., 11.]
+    assert result.param_value.tolist() == ([] if flag == "Delete" else [3., 11.])
 
 
 @pytest.mark.parametrize("lower,upper", [(None, None), (10., 2.), (2., 2.), (2., float("inf"))])

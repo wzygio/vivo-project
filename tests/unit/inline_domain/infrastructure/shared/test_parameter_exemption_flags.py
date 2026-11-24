@@ -32,9 +32,9 @@ def test_persisted_exempt_flags_preserve_delete_and_manual_decisions(
         parameter_column=parameter_column, exempt_param_name_contains=[" pPa ", "A.B"],
     )
     actual = pd.read_excel(path, sheet_name="M")
-    assert actual["flag"].tolist() == [False, "Delete", False, False, True]
-    pd.testing.assert_frame_equal(outcome.decisions_df, decisions[[*keys,"flag"]], check_dtype=False)
-    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="M__flags"), stored_decisions)
+    assert actual["flag"].tolist() == [True, "Delete", False, False, True]
+    assert outcome.decisions_df["flag"].tolist() == actual["flag"].tolist()
+    pd.testing.assert_frame_equal(pd.read_excel(path, sheet_name="M__flags")[stored_decisions.columns].iloc[:3], stored_decisions)
     assert "flag" not in detail
 
 
@@ -48,7 +48,7 @@ def test_exemption_change_rewrites_detail_inside_ttl_and_can_be_disabled(tmp_pat
     assert first.decoration_df["flag"].tolist() == [True]
     released = persist_sheet_oos_decoration_outcome(tmp_path, detail, now=now+timedelta(minutes=1), exempt_param_name_contains=["PPA"], **kwargs)
     assert released.refresh_decision.should_write
-    assert pd.read_excel(tmp_path/"custom.xlsx", sheet_name="M")["flag"].tolist() == [False]
+    assert pd.read_excel(tmp_path/"custom.xlsx", sheet_name="M")["flag"].tolist() == [True]
     same = persist_sheet_oos_decoration_outcome(tmp_path, detail, now=now+timedelta(minutes=2), exempt_param_name_contains=["ppa"], **kwargs)
     assert not same.refresh_decision.should_write
     disabled = persist_sheet_oos_decoration_outcome(tmp_path, detail, now=now+timedelta(minutes=3), exempt_param_name_contains=[], **kwargs)

@@ -30,7 +30,7 @@ def test_latest_snapshot_empty_clear_and_atomic_failure(tmp_path, monkeypatch):
     previous = path.read_bytes()
     def fail(*args):
         raise PermissionError('locked')
-    monkeypatch.setattr('src.iqc_domain.infrastructure.alert_workbook.os.replace', fail)
+    monkeypatch.setattr('src.shared_kernel.infrastructure.alert_workbook.os.replace', fail)
     with pytest.raises(PermissionError):
         store.save(alerts, **scope)
     assert path.read_bytes() == previous

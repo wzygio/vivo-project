@@ -26,7 +26,7 @@ from src.indicator_domain.application.qtime.ports import (
 )
 from src.indicator_domain.core.qtime.alerts import build_qtime_alerts
 from src.indicator_domain.core.qtime.decoration import (
-    apply_qtime_decoration, apply_qtime_spec_overrides, constrain_qtime_display,
+    apply_qtime_decoration, apply_qtime_spec_overrides, build_qtime_oos_detail, constrain_qtime_display,
 )
 from src.shared_kernel.data_health import (
     DataHealth, attach_data_health, get_data_health, make_data_health,
@@ -67,7 +67,11 @@ class QTimeReportService:
     def publish_alert_results(self, result: QTimeMonitoringResult, shop: Shop, as_of: date) -> None:
         """Publish only the full-shop projection produced by the shared cached use case."""
         if self._alert_results is not None:
-            self._alert_results.publish(shop, result.details, result.alerts, result.data_health, as_of)
+            self._alert_results.publish(shop, result.details, result.alerts, result.data_health, as_of,
+                                        candidates=result.decoration)
+
+    def load_decisions(self) -> pd.DataFrame:
+        return self._decoration_port.load_decisions() if self._decoration_port is not None else pd.DataFrame()
 
     @property
     def decoration_path(self) -> Path | None:
@@ -83,7 +87,7 @@ class QTimeReportService:
 
     def cache_signature(self, shop: Shop) -> tuple[object, ...]:
         signature = getattr(self._data_port, "cache_signature", lambda _shop: ())
-        return (signature(shop), self._constrain_display, tuple(sorted(self._spec_overrides.items())))
+        return (signature(shop), str(self.decoration_path), self._constrain_display, tuple(sorted(self._spec_overrides.items())))
 
     def get_report(self, query: QTimeQuery) -> pd.DataFrame:
         return self._data_port.fetch_details(query)
@@ -137,17 +141,17 @@ class QTimeReportService:
             products=products,
             as_of=as_of,
         )
-        decisions = (
-            self._decoration_port.load_decisions()
-            if self._decoration_port is not None
-            else pd.DataFrame()
-        )
         prepared = apply_qtime_spec_overrides(raw_details, self._spec_overrides)
-        decorated = apply_qtime_decoration(prepared, decisions)
         health = get_data_health(raw_details)
+        initialize = getattr(self._decoration_port, 'initialize_decisions', None)
+        if initialize is not None and health["status"] == "fresh":
+            decisions = initialize(build_qtime_oos_detail(prepared))
+        else:
+            decisions = self.load_decisions()
+        decorated = apply_qtime_decoration(prepared, decisions)
         return QTimeMonitoringResult(
             details=attach_data_health(
-                constrain_qtime_display(decorated.details)
+                constrain_qtime_display(decorated.details, decorated.decoration)
                 if self._constrain_display else decorated.details, health,
             ),
             alerts=attach_data_health(build_qtime_alerts(decorated.decoration), health),
@@ -167,7 +171,10 @@ class QTimeReportService:
         outcome = parse_qtime_decision_upload(file_bytes)
         if outcome.status == "error" or outcome.decisions is None:
             return outcome
-        self._decoration_port.save_decisions(outcome.decisions)
+        try:
+            self._decoration_port.save_decisions(outcome.decisions, revision=outcome.revision)
+        except ValueError as exc:
+            return QTimeDecisionUploadResult("error", str(exc))
         return QTimeDecisionUploadResult(
             "success",
             "Q-Time 修饰决策已更新。",

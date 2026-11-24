@@ -58,6 +58,8 @@ def render_saved_ctq_alerts(
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Display committed Sheet alerts even when current measurement loading fails."""
+    from app.sections.inline_domain.shared.alert_decision_admin import render_inline_alert_decisions
+    render_inline_alert_decisions("ctq", product)
     from app.sections.shared.alert_results import read_alert_result
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
@@ -146,8 +148,6 @@ def render_ctq_report_interaction(
     step_desc_map: dict[str, str] | None = None, is_admin: bool = False,
 ) -> None:
     """Keep interactive filtering outside the full-product preparation path."""
-    if is_admin:
-        render_ctq_decoration_admin(getattr(report, "sheet_oos_decoration_result", None))
     factory, params, steps, queried = render_ctq_filters(
         indicator_df=report.indicators_df, step_desc_map=step_desc_map,
     )

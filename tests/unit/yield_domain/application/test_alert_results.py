@@ -133,6 +133,97 @@ def test_write_failure_keeps_previous_bytes(tmp_path, monkeypatch):
     assert path.read_bytes() == before
 
 
+@pytest.mark.parametrize("kind, row_key", [("lot", "yield_lot_oos"), ("trend", "yield_trend_fluctuation")])
+def test_download_partial_flag_edits_republication_and_cached_public_projection(tmp_path, monkeypatch, kind, row_key):
+    from io import BytesIO
+    from app.sections.shared.alert_results import read_alert_result
+    from src.yield_domain import composition
+
+    service = results(tmp_path)
+    monkeypatch.setattr(composition, "build_yield_alert_results", lambda **_: service)
+    key = "超规 Lot ID" if kind == "lot" else "defect_group"
+    base = LOT if kind == "lot" else dict(
+        level="group", defect_desc=None, time_period="2026-W42", curr_rate=.02,
+        prev_rate=.001, rules=["rise"], period_scope="weekly", is_current=True,
+    )
+    records = [{**base, key: identity} for identity in ("001", "002")]
+    publish(service, kind=kind, records=records)
+
+    def visible():
+        return read_alert_result(row_key, "P1", DAY)["records"][key].tolist()
+
+    def download():
+        return pd.read_excel(BytesIO(service.store.decision_workbook("P1", kind)),
+                             sheet_name="P1__flags", dtype=object, keep_default_na=False)
+
+    def edit(value):
+        change = download().iloc[:1].assign(flag=value)
+        stream = BytesIO()
+        with pd.ExcelWriter(stream) as writer:
+            change.to_excel(writer, sheet_name="P1__flags", index=False)
+        service.store.update_decisions("P1", kind, stream.getvalue())
+
+    assert visible() == ([] if kind == "lot" else ["001", "002"])
+    from openpyxl import load_workbook
+    stale = load_workbook(BytesIO(service.store.decision_workbook("P1", kind)))
+    stale["P1__flags"].cell(row=3, column=stale["P1__flags"].max_column).value = "Delete"
+    stale_upload = BytesIO()
+    stale.save(stale_upload)
+    edit(False)
+    assert visible() == (["001"] if kind == "lot" else ["001", "002"])
+    edit("Delete")
+    with pytest.raises(ValueError, match="重新下载"):
+        service.store.update_decisions("P1", kind, stale_upload.getvalue())
+    assert visible() == ([] if kind == "lot" else ["002"])
+    legacy = BytesIO()
+    with pd.ExcelWriter(legacy) as writer:
+        download().assign(flag=False).to_excel(writer, sheet_name="P1__flags", index=False)
+    with pytest.raises(ValueError, match="旧版"):
+        service.store.update_decisions("P1", kind, legacy.getvalue())
+    publish(service, kind=kind, records=[])
+    assert visible() == []
+    publish(service, kind=kind, records=records)
+    assert download().set_index(key)["flag"].to_dict() == {"001": "Delete", "002": kind == "lot"}
+    assert visible() == ([] if kind == "lot" else ["002"])
+    edit(True)
+    assert visible() == ([] if kind == "lot" else ["002"])
+
+
+def test_yield_alert_centers_render_and_apply_admin_upload(tmp_path, monkeypatch):
+    from io import BytesIO
+    from streamlit.testing.v1 import AppTest
+    from app.sections.yield_domain import published_alert_center
+    from src.yield_domain import composition
+
+    service = results(tmp_path)
+    publish(service)
+    publish(service, kind="trend", records=[])
+    monkeypatch.setattr(published_alert_center, "build_yield_alert_results", lambda: service)
+    monkeypatch.setattr(composition, "build_yield_alert_results", lambda: service)
+    app = AppTest.from_string(
+        "from datetime import date\n"
+        "from app.sections.yield_domain.published_alert_center import render_saved_yield_alerts\n"
+        "render_saved_yield_alerts('P1', date(2026, 10, 20))"
+    ).run()
+    assert not app.file_uploader
+    for spelling in ("true", "ture"):
+        app.query_params["admin"] = spelling
+        app.run()
+        assert [widget.key for widget in app.file_uploader] == ["yield_P1_lot_upload", "yield_P1_trend_upload"]
+    flags = pd.read_excel(BytesIO(service.store.decision_workbook("P1", "lot")), sheet_name="P1__flags")
+    data = BytesIO()
+    with pd.ExcelWriter(data) as writer:
+        flags.assign(flag=False).to_excel(writer, sheet_name="P1__flags", index=False)
+    app.file_uploader(key="yield_P1_lot_upload").upload("decisions.xlsx", data.getvalue()).run()
+    app.button(key="yield_P1_lot_save").click().run()
+    assert not app.exception
+    assert app.dataframe[0].value["超规 Lot ID"].tolist() == ["L1"]
+    del app.query_params["admin"]
+    app.run()
+    assert not app.file_uploader
+    assert "flag" not in app.dataframe[0].value
+
+
 def test_expiry_changes_signature_without_rewriting_workbook(tmp_path):
     clock = {"now": NOW}
     service = results(tmp_path, clock=lambda: clock["now"])

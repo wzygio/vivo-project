@@ -68,6 +68,8 @@ class ExcelAlarmReader:
         if "Flag" in frame.columns and "flag" not in frame.columns:
             frame = frame.rename(columns={"Flag": "flag"})
         self._validate(scope, prod_code, frame)
+        if "flag" in frame:
+            frame = frame.loc[frame["flag"].ne("Delete")].copy()
         if scope == "aoi_tt" and "tt_name" in frame:
             # Old generated sheets may contain non-TT facts with null spec types.
             # Apply current ownership on a copy without rewriting decisions.
@@ -102,11 +104,11 @@ class ExcelAlarmReader:
         if not frame["prod_code"].astype(str).str.strip().eq(product).all():
             raise ExcelAlarmReadError(f"{scope}/{product}: product sheet contains another product")
         flags = frame["flag"].map(lambda value: str(value).strip().lower())
-        allowed = {"true", "false", "0", "1", "0.0", "1.0", "yes", "no", "y", "n", "delete", "", "nan", "none", "<na>"}
+        allowed = {"true", "false", "0", "1", "0.0", "1.0", "yes", "no", "y", "n", "是", "否", "修饰", "不修饰", "截断", "不截断", "delete", "", "nan", "none", "<na>"}
         if not flags.isin(allowed).all():
             raise ExcelAlarmReadError(f"{scope}/{product}: invalid flag values")
-        # Normalize Excel's numeric booleans; no decision-ledger merge is allowed.
-        frame["flag"] = ~flags.isin({"false", "0", "0.0", "no", "n"})
+        frame["flag"] = (~flags.isin({"false", "0", "0.0", "no", "n", "否", "不修饰", "不截断"})).astype(object)
+        frame.loc[flags.eq("delete"), "flag"] = "Delete"
         event_column = "start_time" if scope == "aoi_tt" else "sheet_start_time"
         if pd.to_datetime(frame[event_column], errors="coerce").isna().any():
             raise ExcelAlarmReadError(f"{scope}/{product}: invalid event time")

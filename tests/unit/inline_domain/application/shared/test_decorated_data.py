@@ -124,13 +124,12 @@ def test_prepare_decorated_data_preserves_spc_legacy_delete_values(tmp_path: Pat
         product_dir=product_dir,
     )
 
-    # SPC normalizes legacy Delete to False; CTQ retains tri-state actions.
-    assert result.raw_measurements_df["param_value"].tolist() == [8.0, 0.0]
-    assert result.sheet_features_df["sheet_max"].tolist() == [8.0]
-    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == [False]
+    assert result.raw_measurements_df.empty
+    assert result.sheet_features_df.empty
+    assert result.sheet_oos_decoration_result.decoration_df["flag"].tolist() == ["Delete"]
     assert result.sheet_oos_decoration_result.decoration_sheet == "Z571"
     persisted = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="Z571")
-    assert persisted["flag"].tolist() == [False]
+    assert persisted["flag"].tolist() == ["Delete"]
     decisions = pd.read_excel(product_dir / OOS_DECORATION_FILE_NAME, sheet_name="Z571__flags")
     assert decisions["flag"].tolist() == ["Delete"]
 

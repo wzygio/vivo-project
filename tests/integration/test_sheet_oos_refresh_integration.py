@@ -144,32 +144,19 @@ def _flags_by_sheet_id(df: pd.DataFrame) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def test_first_write_creates_empty_flags_and_idempotent_second_run(tmp_path: Path) -> None:
-    """旧产品 sheet 的 flag 永远不再生效：首写生成空 __flags，全部键默认 True。"""
+def test_first_write_migrates_previous_flags_and_idempotent_second_run(tmp_path: Path) -> None:
     product_dir = tmp_path / "resources"
     workbook_path = _write_legacy_workbook(product_dir)
-
     result = _run_prepare(product_dir, revision="R1", now=NOW)
-
     assert result.refresh_reason == "missing"
     assert result.decision_sheet == "Z571__flags"
-
-    # __flags 决策台账：空台账（不继承旧产品 sheet 中的 False/Delete/True）
     decisions = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
     assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
-    assert decisions.empty
-
-    # 产品 sheet 重建为当前明细（历史键 S9 不进入），全部 flag 默认 True
+    assert _flags_by_sheet_id(decisions) == {"S1": False, "S2": "Delete", "S9": True}
     product = _read_product_sheet(workbook_path)
-    assert product["sheet_id"].tolist() == ["S1", "S2"]
-    assert _flags_by_sheet_id(product) == {"S1": True, "S2": True}
-    assert result.decoration_df["sheet_id"].tolist() == ["S1", "S2"]
-
-    # 全部默认 True：S1/S2 均自动修饰，截断到 spec 内（不再是原始超限值）
-    decorated = result.raw_measurements_df
-    assert decorated["sheet_id"].tolist() == ["S1", "S2"]
-    assert decorated["param_value"].between(-6.0, 6.0).all()
-    assert not decorated["param_value"].isin([7.5, -7.5]).any()
+    assert _flags_by_sheet_id(product) == {"S1": False, "S2": "Delete"}
+    assert result.raw_measurements_df["sheet_id"].tolist() == ["S1"]
+    assert result.raw_measurements_df["param_value"].tolist() == [7.5]
 
     # __refresh_meta__ 写入且字段齐全
     meta = load_refresh_meta(product_dir, OOS_DECORATION_FILE_NAME, SCOPE, SHEET)
@@ -183,13 +170,13 @@ def test_first_write_creates_empty_flags_and_idempotent_second_run(tmp_path: Pat
     meta_sheet = read_workbook_sheet(workbook_path, REFRESH_META_SHEET_NAME)
     assert set(REFRESH_META_COLUMNS).issubset(meta_sheet.columns)
 
-    # 二次运行幂等：TTL 内不重写，决策台账仍为空
+    # 二次运行幂等：TTL 内不重写，保留所有决定
     mtime_before = workbook_path.stat().st_mtime_ns
     second = _run_prepare(product_dir, revision="R1", now=NOW + timedelta(hours=1))
     assert second.refresh_reason == "unchanged"
     assert workbook_path.stat().st_mtime_ns == mtime_before
     decisions_after = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    assert decisions_after.empty
+    pd.testing.assert_frame_equal(decisions_after, decisions)
 
 
 # ---------------------------------------------------------------------------
@@ -297,8 +284,7 @@ def test_revision_change_rebuilds_immediately(tmp_path: Path, monkeypatch) -> No
 
     # 用户决策在重建后仍保留
     product = _read_product_sheet(product_dir / OOS_DECORATION_FILE_NAME)
-    # SPC legacy Delete is read as False; the user-owned decision sheet is preserved.
-    assert _flags_by_sheet_id(product) == {"S1": False, "S2": False}
+    assert _flags_by_sheet_id(product) == {"S1": False, "S2": "Delete"}
     assert _flags_by_sheet_id(pd.read_excel(workbook_path, sheet_name=f"{SHEET}__flags")) == {
         "S1": False, "S2": "Delete",
     }

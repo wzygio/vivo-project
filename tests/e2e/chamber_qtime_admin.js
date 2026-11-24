@@ -1,9 +1,9 @@
 async page => {
   const output = 'D:/wzy/Python/vivo-project/output/test-results/qtime-chamber';
   const openAdmin = async () => {
-    const container = page.locator('[data-testid="stExpander"]').filter({hasText: '开发者后台：Q-Time 超规数据修饰'});
-    if (!await container.locator('details').getAttribute('open').then(value => value !== null)) {
-      await page.getByText('开发者后台：Q-Time 超规数据修饰', {exact: true}).click();
+    for (const title of ['Q-Time 超规预警中心', '开发者后台：Q-Time 超规数据修饰']) {
+      const summary = page.locator('summary').filter({has: page.getByText(title, {exact: true})});
+      if (!await summary.locator('..').evaluate(details => details.open)) await summary.click();
     }
   };
   const counts = async () => {
@@ -35,11 +35,11 @@ async page => {
     input.files = transfer.files;
     input.dispatchEvent(new Event('change', {bubbles: true}));
   }, upload.base64);
-  await page.getByRole('button', {name: '确认覆盖并刷新', exact: true, includeHidden: true}).waitFor({state: 'attached'});
+  await page.getByRole('button', {name: '保存决策并刷新', exact: true, includeHidden: true}).waitFor({state: 'attached'});
   await openAdmin();
-  await page.getByRole('button', {name: '确认覆盖并刷新', exact: true}).waitFor();
+  await page.getByRole('button', {name: '保存决策并刷新', exact: true}).waitFor();
   const before = await counts();
-  await page.getByRole('button', {name: '确认覆盖并刷新', exact: true}).click();
+  await page.getByRole('button', {name: '保存决策并刷新', exact: true}).click();
   await page.getByText('station-decision-revision: 1', {exact: true}).first().waitFor();
   await page.getByText('fixture-result-flags: [True, True]', {exact: true}).first().waitFor();
   // This result is emitted after the rebuilt admin download controls.

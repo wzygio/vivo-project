@@ -129,7 +129,7 @@ def test_qtime_dashboard_labels_station_paths_with_original_codes() -> None:
     ]
 
 
-@pytest.mark.parametrize("admin", [None, "false", "true"])
+@pytest.mark.parametrize("admin", [None, "false", "true", "ture"])
 def test_qtime_dashboard_renders_the_alert_center_and_decoration_admin(admin) -> None:
     fixture_path = Path(__file__).parents[6] / "tests" / "e2e" / "fixtures" / "qtime_app.py"
     app = AppTest.from_file(str(fixture_path)).run()
@@ -139,7 +139,7 @@ def test_qtime_dashboard_renders_the_alert_center_and_decoration_admin(admin) ->
 
     expander_labels = [expander.label for expander in app.expander]
     assert "Q-Time 超规预警中心" in expander_labels
-    assert ("开发者后台：Q-Time 超规数据修饰" in expander_labels) is (admin == "true")
+    assert ("开发者后台：Q-Time 超规数据修饰" in expander_labels) is (admin in ("true", "ture"))
     assert any("2 条已确认超规" in message.value for message in app.error)
 
 
@@ -155,6 +155,27 @@ def test_qtime_dashboard_supports_multiple_paths() -> None:
     assert not app.exception
     assert len(app.dataframe) == 1
     assert len(app.get("plotly_chart")) == 4
+
+
+def test_qtime_admin_upload_refreshes_the_submitted_report_without_another_query():
+    import pandas as pd
+    from src.indicator_domain.application.qtime.decoration_service import build_qtime_decoration_workbook
+
+    fixture = Path(__file__).parents[6] / "tests/e2e/fixtures/chamber_qtime_app.py"
+    app = AppTest.from_file(str(fixture))
+    app.query_params["admin"] = "ture"
+    app.run()
+    assert app.file_uploader(key="qtime_oos_decoration_upload")
+    app.button(key="qtime_search").click().run()
+    previous = app.session_state["qtime_report_result"]
+    assert len(previous.alerts) == 2
+    changes = previous.decisions.assign(flag=True)
+    payload = build_qtime_decoration_workbook(pd.DataFrame(), changes)
+    app.file_uploader(key="qtime_oos_decoration_upload").upload("decisions.xlsx", payload).run()
+    app.button(key="qtime_oos_decoration_upload_btn").click().run()
+    assert not app.exception
+    assert app.session_state["qtime_report_result"].alerts.empty
+    assert any("未发现超规" in message.value for message in app.success)
 
 
 def test_station_expander_wraps_four_products_into_two_rows():

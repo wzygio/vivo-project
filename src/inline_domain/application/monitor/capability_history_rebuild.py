@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.inline_domain.core.monitor.cpk_summary import capability_summary_columns
 from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS
+from src.inline_domain.core.monitor.cpk_latest import released_capability_mask
 
 
 def closed_week_labels(as_of: object, *, count: int | None = None,
@@ -44,8 +45,7 @@ def compute_weekly_records(source, latest_reader, *, products: Iterable[str],
             if detail is not None and not detail.empty:
                 selected = detail.loc[detail.prod_code.eq(product) & detail.period_type.eq("week")
                                       & detail.period_label.eq(item.period_label)].drop_duplicates(CPK_KEY_COLUMNS)
-                flags = selected.flag.astype("string").str.strip().str.lower()
-                warning = int(flags.isin(["false", "0", "0.0"]).sum())
+                warning = int(released_capability_mask(selected, metric).sum())
             if warning > total:
                 raise ValueError(f"Saved warning projects exceed computed total for {product}/{item.period_label}/{metric}")
             passed = total - warning

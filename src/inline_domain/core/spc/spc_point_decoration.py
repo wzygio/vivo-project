@@ -10,13 +10,21 @@ from src.inline_domain.core.shared.decoration_window import decoration_window_ma
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     SHEET_POINT_DECORATION_SIGNATURE,
     clip_point_values_to_limits,
-    normalize_boolean_decisions as normalize_spc_decisions,
+    _exclude_delete_flagged_measurements,
+    _normalize_flag_action,
     prepare_point_decoration,
     specification_span,
 )
 
 SpcPointDecorationPolicy = tuple[float, str, str]
-SPC_POINT_DECORATION_SIGNATURE = f"{SHEET_POINT_DECORATION_SIGNATURE}:spc-point-v2-single-sided-span"
+SPC_POINT_DECORATION_SIGNATURE = f"{SHEET_POINT_DECORATION_SIGNATURE}:spc-point-v3-delete"
+
+
+def normalize_spc_decisions(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    if "flag" in result:
+        result["flag"] = result["flag"].map(_normalize_flag_action)
+    return result
 
 
 def _apply_spc_special_decoration(
@@ -45,10 +53,9 @@ def apply_spc_point_decoration(
 ) -> pd.DataFrame:
     """Apply traditional OOS clipping before the optional SPC central-band pass.
 
-    Both passes preserve False/legacy Delete values, rows, times and original
-    specification columns. The special pass only acts in its inclusive date
-    window, and hashes the first pass's output values for its margins.
+    Delete suppresses public point records. False preserves their original values.
     """
+    measurements = _exclude_delete_flagged_measurements(measurements, decisions)
     if measurements.empty or specs.empty:
         return measurements.copy()
     prepared = prepare_point_decoration(measurements, specs, decisions)

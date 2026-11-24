@@ -24,9 +24,9 @@ class Ledger:
         rows = [
             {"prod_code": product, "factory": "ARRAY", "step_id": "1", "param_name": name,
              "period_type": "week", "period_label": "2026-W46", "flag": flag,
-             "cpk_corrected": 999, "period_start": "2026-11-15", "period_end": "2026-11-15",
-             "status": "已修饰或达标"}
-            for name, flag in [("released", False), ("released", "false"), ("hidden", True)]
+             "cpk_corrected": 1.6 if name == "pass" else 0.9, "period_start": "2026-11-15", "period_end": "2026-11-15",
+             "status": "预警" if name == "released" else "已修饰或达标"}
+            for name, flag in [("released", False), ("released", "false"), ("hidden", True), ("pass", False)]
         ]
         return pd.DataFrame(rows)
 
@@ -182,3 +182,35 @@ def test_product_trends_use_same_query_records_without_reloading_sources(tmp_pat
                for frame in view.product_summary_dfs.values())
     selected = service.build_dashboard(products=["M678"], factories=[], end_date="2026-11-17")
     assert list(selected.product_summary_dfs) == ["M678"]
+
+
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
+def test_deleted_weekly_project_is_hidden_from_details_and_period_denominators(tmp_path, metric):
+    class Decisions(Ledger):
+        flag = "Delete"
+        def read_product(self, product):
+            frame = super().read_product(product)
+            frame[f"{metric}_corrected"] = frame["cpk_corrected"]
+            frame.loc[frame["param_name"].eq("hidden"), "flag"] = self.flag
+            # A retained key without a computed value was already absent from the source count.
+            missing = frame.loc[frame["param_name"].eq("hidden")].assign(param_name="missing",
+                flag="Delete", **{f"{metric}_corrected": float("nan")})
+            return pd.concat([frame, missing], ignore_index=True)
+
+    store = CapabilitySummaryStore(tmp_path / "history.xlsx", metric=metric)
+    seed(store, metric=metric)
+    ledger = Decisions()
+    service = CpkWorkbookMonitorService(store, latest_reader=ledger, metric=metric, weekly_source=WeeklySource())
+    def dashboard():
+        return service.build_dashboard(products=["M626"], factories=["ARRAY"], end_date="2026-11-17")
+
+    public = dashboard()
+    assert "hidden" not in public.detail_df.param_name.tolist()
+    assert "missing" not in public.detail_df.param_name.tolist()
+    assert public.summary_df.W46.tolist() == [9, 8, 1, "88.89%"]
+    assert public.summary_df.M11.tolist()[0] == 29
+    stored = store.read()
+    assert stored.loc[stored["时间标签"].eq("2026-W46"), f"{metric.upper()}总项目数"].item() == 10
+    pd.testing.assert_frame_equal(dashboard().summary_df, public.summary_df)
+    ledger.flag = True
+    assert dashboard().summary_df.W46.tolist() == [10, 9, 1, "90.00%"]

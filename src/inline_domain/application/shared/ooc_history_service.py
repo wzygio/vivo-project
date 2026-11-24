@@ -63,7 +63,8 @@ class OocHistoryService(OosHistoryService):
             facts, decisions, contract.key_columns
         )
         decision_columns = [*contract.key_columns, "flag"]
-        editable_decisions = detail.reindex(columns=decision_columns).copy()
+        editable_decisions = pd.concat([decisions, detail.reindex(columns=decision_columns)],
+            ignore_index=True).drop_duplicates(list(contract.key_columns), keep="first")
         return OocDecisionAdminView(
             detail_df=detail,
             decision_df=editable_decisions,

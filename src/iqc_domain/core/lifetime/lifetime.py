@@ -1,6 +1,7 @@
 """Project source measurements to anonymous, numerically ordered public facts."""
 
 from decimal import Decimal
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -47,6 +48,7 @@ def predict_lifetime_value(
 
 def project_report(
     source: pd.DataFrame, *, enabled_products: tuple[str, ...] | None = None,
+    sample_numberer: Callable[[pd.DataFrame], pd.Series] | None = None,
 ) -> pd.DataFrame:
     if not set(REPORT_FIELDS).issubset(source.columns):
         raise LifetimeDataInvalid('LIFETIME_COLUMNS_MISSING')
@@ -74,10 +76,15 @@ def project_report(
     if frame.duplicated(key).any():
         raise LifetimeDataInvalid('LIFETIME_MEASUREMENT_CONFLICT')
     frame = frame.sort_values(key, kind='stable')
-    # Rank complete source groups before any interactive filtering/pagination.
-    frame['panel_id'] = frame.groupby(SOURCE_GROUP, sort=False)['panel_id'].rank(
-        method='dense'
-    ).astype('int64')
+    ids = frame[[*SOURCE_GROUP, 'panel_id']].drop_duplicates().reset_index(drop=True)
+    if sample_numberer is None:
+        numbers = ids.groupby(SOURCE_GROUP, sort=False).cumcount() + 1
+    else:
+        numbers = sample_numberer(ids)
+    ids['sample_number'] = numbers.astype('int64')
+    frame = frame.merge(ids, on=[*SOURCE_GROUP, 'panel_id'], validate='many_to_one')
+    frame['panel_id'] = frame.pop('sample_number')
+    frame = frame.sort_values(key, kind='stable')
     public = frame.rename(columns=REPORT_FIELDS).reset_index(drop=True)
     public.attrs = {}
     return public

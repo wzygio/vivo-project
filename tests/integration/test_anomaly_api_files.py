@@ -280,6 +280,46 @@ def test_real_qtime_uses_from_station_and_its_dictionary_layer(published_files):
     _assert_unchanged(before)
 
 
+def test_same_http_client_observes_station_and_lot_decisions(published_files, tmp_path, monkeypatch):
+    from io import BytesIO
+    from src.indicator_domain import composition
+    from src.indicator_domain.core.qtime.decoration import DECISION_COLUMNS
+    from src.indicator_domain.infrastructure.qtime.decoration_repository import QTimeDecorationRepository
+
+    files = published_files
+    path = tmp_path / "station-decisions.xlsx"
+    repository = QTimeDecorationRepository(path)
+
+    def reader(*, workbook_reader=None):
+        result = files.qtime_service(workbook_reader=workbook_reader)
+        result.decisions_provider = QTimeDecorationRepository(path, workbook_reader=workbook_reader).load_decisions
+        return result
+
+    candidates = reader().store.read()["alerts_ARRAY"].assign(flag=True)
+    repository.initialize_decisions(candidates)
+    reader().publish("ARRAY", candidates, candidates.iloc[:0], {"status": "fresh", "refreshed_at": NOW.isoformat()},
+                     DAY, candidates=candidates)
+    monkeypatch.setattr(composition, "build_qtime_alert_results", reader)
+    yield_store = files.yield_service().store
+    flags = pd.read_excel(BytesIO(yield_store.decision_workbook("P1", "lot")), sheet_name="P1__flags")
+    with TestClient(files.app()) as client:
+        def records(domain):
+            response = client.get("/api/v1/sheet-anomalies", headers=HEADERS, params={
+                "product": "P1", "sub_domain": domain, "event_type": "OOS",
+            })
+            assert response.status_code == 200, response.text
+            return [row["对象编号"] for row in response.json()["data"]]
+
+        assert records("Q-Time") == records("Yield") == []
+        for flag, expected in [(False, ["LOT001"]), ("Delete", []), (True, [])]:
+            repository.save_decisions(candidates[DECISION_COLUMNS].assign(flag=flag))
+            edited = BytesIO()
+            with pd.ExcelWriter(edited) as writer:
+                flags.assign(flag=flag).to_excel(writer, sheet_name="P1__flags", index=False)
+            yield_store.update_decisions("P1", "lot", edited.getvalue())
+            assert records("Q-Time") == records("Yield") == expected
+
+
 def test_authorized_factory_outside_qtime_scope_is_valid_empty(published_files, monkeypatch):
     from src.indicator_domain import composition
     files = published_files
@@ -493,10 +533,12 @@ def test_lot_sources_honor_dates_outside_default_week_and_retain_coverage_checks
 
 
 @pytest.mark.parametrize("domain", list(DISPLAY_NAMES))
-def test_hidden_public_policy_does_not_read_missing_sources_or_disclose_them(published_files, domain):
+@pytest.mark.parametrize("decision", [True, "Delete"])
+def test_hidden_public_policy_does_not_read_missing_sources_or_disclose_them(published_files, domain, decision):
     files = published_files
     policy = files.policy.copy()
-    policy.loc[policy["监控参数"].eq(DISPLAY_NAMES[domain]), "P1"] = True
+    policy["P1"] = policy["P1"].astype(object)
+    policy.loc[policy["监控参数"].eq(DISPLAY_NAMES[domain]), "P1"] = decision
     _write(files.policy_path, {"全指标预警看板": policy})
     for (owner, key), path in files.paths.items():
         if owner != "shared_kernel" and path.exists():

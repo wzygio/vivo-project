@@ -65,3 +65,46 @@ def test_missing_or_wrong_sheet_does_not_silently_enable_compliance(tmp_path):
     pd.DataFrame({"厂别": ["ALL"]}).to_excel(path, sheet_name="规则配置", index=False)
     with pytest.raises(ValueError):
         manager.load_matrix_config(path)
+
+
+def test_matrix_ledger_retains_edits_and_historical_cells_on_warmup(tmp_path):
+    from src.shared_kernel.infrastructure.matrix_decisions import update_matrix_decisions
+
+    path = tmp_path / "matrix.xlsx"
+    row = "SPC 单片异常"
+    update_matrix_decisions(path, [row], ["M626", "M678"])
+    update_matrix_decisions(path, [row], ["M626"], edit=(row, "M626", "Delete"))
+    update_matrix_decisions(path, [row, "新指标"], ["M678"])
+    decisions = manager.load_matrix_config(path)
+    assert decisions[(row, "M626")] == "Delete"
+    with pytest.raises(ValueError, match="已变更"):
+        update_matrix_decisions(path, [row], ["M626"], edit=(row, "M626", True), expected=False)
+    assert manager.load_matrix_config(path)[(row, "M626")] == "Delete"
+    assert decisions[("新指标", "M678")] is False
+    assert ("spc", "M626") not in manager.apply_matrix_compliance(payload(), decisions)["cells"]
+    update_matrix_decisions(path, [row], ["M626"], edit=(row, "M626", False))
+    assert manager.apply_matrix_compliance(payload(), manager.load_matrix_config(path)) == payload()
+
+
+def test_admin_alias_can_hide_and_restore_a_matrix_cell(tmp_path, monkeypatch):
+    from streamlit.testing.v1 import AppTest
+    from src.shared_kernel.config import ConfigLoader
+
+    path = tmp_path / "policy.xlsx"
+    monkeypatch.setattr(manager, "CONFIG_PATH", path)
+    monkeypatch.setattr(ConfigLoader, "get_enabled_products", lambda: ["P1"])
+    app = AppTest.from_string(
+        "from app.sections.inline_domain.monitor.matrix_decision_admin import render_matrix_decision_admin\n"
+        "render_matrix_decision_admin()"
+    ).run()
+    assert not app.selectbox and not path.exists()
+    app.query_params["admin"] = "ture"
+    app.run()
+    name = app.selectbox[0].value
+    app.selectbox[2].select("Delete").run()
+    app.button(key="save_matrix_decision").click().run()
+    assert not app.exception and manager.load_matrix_config(path)[(name, "P1")] == "Delete"
+    app.run()
+    app.selectbox[2].select("False").run()
+    app.button(key="save_matrix_decision").click().run()
+    assert not app.exception and manager.load_matrix_config(path)[(name, "P1")] is False

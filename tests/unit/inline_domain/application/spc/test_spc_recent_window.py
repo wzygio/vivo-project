@@ -88,13 +88,12 @@ def test_database_target_reaches_charts_but_cpm_uses_spec_midpoint(
 def test_spc_point_decoration_needs_no_sheet_statistics(flag):
     points = measurements()
     decisions = points[rules.OOS_KEY_COLUMNS].drop_duplicates().assign(flag=flag)
-    expected_decisions = decisions.assign(flag=False) if flag == "Delete" else decisions
     expected = rules.apply_sheet_oos_decoration(
-        points, preprocess_sheet_features(points, specs()), expected_decisions,
+        points, preprocess_sheet_features(points, specs()), decisions,
     )
     actual = apply_spc_point_decoration(points, specs(), decisions)
     pd.testing.assert_frame_equal(actual[points.columns], expected[points.columns])
-    assert len(actual) == len(points)
+    assert len(actual) == (0 if flag == "Delete" else len(points))
 
 
 def test_spc_builds_features_only_for_recent_points(monkeypatch, tmp_path):

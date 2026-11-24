@@ -11,6 +11,9 @@ from typing import Protocol
 
 import pandas as pd
 
+from src.indicator_domain.core.qtime.decoration import QTIME_KEY_COLUMNS, normalize_qtime_flag
+from src.indicator_domain.application.qtime.errors import QTimeDecorationAccessError
+
 QTIME_ALERT_COLUMNS = [
     "shop", "prodcode", "f_step", "t_step", "step_desc", "lot_id", "q_spec",
     "wait_time", "over_hours", "timekey",
@@ -50,15 +53,21 @@ class QTimeAlertResults:
         self, store: QTimeAlertStore, *, ttl_seconds: int,
         policy_signature: Callable[[], str] = lambda: "qtime-published-v1",
         clock: Callable[[], datetime] = datetime.now,
+        decisions_provider: Callable[[], pd.DataFrame] | None = None,
+        decision_signature: Callable[[], object] = lambda: None,
+        legacy_policy_matches: Callable[[str], bool] | None = None,
     ) -> None:
         self.store = store
         self.ttl_seconds = ttl_seconds
         self.policy_signature = policy_signature
         self.clock = clock
+        self.decisions_provider = decisions_provider
+        self.decision_signature = decision_signature
+        self.legacy_policy_matches = legacy_policy_matches
 
     def publish(
         self, shop: str, details: pd.DataFrame, alerts: pd.DataFrame,
-        health: Mapping[str, str], reference_date: date,
+        health: Mapping[str, str], reference_date: date, *, candidates: pd.DataFrame | None = None,
     ) -> None:
         if shop not in QTIME_SHOPS:
             raise ValueError("Unknown Q-Time publication shop")
@@ -70,19 +79,26 @@ class QTimeAlertResults:
         if not alerts.empty and ("flag" not in alerts or not alerts["flag"].map(_released).all()):
             raise ValueError("Q-Time publication requires explicit release decisions")
         saved = alerts.assign(shop=shop, flag=False).reindex(columns=QTIME_PUBLISHED_COLUMNS).copy()
+        if candidates is not None and not candidates.empty:
+            saved = candidates.assign(shop=shop).loc[:, QTIME_PUBLISHED_COLUMNS].copy()
         membership = (
             details[["prodcode", "step_desc", "lot_id", "timekey"]].drop_duplicates().copy()
             if not details.empty else pd.DataFrame(columns=["prodcode", "step_desc", "lot_id", "timekey"])
         )
+        if candidates is not None and not candidates.empty:
+            membership = pd.concat([membership, candidates[QTIME_KEY_COLUMNS]], ignore_index=True).drop_duplicates()
         previous_month = (reference_date.replace(day=1) - timedelta(days=1)).replace(day=1)
         metadata = {
             "shop": shop, "reference_date": reference_date.isoformat(),
             "coverage_start": previous_month.isoformat(), "coverage_end": reference_date.isoformat(),
             "updated_at": self.clock().isoformat(), "status": "success",
             "source_status": health["status"], "source_refreshed_at": health.get("refreshed_at", ""),
-            "policy_signature": self.policy_signature(), "alert_count": len(saved),
+            "policy_signature": self.policy_signature(), "alert_count": len(alerts),
             "product_count": len(membership),
         }
+        if candidates is not None:
+            metadata["decision_schema"] = 2
+            metadata["candidate_count"] = len(saved)
         metadata["fingerprint"] = _digest({
             "metadata": {key: value for key, value in metadata.items() if key != "updated_at"},
             "alerts": saved.astype(object).where(saved.notna(), None).to_dict("records"),
@@ -103,6 +119,7 @@ class QTimeAlertResults:
             if sheets is None or "__meta__" not in sheets:
                 raise ValueError("Missing Q-Time publication")
             meta = sheets["__meta__"]
+            decisions = None
             if meta.empty and set(QTIME_METADATA_COLUMNS).issubset(meta):
                 initialized = all(
                     f"alerts_{shop}" in sheets and f"products_{shop}" in sheets
@@ -143,7 +160,11 @@ class QTimeAlertResults:
                     if len(metadata) != 1:
                         raise ValueError("Missing or duplicate Q-Time shop metadata")
                     row = metadata.iloc[0]
-                    if (len(saved) != int(row.alert_count) or len(products) != int(row.product_count)
+                    uses_decisions = row.get("decision_schema") == 2
+                    expected_count = row["candidate_count"] if uses_decisions else row.alert_count
+                    if uses_decisions and ("flag" not in saved or int(saved["flag"].map(_released).sum()) != int(row.alert_count)):
+                        raise ValueError("Invalid Q-Time published release count")
+                    if (len(saved) != int(expected_count) or len(products) != int(row.product_count)
                             or row.status != "success" or row.source_status != "fresh"):
                         raise ValueError(f"Invalid Q-Time publication count/status: shop={shop}")
                     if str(row.reference_date) != str(reference_date):
@@ -151,7 +172,10 @@ class QTimeAlertResults:
                             f"Q-Time publication reference date mismatch: shop={shop} "
                             f"published={row.reference_date} requested={reference_date}"
                         )
-                    if row.policy_signature != self.policy_signature():
+                    policy_matches = row.policy_signature == self.policy_signature()
+                    if not policy_matches and not uses_decisions and self.legacy_policy_matches:
+                        policy_matches = self.legacy_policy_matches(row.policy_signature)
+                    if not policy_matches:
                         raise ValueError(f"Q-Time publication policy changed: shop={shop}")
                     if (pd.Timestamp(row.coverage_start) > start
                             or pd.Timestamp(row.coverage_end) < end - pd.Timedelta(days=1)):
@@ -171,6 +195,20 @@ class QTimeAlertResults:
                             raise ValueError("Expired Q-Time publication")
                 if not saved.empty and not saved["shop"].eq(shop).all():
                     raise ValueError("Q-Time shop sheet contains another shop")
+                if self.decisions_provider is not None and not saved.empty and "flag" in saved:
+                    if decisions is None:
+                        decisions = self.decisions_provider()
+                    keys = saved[QTIME_KEY_COLUMNS].astype(str)
+                    controls = decisions.set_index(QTIME_KEY_COLUMNS)["flag"]
+                    flags = controls.reindex(pd.MultiIndex.from_frame(keys))
+                    if uses_decisions and flags.isna().any():
+                        raise ValueError("Missing Q-Time decision for a published candidate")
+                    flags.index = saved.index
+                    saved = saved.assign(flag=flags.where(flags.notna(), saved["flag"]).map(normalize_qtime_flag))
+                if "flag" in saved:
+                    excluded = saved.loc[saved["flag"].eq("Delete"), QTIME_KEY_COLUMNS].astype(str)
+                    products = products.loc[~pd.MultiIndex.from_frame(products[QTIME_KEY_COLUMNS].astype(str))
+                                            .isin(pd.MultiIndex.from_frame(excluded))]
                 product_rows = products.loc[products["prodcode"].astype(str).eq(str(product))]
                 product_times = pd.to_datetime(product_rows["timekey"].astype(str).str.slice(0, 14),
                                                format="%Y%m%d%H%M%S", errors="coerce")
@@ -208,7 +246,7 @@ class QTimeAlertResults:
                 "metadata": {"total_lots": len(lot_ids), "period_start": str(start.date()),
                              "period_end": str((end-pd.Timedelta(days=1)).date())},
             }
-        except (KeyError, TypeError, ValueError, OSError) as exc:
+        except (KeyError, TypeError, ValueError, OSError, QTimeDecorationAccessError) as exc:
             logger.warning(
                 "Q-Time published alerts unavailable: product=%s shops=%s reference_date=%s "
                 "start_date=%s end_date=%s cause=%s: %s",
@@ -223,4 +261,5 @@ class QTimeAlertResults:
     def source_signature(self, product: str, reference_date: date, **selection) -> str:
         # Recheck validity outside the result cache so age expiry invalidates it.
         state = self.read(product, reference_date, **selection)["state"]
-        return _digest((self.store.source_signature(), self.policy_signature(), str(reference_date), selection, state))
+        return _digest((self.store.source_signature(), self.decision_signature(), self.policy_signature(),
+                        str(reference_date), selection, state))

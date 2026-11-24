@@ -105,7 +105,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
         from src.indicator_domain.infrastructure.ijp import alert_workbook as ijp
         from src.equipment_domain.infrastructure import parts_alert_workbook as parts
         from src.iqc_domain.infrastructure.eva_materials import alert_workbook as iqc
-        from src.iqc_domain.infrastructure import alert_workbook as iqc_writer
+        from src.shared_kernel.infrastructure import alert_workbook as workbook_writer
         from app.sections.shared import published_alert_snapshots as snapshots
 
         class Clock(datetime):
@@ -116,14 +116,14 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
             def __new__(cls, *args, **kwargs): return pd.Timestamp(*args, **kwargs)
             @staticmethod
             def now(): return pd.Timestamp(NOW.replace(tzinfo=None))
-        def fixture_workbook(path):
+        def fixture_workbook(path, *, preserve_text=False):
             assert Path(path).resolve().is_relative_to(tmp_path.resolve())
-            return pd.read_excel(path, sheet_name=None)
-        for adapter in (ijp, parts, iqc_writer):
-            monkeypatch.setattr(adapter, 'datetime', Clock)
-            monkeypatch.setattr(adapter, 'read_workbook_sheets', fixture_workbook)
-        monkeypatch.setattr(snapshots, 'pd', SimpleNamespace(Timestamp=Stamp, DataFrame=pd.DataFrame, to_numeric=pd.to_numeric))
-        monkeypatch.setattr(snapshots, 'read_snapshot_workbook', lambda path, *args: fixture_workbook(path))
+            return pd.read_excel(path, sheet_name=None, dtype=object if preserve_text else None,
+                                 keep_default_na=not preserve_text)
+        monkeypatch.setattr(workbook_writer, 'datetime', Clock)
+        monkeypatch.setattr(workbook_writer, 'read_workbook_sheets', fixture_workbook)
+        monkeypatch.setattr(snapshots, 'pd', SimpleNamespace(Timestamp=Stamp, DataFrame=pd.DataFrame, Series=pd.Series, to_numeric=pd.to_numeric))
+        monkeypatch.setattr(snapshots, 'read_workbook_sheets', fixture_workbook)
         if module in ('ijp_aa', 'ijp_hole'):
             from src.indicator_domain.core.ijp.alerts import ALERT_COLUMNS
             region = 'AA区' if module == 'ijp_aa' else '孔区'
@@ -178,7 +178,7 @@ def acquired_publications(capability_files, tmp_path, monkeypatch):
 def test_all_domain_publications_receipt_http_and_mail(acquired_publications, tmp_path, monkeypatch):
     files, jobs = acquired_publications
     report = run_inspection(('P1',), NOW.date(), jobs, tmp_path / 'inspection')
-    assert report['status'] == 'success'
+    assert report['status'] == 'success', report['outcomes']
     assert set(report['modules']) == set(MODULES)
     assert {(row['module'], row.get('product', '')) for row in report['outcomes']} == required_keys(('P1',))
     receipt = tmp_path / 'inspection/latest.json'

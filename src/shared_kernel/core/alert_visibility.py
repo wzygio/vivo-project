@@ -7,11 +7,13 @@ from typing import Any
 
 import pandas as pd
 
+from src.shared_kernel.core.decoration_flags import DecorationFlag, parse_decoration_flag
+
 ROW_COLUMN = "监控参数"
 
 
-def parse_matrix_config(frame: pd.DataFrame) -> dict[tuple[str, str], bool]:
-    """Parse strict True/False cells; nonempty text is never implicitly true."""
+def parse_matrix_config(frame: pd.DataFrame) -> dict[tuple[str, str], DecorationFlag]:
+    """Parse explicit True/False/Delete cells; nonempty text is never implicitly true."""
     if ROW_COLUMN not in frame or frame.columns.duplicated().any():
         raise ValueError("修饰配置应为监控参数 × 产品矩阵，不能使用旧四维规则表")
     frame = frame.dropna(how="all").copy()
@@ -24,9 +26,9 @@ def parse_matrix_config(frame: pd.DataFrame) -> dict[tuple[str, str], bool]:
             if product == ROW_COLUMN:
                 continue
             value = str(frame.at[index, product]).strip().lower()
-            if value not in ("true", "false"):
-                raise ValueError(f"{name} × {product} 只能填写 True 或 False")
-            switches[(str(name), str(product))] = value == "true"
+            if value not in ("true", "false", "delete"):
+                raise ValueError(f"{name} × {product} 只能填写 True、False 或 Delete")
+            switches[(str(name), str(product))] = parse_decoration_flag(value)
     return switches
 
 
@@ -35,7 +37,10 @@ def apply_matrix_compliance(payload: Mapping[str, Any], switches: Mapping) -> di
     names = {row["row_key"]: row["display_name"] for row in payload.get("rows", [])}
     cells = {}
     for (row_key, product), cell in payload.get("cells", {}).items():
-        if switches.get((names.get(row_key), product), False):
+        action = switches.get((names.get(row_key), product), False)
+        if action == "Delete":
+            continue
+        if action is True:
             cells[(row_key, product)] = {**cell, "state": "ok", "message": ""}
         else:
             cells[(row_key, product)] = dict(cell)

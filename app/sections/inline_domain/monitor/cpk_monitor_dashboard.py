@@ -8,6 +8,8 @@ from typing import Protocol
 
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+
 from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.capability_trend_chart import create_capability_trend_chart
 from src.inline_domain.application.monitor.cpk_monitor_service import (
@@ -48,7 +50,7 @@ def render_capability_monitor_results(view: CpkMonitorViewModel, *, metric: str)
             width="stretch", key=f"{metric}_monitor_pass_rate_chart_{product}",
             config={"scrollZoom": False},
         )
-    if st.query_params.get("admin") == "true" and not view.refresh_status_df.empty:
+    if is_admin_mode(st.query_params) and not view.refresh_status_df.empty:
         st.markdown(f"#### {name} 数据更新状态（管理员）")
         st.dataframe(view.refresh_status_df, hide_index=True, width="stretch")
 

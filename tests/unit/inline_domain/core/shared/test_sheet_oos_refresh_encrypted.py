@@ -238,10 +238,9 @@ def test_encrypted_workbook_with_flags_sheet_skips_rewrite_within_ttl(
 # ---------------------------------------------------------------------------
 
 
-def test_encrypted_workbook_first_write_creates_empty_flags_idempotent(
+def test_encrypted_workbook_first_write_migrates_flags_idempotent(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """旧产品 sheet 的 flag 永不生效：首写物化空 __flags，全部键默认 True。"""
     product_dir = _make_product_dir(tmp_path)
     detail = build_sheet_oos_detail(_sheet_features())
     workbook = _write_workbook(product_dir, {SHEET: _legacy_product_sheet()})
@@ -250,23 +249,22 @@ def test_encrypted_workbook_first_write_creates_empty_flags_idempotent(
 
     merged = persist_sheet_oos_decoration(product_dir, detail, **_persist_kwargs())
 
-    # 首次运行：不继承旧产品 sheet 的 flag（S1=False 不生效），物化空 __flags
     assert write_calls == [(SHEET, f"{SHEET}__flags", REFRESH_META_SHEET_NAME)]
-    assert merged["flag"].tolist() == [True, True]
+    assert merged["flag"].tolist() == [False, True]
     decisions = load_sheet_oos_decisions(product_dir, sheet_name=SHEET)
-    assert decisions.empty
+    assert decisions["flag"].tolist() == [False, True]
     assert list(decisions.columns) == [*OOS_KEY_COLUMNS, "flag"]
 
-    # 二次运行：__flags 已存在，TTL 内不重写；旧表 flag 仍不生效
     bytes_before = workbook.read_bytes()
     merged_again = persist_sheet_oos_decoration(
         product_dir, detail, **_persist_kwargs(now=NOW + timedelta(hours=1))
     )
     assert len(write_calls) == 1
     assert workbook.read_bytes() == bytes_before
-    assert merged_again["flag"].tolist() == [True, True]
+    assert merged_again["flag"].tolist() == [False, True]
     flags_after = com_read_sheet(workbook, f"{SHEET}__flags")
-    assert flags_after.empty
+    assert flags_after["flag"].tolist() == [False, True]
+
 
 
 # ---------------------------------------------------------------------------

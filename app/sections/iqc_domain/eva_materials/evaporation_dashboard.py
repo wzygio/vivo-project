@@ -21,6 +21,8 @@ from src.iqc_domain.core.eva_materials.evaporation import (
 )
 from src.shared_kernel.config import ConfigLoader
 from app.sections.shared.alert_results import read_alert_result
+from app.sections.shared.auxiliary_decision_admin import render_decision_admin
+from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EVAPORATION_DECISIONS
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +144,7 @@ def _prepare_automatic_alerts(
 def _render_saved_automatic_alerts(
     today: date, title: str, start: date, end: date, *, update_failed: bool = False,
 ) -> None:
+    render_decision_admin(EVAPORATION_DECISIONS, 'iqc_domain', 'evaporation_alerts')
     result = read_alert_result('iqc_evaporation_ng', '', today)
     alerts = result['alerts']
     with st.expander(title, expanded=not alerts.empty or update_failed or result['state'] == 'error'):

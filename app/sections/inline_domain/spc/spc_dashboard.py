@@ -54,9 +54,10 @@ from src.inline_domain.core.spc.cpk_decoration import (
 from src.inline_domain.core.monitor.cpk_latest import latest_capability_alerts
 from src.inline_domain.core.spc.spc_calculator import get_period_window_start
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.core.decoration_revision import VERSION_SHEET, decision_revision, upload_revision
+from src.inline_domain.infrastructure.spc.capability_decoration_repository import update_capability_decisions
 from src.shared_kernel.utils.excel_tools import (
     read_uploaded_excel_sheet,
-    replace_workbook_sheets,
 )
 
 SPC_FACTORY_OPTIONS = INLINE_FACTORY_OPTIONS
@@ -361,6 +362,8 @@ def render_saved_spc_alerts(
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Read the same saved results as the matrix; report frames are optional charts."""
+    from app.sections.inline_domain.shared.alert_decision_admin import render_inline_alert_decisions
+    render_inline_alert_decisions("spc", product)
     from app.sections.shared.alert_results import read_alert_result
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
 
@@ -464,12 +467,6 @@ def render_spc_report_interaction(
     selected_factory, selected_params, selected_steps, should_render = render_spc_filters(
         indicator_df=report.indicators_df, step_desc_map=step_desc_map,
     )
-    if is_admin:
-        render_spc_decoration_admin(
-            getattr(report, "sheet_oos_decoration_result", None),
-            getattr(report, "cpk_decoration_result", None),
-            getattr(report, "cpm_decoration_result", None),
-        )
     render_saved_spc_alerts(
         product, reference_date=reference_date, report=report, step_desc_map=step_desc_map,
     )
@@ -505,6 +502,9 @@ def render_capability_decoration_admin(
         if not decoration_result.decoration_df.empty
         else pd.DataFrame(columns=capability_decoration_columns(metric))
     )
+    replacement = f"{metric}_replacement"
+    version = decision_revision(decoration_result.decoration_sheet, decoration_download_df,
+        CPK_KEY_COLUMNS, controls=("flag", replacement) if replacement in decoration_download_df else ("flag",))
     container = (
         st.expander(f"开发者后台：SPC {metric_label} 修饰", expanded=False)
         if show_expander
@@ -514,7 +514,7 @@ def render_capability_decoration_admin(
         st.caption(
             f"默认 flag=False，{metric_label} 显示基于修饰后点位的计算值；"
             f"启用后显示 {metric}_replacement（随机生成并保存，介于 1.33 与 1.40 之间）；"
-            f"{corrected_column} 保留原记录值。"
+            f"Delete 隐藏该指标，{corrected_column} 记录本次计算值。"
         )
         st.caption(f"修饰文件：{decoration_result.decoration_path}")
         c_decoration, c_upload = st.columns([1, 1.2])
@@ -523,7 +523,8 @@ def render_capability_decoration_admin(
             st.markdown(f"#### 下载 {metric_label} 修饰表")
             st.download_button(
                 label="下载修饰表",
-                data=_excel_bytes({f"{metric_label}修饰表": decoration_download_df}),
+                data=_excel_bytes({f"{metric_label}修饰表": decoration_download_df,
+                    VERSION_SHEET: pd.DataFrame({"revision": [version]})}),
                 file_name=f"{decoration_result.decoration_sheet}_{decoration_result.decoration_path.name}",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"{key_prefix}_download",
@@ -547,24 +548,29 @@ def render_capability_decoration_admin(
                     width="stretch",
                 ):
                     try:
-                        uploaded_df = read_uploaded_excel_sheet(uploaded_file.getbuffer())
+                        buffer = uploaded_file.getbuffer()
+                        revision = upload_revision(read_uploaded_excel_sheet(buffer, sheet_name=VERSION_SHEET))
+                        uploaded_df = read_uploaded_excel_sheet(buffer, sheet_name=f"{metric_label}修饰表")
+                        if not len(uploaded_df.columns) and revision is None:
+                            uploaded_df = read_uploaded_excel_sheet(buffer, preserve_text=True)
                         required_columns = {*CPK_KEY_COLUMNS, corrected_column, "flag"}
                         missing_columns = required_columns - set(uploaded_df.columns)
                         if missing_columns:
                             st.error(f"修饰表缺少必要字段：{', '.join(sorted(missing_columns))}")
                             return
 
-                        from src.shared_kernel.infrastructure.file_lock import publication_lock
-
-                        with publication_lock(decoration_result.decoration_path):
-                            write_result = replace_workbook_sheets(
-                                decoration_result.decoration_path,
-                                {decoration_result.decoration_sheet: uploaded_df},
-                            )
-                        if not write_result.written:
-                            st.error(f"保存 {metric_label} 修饰表失败：{write_result.error}")
+                        from src.shared_kernel.core.decoration_flags import parse_decoration_flag
+                        uploaded_df["flag"] = uploaded_df["flag"].map(
+                            lambda cell: True if str(cell).strip().lower() == "ture" else parse_decoration_flag(cell))
+                        if (uploaded_df.duplicated(CPK_KEY_COLUMNS).any() or
+                                not uploaded_df["prod_code"].astype(str).eq(
+                                    decoration_result.decoration_sheet.removesuffix("_cpm")).all()):
+                            st.error("修饰表包含重复业务键或其他产品记录。")
                             return
-                        st.success(f"{metric_label} 修饰表已覆盖，正在刷新缓存。")
+
+                        update_capability_decisions(decoration_result.decoration_path,
+                            decoration_result.decoration_sheet, metric, uploaded_df, revision=revision)
+                        st.success(f"{metric_label} 修饰决策已保存。")
                         # The workbook stat participates in the report cache key;
                         # the full rerun picks up that version without evicting
                         # unrelated products or reports.

@@ -42,15 +42,18 @@ def test_approved_specification_drives_original_decoration_and_chart(monkeypatch
     if action == "Delete":
         assert "ABOVE" not in value.details.lot_id.tolist()
         assert value.alerts.empty
+    elif action is False:
+        assert value.details.set_index("lot_id").loc["ABOVE", "wait_time"] == 250.
+        assert value.alerts.wait_time.tolist() == [250.]
     else:
         assert 170. <= value.details.set_index("lot_id").loc["ABOVE", "wait_time"] <= 190.
-        assert value.alerts.wait_time.tolist() == ([250.] if action is False else [])
+        assert value.alerts.empty
     figure = build_qtime_figure(value.details)
     assert figure.layout.shapes[0].y0 == 200.
 
 
 def test_output_policy_change_invalidates_old_publication_without_rewriting(tmp_path, monkeypatch):
-    monkeypatch.setattr(composition.ConfigLoader, "get_domain_resource_path", lambda *_a: tmp_path / "alerts.xlsx")
+    monkeypatch.setattr(composition.ConfigLoader, "get_domain_resource_path", lambda _domain, key, *_a: tmp_path / f"{key}.xlsx")
     monkeypatch.setattr(composition, "_qtime_decision_signature", lambda: None)
     monkeypatch.setattr(pd, "read_sql", lambda *_a, **_k: pytest.fail("Reader must not query a database"))
     current_policy = composition.OUTPUT_POLICY_VERSION

@@ -14,7 +14,9 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     DECISION_FLAG_COLUMN,
     _normalize_flag_action,
 )
-from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+from src.inline_domain.infrastructure.shared.alert_decisions import AlertDecisionWorkbook
+from src.shared_kernel.core.decoration_revision import VERSION_SHEET, upload_revision
+from src.shared_kernel.utils.excel_tools import read_uploaded_excel_sheet
 
 _TRUE_TOKENS = {"true", "1", "yes", "y", "是", "修饰", "截断"}
 _FALSE_TOKENS = {"false", "0", "no", "n", "否", "不修饰", "不截断"}
@@ -25,7 +27,7 @@ def _normalize_upload(
     file_bytes: bytes, key_columns: tuple[str, ...]
 ) -> tuple[pd.DataFrame | None, str | None]:
     try:
-        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None)
+        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None, dtype=object, keep_default_na=False)
     except Exception as exc:
         return None, f"无法读取 Excel：{exc}"
     source = sheets.get("决策台账") if sheets else None
@@ -77,9 +79,8 @@ def render_ooc_decision_admin(
                 "类型", scopes, format_func=str.upper, key="monitor_ooc_admin_scope"
             )
         view = service.build_decision_admin_view(str(scope), str(product))
-        decision_columns = [*view.key_columns, DECISION_FLAG_COLUMN]
-        decision_df = view.decision_df.reindex(columns=decision_columns)
-        payload = excel_bytes({"当前明细": view.detail_df, "决策台账": decision_df})
+        store = AlertDecisionWorkbook(view.workbook_path, list(view.key_columns), default=True)
+        payload = excel_bytes(store.download(view.product_sheet))
         st.caption(
             "flag=True 抑制预警，False 释放到看板，Delete 隐藏记录；"
             f"工作簿：{view.workbook_path}"
@@ -113,14 +114,15 @@ def render_ooc_decision_admin(
                 if error:
                     st.error(error)
                 else:
-                    result = replace_workbook_sheets(
-                        view.workbook_path, {view.decision_sheet: normalized}
-                    )
-                    if result.written:
+                    try:
+                        revision = upload_revision(read_uploaded_excel_sheet(uploaded.getbuffer(), sheet_name=VERSION_SHEET))
+                        store.update(view.product_sheet, normalized, revision=revision)
+                    except (OSError, ValueError) as exc:
+                        st.error(f"保存失败：{exc}")
+                    else:
                         st.success("OOC 决策台账已更新，正在刷新。")
                         st.rerun()
-                    else:
-                        st.error(f"保存失败：{result.error}")
+
 
 
 __all__ = ["render_ooc_decision_admin"]

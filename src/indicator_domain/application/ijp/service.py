@@ -51,7 +51,9 @@ class IjpReportService:
             frame = frame.loc[frame.productcode.isin(self._enabled_product_codes)]
         alerts = build_weekly_alerts(frame, 'AA区', end.date())
         if self._alert_store is not None:
-            self._alert_store.save('AA区', alerts, end.date())
+            published = self._alert_store.save('AA区', alerts, end.date())
+            if published is not None:
+                alerts = published
         public = frame.reindex(columns=[
             'productcode', 'line', 'printer', 'rs_code', 'period',
             'period_start', 'period_end', 'has_data', 'display_ratio',

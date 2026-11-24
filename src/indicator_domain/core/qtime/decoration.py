@@ -70,6 +70,7 @@ def normalize_qtime_flag(value: object) -> bool | str:
     return str(value).strip().lower() not in {
         "false",
         "0",
+        "0.0",
         "no",
         "n",
         "否",
@@ -127,7 +128,7 @@ def apply_qtime_spec_overrides(
     return result
 
 
-def constrain_qtime_display(details: pd.DataFrame) -> pd.DataFrame:
+def constrain_qtime_display(details: pd.DataFrame, decoration: pd.DataFrame | None = None) -> pd.DataFrame:
     """Keep displayed values below valid limits, without altering alert evidence."""
     result = details.copy()
     if result.empty:
@@ -135,6 +136,10 @@ def constrain_qtime_display(details: pd.DataFrame) -> pd.DataFrame:
     waits = pd.to_numeric(result["wait_time"], errors="coerce")
     specs = pd.to_numeric(result["q_spec"], errors="coerce")
     mask = specs.gt(0) & specs.lt(float("inf")) & waits.ge(specs)
+    if decoration is not None and not decoration.empty:
+        preserved = decoration.loc[decoration['flag'].eq(False), QTIME_KEY_COLUMNS]
+        mask &= ~pd.MultiIndex.from_frame(_normalize_keys(result)[QTIME_KEY_COLUMNS]).isin(
+            pd.MultiIndex.from_frame(preserved))
     if mask.any():
         result["wait_time"] = waits.astype(float)
         result.loc[mask, "wait_time"] = result.loc[mask].apply(

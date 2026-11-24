@@ -10,7 +10,7 @@ from src.iqc_domain.infrastructure.lifetime.lifetime_repository import LifetimeR
 
 
 @pytest.mark.parametrize('product', [None, '', ' \t ', 'DISABLED'])
-def test_composed_service_scopes_products_before_identity_validation(monkeypatch, product):
+def test_composed_service_scopes_products_before_identity_validation(monkeypatch, tmp_path, product):
     from src.iqc_domain import composition
     from tests.unit.test_iqc_lifetime import source_frame
 
@@ -18,6 +18,7 @@ def test_composed_service_scopes_products_before_identity_validation(monkeypatch
     outside = raw.iloc[[0]].assign(product_group=product, panel_id=None, test_time='bad')
     combined = pd.concat([raw, outside], ignore_index=True)
     monkeypatch.setattr(composition, 'get_m3_engine', lambda: object())
+    monkeypatch.setattr(composition.ConfigLoader, 'get_domain_resource_path', lambda *args: tmp_path / 'alerts.xlsx')
     monkeypatch.setattr(LifetimeRepository, 'read_report', lambda self: combined.copy())
     monkeypatch.setattr(composition.ConfigLoader, 'get_enabled_products',
                         lambda **kwargs: ['M678'])
@@ -216,5 +217,29 @@ def test_public_cache_changes_with_enabled_product_scope(monkeypatch):
         assert len(calls) == 2
         assert dashboard.fetch_report_payload(()).empty
         assert len(calls) == 3
+    finally:
+        dashboard.fetch_report_payload.clear()
+
+
+def test_public_cache_uses_inspection_numbering_revision(monkeypatch, tmp_path):
+    from app.sections.iqc_domain.lifetime import lifetime_dashboard as dashboard
+    from src.iqc_domain.application.lifetime.lifetime import LifetimeReportService
+    from src.iqc_domain.infrastructure.lifetime.workbooks import LifetimeAlertWorkbook
+    from tests.unit.test_iqc_lifetime import MemorySource, source_frame
+
+    store = LifetimeAlertWorkbook(tmp_path / 'numbers.xlsx')
+    raw = source_frame().iloc[[0]]
+    service = LifetimeReportService(MemorySource(raw), sample_numberer=store.sample_numbers)
+    monkeypatch.setattr(dashboard, 'build_lifetime_service', lambda **kwargs: service)
+    dashboard.fetch_report_payload.clear()
+    try:
+        def fetch_number():
+            frame = dashboard.fetch_report_payload(('M678',), store.numbering_version())
+            return frame['样品编号'].item()
+
+        assert fetch_number() == 1 and not store.path.exists()
+        LifetimeReportService(MemorySource(raw.assign(panel_id='earlier'))).get_report(
+            sample_numberer=store.reserve_sample_numbers)
+        assert fetch_number() == 2
     finally:
         dashboard.fetch_report_payload.clear()

@@ -1,5 +1,7 @@
 # src/vivo_project/app/pages/专项资料-台账周报.py
 import streamlit as st
+
+from app.utils.admin_mode import is_admin_mode
 import logging
 import pandas as pd
 import time
@@ -63,7 +65,7 @@ if viewing_directory is None or (viewing_file and not (viewing_directory / viewi
 #  界面区域 A: 统一上传接口
 # ==============================================================================
 # 管理员硬重置入口：与页头「刷新缓存」同一套逻辑，仅 ?admin=true 可见
-if st.query_params.get("admin") == "true":
+if is_admin_mode(st.query_params):
     st.button(
         "🔄 刷新缓存",
         key="btn_clear_专项资料台账周报",

@@ -63,7 +63,7 @@ class FakeQTimeDecorationPort:
             ]
         )
 
-    def save_decisions(self, decisions: pd.DataFrame) -> None:
+    def save_decisions(self, decisions: pd.DataFrame, *, revision=None) -> None:
         raise AssertionError("This test only reads decoration decisions")
 
 
@@ -71,7 +71,7 @@ class RecordingQTimeDecorationPort(FakeQTimeDecorationPort):
     def __init__(self) -> None:
         self.saved_decisions: pd.DataFrame | None = None
 
-    def save_decisions(self, decisions: pd.DataFrame) -> None:
+    def save_decisions(self, decisions: pd.DataFrame, *, revision=None) -> None:
         self.saved_decisions = decisions.copy()
 
 
@@ -161,10 +161,7 @@ def test_service_returns_decorated_details_and_confirmed_qtime_alerts(
         as_of=date(2026, 9, 2),
     )
 
-    if constrain_display:
-        assert result.details.loc[0, "wait_time"] < 24.0
-    else:
-        assert result.details.loc[0, "wait_time"] == 25.0
+    assert result.details.loc[0, "wait_time"] == 25.0
     assert result.details.loc[0, "wait_time_raw"] == 25.0
     assert result.alerts.loc[0, "wait_time"] == 25.0
     assert result.alerts["lot_id"].tolist() == ["L001"]

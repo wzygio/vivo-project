@@ -236,6 +236,77 @@ def test_corrupt_shop_sheet_is_unavailable_without_a_query_fallback(tmp_path):
     assert results.read("M678", AS_OF)["state"] == "error"
 
 
+def test_station_decisions_change_report_matrix_and_api_without_republication(tmp_path, monkeypatch):
+    from api.composition import build_service
+    from api.schemas import AnomalyQuery
+    from app.sections.shared.alert_results import read_alert_result
+    from src.indicator_domain import composition
+    from src.indicator_domain.application.qtime.decoration_service import build_qtime_decoration_workbook
+    from src.indicator_domain.application.qtime.service import QTimeReportService
+    from src.indicator_domain.infrastructure.qtime.decoration_repository import QTimeDecorationRepository
+    from src.shared_kernel.data_health import attach_data_health, make_data_health
+
+    decisions = QTimeDecorationRepository(tmp_path / "flags.xlsx")
+    results = service(tmp_path)
+    results.decisions_provider = decisions.load_decisions
+    results.decision_signature = lambda: decisions.decoration_path.stat().st_mtime_ns
+    monkeypatch.setattr(composition, "build_qtime_alert_results", lambda **_: results)
+    source = rows()
+
+    class Data:
+        def fetch_details(self, query):
+            return attach_data_health(source.copy(), make_data_health(**HEALTH))
+
+    report = QTimeReportService(Data(), decisions, constrain_display=True, alert_results=results)
+    def query():
+        return report.get_current_monitoring(shop="ARRAY", step_descriptions=("PATH1", "PATH2"), as_of=AS_OF)
+
+    def change(value):
+        from io import BytesIO
+        from openpyxl import load_workbook
+        download = build_qtime_decoration_workbook(pd.DataFrame(), decisions.load_decisions())
+        book = load_workbook(BytesIO(download))
+        sheet = book["决策台账"]
+        for index in range(sheet.max_row, 1, -1):
+            if sheet.cell(index, 3).value == "LAST":
+                sheet.cell(index, 5).value = value
+            else:
+                sheet.delete_rows(index)
+        edited = BytesIO()
+        book.save(edited)
+        assert report.update_decisions(edited.getvalue()).status == "success"
+        return edited.getvalue()
+
+    def check(state):
+        assert read_alert_result("qtime_sheet_oos", "M678", AS_OF, shops=("ARRAY",))["state"] == state
+        api = build_service()._source_reader(AnomalyQuery(product="M678", sub_domain="Q-Time", event_type="OOS"),
+                                             AS_OF, ("ARRAY",))
+        assert api["state"] == state and api["release_evidence"]
+        assert api["records"].lot_id.tolist() == (["LAST"] if state == "alert" else [])
+        assert "flag" not in api["records"]
+
+    report.publish_alert_results(query(), "ARRAY", AS_OF)
+    check("ok")
+    assert decisions.load_decisions().flag.tolist() == [True, True, True]
+    before = results.store.path.read_bytes()
+    first_session = change(False)
+    check("alert")
+    assert query().details.set_index("lot_id").loc["LAST", "wait_time"] == 14.
+    change("Delete")
+    assert report.update_decisions(first_session).status == "error"
+    check("ok")
+    assert "LAST" not in query().details.lot_id.tolist()
+    assert results.store.path.read_bytes() == before
+    source.loc[source.lot_id.eq("LAST"), "wait_time"] = 10.
+    report.publish_alert_results(query(), "ARRAY", AS_OF)
+    source.loc[source.lot_id.eq("LAST"), "wait_time"] = 15.
+    report.publish_alert_results(query(), "ARRAY", AS_OF)
+    assert decisions.load_decisions().set_index("lot_id").loc["LAST", "flag"] == "Delete"
+    check("ok")
+    change(False)
+    check("alert")
+
+
 def test_atomic_publish_failure_preserves_old_success_and_other_shop_sheets(tmp_path, monkeypatch):
     from src.indicator_domain.infrastructure.qtime import alert_workbook
 
@@ -247,6 +318,39 @@ def test_atomic_publish_failure_preserves_old_success_and_other_shop_sheets(tmp_
         results.publish("ARRAY", rows(), rows().iloc[:1], HEALTH, AS_OF)
     assert results.store.path.read_bytes() == original
     assert not list(tmp_path.glob(".qtime-alert-*.xlsx"))
+
+
+def test_legacy_publication_keeps_its_policy_and_applies_new_decisions(tmp_path, monkeypatch):
+    import hashlib
+    from src.indicator_domain import composition
+    from src.indicator_domain.application.qtime.decoration_service import DECISION_SHEET_NAME
+    from src.indicator_domain.core.qtime.decoration import DECISION_COLUMNS
+    from src.indicator_domain.infrastructure.qtime.decoration_repository import QTimeDecorationRepository
+
+    monkeypatch.setattr(composition.ConfigLoader, "get_domain_resource_path",
+                        lambda _domain, key, *_args: tmp_path / f"{key}.xlsx")
+    ledger_path = tmp_path / "qtime_oos_decoration.xlsx"
+    ledger = rows()[DECISION_COLUMNS]
+    ledger.to_excel(ledger_path, sheet_name=DECISION_SHEET_NAME, index=False)
+    results = composition.build_qtime_alert_results()
+    results.clock = lambda: NOW
+    original_policy = results.policy_signature
+    settings = ("qtime-published-v1", composition.OUTPUT_POLICY_VERSION,
+                composition.ConfigLoader.get_indicator_data_exclusion(),
+                composition.ConfigLoader.get_data_forward_policy().signature,
+                composition.ConfigLoader.get_report_cutoff_policy().signature,
+                composition.ConfigLoader.load_domain_config("indicator_domain", "qtime").get("qtime", {}),
+                composition._qtime_decision_signature())
+    results.policy_signature = lambda: hashlib.sha256(repr(settings).encode()).hexdigest()
+    results.publish("ARRAY", rows(), rows(), HEALTH, AS_OF)
+    before = results.store.path.read_bytes()
+    results.policy_signature = original_policy
+    assert results.read("M678", AS_OF, shops=("ARRAY",))["state"] == "alert"
+    repository = QTimeDecorationRepository(ledger_path)
+    for flag, state in [("Delete", "ok"), (True, "ok"), (False, "alert")]:
+        repository.save_decisions(ledger.iloc[:1].assign(flag=flag))
+        assert results.read("M678", AS_OF, shops=("ARRAY",))["state"] == state
+    assert results.store.path.read_bytes() == before
 
 
 @pytest.mark.parametrize("empty_tp", [False, True])

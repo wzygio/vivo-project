@@ -80,6 +80,7 @@ def test_refresh_and_append_preserve_legacy_rows_unknowns_and_extra_columns(tmp_
     persist_capability_decoration(tmp_path, candidates, sheet_name=sheet, metric=metric,
         computed_detail_df=candidates, reference_date=date(2026, 11, 17), workbook_path=path, raise_on_error=True)
     after = pd.read_excel(path, sheet_name=sheet)
+    before.loc[0, f"{metric}_corrected"] = float("nan")
     before.loc[2, f"{metric}_corrected"] = 0.7
     pd.testing.assert_frame_equal(after.iloc[:len(before)].reset_index(drop=True), before)
     assert after["param_name"].tolist() == ["LEGACY_PASS", "UNKNOWN", "EXISTING", "NEW"]

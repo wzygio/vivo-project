@@ -18,16 +18,23 @@ import streamlit as st  # [新增] 引入 streamlit
 from src.shared_kernel.config import ConfigLoader
 
 
-def read_uploaded_excel_sheet(file_bytes: bytes | memoryview) -> pd.DataFrame:
-    """Read an upload's first sheet, including enterprise-encrypted XLSX files.
+def read_uploaded_excel_sheet(file_bytes: bytes | memoryview, *, sheet_name: str | None = None, preserve_text: bool = False) -> pd.DataFrame:
+    """Read the requested sheet (default: first), including enterprise-encrypted XLSX.
 
     Ordinary XLSX stays in memory. Excel COM needs a real, closed file, so its
     fallback uses a unique temporary directory that is removed on either outcome.
     No user-provided filename is used for local paths.
     """
     try:
-        return pd.read_excel(BytesIO(file_bytes), engine="openpyxl")
-    except (BadZipFile, ValueError):
+        if sheet_name is None:
+            if preserve_text:
+                return pd.read_excel(BytesIO(file_bytes), engine="openpyxl", dtype=object, keep_default_na=False)
+            return pd.read_excel(BytesIO(file_bytes), engine="openpyxl")
+        return pd.read_excel(BytesIO(file_bytes), engine="openpyxl", sheet_name=sheet_name,
+                             dtype=object, keep_default_na=False)
+    except (BadZipFile, ValueError) as exc:
+        if _is_missing_sheet_error(exc):
+            return pd.DataFrame()
         logging.info("[excel_tools] Uploaded workbook requires Excel COM reading")
 
     staging_root = ConfigLoader.get_project_root() / "output" / "tmp"
@@ -35,7 +42,9 @@ def read_uploaded_excel_sheet(file_bytes: bytes | memoryview) -> pd.DataFrame:
     with tempfile.TemporaryDirectory(prefix="excel-upload-", dir=staging_root) as directory:
         upload_path = Path(directory) / "upload.xlsx"
         upload_path.write_bytes(file_bytes)
-        return _read_encrypted_xlsx_via_com(upload_path)
+        if sheet_name is None:
+            return _read_encrypted_xlsx_via_com(upload_path)
+        return _read_encrypted_xlsx_via_com(upload_path, sheet_name)
 
 
 def _normalize_excel_com_value(value: object) -> object:
@@ -53,7 +62,7 @@ def _normalize_excel_com_value(value: object) -> object:
     return value
 
 
-def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
+def read_workbook_sheet(xlsx_path: Path, sheet_name: str, *, preserve_text: bool = False) -> pd.DataFrame:
     """读取共享工作簿中的指定 sheet。
 
     文件不存在或 sheet 不存在时返回空 DataFrame（与“文件缺失”语义一致）；
@@ -70,7 +79,8 @@ def read_workbook_sheet(xlsx_path: Path, sheet_name: str) -> pd.DataFrame:
     if not xlsx_path.exists():
         return pd.DataFrame()
     try:
-        return pd.read_excel(xlsx_path, sheet_name=sheet_name)
+        options = {"dtype": object, "keep_default_na": False} if preserve_text else {}
+        return pd.read_excel(xlsx_path, sheet_name=sheet_name, **options)
     except ValueError as openpyxl_error:
         if _is_missing_sheet_error(openpyxl_error):
             return pd.DataFrame()
@@ -212,12 +222,13 @@ class WorkbookWriteResult:
 _workbook_write_lock = threading.Lock()
 
 
-def read_workbook_sheets(xlsx_path: Path) -> dict[str, pd.DataFrame]:
+def read_workbook_sheets(xlsx_path: Path, *, preserve_text: bool = False) -> dict[str, pd.DataFrame]:
     """Read a complete bounded local workbook, including enterprise protection."""
     if not xlsx_path.exists():
         return {}
     try:
-        return pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl")
+        options = {'dtype': object, 'keep_default_na': False} if preserve_text else {}
+        return pd.read_excel(xlsx_path, sheet_name=None, engine="openpyxl", **options)
     except (BadZipFile, OSError, ValueError):
         return _read_all_sheets_via_com(xlsx_path)
 

@@ -3,8 +3,7 @@
 本模块不依赖 streamlit，便于单测；UI 薄壳在
 ``app.sections.inline_domain.shared.decoration_admin.render_sheet_oos_decoration_admin``。
 
-写入契约：上传只覆盖 ``<产品sheet>__flags`` 决策 sheet（完整决策集覆盖语义），
-绝不触碰产品当前明细 sheet；``__refresh_meta__`` 由系统维护，不进下载、不由上传更新。
+管理员只修改已存在业务键的 flag，工作簿写入器同步该决定到当前明细。
 """
 
 from __future__ import annotations
@@ -21,13 +20,12 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     OOS_KEY_COLUMNS,
     _normalize_flag_action,
     _normalize_key_columns,
-    compute_decision_signature,
-    get_decision_sheet_name,
 )
 from src.inline_domain.application.shared.sheet_oos_decoration_service import (
     SheetOosDecorationResult,
 )
-from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
+from src.inline_domain.infrastructure.shared.alert_decisions import AlertDecisionWorkbook
+from src.shared_kernel.core.decoration_revision import VERSION_SHEET, decision_revision, upload_revision
 
 DETAIL_DOWNLOAD_SHEET = "当前明细"
 DECISION_DOWNLOAD_SHEET = "决策台账"
@@ -82,7 +80,10 @@ def build_decision_download_sheets(
             if column not in ledger_df.columns:
                 ledger_df[column] = pd.NA
         ledger_df = ledger_df[DECISION_DOWNLOAD_COLUMNS]
-    return {DETAIL_DOWNLOAD_SHEET: detail_df, DECISION_DOWNLOAD_SHEET: ledger_df}
+    scope = f"{decoration_result.decoration_path.name}/{decoration_result.decoration_sheet}"
+    version = decision_revision(scope, ledger_df, OOS_KEY_COLUMNS)
+    return {DETAIL_DOWNLOAD_SHEET: detail_df, DECISION_DOWNLOAD_SHEET: ledger_df,
+            VERSION_SHEET: pd.DataFrame({"revision": [version]})}
 
 
 def validate_decision_upload(
@@ -97,7 +98,7 @@ def validate_decision_upload(
     - 重复键显式拒绝（keep=last 只是旧表迁移逻辑的行为，管理员上传必须报错）。
 
     返回 (ok, error_msg, normalized_df)；normalized_df 仅含键列 + flag，
-    flag 已规范化为 True/False/"Delete"。空表（仅列头）合法，表示清空显式决策。
+    flag 已规范化为 True/False/"Delete"。空表（仅列头）合法，保留已有决策。
     """
     if uploaded_df is None:
         return False, "上传内容为空。", None
@@ -132,7 +133,7 @@ def parse_decision_upload(
 ) -> tuple[bool, str | None, pd.DataFrame | None]:
     """解析上传的 Excel：优先“决策台账”sheet；兼容旧单 sheet 文件（取第一个 sheet）。"""
     try:
-        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None)
+        sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None, dtype=object, keep_default_na=False)
     except Exception as exc:
         return False, f"无法读取上传的 Excel 文件：{exc}", None
     if not sheets:
@@ -142,34 +143,29 @@ def parse_decision_upload(
     else:
         # 兼容旧单 sheet 修饰表：取第一个 sheet，键列/flag 缺失由校验报错
         df = next(iter(sheets.values()))
-    return validate_decision_upload(df, allow_delete=allow_delete)
+    ok, error, normalized = validate_decision_upload(df, allow_delete=allow_delete)
+    if ok:
+        try:
+            normalized.attrs["revision"] = upload_revision(sheets.get(VERSION_SHEET))
+        except ValueError as exc:
+            return False, str(exc), None
+    return ok, error, normalized
 
 
 def apply_decision_upload(
     decoration_result: SheetOosDecorationResult,
     normalized_df: pd.DataFrame,
 ) -> DecisionUploadOutcome:
-    """把校验后的决策集完整覆盖写入 ``<产品sheet>__flags``（不触碰产品明细 sheet）。
-
-    与现有决策规范化后签名一致 → unchanged，不重写文件；
-    写入失败（如文件被 Excel 占用）→ error，携带底层可操作错误信息。
-    """
-    decision_sheet = decoration_result.decision_sheet or get_decision_sheet_name(
-        decoration_result.decoration_sheet
-    )
-    if compute_decision_signature(normalized_df) == compute_decision_signature(
-        decoration_result.decision_df
-    ):
-        return DecisionUploadOutcome("unchanged", "内容一致，无需更新。")
-
-    write_result = replace_workbook_sheets(
-        decoration_result.decoration_path, {decision_sheet: normalized_df}
-    )
-    if not write_result.written:
-        return DecisionUploadOutcome("error", f"保存决策台账失败：{write_result.error}")
-    if normalized_df.empty:
-        return DecisionUploadOutcome("success", "已清空该产品的显式决策（空 __flags 已写入）。")
-    return DecisionUploadOutcome("success", "决策台账已更新，正在刷新。")
+    """Update the submitted decisions under the shared publication lock."""
+    store = AlertDecisionWorkbook(decoration_result.decoration_path, OOS_KEY_COLUMNS, default=True)
+    try:
+        changed = store.update(decoration_result.decoration_sheet, normalized_df,
+                               revision=normalized_df.attrs.get("revision"))
+    except (OSError, ValueError) as exc:
+        return DecisionUploadOutcome("error", f"保存决策台账失败：{exc}")
+    if changed:
+        return DecisionUploadOutcome("success", "决策台账已更新，正在刷新。")
+    return DecisionUploadOutcome("unchanged", "内容一致，无需更新。")
 
 
 def handle_decision_upload(

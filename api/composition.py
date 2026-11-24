@@ -49,7 +49,7 @@ def build_service() -> PublishedAnomalyService:
         # A missing public policy is not permission to disclose a source.
         if key not in switches:
             raise ValueError('Public policy unavailable')
-        return switches[key]
+        return switches[key] is not False
 
     def hidden(domain: str, product: str) -> bool:
         return hidden_row(DISPLAY_NAMES[domain], product)

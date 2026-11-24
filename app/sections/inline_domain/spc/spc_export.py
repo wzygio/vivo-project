@@ -14,6 +14,8 @@ import plotly.io as pio
 import pymupdf
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+
 from app.components.product_labels import get_product_label_formatter
 from app.charts.inline_domain.indicator_pdf import IndicatorPdfReport, format_spc_pdf_figure
 from app.charts.inline_domain.spc_charts import iter_spc_chart_groups
@@ -151,7 +153,7 @@ def render_spc_export(
     step_desc_map: dict[str, str] | None = None,
 ) -> None:
     """Generate on request; offer a native download only after a PDF is ready."""
-    if st.query_params.get("admin") != "true":
+    if not is_admin_mode(st.query_params):
         return
     enabled = ConfigLoader.get_enabled_products()
     if not enabled:

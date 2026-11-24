@@ -17,6 +17,8 @@ if project_root:
         sys.path.insert(0, src_str)
 
 import streamlit as st
+
+from app.utils.admin_mode import is_admin_mode
 import pandas as pd
 
 from app.manager.session_manager import SessionManager
@@ -114,8 +116,7 @@ render_page_header(
 )
 
 # [权限控制] 检测 URL 参数，控制管理员刷新入口与状态面板显示
-query_params = st.query_params
-is_admin = query_params.get("admin") == "true"
+is_admin = is_admin_mode(st.query_params)
 
 # ==============================================================================
 #  数据加载

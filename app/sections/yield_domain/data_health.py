@@ -2,13 +2,15 @@
 
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+
 
 def render_yield_data_health(health: dict, *, admin_only: bool = True) -> None:
     """Show health only for ``?admin=true`` unless ``admin_only=False``.
 
     Unavailable data always stops the page, regardless of visibility.
     """
-    is_visible = not admin_only or st.query_params.get("admin") == "true"
+    is_visible = not admin_only or is_admin_mode(st.query_params)
     status = health.get("status", "unknown")
     if status == "unavailable":
         if is_visible:

@@ -86,6 +86,8 @@ def render_saved_aoi_tt_alerts(
     step_desc_map: dict[str, str] | None = None, publish_report: bool = True,
 ) -> None:
     """Use committed Sheet/trend results; missing chart frames do not hide alerts."""
+    from app.sections.inline_domain.shared.alert_decision_admin import render_inline_alert_decisions
+    render_inline_alert_decisions("aoi_tt", product)
     from app.sections.shared.alert_results import read_alert_result
     from app.sections.inline_domain.aoi_tt.trend_alerts import render_aoi_tt_trend_alerts
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range

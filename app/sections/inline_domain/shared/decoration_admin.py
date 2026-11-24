@@ -1,8 +1,7 @@
 """Sheet OOS 修饰后台 UI（SPC/CTQ 共用）。
 
 通过 ``key_prefix`` 与 ``report_name`` 参数化，session key 与各页面历史保持一致。
-下载含“当前明细 + 决策台账”两个 sheet；上传只覆盖 ``<产品sheet>__flags`` 决策 sheet，
-绝不触碰产品当前明细 sheet，纯逻辑见 ``sheet_oos_admin``，本模块保持薄壳。
+管理工作簿包含当前明细、决策台账与下载版本。上传按业务键更新决策。
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from app.sections.inline_domain.shared.sheet_oos_admin import (
     build_decision_download_sheets,
     handle_decision_upload,
 )
+from src.shared_kernel.core.decoration_revision import VERSION_SHEET
 from src.inline_domain.core.shared.sheet_oos_decoration import (
     DELETE_ACTION,
     get_decision_sheet_name,
@@ -28,9 +28,13 @@ from src.inline_domain.application.shared.sheet_oos_decoration_service import (
 
 def excel_bytes(sheet_map: dict[str, pd.DataFrame]) -> bytes:
     output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(output, engine="xlsxwriter", engine_kwargs={
+        "options": {"strings_to_formulas": False, "strings_to_urls": False},
+    }) as writer:
         for sheet_name, df in sheet_map.items():
             df.to_excel(writer, index=False, sheet_name=sheet_name)
+            if sheet_name == VERSION_SHEET:
+                writer.sheets[sheet_name].hide()
     return output.getvalue()
 
 
@@ -53,8 +57,7 @@ def render_sheet_oos_decoration_admin(
     )
     with container:
         supported_flags = "True（修饰）、False（保留原值）"
-        if report_name != "SPC":
-            supported_flags += f"、{DELETE_ACTION}（不显示该 Sheet 的当前参数记录）"
+        supported_flags += f"、{DELETE_ACTION}（不显示该 Sheet 的当前参数记录）"
         st.caption(f"flag 支持 {supported_flags}；修改“决策台账”sheet 后上传并确认，或点击页头“刷新缓存”。")
         st.caption(f"修饰工作簿：{decoration_result.decoration_path}")
         st.caption(
@@ -92,7 +95,7 @@ def render_sheet_oos_decoration_admin(
                     width="stretch",
                 ):
                     outcome = handle_decision_upload(
-                        decoration_result, uploaded_file.getbuffer(), allow_delete=report_name != "SPC",
+                        decoration_result, uploaded_file.getbuffer(),
                     )
                     # 决策签名变化会自然触发 L2 miss，无需手动清缓存
                     if outcome.status == "success":

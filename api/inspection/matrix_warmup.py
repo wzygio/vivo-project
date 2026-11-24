@@ -27,6 +27,7 @@ def main(
     log_dir: Path | None = None,
     reference_date: date | None = None,
     products: Sequence[str] | None = None,
+    decision_path: Path | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="Validate paths only; do not query data.")
@@ -44,13 +45,23 @@ def main(
     try:
         if loader is None:
             from app.sections.inline_domain.monitor.alert_matrix_cache import get_cached_alert_matrix
+            from src.shared_kernel.config import ConfigLoader
+
             loader = get_cached_alert_matrix
+            decision_path = decision_path or ConfigLoader.get_compliance_config_path()
         options = {"reference_date": reference_date or date.today(), "reuse_snapshot": False}
         if products is not None:
             options["products"] = tuple(products)
         payload = loader(**options)
         if not payload.get("cells"):
             raise ValueError("Empty alert matrix")
+        if decision_path is not None:
+            from src.shared_kernel.infrastructure.matrix_decisions import update_matrix_decisions
+
+            update_matrix_decisions(
+                decision_path,
+                (row["display_name"] for row in payload["rows"]), payload["products"],
+            )
         target.write(payload)
         counts = dict(Counter(cell["state"] for cell in payload["cells"].values()))
         failures = [f"{row}|{product}" for (row, product), cell in payload["cells"].items()

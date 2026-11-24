@@ -38,12 +38,12 @@ class TrendAlertResults:
         if previous is not None:
             meta = previous[1]
             generated = pd.to_datetime(meta.get("generated_at"), errors="coerce")
-            if (meta.get("fingerprint") == fingerprint and pd.notna(generated)
+            if (meta.get("decision_schema") == 1 and meta.get("fingerprint") == fingerprint and pd.notna(generated)
                     and 0 <= (now - generated).total_seconds() < self.ttl_seconds):
                 return
         self.store.save(product, frame, {"product": product, "reference_date": str(reference_date),
             "policy": self.policy, "generated_at": now.isoformat(), "row_count": len(frame),
-            "fingerprint": fingerprint, "status": "success"})
+            "fingerprint": fingerprint, "decision_schema": 1, "status": "success"})
 
     def read(self, product: str, reference_date: date) -> dict:
         payload = self.store.read(product)
@@ -67,6 +67,11 @@ class TrendAlertResults:
                 if not flags.isin(["true", "false", "1", "0"]).all():
                     raise ValueError("Invalid published trend flag")
                 frame[column] = flags.isin(["true", "1"])
+        if "flag" in frame:
+            frame = frame.loc[frame["flag"].ne("Delete")].copy()
+            frame["is_alert"] &= frame["flag"].eq(False)
+            frame["daily_alert"] &= frame["flag"].eq(False)
+            frame = frame.drop(columns="flag")
         rows = frame.loc[frame["is_alert"].eq(True)].copy() if "is_alert" in frame else frame.copy()
         return {"state": "no_data" if frame.empty else "alert" if len(rows) else "ok",
                 "records": rows, "alerts": pd.DataFrame(), "evaluation": frame,

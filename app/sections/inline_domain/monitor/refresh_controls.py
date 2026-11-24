@@ -5,6 +5,8 @@ from collections.abc import Callable, Sequence
 
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+
 from src.inline_domain.infrastructure.monitor.excel_alarm_store import clear_alarm_workbook_cache
 from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
 from src.shared_kernel.config import ConfigLoader
@@ -27,7 +29,7 @@ def render_board_refresh_controls(
     selection_valid: bool = True,
 ) -> bool:
     """Return a new query request only after successful local invalidation."""
-    if st.query_params.get("admin") != "true":
+    if not is_admin_mode(st.query_params):
         return False
     with st.container(horizontal=True):
         refresh_data = st.button(

@@ -11,6 +11,10 @@ from src.indicator_domain.core.ijp.alerts import ALERT_COLUMNS
 from src.equipment_domain.core.parts_alerts import PARTS_PUBLIC_COLUMNS
 from src.iqc_domain.core.eva_materials.evaporation import REPORT_COLUMNS
 from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
+from src.iqc_domain.infrastructure.lifetime.publication import read_lifetime_publication
+from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EVAPORATION_DECISIONS
+from src.indicator_domain.infrastructure.ijp.alert_workbook import ijp_decisions
+from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import read_workbook_sheets
 
@@ -35,8 +39,31 @@ EMPTY_TEMPLATE_MESSAGE = '当前暂无预警记录。'
 
 
 @st.cache_data(max_entries=16, ttl=ConfigLoader.get_cache_ttl_seconds(), show_spinner=False)
-def read_snapshot_workbook(path: str, modified: int, size: int) -> dict[str, pd.DataFrame]:
-    return read_workbook_sheets(Path(path))
+def _snapshot_sheets(path: str, modified: int, size: int) -> dict[str, pd.DataFrame]:
+    return read_workbook_sheets(Path(path), preserve_text=True)
+
+
+@st.cache_data(max_entries=16, ttl=ConfigLoader.get_cache_ttl_seconds(), show_spinner=False)
+def read_snapshot_workbook(path: str, modified: int, size: int, row_key: str) -> dict[str, pd.DataFrame]:
+    frames = _snapshot_sheets(path, modified, size)
+    sheet = _SOURCES[row_key][2]
+    if sheet not in frames:
+        return {}
+    meta = frames['__meta__'].copy()
+    selected = meta.region.eq(sheet) if row_key.startswith('ijp_') else pd.Series(True, index=meta.index)
+    records = meta.loc[selected]
+    public = frames[sheet]
+    if len(records) == 1:
+        if row_key == 'iqc_lifetime_oos':
+            public = read_lifetime_publication(public, records.iloc[0], allow_decision_edits=True)
+        else:
+            layout = (ijp_decisions(sheet) if row_key.startswith('ijp_') else
+                      PARTS_DECISIONS if row_key == 'parts_oos' else EVAPORATION_DECISIONS)
+            public = layout.read(frames, records.iloc[0])
+        meta.loc[selected, 'alert_count'] = len(public)
+    # Preserve both IJP region headers for validating a freshly initialized workbook.
+    result = {name: frames[name] for name in ('AA区', '孔区') if name in frames and meta.empty}
+    return {**result, sheet: public, '__meta__': meta}
 
 
 def _source(row_key: str) -> tuple[Path, str, tuple[str, ...]]:
@@ -57,7 +84,7 @@ def read_published_alerts(row_key: str, product: str, reference_date: date) -> d
             stat = path.stat()
         except FileNotFoundError:
             return _empty_result(columns)
-        frames = read_snapshot_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+        frames = read_snapshot_workbook(str(path.resolve()), stat.st_mtime_ns, stat.st_size, row_key)
         if sheet not in frames:
             return _empty_result(columns)
         alerts = frames[sheet]
@@ -147,4 +174,8 @@ def clear_published_snapshot(row_key: str) -> None:
         stat = path.stat()
     except FileNotFoundError:
         return
-    read_snapshot_workbook.clear(str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+    generation = (str(path.resolve()), stat.st_mtime_ns, stat.st_size)
+    _snapshot_sheets.clear(*generation)
+    affected = ('ijp_aa_oos', 'ijp_hole_oos') if row_key.startswith('ijp_') else (row_key,)
+    for affected_key in affected:
+        read_snapshot_workbook.clear(*generation, affected_key)

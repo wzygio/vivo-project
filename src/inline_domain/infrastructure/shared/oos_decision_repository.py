@@ -16,6 +16,7 @@ from src.inline_domain.core.shared.sheet_oos_decoration import (
     REFRESH_META_SHEET_NAME,
     get_decision_sheet_name,
 )
+from src.inline_domain.infrastructure.shared.alert_decisions import decision_rows
 from src.shared_kernel.utils.excel_tools import _read_all_sheets_via_com
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 
@@ -41,7 +42,7 @@ class OosDecisionWorkbookRepository:
         if cached is not None and cached[0] == signature:
             return cached[1]
         try:
-            sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl")
+            sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl", dtype=object)
         except Exception:
             try:
                 sheets = _read_all_sheets_via_com(path)
@@ -72,13 +73,18 @@ class OosDecisionWorkbookRepository:
     def load_fallback(
         self, file_name: str, prod_code: str, key_columns: Iterable[str]
     ) -> pd.DataFrame:
-        frame = self._all_sheets(file_name).get(prod_code)
+        sheets = self._all_sheets(file_name)
+        frame = sheets.get(prod_code)
         if frame is None or frame.empty:
             return pd.DataFrame()
         result = frame.copy()
         for column in key_columns:
             if column in result.columns:
                 result[column] = result[column].fillna("").astype(str)
+        keys = list(key_columns)
+        if get_decision_sheet_name(prod_code) in sheets:
+            actions = decision_rows(sheets, prod_code, keys, True).set_index(keys)["flag"]
+            result["flag"] = actions.reindex(pd.MultiIndex.from_frame(result[keys])).to_numpy()
         return apply_inline_date_exclusion(
             result, time_column="start_time" if "start_time" in result.columns else "sheet_start_time",
         )

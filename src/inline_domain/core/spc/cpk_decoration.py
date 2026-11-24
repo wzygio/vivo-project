@@ -127,6 +127,12 @@ def _parse_flag(value: object) -> bool:
     }
 
 
+def _capability_action(value: object) -> bool | str:
+    if str(value).strip().lower() == "delete":
+        return "Delete"
+    return _parse_flag(value)
+
+
 def initialize_capability_replacements(decoration_df: pd.DataFrame, metric: str) -> pd.DataFrame:
     """Initialize targets once for newly created rows; saved rows never enter here."""
     result = _ordered_existing_columns(decoration_df, capability_decoration_columns(metric))
@@ -220,10 +226,10 @@ def merge_capability_detail_with_decoration_flags(
     user_values_df = _normalize_key_columns(
         _ordered_existing_columns(existing_decoration_df, decoration_columns)
     )[[*CPK_KEY_COLUMNS, "flag", replacement_column]].copy()
-    user_values_df["flag"] = user_values_df["flag"].apply(_parse_flag)
+    user_values_df["flag"] = user_values_df["flag"].apply(_capability_action)
     user_values_df = user_values_df.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
     result = detail_df.merge(user_values_df, on=CPK_KEY_COLUMNS, how="left", indicator="_saved")
-    result["flag"] = result["flag"].apply(_parse_flag)
+    result["flag"] = result["flag"].apply(_capability_action)
     new = result["_saved"].eq("left_only")
     if create_replacements and new.any():
         initialized = initialize_capability_replacements(result.loc[new], metric)
@@ -286,11 +292,12 @@ def apply_capability_decoration(
     selected_df = flags_df[[*CPK_KEY_COLUMNS, corrected_column, "flag"]].copy()
     selected_df = selected_df.rename(columns={"flag": decorated_column})
     result = _normalize_key_columns(result).merge(selected_df, on=CPK_KEY_COLUMNS, how="left")
+    result.loc[result[decorated_column].eq("Delete"), metric] = float("nan")
     result[decorated_column] = result[decorated_column].apply(_parse_flag)
     corrected_values = pd.to_numeric(result[corrected_column], errors="coerce")
     valid_target = corrected_values.map(lambda value: pd.notna(value) and isfinite(value)
                                        and CAPABILITY_ALERT_THRESHOLD < value < CAPABILITY_REPLACEMENT_UPPER_BOUND)
-    result[decorated_column] &= valid_target
+    result[decorated_column] &= valid_target & pd.to_numeric(result[metric], errors="coerce").notna()
     decorated_mask = result[decorated_column]
     result.loc[decorated_mask, metric] = corrected_values[decorated_mask]
     return result.drop(columns=[corrected_column])

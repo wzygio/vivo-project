@@ -1,5 +1,6 @@
 """Atomic product-sheet publication; memory caches only parsed workbook bytes."""
 from pathlib import Path
+from io import BytesIO
 import threading
 from typing import Mapping
 from collections.abc import Callable
@@ -11,7 +12,11 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.file_lock import publication_lock
 from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
-from src.yield_domain.application.alert_results import merge_lot_release_controls
+from src.yield_domain.application.alert_results import RELEASE_KEYS, merge_lot_release_controls, merge_release_controls
+from src.shared_kernel.core.decoration_flags import parse_decoration_flag
+from src.shared_kernel.core.decoration_revision import (
+    VERSION_SHEET, decision_revision, upload_revision, validate_decision_update,
+)
 
 WorkbookReader = Callable[[str, int, int], dict[str, pd.DataFrame]]
 
@@ -74,7 +79,7 @@ class YieldAlertWorkbookStore:
             return None
         if len(meta) != 1:
             raise ValueError("Invalid Yield publication metadata")
-        decisions = sheets.get(self._flags_sheet(product)) if kind == "lot" else None
+        decisions = sheets.get(self._flags_sheet(product))
         return {"records": sheets.get(product, pd.DataFrame()).copy(),
                 "metadata": meta.iloc[0].where(meta.iloc[0].notna(), None).to_dict(),
                 "decisions": decisions.copy() if decisions is not None else None,
@@ -116,6 +121,55 @@ class YieldAlertWorkbookStore:
         except FileNotFoundError:
             return f"{path}:missing"
 
+    def decision_workbook(self, product: str, kind: str) -> bytes:
+        payload = self.read_product(product, kind)
+        keys = RELEASE_KEYS[kind]
+        records = payload["records"] if payload else pd.DataFrame(columns=keys)
+        _, decisions = merge_release_controls(kind, records, payload["decisions"] if payload else None)
+        stream = BytesIO()
+        with pd.ExcelWriter(stream, engine="xlsxwriter", engine_kwargs={
+            "options": {"strings_to_formulas": False, "strings_to_urls": False},
+        }) as writer:
+            decisions.to_excel(writer, sheet_name=self._flags_sheet(product), index=False)
+            records.drop(columns="flag", errors="ignore").to_excel(writer, sheet_name="预警候选", index=False)
+            revision = decision_revision(f"yield/{product}/{kind}", decisions, keys)
+            pd.DataFrame({"revision": [revision]}).to_excel(writer, sheet_name=VERSION_SHEET, index=False)
+            writer.sheets[VERSION_SHEET].hide()
+        return stream.getvalue()
+
+    def update_decisions(self, product: str, kind: str, data: bytes) -> None:
+        sheet = self._flags_sheet(product)
+        edits = excel_tools.read_uploaded_excel_sheet(data, sheet_name=sheet)
+        revision = upload_revision(excel_tools.read_uploaded_excel_sheet(data, sheet_name=VERSION_SHEET))
+        keys = RELEASE_KEYS[kind]
+        if set(edits) != {*keys, "flag"}:
+            raise ValueError("决策表的业务键或 flag 列不完整。")
+        edits["flag"] = edits["flag"].map(parse_decoration_flag)
+        path = self.paths[kind]
+        with self._write_lock, publication_lock(path):
+            previous = self.read_product(product, kind)
+            if previous is None:
+                raise ValueError("当前产品尚无发布结果。")
+            records = previous["records"]
+            _, ledger = merge_release_controls(kind, records, previous["decisions"])
+            _, changes = merge_release_controls(kind, records.iloc[:0], edits)
+            # A legacy publication may not yet have a persisted decisions sheet.
+            existing = ledger if previous["controls_initialized"] or revision else ledger.iloc[:0]
+            validate_decision_update(f"yield/{product}/{kind}", existing, changes, keys, revision)
+            decisions = ledger.set_index(keys)
+            updates = changes.set_index(keys)
+            if not updates.index.isin(decisions.index).all():
+                raise ValueError("上传表包含未知的预警业务键。")
+            decisions["flag"] = decisions["flag"].astype(object)
+            decisions.loc[updates.index, "flag"] = updates["flag"]
+            effective, saved = merge_release_controls(kind, records, decisions.reset_index())
+            result = replace_workbook_sheets(path, {
+                product: effective, sheet: saved,
+                self._meta_sheet(product): pd.DataFrame([{**previous["metadata"], "release_schema_version": 1}]),
+            })
+            if not result.written:
+                raise OSError("Yield decisions could not be saved")
+
     def write_product(self, product: str, kind: str, records: pd.DataFrame | None,
                       metadata: dict) -> bool:
         path = self.paths[kind]
@@ -124,9 +178,9 @@ class YieldAlertWorkbookStore:
             previous = self.read_product(product, kind)
             old = previous["metadata"] if previous else {}
             decisions = None
-            if kind == "lot" and records is not None:
-                records, decisions = merge_lot_release_controls(
-                    records, previous["decisions"] if previous else None,
+            if records is not None:
+                records, decisions = merge_release_controls(
+                    kind, records, previous["decisions"] if previous else None,
                 )
                 metadata = {**metadata, "release_schema_version": 1}
             same_records = records is None or (previous is not None

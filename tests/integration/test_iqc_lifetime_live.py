@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import text
 
-from src.iqc_domain.composition import build_lifetime_service
+from src.iqc_domain.composition import build_lifetime_alert_store, build_lifetime_service
 from src.iqc_domain.infrastructure.lifetime.m3_database import get_m3_engine
 from src.shared_kernel.config import ConfigLoader
 
@@ -48,7 +48,9 @@ def test_live_lifetime_public_report_matches_source():
         product, batch, screen = identity
         group = actual.loc[actual['产品型号'].eq(product) & actual['批次号'].eq(batch)
                            & actual['测试画面'].eq(screen)]
-        for number, panel in enumerate(sorted(source.panel_id.unique()), start=1):
+        identities = source[['product_group', 'date_key', 'bu', 'panel_id']].drop_duplicates().sort_values('panel_id')
+        numbers = build_lifetime_alert_store().sample_numbers(identities)
+        for number, panel in zip(numbers, identities.panel_id):
             expected = source.loc[source.panel_id.eq(panel)].copy()
             expected['test_time'] = pd.to_numeric(expected.test_time)
             expected = expected.sort_values('test_time')

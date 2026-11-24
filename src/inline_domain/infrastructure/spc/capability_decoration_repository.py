@@ -9,7 +9,6 @@ from pathlib import Path
 import pandas as pd
 
 from src.inline_domain.core.spc.cpk_decoration import (
-    CAPABILITY_ALERT_THRESHOLD,
     CAPABILITY_METRIC_CPK,
     CPK_KEY_COLUMNS,
     CPK_DECORATION_FILE_NAME,
@@ -24,6 +23,8 @@ from src.inline_domain.core.spc.cpk_decoration import (
     previous_week_detail,
 )
 from src.shared_kernel.infrastructure.file_lock import publication_lock
+from src.shared_kernel.core.decoration_flags import parse_decoration_flag
+from src.shared_kernel.core.decoration_revision import validate_decision_update
 from src.shared_kernel.utils.excel_tools import (
     _is_missing_sheet_error,
     _read_encrypted_xlsx_via_com,
@@ -38,6 +39,45 @@ from src.inline_domain.application.shared.decoration_ports import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def update_capability_decisions(path: Path, sheet: str, metric: str, uploaded: pd.DataFrame, *, revision: str | None = None) -> None:
+    """Edit only submitted manual cells on the current ledger version."""
+    _validate_metric(metric)
+    with publication_lock(path):
+        version = workbook_version(path)
+        saved = _read_capability_decoration(path.parent, sheet, metric, raise_on_error=True, workbook_path=path)
+        keys = CPK_KEY_COLUMNS
+        normalized = _normalize_key_columns(uploaded)
+        if normalized.duplicated(keys).any():
+            raise ValueError("重复业务键")
+        replacements = f"{metric}_replacement"
+        saved = _normalize_key_columns(saved)
+        controls = ["flag", replacements] if replacements in saved else ["flag"]
+        if replacements in saved and replacements not in normalized:
+            normalized = normalized.merge(saved[[*keys, replacements]], on=keys, how="left", validate="one_to_one")
+        validate_decision_update(sheet, saved, normalized, keys, revision, controls=controls)
+        positions = pd.Series(range(2, len(saved) + 2), index=pd.MultiIndex.from_frame(_normalize_key_columns(saved)[keys]))
+        if not positions.index.is_unique:
+            raise ValueError("已有台账业务键重复")
+        edits = CapabilityRowEdits()
+        for key, record in normalized.set_index(keys).iterrows():
+            if key not in positions:
+                raise ValueError("未知业务键")
+            flag = record["flag"]
+            fields = {"flag": True if str(flag).strip().lower() == "ture" else parse_decoration_flag(flag)}
+            if replacements in record:
+                value = record[replacements]
+                if pd.isna(value) or value == "":
+                    value = None
+                elif not 1.33 < float(value) < 1.40:
+                    prior = saved.iloc[positions[key] - 2][replacements]
+                    if pd.isna(prior) or float(value) != float(prior):
+                        raise ValueError("替换值须在 1.33 到 1.40 之间")
+                fields[replacements] = value
+            edits.updates[int(positions[key])] = fields
+        if edits and not write_capability_rows(path, sheet, saved.iloc[:0], edits, version).written:
+            raise OSError("保存能力决策失败")
 
 
 def get_cpk_decoration_path(product_dir: Path, *, workbook_path: Path | None = None) -> Path:
@@ -124,34 +164,32 @@ def _refresh_saved_rows(
     existing: pd.DataFrame, computed: pd.DataFrame | None, metric: str, reference_date: date,
 ) -> tuple[pd.DataFrame, CapabilityRowEdits]:
     edits = CapabilityRowEdits()
-    if existing.empty or computed is None or computed.empty:
+    if existing.empty or computed is None:
         return existing, edits
     corrected = capability_corrected_column(metric)
     weekly = previous_week_detail(_normalize_key_columns(computed), reference_date).copy()
     weekly[corrected] = pd.to_numeric(weekly[corrected], errors="coerce")
-    weekly = weekly.drop_duplicates(CPK_KEY_COLUMNS, keep="last").dropna(subset=[corrected])
-    if weekly.empty:
-        return existing, edits
+    weekly = weekly.drop_duplicates(CPK_KEY_COLUMNS, keep="last")
     if corrected not in existing:
         raise CapabilityDecorationWriteError(f"Existing capability sheet lacks {corrected!r}")
     fields = [name for name in (corrected, "period_start", "period_end") if name in weekly and name in existing]
     calculations = weekly.set_index(CPK_KEY_COLUMNS)[fields].to_dict("index")
     saved = existing.reset_index(drop=True).copy()
     keys = _normalize_key_columns(saved[CPK_KEY_COLUMNS])
+    review_keys = set(previous_week_detail(keys, reference_date).itertuples(index=False, name=None))
     for index, key in enumerate(keys.itertuples(index=False, name=None)):
         fresh = calculations.get(key)
         if fresh is None:
-            continue
+            if key not in review_keys:
+                continue
+            fresh = {corrected: float("nan")}
         number = index + 2  # Header occupies Excel row 1.
-        if fresh[corrected] > CAPABILITY_ALERT_THRESHOLD:
-            edits.deletes.append(number)
-            continue
         for name, value in fresh.items():
             prior = saved.at[index, name]
             if name == corrected:
                 prior = pd.to_numeric(prior, errors="coerce")
                 # XLSX serialization can round a float to 16 significant digits.
-                equal = pd.notna(prior) and format(prior, ".16g") == format(value, ".16g")
+                equal = (pd.isna(prior) and pd.isna(value)) or format(prior, ".16g") == format(value, ".16g")
             else:
                 prior = pd.to_datetime(prior, errors="coerce")
                 value = pd.to_datetime(value, errors="coerce")

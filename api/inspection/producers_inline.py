@@ -259,6 +259,13 @@ class InlineProductionSession:
         if scope == "spc":
             self.phase = "CAPABILITY_VERIFICATION"
             self._ensure_capability_headers()
+            if report.period_capability_df.empty:
+                from src.shared_kernel.config import ConfigLoader
+                from src.inline_domain.application.spc.capability_decoration_service import prepare_capability_decoration
+                path = ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration")
+                for metric, sheet in (("cpk", self.product), ("cpm", f"{self.product}_cpm")):
+                    prepare_capability_decoration(report.period_capability_df, path.parent, sheet_name=sheet,
+                        metric=metric, reference_date=self.reference, workbook_path=path, strict_persistence=True)
             self._verify_capability(report)
             counts["verified_events"] = ["OOS", "OOC", "CPK", "CPM"]
         elif scope in ("aoi_tt", "aoi_rs"):
@@ -332,7 +339,7 @@ class InlineProductionSession:
             if saved is None:
                 raise ValueError("Generated capability workbook missing")
             selected = saved.loc[saved["period_type"].eq("week") & saved["period_label"].eq(expected_label)]
-            if report.period_capability_df.empty and not selected.empty:
+            if report.period_capability_df.empty and selected[metric].notna().any():
                 raise ValueError("Obsolete capability records remain in an empty source week")
             result = inline.build_capability_alert_query(metric, workbook_reader=self._readback).read(self.product, self.reference)
             if result["state"] not in ("ok", "alert"):

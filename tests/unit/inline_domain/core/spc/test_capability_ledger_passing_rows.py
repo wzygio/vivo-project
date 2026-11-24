@@ -18,7 +18,7 @@ def capability(metric, value):
 
 @pytest.mark.parametrize("metric", ["cpk", "cpm"])
 @pytest.mark.parametrize("passing_value", [1.33, 1.33001, 1.6, float("inf")])
-def test_recomputed_value_deletes_only_strictly_above_threshold(tmp_path, metric, passing_value):
+def test_recomputed_passing_value_preserves_manual_decision(tmp_path, metric, passing_value):
     sheet = resolve_capability_decoration_sheet("M678", metric)
     def prepare(frame):
         return prepare_capability_decoration(frame, tmp_path, sheet_name=sheet, metric=metric,
@@ -29,12 +29,11 @@ def test_recomputed_value_deletes_only_strictly_above_threshold(tmp_path, metric
         initial.decoration_path, sheet_name=sheet, index=False)
     result = prepare(capability(metric, passing_value))
     stored = pd.read_excel(initial.decoration_path, sheet_name=sheet)
-    retained = passing_value == 1.33
-    expected = [1.33] if retained else []
+    expected = [passing_value]
     assert stored[f"{metric}_corrected"].tolist() == expected
     assert result.decoration_df[f"{metric}_corrected"].tolist() == expected
-    assert result.period_capability_df[metric].tolist() == [1.372 if retained else passing_value]
-    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [retained]
+    assert result.period_capability_df[metric].tolist() == [1.372]
+    assert result.period_capability_df[f"{metric}_decorated"].tolist() == [True]
     before = initial.decoration_path.read_bytes()
     prepare(capability(metric, passing_value))
     assert initial.decoration_path.read_bytes() == before
@@ -49,9 +48,9 @@ def test_reading_existing_key_still_appends_new_failure(tmp_path, metric):
     result = prepare_capability_decoration(rows, tmp_path,
         sheet_name=sheet, metric=metric, reference_date=date(2026, 11, 17))
     stored = pd.read_excel(initial.decoration_path, sheet_name=sheet)
-    assert stored["param_name"].tolist() == ["NEW"]
-    assert stored[f"{metric}_corrected"].tolist() == [0.9]
-    assert stored["flag"].tolist() == [False]
+    assert stored["param_name"].tolist() == ["TEST", "NEW"]
+    assert stored[f"{metric}_corrected"].tolist() == [1.6, 0.9]
+    assert stored["flag"].tolist() == [False, False]
     assert result.period_capability_df[metric].tolist() == [1.6, 0.9]
 
 

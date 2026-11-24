@@ -130,7 +130,7 @@ def test_aoi_rs_preparation_reads_renamed_decision_file(tmp_path):
     assert not (tmp_path / "ignored").exists()
 
 
-def test_renamed_spc_oos_persistence_normalizes_legacy_delete_for_alerts(monkeypatch, tmp_path):
+def test_renamed_spc_oos_persistence_preserves_delete(monkeypatch, tmp_path):
     from datetime import date
     from src.inline_domain.application.shared.decorated_data import prepare_decorated_data
     from src.inline_domain.core.shared.sheet_oos_alerts import build_sheet_oos_alerts
@@ -147,10 +147,10 @@ def test_renamed_spc_oos_persistence_normalizes_legacy_delete_for_alerts(monkeyp
                                usl=6.0, lsl=0.0, ucl=5.0, lcl=1.0, target=3.0)])
     result = prepare_decorated_data(raw, specs, "M", "spc", persist=True)
     generated = load_sheet_oos_decoration(workbook.parent, workbook.name, "M")
-    assert result.raw_measurements_df["param_value"].tolist() == [8.0]
-    assert generated["flag"].tolist() == [False]
+    assert result.raw_measurements_df.empty
+    assert generated["flag"].tolist() == ["Delete"]
     alerts = build_sheet_oos_alerts(generated, time_column="sheet_start_time", reference_date=date(2026, 9, 7))
-    assert alerts["sheet_id"].tolist() == ["S1"]
+    assert alerts.empty
     decisions = pd.read_excel(workbook, sheet_name="M__flags")
     assert decisions["flag"].tolist() == ["Delete"]
 

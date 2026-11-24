@@ -13,6 +13,8 @@ from src.indicator_domain.core.ijp.alerts import previous_week_range
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
 from app.sections.shared.alert_results import read_alert_result
+from app.sections.shared.auxiliary_decision_admin import render_decision_admin
+from src.indicator_domain.infrastructure.ijp.alert_workbook import ijp_decisions
 
 logger = logging.getLogger(__name__)
 GROUP_COLUMNS = ['productcode', 'line', 'printer']
@@ -45,6 +47,7 @@ def render_ijp_alert_center(service: IjpAlertSource, region: str, *, produce: bo
         except Exception:
             logger.exception('IJP automatic alert calculation or snapshot publication failed: %s', region)
             update_failed = True
+    render_decision_admin(ijp_decisions(region), 'indicator_domain', 'ijp_alerts')
     result = read_alert_result('ijp_hole_oos' if region == '孔区' else 'ijp_aa_oos', '', end.date())
     alerts = result['alerts']
     descriptions = get_ijp_code_descriptions(region)

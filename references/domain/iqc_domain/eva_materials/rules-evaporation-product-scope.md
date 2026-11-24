@@ -68,12 +68,14 @@
 
 - 页面打开或重跑时自动获取上一周数据，无需点击查询。全部产品的成员关系、工单范围、源日期前推和截止规则沿用既有报表服务与 adapter。无启用产品或筛选配置失败时不取数、不发布新快照。
 - 使用报表已经完成的测点 CASE 判定结果，不重新使用数据库原始结果列。任一结果为 `NG` 就选择该事实；两项都为 `NG` 只列一条。不同检验事实即使外观重复也保留，不对物料号或特性项目擅自去重。缺测仍遵循既有 ELSE OK 规则。
-- Core `build_evaporation_alerts()` 只返回 `REPORT_COLUMNS` 的 27 列公开数据。预警表、缓存、原生下载和快照不包含蒸镀批次、WMS“通用”产品属性、工单关联字段、内部主键、flag 或调试信息。
+- Core `build_evaporation_alerts()` 只返回 `REPORT_COLUMNS` 的 27 列公开数据。普通模式的预警表、导出与图表只接收公开业务字段。
 - 自动预警使用现有 `fetch_report_payload()` 原生 DataFrame 缓存，键继续包含窗口、前推、截止、有效产品、启用配置、工单及判定版本；与相同窗口/产品的手动查询共享缓存。页头“刷新缓存”同时使自动预警取数失效，下一次页面执行重新计算、发布；注入的测试服务绕过生产缓存。
 - 有 NG 时“蒸镀材料超规预警中心”自动展开，展示完整 NG 清单；有检验数据但无 NG、没有检验数据、源读取或快照更新失败分别显示独立业务状态。预警更新失败不会关闭普通明细查询，也不把旧快照作为当前成功结果展示。技术日志只记录安全错误码和异常类型。
 - Application `publish_evaporation_alerts()` 拥有 `EvaporationAlertStore` 端口；composition 注入 Infrastructure 的 `EvaporationAlertWorkbook`，页面不直接读写 Excel。
 - 路径唯一配置来源为 `config/global.yaml` → `resources.iqc_domain.files.evaporation_alerts`，默认 `resources/iqc_domain/eva_materials/evaporation_alerts.xlsx`。第一次成功计算并发布时自动创建，无需预置业务记录。
-- `超规材料` sheet 保存最近一次成功计算的完整超规清单；`__meta__` 保存窗口起止、产品范围、发布时间、条数和成功状态。成功的空结果清除旧清单，保留明确空结果元数据；源读取/计算失败不发布，Excel 写入失败保留原文件。
+- `超规材料候选` 保存本期全部 NG 记录，`超规材料决策` 按工厂、物料号、物料分类、特性项目、报检日期和检验时间匹配 Flag。同键的检验记录沿用相同决定。False 放行，True 屏蔽，Delete 移出公开预警。新键默认为 False，巡检和管理员上传均保留其他已有决定。普通预警中心和看板读取当前决定，常规检验明细沿用原口径。
+- 管理员下载的 Excel 附带“决策版本”。请保留该表。上传时在发布锁内核对版本，决定或业务键已变化时需重新下载。
+- `超规材料` 保存本次发布放行的记录，`__meta__` 保存窗口起止、产品范围、发布时间、候选及公开条数。成功的空结果清除本期清单并保留决策表。源读取或计算失败时停止发布，Excel 写入失败时保留原文件。
 - 工作簿使用 OS 文件锁串行化读改写，内存生成并核验后通过同目录临时文件原子替换。保留其他 sheet，失败清理本次临时文件。该文件是最新结果快照，不是追加型历史台账；发布时间反映本次发布，源数据仍遵循报表缓存和源时间语义。
 
 验证：`tests/unit/test_iqc_evaporation_alerts.py` 覆盖 OR 条件、双 NG 单行、重复事实保留、公开投影和跨年周；`tests/integration/test_iqc_evaporation_alert_workbook.py` 验证快照、清空、其他 sheet 保留、写失败与配置完整路径；`tests/e2e/test_iqc_evaporation_alerts_apptest.py` 使用真实 section、服务和 Core，注入合成源与临时工作簿，验证自动执行、全部产品、日期/产品筛选独立、正常/空/失败状态以及普通模式字段边界。现有 SQL、产品成员关系、缓存与查询门控测试继续适用。

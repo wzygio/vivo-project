@@ -23,7 +23,7 @@ def read_cached_alarm_workbook(
     """Only native frames enter the cache; no COM objects or business results."""
     workbook = Path(path)
     try:
-        return pd.read_excel(workbook, sheet_name=None)
+        return pd.read_excel(workbook, sheet_name=None, dtype=object)
     except Exception:
         try:
             return excel_tools._read_all_sheets_via_com(workbook)
@@ -73,6 +73,14 @@ class ExcelAlarmStore:
             return None
         frame = sheets[product].copy()
         frame.columns = [str(column).strip() for column in frame.columns]
+        from src.inline_domain.core.shared.sheet_oos_decoration import get_decision_sheet_name
+        from src.inline_domain.infrastructure.shared.alert_decisions import decision_rows
+        from src.inline_domain.infrastructure.shared.oos_history_store import OosHistoryStore
+        if not frame.empty and get_decision_sheet_name(product) in sheets:
+            keys = list(OosHistoryStore.contract_for(scope).key_columns)
+            latest = decision_rows(sheets, product, keys, True).set_index(keys)["flag"]
+            current_keys = pd.MultiIndex.from_frame(frame[keys].astype(str))
+            frame["flag"] = latest.reindex(current_keys).to_numpy()
         if not frame.empty and "prod_code" in frame and not frame["prod_code"].astype(str).str.strip().eq(product).all():
             raise ExcelAlarmReadError(f"{scope}/{product}: product sheet contains another product")
         time_column = "start_time" if scope == "aoi_tt" else "sheet_start_time"

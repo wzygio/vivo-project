@@ -92,14 +92,10 @@ def prepare_aoi_tt_decoration(
             prod_code,
             AOI_TT_OOS_KEY_COLUMNS,
         )
-        decoration = merge_detail_with_decoration_flags(
-            detail,
-            decisions,
-            AOI_TT_OOS_KEY_COLUMNS,
-        )
-    decoration = release_exempt_parameter_flags(
-        decoration, "tt_name", exempt_param_name_contains,
-    )
+        defaults = merge_detail_with_decoration_flags(detail, pd.DataFrame(), AOI_TT_OOS_KEY_COLUMNS)
+        defaults = release_exempt_parameter_flags(defaults, "tt_name", exempt_param_name_contains)
+        flags = pd.concat([defaults, decisions], ignore_index=True)
+        decoration = merge_detail_with_decoration_flags(detail, flags, AOI_TT_OOS_KEY_COLUMNS)
     return AoiTtDecorationResult(
         tt_details_df=apply_aoi_tt_decoration(
             tt_details_df,

@@ -26,7 +26,7 @@ class IjpDataPort(Protocol):
 
 
 class IjpAlertStore(Protocol):
-    def save(self, region: str, alerts: pd.DataFrame, reference_date: date) -> None: ...
+    def save(self, region: str, alerts: pd.DataFrame, reference_date: date) -> pd.DataFrame | None: ...
 
 
 class IjpAlertReport(TypedDict):

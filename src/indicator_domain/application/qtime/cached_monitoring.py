@@ -35,7 +35,7 @@ from src.shared_kernel.data_health import make_data_health
 # 决策工作簿不存在（按需创建，用户从未上传过决策）时的确定性哨兵。
 MISSING_DECISION_FILE_STAT: tuple[int, int] = (-1, -1)
 # Invalidate results computed before support for microsecond source timekeys.
-MONITORING_CACHE_VERSION = 5
+MONITORING_CACHE_VERSION = 6
 logger = logging.getLogger(__name__)
 
 

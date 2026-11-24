@@ -18,6 +18,7 @@ from src.inline_domain.core.monitor.capability_trend import (
     normalize_capability_history, week_owner_month,
 )
 from src.inline_domain.core.spc.cpk_decoration import CPK_KEY_COLUMNS
+from src.inline_domain.core.monitor.cpk_latest import public_capability_history, released_capability_mask
 from src.shared_kernel.config import ConfigLoader
 
 
@@ -64,13 +65,14 @@ class CpkWorkbookMonitorService:
         detail = pd.DataFrame(columns=[
             *(column.replace("cpk", self._metric) for column in CPK_DETAIL_COLUMNS), "status",
         ])
+        all_detail = detail
         status = pd.DataFrame()
         date_exclusion = ConfigLoader.get_inline_data_exclusion()
         if self._latest_reader is not None:
             frames = [self._latest_reader.read_product(product) for product in products]
             frames = [frame for frame in frames if frame is not None and not frame.empty]
             if frames:
-                detail = pd.concat(frames, ignore_index=True)
+                all_detail = detail = pd.concat(frames, ignore_index=True)
                 previous = as_of - pd.Timedelta(days=as_of.weekday() + 7)
                 iso = previous.isocalendar()
                 latest = (detail["period_type"].eq("week")
@@ -95,6 +97,10 @@ class CpkWorkbookMonitorService:
             & records["监控类型"].eq("SPC")
             & records["厂别"].eq("ALL")
         ]
+        all_detail = exclude_inline_period_records(all_detail, date_exclusion, as_of=as_of)
+        selected = public_capability_history(selected, all_detail, self._metric)
+        if "flag" in detail:
+            detail = detail.loc[~detail["flag"].astype(str).str.strip().str.lower().eq("delete")]
         return CpkMonitorViewModel(
             build_cpk_summary_from_records(
                 selected, end_date=as_of, expected_products=products, week_count=4, metric=self._metric,
@@ -143,9 +149,8 @@ class CpkWorkbookMonitorService:
         if ledger is not None and not ledger.empty:
             if missing := {*CPK_KEY_COLUMNS, "flag"} - set(ledger.columns):
                 raise ValueError(f"Capability alert history missing columns: {sorted(missing)}")
-            flags = ledger["flag"].astype("string").str.strip().str.lower()
             rows = ledger.loc[ledger["prod_code"].eq(product) & ledger["period_type"].eq("week")
-                              & ledger["period_label"].isin(weeks) & flags.isin(["false", "0", "0.0"])]
+                              & ledger["period_label"].isin(weeks) & released_capability_mask(ledger, self._metric)]
             warnings = rows.drop_duplicates(CPK_KEY_COLUMNS).groupby("period_label").size()
         total_column, rate_column = capability_summary_columns(self._metric)[6:8]
         rows = []
@@ -192,7 +197,7 @@ class CpkWorkbookMonitorService:
             ledger = self._latest_reader.read_product(product)
             updates.append(self._weekly_rows(product, weeks, ledger, as_of))
             if ledger is not None and not ledger.empty:
-                details.append(ledger.loc[ledger["period_type"].eq("week") & ledger["period_label"].eq(label)])
+                details.append(ledger)
             statuses.append({"product": product, "period": label, "source": "snapshot", "message": ""})
         if updates:
             records = self._store.refresh_weeks(pd.concat(updates, ignore_index=True),
@@ -202,8 +207,12 @@ class CpkWorkbookMonitorService:
         selected = records.loc[records["产品"].isin(products) & records["监控类型"].eq("SPC")
                                & records["厂别"].eq("ALL")]
         detail = pd.concat(details, ignore_index=True) if details else pd.DataFrame(columns=CPK_DETAIL_COLUMNS)
-        if "factory" in detail:
-            detail = detail.loc[detail["factory"].isin(factories)].copy()
+        active_detail = exclude_inline_period_records(detail, ConfigLoader.get_inline_data_exclusion(), as_of=as_of)
+        selected = public_capability_history(selected, active_detail, self._metric)
+        if not detail.empty:
+            detail = detail.loc[detail["period_type"].eq("week") & detail["period_label"].eq(label)
+                                & detail["factory"].isin(factories)
+                                & ~detail["flag"].astype(str).str.strip().str.lower().eq("delete")].copy()
         return CpkMonitorViewModel(
             build_cpk_summary_from_records(selected, end_date=as_of, expected_products=products,
                                            week_count=4, metric=self._metric),

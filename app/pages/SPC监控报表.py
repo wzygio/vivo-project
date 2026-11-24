@@ -173,8 +173,8 @@ if raw_measurements_df.empty or indicator_df.empty:
     _render_saved_page_alerts(view_model)
     st.stop()
 
-query_params = st.query_params
-is_admin = query_params.get("admin") == "true" or "admin-true" in query_params
+from app.utils.admin_mode import is_admin_mode
+is_admin = is_admin_mode(st.query_params) or "admin-true" in st.query_params
 render_spc_report_interaction(
     view_model, product=current_product, reference_date=default_end_dt.date(),
     step_desc_map=step_desc_map, is_admin=is_admin,

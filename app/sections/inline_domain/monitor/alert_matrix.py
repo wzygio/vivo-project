@@ -26,6 +26,9 @@ from typing import Any
 
 import streamlit as st
 
+from app.utils.admin_mode import is_admin_mode
+from src.shared_kernel.config import ConfigLoader
+
 from app.components.product_labels import get_product_label_formatter
 from app.sections.inline_domain.monitor.alert_matrix_cache import get_cached_alert_matrix
 from app.components.indicator_cache import bump_indicator_product_revision
@@ -291,7 +294,9 @@ def _render_matrix_rows(
         line_columns[0].markdown(str(row.get("display_name") or row.get("row_key", "")))
         row_key = str(row.get("row_key", ""))
         for column, prod_code in zip(line_columns[1:], products):
-            cell = cells.get((row_key, prod_code)) or {}
+            cell = cells.get((row_key, prod_code))
+            if cell is None:
+                continue
             state = _effective_cell_state(row, cell, selected_factories)
             detail_key = cell.get("detail_key") or f"{row_key}|{prod_code}"
             column.button(
@@ -341,10 +346,11 @@ def render_alert_matrix_board(
     except Exception:
         logger.exception("[alert-matrix] 显示修饰配置读取失败")
         st.warning("显示配置加载失败，请稍后重试。")
+        return
 
     render_alert_matrix_section(payload, filter_selection=filter_selection)
 
-    if str(st.query_params.get("admin", "")).lower() == "true":
+    if is_admin_mode(st.query_params):
         st.dataframe([
             {"指标": row, "产品": product, "刷新标识": cell.get("cache_revision", ""),
              "状态计算时间": cell.get("computed_at", "")}
@@ -365,7 +371,7 @@ def render_alert_matrix_board(
 
 
 def _refresh_matrix(indicator: str, product: str, refresh_data: bool) -> None:
-    if st.query_params.get("admin") != "true":
+    if not is_admin_mode(st.query_params):
         return
     try:
         if refresh_data:
@@ -401,10 +407,9 @@ def _refresh_matrix(indicator: str, product: str, refresh_data: bool) -> None:
 
 def render_matrix_refresh_controls() -> None:
     """Manual refresh is explicitly targeted and visible only in admin mode."""
-    if st.query_params.get("admin") != "true":
+    if not is_admin_mode(st.query_params):
         return
     from app.sections.inline_domain.monitor.alert_matrix_service import MATRIX_ROWS
-    from src.shared_kernel.config import ConfigLoader
 
     with st.expander("指标刷新管理（管理员）", expanded=False):
         names = {row.row_key: row.display_name for row in MATRIX_ROWS}

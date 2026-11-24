@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from collections.abc import Callable
 
 
 def _alert_display(alerts: pd.DataFrame) -> pd.DataFrame:
@@ -33,10 +34,13 @@ def _alert_display(alerts: pd.DataFrame) -> pd.DataFrame:
     )[["站点", "Lot ID", "Q-Time规格(H)", "等待时长(H)", "超规时长(H)", "过货时间"]]
 
 
-def render_qtime_alert_center(alerts: pd.DataFrame, *, total_lots: int) -> None:
+def render_qtime_alert_center(alerts: pd.DataFrame, *, total_lots: int,
+                              maintenance: Callable[[], None] | None = None) -> None:
     """Render confirmed real Q-Time violations in the current report window."""
     has_alerts = not alerts.empty
     with st.expander("Q-Time 超规预警中心", expanded=has_alerts):
+        if maintenance is not None:
+            maintenance()
         if has_alerts:
             alert_lots = alerts["lot_id"].nunique()
             st.error(f"检测到 {len(alerts)} 条已确认超规，涉及 {alert_lots} 个 Lot，请关注。")
