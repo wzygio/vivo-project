@@ -88,6 +88,31 @@ def _export_app():
     render_yield_weekly_export()
 
 
+def test_product_picker_controls_generation_and_invalidates_previous_download(monkeypatch):
+    enabled = ("M626", "M678", "Z517")
+    monkeypatch.setattr(weekly_export.ConfigLoader, "get_enabled_products", lambda **_: enabled)
+    monkeypatch.setattr(weekly_export, "_input_revision", lambda _: ("v1",))
+    calls = []
+
+    def generate(*, selected_products, db_manager):
+        calls.append(selected_products)
+        return weekly_export.WeeklyYieldExport(ReportWeek.previous(), selected_products, b"pptx", ("v1",))
+
+    monkeypatch.setattr(weekly_export, "generate_weekly_yield_export", generate)
+    app = AppTest.from_function(_export_app).run()
+    for i, (selection, expected) in enumerate([
+        (["Z517"], ("Z517",)),
+        (["Z517", "M626"], ("M626", "Z517")),
+        ([], enabled),
+    ]):
+        app.multiselect(key="yield_weekly_products").set_value(selection).run()
+        assert not app.exception and not app.get("download_button")
+        assert len(calls) == i
+        app.button(key="yield_weekly_generate").click().run()
+        assert calls[-1] == expected
+        assert app.get("download_button")
+
+
 def test_download_follows_success_and_is_removed_after_failure(monkeypatch):
     products = ["M678", "Z622"]
     monkeypatch.setattr(weekly_export.ConfigLoader, "get_enabled_products", lambda **_: products)
