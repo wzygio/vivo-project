@@ -45,6 +45,7 @@
 | Yield 良率分析职责与分层 | [Yield 概览](domain/yield_domain/shared/overview-yield.md) |
 | Yield 报表数据流、共享输入版本、请求缓存、按需详情、覆盖表读取与暂停 Array 时间查询／排序 | [Yield 报表数据流](domain/yield_domain/shared/data-flow-yield-report.md) |
 | Yield Lot/趋势预警结果文件、原报表发布、空结果/失败元数据、矩阵直读与全产品补齐 | [Yield 预警结果规则](domain/yield_domain/shared/rules-yield-alert-results.md) |
+| 上一 ISO 周全产品良率 PPT、预警结论、模板和看板导出 | [Yield 良率周报规则](domain/yield_domain/shared/rules-yield-weekly-report.md) |
 | Mapping 坐标、矩阵修饰、随机分布与守恒 | [Mapping 算法](domain/yield_domain/mapping/algorithm-mapping.md) |
 | MWD 月周日趋势、修饰表、Code / Group 汇总与跨月平滑 | [MWD 趋势算法](domain/yield_domain/mwd_trend/algorithm-mwd-trend.md) |
 | 全产品半年／季度／月度不良率、独立过货数、Excel历史快照、Code筛选及季报Top5 | [年度趋势历史规则](domain/yield_domain/mwd_trend/rules-period-trend-history.md) |

@@ -57,7 +57,7 @@ def merge_lot_release_controls(
 
 
 def merge_release_controls(
-    kind: str, records: pd.DataFrame, decisions: pd.DataFrame | None,
+    kind: str, records: pd.DataFrame, decisions: pd.DataFrame | None, *, add_missing: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     keys = RELEASE_KEYS[kind]
     columns = [*keys, "flag"]
@@ -70,14 +70,15 @@ def merge_release_controls(
         history = _release_keys(decisions, kind).reindex(columns=columns)
         if history.duplicated(keys).any():
             raise ValueError("Duplicate Yield release decisions")
-    new_keys = source[keys].drop_duplicates()
-    existing = set(history[keys].itertuples(index=False, name=None))
-    unseen = [key not in existing for key in new_keys.itertuples(index=False, name=None)]
-    additions = new_keys.loc[unseen].assign(flag=kind == "lot")
-    if history.empty:
-        history = additions.reset_index(drop=True)
-    elif not additions.empty:
-        history = pd.concat([history, additions], ignore_index=True)
+    if add_missing:
+        new_keys = source[keys].drop_duplicates()
+        existing = set(history[keys].itertuples(index=False, name=None))
+        unseen = [key not in existing for key in new_keys.itertuples(index=False, name=None)]
+        additions = new_keys.loc[unseen].assign(flag=kind == "lot")
+        if history.empty:
+            history = additions.reset_index(drop=True)
+        elif not additions.empty:
+            history = pd.concat([history, additions], ignore_index=True)
     effective = source.drop(columns="flag", errors="ignore").merge(
         history, on=keys, how="left", validate="many_to_one", sort=False,
     )
@@ -181,15 +182,11 @@ class YieldAlertResults:
         metadata["attempted_at"] = self.clock().isoformat()
         return self.store.write_product(product, kind, None, metadata)
 
-    def read(self, product: str, kind: str, reference_date: date, *,
-             start_date: str | None = None, end_date: str | None = None,
-             time_period: int | None = None) -> PublishedYieldAlerts:
-        payload = self.store.read_product(product, kind)
-        if payload is None:
-            return PublishedYieldAlerts("missing", pd.DataFrame(columns=RESULT_COLUMNS[kind]), {})
-        frame, meta = payload["records"], payload["metadata"]
+    def publication_status(self, product: str, kind: str, frame: pd.DataFrame, meta: Mapping, *,
+                           reference_date: date | None = None) -> str:
+        """Validate the publication before applying a consumer's selection window."""
         if meta.get("status") == "failed":
-            return PublishedYieldAlerts("failed", frame, meta)
+            return "failed"
         required = {"schema_version", "product", "kind", "reference_date", "policy_signature",
                     "coverage_start", "coverage_end", "row_count", "has_data", "generated_at",
                     "source_status", "source_refreshed_at", "fingerprint"}
@@ -199,7 +196,7 @@ class YieldAlertResults:
                 or meta["kind"] != kind or set(RESULT_COLUMNS[kind]) - set(frame.columns)
                 or len(frame) != meta["row_count"] or meta["has_data"] not in (True, False)):
             raise ValueError("Invalid Yield publication payload")
-        stale = (meta["reference_date"] != reference_date.isoformat()
+        stale = ((reference_date is not None and meta["reference_date"] != reference_date.isoformat())
                  or meta["policy_signature"] != self.policy_signature(product)
                  or meta["source_status"] != "fresh")
         now = pd.Timestamp(self.clock())
@@ -209,8 +206,18 @@ class YieldAlertResults:
             timestamp = _utc_timestamp(meta[key])
             age = (now.tz_convert("UTC") - timestamp).total_seconds() if pd.notna(timestamp) else -1
             stale |= age < 0 or age > self.ttl_seconds
-        if stale:
-            return PublishedYieldAlerts("stale", frame, meta)
+        return "stale" if stale else "ready"
+
+    def read(self, product: str, kind: str, reference_date: date, *,
+             start_date: str | None = None, end_date: str | None = None,
+             time_period: int | None = None) -> PublishedYieldAlerts:
+        payload = self.store.read_product(product, kind)
+        if payload is None:
+            return PublishedYieldAlerts("missing", pd.DataFrame(columns=RESULT_COLUMNS[kind]), {})
+        frame, meta = payload["records"], payload["metadata"]
+        status = self.publication_status(product, kind, frame, meta, reference_date=reference_date)
+        if status != "ready":
+            return PublishedYieldAlerts(status, frame, meta)
         monday = reference_date - timedelta(days=reference_date.weekday())
         required_start = monday - timedelta(days=7) if kind == "lot" else reference_date
         required_end = monday - timedelta(days=1) if kind == "lot" else reference_date

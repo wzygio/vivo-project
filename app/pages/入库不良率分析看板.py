@@ -42,6 +42,7 @@ from app.sections.yield_domain.chart_data import build_chart_data_signature
 from src.yield_domain.application.report_cache import YieldSourceGenerationChanged
 from app.sections.yield_domain.code_analysis import render_code_analysis_section
 from app.sections.yield_domain.published_alert_center import render_saved_yield_alerts
+from app.sections.yield_domain.weekly_export import render_yield_weekly_export
 
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
@@ -144,6 +145,7 @@ saved_alerts = render_saved_yield_alerts(
     active_config.data_source.product_code,
     pd.Timestamp(yield_cache_context['analysis_end_date']).date(),
 )
+render_yield_weekly_export(db_manager=db_manager)
 if alert_generation["errors"]:
     st.error("Yield 报表数据加载失败，请稍后重试。")
     st.stop()

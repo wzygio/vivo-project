@@ -8,7 +8,7 @@ import pytest
 import pythoncom
 import win32com.client
 
-from src.inline_domain.infrastructure.shared import ppt_template
+from src.shared_kernel.infrastructure import ppt_template
 
 
 def xml_package():
@@ -68,5 +68,5 @@ def test_protected_template_cleanup_and_preserved_sessions(monkeypatch, tmp_path
     assert ("close" in calls) == (outcome != "open_failure")
     assert ("quit" in calls) == (not existing)
     assert calls[-1] == "uninit"
-    assert not list((tmp_path / "work").glob("inline_ppt_template_*"))
+    assert not list((tmp_path / "work").glob("ppt_template_*"))
     assert source.read_bytes() == b"\0" * 16

@@ -47,5 +47,5 @@
 - 数据、真实服务零 RS 分支：`tests/unit/inline_domain/application/aoi_rs/test_weekly_report.py`。
 - 文件与版式：`tests/unit/app/sections/aoi_rs/test_aoi_rs_weekly_ppt.py`，覆盖行/列分页及图片关系保留。
 - AppTest 及异常中断：`tests/unit/app/sections/aoi_rs/test_aoi_rs_weekly_export.py`。
-- 模板读取及 Office 生命周期：`tests/unit/inline_domain/infrastructure/shared/test_ppt_template.py`。
+- 模板读取及 Office 生命周期见 `tests/unit/shared_kernel/infrastructure/test_ppt_template.py`。
 - 真实模板验证使用合成 RS 事实，生成 8 页并由 PowerPoint 重新打开；示例与预览写入 `output/test-results/aoi_rs_weekly/`，未查询生产数据库。

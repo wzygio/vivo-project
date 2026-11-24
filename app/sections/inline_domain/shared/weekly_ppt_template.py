@@ -3,7 +3,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from src.inline_domain.infrastructure.shared.ppt_template import read_ppt_template
+from src.shared_kernel.infrastructure.ppt_template import read_ppt_template
 from src.shared_kernel.config import ConfigLoader
 
 

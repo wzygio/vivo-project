@@ -7,6 +7,7 @@ from plotly.subplots import make_subplots
 from typing import Optional
 from datetime import datetime, timedelta
 
+from app.constants import COLOR_MAP
 from src.shared_kernel.config import ConfigLoader
 
 # -----------------------------------------------------------------------------
@@ -157,6 +158,48 @@ def create_group_trend_chart(
     fig.update_xaxes(type='category', tickangle=-45 if "日度" in title else 0)
     
     return fig
+
+def prepare_group_trend_figures(
+    mwd_group_data: dict,
+    sel_grps_macro: list,
+    dynamic_category_orders: dict,
+) -> list[tuple[str, go.Figure | None]]:
+    """Build Group charts with the dashboard time windows and one defect-rate scale."""
+    df_m = slice_recent_data(mwd_group_data.get('monthly'), 3)
+    df_w = slice_recent_data(mwd_group_data.get('weekly'), 3)
+    df_d = slice_recent_data(mwd_group_data.get('daily'), 7)
+
+    # 多选过滤: 若用户有选中 Group 则只展示选中项；未选或全不选时展示全部
+    if sel_grps_macro:
+        filter_func = lambda df: df[df['defect_group'].isin(sel_grps_macro)] if df is not None else None
+        df_m, df_w, df_d = map(filter_func, [df_m, df_w, df_d])
+
+    max_rate = 0
+    for df in [df_m, df_w, df_d]:
+        if df is not None and not df.empty:
+            curr_max = df.groupby('time_period', observed=False)['defect_rate'].sum().max()
+            if pd.notna(curr_max):
+                max_rate = max(max_rate, curr_max)
+    y_limit = [0, max_rate * 1.2] if max_rate > 0 else [0, 0.1]
+
+    chart_configs = [
+        (df_m, "月度趋势", False, True),
+        (df_w, "周度趋势", False, False),
+        (df_d, "日度趋势", True, False),
+    ]
+    figures = []
+    for df, title, show_slider, show_count in chart_configs:
+        if df is None or df.empty:
+            figures.append((title, None))
+            continue
+        figures.append((
+            title,
+            create_group_trend_chart(
+                df, title, show_slider, show_count, y_limit, COLOR_MAP,
+                dynamic_category_orders, show_input_count=True
+            ),
+        ))
+    return figures
 
 # -----------------------------------------------------------------------------
 #  Code 级图表绘制

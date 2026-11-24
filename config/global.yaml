@@ -130,6 +130,7 @@ resources:
       period_trend_history: resources/yield_domain/mwd_trend/yield_period_history.xlsx
       lot_oos_results: resources/yield_domain/sheet_lot/yield_lot_oos_results.xlsx
       trend_alert_results: resources/yield_domain/mwd_trend/yield_trend_alert_results.xlsx
+      weekly_ppt_template: resources/yield_domain/北极星周报-template-yield.pptx
       lot_oos_results_backup: resources/yield_domain/sheet_lot/yield_lot_oos_results.xlsx.bak
       trend_alert_results_backup: resources/yield_domain/mwd_trend/yield_trend_alert_results.xlsx.bak
       asset_sig_json_909181e8: resources/yield_domain/mwd_trend/入库良率修饰表.sig.json

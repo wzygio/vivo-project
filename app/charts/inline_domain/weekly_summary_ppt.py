@@ -1,7 +1,6 @@
 """Editable Inline weekly tables on the configured PowerPoint master."""
 from __future__ import annotations
 
-from copy import deepcopy
 from datetime import timedelta
 from io import BytesIO
 from math import ceil, isfinite
@@ -13,6 +12,8 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Pt
+
+from app.charts.ppt_slides import clone_template_slide, drop_slide
 
 if TYPE_CHECKING:
     from src.inline_domain.application.shared.weekly_summary import WeeklySummaryTable
@@ -85,31 +86,6 @@ def _pages(rows, label_width: float):
         height += row_height
     if page or not rows:
         yield page
-
-
-def _clone_template_slide(deck, source):
-    """Copy slide-local assets while retaining the original layout/master."""
-    slide = deck.slides.add_slide(source.slide_layout)
-    for shape in list(slide.shapes):
-        slide.shapes._spTree.remove(shape.element)
-    relation_ids = {}
-    for relationship in source.part.rels.values():
-        if relationship.is_external:
-            rid = slide.part.rels.get_or_add_ext_rel(relationship.reltype, relationship.target_ref)
-        else:
-            rid = slide.part.rels.get_or_add(relationship.reltype, relationship.target_part)
-        relation_ids[relationship.rId] = rid
-    for shape in source.shapes:
-        element = deepcopy(shape.element)
-        for node in element.iter():
-            for attr, value in list(node.attrib.items()):
-                if attr.startswith("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"):
-                    node.set(attr, relation_ids[value])
-        slide.shapes._spTree.insert_element_before(element, "p:extLst")
-    background = source._element.cSld.find("{http://schemas.openxmlformats.org/presentationml/2006/main}bg")
-    if background is not None:
-        slide._element.cSld.insert(0, deepcopy(background))
-    return slide
 
 
 def _density_color(text: str, within_spec: bool | None) -> str:
@@ -192,7 +168,7 @@ def build_weekly_summary_ppt(
         for product_start in range(0, len(table.products), PRODUCTS_PER_PAGE):
             label_width = 210 if table.factory == "ARRAY" else 245
             for rows in _pages(table.rows, label_width):
-                slide = _clone_template_slide(deck, source)
+                slide = clone_template_slide(deck, source)
                 page_number += 1
                 title = slide.shapes.add_textbox(Pt(20), Pt(8), Pt(700), Pt(48))
                 factory = "Array" if table.factory == "ARRAY" else table.factory
@@ -210,9 +186,7 @@ def build_weekly_summary_ppt(
                 footer = slide.shapes.add_textbox(Pt(20), Pt(514), Pt(920), Pt(20))
                 _text(footer, f"{report_name} 周报    ·    {page_number}", 10, color="777777")
     # Remove only the unused, pristine template slide, retaining its master and assets.
-    source_id = deck.slides._sldIdLst[0]
-    deck.part.drop_rel(source_id.rId)
-    deck.slides._sldIdLst.remove(source_id)
+    drop_slide(deck, 0)
     deck.core_properties.title = f"{report_name} 周度报告"
     deck.core_properties.subject = metric_label
     deck.core_properties.author = ""

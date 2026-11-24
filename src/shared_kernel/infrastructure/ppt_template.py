@@ -45,7 +45,7 @@ def _read_protected_template(path: Path, temp_root: Path) -> bytes:
     pythoncom.CoInitialize()
     app = document = None
     try:
-        with TemporaryDirectory(prefix="inline_ppt_template_", dir=temp_root) as directory:
+        with TemporaryDirectory(prefix="ppt_template_", dir=temp_root) as directory:
             app = win32com.client.DispatchEx("PowerPoint.Application")
             document = app.Presentations.Open(str(path.resolve()), True, False, False)
             target = Path(directory) / "template.pptx"

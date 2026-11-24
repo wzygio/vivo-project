@@ -25,7 +25,7 @@
 | 原生周表结构与共用判定/格式函数 | `application/shared/weekly_summary.py` |
 | 可编辑 PPT、母版资产、行/列分页与颜色映射 | `app/charts/inline_domain/weekly_summary_ppt.py` |
 | 报告分类、单位、文件元数据 | RS / TT 的薄 PPT 包装器 |
-| 保护模板规范化及临时资源清理 | `infrastructure/shared/ppt_template.py` |
+| 保护模板规范化及临时资源清理 | `src/shared_kernel/infrastructure/ppt_template.py` |
 | 模板原生字节缓存 | `app/sections/inline_domain/shared/weekly_ppt_template.py` |
 
 PPT 写入模块不查询数据库、不读取业务规格文件，也不从展示数字反算 density 或再次判定规格。其唯一业务判定输入为应用层传入的逐产品结果。

@@ -39,10 +39,15 @@ def yield_alert_policy_signature(product: str) -> str:
     if product not in overrides and product not in enabled:
         raise ValueError(f"Unknown Yield product: {product}")
     product_config = overrides.get(product, {})
+    resources = global_config.get("resources", {}).get("yield_domain", {})
+    alert_resources = {**resources, "files": {
+        key: value for key, value in resources.get("files", {}).items()
+        if key != "weekly_ppt_template"
+    }}
     policy = {
         "schema": RESULT_SCHEMA_VERSION,
         "global": {key: global_config.get(key) for key in ("data_source", "data_forward", "report_cutoff")},
-        "resources": global_config.get("resources", {}).get("yield_domain"),
+        "resources": alert_resources if resources else resources,
         "product": {"data_source": {**product_config.get("data_source", {}), "product_code": product},
                     "paths": product_config.get("paths"), "processing": product_config.get("processing")},
         "domain": domain,

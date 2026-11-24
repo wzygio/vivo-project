@@ -34,7 +34,7 @@
 ## 模板、共享与交互
 
 - 模板由全局 `resources.inline_domain.files.aoi_tt_weekly_ppt_template` 配置，当前沿用用户提供的 `references/template/template-PPT.pptx`。保留原文件、母版、Logo、水印，生成可编辑表格。
-- 与 RS 共用 `application/shared/weekly_summary.py` 的原生表格结构及数字格式、`app/charts/inline_domain/weekly_summary_ppt.py` 的 PPT 写入，以及 `infrastructure/shared/ppt_template.py` 的受保护模板读取。两个模板资源指向同一路径时，表现层按路径/mtime/size 复用模板原生 bytes 缓存。
+- 与 RS 共用 `application/shared/weekly_summary.py` 的原生表格结构及数字格式、`app/charts/inline_domain/weekly_summary_ppt.py` 的 PPT 写入，以及 `src/shared_kernel/infrastructure/ppt_template.py` 的受保护模板读取。两个模板资源指向同一路径时，表现层按路径/mtime/size 复用模板原生 bytes 缓存。
 - TT 与 RS 的产品查询、业务计算、缓存签名、生成状态及下载文件名保持各自归属。TT 报告分类为 `TT Defect`、单位为“平均每片 TT 个数”，文件名为 `AOI_TT_周报_<ISO 周>.pptx`。
 - 用户点击生成后再下载，可重复下载。失败或异常中断会解除忙状态，并保留上次完整报告；筛选变化时提示旧下载尚未更新，禁用产品会使包含该产品的旧下载失效。
 - 普通模式提示和下载仅包含业务内容；技术异常记录在日志，不显示内部路径、标志字段或其他数据版本。
@@ -45,5 +45,5 @@
 - 数据规则与真实服务空明细：`tests/unit/inline_domain/application/aoi_tt/test_aoi_tt_weekly_report.py`。
 - 普通模式生成、下载、筛选、错误、中断、缓存：`tests/unit/app/sections/aoi_tt/test_aoi_tt_weekly_export.py`。
 - 下载文件的八产品列、数值、类别及单位：`tests/unit/app/sections/aoi_tt/test_aoi_tt_weekly_ppt.py`。
-- 模板读取及生命周期：`tests/unit/inline_domain/infrastructure/shared/test_ppt_template.py`。
+- 模板读取及生命周期见 `tests/unit/shared_kernel/infrastructure/test_ppt_template.py`。
 - 2026-10-20 使用实际模板及合成数据生成 Array/OLED/TP 三页、每页八产品，由 PowerPoint 重新打开和导出预览通过。样例及测试日志位于 `output/test-results/aoi_tt_weekly/`，并非生产周报。

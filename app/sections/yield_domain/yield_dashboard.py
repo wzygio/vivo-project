@@ -14,7 +14,7 @@ from app.sections.yield_domain.resource_config import get_array_time_query_enabl
 
 from app.charts.yield_domain.compact_layout import apply_compact_chart_layout
 from app.charts.yield_domain.mwd_chart import (
-    create_group_trend_chart, 
+    prepare_group_trend_figures,
     create_code_trend_chart,
     slice_recent_data
 )
@@ -25,7 +25,6 @@ from app.charts.yield_domain.sheet_lot_chart import (
     parse_panel_id_to_coords,
     create_sheet_stack_chart
 )
-from app.constants import COLOR_MAP
 from yield_domain.core.mapping.layout import resolve_mapping_layout
 from yield_domain.core.mapping.mapping_processor import apply_hotspot_modification_to_matrix
 
@@ -94,7 +93,7 @@ def render_macro_trend_section(
     gate = RenderGate()
     gate.stage(
         partial(
-            _prepare_macro_trend_figures,
+            prepare_group_trend_figures,
             mwd_group_data=mwd_group_data,
             sel_grps_macro=sel_grps_macro,
             dynamic_category_orders=dynamic_category_orders,
@@ -112,47 +111,6 @@ def render_macro_trend_section(
             else:
                 st.info(f"{title}数据暂无")
 
-
-def _prepare_macro_trend_figures(
-    mwd_group_data: dict,
-    sel_grps_macro: list,
-    dynamic_category_orders: dict,
-) -> List[tuple]:
-    """[RenderGate 阶段1] 纯计算：构建 Group 级月/周/日趋势图，禁止触碰 st.*。"""
-    df_m = slice_recent_data(mwd_group_data.get('monthly'), 3)
-    df_w = slice_recent_data(mwd_group_data.get('weekly'), 3)
-    df_d = slice_recent_data(mwd_group_data.get('daily'), 7)
-
-    # 多选过滤: 若用户有选中 Group 则只展示选中项；未选或全不选时展示全部
-    if sel_grps_macro:
-        filter_func = lambda df: df[df['defect_group'].isin(sel_grps_macro)] if df is not None else None
-        df_m, df_w, df_d = map(filter_func, [df_m, df_w, df_d])
-
-    max_rate = 0
-    for df in [df_m, df_w, df_d]:
-        if df is not None and not df.empty:
-            curr_max = df.groupby('time_period')['defect_rate'].sum().max()
-            if pd.notna(curr_max): max_rate = max(max_rate, curr_max)
-    y_limit = [0, max_rate * 1.2] if max_rate > 0 else [0, 0.1]
-
-    chart_configs = [
-        (df_m, "月度趋势", False, True),
-        (df_w, "周度趋势", False, False),
-        (df_d, "日度趋势", True, False),
-    ]
-    figures = []
-    for df, title, show_slider, show_count in chart_configs:
-        if df is None or df.empty:
-            figures.append((title, None))
-            continue
-        figures.append((
-            title,
-            create_group_trend_chart(
-                df, title, show_slider, show_count, y_limit, COLOR_MAP,
-                dynamic_category_orders, show_input_count=True
-            ),
-        ))
-    return figures
 
 # ==============================================================================
 #  2. 微观分析区 (Row A: Code 级时间趋势)
