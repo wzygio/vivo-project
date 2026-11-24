@@ -72,6 +72,18 @@ def _render_charts(figures: list[go.Figure], temp_root: Path) -> list[bytes]:
         return [path.read_bytes() for path in paths]
 
 
+def _weekly_rate_text(trends: dict | None, week_label: str) -> str:
+    """Use the target week's stacked Group total, with one shared panel denominator."""
+    data = trends or {}
+    weekly = data.get("weekly_full", data.get("weekly"))
+    if weekly is None or weekly.empty:
+        return "暂无数据"
+    rows = weekly.loc[weekly["time_period"].eq(week_label)]
+    if rows.empty or not rows["total_panels"].gt(0).all() or rows["defect_rate"].isna().any():
+        return "暂无数据"
+    return f"{rows['defect_rate'].sum():.2%}"
+
+
 def _replace_text(shape, text: str) -> None:
     paragraph = shape.text_frame.paragraphs[0]
     runs = paragraph.runs or (paragraph.add_run(),)
@@ -139,8 +151,9 @@ def build_weekly_yield_ppt(
                     shape.element.getparent().remove(shape.element)
                 continue
             product = products[index]
+            rate = _weekly_rate_text(trends[product], week_label)
             _fill_slot(
-                slide, shapes, product, f"{product} - {week_label}不良率，{conclusions[product]}",
+                slide, shapes, product, f"{product} - {week_label}不良率{rate}，{conclusions[product]}",
                 images[index * _CHARTS_PER_PRODUCT:(index + 1) * _CHARTS_PER_PRODUCT], deck.slide_width,
             )
     drop_slide(deck, 2)

@@ -47,6 +47,15 @@ def test_export_group_colors_and_daily_legend_match_dashboard():
     assert all(bar.width == 0.7 for bar in day.select_traces(dict(type="bar")))
 
 
+def test_summary_rate_requires_target_iso_year_week_and_positive_throughput():
+    weekly = pd.DataFrame({
+        "time_period": ["2025-W01", "2026-W01"], "total_panels": [100, 0],
+        "defect_rate": [0.05, 0.0],
+    })
+    assert weekly_ppt._weekly_rate_text({"weekly": weekly}, "2026-W01") == "暂无数据"
+    assert weekly_ppt._weekly_rate_text({"weekly": weekly}, "2026-W02") == "暂无数据"
+
+
 def test_deck_preserves_cover_and_fills_two_product_slots(monkeypatch, tmp_path):
     template = Presentation()
     layout = template.slide_layouts[6]
@@ -65,8 +74,15 @@ def test_deck_preserves_cover_and_fills_two_product_slots(monkeypatch, tmp_path)
     monkeypatch.setattr(weekly_ppt, "_render_charts", lambda figures, _: [png.getvalue()] * len(figures))
 
     conclusions = {"A": "正常", "B": "CODE-规则", "C": "LOT-CODE超规"}
+    weekly = pd.DataFrame({
+        "time_period": ["2026-W47", "2026-W47", "2026-W48"],
+        "total_panels": [10000, 10000, 10000], "defect_rate": [0.0123, 0.0138, 0.07],
+        "defect_group": ["G1", "G2", "G1"],
+    })
+    trends = {"A": {"weekly_full": weekly}, "B": {"weekly": weekly.assign(defect_rate=0)}, "C": None}
+    rates = {"A": "2.61%", "B": "0.00%", "C": "暂无数据"}
     result = weekly_ppt.build_weekly_yield_ppt(
-        conclusions, dict.fromkeys(conclusions), week_label="2026-W47",
+        conclusions, trends, week_label="2026-W47",
         template_bytes=template_bytes.getvalue(), temp_root=tmp_path,
     )
     slides = Presentation(BytesIO(result)).slides
@@ -77,7 +93,7 @@ def test_deck_preserves_cover_and_fills_two_product_slots(monkeypatch, tmp_path)
         texts = {shape.text for shape in slide.shapes if shape.has_text_frame}
         assert texts == {
             text for product in products
-            for text in (f"{product}不良率", f"{product} - 2026-W47不良率，{conclusions[product]}")
+            for text in (f"{product}不良率", f"{product} - 2026-W47不良率{rates[product]}，{conclusions[product]}")
         }
         assert sum(shape.shape_type == MSO_SHAPE_TYPE.PICTURE for shape in slide.shapes) == 3 * len(products)
 
