@@ -14,7 +14,6 @@ from app.components import page_header
 from app.sections.inline_domain.aoi_rs import aoi_rs_dashboard
 from app.sections.inline_domain.aoi_rs import trend_alerts as trend_alert_section
 from app.utils.app_setup import AppSetup
-from app.manager.session_manager import SessionManager
 from src.inline_domain import composition as inline_composition
 from src.inline_domain.application.aoi_rs.dtos import AoiRsQueryConfig
 from src.inline_domain.application.aoi_rs.aoi_rs_service import AoiRsReportService
@@ -103,12 +102,9 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("AOI_RS 页面不得提供时间筛选")),
         raising=False,
     )
+    from app.utils import step_labels
+    monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda _db: {})
     monkeypatch.setattr(AppSetup, "initialize_app", staticmethod(lambda: None))
-    monkeypatch.setattr(
-        SessionManager,
-        "get_active_config",
-        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M678"))),
-    )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(
         inline_composition,
@@ -139,7 +135,7 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     monkeypatch.setattr(
         page_header,
         "render_page_header",
-        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+        lambda *_args, **kwargs: header_kwargs.update(kwargs) or "M678",
     )
 
     def fake_load_report(**kwargs):
@@ -172,10 +168,9 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     assert loaded_queries[0].start_date == "2026-07-01"
     assert loaded_queries[0].end_date == "2026-08-10"
     assert loaded_signatures == ["aoi_rs_report_v1|scoped=M678"]
-    assert header_kwargs["product_cache_scope"] == "M678"
-    assert len(header_kwargs["refresh_handlers"]) == 1
-    assert header_kwargs["refresh_handlers"][0]() is True
+    assert callable(header_kwargs["product_refresh_handler"])
+    assert header_kwargs["product_refresh_handler"]("Z622") is True
     assert [(prod_code, end_date) for _, prod_code, end_date in refresh_calls] == [
-        ("M678", "2026-08-10")
+        ("Z622", "2026-08-10")
     ]
     assert events == (["filters", "trend", "charts"] if queried else ["filters", "trend"])

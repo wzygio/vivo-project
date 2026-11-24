@@ -45,3 +45,7 @@ def test_composition_uses_configured_full_path(monkeypatch, tmp_path):
     assert store.path == configured
     store.save(build_parts_alerts(pd.DataFrame()), as_of_date='2026-10-26', last_update='')
     assert configured.exists()
+    assert pd.ExcelFile(configured).sheet_names == ['__meta__']
+    alerts = build_parts_alerts(pd.DataFrame({'厂别': ['ARRAY'], '使用进度': [110]}))
+    store.save(alerts, as_of_date='2026-10-27', last_update='')
+    assert len(pd.read_excel(configured, sheet_name='超规备件决策')) == 1

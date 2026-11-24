@@ -1,4 +1,4 @@
-"""Keep dashboard Mapping configuration stable between explicit refreshes."""
+"""Resolve Yield report resources and refresh the submitted product."""
 
 from copy import deepcopy
 import math
@@ -9,6 +9,13 @@ from src.shared_kernel.config_model import AppConfig
 from src.shared_kernel.config import ConfigLoader
 from app.components.code_selector import DEFAULT_MONTHLY_RATE_THRESHOLD
 from yield_domain.application.excel_service import ExcelService
+from yield_domain.application.yield_service import YieldAnalysisService
+from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+
+
+def refresh_yield_product(product: str) -> bool:
+    config = ConfigLoader.load_config(product)
+    return YieldAnalysisService.safe_refresh_snapshots(DatabaseManager(), config)
 
 
 def get_code_monthly_rate_threshold() -> float:

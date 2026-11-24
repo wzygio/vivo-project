@@ -12,7 +12,6 @@ from streamlit.testing.v1 import AppTest
 
 def install_inline_page_fakes(scope, monkeypatch):
     from app.components import indicator_cache, page_header
-    from app.manager.session_manager import SessionManager
     from app.utils import step_labels
     from app.utils.app_setup import AppSetup
     from src.inline_domain import composition
@@ -54,10 +53,9 @@ def install_inline_page_fakes(scope, monkeypatch):
         state["publications"] += 1
 
     monkeypatch.setattr(AppSetup, "initialize_app", lambda: None)
-    monkeypatch.setattr(SessionManager, "get_active_config", lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M678")))
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda _: {})
-    monkeypatch.setattr(page_header, "render_page_header", lambda **kwargs: None)
+    monkeypatch.setattr(page_header, "render_page_header", lambda **kwargs: "M678")
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *args: [])
     monkeypatch.setattr(indicator_cache, "build_indicator_product_cache_signature", lambda *args: "test-revision")
     monkeypatch.setattr(indicator_cache, "get_indicator_product_revision", lambda *args: "test-revision")

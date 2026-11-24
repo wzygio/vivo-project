@@ -80,6 +80,37 @@ def test_offset_uses_product_scope_and_combines_matching_rules() -> None:
     assert measurements["param_value"].tolist() == [-3.0, 8.0, 5.0]
 
 
+@pytest.mark.parametrize("offset", [-50, 0])
+def test_workbook_offset_without_bounds_preserves_rows_and_raw_input(tmp_path, offset) -> None:
+    source = tmp_path / "rules.xlsx"
+    pd.DataFrame([{
+        "prod_code": "Z622", "step_col": "11140", "param_col": "SE_L2T",
+        "lower_col": "", "upper_col": "", "offset": offset,
+    }]).to_excel(source, index=False)
+    rules = load_outlier_filter_rules(source, tmp_path)
+    points = pd.DataFrame({
+        "step_id": ["11140", "11140", "10140"],
+        "param_name": ["SE_L2T", "OTHER", "SE_L2T"],
+        "param_value": [110, 120, 130],
+    })
+    expected = points.assign(param_value=[110 + offset, 120, 130])
+
+    for _ in range(2):
+        actual = apply_outlier_filter_rules(points, "Z622", rules)
+        pd.testing.assert_frame_equal(actual, expected, check_dtype=False)
+    pd.testing.assert_frame_equal(apply_outlier_filter_rules(points, "M626", rules), points)
+    assert points["param_value"].tolist() == [110, 120, 130]
+
+
+@pytest.mark.parametrize(("lower", "offset"), [("", ""), ("invalid", "-50")])
+def test_missing_bounds_require_an_explicit_offset_and_no_malformed_bound(lower, offset) -> None:
+    rules = pd.DataFrame([{
+        "step_col": "100", "param_col": "PARAM_A", "lower_col": lower, "offset": offset,
+    }])
+    with pytest.raises(OutlierFilterConfigurationError):
+        apply_outlier_filter_rules(_measurements(), "Z622", rules)
+
+
 @pytest.mark.parametrize("offset", ["invalid", "inf"])
 def test_invalid_nonempty_offset_fails_fast(offset: str) -> None:
     rules = pd.DataFrame([

@@ -8,7 +8,7 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from app.components import page_header
-from app.manager.session_manager import SessionManager
+from src.shared_kernel.config import ConfigLoader
 from app.sections.yield_domain import resource_config
 from app.utils.app_setup import AppSetup
 from src.shared_kernel.infrastructure import db_handler
@@ -28,9 +28,9 @@ def test_page_publishes_results_and_defers_sheet_failure_until_details_requested
         ttl_seconds=43200)
     config = SimpleNamespace(data_source=SimpleNamespace(product_code="M678"), processing={})
     monkeypatch.setattr(AppSetup, "initialize_app", lambda: None)
-    monkeypatch.setattr(SessionManager, "get_active_config", lambda: config)
-    monkeypatch.setattr(SessionManager, "get_product_dir", lambda: tmp_path)
-    monkeypatch.setattr(page_header, "render_page_header", lambda **kwargs: None)
+    monkeypatch.setattr(ConfigLoader, "load_config", lambda product: config if product == config.data_source.product_code else None)
+    monkeypatch.setattr(ConfigLoader, "get_domain_resource_dir", lambda domain: tmp_path)
+    monkeypatch.setattr(page_header, "render_page_header", lambda **kwargs: config.data_source.product_code)
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: None)
     monkeypatch.setattr(composition, "build_yield_alert_results", lambda: publisher)
     monkeypatch.setattr(resource_config, "get_dashboard_resource_config", lambda config, revision: config)

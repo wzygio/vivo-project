@@ -212,6 +212,7 @@ def test_hard_reset_callback_reloads_code_and_config_and_clears_pending(monkeypa
     page_header.render_page_header(
         title="SPC监控报表",
         config=SimpleNamespace(data_source=SimpleNamespace(product_code="M626")),
+        show_product_filter=False,
         product_cache_scope="M626",
         product_cache_indicators=indicators,
     )
@@ -251,7 +252,7 @@ def test_page_header_separates_product_filter_and_gates_admin_actions(
     bordered_containers = []
 
     class FakeSt:
-        session_state = {}
+        session_state = {"header_product_query_测试页面": "M626"}
 
         def __init__(self):
             self.query_params = query_params
@@ -270,6 +271,12 @@ def test_page_header_separates_product_filter_and_gates_admin_actions(
         def columns(self, spec, **_kwargs):
             count = spec if isinstance(spec, int) else len(spec)
             return [nullcontext() for _ in range(count)]
+
+        def form(self, *args, **kwargs):
+            return nullcontext()
+
+        def form_submit_button(self, *args, **kwargs):
+            return False
 
         def selectbox(self, *_args, **kwargs):
             return kwargs["options"][0]
@@ -290,6 +297,6 @@ def test_page_header_separates_product_filter_and_gates_admin_actions(
     )
 
     assert [label for label, _kwargs in button_calls] == expected_buttons
-    assert captions == expected_groups
+    assert [c for c in captions if not c.startswith("当前报表产品")] == expected_groups
     assert len(bordered_containers) == len(expected_groups)
     assert all(kwargs.get("width") == "stretch" for _label, kwargs in button_calls)

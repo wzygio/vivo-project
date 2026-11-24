@@ -3,7 +3,8 @@ from app.sections.yield_domain.data_health import render_yield_data_health
 import streamlit as st
 
 # --- 1. 初始化与配置 ---
-from app.manager.session_manager import SessionManager
+from src.shared_kernel.config import ConfigLoader
+from app.sections.yield_domain.resource_config import refresh_yield_product
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 from yield_domain.application.yield_service import (
@@ -32,9 +33,15 @@ from app.sections.yield_domain.table_details import (
 # --- 2. UI 界面布局 ---
 st.set_page_config(layout="wide", initial_sidebar_state="collapsed")
 
-# [关键修复]：必须先拿到 Config，再获取 product_dir
-active_config = SessionManager.get_active_config()
-product_dir = SessionManager.get_product_dir()
+current_product = render_page_header(
+    "📋 入库不良率ByLot明细表",
+    cached_funcs=extract_cached_funcs(YieldAnalysisService),
+    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
+    product_refresh_handler=refresh_yield_product,
+)
+
+active_config = ConfigLoader.load_config(current_product)
+product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / current_product
 
 YIELD_LOT_DETAIL_CACHE_SIGNATURE = "yield_lot_detail_manual_refresh_v1"
 product_cache_signature = build_indicator_product_cache_signature(
@@ -45,20 +52,6 @@ product_cache_signature = build_indicator_product_cache_signature(
 
 db_manager = DatabaseManager()
 yield_cache_context = YieldAnalysisService.build_cache_context(active_config, product_dir)
-
-render_page_header(
-    "📋 入库不良率ByLot明细表",
-    active_config,
-    cached_funcs=extract_cached_funcs(YieldAnalysisService),
-    product_cache_scope=active_config.data_source.product_code,
-    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
-    refresh_handlers=[
-        lambda: YieldAnalysisService.safe_refresh_snapshots(
-            db_manager,
-            active_config,
-        )
-    ],
-)
 
 # --- 3. 加载数据 ---
 # [核心修复] 依赖注入 db_manager + 快照签名感知缓存

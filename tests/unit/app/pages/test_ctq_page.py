@@ -9,7 +9,6 @@ import pandas as pd
 from app.components import page_header
 from app.sections.inline_domain.ctq import ctq_dashboard
 from app.utils.app_setup import AppSetup
-from app.manager.session_manager import SessionManager
 from src.inline_domain.application.ctq.ctq_service import CtqReportService
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
 from src.inline_domain.application.spc.dtos import SpcQueryConfig
@@ -62,12 +61,9 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
     monkeypatch.setattr(ctq_dashboard.st, "set_page_config", lambda **_kwargs: None)
     monkeypatch.setattr(ctq_dashboard.st, "spinner", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(ctq_dashboard.st, "query_params", {})
+    from app.utils import step_labels
+    monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda _db: {})
     monkeypatch.setattr(AppSetup, "initialize_app", staticmethod(lambda: None))
-    monkeypatch.setattr(
-        SessionManager,
-        "get_active_config",
-        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M678"))),
-    )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(
         MonitorAnalysisService,
@@ -83,7 +79,7 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
     monkeypatch.setattr(
         page_header,
         "render_page_header",
-        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+        lambda *_args, **kwargs: header_kwargs.update(kwargs) or "M678",
     )
     monkeypatch.setattr(ConfigLoader, "get_spc_period_box_source", staticmethod(lambda: "point_value"))
 
@@ -109,7 +105,7 @@ def test_ctq_page_loads_once_and_renders_only_filters_and_distributions(monkeypa
 
     assert [query.data_type_filter for query in loaded_queries] == ["CTQ"]
     assert loaded_signatures == ["ctq_distribution_report_v1|scoped=M678:test-outlier-rules"]
-    assert header_kwargs["product_cache_scope"] == "M678"
+    assert callable(header_kwargs["product_refresh_handler"])
     assert events == ["filters", "charts"]
     assert not hasattr(report, "period_capability_df")
 

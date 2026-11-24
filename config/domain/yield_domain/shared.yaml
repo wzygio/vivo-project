@@ -69,3 +69,9 @@ product_overrides:
       use_local_snapshot: true
       snapshot_path: data/snapshot_Z576.parquet
       defect_multipliers: null
+  Z622:
+    data_source:
+      # 仅为以下 Lot 补充工单类型。Lot ID 取 Panel ID 前 9 位。
+      additional_work_orders_by_lot:
+        work_order_types: ["XMSY", "XPSY"]
+        lot_ids: ["L3ZB6BE03", "L3ZB6BE04"]

@@ -8,23 +8,14 @@ async page => {
       );
       return el?.value || "";
     }, label);
-  const waitQueryEnabled = (timeout = 300_000) =>
-    page.waitForFunction(
-      () => {
-        const btn = [...document.querySelectorAll("button")].find(
-          b => b.textContent?.trim() === "查询",
-        );
-        return btn && !btn.disabled;
-      },
-      undefined,
-      { timeout },
-    );
 
   const selectProduct = async product => {
-    const selector = page.getByRole("combobox", { name: "📦 当前产品型号" });
-    if ((await selector.inputValue()).split("（", 1)[0] === product) return;
-    await selector.click();
-    await page.getByRole("option", { name: new RegExp(`^${product}(?:（.*）)?$`) }).click();
+    const selector = page.getByRole("combobox", { name: "产品型号", exact: true });
+    if ((await selector.inputValue()).split("（", 1)[0] !== product) {
+      await selector.click();
+      await page.getByRole("option", { name: new RegExp(`^${product}(?:（.*）)?$`) }).click();
+    }
+    await page.getByTestId("stForm").getByRole("button", { name: "查询", exact: true }).click();
     const loading = page.getByText("正在加载 AOI TT 数据...");
     await loading.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
     await loading.waitFor({ state: "hidden", timeout: 600_000 });
@@ -103,8 +94,7 @@ async page => {
   const firstStepName = "11620";
 
   // Code名称（TT 参数）随站点自动全选后查询按钮启用
-  await waitQueryEnabled(300_000);
-  await page.getByRole("button", { name: "查询" }).click();
+  await page.getByRole("button", { name: "查询", exact: true }).last().click({ timeout: 300_000 });
 
   // 报表区：站点分组标题 + 每 TT 三图
   const groupHeading = page.getByRole("heading", {

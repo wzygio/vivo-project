@@ -68,7 +68,7 @@ def test_every_single_product_header_declares_indicator_scope():
             kwargs = {kw.arg: kw.value for kw in call.keywords}
             if isinstance(kwargs.get("show_product_filter"), ast.Constant) and kwargs["show_product_filter"].value is False:
                 continue
-            assert "product_cache_scope" in kwargs, path.name
+            assert "product_refresh_handler" in kwargs, path.name
             assert "product_cache_indicators" in kwargs, path.name
             source = path.read_text(encoding="utf-8-sig")
             assert "build_product_cache_signature" not in source, path.name

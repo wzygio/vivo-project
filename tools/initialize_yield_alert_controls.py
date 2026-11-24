@@ -1,6 +1,6 @@
-"""Operator-only initialization of Yield Lot release controls; never run by API GET.
+"""Operator-only initialization of Yield Lot or trend release controls; never run by API GET.
 
-Existing publications receive default-deny decisions without refreshing their
+Existing publications receive their domain-specific default decisions without refreshing their
 publication age. This command does not run Yield analysis or query a database.
 """
 from __future__ import annotations
@@ -21,6 +21,7 @@ for import_path in (ROOT, ROOT / "src"):
 
 class LotControlStore(Protocol):
     def initialize_lot_controls(self, product: str) -> bool: ...
+    def initialize_controls(self, product: str, kind: str) -> bool: ...
 
 
 def _unavailable(code: str) -> int:
@@ -34,6 +35,7 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--product", required=True, help="One enabled product code.")
+    parser.add_argument("--kind", choices=("lot", "trend"), default="lot")
     args = parser.parse_args(argv)
 
     try:
@@ -47,7 +49,8 @@ def main(
             from src.yield_domain.composition import build_yield_alert_results
 
             store = build_yield_alert_results().store
-        created = store.initialize_lot_controls(args.product)
+        created = (store.initialize_lot_controls(args.product) if args.kind == "lot"
+                   else store.initialize_controls(args.product, args.kind))
     except Exception:
         # Driver errors and workbook exceptions can include paths or contents.
         return _unavailable("result_unavailable")

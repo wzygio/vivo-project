@@ -247,7 +247,7 @@ Core 仍为直接注入的旧格式源数据保留 `baseline_date` 空时间回�
 - 原有 >98% 更换与归零逻辑继续生效，因此当前正常生成的报表通常不会出现 >100% 项。零进度“已更换”不因内部原始超规标记产生预警；源快照和更换规则不变。
 - “超规备件预警中心”有异常时自动展开并展示公开明细，进度按数值百分比显示完整的 >100% 值；正常、无监控数据、预警计算或快照写入失败使用独立业务提示。预警写入失败不影响已有普通报表展示；报表加载失败时不计算预警、不发布快照。
 - Application `publish_parts_alerts()` 只依赖应用拥有的 `PartsAlertStore`；composition 注入 Infrastructure 的 `PartsAlertWorkbook`。复用已经加载的报表与既有 L2 缓存，预警不增加数据库读取；每次页面执行在缓存外重新判定并发布，确保刷新或配置路径更改后更新本地文件。
-- 快照路径的唯一配置来源为 `config/global.yaml` → `resources.equipment_domain.files.parts_alerts`，默认 `resources/equipment_domain/parts/parts_alerts.xlsx`；第一次成功发布时自动创建，无需预置业务记录。
+- 快照路径由 `config/global.yaml` 的 `resources.equipment_domain.files.parts_alerts` 配置，默认 `resources/equipment_domain/parts/parts_alerts.xlsx`。首次成功检查若无超规项，只写 `__meta__`，记录检查日期、成功状态及零条数。首次产生超规项时才创建超规备件、候选及决策工作表。已有决定随以后的发布保留。
 - `超规备件候选` 保存本期超规明细，`超规备件决策` 以厂别、备件类型、设备类型、膜层、制程、站点和机台号-腔室匹配 Flag。新键默认为 False，True 屏蔽，Delete 移出公开预警。巡检保留现有决定，包括本期没有对应备件的决定。管理员可下载并上传决策工作表，上传仅更新所列键。
 - 管理员下载的 Excel 附带“决策版本”。请保留该表。上传时在发布锁内核对版本，决定或业务键已变化时需重新下载。
 - `超规备件` 保存本次发布放行的记录，`__meta__` 保存报告日期、源最后更新日期、发布时间、候选及公开条数。普通预警中心和看板按当前决定投影本期候选，测量与备件寿命计算沿用原口径。成功的空结果清除本期预警。写入使用文件锁和原子替换，保留其他工作表。

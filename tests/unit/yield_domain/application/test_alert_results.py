@@ -266,3 +266,33 @@ def test_lot_report_window_is_explicit_and_preserves_published_latest_source_anc
     explicit = service.read("P1", "lot", DAY, start_date="2026-10-01", end_date="2026-10-18")
     assert explicit.records["超规 Lot ID"].tolist() == ["LATEST_ALERT"]
     assert service.read("P1", "lot", DAY, start_date="2026-08-01", end_date="2026-10-18").status == "uncovered"
+
+@pytest.mark.parametrize("decision", [None, "Delete"])
+def test_upgrade_trend_keeps_current_marker_and_manual_decision(tmp_path, decision):
+    service = results(tmp_path)
+    rows = [dict(level="group", defect_group="A", defect_desc="", time_period=week,
+                 curr_rate=2, prev_rate=1, rules="up", period_scope="weekly", is_current=current)
+            for week, current in [("2026-W41", False), ("2026-W42", True)]]
+    publish(service, kind="trend", records=rows)
+    store = service.store
+    path = store.paths["trend"]
+    legacy = pd.read_excel(path, sheet_name=None, dtype=object)
+    del legacy["P1__flags"]
+    legacy["P1__meta"] = legacy["P1__meta"].drop(columns="release_schema_version")
+    legacy["P1"] = legacy["P1"].drop(columns="flag")
+    if decision is not None:
+        legacy["P1"]["flag"] = [True, decision]
+    with pd.ExcelWriter(path) as writer:
+        for name, frame in legacy.items():
+            frame.to_excel(writer, sheet_name=name, index=False)
+    from tools.initialize_yield_alert_controls import main
+
+    assert main(["--product", "P1", "--kind", "trend"], store=store, enabled_products=["P1"]) == 0
+    after = pd.read_excel(path, sheet_name=None, dtype=object)
+    expected = [False, False] if decision is None else [True, decision]
+    assert after["P1"]["flag"].tolist() == after["P1__flags"]["flag"].tolist() == expected
+    assert after["P1"]["is_current"].tolist() == [False, True]
+    assert after["P1__meta"]["generated_at"].equals(legacy["P1__meta"]["generated_at"])
+    assert not store.initialize_controls("P1", "trend")
+    public = service.read("P1", "trend", DAY)
+    assert public.records["time_period"].tolist() == (["2026-W42"] if decision is None else [])

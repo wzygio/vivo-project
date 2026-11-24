@@ -14,7 +14,6 @@ from app.components import page_header
 from app.sections.inline_domain.aoi_tt import aoi_tt_dashboard
 from app.sections.inline_domain.aoi_tt import trend_alerts as trend_alert_section
 from app.utils.app_setup import AppSetup
-from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import AoiTtReportService
 from src.inline_domain.application.shared import decision_signature
 from src.inline_domain.application.monitor.monitor_service import MonitorAnalysisService
@@ -72,12 +71,9 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
         lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("AOI_TT 页面不得提供时间筛选")),
         raising=False,
     )
+    from app.utils import step_labels
+    monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda _db: {})
     monkeypatch.setattr(AppSetup, "initialize_app", staticmethod(lambda: None))
-    monkeypatch.setattr(
-        SessionManager,
-        "get_active_config",
-        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M678"))),
-    )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     monkeypatch.setattr(
         MonitorAnalysisService,
@@ -103,7 +99,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     monkeypatch.setattr(
         page_header,
         "render_page_header",
-        lambda *_args, **kwargs: header_kwargs.update(kwargs),
+        lambda *_args, **kwargs: header_kwargs.update(kwargs) or "M678",
     )
 
     def fake_load_report(**kwargs):
@@ -141,7 +137,7 @@ def test_aoi_tt_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     assert loaded_queries[0].start_date == "2026-07-01"
     assert loaded_queries[0].end_date == "2026-08-10"
     assert loaded_signatures == ["aoi_tt_report_v4_integer_particle_quantities|scoped=M678"]
-    assert header_kwargs["product_cache_scope"] == "M678"
+    assert callable(header_kwargs["product_refresh_handler"])
     assert events == (["filters", "trend", "charts"] if queried else ["filters", "trend"])
     assert rendered_particle_sizes == (["S"] if queried else [])
 

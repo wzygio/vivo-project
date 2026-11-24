@@ -20,6 +20,8 @@ def install_fixture():
     def alerts(*args, **kwargs):
         state["alerts"] += 1
         st.caption(f"Fixture load calls: {state['loads']}")
+        st.caption(f"Fixture products: {' / '.join(dict.fromkeys(state['products']))}")
+        st.caption(f"Fixture refreshes: {' / '.join(state['refreshes']) or 'none'}")
         st.caption("Fixture published alerts remain visible")
 
     def charts(**kwargs):

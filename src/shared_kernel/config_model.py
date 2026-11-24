@@ -1,6 +1,6 @@
 # src/vivo_project/config_model.py
-from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Annotated, Dict, Any, List, Optional
+from pydantic import BaseModel, Field, ConfigDict, StringConstraints
 
 # ==============================================================================
 # 1. 基础原子模型 (Building Blocks)
@@ -25,11 +25,25 @@ class ApplicationConfig(BaseModel):
         default=7, gt=0, strict=True, description="源快照增量回刷天数必须为正整数"
     )
 
+class LotWorkOrderScope(BaseModel):
+    """Additional Yield work-order types restricted to specific Lot IDs."""
+
+    work_order_types: tuple[
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)], ...
+    ] = Field(min_length=1)
+    lot_ids: tuple[
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=9, max_length=9)], ...
+    ] = Field(min_length=1)
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
 class DataSourceConfig(BaseModel):
     product_code: str = Field(..., min_length=1)
     # 虽然 target_defect_groups 是列表，但我们允许它为空（某些产品可能不按 Group 过滤）
     target_defect_groups: List[str] = Field(default_factory=list)
     work_order_types: List[str] = Field(default_factory=list)
+    additional_work_orders_by_lot: LotWorkOrderScope | None = None
     
     model_config = ConfigDict(extra="allow")
 

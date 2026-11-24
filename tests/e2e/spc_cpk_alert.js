@@ -21,7 +21,8 @@ async page => {
     await page.getByRole("option", { name: "M673" }).click();
   }
 
-  await waitComboValue("📦 当前产品型号", "M673");
+  await waitComboValue("产品型号", "M673");
+  await page.getByTestId("stForm").getByRole("button", { name: "查询", exact: true }).click();
   await page
     .getByRole("heading", { name: "筛选", exact: true })
     .waitFor({ timeout: 300_000 });

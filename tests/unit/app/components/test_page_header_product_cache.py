@@ -131,6 +131,12 @@ class _StreamlitStub:
     def container(self, **kwargs) -> _ContainerStub:
         return _ContainerStub()
 
+    def form(self, *_args, **kwargs):
+        return _ContainerStub()
+
+    def form_submit_button(self, label, **kwargs):
+        self.button(label, **kwargs)
+
     def selectbox(self, label, *, options, index=0, **kwargs):
         self.selectbox_labels.append(label)
         return options[index]
@@ -222,6 +228,7 @@ def _render_header_and_get_refresh_callback(
         config=config,
         cached_funcs=cached_funcs,
         refresh_handlers=refresh_handlers,
+        show_product_filter=False,
         product_cache_scope=product_cache_scope,
         product_cache_indicators=product_cache_indicators,
     )
@@ -560,8 +567,9 @@ def test_show_product_filter_false_skips_product_selectbox(monkeypatch) -> None:
 
 
 def test_show_product_filter_default_keeps_product_selectbox(monkeypatch) -> None:
-    """默认行为不变：其余页面仍渲染产品筛选 selectbox。"""
-    st_stub = _StreamlitStub()
+    """公共页头默认显示产品选择和显式查询。"""
+    key = "header_product_query_测试页"
+    st_stub = _StreamlitStub({key: "M626"})
     monkeypatch.setattr(page_header, "st", st_stub)
     monkeypatch.setattr(
         page_header,
@@ -573,7 +581,8 @@ def test_show_product_filter_default_keeps_product_selectbox(monkeypatch) -> Non
 
     page_header.render_page_header(title="测试页", config=config)
 
-    assert st_stub.selectbox_labels == ["📦 当前产品型号"]
+    assert st_stub.selectbox_labels == ["产品型号"]
+    assert f"{key}_submit" in st_stub.button_callbacks
 
 
 def test_hard_reset_clears_alert_matrix_loaded_state(monkeypatch) -> None:

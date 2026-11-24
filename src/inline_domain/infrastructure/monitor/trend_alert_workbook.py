@@ -31,10 +31,8 @@ class TrendAlertWorkbook:
             return None
         facts = frames[product].copy()
         if not facts.empty and get_decision_sheet_name(product) in frames:
-            keys = trend_decision_keys(facts)
-            actions = decision_rows(frames, product, keys, False).set_index(keys)["flag"]
-            index = pd.MultiIndex.from_frame(normalize_decision_keys(facts, keys)[keys])
-            facts["flag"] = actions.reindex(index).map(parse_decoration_flag).to_numpy()
+            ledger = decision_rows(frames, product, trend_decision_keys(facts), False)
+            facts = with_trend_flags(facts, ledger)
         return facts, selected.iloc[0].to_dict()
 
     def save(self, product: str, evaluation: pd.DataFrame, metadata: dict) -> None:
@@ -48,7 +46,7 @@ class TrendAlertWorkbook:
             frames[get_decision_sheet_name(product)] = old
             frames[product] = evaluation
             ledger = decision_rows(frames, product, keys, False)
-            outcome = replace_workbook_sheets(self.path, {product: evaluation, "__meta__": meta,
+            outcome = replace_workbook_sheets(self.path, {product: with_trend_flags(evaluation, ledger), "__meta__": meta,
                 get_decision_sheet_name(product): ledger})
             if not outcome.written:
                 raise OSError("Trend result publication failed")
@@ -63,3 +61,11 @@ class TrendAlertWorkbook:
 
 def trend_decision_keys(frame: pd.DataFrame) -> list[str]:
     return ["prod_code", "factory", "step_id", "rs_code" if "rs_code" in frame else "tt_name", "target_date"]
+
+
+def with_trend_flags(facts: pd.DataFrame, ledger: pd.DataFrame) -> pd.DataFrame:
+    """Mirror the authoritative decisions alongside the current measurements."""
+    keys = trend_decision_keys(facts)
+    index = pd.MultiIndex.from_frame(normalize_decision_keys(facts, keys)[keys])
+    flags = ledger.set_index(keys)["flag"].reindex(index).map(parse_decoration_flag)
+    return facts.assign(flag=flags.to_numpy())

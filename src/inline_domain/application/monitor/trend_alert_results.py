@@ -38,12 +38,12 @@ class TrendAlertResults:
         if previous is not None:
             meta = previous[1]
             generated = pd.to_datetime(meta.get("generated_at"), errors="coerce")
-            if (meta.get("decision_schema") == 1 and meta.get("fingerprint") == fingerprint and pd.notna(generated)
+            if (meta.get("decision_schema") == 2 and meta.get("fingerprint") == fingerprint and pd.notna(generated)
                     and 0 <= (now - generated).total_seconds() < self.ttl_seconds):
                 return
         self.store.save(product, frame, {"product": product, "reference_date": str(reference_date),
             "policy": self.policy, "generated_at": now.isoformat(), "row_count": len(frame),
-            "fingerprint": fingerprint, "decision_schema": 1, "status": "success"})
+            "fingerprint": fingerprint, "decision_schema": 2, "status": "success"})
 
     def read(self, product: str, reference_date: date) -> dict:
         payload = self.store.read(product)

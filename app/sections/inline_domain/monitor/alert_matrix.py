@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 # 选中单元格的 session_state 键；alert_matrix_detail 按同一键读取（懒加载触发源）。
 MATRIX_SELECTION_STATE_KEY = "alert_matrix_selected_cell"
+PARTS_OK_MESSAGE = "当前范围内无超规备件（达标）。"
 
 CELL_STATE_ICONS = {
     CELL_STATE_OK: "🟢",
@@ -95,9 +96,11 @@ def _select_cell(detail_key: str) -> None:
     st.session_state[MATRIX_SELECTION_STATE_KEY] = detail_key
 
 
-def _cell_help(cell: Mapping[str, str]) -> str:
+def _cell_help(cell: Mapping[str, str], row_key: str = "") -> str:
     """单元格 tooltip：状态说明 +（如有）降级原因，⬜ 的 message 在此可见。"""
     state = cell.get("state", CELL_STATE_ERROR)
+    if row_key == "parts_oos" and state == CELL_STATE_OK:
+        return PARTS_OK_MESSAGE
     if state == CELL_STATE_NO_DATA:
         if cell.get('message') == '当前暂无预警记录。':
             return '当前暂无预警记录。'
@@ -303,7 +306,7 @@ def _render_matrix_rows(
                 CELL_STATE_ICONS.get(state, CELL_STATE_ICONS[CELL_STATE_ERROR]),
                 key=matrix_cell_button_key(row_key, prod_code),
                 help=_cell_help(cell if state == cell.get("state") or cell.get('state') == CELL_STATE_NO_DATA
-                                else {"state": state}),
+                                else {"state": state}, row_key),
                 on_click=_select_cell,
                 args=(detail_key,),
                 width="stretch",

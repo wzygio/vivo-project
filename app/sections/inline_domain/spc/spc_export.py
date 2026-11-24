@@ -151,17 +151,20 @@ def render_spc_export(
     end_date: date,
     db_manager: DatabaseManager,
     step_desc_map: dict[str, str] | None = None,
+    current_product: str | None = None,
 ) -> None:
     """Generate on request; offer a native download only after a PDF is ready."""
     if not is_admin_mode(st.query_params):
         return
     enabled = ConfigLoader.get_enabled_products()
+    if current_product is not None:
+        enabled = [current_product] if current_product in enabled else []
     if not enabled:
         return
-    for key, options, default in (
-        (PRODUCT_SELECTION_KEY, enabled, list(enabled)),
-        (FACTORY_SELECTION_KEY, INLINE_FACTORY_OPTIONS, ["ARRAY"]),
-    ):
+    filters = [(FACTORY_SELECTION_KEY, INLINE_FACTORY_OPTIONS, ["ARRAY"])]
+    if current_product is None:
+        filters.append((PRODUCT_SELECTION_KEY, enabled, list(enabled)))
+    for key, options, default in filters:
         if key not in st.session_state:
             st.session_state[key] = default
         else:
@@ -178,11 +181,13 @@ def render_spc_export(
         status.update(kind="error", message="产品范围已变化，请重新生成报告。", data=None)
 
     with st.expander("SPC 报告导出", expanded=False):
-        selected = st.multiselect(
-            "导出产品", options=enabled, key=PRODUCT_SELECTION_KEY,
-            format_func=get_product_label_formatter(),
-            help="留空时导出全部已启用产品。",
-        )
+        selected = enabled
+        if current_product is None:
+            selected = st.multiselect(
+                "导出产品", options=enabled, key=PRODUCT_SELECTION_KEY,
+                format_func=get_product_label_formatter(),
+                help="留空时导出全部已启用产品。",
+            )
         selected_factories = st.multiselect(
             "导出厂别", options=INLINE_FACTORY_OPTIONS, key=FACTORY_SELECTION_KEY,
             help="留空时导出全部厂别。",
@@ -192,8 +197,9 @@ def render_spc_export(
             item for item in INLINE_FACTORY_OPTIONS
             if not selected_factories or item in selected_factories
         )
+        product_label = current_product or f"{len(products)} 款产品"
         st.caption(
-            f"待导出 {len(products)} 款产品，厂别：{'、'.join(factories)}。"
+            f"待导出 {product_label}，厂别：{'、'.join(factories)}。"
             "导出所选范围的主报表图像，不含预警区，不受下方查询筛选影响。"
             "PDF 内每个指标一行三图（月周天分布、腔室分布、时间分布）。"
             "生成后点击下载按钮保存，临时图片会自动清理。"
@@ -266,9 +272,11 @@ def render_spc_export(
 def render_spc_export_interaction(
     *, start_date: date, end_date: date, db_manager,
     step_desc_map: dict[str, str] | None = None,
+    current_product: str | None = None,
 ) -> None:
     """Isolate export controls from unrelated report loading and other exports."""
     render_spc_export(
         start_date=start_date, end_date=end_date, db_manager=db_manager,
         step_desc_map=step_desc_map,
+        current_product=current_product,
     )

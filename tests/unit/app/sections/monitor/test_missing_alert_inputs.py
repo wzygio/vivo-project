@@ -80,6 +80,9 @@ render_alert_matrix_detail(payload)
     for row in matrix.MATRIX_ROWS:
         app.button(key=f"matrix_cell_{row.row_key}_Z622").click().run()
         assert not app.exception and not app.error and not app.dataframe
+        if row.row_key == 'parts_oos':
+            assert app.button(key='matrix_cell_parts_oos_Z622').help == '当前范围内无超规备件（达标）。'
+            assert app.success[-1].value == '当前范围内无超规备件（达标）。'
     # Preserve existing inputs. Q-Time retains its previously authorized header initialization.
     qtime_path = resource("indicator_domain", "qtime_alerts")
     assert all(path == qtime_path or path.read_bytes() == before for path, before in paths_before.items())

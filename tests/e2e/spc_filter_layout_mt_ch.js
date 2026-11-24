@@ -24,17 +24,6 @@ async page => {
       [label, value],
       { timeout },
     );
-  const waitQueryEnabled = (timeout = 600_000) =>
-    page.waitForFunction(
-      () => {
-        const btn = [...document.querySelectorAll("button")].find(
-          b => b.textContent?.trim() === "查询",
-        );
-        return btn && !btn.disabled;
-      },
-      undefined,
-      { timeout },
-    );
 
   await page.goto("http://localhost:8503/SPC监控报表");
   await page
@@ -52,6 +41,12 @@ async page => {
   });
   const alertCenter = page.getByText(/CPK预警中心（CPK < 1\.33）/).first();
 
+  if ((await productSelector.inputValue()).split("（", 1)[0] !== "M626") {
+    await productSelector.click();
+    await page.getByRole("option", { name: /^M626(?:（.*）)?$/ }).click();
+    await waitComboValue("产品型号", "M626");
+  }
+  await page.getByTestId("stForm").getByRole("button", { name: "查询", exact: true }).click();
   await filterHeading.waitFor({ timeout: 300_000 });
   await alertCenter.waitFor({ timeout: 300_000 });
 
@@ -75,15 +70,6 @@ async page => {
       `页面顺序错误: title=${titleBox.y}, product=${productBox.y}, ` +
         `filter=${filterBox.y}, alert=${alertBox.y}`,
     );
-  }
-
-  if ((await productSelector.inputValue()).split("（", 1)[0] !== "M626") {
-    await productSelector.click();
-    await page.getByRole("option", { name: /^M626(?:（.*）)?$/ }).click();
-    await waitComboValue("📦 当前产品型号", "M626");
-    await page
-      .getByText("正在加载 SPC 分布数据...")
-      .waitFor({ state: "hidden", timeout: 600_000 });
   }
 
   if ((await comboInputValue("厂别")) !== "OLED") {
@@ -117,8 +103,7 @@ async page => {
     }
   }
 
-  await waitQueryEnabled(300_000);
-  await page.getByRole("button", { name: "查询" }).click();
+  await page.getByRole("button", { name: "查询", exact: true }).last().click({ timeout: 300_000 });
   for (const parameter of expectedParameters) {
     await page
       .getByText(`OLED | 21200 | ${parameter}`, { exact: true })

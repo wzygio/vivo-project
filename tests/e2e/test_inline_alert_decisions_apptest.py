@@ -72,10 +72,12 @@ def test_trend_decision_survives_empty_result_and_excel_dates(tmp_path, scope):
     decide(True)
     assert trend.read("M", day)["state"] == "ok"
     decide("Delete")
+    assert pd.read_excel(path, sheet_name="M")["flag"].tolist() == ["Delete"]
     assert trend.read("M", day)["evaluation"].empty
     trend.publish("M", day, pd.DataFrame())
     assert admin.download("M")["决策台账"].flag.tolist() == ["Delete"]
     trend.publish("M", day, facts.assign(target_date="2026-10-26"))
+    assert pd.read_excel(path, sheet_name="M")["flag"].tolist() == ["Delete"]
     assert trend.read("M", day)["evaluation"].empty
     decide(False)
     assert trend.read("M", day)["state"] == "alert"

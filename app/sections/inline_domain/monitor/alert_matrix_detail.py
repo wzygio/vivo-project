@@ -37,7 +37,7 @@ from app.components.indicator_cache import (
     get_indicator_product_revision,
 )
 from app.manager.render_gate import RenderGate
-from app.sections.inline_domain.monitor.alert_matrix import MATRIX_SELECTION_STATE_KEY
+from app.sections.inline_domain.monitor.alert_matrix import MATRIX_SELECTION_STATE_KEY, PARTS_OK_MESSAGE
 from app.sections.inline_domain.monitor.alert_matrix_cache import (
     MATRIX_CACHE_BASE_SIGNATURE,
     YIELD_SNAPSHOT_SIGNATURE_BASE,
@@ -978,7 +978,7 @@ def render_alert_matrix_detail(
             st.caption('当前暂无预警记录。')
             return
         if state in (CELL_STATE_OK, CELL_STATE_NO_DATA):
-            st.success("该产品该项上一周期无预警（达标）。")
+            st.success(PARTS_OK_MESSAGE if row_key == 'parts_oos' else "该产品该项上一周期无预警（达标）。")
             return
         if state == CELL_STATE_ERROR:
             st.warning("数据加载失败，请稍后重试。")

@@ -38,7 +38,6 @@ from app.sections.inline_domain.aoi_tt.aoi_tt_dashboard import (
 from app.sections.inline_domain.aoi_tt.aoi_tt_weekly_export import render_aoi_tt_weekly_export_interaction as render_aoi_tt_weekly_export
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
-from app.manager.session_manager import SessionManager
 from src.inline_domain.application.aoi_tt.aoi_tt_service import (
     AoiTtReportBuildError,
     AoiTtReportService,
@@ -65,14 +64,20 @@ def _render_saved_page_alerts(report=None) -> None:
 st.set_page_config(page_title="AOI_TT监控报表", layout="wide", initial_sidebar_state="collapsed")
 AppSetup.initialize_app()
 
-active_config = SessionManager.get_active_config()
-current_product = active_config.data_source.product_code
+_, default_end_dt = MonitorAnalysisService.get_time_window()
+current_product = render_page_header(
+    title="AOI_TT监控报表",
+    cached_funcs=extract_cached_funcs(AoiTtReportService) + [get_cached_step_description_map],
+    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
+    product_refresh_handler=lambda product: refresh_raw_measurements(
+        DatabaseManager(), product, default_end_dt.date().isoformat(),
+    ),
+)
 product_cache_signature = build_indicator_product_cache_signature(
     AOI_TT_PAGE_CACHE_SIGNATURE,
     current_product,
     PRODUCT_CACHE_INDICATORS,
 )
-_, default_end_dt = MonitorAnalysisService.get_time_window()
 step_desc_map = {}
 try:
     db_manager = DatabaseManager()
@@ -89,17 +94,6 @@ query_config = AoiTtQueryConfig(
     prod_code=current_product,
     start_date=default_start_dt.strftime("%Y-%m-%d"),
     end_date=default_end_dt.strftime("%Y-%m-%d"),
-)
-
-render_page_header(
-    title="AOI_TT监控报表",
-    config=active_config,
-    cached_funcs=extract_cached_funcs(AoiTtReportService) + [get_cached_step_description_map],
-    product_cache_scope=current_product,
-    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
-    refresh_handlers=[
-        lambda: refresh_raw_measurements(db_manager, current_product, query_config.end_date)
-    ],
 )
 
 render_aoi_tt_weekly_export(

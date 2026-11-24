@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import bindparam, text
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Sequence
+from src.shared_kernel.config_model import LotWorkOrderScope
 from src.yield_domain.application.errors import YieldSourceReadError
 
 if TYPE_CHECKING:
@@ -15,6 +16,7 @@ def load_panel_details(
     end_date: str, 
     prod_code: str, 
     work_order_types: Sequence[str],
+    additional_work_orders_by_lot: LotWorkOrderScope | None = None,
 ) -> pd.DataFrame:
     """
     (V3.1 - 纯净版)
@@ -70,8 +72,25 @@ def load_panel_details(
     where dwp.last_flag = 'Y'
         and dwp.first_ship_date between :start_date and :end_date
         and dmp.productcode = :prod_code
-        and dwp.sub_prod_type in :work_order_types
     """
+    work_order_filter = "dwp.sub_prod_type in :work_order_types"
+    params = {
+        'start_date': start_date_fmt,
+        'end_date': end_date_fmt,
+        'batch_end_timekey': batch_end_timekey,
+        'prod_code': prod_code,
+        'work_order_types': list(work_order_types),
+    }
+    expanding_keys = ["work_order_types"]
+    if additional_work_orders_by_lot is not None:
+        work_order_filter += """
+        or (dwp.sub_prod_type in :additional_work_order_types
+            and substr(dwp.panel_id, 1, 9) in :additional_lot_ids)
+        """
+        params["additional_work_order_types"] = list(additional_work_orders_by_lot.work_order_types)
+        params["additional_lot_ids"] = list(additional_work_orders_by_lot.lot_ids)
+        expanding_keys.extend(("additional_work_order_types", "additional_lot_ids"))
+    sql_query += f"\n        and ({work_order_filter})"
     # 批次子查询仅为去重排序；最终报表顺序由 Pandas 处理，避免跨表全量排序。
 
     try:
@@ -79,14 +98,10 @@ def load_panel_details(
             raise Exception("数据库引擎未初始化。")
         
         logging.info("正在执行SQL查询 (最终报表排序由 Pandas 执行)...")
-        query = text(sql_query).bindparams(bindparam('work_order_types', expanding=True))
-        panel_df = pd.read_sql(query, db_manager.engine, params={
-            'start_date': start_date_fmt,
-            'end_date': end_date_fmt,
-            'batch_end_timekey': batch_end_timekey,
-            'prod_code': prod_code,
-            'work_order_types': list(work_order_types),
-        })
+        query = text(sql_query).bindparams(
+            *(bindparam(key, expanding=True) for key in expanding_keys)
+        )
+        panel_df = pd.read_sql(query, db_manager.engine, params=params)
         panel_df.columns = panel_df.columns.str.lower()
         
         # 1. 在 Pandas 中进行排序：此时数据已经到了本地内存，Pandas 排序非常快且不会导致数据库连接超时

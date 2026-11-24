@@ -14,7 +14,7 @@ from src.shared_kernel.config import ConfigLoader
 logger = logging.getLogger(__name__)
 
 REQUIRED_RULE_COLUMNS = frozenset({"step_col", "param_col"})
-OUTLIER_FILTER_POLICY = "inline-outlier-filter-v2-offset"
+OUTLIER_FILTER_POLICY = "inline-outlier-filter-v3-offset-only"
 
 
 class OutlierFilterConfigurationError(RuntimeError):
@@ -50,7 +50,7 @@ def load_outlier_filter_rules(rule_file: Path, decrypted_dir: Path) -> pd.DataFr
             decryption = decrypt_file(source, output_dir=decrypted_dir)
             decrypted_path = Path(decryption.output_path)
             read_path = decrypted_path
-        rules = pd.read_excel(read_path, dtype=str).fillna("")
+        rules = pd.read_excel(read_path, dtype=str, keep_default_na=False)
     except Exception as exc:
         raise OutlierFilterConfigurationError(
             f"无法加载异常值过滤配置: {source}"
@@ -107,14 +107,18 @@ def apply_outlier_filter_rules(
         if rule_prod not in {"", "ALL", prod_code.upper()}:
             continue
 
-        lower = pd.to_numeric(_rule_text(rule, "lower_col"), errors="coerce")
-        upper = pd.to_numeric(_rule_text(rule, "upper_col"), errors="coerce")
-        if rule_param and pd.isna(lower) and pd.isna(upper):
+        lower_text = _rule_text(rule, "lower_col")
+        upper_text = _rule_text(rule, "upper_col")
+        offset_text = _rule_text(rule, "offset")
+        lower = pd.to_numeric(lower_text, errors="coerce")
+        upper = pd.to_numeric(upper_text, errors="coerce")
+        offset_only = bool(offset_text) and not (lower_text or upper_text)
+        if rule_param and pd.isna(lower) and pd.isna(upper) and not offset_only:
             raise OutlierFilterConfigurationError(
-                "参数级异常值过滤规则必须至少配置一个有效数值边界: "
+                "参数级规则须至少配置一个有效数值边界，或留空上下限并填写 offset: "
                 f"prod={rule_prod or 'ALL'}, step={rule_step}, param={rule_param}"
             )
-        offset = _rule_offset(rule, rule_prod, rule_step, rule_param) if rule_param else 0.0
+        offset = _rule_offset(offset_text, rule_prod, rule_step, rule_param) if rule_param else 0.0
 
         step_mask = step_ids.isin(_step_variants(rule_step))
         if not step_mask.any():
@@ -153,8 +157,8 @@ def apply_outlier_filter_rules(
     return result
 
 
-def _rule_offset(rule: pd.Series, product: str, step: str, param: str) -> float:
-    offset = pd.to_numeric(_rule_text(rule, "offset") or "0", errors="coerce")
+def _rule_offset(text: str, product: str, step: str, param: str) -> float:
+    offset = pd.to_numeric(text or "0", errors="coerce")
     if not isfinite(offset):
         raise OutlierFilterConfigurationError(
             f"异常值过滤规则的 offset 必须为有限数值: prod={product or 'ALL'}, step={step}, param={param}"

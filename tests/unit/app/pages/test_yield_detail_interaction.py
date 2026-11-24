@@ -12,15 +12,15 @@ from streamlit.testing.v1 import AppTest
 @pytest.fixture
 def detail_page(monkeypatch, tmp_path):
     from app.components import indicator_cache, page_header
-    from app.manager.session_manager import SessionManager
+    from src.shared_kernel.config import ConfigLoader
     from src.shared_kernel.infrastructure import db_handler
 
     analysis = importlib.import_module("yield_domain.application.yield_service").YieldAnalysisService
     config = SimpleNamespace(data_source=SimpleNamespace(product_code="Z553"), processing={})
-    monkeypatch.setattr(SessionManager, "get_active_config", lambda: config)
-    monkeypatch.setattr(SessionManager, "get_product_dir", lambda: tmp_path)
+    monkeypatch.setattr(ConfigLoader, "load_config", lambda product: config if product == config.data_source.product_code else None)
+    monkeypatch.setattr(ConfigLoader, "get_domain_resource_dir", lambda domain: tmp_path)
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
-    monkeypatch.setattr(page_header, "render_page_header", lambda *args, **kwargs: None)
+    monkeypatch.setattr(page_header, "render_page_header", lambda *args, **kwargs: config.data_source.product_code)
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *args: [])
     monkeypatch.setattr(indicator_cache, "build_indicator_product_cache_signature", lambda *args: "test")
     monkeypatch.setattr(analysis, "build_cache_context", lambda *args: {

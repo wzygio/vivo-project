@@ -14,7 +14,7 @@ from src.iqc_domain.core.lifetime.alerts import LIFETIME_ALERT_COLUMNS
 from src.iqc_domain.infrastructure.lifetime.publication import read_lifetime_publication
 from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EVAPORATION_DECISIONS
 from src.indicator_domain.infrastructure.ijp.alert_workbook import ijp_decisions
-from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS
+from src.equipment_domain.infrastructure.parts_alert_workbook import has_parts_alert_history, read_parts_publication
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.utils.excel_tools import read_workbook_sheets
 
@@ -48,17 +48,22 @@ def read_snapshot_workbook(path: str, modified: int, size: int, row_key: str) ->
     frames = _snapshot_sheets(path, modified, size)
     sheet = _SOURCES[row_key][2]
     if sheet not in frames:
-        return {}
+        if row_key != 'parts_oos':
+            return {}
+        if not has_parts_alert_history(frames) and ('__meta__' not in frames or frames['__meta__'].empty):
+            return {}
     meta = frames['__meta__'].copy()
     selected = meta.region.eq(sheet) if row_key.startswith('ijp_') else pd.Series(True, index=meta.index)
     records = meta.loc[selected]
-    public = frames[sheet]
+    public = frames.get(sheet)
     if len(records) == 1:
         if row_key == 'iqc_lifetime_oos':
             public = read_lifetime_publication(public, records.iloc[0], allow_decision_edits=True)
+        elif row_key == 'parts_oos':
+            public = read_parts_publication(frames, records.iloc[0])
+            meta.loc[selected, 'has_parts_history'] = has_parts_alert_history(frames)
         else:
-            layout = (ijp_decisions(sheet) if row_key.startswith('ijp_') else
-                      PARTS_DECISIONS if row_key == 'parts_oos' else EVAPORATION_DECISIONS)
+            layout = ijp_decisions(sheet) if row_key.startswith('ijp_') else EVAPORATION_DECISIONS
             public = layout.read(frames, records.iloc[0])
         meta.loc[selected, 'alert_count'] = len(public)
     # Preserve both IJP region headers for validating a freshly initialized workbook.
@@ -106,7 +111,12 @@ def read_published_alerts(row_key: str, product: str, reference_date: date) -> d
         published = pd.Timestamp(record.updated_at)
         now = pd.Timestamp.now()
         age = (now - published).total_seconds()
-        if published.date() != reference_date or age < 0 or age > ConfigLoader.get_cache_ttl_seconds():
+        if pd.isna(published) or age < 0:
+            raise ValueError('Invalid publication timestamp')
+        if (row_key == 'parts_oos' and not record.has_parts_history
+                and str(record.as_of_date) == str(published.date()) and published.date() <= reference_date):
+            return {'state': 'ok', 'alerts': alerts, 'alert_factories': [], 'message': ''}
+        if published.date() != reference_date or age > ConfigLoader.get_cache_ttl_seconds():
             raise ValueError('Expired publication')
         monday = reference_date - timedelta(days=reference_date.weekday())
         start, end = str(monday - timedelta(days=7)), str(monday - timedelta(days=1))

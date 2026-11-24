@@ -13,7 +13,6 @@ from src.inline_domain import composition
 from app.components import page_header
 from app.sections.inline_domain.spc import spc_dashboard
 from app.utils.app_setup import AppSetup
-from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure import db_handler
 
@@ -103,17 +102,18 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         return {"state": "no_data" if frame is None else "alert" if len(alerts) else "ok", "alerts": alerts}
 
     monkeypatch.setattr(alert_results, "read_alert_result", read_saved_result)
+    monkeypatch.setattr(composition, "build_spc_repository", lambda *args: object())
+    monkeypatch.setattr(composition, "build_spc_sheet_membership_store", lambda: object())
+    monkeypatch.setattr(composition, "build_spc_sheet_membership_policy_signature", lambda _: "test-policy")
+    monkeypatch.setattr(composition, "build_spc_sheet_membership_coverage", lambda *args: None)
     monkeypatch.setattr(composition, "build_spc_input_signature", lambda product: "snapshot-v1")
 
     monkeypatch.setattr(spc_dashboard.st, "set_page_config", lambda **_kwargs: None)
     monkeypatch.setattr(spc_dashboard.st, "spinner", lambda *_args, **_kwargs: nullcontext())
     monkeypatch.setattr(spc_dashboard.st, "query_params", {})
+    from app.utils import step_labels
+    monkeypatch.setattr(step_labels, "get_cached_step_description_map", lambda _db: {})
     monkeypatch.setattr(AppSetup, "initialize_app", staticmethod(lambda: None))
-    monkeypatch.setattr(
-        SessionManager,
-        "get_active_config",
-        staticmethod(lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M673"))),
-    )
     monkeypatch.setattr(db_handler, "DatabaseManager", lambda: object())
     from src.shared_kernel.report_cutoff import ReportCutoffPolicy
     monkeypatch.setattr(ReportCutoffPolicy, "boundary", lambda self, now=None: pd.Timestamp("2026-07-28 12:00"))
@@ -123,14 +123,12 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
         "build_indicator_product_cache_signature",
         lambda base_signature, product_code, indicator_keys: f"{base_signature}|scoped={product_code}",
     )
-    monkeypatch.setattr(
-        page_header,
-        "render_page_header",
-        lambda *_args, **kwargs: (
-            header_kwargs.update(kwargs),
-            events.append("header"),
-        ),
-    )
+    def submit_product(**kwargs):
+        header_kwargs.update(kwargs)
+        events.append("header")
+        return "M673"
+
+    monkeypatch.setattr(page_header, "render_page_header", submit_product)
     monkeypatch.setattr(ConfigLoader, "get_spc_period_sigma_source", staticmethod(lambda: "point_value"))
     monkeypatch.setattr(ConfigLoader, "get_spc_period_box_source", staticmethod(lambda: "point_value"))
 
@@ -187,7 +185,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
     assert loaded_signatures == [
         "spc_saved_capability_alerts_v5|scoped=M673:snapshot-v1"
     ]
-    assert header_kwargs["product_cache_scope"] == "M673"
+    assert callable(header_kwargs["product_refresh_handler"])
     assert rendered_alerts[0].to_dict("records") == ([
         {
             "厂别": "TP",

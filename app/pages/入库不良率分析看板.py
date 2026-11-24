@@ -10,7 +10,8 @@ from functools import partial
 # ==============================================================================
 #  配置与初始化
 # ==============================================================================
-from app.manager.session_manager import SessionManager
+from src.shared_kernel.config import ConfigLoader
+from app.sections.yield_domain.resource_config import refresh_yield_product
 from app.utils.app_setup import AppSetup
 
 from yield_domain.application.yield_service import YieldAnalysisService
@@ -49,9 +50,15 @@ AppSetup.initialize_app()
 
 YIELD_DASHBOARD_CACHE_SIGNATURE = YIELD_SNAPSHOT_SIGNATURE_BASE
 
-# [Refactor] 2. 获取上下文 (配置 & 路径)
-active_config = SessionManager.get_active_config()
-product_dir = SessionManager.get_product_dir()
+current_product = render_page_header(
+    title="📊 入库不良率分析看板",
+    cached_funcs=extract_cached_funcs(YieldAnalysisService),
+    product_cache_indicators=("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos", YIELD_SOURCE_INDICATOR),
+    product_refresh_handler=refresh_yield_product,
+)
+
+active_config = ConfigLoader.load_config(current_product)
+product_dir = ConfigLoader.get_domain_resource_dir("yield_domain") / current_product
 source_signature = build_yield_source_signature(active_config.data_source.product_code)
 product_cache_signature = build_indicator_product_cache_signature(
     YIELD_DASHBOARD_CACHE_SIGNATURE,
@@ -69,24 +76,6 @@ sheet_cache_signature = build_indicator_product_cache_signature(
 
 # 依赖注入：初始化数据库连接
 db_manager = DatabaseManager()
-
-refresh_handlers = [
-    lambda: YieldAnalysisService.safe_refresh_snapshots(
-        db_manager,
-        active_config,
-    )
-]
-
-# [Refactor] 3. 渲染页头
-funcs_to_clear = extract_cached_funcs(YieldAnalysisService)
-render_page_header(
-    title="📊 入库不良率分析看板",
-    config=active_config,
-    cached_funcs=funcs_to_clear,
-    refresh_handlers=refresh_handlers,
-    product_cache_scope=active_config.data_source.product_code,
-    product_cache_indicators=("yield_trend_fluctuation", "yield_lot_oos", "yield_sheet_oos", YIELD_SOURCE_INDICATOR),
-)
 
 # [Refactor] 4. 渲染 Yield 配置文件上传组件
 if is_admin_mode(st.query_params):

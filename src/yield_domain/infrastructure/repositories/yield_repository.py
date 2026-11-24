@@ -183,7 +183,8 @@ class PanelRepository:
                 e_s = current_end.strftime("%Y-%m-%d")
                 
                 df = load_panel_details(
-                    self.db, s_s, e_s, prod, wo_types
+                    self.db, s_s, e_s, prod, wo_types,
+                    self.data_policy.additional_work_orders_by_lot,
                 )
                 if not df.empty: all_chunks.append(df)
                 

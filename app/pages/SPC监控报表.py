@@ -36,7 +36,6 @@ from app.sections.inline_domain.spc.spc_export import render_spc_export_interact
 from app.sections.inline_domain.spc.scroll_layout import render_spc_page_scroll_layout
 from app.utils.app_setup import AppSetup
 from app.utils.step_labels import get_cached_step_description_map
-from app.manager.session_manager import SessionManager
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from src.inline_domain.application.spc import spc_service
@@ -70,6 +69,11 @@ SPC_REPORT_BUILD_ERRORS = (
     else ()
 )
 
+def _refresh_product_measurements(product: str) -> bool:
+    end_date = ConfigLoader.get_report_cutoff_policy().boundary().date()
+    return refresh_raw_measurements(DatabaseManager(), product, end_date.isoformat())
+
+
 def _render_saved_page_alerts(report=None) -> None:
     render_saved_spc_alerts(
         current_product, reference_date=default_end_dt.date(), report=report,
@@ -81,8 +85,13 @@ st.set_page_config(page_title="SPC监控报表", layout="wide", initial_sidebar_
 render_spc_page_scroll_layout()
 AppSetup.initialize_app()
 
-active_config = SessionManager.get_active_config()
-current_product = active_config.data_source.product_code
+current_product = render_page_header(
+    title="SPC监控报表",
+    cached_funcs=extract_cached_funcs(SpcReportService) + [fetch_decorated_features, get_cached_step_description_map],
+    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
+    product_refresh_handler=_refresh_product_measurements,
+)
+
 product_cache_signature = build_indicator_product_cache_signature(
     SPC_PAGE_CACHE_SIGNATURE,
     current_product,
@@ -108,26 +117,12 @@ query_config = SpcQueryConfig(
     data_type_filter="SPC",
 )
 
-render_page_header(
-    title="SPC监控报表",
-    config=active_config,
-    cached_funcs=extract_cached_funcs(SpcReportService) + [fetch_decorated_features, get_cached_step_description_map],
-    product_cache_scope=current_product,
-    product_cache_indicators=PRODUCT_CACHE_INDICATORS,
-    refresh_handlers=[
-        lambda: refresh_raw_measurements(
-            db_manager,
-            current_product,
-            query_config.end_date,
-        )
-    ],
-)
-
 render_spc_export(
     start_date=default_start_dt,
     end_date=default_end_dt.date(),
     db_manager=db_manager,
     step_desc_map=step_desc_map,
+    current_product=current_product,
 )
 
 try:

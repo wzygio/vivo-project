@@ -134,6 +134,33 @@ def test_missing_snapshot_cache_is_invalidated_by_real_publication(snapshots):
     assert read_alert_result(row, 'M678', date.today())['state'] == 'alert'
 
 
+def test_stale_parts_workbook_without_any_history_is_green_until_first_alert(snapshots):
+    from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS as layout
+    from app.sections.shared.alert_results import read_alert_result
+
+    path = snapshots['parts_alerts']
+    old = datetime.now() - timedelta(days=7)
+    parts = pd.DataFrame(columns=PARTS_PUBLIC_COLUMNS)
+    ledger = pd.DataFrame(columns=[*layout.keys, 'Flag'])
+    meta = pd.DataFrame([dict(as_of_date=str(old.date()), updated_at=old.isoformat(),
+                              candidate_count=0, alert_count=0, status='success')])
+    def write(ledger, metadata):
+        with pd.ExcelWriter(path) as writer:
+            for name, frame in ((layout.sheet, parts), (layout.candidates, parts),
+                                (layout.decisions, ledger), ('__meta__', metadata)):
+                frame.to_excel(writer, sheet_name=name, index=False)
+
+    write(ledger, meta)
+    for product in ('M626', 'Z622'):
+        assert read_alert_result('parts_oos', product, date.today())['state'] == 'ok'
+    for invalid in (meta.assign(status='failed'), meta.assign(candidate_count=1),
+                    meta.assign(alert_count=1)):
+        write(ledger, invalid)
+        assert read_alert_result('parts_oos', 'Z622', date.today())['state'] == 'error'
+    write(pd.DataFrame([dict.fromkeys(layout.keys, 'A')]).assign(Flag=True), meta)
+    assert read_alert_result('parts_oos', 'Z622', date.today())['state'] == 'error'
+
+
 def test_lifetime_inspection_warmup_persists_product_cells_and_invalidates_on_republication(
     snapshots, tmp_path, monkeypatch,
 ):
@@ -357,7 +384,8 @@ def test_header_only_templates_are_no_data_without_fabricating_success(snapshots
     write_snapshots(snapshots, empty=True)
     for row in saved.PUBLISHED_ALERT_ROWS:
         assert saved.read_published_alerts(row, 'M678', date.today())['state'] == 'ok'
-        assert saved.read_published_alerts(row, 'M678', date.today() + timedelta(days=1))['state'] == 'error'
+        expected = 'ok' if row == 'parts_oos' else 'error'
+        assert saved.read_published_alerts(row, 'M678', date.today() + timedelta(days=1))['state'] == expected
 
 
 def test_empty_metadata_cannot_hide_nonempty_alert_records(snapshots):

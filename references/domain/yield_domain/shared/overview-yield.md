@@ -153,7 +153,8 @@ Panel 明细的蒸镀批次取数规则（2026-11-02）：
 - 增量更新（回读天数来自全局 `application.incremental_refresh_days`，当前配置为 7 天）
 - 三防线容灾降级
 - 构造时接收 `YieldDataPolicy`
-- Work Order Type 仅在数据库查询边界应用
+- Panel 明细取数沿用全局 `data_source.work_order_types`。在 [Yield 共享配置](../../../../config/domain/yield_domain/shared.yaml) 的 `product_overrides.<产品>.data_source.additional_work_orders_by_lot` 可为指定产品补充工单类型，补充记录必须同时命中 `work_order_types` 和 `lot_ids`（Panel ID 前 9 位）。补充记录使用原查询窗口及入库条件。
+- 工单类型和补充 Lot 范围仅在 Panel 数据库查询边界应用，并参与快照签名。
 - 原始 Defect Group 数据写入带策略签名的快照
 - 新查、快照、增量与降级数据在返回上层前统一应用一次 Defect Group 策略
 

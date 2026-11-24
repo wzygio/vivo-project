@@ -25,32 +25,19 @@ async page => {
       [label, value],
       { timeout },
     );
-  const waitQueryEnabled = (timeout = 600_000) =>
-    page.waitForFunction(
-      () => {
-        const btn = [...document.querySelectorAll("button")].find(
-          b => b.textContent?.trim() === "查询",
-        );
-        return btn && !btn.disabled;
-      },
-      undefined,
-      { timeout },
-    );
 
   await page.goto(
     "http://localhost:8503/SPC%E7%9B%91%E6%8E%A7%E6%8A%A5%E8%A1%A8?admin=true",
   );
   await page.getByRole("combobox").first().waitFor({ timeout: 300_000 });
-  await page
-    .getByText("当前筛选条件尚未查询。")
-    .waitFor({ timeout: 300_000 });
 
   const productSelector = page.getByRole("combobox").first();
   if ((await productSelector.inputValue()) !== "Z571") {
     await productSelector.click();
     await page.getByRole("option", { name: "Z571" }).click();
-    await waitComboValue("📦 当前产品型号", "Z571");
+    await waitComboValue("产品型号", "Z571");
   }
+  await page.getByTestId("stForm").getByRole("button", { name: "查询", exact: true }).click();
   // 就绪指示：CPK 预警中心已渲染（预警周次随当前日期滚动，不断言具体指标名）
   const readyIndicator = page
     .getByText(/🚨 自动预警指标图像（\d+ 个指标）/)
@@ -107,8 +94,7 @@ async page => {
     await waitMultiValue("参数名称", "CD1", 300_000);
   }
 
-  await waitQueryEnabled(300_000);
-  await page.getByRole("button", { name: "查询" }).click();
+  await page.getByRole("button", { name: "查询", exact: true }).last().click({ timeout: 300_000 });
   const indicator = page.getByText("ARRAY | 1L650 | CD1", { exact: true }).last();
   await indicator.waitFor({ timeout: 300_000 });
 

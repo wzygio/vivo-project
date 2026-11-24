@@ -464,6 +464,10 @@ def render_spc_report_interaction(
     is_admin: bool = False,
 ) -> None:
     """Rerun cascade controls and charts without re-entering product loading."""
+    if st.session_state.get("spc_report_product") != product:
+        st.session_state.pop("spc_applied_filter_signature", None)
+        st.session_state["spc_report_product"] = product
+
     selected_factory, selected_params, selected_steps, should_render = render_spc_filters(
         indicator_df=report.indicators_df, step_desc_map=step_desc_map,
     )

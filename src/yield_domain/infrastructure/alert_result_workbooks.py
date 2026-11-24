@@ -12,7 +12,7 @@ from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.file_lock import publication_lock
 from src.shared_kernel.utils import excel_tools
 from src.shared_kernel.utils.excel_tools import replace_workbook_sheets
-from src.yield_domain.application.alert_results import RELEASE_KEYS, merge_lot_release_controls, merge_release_controls
+from src.yield_domain.application.alert_results import RELEASE_KEYS, merge_release_controls
 from src.shared_kernel.core.decoration_flags import parse_decoration_flag
 from src.shared_kernel.core.decoration_revision import (
     VERSION_SHEET, decision_revision, upload_revision, validate_decision_update,
@@ -80,10 +80,18 @@ class YieldAlertWorkbookStore:
         if len(meta) != 1:
             raise ValueError("Invalid Yield publication metadata")
         decisions = sheets.get(self._flags_sheet(product))
-        return {"records": sheets.get(product, pd.DataFrame()).copy(),
+        initialized = decisions is not None
+        records = sheets.get(product, pd.DataFrame()).copy()
+        if not initialized and meta.iloc[0].get("release_schema_version") == 1:
+            raise ValueError("Missing Yield release controls")
+        if not initialized and "flag" in records:
+            keys = RELEASE_KEYS[kind]
+            decisions = records[[*keys, "flag"]].drop_duplicates().copy()
+            decisions["flag"] = decisions["flag"].map(parse_decoration_flag)
+        return {"records": records,
                 "metadata": meta.iloc[0].where(meta.iloc[0].notna(), None).to_dict(),
                 "decisions": decisions.copy() if decisions is not None else None,
-                "controls_initialized": decisions is not None}
+                "controls_initialized": initialized}
 
     def is_product_absent(self, product: str, kind: str) -> bool:
         """Missing workbook/product is normal; an unreadable or partial publication is not."""
@@ -92,17 +100,19 @@ class YieldAlertWorkbookStore:
         return names.isdisjoint(sheets)
 
     def initialize_lot_controls(self, product: str) -> bool:
-        """Explicit operator migration; reading never initializes a decision sheet."""
-        path = self.paths["lot"]
+        return self.initialize_controls(product, "lot")
+
+    def initialize_controls(self, product: str, kind: str) -> bool:
+        """Upgrade existing product sheets without changing their measurement or publication date."""
+        path = self.paths[kind]
         flags_name = self._flags_sheet(product)
         with self._write_lock, publication_lock(path):
-            previous = self.read_product(product, "lot")
+            previous = self.read_product(product, kind)
             if previous is None:
                 raise ValueError("Missing Yield publication for release initialization")
-            controlled, decisions = merge_lot_release_controls(
-                previous["records"], previous["decisions"],
-            )
-            if previous["controls_initialized"]:
+            controlled, decisions = merge_release_controls(kind, previous["records"], previous["decisions"])
+            if (previous["controls_initialized"] and "flag" in previous["records"]
+                    and previous["metadata"].get("release_schema_version") == 1):
                 return False
             metadata = {**previous["metadata"], "release_schema_version": 1}
             outcome = replace_workbook_sheets(path, {
@@ -187,7 +197,9 @@ class YieldAlertWorkbookStore:
                 and list(previous["records"].columns) == list(records.columns)
                 and previous["records"].astype(object).where(previous["records"].notna(), None).to_dict("records")
                     == records.astype(object).where(records.notna(), None).to_dict("records"))
-            if old.get("fingerprint") == metadata["fingerprint"] and same_records:
+            controls_ready = records is None or (previous is not None and previous["controls_initialized"]
+                                                and old.get("release_schema_version") == 1)
+            if controls_ready and old.get("fingerprint") == metadata["fingerprint"] and same_records:
                 return False
             merged = {**old, **metadata} if records is None else metadata
             sheets = {meta_name: pd.DataFrame([merged])}

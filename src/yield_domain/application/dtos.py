@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.shared_kernel.config_model import LotWorkOrderScope
+
 if TYPE_CHECKING:
     from src.shared_kernel.config_model import AppConfig
 
@@ -12,6 +14,7 @@ class YieldDataPolicy(BaseModel):
 
     work_order_types: tuple[str, ...] = Field(default_factory=tuple)
     target_defect_groups: tuple[str, ...] = Field(default_factory=tuple)
+    additional_work_orders_by_lot: LotWorkOrderScope | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -21,12 +24,13 @@ class YieldDataPolicy(BaseModel):
         return cls(
             work_order_types=tuple(config.data_source.work_order_types),
             target_defect_groups=tuple(config.data_source.target_defect_groups),
+            additional_work_orders_by_lot=config.data_source.additional_work_orders_by_lot,
         )
 
     @property
     def signature(self) -> str:
         """返回可用于缓存和快照隔离的稳定策略签名。"""
-        payload = self.model_dump_json().encode("utf-8")
+        payload = self.model_dump_json(exclude_none=True).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()[:12]
 
 

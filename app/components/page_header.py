@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import hashlib
 import logging
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -105,6 +107,7 @@ def perform_hard_reset(
     product_cache_indicators: tuple[str, ...] = (),
     *,
     snapshot_refreshed: bool = False,
+    update_session_product: bool = True,
 ) -> None:
     """统一刷新缓存、重载代码、重读配置；也用于快照刷新成功后的收尾。"""
     # ---- 阶段 1: 优先仅失效当前产品；无产品作用域时保留旧的全量清理 ----
@@ -133,7 +136,12 @@ def perform_hard_reset(
     try:
         current_product = product_cache_scope or st.session_state.get(SessionManager.KEY_PRODUCT)
         if current_product:
-            SessionManager.load_and_set_config(current_product)
+            if update_session_product:
+                SessionManager.load_and_set_config(current_product)
+            else:
+                from src.shared_kernel.config import ConfigLoader as ReloadedConfigLoader
+
+                ReloadedConfigLoader.load_config(current_product)
             logging.info(f"♻️ [Hard Reset] 配置已强制重读: {current_product}")
     except Exception:
         logging.exception("❌ [Hard Reset] 配置重读失败，刷新流程未完成。")
@@ -179,7 +187,9 @@ def render_page_header(
     product_cache_indicators: tuple[str, ...] = (),
     show_cache_refresh: bool = True,
     show_data_refresh: bool = True,
-) -> None:
+    product_refresh_handler: Callable[[str], bool] | None = None,
+) -> str | None:
+    """Render report controls. Product-filtered pages resume only after submission."""
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
     # 检测只置位提示标记，绝不打断当前 run；两个刷新按钮均可手动应用代码/配置/缓存更新。
     detect_project_changes()
@@ -206,8 +216,30 @@ def render_page_header(
     if title:
         st.title(title)
 
+    reset_options = {}
+    product_query_key = f"header_product_query_{title}"
+    if show_product_filter:
+        available_prods = ConfigLoader.get_enabled_products()
+        product_cache_scope = st.session_state.get(product_query_key)
+        if product_cache_scope not in available_prods:
+            st.session_state.pop(product_query_key, None)
+            product_cache_scope = None
+        refresh_handlers = []
+        if product_cache_scope is not None and product_refresh_handler is not None:
+            refresh_handlers = [partial(product_refresh_handler, product_cache_scope)]
+        reset_options["update_session_product"] = False
+
+    def _can_refresh() -> bool:
+        return not show_product_filter or (
+            product_cache_scope is not None
+            and st.session_state.get(product_query_key) == product_cache_scope
+            and product_cache_scope in ConfigLoader.get_enabled_products()
+        )
+
     # 快照全部刷新成功后，复用「刷新缓存」的缓存失效、代码重载与配置重读流程。
     def _refresh_data_callback():
+        if not _can_refresh():
+            return
         if not refresh_handlers:
             st.toast("当前页面没有独立的数据快照刷新任务。", icon="ℹ️")
             return
@@ -233,12 +265,16 @@ def render_page_header(
             product_cache_scope,
             product_cache_indicators,
             snapshot_refreshed=True,
+            **reset_options,
         )
         logging.info("🔄 [UI] 数据快照、页面缓存、代码与配置刷新完毕。")
 
     # 数据缓存按页面作用域失效；所有页面的「刷新缓存」均执行进程级代码重载。
     def _hard_reset_callback():
-        perform_hard_reset(cached_funcs, product_cache_scope, product_cache_indicators)
+        if _can_refresh():
+            perform_hard_reset(
+                cached_funcs, product_cache_scope, product_cache_indicators, **reset_options,
+            )
 
     # 产品筛选与管理员操作使用独立边框分组，避免把常规筛选误认为维护操作。
     # show_product_filter=False（如 Q-Time 页，产品多选内聚在页面筛选区）时
@@ -251,20 +287,11 @@ def render_page_header(
         with product_column:
             with st.container(border=True):
                 st.caption("产品筛选")
-                current_prod = config.data_source.product_code
-                available_prods = SessionManager.AVAILABLE_PRODUCTS
-                selected_prod = st.selectbox(
-                    "📦 当前产品型号",
-                    options=available_prods,
-                    format_func=get_product_label_formatter(),
-                    index=available_prods.index(current_prod) if current_prod in available_prods else 0,
-                    key=f"header_prod_sel_{title}",
-                    label_visibility="collapsed",
+                _render_product_query(
+                    title, product_query_key, available_prods, product_cache_scope,
                 )
-                if selected_prod != current_prod:
-                    SessionManager.load_and_set_config(selected_prod)
-                    st.rerun()
 
+    refresh_disabled = show_product_filter and product_cache_scope is None
     if is_admin:
         with admin_column:
             with st.container(border=True):
@@ -275,6 +302,7 @@ def render_page_header(
                             "🔄 刷新数据",
                             key=f"btn_refresh_{title}",
                             on_click=_refresh_data_callback,
+                            disabled=refresh_disabled,
                             width="stretch",
                             help=(
                                 f"刷新底层数据快照，成功后刷新产品 {product_cache_scope} 的页面缓存，并重载代码、重读配置。"
@@ -287,6 +315,7 @@ def render_page_header(
                             "🔄 刷新缓存",
                             key=f"btn_clear_{title}",
                             on_click=_hard_reset_callback,
+                            disabled=refresh_disabled,
                             width="stretch",
                             help=(
                                 f"刷新产品 {product_cache_scope} 的当前报表指标缓存，并重载代码与配置。"
@@ -296,6 +325,44 @@ def render_page_header(
                         )
                 if st.session_state.get("code_update_pending"):
                     st.caption("⚠️ 检测到项目文件变更，点击「刷新缓存」应用")
+
+    if refresh_disabled:
+        if available_prods:
+            st.info("请选择产品并点击「查询」。")
+        st.stop()
+    return product_cache_scope if show_product_filter else None
+
+
+def _render_product_query(
+    title: str | None, query_key: str, products: list[str], current: str | None,
+) -> None:
+    if not products:
+        st.info("暂无可查询的产品。")
+        return
+
+    format_product = get_product_label_formatter()
+    draft_key = f"header_prod_sel_{title}"
+
+    def submit() -> None:
+        product = st.session_state.get(draft_key)
+        if product in products:
+            st.session_state[query_key] = product
+
+    with st.form(f"{query_key}_form", enter_to_submit=False, border=False):
+        product_col, query_col = st.columns([4, 1], vertical_alignment="bottom")
+        with product_col:
+            st.selectbox(
+                "产品型号", options=products, format_func=format_product,
+                index=products.index(current) if current in products else 0,
+                key=draft_key, label_visibility="collapsed",
+            )
+        with query_col:
+            st.form_submit_button(
+                "查询", key=f"{query_key}_submit", on_click=submit,
+                type="primary", width="stretch",
+            )
+    if current is not None:
+        st.caption(f"当前报表产品：{format_product(current)}")
 
 
 def extract_cached_funcs(*services) -> list:

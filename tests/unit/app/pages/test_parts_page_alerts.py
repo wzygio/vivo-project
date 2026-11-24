@@ -10,7 +10,7 @@ from src.equipment_domain import composition
 from src.equipment_domain.application.parts_service import PartsReportService, PartsReportViewModel
 from src.equipment_domain.infrastructure.parts_alert_workbook import PartsAlertWorkbook
 from src.shared_kernel.infrastructure import db_handler
-from app.sections.equipment_domain import parts_alerts
+from src.shared_kernel.config import ConfigLoader
 
 PAGE = Path(__file__).resolve().parents[4] / 'app/pages/关键备件报表.py'
 
@@ -52,16 +52,9 @@ def test_parts_page_automatic_alert_scope_snapshot_and_safe_failure(monkeypatch,
             raise KeyError('internal-path admin=true')
         return store
     monkeypatch.setattr(composition, 'create_parts_alert_store', store_factory)
-    def read_saved(row, product, reference):
-        try:
-            meta = pd.read_excel(path, sheet_name='__meta__').iloc[0]
-            records = pd.read_excel(path, sheet_name='超规备件')
-            if str(meta.as_of_date) != str(reference):
-                raise ValueError('stale fixture')
-        except Exception:
-            return {'state': 'error', 'alerts': pd.DataFrame(), 'message': '预警结果暂不可用，请更新对应报表后重试。'}
-        return {'state': 'alert' if len(records) else 'ok', 'alerts': records, 'message': ''}
-    monkeypatch.setattr(parts_alerts, 'read_alert_result', read_saved)
+    original_resource = ConfigLoader.get_domain_resource_path
+    monkeypatch.setattr(ConfigLoader, 'get_domain_resource_path', lambda domain, key, *args:
+                        path if key == 'parts_alerts' else original_resource(domain, key, *args))
     app = AppTest.from_file(str(PAGE)).run()
     assert not app.exception
     if mode == 'load_failure':
@@ -85,13 +78,11 @@ def test_parts_page_automatic_alert_scope_snapshot_and_safe_failure(monkeypatch,
         saved = pd.read_excel(path, sheet_name='超规备件')
         assert saved['备件类型'].tolist() == ['Target']
         assert saved['使用进度'].item() == 110
-    elif mode == 'normal':
-        assert app.success[0].value == '当前未发现使用进度超过 100% 的备件。'
-        assert pd.read_excel(path, sheet_name='超规备件').empty
+        assert not {'是否超规', '原始测量值', '参数名称', '数据修饰'} & set(saved)
     else:
         assert app.success[0].value == '当前未发现使用进度超过 100% 的备件。'
-        assert pd.read_excel(path, sheet_name='超规备件').empty
+        with pd.ExcelFile(path) as workbook:
+            assert workbook.sheet_names == ['__meta__']
+            assert workbook.parse('__meta__').iloc[0].candidate_count == 0
     for table in app.dataframe:
         assert not {'是否超规', '原始测量值', '参数名称', '数据修饰'} & set(table.value)
-    if mode not in ('write_failure', 'config_failure', 'load_failure'):
-        assert not {'是否超规', '原始测量值', '参数名称', '数据修饰'} & set(pd.read_excel(path, sheet_name='超规备件'))

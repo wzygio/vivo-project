@@ -42,21 +42,22 @@ def _verify_saved(module: str, products: tuple[str, ...], reference: date,
 
     path, sheet = _source(module)
     frames = read_workbook_sheets(path, preserve_text=True)
-    alerts, metadata = frames[sheet], frames['__meta__']
+    metadata = frames['__meta__']
     if module.startswith('ijp_'):
         metadata = metadata.loc[metadata['region'].eq(sheet)]
     if len(metadata) != 1:
         raise ValueError('INSPECTION_PUBLICATION_MISSING_METADATA')
     meta = metadata.iloc[0]
-    if module == 'iqc_lifetime':
+    if module == 'parts':
+        from src.equipment_domain.infrastructure.parts_alert_workbook import read_parts_publication
+        alerts = read_parts_publication(frames, meta, verify_publication=True)
+    elif module == 'iqc_lifetime':
         from src.iqc_domain.infrastructure.lifetime.publication import read_lifetime_publication
-        alerts = read_lifetime_publication(alerts, meta)
+        alerts = read_lifetime_publication(frames[sheet], meta)
     else:
-        from src.equipment_domain.infrastructure.parts_alert_workbook import PARTS_DECISIONS
         from src.indicator_domain.infrastructure.ijp.alert_workbook import ijp_decisions
         from src.iqc_domain.infrastructure.eva_materials.alert_workbook import EVAPORATION_DECISIONS
-        layout = (ijp_decisions(sheet) if module.startswith('ijp_') else
-                  PARTS_DECISIONS if module == 'parts' else EVAPORATION_DECISIONS)
+        layout = ijp_decisions(sheet) if module.startswith('ijp_') else EVAPORATION_DECISIONS
         alerts = layout.read(frames, meta, verify_publication=True)
     if meta['status'] != 'success' or int(meta['alert_count']) != count or len(alerts) != count:
         raise ValueError('INSPECTION_PUBLICATION_COUNT_MISMATCH')

@@ -70,7 +70,7 @@ def test_saved_alerts_remain_visible_when_producer_fails(
     monkeypatch.setattr(SessionManager, "get_active_config", staticmethod(
         lambda: SimpleNamespace(data_source=SimpleNamespace(product_code="M678")),
     ))
-    monkeypatch.setattr(page_header, "render_page_header", lambda **kw: None)
+    monkeypatch.setattr(page_header, "render_page_header", lambda **kw: "M678")
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *a: [])
     monkeypatch.setattr(indicator_cache, "build_indicator_product_cache_signature", lambda *a: "test")
     monkeypatch.setattr(indicator_cache, "get_indicator_product_revision", lambda *a: "test")
