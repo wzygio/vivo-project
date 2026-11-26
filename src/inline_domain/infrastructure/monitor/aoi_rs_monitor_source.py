@@ -41,10 +41,14 @@ class AoiRsMonitorSource:
 
     def policy_signature(self, product: str) -> str:
         domain = ConfigLoader.load_domain_config("inline_domain", "shared", "aoi_rs")
+        special = domain.get("aoi_rs", {}).get("special_decoration")
+        if isinstance(special, dict) and "products_by_factory" in special:
+            special = {key: value for key, value in special.items() if key != "products_by_factory"}
+            special["factories"] = ConfigLoader.get_aoi_rs_special_decoration_factories(product)
         signature = {
             "version": "aoi-rs-monitor-v1", "decoration_version": AOI_RS_DECORATION_POLICY_VERSION,
             "exclusion": domain.get("data_exclusion"),
-            "special": domain.get("aoi_rs", {}).get("special_decoration"),
+            "special": special,
             "exemptions": ConfigLoader.get_auto_decoration_param_exemptions(),
             "decisions": get_scope_decision_signature("aoi_rs", product),
             "forward": ConfigLoader.get_data_forward_policy().signature,
@@ -88,7 +92,7 @@ class AoiRsMonitorSource:
                                & display["start_time"].lt(pd.Timestamp(end) + pd.Timedelta(days=1))].copy()
 
         rs, throughput = project(rs), project(throughput)
-        factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories())
+        factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories(product))
         window = ConfigLoader.get_aoi_rs_special_decoration_window()
         if factory in factories and not rs.empty:
             path = ConfigLoader.get_domain_resource_path("inline_domain", "aoi_rs_sheet_oos_decoration")

@@ -227,14 +227,23 @@ class ConfigLoader:
     @classmethod
     def get_incremental_refresh_days(cls) -> int:
         """Load the shared source-snapshot overlap; older configs default to 7 days."""
+        return cls._get_refresh_days("incremental_refresh_days", 7)
+
+    @classmethod
+    def get_manual_refresh_days(cls) -> int:
+        """Load the calendar-day window for the page-header data refresh."""
+        return cls._get_refresh_days("manual_refresh_days", 14)
+
+    @classmethod
+    def _get_refresh_days(cls, key: str, default: int) -> int:
         yaml_path = cls.get_project_root() / "config" / "global.yaml"
         application = cls._load_yaml(yaml_path).get("application", {})
         if not isinstance(application, dict):
             raise ValueError("global.yaml: 'application' must be a mapping")
-        days = application.get("incremental_refresh_days", 7)
+        days = application.get(key, default)
         if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
             raise ValueError(
-                "global.yaml: 'application.incremental_refresh_days' must be a positive integer"
+                f"global.yaml: 'application.{key}' must be a positive integer"
             )
         return days
 
@@ -694,9 +703,9 @@ class ConfigLoader:
         return cls.get_inline_data_exclusion(today=today)
 
     @classmethod
-    def get_aoi_rs_special_decoration_factories(cls) -> list[str]:
-        """Read the active AOI_RS allowlist; special rules are disabled by default."""
-        return cls._aoi_special_decoration_factories("aoi_rs")
+    def get_aoi_rs_special_decoration_factories(cls, prod_code: str | None = None) -> list[str]:
+        """Resolve the factories eligible for this AOI_RS product."""
+        return cls._aoi_special_decoration_factories("aoi_rs", prod_code=prod_code)
 
     @classmethod
     def _aoi_special_decoration_section(cls, report_name: str) -> dict:
@@ -709,7 +718,9 @@ class ConfigLoader:
         return special
 
     @classmethod
-    def _aoi_special_decoration_factories(cls, report_name: str) -> list[str]:
+    def _aoi_special_decoration_factories(
+        cls, report_name: str, *, prod_code: str | None = None,
+    ) -> list[str]:
         special = cls._aoi_special_decoration_section(report_name)
         enabled = special.get("enabled", False)
         if not isinstance(enabled, bool):
@@ -721,7 +732,36 @@ class ConfigLoader:
             not isinstance(value, str) or not value.strip() for value in factories
         ):
             raise ValueError(f"{report_name}.special_decoration.factories must be a list of factory names")
-        return list(dict.fromkeys(value.strip().upper() for value in factories))
+        factory_names = list(dict.fromkeys(value.strip().upper() for value in factories))
+        if report_name == "aoi_rs" and "products_by_factory" in special:
+            return cls._aoi_rs_factories_for_product(factory_names, special["products_by_factory"], prod_code)
+        return factory_names
+
+    @staticmethod
+    def _aoi_rs_factories_for_product(
+        factories: list[str], products_by_factory: object, prod_code: str | None,
+    ) -> list[str]:
+        path = "aoi_rs.special_decoration.products_by_factory"
+        if not isinstance(products_by_factory, dict):
+            raise ValueError(f"{path} must be a mapping")
+        product = prod_code.strip().upper() if prod_code is not None else None
+        eligible = []
+        seen = set()
+        for factory, products in products_by_factory.items():
+            if not isinstance(factory, str) or not factory.strip():
+                raise ValueError(f"{path} keys must be nonempty factory names")
+            factory = factory.strip().upper()
+            if factory in seen:
+                raise ValueError(f"{path} has a duplicate factory: {factory}")
+            seen.add(factory)
+            if not isinstance(products, list) or any(
+                not isinstance(value, str) or not value.strip() or value.strip() == "*"
+                for value in products
+            ):
+                raise ValueError(f"{path}.{factory} must be a list of product codes")
+            if product in {value.strip().upper() for value in products}:
+                eligible.append(factory)
+        return [factory for factory in factories if factory not in seen] + eligible
 
     @classmethod
     def get_aoi_rs_special_decoration_sheet_ratios(cls) -> tuple[float, float]:

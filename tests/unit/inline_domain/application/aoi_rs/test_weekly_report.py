@@ -25,7 +25,7 @@ def _report(details=(), passes=(), specs=(), indicators=()):
 
 @pytest.fixture
 def load_report(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ())
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ())
     monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_window", lambda: None)
     reports = {}
     calls = []
@@ -60,11 +60,19 @@ def test_weekly_ratio_uses_distinct_station_sheets_and_preserves_product_order(l
 
 
 def test_month_projection_matches_current_chart_without_cropping_at_previous_sunday(load_report, monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ("ARRAY",))
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ("ARRAY",))
     details = [_detail(qty=10), _detail("2026-10-19", qty=0, sheet="S2")]
     load_report.reports["M626"] = _report(details, details)
     # Current month's mean is 5, so the current chart caps the previous week at 6.5.
     assert _tables(load_report)[0].rows[0].values == ("6.5",)
+
+
+def test_weekly_projection_resolves_each_products_array_scope(load_report, monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories",
+                        lambda product: ("ARRAY",) if product == "Z622" else ())
+    details = [_detail(qty=10), _detail("2026-10-19", qty=0, sheet="S2")]
+    load_report.reports.update(Z622=_report(details, details), M626=_report(details, details))
+    assert _tables(load_report, ("Z622", "M626"))[0].rows[0].values == ("6.5", "10")
 
 
 def test_specs_indicators_and_details_form_union_and_zero_is_distinct_from_no_throughput(load_report):
@@ -123,7 +131,7 @@ def test_numeric_format_and_nonfinite_trend(load_report, monkeypatch, value, exp
 
     source = _detail()
     load_report.reports["M626"] = _report([source], [source])
-    monkeypatch.setattr(weekly_report, "build_aoi_rs_period_trend", lambda *_args: pd.DataFrame([
+    monkeypatch.setattr(weekly_report, "build_aoi_rs_period_trend", lambda *_args, prod_code: pd.DataFrame([
         dict(factory="ARRAY", step_id="11629", rs_code="A", period_type="week",
              period_label="2026-W42", value=value),
     ]))

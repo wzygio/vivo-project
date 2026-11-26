@@ -8,8 +8,10 @@ from datetime import datetime, timedelta
 
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, get_data_health, make_data_health
-from src.shared_kernel.snapshot_paths import snapshot_directory, snapshot_component
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
+from src.shared_kernel.infrastructure.parquet_snapshot import publish_parquet
+from src.shared_kernel.snapshot_paths import snapshot_directory, snapshot_component
+from src.shared_kernel.snapshot_window import manual_refresh_start
 from src.yield_domain.application.dtos import YieldDataPolicy, YieldQueryConfig
 from src.yield_domain.application.errors import YieldSourceReadError
 from src.yield_domain.infrastructure.data_loader import load_panel_details, load_array_input_times
@@ -56,7 +58,10 @@ class PanelRepository:
         self.SNAPSHOT_TTL_HOURS = ConfigLoader.get_snapshot_ttl_hours()
         self.data_forward_policy = ConfigLoader.get_data_forward_policy()
 
-    def get_panel_details(self, query: YieldQueryConfig, force_refresh: bool = False) -> pd.DataFrame:
+    def get_panel_details(
+        self, query: YieldQueryConfig, force_refresh: bool = False, *,
+        refresh_days: int | None = None,
+    ) -> pd.DataFrame:
         """Publish only complete source windows; preserve old snapshots on failure."""
         req_start = pd.Timestamp(query.start_date)
         req_end = pd.Timestamp(query.end_date)
@@ -90,11 +95,11 @@ class PanelRepository:
                 logging.warning("YIELD_SNAPSHOT_READ_FAILED")
                 cache = None
 
-        if cache is not None and fresh and not force_refresh:
+        if cache is not None and fresh and not force_refresh and refresh_days is None:
             result = cache
             health = cache_health
         else:
-            overlap_days = ConfigLoader.get_incremental_refresh_days()
+            overlap_days = ConfigLoader.get_incremental_refresh_days() if refresh_days is None else None
             try:
                 fetch_start = source_start
                 incremental = (
@@ -103,7 +108,16 @@ class PanelRepository:
                     and bool(cache_health["source_start"])
                     and pd.Timestamp(cache_health["source_start"]) <= source_start
                 )
-                if incremental:
+                if refresh_days is not None:
+                    covered_until = None
+                    if (cache is not None and event_col in cache
+                            and cache_health["source_start"] and cache_health["source_end"]
+                            and pd.Timestamp(cache_health["source_start"]) <= source_start):
+                        covered_until = pd.Timestamp(cache_health["source_end"]) + pd.Timedelta(days=1)
+                    fetch_start = manual_refresh_start(
+                        source_start, source_end + pd.Timedelta(days=1), covered_until, refresh_days,
+                    )
+                elif incremental and overlap_days is not None:
                     fetch_start = max(source_start, cache[time_col].max() - timedelta(days=overlap_days))
                 delta = self._fetch_from_db_in_chunks(
                     fetch_start.strftime("%Y-%m-%d"), source_end.strftime("%Y-%m-%d"),
@@ -119,7 +133,11 @@ class PanelRepository:
                             format="%Y%m%d%H%M%S%f", errors="coerce",
                         )
                 # Successful empty chunks are facts, not connection failures.
-                result = pd.concat([cache, delta], ignore_index=True) if incremental else delta
+                if refresh_days is not None and cache is not None and not cache.empty:
+                    retained = cache.loc[cache[time_col].lt(fetch_start)]
+                    result = pd.concat([retained, delta], ignore_index=True)
+                else:
+                    result = pd.concat([cache, delta], ignore_index=True) if incremental else delta
                 if not result.empty:
                     result = result.sort_values(time_col)
                     keys = ["panel_id", "defect_desc"] if "defect_desc" in result else ["panel_id"]
@@ -133,10 +151,11 @@ class PanelRepository:
                 attach_data_health(result, health)
                 if self.use_snapshot:
                     try:
-                        self.snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-                        result.to_parquet(self.snapshot_path, index=False)
+                        publish_parquet(self.snapshot_path, result)
                     except Exception:
                         logging.error("YIELD_SNAPSHOT_WRITE_FAILED")
+                        if refresh_days is not None:
+                            raise
             except Exception:
                 logging.warning("YIELD_SOURCE_UNAVAILABLE: retaining previous snapshot when available")
                 result = cache if cache is not None else pd.DataFrame()

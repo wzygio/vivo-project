@@ -86,12 +86,9 @@ render_page_header(
     active_config,
     show_product_filter=False,
     cached_funcs=extract_cached_funcs(PartsReportService),
-    refresh_handlers=[
-        lambda: PartsReportService.safe_refresh_snapshots(
-            db_manager,
-            str(BASELINE_PATH),
-        )
-    ],
+    data_refresh_handler=lambda days: PartsReportService.safe_refresh_snapshots(
+        db_manager, str(BASELINE_PATH), refresh_days=days,
+    ),
 )
 
 

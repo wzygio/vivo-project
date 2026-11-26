@@ -105,11 +105,18 @@ class PartsReportService:
         _db_manager: "DatabaseManager",
         baseline_path: str,
         _data_port: PartsDataPort | None = None,
+        *,
+        refresh_days: int | None = None,
     ) -> bool:
         """刷新关键备件 L1 Parquet 快照，不触碰 Streamlit L2 缓存。"""
         try:
-            snapshot_df = _resolve_data_port(_db_manager, _data_port).refresh(baseline_path)
-            return not snapshot_df.empty
+            snapshot_df = _resolve_data_port(_db_manager, _data_port).refresh(
+                baseline_path, **({"refresh_days": refresh_days} if refresh_days is not None else {}),
+            )
+            return not snapshot_df.empty or (
+                refresh_days is not None
+                and snapshot_df.attrs.get("parts_source_read", {}).get("status") == "success"
+            )
         except Exception as e:
             logger.error(f"关键备件快照刷新失败: {e}", exc_info=True)
             return False

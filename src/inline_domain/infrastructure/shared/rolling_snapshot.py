@@ -17,6 +17,7 @@ from uuid import uuid4
 import pandas as pd
 
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.snapshot_window import manual_refresh_start
 
 from .snapshot_window import inline_snapshot_window_start
 
@@ -116,6 +117,17 @@ def incremental_start(metadata: dict | None, end: object,
     return max(start, covered_through - pd.Timedelta(days=overlap_days))
 
 
+def manual_tail_start(
+    metadata: dict | None, end: object, days: int, *, window_start: pd.Timestamp,
+) -> pd.Timestamp:
+    covered_until = None
+    if metadata is not None and pd.Timestamp(metadata["covered_from"]) <= window_start:
+        covered_until = pd.Timestamp(metadata["covered_through"]) + pd.Timedelta(days=1)
+    return manual_refresh_start(
+        window_start, pd.Timestamp(end) + pd.Timedelta(days=1), covered_until, days,
+    )
+
+
 def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end: object,
                  *, window_start: object | None = None) -> pd.DataFrame:
     """Replace the entire queried interval, so removed/corrected records disappear.
@@ -132,7 +144,9 @@ def replace_tail(old: pd.DataFrame | None, new: pd.DataFrame, start: object, end
     new = new.loc[new.start_time.ge(pd.Timestamp(start)) & new.start_time.lt(pd.Timestamp(end) + pd.Timedelta(days=1))]
     if old is not None and not old.empty:
         old = old.loc[pd.to_datetime(old.start_time).lt(pd.Timestamp(start))]
+        source_attrs = new.attrs
         new = pd.concat([old, new], ignore_index=True)
+        new.attrs = source_attrs
     retained_start = inline_snapshot_window_start(end) if window_start is None else pd.Timestamp(window_start)
     return new.loc[new.start_time.ge(retained_start)].drop_duplicates().reset_index(drop=True)
 

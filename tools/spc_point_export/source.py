@@ -193,9 +193,11 @@ def read_outlier_rules() -> pd.DataFrame:
 class MeasurementSource:
     """Reuse fresh snapshots or query only the selected source window in memory."""
 
-    def __init__(self, adapter, start: date, end: date, *, query_manager) -> None:
+    def __init__(self, adapter, start: date, end: date, *, query_manager,
+                 display_end: datetime | None = None) -> None:
         self.adapter, self.start, self.end = adapter, start, end
         self.query_manager = query_manager
+        self.display_end = display_end
 
     def get_measurements(self, product: str, end_date: str, force_refresh: bool = False) -> pd.DataFrame:
         from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import measurement_snapshot_coverage
@@ -210,17 +212,31 @@ class MeasurementSource:
         metadata = read_metadata(path, self.adapter.SNAPSHOT_POLICY_VERSION, policy_file=True)
         coverage = measurement_snapshot_coverage(path, self.adapter.data_forward_policy)
         window_start = inline_measurement_snapshot_window_start(product, self.end)
-        fresh = (is_fresh(metadata, self.end, self.adapter.SNAPSHOT_TTL_HOURS,
+        snapshot_end = pd.Timestamp(self.end)
+        if self.display_end is not None:
+            source_start, source_end = self.adapter.data_forward_policy.to_source_window(
+                pd.Timestamp(self.start), pd.Timestamp(self.display_end),
+            )
+            if (metadata is None or coverage is None
+                    or pd.Timestamp(metadata['covered_from']) > source_start
+                    or pd.Timestamp(metadata['covered_through']).normalize() < source_end.normalize()
+                    or pd.Timestamp(metadata['refreshed_at']).tz_convert('Asia/Shanghai').tz_localize(None) < source_end):
+                raise ExportError(f'{product}: snapshot does not cover the requested source window through {source_end}')
+            window_start = pd.Timestamp(metadata['covered_from'])
+            snapshot_end = source_end.normalize()
+        fresh = (is_fresh(metadata, snapshot_end, self.adapter.SNAPSHOT_TTL_HOURS,
                           window_start=window_start)
                  and coverage is not None and coverage['start_date'] <= self.start.isoformat()
                  and coverage['end_date'] >= self.end.isoformat())
         source = self.adapter._try_read_fresh(
-            path, pd.Timestamp(self.end), window_start=window_start,
+            path, snapshot_end, window_start=window_start,
         ) if fresh else None
         if source is not None:
             if read_metadata(path, self.adapter.SNAPSHOT_POLICY_VERSION, policy_file=True) != metadata:
                 raise ExportError(f'{product}: source snapshot changed during the read; retry the export')
         else:
+            if self.display_end is not None:
+                raise ExportError(f'{product}: forwarded export needs a current, readable source snapshot')
             fresh = False
             display_end = ConfigLoader.get_report_cutoff_policy().cap_end(
                 pd.Timestamp(self.end) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1))
@@ -233,19 +249,21 @@ class MeasurementSource:
             if self.adapter.measurement_corrector is not None and not source.empty:
                 source = self.adapter.measurement_corrector(source)
         # Reuse the repository's sole source-time/display-time output boundary.
-        displayed = self.adapter._report_projection(source)
+        displayed = self.adapter._report_projection(source, display_end=self.display_end)
         if fresh:
             displayed.attrs['spc_source_coverage'] = coverage
         displayed.attrs['export_source'] = 'fresh-snapshot' if fresh else 'read-only-query'
         return displayed
 
 
-def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
+def load_product(manager, product: str, start: date, end: date, *,
+                 display_end: datetime | None = None) -> pd.DataFrame:
     from src.inline_domain.application.shared.decorated_data import prepare_decorated_data
     from src.inline_domain.application.spc.dtos import SpcQueryConfig
     from src.inline_domain.composition import build_measurement_preparation_repository
     from src.inline_domain.core.shared.sheet_oos_alerts import previous_iso_week_range
     from src.inline_domain.core.spc.spc_calculator import get_period_window_start
+    from src.inline_domain.infrastructure.shared.main_process_history_repository import InlineMainProcessHistoryRepository
     from src.inline_domain.infrastructure.shared.measurement_preparation import InlineMeasurementPreparationRepository
     from src.inline_domain.infrastructure.shared.outlier_filter_rules import apply_outlier_filter_rules
     from src.inline_domain.infrastructure.spc.spc_repository import SpcRepository, Z622_PRODUCT
@@ -262,9 +280,10 @@ def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
     query_manager = SimpleNamespace(engine=manager.measurement_engine) if product == Z622_PRODUCT else manager
     repository = SpcRepository(ReadOnlyPreparation(
         raw_measurements=MeasurementSource(report_preparation.raw_measurements, preparation_start, end,
-                                           query_manager=query_manager),
+                                           query_manager=query_manager, display_end=display_end),
         metadata=report_preparation.metadata,
-        main_process_history=report_preparation.main_process_history,
+        main_process_history=(report_preparation.main_process_history if display_end is None
+                              else InlineMainProcessHistoryRepository(manager, display_end=display_end)),
     ))
     points = repository.get_spc_measurements(SpcQueryConfig(
         prod_code=product, start_date=preparation_start.isoformat(), end_date=end.isoformat(), data_type_filter='SPC'))
@@ -273,7 +292,9 @@ def load_product(manager, product: str, start: date, end: date) -> pd.DataFrame:
         return points
     if specs.empty:
         raise ExportError(f'{product}: specifications missing; no partially decorated export was written')
-    points = ConfigLoader.get_report_cutoff_policy().filter_frame(points, 'sheet_start_time')
+    points = ConfigLoader.get_report_cutoff_policy().filter_frame(
+        points, 'sheet_start_time', display_end=display_end,
+    )
     previous_start, _ = previous_iso_week_range(pd.Timestamp(end))
     return prepare_decorated_data(
         points, specs, product, 'spc', persist=False,

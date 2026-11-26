@@ -22,7 +22,7 @@ def report_case(monkeypatch, tmp_path):
         "application:\n  cache_ttl_hours: 4\n", encoding="utf-8",
     )
     monkeypatch.setattr(ConfigLoader, "get_project_root", lambda: tmp_path)
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["OLED"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["OLED"])
     monkeypatch.setattr(ConfigLoader, "get_auto_decoration_param_exemptions", lambda: [])
     monkeypatch.setattr(aoi_tt_service, "_particle_size_runtime_config", lambda: (True, 0.1, "test"))
     policy = {"value": (("OLED",), "2026-10-01", "2026-10-06")}

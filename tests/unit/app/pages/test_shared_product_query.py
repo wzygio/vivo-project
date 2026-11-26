@@ -29,14 +29,15 @@ def test_report_reads_and_refreshes_only_its_submitted_product(monkeypatch, page
         reads.append(product)
         st.stop()  # The page has reached its first product-specific cache lookup.
 
-    def capture_refresh(_db, product, _end):
-        refreshes.append(product)
+    def capture_refresh(_db, product, _end, *, refresh_days):
+        refreshes.append((product, refresh_days))
         return True
 
     monkeypatch.setattr(db_handler.DatabaseManager, "__new__", db)
     monkeypatch.setattr(AppSetup, "initialize_app", lambda: None)
     monkeypatch.setattr(SessionManager, "get_active_config", config)
     monkeypatch.setattr(ConfigLoader, "get_enabled_products", lambda: ["M626", "Z622"])
+    monkeypatch.setattr(ConfigLoader, "get_manual_refresh_days", lambda: 19)
     monkeypatch.setattr(page_header, "perform_hard_reset",
                         lambda _funcs, product, _indicators, **kw: resets.append(product))
     monkeypatch.setattr(page_header, "detect_project_changes", lambda: False)
@@ -60,7 +61,9 @@ def test_report_reads_and_refreshes_only_its_submitted_product(monkeypatch, page
     monkeypatch.setattr(composition, "refresh_raw_measurements", capture_refresh)
     monkeypatch.setattr(composition, "refresh_aoi_rs_snapshots", capture_refresh)
     monkeypatch.setattr(resource_config.YieldAnalysisService, "safe_refresh_snapshots",
-                        lambda _db, cfg: capture_refresh(_db, cfg.data_source.product_code, None))
+                        lambda _db, cfg, *, refresh_days: capture_refresh(
+                            _db, cfg.data_source.product_code, None, refresh_days=refresh_days,
+                        ))
     title = app.title[0].value
     app.selectbox[0].select("Z622")
     app.button(key=f"header_product_query_{title}_submit").click().run()
@@ -74,7 +77,7 @@ def test_report_reads_and_refreshes_only_its_submitted_product(monkeypatch, page
     app.button(key=f"btn_refresh_{title}").click().run()
     app.button(key=f"btn_clear_{title}").click().run()
     assert not app.exception
-    assert refreshes == ["Z622"]
+    assert refreshes == [("Z622", 19)]
     assert resets == ["Z622", "Z622"]
     assert set(reads) == {"Z622"}
     app.button(key=f"header_product_query_{title}_submit").click().run()

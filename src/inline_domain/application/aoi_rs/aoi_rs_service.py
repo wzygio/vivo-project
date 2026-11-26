@@ -348,7 +348,11 @@ class AoiRsReportService:
     ) -> AoiRsReportViewModel:
         """在 Streamlit pickle 缓存边界外构造 ViewModel。"""
         try:
-            factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories())
+            product = AoiRsQueryConfig.model_validate_json(query_config_json).prod_code
+        except ValueError as exc:
+            raise AoiRsReportBuildError("AOI_RS query config is invalid.") from exc
+        try:
+            factories = tuple(ConfigLoader.get_aoi_rs_special_decoration_factories(product))
             date_exclusion = ConfigLoader.get_inline_data_exclusion()
             decoration_window = ConfigLoader.get_aoi_rs_special_decoration_window()
             sheet_spec_ratios = ConfigLoader.get_aoi_rs_special_decoration_sheet_ratios()

@@ -19,5 +19,6 @@ class PartsReportDataAdapter:
     def load_snapshots(self, spec_df: pd.DataFrame, *, as_of: pd.Timestamp, max_age_days: int) -> tuple[pd.DataFrame, pd.DataFrame]:
         return load_report_part_life_snapshots(self.db_manager, spec_df, as_of=as_of, max_age_days=max_age_days)
 
-    def refresh(self, baseline_path: str) -> pd.DataFrame:
-        return PartsRepository(self.db_manager, self.load_baseline(baseline_path)).get_snapshot(force_refresh=True)
+    def refresh(self, baseline_path: str, *, refresh_days: int | None = None) -> pd.DataFrame:
+        repo = PartsRepository(self.db_manager, self.load_baseline(baseline_path))
+        return repo.get_snapshot(force_refresh=True, refresh_days=refresh_days)

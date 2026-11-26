@@ -390,6 +390,28 @@ def test_incremental_refresh_uses_global_days_and_replaces_empty_tail(
     assert set(pd.read_parquet(tmp_path / "qtime_source_array.parquet").lot_id) == remaining
 
 
+def test_manual_refresh_keeps_qtime_history_and_replaces_configured_tail(tmp_path, monkeypatch):
+    old = pd.DataFrame([
+        _detail_row("A->B", "KEEP", "M626", "20260815010000"),
+        _detail_row("A->B", "DELETE", "M626", "20260816010000"),
+    ])
+    calls = []
+
+    def read_sql(_statement, _engine, params):
+        calls.append(dict(params))
+        return old if len(calls) == 1 else old.iloc[:0]
+
+    monkeypatch.setattr(qtime_repository.pd, "read_sql", read_sql)
+    repository = QTimeRepository(SimpleNamespace(engine=object()), snapshot_dir=tmp_path)
+    as_of = date(2026, 9, 2)
+    repository.fetch_details(_current_query(as_of))
+    result = repository.refresh_snapshot("ARRAY", as_of=as_of, refresh_days=14)
+    assert result.refreshed_from_database
+    assert calls[-1]["start_time"] == "20260816000000"
+    assert calls[-1]["end_time"] == "20260830000000"
+    assert pd.read_parquet(tmp_path / "qtime_source_array.parquet").lot_id.tolist() == ["KEEP"]
+
+
 def test_legacy_l1_is_removed_only_after_all_shop_snapshots_exist(tmp_path) -> None:
     legacy_detail = tmp_path / "qtime_details_deadbeef.parquet"
     legacy_options = tmp_path / "qtime_step_options_array_qtime-source-v1.parquet"

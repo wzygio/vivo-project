@@ -26,13 +26,16 @@ application/composition 入口及其 infrastructure 实现决定，页头不直�
 
 此约定适用于 SPC、CTQ、AOI RS、AOI TT 和三张入库不良率报表。隐藏公共产品筛选框的页面继续使用各自的查询范围。AOI 和入库报表的独立多产品导出仍使用导出区提交的产品。
 
-Yield、Inline、Q-Time 的既有人工刷新入口按各自窗口全量重取；这不等于扫描整个数据库历史。
-默认向前重刷 7 天是 infrastructure 的增量刷新规则，不能据此把页头人工刷新解释为只重刷 7 天。
-仓储规则见 [Infrastructure 数据刷新机制](data-flow-infrastructure-refresh.md)。
+页头在点击“刷新数据”时读取 `config/global.yaml` 的 `application.manual_refresh_days`，
+默认 14 个自然日，包含各模块本次查询截止日。Yield、Inline 共享测量、AOI_RS、Q-Time 常规站间数据
+和关键备件真实测量按此配置回刷，保留窗口之前的有效快照。快照缺失或没有可信覆盖时重建模块窗口，
+覆盖断档时从最早缺失日补齐。Q-Time 固定路径继续核对滚动窗口内能被迟到终点配对的起点。
+配置必须是正整数，非法值使有窗口的数据刷新在取数前失败。过期快照的日常增量由
+`application.incremental_refresh_days` 单独配置，默认 7 天。仓储规则见
+[Infrastructure 数据刷新机制](data-flow-infrastructure-refresh.md)。
 
-本次快照任务使用点击时已经注册的处理函数和配置；后续代码重载、配置重读在快照成功后进行。
-如果修改的是快照生成逻辑或查询配置，并要求本次快照立即按新版本生成，应先点击“刷新缓存”，
-再点击“刷新数据”。报表读取、去重和计算逻辑在重新导入后使用新版本。
+本次快照任务使用已注册的处理函数。回刷天数直接从当前配置文件读取，完整代码重载和会话配置
+重读在快照成功后进行。修改快照生成代码后，可以先点击“刷新缓存”加载新版处理函数。
 
 ## 3. 共用的缓存与代码更新流程
 
@@ -84,5 +87,7 @@ Python 模块重载是进程级行为，不按产品隔离，也不等于重启�
   在隔离子进程中修改后端函数、执行真实模块卸载，再导入得到新结果，且 PID 保持不变。
 - [指标产品缓存测试](../../../../tests/unit/app/components/test_indicator_product_cache.py)：
   定向 revision 失效与代码/配置重载兼容，不退化为全局数据缓存清空。
+- [产品页提交与刷新测试](../../../../tests/unit/app/pages/test_shared_product_query.py)：
+  页头将点击时配置的回刷天数与已提交产品一起交给刷新处理函数。
 
 这些自动化检查验证代码和回调契约，不代表已在生产数据库执行全量刷新。

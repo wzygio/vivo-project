@@ -47,6 +47,30 @@ def test_empty_pair_refresh_is_success_and_cached(tmp_path):
     assert len(calls) == 2
 
 
+def test_manual_pair_refresh_replaces_tail_in_both_snapshots(tmp_path):
+    query = AoiRsQueryConfig(prod_code="M1", start_date="2026-06-01", end_date="2026-09-08")
+    old = pd.concat([_frame("2026-06-10"), _frame("2026-09-08")], ignore_index=True)
+    calls = []
+
+    def loader(columns):
+        def load(_db, request):
+            calls.append(request.start_date)
+            facts = old if request.start_date == "2026-06-01" else old.iloc[:0]
+            return facts.reindex(columns=columns)
+        return load
+
+    repo = AoiRsSnapshotRepository(
+        tmp_path, object(), details_loader=loader(RS_DETAIL_COLUMNS),
+        pass_through_loader=loader(PASS_THROUGH_COLUMNS),
+    )
+    assert repo.refresh(query)
+    assert repo.refresh(query, refresh_days=14)
+    assert calls == ["2026-06-01", "2026-06-01", "2026-08-26", "2026-08-26"]
+    for kind in ("details", "pass_through"):
+        saved = pd.read_parquet(tmp_path / f"aoi_rs_{kind}_M1.parquet")
+        assert saved.start_time.tolist() == [pd.Timestamp("2026-06-10")]
+
+
 def test_second_loader_failure_keeps_first_snapshot_and_metadata_untouched(tmp_path):
     failed = False
     def passed(*args):

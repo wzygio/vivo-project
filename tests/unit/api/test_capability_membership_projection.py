@@ -24,7 +24,7 @@ URL = '/api/v1/sheet-anomalies'
 def capability_row(**changes):
     return dict(factory='ARRAY', step_id='0100', param_name='THK', flag=False,
                 period_type='week', period_label='2026-W44',
-                calendar_start='2026-10-26', calendar_end='2026-11-01',
+                lower_bound=1.33, calendar_start='2026-10-26', calendar_end='2026-11-01',
                 period_start='2026-10-27 10:00:00', period_end='2026-10-29 10:00:00',
                 cpk=1.2, cpm=1.1) | changes
 

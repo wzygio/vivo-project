@@ -96,12 +96,28 @@ def test_explicit_range_only_includes_whole_weeks_and_keeps_all_selected_weeks()
     assert set(result["records"]["period_label"]) == {"2026-W43", "2026-W44"}
 
 
-def test_partial_first_week_and_unclosed_future_week_are_not_returned():
+def test_partial_first_week_is_included_and_unclosed_future_weeks_are_omitted():
     service, _ = query([row(), row(period_label="2026-W43", param_name="OLDER"),
                         row(period_label="2026-W45", param_name="CURRENT"),
                         row(period_label="2026-W46", param_name="FUTURE")])
     result = service.read("P1", TODAY, start_date="2026-10-20", end_date="2026-11-15")
-    assert result["records"]["period_label"].tolist() == ["2026-W44"]
+    assert set(result["records"]["period_label"]) == {"2026-W43", "2026-W44"}
+
+
+@pytest.mark.parametrize("metric", ["cpk", "cpm"])
+@pytest.mark.parametrize("start,end,expected", [
+    ("2026-11-12", "2026-11-20", {"2026-W46"}),
+    ("2026-11-12", "2026-11-23", {"2026-W46", "2026-W47"}),
+    ("2026-11-22", "2026-11-22", {"2026-W47"}),
+    ("2026-11-17", "2026-11-20", set()),
+])
+def test_week_end_inside_request_selects_entire_closed_period(metric, start, end, expected):
+    service, _ = query([
+        row(metric, period_label="2026-W46", period_start="2026-11-10", period_end="2026-11-13"),
+        row(metric, period_label="2026-W47", period_start="2026-11-17", period_end="2026-11-20"),
+    ], metric)
+    result = service.read("P1", date(2026, 11, 26), start_date=start, end_date=end)
+    assert set(result["records"].get("period_label", [])) == expected
 
 
 @pytest.mark.parametrize("start,end", [("2026-11-02", "2026-11-08"), ("2026-11-09", "2026-11-15")])

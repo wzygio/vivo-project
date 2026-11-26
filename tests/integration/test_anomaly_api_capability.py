@@ -44,7 +44,7 @@ def capability_files(published_files, monkeypatch):
     monkeypatch.setattr(ConfigLoader, 'get_spc_capability_alert_min_span_hours', lambda: 0)
     from src.inline_domain import composition
     from src.inline_domain.application.spc.sheet_membership import (
-        SpcSheetMembershipQuery, publish_spc_sheet_memberships,
+        publish_spc_sheet_memberships,
     )
     from src.inline_domain.infrastructure.spc.sheet_membership_store import SpcSheetMembershipJsonStore
 
@@ -63,6 +63,8 @@ def capability_files(published_files, monkeypatch):
                 blocks.append(block[keys + metrics])
             capability_records = pd.concat(blocks, ignore_index=True).groupby(
                 keys, sort=False, dropna=False).first().reset_index()
+        files.publish('spc', 'CPK')
+        files.publish('spc', 'CPM')
         return publish_spc_sheet_memberships(frame, store=files.membership_store, product=product,
             start_date=start_date, end_date=end_date, reference_date=NOW.date(),
             policy_signature='fixture-policy', capability_records=capability_records)
@@ -79,8 +81,7 @@ def capability_files(published_files, monkeypatch):
                       for identifier, stamp in zip(ids, (start, end)))
     files.member_points = pd.DataFrame(points)
     publish_membership(files.member_points)
-    monkeypatch.setattr(composition, 'build_spc_sheet_membership_query',
-        lambda _: SpcSheetMembershipQuery(files.membership_store, policy_signature='fixture-policy'))
+    monkeypatch.setattr(composition, 'build_spc_sheet_membership_store', lambda: files.membership_store)
     return files
 
 
@@ -166,7 +167,9 @@ def test_capability_dates_select_complete_iso_weeks_and_fields_filter(capability
         assert row['统计周期'] == '2026-W43' and row['监控参数'] == 'OLD_WEEK'
         partial = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
             params={**params, 'start_date': '2026-10-20'})
-        assert partial.status_code == 200 and partial.json()['data'] == []
+        assert partial.status_code == 200 and partial.json()['data'] == [row]
+        assert partial.json()['meta']['complete'] is True
+        assert partial.json()['meta']['period_start'].startswith('2026-10-20T')
         for extra in ({'step_id': '100'}, {'layer': 'OTHER'}, {'parameter_name': 'unmatched'}, {'entity_type': 'sheet'}):
             omitted = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
                 params={'event_type': event, **extra})
@@ -243,6 +246,22 @@ def test_capability_policy_change_invalidates_next_page(capability_files):
         assert next_page.status_code == 410
 
 
+def test_http_uses_published_capability_even_when_rules_cannot_be_loaded(capability_files, monkeypatch):
+    from src.inline_domain import composition
+    def unexpected(*args):
+        pytest.fail('HTTP read a production rule')
+    for name in ('get_inline_data_exclusion', 'get_spc_capability_alert_min_span_hours',
+                 'get_spc_sheet_oos_alert_param_exclusions'):
+        monkeypatch.setattr(ConfigLoader, name, unexpected)
+    monkeypatch.setattr(composition, 'build_spc_sheet_membership_policy_signature', unexpected)
+    with TestClient(capability_files.app()) as client:
+        for event in ('CPK', 'CPM', 'OOS', 'OOC'):
+            response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
+                                  params={'sub_domain': 'SPC', 'event_type': event})
+            assert response.status_code == 200
+            assert response.json()['meta']['returned_count'] == 1
+
+
 def test_explicit_oos_retains_original_sheet_json_shape(capability_files):
     with TestClient(capability_files.app()) as client:
         result = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'sub_domain': 'SPC', 'event_type': 'OOS'})
@@ -264,7 +283,7 @@ def test_capability_missing_member_snapshot_is_unavailable_without_fabricating_i
     assert 'capability:' not in response.text and 'PPA_X' not in response.text
 
 
-def test_capability_member_snapshot_cannot_mix_with_another_statistical_span(capability_files):
+def test_http_reads_published_members_without_comparing_statistical_spans(capability_files):
     files = capability_files
     points = files.member_points.copy()
     selected = points['param_name'].eq('PPA_X')
@@ -273,10 +292,11 @@ def test_capability_member_snapshot_cannot_mix_with_another_statistical_span(cap
     files.publish_membership(points)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'CPK'})
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert response.json()['data'][0]['对象编号'] == ['00001', '00002']
 
 
-def test_new_capability_value_cannot_use_members_from_an_older_publication(capability_files):
+def test_capability_value_changes_only_after_inspection_publishes(capability_files):
     files = capability_files
     path = files.paths[('inline_domain', 'spc_cpk_cpm_decoration')]
     rows = _capability_rows('cpk')
@@ -284,7 +304,8 @@ def test_new_capability_value_cannot_use_members_from_an_older_publication(capab
     _write(path, {'P1': rows, 'P1_cpm': _capability_rows('cpm')})
     with TestClient(files.app()) as client:
         mismatch = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'CPK'})
-        assert mismatch.status_code == 503
+        assert mismatch.status_code == 200
+        assert mismatch.json()['data'][0]['指标值'] == 1.2
         files.publish_membership(files.member_points)
         refreshed = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'event_type': 'CPK'})
     assert refreshed.status_code == 200

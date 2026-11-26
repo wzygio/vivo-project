@@ -368,7 +368,7 @@ def launch_gui(defaults: argparse.Namespace | None = None) -> int:
             else:
                 widget = ttk.Entry(frame, name=name, textvariable=var, show='*' if name == 'api_key' else '')
             widget.grid(row=row, column=column * 2 + 1, columnspan=3 if name == 'cursor' else 1, sticky='ew', pady=4)
-    ttk.Label(frame, text='筛选留空表示不限，日期留空为上周。CPK/CPM 是 SPC 周统计项，日期需覆盖完整周一至周日；对象编号可填一个 Sheet ID。'
+    ttk.Label(frame, text='筛选留空表示不限，日期留空为上周。CPK/CPM 是 SPC 周统计项，按周日筛选已结束周，跨周可返回多周；对象编号可填一个 Sheet ID。'
               '完整查询会自动翻页。单页调试可填写每页行数，首次留空游标，续页时填入上一页的 next_cursor。',
               wraplength=880).grid(row=8, column=0, columnspan=4, sticky='w', pady=8)
     status = tk.StringVar(value='可从 API_KEY／VIVO_API_KEY 环境变量自动填入密钥，或手动输入；密钥不保存到文件。')

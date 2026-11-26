@@ -26,6 +26,7 @@ from src.indicator_domain.infrastructure.qtime.snapshot_store import (
 from src.indicator_domain.infrastructure.shared.date_exclusion import apply_indicator_date_exclusion
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.data_health import attach_data_health, make_data_health
+from src.shared_kernel.snapshot_window import manual_refresh_start
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -176,6 +177,7 @@ class QTimeRepository:
         *,
         as_of: date | None = None,
         full_refresh: bool = False,
+        refresh_days: int | None = None,
     ) -> QTimeSnapshotRefresh:
         """Force one incremental shop refresh for the rolling report window."""
         if self._snapshot_store is None:
@@ -189,6 +191,7 @@ class QTimeRepository:
             source_end=source_end,
             force_refresh=True,
             full_refresh=full_refresh,
+            refresh_days=refresh_days,
         )
         return QTimeSnapshotRefresh(
             shop=shop,
@@ -231,6 +234,7 @@ class QTimeRepository:
         source_end: pd.Timestamp,
         force_refresh: bool,
         full_refresh: bool = False,
+        refresh_days: int | None = None,
     ) -> "_LoadedShopSource":
         if self._snapshot_store is None:
             raise RuntimeError("Q-Time snapshot store is not configured")
@@ -252,7 +256,7 @@ class QTimeRepository:
             ):
                 return _LoadedShopSource(fresh.frame, fresh, False)
             return self._refresh_shop_source(
-                shop, source_start, source_end, full_refresh=full_refresh,
+                shop, source_start, source_end, full_refresh=full_refresh, refresh_days=refresh_days,
             )
 
     def _refresh_shop_source(
@@ -262,14 +266,20 @@ class QTimeRepository:
         source_end: pd.Timestamp,
         *,
         full_refresh: bool = False,
+        refresh_days: int | None = None,
     ) -> "_LoadedShopSource":
         if self._snapshot_store is None:
             raise RuntimeError("Q-Time snapshot store is not configured")
         stale = self._read_snapshot(shop, fresh_only=False)
-        refresh_start = (
-            source_start if full_refresh
-            else self._refresh_start(stale, source_start, source_end)
-        )
+        if full_refresh:
+            refresh_start = source_start
+        elif refresh_days is not None:
+            covered_until = None
+            if stale is not None and pd.Timestamp(stale.metadata.source_start) <= source_start:
+                covered_until = pd.Timestamp(stale.metadata.source_end)
+            refresh_start = manual_refresh_start(source_start, source_end, covered_until, refresh_days)
+        else:
+            refresh_start = self._refresh_start(stale, source_start, source_end)
         params: dict[str, object] = {
             "start_time": refresh_start.strftime("%Y%m%d%H%M%S"),
             "end_time": source_end.strftime("%Y%m%d%H%M%S"),

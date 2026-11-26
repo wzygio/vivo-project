@@ -122,6 +122,27 @@ def test_source_health_survives_display_shift(repository, monkeypatch):
     assert pd.read_parquet(repository.snapshot_path).warehousing_time.iloc[0] == pd.Timestamp("2026-06-05")
 
 
+def test_manual_refresh_replaces_old_tail_without_rebuilding_history(repository, monkeypatch):
+    old = pd.DataFrame({
+        "panel_id": ["KEEP", "DELETE"],
+        "warehousing_time": pd.to_datetime(["2026-06-05", "2026-07-19"]),
+        "warehousing_event_time": ["20260605080000", "20260719080000"],
+    })
+    calls = []
+
+    def fetch(start, end, *_args):
+        calls.append((start, end))
+        return old if len(calls) == 1 else pd.DataFrame()
+
+    monkeypatch.setattr(repository, "_fetch_from_db_in_chunks", fetch)
+    repository.get_panel_details(query())
+    result = repository.get_panel_details(query(), force_refresh=True, refresh_days=14)
+    assert calls == [("2026-06-01", "2026-08-01"), ("2026-07-19", "2026-08-01")]
+    assert result.panel_id.tolist() == ["KEEP"]
+    assert result.attrs["data_health"]["source_start"] == "2026-06-01"
+    assert pd.read_parquet(repository.snapshot_path).panel_id.tolist() == ["KEEP"]
+
+
 @pytest.mark.parametrize("empty", [False, True])
 def test_force_refresh_replaces_old_history_in_full_request_window(repository, monkeypatch, empty):
     old = pd.DataFrame({

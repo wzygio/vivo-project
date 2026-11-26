@@ -231,7 +231,8 @@ def test_inspection_only_plan_merges_warmup_without_touching_mail(tmp_path):
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report['Status'] == 'plan' and len(report['Tasks']) == 1
-    assert report['Tasks'][0]['Arguments'] == '-m api.inspection'
+    assert report['Tasks'][0]['Execute'].lower().endswith('wscript.exe')
+    assert 'run_inspection.vbs' in report['Tasks'][0]['Arguments']
     assert report['Tasks'][0]['Name'] == 'vivo-project Alert Inspection'
     assert set(report['RetireTasks']) == {
         'vivo-project Alert Matrix Warmup', 'vivo-project Yield IJP Alert Publication',

@@ -69,8 +69,9 @@ current_product = render_page_header(
     title="AOI_TT监控报表",
     cached_funcs=extract_cached_funcs(AoiTtReportService) + [get_cached_step_description_map],
     product_cache_indicators=PRODUCT_CACHE_INDICATORS,
-    product_refresh_handler=lambda product: refresh_raw_measurements(
-        DatabaseManager(), product, default_end_dt.date().isoformat(),
+    product_refresh_handler=lambda product, days: refresh_raw_measurements(
+        DatabaseManager(), product, MonitorAnalysisService.get_time_window()[1].date().isoformat(),
+        refresh_days=days,
     ),
 )
 product_cache_signature = build_indicator_product_cache_signature(

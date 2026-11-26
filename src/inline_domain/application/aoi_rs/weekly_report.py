@@ -99,7 +99,7 @@ def _prepare_product_week(
     frames = {name: _prepare_frame(getattr(report, name), name, product) for name in _FRAME_COLUMNS}
     details, passes = frames["rs_details_df"], frames["pass_through_df"]
     # Keep the full monthly context. Cropping to last Sunday changes chart values.
-    trend = build_aoi_rs_period_trend(details, passes, reference_date)
+    trend = build_aoi_rs_period_trend(details, passes, reference_date, prod_code=product)
     iso = week_start.isocalendar()
     week_label = f"{iso.year}-W{iso.week:02d}"
     weekly = trend.loc[trend["period_type"].eq("week") & trend["period_label"].eq(week_label)]

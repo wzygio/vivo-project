@@ -19,6 +19,7 @@ import pandas as pd
 
 INLINE_SCOPES = ("spc", "ctq", "aoi_tt", "aoi_rs")
 _VERIFICATION_CODES = {
+    "Published SPC Sheet membership unavailable": "INLINE_MEMBERSHIP_INVALID",
     "Source refresh fell back to an older snapshot": "INLINE_SOURCE_FALLBACK",
     "Source snapshot does not cover the report window": "INLINE_SOURCE_UNCOVERED",
     "RS source refresh was not successful": "INLINE_RS_SOURCE_REFRESH_FAILED",
@@ -113,7 +114,7 @@ def produce_inline(product: str, reference_date: date, *,
                 except Exception as exc:
                     # Driver/Office exception messages can contain private data.
                     phase = getattr(session, "phase", "PRODUCTION")
-                    if phase not in ("SOURCE_REFRESH", "REPORT", "LEDGER_VERIFICATION", "CAPABILITY_VERIFICATION", "TREND_PUBLICATION"):
+                    if phase not in ("SOURCE_REFRESH", "REPORT", "LEDGER_VERIFICATION", "CAPABILITY_VERIFICATION", "TREND_PUBLICATION", "ALERT_PUBLICATION"):
                         phase = "PRODUCTION"
                     outcome.update(status="failed", error_type=type(exc).__name__,
                                    code=_VERIFICATION_CODES.get(str(exc), f"INLINE_{phase}_FAILED"),
@@ -279,6 +280,9 @@ class InlineProductionSession:
             counts["verified_events"] = ["OOS", "OOC", "trend"]
         else:
             counts["verified_events"] = ["OOS", "OOC"]
+        from api.inspection.inline_alert_rows import publish_scope
+        self.phase = "ALERT_PUBLICATION"
+        counts["published_rows"] = publish_scope(self.product, scope, self.reference, self._readback)
         return {**counts, "coverage_start": self.start.isoformat(),
                 "coverage_end": self.reference.isoformat()}
 
@@ -333,6 +337,7 @@ class InlineProductionSession:
         previous_monday = self.reference - timedelta(days=self.reference.weekday() + 7)
         year, week, _ = previous_monday.isocalendar()
         expected_label = f"{year}-W{week:02d}"
+        released = {}
         for metric in ("cpk", "cpm"):
             saved = inline.build_capability_latest_reader(metric, strict_empty=True,
                                                          workbook_reader=self._readback).read_product(self.product)
@@ -344,6 +349,7 @@ class InlineProductionSession:
             result = inline.build_capability_alert_query(metric, workbook_reader=self._readback).read(self.product, self.reference)
             if result["state"] not in ("ok", "alert"):
                 raise ValueError("Generated capability result did not validate")
+            released[metric] = result["records"]
         self._finalize_membership_policy(report)
         members = inline.build_spc_sheet_membership_store().read(self.product, previous_monday)
         if (members is None
@@ -351,6 +357,15 @@ class InlineProductionSession:
                 or members.get("coverage_start") != previous_monday.isoformat()
                 or members.get("coverage_end_exclusive") != (previous_monday + timedelta(days=7)).isoformat()):
             raise ValueError("SPC complete-week membership did not validate")
+        from src.inline_domain.application.spc.sheet_membership import SpcSheetMembershipQuery
+        verifier = SpcSheetMembershipQuery(inline.build_spc_sheet_membership_store(),
+                                          policy_signature=members["policy_signature"])
+        for metric, records in released.items():
+            for row in records.to_dict("records"):
+                verifier.sheet_ids(product=self.product, factory=row["factory"], step_id=row["step_id"],
+                                   parameter_name=row["param_name"], start_date=row["calendar_start"],
+                                   end_date=row["calendar_end"], expected_period_start=row["period_start"],
+                                   expected_period_end=row["period_end"], metric=metric, expected_value=row[metric])
 
     def _logical_membership_policy(self) -> str:
         """Compare actual preparation rules, independent of protected stat views."""

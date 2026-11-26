@@ -109,7 +109,7 @@ def capability_week_window(
     reference_date: date, *, start_date: str | date | None = None,
     end_date: str | date | None = None,
 ) -> tuple[date, date] | None:
-    """Return closed ISO weeks contained in an inclusive requested date range."""
+    """Return full, already closed ISO weeks whose Sunday falls in the inclusive range."""
     reference = pd.Timestamp(reference_date).date()
     monday = reference - timedelta(days=reference.weekday())
     start = pd.Timestamp(start_date).date() if start_date is not None else monday - timedelta(days=7)
@@ -119,9 +119,10 @@ def capability_week_window(
     end = min(end, monday - timedelta(days=1))
     if start > end:
         return None
-    first = start.toordinal() + (7 - start.weekday()) % 7
-    last = end.toordinal() - (end.weekday() + 1) % 7
-    return (date.fromordinal(first), date.fromordinal(last)) if first <= last else None
+    last_sunday = end.toordinal() - (end.weekday() + 1) % 7
+    if last_sunday < start.toordinal():
+        return None
+    return start - timedelta(days=start.weekday()), date.fromordinal(last_sunday)
 
 
 def capability_period_records(

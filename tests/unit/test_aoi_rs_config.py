@@ -41,6 +41,42 @@ def test_special_decoration_factories(monkeypatch, section, expected):
     assert ConfigLoader.get_aoi_rs_special_decoration_factories() == expected
 
 
+@pytest.mark.parametrize("product,expected", [
+    ("Z622", ["OLED", "ARRAY"]),
+    (" z622 ", ["OLED", "ARRAY"]),
+    ("M626", ["OLED"]),
+    (None, ["OLED"]),
+])
+def test_special_factories_can_limit_products(monkeypatch, product, expected):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "aoi_rs": {"special_decoration": {
+            "enabled": True, "factories": ["OLED", "ARRAY", "TP"],
+            "products_by_factory": {" array ": [" z622 "], "TP": []},
+        }},
+    })
+    assert ConfigLoader.get_aoi_rs_special_decoration_factories(product) == expected
+
+
+def test_configured_special_decoration_covers_only_z622_in_array():
+    assert ConfigLoader.get_aoi_rs_special_decoration_factories("Z622") == ["OLED", "ARRAY"]
+    assert ConfigLoader.get_aoi_rs_special_decoration_factories("M626") == ["OLED"]
+
+
+@pytest.mark.parametrize("products_by_factory", [
+    None, [],
+    {"ARRAY": "Z622"}, {"ARRAY": None}, {"ARRAY": [False]}, {"ARRAY": ["*"]},
+    {"ARRAY": [""]}, {"ARRAY": ["Z622"], " array ": "*"}, {1: "*"},
+])
+def test_invalid_product_allowlist_is_rejected(monkeypatch, products_by_factory):
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "aoi_rs": {"special_decoration": {
+            "enabled": True, "products_by_factory": products_by_factory,
+        }},
+    })
+    with pytest.raises(ValueError, match="products_by_factory"):
+        ConfigLoader.get_aoi_rs_special_decoration_factories("Z622")
+
+
 @pytest.mark.parametrize("factories", ["OLED", None, [None], [1], [""]])
 def test_invalid_factory_configuration_is_rejected(monkeypatch, factories):
     monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {

@@ -128,9 +128,11 @@ def build_workbook(frame: pd.DataFrame, product: str, metadata: dict,
     return payload, sheets
 
 
-def write_product(frame: pd.DataFrame, product: str, directory: Path,
-                  metadata: dict, temp_root: Path) -> dict:
-    filename = f"SPC_{product}_{metadata['start_date']}_{metadata['end_date']}.xlsx"
+MAX_FILE_ROWS = 50_000
+
+
+def _write_file(frame: pd.DataFrame, product: str, directory: Path,
+                metadata: dict, temp_root: Path, filename: str) -> dict:
     target = directory / filename
     if target.exists():
         raise ExportError(f'Output already exists: {filename}')
@@ -144,9 +146,28 @@ def write_product(frame: pd.DataFrame, product: str, directory: Path,
             target.unlink(missing_ok=True)  # Only the file created by this call.
             raise
     times = pd.to_datetime(frame['sheet_start_time']) if 'sheet_start_time' in frame else pd.Series(dtype='datetime64[ns]')
-    return {'product': product, 'row_count': len(frame), 'columns': list(frame.columns),
+    return {'row_count': len(frame),
             'min_time': str(times.min()) if not times.empty else '',
             'max_time': str(times.max()) if not times.empty else '',
             'file': filename, 'size_bytes': target.stat().st_size, 'sheets': sheets,
             'plaintext_sha256': hashlib.sha256(payload).hexdigest(),
             'verification': 'CRC, row sequence/count, headers, first/last rows; before enterprise protection'}
+
+
+def write_product(frame: pd.DataFrame, product: str, directory: Path,
+                  metadata: dict, temp_root: Path) -> dict:
+    stem = f"SPC_{product}_{metadata['start_date']}_{metadata['end_date']}"
+    files = []
+    try:
+        for part, start in enumerate(range(0, max(1, len(frame)), MAX_FILE_ROWS), 1):
+            suffix = f'_part{part:02d}' if len(frame) > MAX_FILE_ROWS else ''
+            section = frame.iloc[start:start + MAX_FILE_ROWS]
+            files.append(_write_file(section, product, directory, metadata, temp_root,
+                                     f'{stem}{suffix}.xlsx'))
+    except BaseException:
+        for entry in files:
+            (directory / entry['file']).unlink(missing_ok=True)
+        raise
+    result = {'product': product, 'row_count': len(frame), 'columns': list(frame.columns),
+              'size_bytes': sum(entry['size_bytes'] for entry in files), 'files': files}
+    return {**files[0], **result} if len(files) == 1 else result

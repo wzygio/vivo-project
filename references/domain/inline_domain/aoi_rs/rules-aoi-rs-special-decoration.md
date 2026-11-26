@@ -1,22 +1,26 @@
-# AOI_RS 专用修饰：厂别、日期与顺序处理
+# AOI_RS 专用修饰的厂别、产品、日期与处理顺序
 
-核验日期：2026-10-21。普通单边规格修饰由 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断) 介绍；本文负责指定厂别和日期内的专用规则。
+更新日期：2026-11-26。专用修饰按厂别、产品和报表日期生效。普通单边规格修饰见 [Inline 概览第7.5节](../shared/overview-inline.md#75-aoi_rs按图表口径的单边-spec-截断)。
 
 ## 1. 配置与日期范围
 
 ```yaml
 aoi_rs:
   special_decoration:
-    enabled: false
+    enabled: true
     sheet_threshold_ratio: 0.5
     sheet_replacement_ratio: 0.25
     factories:
       - "OLED"
+    products_by_factory:
+      ARRAY: ["Z622"]
     start_date: "2026-09-21"
     end_date: "today"
 ```
 
-`enabled` 默认 `false`（省略时也关闭），仅显式设置布尔值 `true` 才启用专用规则；厂别集合为空时也关闭。关闭时所有厂别沿用普通单边修饰，不执行专用明细投影与周/日限幅。开启时未选厂别和窗口外图点沿用普通单边修饰。日期为报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。无效日期、反向区间和错误配置结构报错。
+`enabled` 默认 `false`，仅显式设置布尔值 `true` 才启用专用规则。`factories` 列出整厂启用的厂别；启用时省略该字段沿用 OLED 全产品的默认范围。`products_by_factory` 按厂别列出启用的产品。一个厂别同时出现在两处时，以产品清单为准，空清单表示该厂别停用。仅按产品配置时可将 `factories` 设为 `[]`。厂别和产品代码匹配时忽略大小写与首尾空格。
+
+当前启用 **OLED 全产品**及 **ARRAY-Z622**，其余组合沿用普通单边修饰。日期采用报表显示日期，首尾均包含，结束日覆盖全天，`today` 为服务器当日。省略日期时默认 2026-09-21 至当天。窗口外图点沿用普通单边修饰。无效日期、反向区间和错误配置结构报错。
 
 两个比例位于 `config/domain/inline_domain/aoi_rs.yaml` 的 `aoi_rs.special_decoration` 下：`sheet_threshold_ratio` 为 Sheet 触发阈值相对于规格的倍数，默认 `0.5`；`sheet_replacement_ratio` 为稳定哈希值上限相对于规格的倍数，默认 `0.25`。省略时采用默认值；两项都必须是有限非负数，不接受布尔值、字符串、空值、负数或非有限数。触发条件为严格大于阈值，恰好等于阈值时保留原值。哈希种子沿用产品、厂别、站点、RS Code、图类型与图点 ID，改变上限比例只缩放相同图点的哈希值。
 
@@ -45,8 +49,8 @@ aoi_rs:
 
 ## 4. 调用、缓存与验证
 
-ConfigLoader 解析 `(start_date, resolved_end_date)` 和 `(sheet_threshold_ratio, sheet_replacement_ratio)`，关闭时返回空厂别集合；`AoiRsReportService` 把日期元组、比例元组、生效厂别集合及规则版本放入原生报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和纯 Core 规则。切换开关、修改生效厂别、任一比例、开始日、结束日或跨天后无需等待 TTL 重建。AOI_RS 周期监控也复用此配置，其策略签名包含整个专用修饰配置及规则版本。页面与 PDF 共用 `build_aoi_rs_period_trend()`，读取同一配置。
+ConfigLoader 按查询产品解析生效厂别、日期窗口和规格比例。`AoiRsReportService` 将这些值和规则版本放入该产品的报表缓存键，并传给 `prepare_aoi_rs_decoration()` 和 Core。产品的生效厂别、比例、窗口或解析后的结束日变化时，按新的缓存键计算。页面、PDF 和周报共用 `build_aoi_rs_period_trend()`，趋势预警也使用对应产品的专用明细投影和限幅。AOI_RS 周期监控按产品记录生效厂别及其他规则参数。仅改变产品清单且该产品的生效厂别不变时，其历史策略签名保持一致。
 
 主要实现：`core/aoi_rs/aoi_rs_special_decoration.py`、`application/aoi_rs/decoration_service.py`、`application/aoi_rs/aoi_rs_service.py`。
 
-`test_aoi_rs_config.py` 验证比例默认值与非法配置；`test_aoi_rs_sequential_decoration.py` 验证 SHEET_ID/GLASS_ID 的半规格边界、四分之一规格哈希上限、可配比例及 Sheet→Lot→周期关系。`test_aoi_rs_special_window.py` 覆盖日期首尾、区间外常规处理、源数据保留、窗口内 Delete 明细剔除、跨窗口 Lot 及部分周期；应用服务测试验证窗口和任一比例变化触发缓存失效。
+`test_aoi_rs_config.py` 验证产品清单、旧式厂别列表、比例默认值和非法配置。`test_aoi_rs_sequential_decoration.py` 与 `test_aoi_rs_special_window.py` 分别验证顺序处理和日期边界。应用服务测试验证同一厂别内的产品隔离、趋势限幅及缓存重建。周期监控测试验证产品清单变化仅影响相关产品的历史策略签名。

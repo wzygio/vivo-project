@@ -97,11 +97,13 @@ class QTimeReportService:
         *,
         as_of: date | None = None,
         full_refresh: bool = False,
+        refresh_days: int | None = None,
     ) -> tuple[QTimeSnapshotRefresh, ...]:
         """Refresh all shared shop snapshots through the application boundary."""
         return tuple(
             self._data_port.refresh_snapshot(
                 shop, as_of=as_of, **({"full_refresh": True} if full_refresh else {}),
+                **({"refresh_days": refresh_days} if refresh_days is not None else {}),
             )
             for shop in ("ARRAY", "OLED", "TP")
         )

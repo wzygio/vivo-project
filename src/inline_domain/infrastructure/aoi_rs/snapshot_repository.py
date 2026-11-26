@@ -15,7 +15,7 @@ from src.inline_domain.infrastructure.aoi_rs.data_loader import (
 )
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
-    snapshot_process_lock,
+    manual_tail_start, snapshot_process_lock,
 )
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError, inline_snapshot_window_start, metadata_covers_start,
@@ -100,12 +100,15 @@ class AoiRsSnapshotRepository:
     def _load_tail(
         self, query: AoiRsQueryConfig, columns: list[str], loader: DetailsLoader,
         metadata: dict | None, old: pd.DataFrame | None,
-        *, force_refresh: bool = False,
+        *, force_refresh: bool = False, refresh_days: int | None = None,
     ) -> pd.DataFrame:
-        start = (
-            inline_snapshot_window_start(query.end_date)
-            if force_refresh else incremental_start(metadata, query.end_date)
-        )
+        window_start = inline_snapshot_window_start(query.end_date)
+        if refresh_days is not None:
+            start = manual_tail_start(metadata, query.end_date, refresh_days, window_start=window_start)
+        elif force_refresh:
+            start = window_start
+        else:
+            start = incremental_start(metadata, query.end_date, window_start=window_start)
         loader_query = query.model_copy(update={"start_date": start.strftime("%Y-%m-%d")})
         frame = loader(self.db_manager, loader_query)
         if not frame.empty and set(columns).difference(frame.columns):
@@ -113,20 +116,30 @@ class AoiRsSnapshotRepository:
         frame = frame.reindex(columns=columns)
         if "code_qty" in frame:
             frame["code_qty"] = pd.to_numeric(frame["code_qty"], errors="raise")
-        return replace_tail(None if force_refresh else old, frame, start, query.end_date)
+        return replace_tail(
+            old if not force_refresh or refresh_days is not None else None,
+            frame, start, query.end_date,
+        )
 
-    def refresh(self, query: AoiRsQueryConfig) -> bool:
-        """Reload both full windows before publishing either; empty loads are valid."""
+    def refresh(self, query: AoiRsQueryConfig, *, refresh_days: int | None = None) -> bool:
+        """Reload both snapshots before publishing either; empty loads are valid."""
         details_path = self.snapshot_dir / f"aoi_rs_details_{query.prod_code}.parquet"
         pass_path = self.snapshot_dir / f"aoi_rs_pass_through_{query.prod_code}.parquet"
         identity = self.snapshot_dir / f"aoi_rs_{query.prod_code}"
         with self._lock_for(identity), snapshot_process_lock(identity):
             try:
+                details_meta, old_details = (None, None)
+                pass_meta, old_pass = (None, None)
+                if refresh_days is not None:
+                    details_meta, old_details = self._existing(details_path, RS_DETAIL_COLUMNS)
+                    pass_meta, old_pass = self._existing(pass_path, PASS_THROUGH_COLUMNS)
                 details = self._load_tail(
-                    query, RS_DETAIL_COLUMNS, self.details_loader, None, None, force_refresh=True,
+                    query, RS_DETAIL_COLUMNS, self.details_loader, details_meta, old_details,
+                    force_refresh=True, refresh_days=refresh_days,
                 )
                 passed = self._load_tail(
-                    query, PASS_THROUGH_COLUMNS, self.pass_through_loader, None, None, force_refresh=True,
+                    query, PASS_THROUGH_COLUMNS, self.pass_through_loader, pass_meta, old_pass,
+                    force_refresh=True, refresh_days=refresh_days,
                 )
                 publish_snapshots([
                     (details_path, details, self.SNAPSHOT_POLICY_VERSION, query.end_date, False),

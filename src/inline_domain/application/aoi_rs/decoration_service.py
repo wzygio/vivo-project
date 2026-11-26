@@ -129,10 +129,18 @@ def prepare_aoi_rs_decoration(
 
 def build_aoi_rs_period_trend(
     rs_details_df: pd.DataFrame, pass_through_df: pd.DataFrame, end_date: date,
+    *, prod_code: str | None = None,
 ) -> pd.DataFrame:
-    """Build page/PDF trends with the configured factory scope."""
+    """Build a single product's trend using its configured factories."""
+    if prod_code is None and "prod_code" in rs_details_df:
+        products = rs_details_df["prod_code"].dropna().astype(str).str.strip().str.upper()
+        product_codes = products.loc[products.ne("")].unique()
+        if len(product_codes) > 1:
+            raise ValueError("AOI_RS period trend requires one product")
+        if len(product_codes) == 1:
+            prod_code = product_codes[0]
     return build_decorated_period_trend_df(
         rs_details_df, pass_through_df, end_date,
-        special_factories=ConfigLoader.get_aoi_rs_special_decoration_factories(),
+        special_factories=ConfigLoader.get_aoi_rs_special_decoration_factories(prod_code),
         decoration_window=ConfigLoader.get_aoi_rs_special_decoration_window(),
     )

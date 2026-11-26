@@ -19,7 +19,7 @@ class PartsDataPort(Protocol):
         """Return real and fabricated frames separately; preserve source policy."""
         ...
 
-    def refresh(self, baseline_path: str) -> pd.DataFrame:
+    def refresh(self, baseline_path: str, *, refresh_days: int | None = None) -> pd.DataFrame:
         """Force the existing source refresh and return its usable snapshot."""
         ...
 

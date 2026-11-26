@@ -18,12 +18,18 @@ class YieldReportDataAdapter:
     def read_warning_matrix(self, path: Path, sheet_name: str) -> pd.DataFrame:
         return read_warning_matrix(path, sheet_name)
 
-    def read_panel(self, query: YieldQueryConfig, policy: YieldDataPolicy, *, force_refresh: bool = False) -> pd.DataFrame:
+    def read_panel(
+        self, query: YieldQueryConfig, policy: YieldDataPolicy, *,
+        force_refresh: bool = False, refresh_days: int | None = None,
+    ) -> pd.DataFrame:
         repo = PanelRepository(
             snapshot_path=build_yield_snapshot_path(self.data_dir, query.product_code, policy),
             data_policy=policy, use_snapshot=True, db_manager=self.db_manager,
         )
-        return repo.get_panel_details(query, force_refresh=force_refresh)
+        return repo.get_panel_details(
+            query, force_refresh=force_refresh,
+            **({"refresh_days": refresh_days} if refresh_days is not None else {}),
+        )
 
     def read_array_times(self, lot_ids: Sequence[str], custom_times: dict[str, str]) -> pd.DataFrame:
         repo = PanelRepository(

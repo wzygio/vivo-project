@@ -49,6 +49,7 @@ def _two_spc_rows(files):
     frame = _inline_rows('spc')
     another = frame.iloc[[0]].assign(sheet_id='00000000002')
     _write(path, {'P1': pd.concat([frame, another], ignore_index=True)})
+    files.publish('spc', 'OOS')
     return path
 
 

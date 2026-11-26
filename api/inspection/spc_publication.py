@@ -1,7 +1,7 @@
 """Publish SPC By Sheet membership through the normal bounded report workflow.
 
 This maintenance command is separate from HTTP. It uses the same preparation,
-capability publication and member publication as the SPC report page.
+capability calculation as the SPC report page, then explicitly publishes membership.
 """
 from __future__ import annotations
 
@@ -59,6 +59,9 @@ def publish_product(product: str, start: date, reference: date) -> dict:
         if (published is None
                 or published.get("policy_signature") != build_spc_sheet_membership_policy_signature(product)):
             raise ValueError("Target SPC member week was not published")
+        from api.inspection.inline_alert_rows import publish_scope
+        from src.shared_kernel.infrastructure.api_workbook_cache import BoundedWorkbookCache
+        publish_scope(product, "spc", date.today(), BoundedWorkbookCache())
         year, week, _ = previous_monday.isocalendar()
         return {"product": product, "status": "success",
                 "verified_week": f"{year}-W{week:02d}",

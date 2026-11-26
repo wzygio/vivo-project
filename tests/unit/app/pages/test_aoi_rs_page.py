@@ -115,8 +115,8 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     monkeypatch.setattr(
         inline_composition,
         "refresh_aoi_rs_snapshots",
-        lambda db_manager, prod_code, end_date: refresh_calls.append(
-            (db_manager, prod_code, end_date)
+        lambda db_manager, prod_code, end_date, *, refresh_days: refresh_calls.append(
+            (db_manager, prod_code, end_date, refresh_days)
         )
         or True,
         raising=False,
@@ -169,8 +169,8 @@ def test_aoi_rs_page_loads_with_fixed_window_and_renders_filters_then_charts(mon
     assert loaded_queries[0].end_date == "2026-08-10"
     assert loaded_signatures == ["aoi_rs_report_v1|scoped=M678"]
     assert callable(header_kwargs["product_refresh_handler"])
-    assert header_kwargs["product_refresh_handler"]("Z622") is True
-    assert [(prod_code, end_date) for _, prod_code, end_date in refresh_calls] == [
-        ("Z622", "2026-08-10")
+    assert header_kwargs["product_refresh_handler"]("Z622", 14) is True
+    assert [(prod_code, end_date, days) for _, prod_code, end_date, days in refresh_calls] == [
+        ("Z622", "2026-08-10", 14)
     ]
     assert events == (["filters", "trend", "charts"] if queried else ["filters", "trend"])

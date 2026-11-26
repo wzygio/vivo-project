@@ -98,6 +98,8 @@ def test_report_query_is_full_product_and_empty_generation_is_published(monkeypa
     from src.inline_domain import composition
     from src.inline_domain.application.ctq.ctq_service import CtqReportService
 
+    from api.inspection import inline_alert_rows
+    monkeypatch.setattr(inline_alert_rows, "publish_scope", lambda *args: {"OOS": 0, "OOC": 0})
     captured, writes = [], []
     port = SimpleNamespace(get_spc_spec_limits=lambda product: pd.DataFrame({'usl': [1]}))
     monkeypatch.setattr(composition, 'build_ctq_repository', lambda *args: port)
@@ -190,7 +192,10 @@ def test_aoi_report_evaluation_is_explicitly_published_then_read_back(monkeypatc
             return {'state': 'alert'}
     monkeypatch.setattr(composition, 'build_trend_alert_results', lambda actual:
                         Publisher() if actual == scope else pytest.fail('wrong scope'))
+    from api.inspection import inline_alert_rows
+    monkeypatch.setattr(inline_alert_rows, 'publish_scope', lambda *args: {'OOS': 0, 'OOC': 0})
     result = InlineProductionSession(object(), 'DEMO', DAY).produce(scope)
+    assert result['published_rows'] == {'OOS': 0, 'OOC': 0}
     assert calls == [('publish', 'DEMO', DAY), ('read', 'DEMO', DAY)]
     assert result['verified_events'] == ['OOS', 'OOC', 'trend']
     assert result['trend_state'] == 'alert'

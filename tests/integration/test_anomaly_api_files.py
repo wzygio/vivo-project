@@ -109,6 +109,17 @@ def published_files(tmp_path, monkeypatch):
     monkeypatch.setattr(indicator_composition, "build_qtime_alert_results", qtime_service)
     monkeypatch.setattr(yield_composition, "build_yield_alert_results", yield_service)
 
+    from api.inspection.inline_alert_rows import publish_event
+    from src.inline_domain.infrastructure.monitor import published_alert_rows
+    from src.shared_kernel.infrastructure.api_workbook_cache import BoundedWorkbookCache
+    monkeypatch.setattr(published_alert_rows, 'publication_path',
+        lambda product, scope, event: tmp_path / 'published' / product / f'{scope}_{event}.parquet')
+    def publish(scope, event):
+        return publish_event('P1', scope, event, DAY, BoundedWorkbookCache())
+    for scope in ('spc', 'ctq', 'aoi_tt', 'aoi_rs'):
+        for event in ('OOS', 'OOC'):
+            publish(scope, event)
+
     def forbidden(*_, **__):
         pytest.fail("HTTP attempted database access or protected-file fallback")
 
@@ -124,7 +135,7 @@ def published_files(tmp_path, monkeypatch):
 
     return SimpleNamespace(paths=paths, metadata_path=metadata_path,
         policy_path=policy_path, policy=policy, app=app,
-        qtime_service=qtime_service, yield_service=yield_service)
+        qtime_service=qtime_service, yield_service=yield_service, publish=publish)
 
 
 def _bytes(files) -> dict[Path, bytes]:
@@ -171,19 +182,41 @@ def test_yield_partially_missing_existing_publication_is_not_reported_as_empty(p
     _assert_unchanged(before)
 
 
-def test_yield_expired_publication_remains_unavailable_and_logs_reason(published_files, monkeypatch, caplog):
+@pytest.mark.parametrize('failed_attempt', [False, True])
+def test_yield_http_reuses_published_rows_after_expiry_and_policy_change(published_files, monkeypatch, failed_attempt):
     from datetime import timedelta
     from src.yield_domain import composition as yield_composition
 
     service = published_files.yield_service()
     service.ttl_seconds = 43200
     service.clock = lambda: NOW + timedelta(hours=13)
+    service.policy_signature = lambda *_: pytest.fail('HTTP checked the production policy')
+    _release_yield(published_files)
+    if failed_attempt:
+        service.mark_failed('P1', 'lot', DAY, 'YIELD_SOURCE_NOT_CURRENT')
+        assert service.read('P1', 'lot', DAY).status == 'failed'
     monkeypatch.setattr(yield_composition, 'build_yield_alert_results', lambda **_: service)
     with TestClient(published_files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS,
                               params={'product': 'P1', 'sub_domain': 'Yield', 'event_type': 'OOS'})
-    assert response.status_code == 503
-    assert 'API_PUBLICATION_UNAVAILABLE' in caplog.text and 'status=stale' in caplog.text
+    assert response.status_code == 200
+    assert response.json()['meta']['returned_count'] == 1
+
+
+def test_qtime_http_uses_covered_publication_after_rule_and_reference_changes(published_files, monkeypatch):
+    from datetime import timedelta
+    from src.indicator_domain import composition
+
+    service = published_files.qtime_service()
+    service.policy_signature = lambda: pytest.fail('HTTP checked Q-Time production rules')
+    service.clock = lambda: pytest.fail('HTTP checked publication age')
+    monkeypatch.setattr(composition, 'build_qtime_alert_results', lambda **_: service)
+    app = create_app(clients_provider=lambda: (ApiClient('fixture', hashlib.sha256(FIXTURE_KEY.encode()).hexdigest(),
+                     ('P1',), ('ARRAY',)),), clock=lambda: NOW + timedelta(days=1))
+    with TestClient(app) as client:
+        response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params={'sub_domain': 'Q-Time'})
+    assert response.status_code == 200
+    assert response.json()['meta']['returned_count'] == 1
 
 
 def _release_yield(files) -> None:
@@ -439,6 +472,7 @@ def test_inline_date_boundaries_use_shanghai_for_timezone_aware_published_times(
     frame['sheet_id'] = ['INCLUDED', 'NEXT_DAY']
     frame['sheet_start_time'] = ['2026-11-01T16:00:00+00:00', '2026-11-02T16:00:00+00:00']
     _write(files.paths[('inline_domain', 'spc_sheet_oos_decoration')], {'P1': frame})
+    files.publish('spc', 'OOS')
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(event_type='OOS',
@@ -458,6 +492,8 @@ def test_timezone_normalization_precedes_public_date_exclusion(published_files, 
     frame = _inline_rows(scope).iloc[[0]].copy()
     frame['sheet_start_time'] = frame['start_time'] = '2026-11-01T16:00:00+00:00'
     _write(files.paths[('inline_domain', f'{scope}_sheet_{event.lower()}_decoration')], {'P1': frame})
+    files.publish(scope, event)
+    monkeypatch.setattr(ConfigLoader, 'get_inline_data_exclusion', lambda: pytest.fail('HTTP read production rules'))
     before = _bytes(files)
     with TestClient(files.app()) as client:
         response = client.get('/api/v1/sheet-anomalies', headers=HEADERS, params=dict(

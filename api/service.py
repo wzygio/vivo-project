@@ -13,7 +13,6 @@ from api.schemas import (
     AnomalyQuery, AnomalyRecord, CapabilityRecord, normalize_sheet_ids,
     public_record_sort_key,
 )
-from src.inline_domain.core.monitor.cpk_summary import CPK_THRESHOLD
 
 
 class ResultUnavailable(ValueError):
@@ -167,6 +166,6 @@ class PublishedAnomalyService:
         return dict(entity_type='capability', entity_id='capability:' + digest,
                     parameter_name=parameter, factory=factory, step_id=step,
                     occurred_at=end.date().isoformat(), boundary='spec',
-                    metric_value=row.get(query.event_type.lower()), lower_bound=CPK_THRESHOLD,
+                    metric_value=row.get(query.event_type.lower()), lower_bound=row.get('lower_bound'),
                     period_type=period_type, period_label=period_label,
                     period_start_date=start.date(), period_end_date=end.date())

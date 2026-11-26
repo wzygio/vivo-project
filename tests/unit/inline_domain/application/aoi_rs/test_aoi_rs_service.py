@@ -102,7 +102,7 @@ def _config_json() -> str:
 
 
 def test_yesterday_rules_include_oldest_baseline_day_even_with_today_data(monkeypatch) -> None:
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: [])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: [])
     rows = [
         dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code="A",
              start_time=pd.Timestamp(f"2026-10-{day} 08:00"),
@@ -132,7 +132,7 @@ def test_yesterday_rules_include_oldest_baseline_day_even_with_today_data(monkey
 def test_warning_matches_chart_cap_and_cache_revision_and_next_day(monkeypatch) -> None:
     from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
 
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["ARRAY"])
     source = pd.DataFrame([
         dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code="A",
              start_time=pd.Timestamp(f"2026-10-{day} 08:00"), sheet_id=f"S{day}",
@@ -167,7 +167,7 @@ def test_warning_matches_chart_cap_and_cache_revision_and_next_day(monkeypatch) 
 def test_warning_loads_oldest_comparison_day_beyond_compact_chart_axis(monkeypatch) -> None:
     from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
 
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: [])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: [])
     source = pd.DataFrame([
         dict(prod_code="M678", factory="ARRAY", step_id="S", rs_code=code,
              start_time=pd.Timestamp(f"2026-10-{day} 08:00"), sheet_id=f"S{day}",
@@ -268,7 +268,7 @@ def test_service_surfaces_loader_exception_without_caching(monkeypatch) -> None:
 
 def test_service_returns_decorated_lot_and_sheet_points(monkeypatch) -> None:
     """修饰在 service 层完成（D4）：payload 直接给出图表就绪的修饰后点帧。"""
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["ARRAY"])
     spec_df = pd.DataFrame(
         [
             {
@@ -458,7 +458,7 @@ def test_report_and_shared_charts_use_sequential_projection(monkeypatch) -> None
     from datetime import date
     from app.charts.inline_domain import aoi_rs_charts
 
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["ARRAY"])
 
     source = _details_df().iloc[[0]].copy()
     source["code_qty"] = 8
@@ -610,7 +610,7 @@ def test_period_cap_reads_same_factory_configuration_for_page_and_pdf(monkeypatc
         ])
     source = pd.concat(frames, ignore_index=True)
     for factories in [["OLED"], ["ARRAY"], []]:
-        monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: factories)
+        monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: factories)
         trend = build_aoi_rs_period_trend(source, source, date(2026, 8, 10))
         for factory in ["ARRAY", "OLED"]:
             rows = trend[trend.factory.eq(factory)]
@@ -620,8 +620,58 @@ def test_period_cap_reads_same_factory_configuration_for_page_and_pdf(monkeypatc
                 assert maximum == (6.5 if factory in factories else 10)
 
 
+def test_product_allowlist_controls_report_projection_chart_and_cache(_tmp_project_root):
+    from datetime import date
+    import yaml
+
+    from src.inline_domain.application.aoi_rs.decoration_service import build_aoi_rs_period_trend
+
+    config_path = _tmp_project_root / "config/domain/inline_domain.yaml"
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def configure(products):
+        config_path.write_text(yaml.safe_dump({
+            "aoi_rs": {"special_decoration": {
+                "enabled": True, "factories": [], "products_by_factory": {"ARRAY": products},
+            }},
+        }), encoding="utf-8")
+
+    configure(["Z622"])
+    arguments = {}
+    reads = []
+    AoiRsReportService.fetch_aoi_rs_report_payload.clear()
+    for product in ("Z622", "M678"):
+        source = _details_df().iloc[[0]].assign(prod_code=product, code_qty=8)
+        port = _data_port(source, source, _chart_spec_df().assign(prod_code=product))
+        port.get_rs_details = lambda query, source=source: (reads.append(query.prod_code) or source)
+        arguments[product] = dict(
+            _data_port=port, snapshot_signature="product-scope",
+            query_config_json=AoiRsQueryConfig(
+                prod_code=product, start_date="2026-07-01", end_date="2026-08-10",
+            ).model_dump_json(),
+        )
+        report = AoiRsReportService.get_aoi_rs_report_data(**arguments[product])
+        if product == "Z622":
+            assert report.rs_details_df.code_qty.iloc[0] <= 0.5
+        else:
+            assert report.rs_details_df.code_qty.iloc[0] == 8
+
+        trend_source = pd.concat([
+            source.assign(code_qty=10, start_time=pd.Timestamp("2026-08-01")),
+            source.assign(code_qty=0, sheet_id="OTHER", start_time=pd.Timestamp("2026-08-09")),
+        ], ignore_index=True)
+        trend = build_aoi_rs_period_trend(trend_source, trend_source, date(2026, 8, 10))
+        assert trend.loc[trend.period_type.eq("day"), "value"].max() == (6.5 if product == "Z622" else 10)
+
+    configure([])
+    for product, kwargs in arguments.items():
+        report = AoiRsReportService.get_aoi_rs_report_data(**kwargs)
+        assert report.rs_details_df.code_qty.iloc[0] == 8
+    assert reads == ["Z622", "M678", "Z622"]
+
+
 def test_special_sheet_ratio_changes_invalidate_report_cache(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["ARRAY"])
     current = [(0.5, 0.25)]
     monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_sheet_ratios", lambda: current[0])
     source = _details_df().iloc[[0]].assign(code_qty=1.5)
@@ -646,7 +696,7 @@ def test_special_sheet_ratio_changes_invalidate_report_cache(monkeypatch):
 
 
 def test_special_window_changes_invalidate_report_cache(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ["ARRAY"])
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ["ARRAY"])
     current = [("2026-07-15", "2026-08-10")]
     monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_window", lambda: current[0])
     source = _details_df().iloc[[0]].copy()

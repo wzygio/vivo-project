@@ -119,7 +119,7 @@ def _utc_timestamp(value: object) -> pd.Timestamp:
 
 class YieldAlertResults:
     def __init__(self, store: YieldAlertStore, *, policy_signature: Callable[[str], str],
-                 ttl_seconds: int, clock: Callable[[], datetime] | None = None,
+                 ttl_seconds: int | Callable[[], int], clock: Callable[[], datetime] | None = None,
                  lot_factory_mapping: Callable[[], Mapping[str, str]] | None = None) -> None:
         self.store = store
         self.policy_signature = policy_signature
@@ -183,39 +183,46 @@ class YieldAlertResults:
         return self.store.write_product(product, kind, None, metadata)
 
     def publication_status(self, product: str, kind: str, frame: pd.DataFrame, meta: Mapping, *,
-                           reference_date: date | None = None) -> str:
+                           reference_date: date | None = None, check_freshness: bool = True) -> str:
         """Validate the publication before applying a consumer's selection window."""
-        if meta.get("status") == "failed":
+        # A failed attempt overlays its diagnostics on the last successful metadata.
+        # A retained generation can still satisfy a file-only query for its covered dates.
+        retained = not check_freshness and meta.get("status") == "failed" and bool(meta.get("generated_at"))
+        if meta.get("status") == "failed" and not retained:
             return "failed"
         required = {"schema_version", "product", "kind", "reference_date", "policy_signature",
                     "coverage_start", "coverage_end", "row_count", "has_data", "generated_at",
                     "source_status", "source_refreshed_at", "fingerprint"}
-        if required - meta.keys() or meta.get("status") != "ready":
+        if required - meta.keys() or (meta.get("status") != "ready" and not retained):
             raise ValueError("Incomplete Yield publication metadata")
         if (meta["schema_version"] != RESULT_SCHEMA_VERSION or meta["product"] != product
                 or meta["kind"] != kind or set(RESULT_COLUMNS[kind]) - set(frame.columns)
                 or len(frame) != meta["row_count"] or meta["has_data"] not in (True, False)):
             raise ValueError("Invalid Yield publication payload")
+        if not check_freshness:
+            return "ready"
         stale = ((reference_date is not None and meta["reference_date"] != reference_date.isoformat())
                  or meta["policy_signature"] != self.policy_signature(product)
                  or meta["source_status"] != "fresh")
         now = pd.Timestamp(self.clock())
         if now.tz is None:
             now = now.tz_localize("Asia/Shanghai")
+        ttl = self.ttl_seconds() if callable(self.ttl_seconds) else self.ttl_seconds
         for key in ("generated_at", "source_refreshed_at"):
             timestamp = _utc_timestamp(meta[key])
             age = (now.tz_convert("UTC") - timestamp).total_seconds() if pd.notna(timestamp) else -1
-            stale |= age < 0 or age > self.ttl_seconds
+            stale |= age < 0 or age > ttl
         return "stale" if stale else "ready"
 
     def read(self, product: str, kind: str, reference_date: date, *,
              start_date: str | None = None, end_date: str | None = None,
-             time_period: int | None = None) -> PublishedYieldAlerts:
+             time_period: int | None = None, check_freshness: bool = True) -> PublishedYieldAlerts:
         payload = self.store.read_product(product, kind)
         if payload is None:
             return PublishedYieldAlerts("missing", pd.DataFrame(columns=RESULT_COLUMNS[kind]), {})
         frame, meta = payload["records"], payload["metadata"]
-        status = self.publication_status(product, kind, frame, meta, reference_date=reference_date)
+        status = self.publication_status(product, kind, frame, meta, reference_date=reference_date,
+                                         check_freshness=check_freshness)
         if status != "ready":
             return PublishedYieldAlerts(status, frame, meta)
         monday = reference_date - timedelta(days=reference_date.weekday())

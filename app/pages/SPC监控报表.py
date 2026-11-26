@@ -45,9 +45,6 @@ from src.inline_domain.application.shared.decision_signature import get_scope_de
 from src.inline_domain.composition import (
     build_spc_repository, refresh_raw_measurements,
     build_spc_input_signature,
-    build_spc_sheet_membership_store,
-    build_spc_sheet_membership_policy_signature,
-    build_spc_sheet_membership_coverage,
 )
 from src.inline_domain.infrastructure.shared.sheet_oos_decoration_repository import (
     SheetOosDecorationReadError,
@@ -69,9 +66,11 @@ SPC_REPORT_BUILD_ERRORS = (
     else ()
 )
 
-def _refresh_product_measurements(product: str) -> bool:
+def _refresh_product_measurements(product: str, refresh_days: int) -> bool:
     end_date = ConfigLoader.get_report_cutoff_policy().boundary().date()
-    return refresh_raw_measurements(DatabaseManager(), product, end_date.isoformat())
+    return refresh_raw_measurements(
+        DatabaseManager(), product, end_date.isoformat(), refresh_days=refresh_days,
+    )
 
 
 def _render_saved_page_alerts(report=None) -> None:
@@ -139,9 +138,6 @@ try:
             period_sigma_source=ConfigLoader.get_spc_period_sigma_source(),
             product_revision=product_revision,
             decision_signature=decision_signature,
-            _sheet_membership_store=build_spc_sheet_membership_store(),
-            sheet_membership_policy_signature=build_spc_sheet_membership_policy_signature(current_product),
-            _sheet_membership_coverage=build_spc_sheet_membership_coverage(current_product),
         )
 except SPC_DECORATION_FILE_ERRORS + (SheetOosDecorationReadError,):
     logging.getLogger(__name__).exception("SPC report inputs could not be read")

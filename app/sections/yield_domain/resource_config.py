@@ -13,9 +13,11 @@ from yield_domain.application.yield_service import YieldAnalysisService
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 
 
-def refresh_yield_product(product: str) -> bool:
+def refresh_yield_product(product: str, refresh_days: int) -> bool:
     config = ConfigLoader.load_config(product)
-    return YieldAnalysisService.safe_refresh_snapshots(DatabaseManager(), config)
+    return YieldAnalysisService.safe_refresh_snapshots(
+        DatabaseManager(), config, refresh_days=refresh_days,
+    )
 
 
 def get_code_monthly_rate_threshold() -> float:

@@ -44,7 +44,8 @@ render_page_header(
     config=active_config,
     cached_funcs=get_qtime_cached_funcs() + get_chamber_cached_funcs(),
     show_product_filter=False,
-    refresh_handlers=[refresh_chamber_data, lambda: refresh_qtime_data(service)],
+    refresh_handlers=[refresh_chamber_data],
+    data_refresh_handler=lambda days: refresh_qtime_data(service, refresh_days=days),
 )
 # Each section owns its fragment and widget/result state. The shared header
 # remains outside so explicit page-wide refreshes can invalidate both modules.

@@ -58,7 +58,8 @@ def test_qtime_page_is_a_thin_composition_layer(monkeypatch) -> None:
     runpy.run_path(str(page_path), run_name="__main__")
 
     handlers = events[4][1].pop("refresh_handlers")
-    assert len(handlers) == 2 and all(callable(handler) for handler in handlers)
+    assert handlers == [chamber_dashboard.refresh_chamber_data]
+    assert callable(events[4][1].pop("data_refresh_handler"))
 
     assert events == [
         {"page_title": "Q-Time监控报表", "layout": "wide", "initial_sidebar_state": "collapsed"},

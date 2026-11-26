@@ -38,7 +38,7 @@ def test_capability_contract_rejects_nonfinite_or_missing_values(field, value):
     {'step_id': None}, {'layer': None}, {'factory': ''}, {'parameter_name': ''},
     {'period_type': 'month'}, {'period_label': '2021-W01'},
     {'period_end_date': date(2021, 1, 4)}, {'period_start_date': date(2020, 12, 29)},
-    {'occurred_at': '2021-01-03T00:00:00+08:00'}, {'metric_value': 1.33},
+    {'occurred_at': '2021-01-03T00:00:00+08:00'},
     {'flag': False}, {'cpk_replacement': 99.0},
 ])
 def test_capability_contract_rejects_false_identity_or_private_columns(changes):

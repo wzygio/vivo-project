@@ -78,7 +78,7 @@ def page(monkeypatch):
     monkeypatch.setattr(page_header, "extract_cached_funcs", lambda *args: [])
     monkeypatch.setattr(indicator_cache, "build_indicator_product_cache_signature", lambda *args: "test-revision")
     monkeypatch.setattr(composition, "refresh_raw_measurements",
-                        lambda db, product, date: state["refreshes"].append(product) or True)
+                        lambda db, product, date, *, refresh_days: state["refreshes"].append(product) or True)
     monkeypatch.setattr(MonitorAnalysisService, "get_time_window", lambda: (
         pd.Timestamp("2026-08-01"), pd.Timestamp("2026-11-13")))
     monkeypatch.setattr(decision_signature, "get_scope_decision_signature", lambda *args: "test-decisions")

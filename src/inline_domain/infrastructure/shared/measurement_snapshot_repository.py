@@ -25,7 +25,7 @@ from src.shared_kernel.data_forward import DataForwardPolicy
 from src.inline_domain.infrastructure.shared.date_exclusion import apply_inline_date_exclusion
 from src.inline_domain.infrastructure.shared.rolling_snapshot import (
     read_metadata, is_fresh, incremental_start, replace_tail, publish_snapshots,
-    snapshot_process_lock,
+    manual_tail_start, snapshot_process_lock,
 )
 from src.inline_domain.infrastructure.shared.snapshot_window import (
     IncompleteMonitorSnapshotError,
@@ -109,23 +109,31 @@ class InlineMeasurementSnapshotRepository:
         self,
         prod_code: str,
         end_date: str,
+        *,
+        refresh_days: int | None = None,
     ) -> MeasurementRefreshResult:
-        """Reload the full rolling window and report actual DB refresh success.
+        """Reload the requested tail or full window and report actual DB success.
 
         An empty data window counts as success when the loader returned
         normally; only loader failures (served via the old snapshot fallback)
         report ``refreshed_from_db=False``.
         """
-        result = self._load_measurements(prod_code, end_date, force_refresh=True)
+        result = self._load_measurements(
+            prod_code, end_date, force_refresh=True, refresh_days=refresh_days,
+        )
         self.last_refresh_from_db = result.refreshed_from_db
         return MeasurementRefreshResult(
             self._report_projection(result.measurements),
             result.refreshed_from_db,
         )
 
-    def _report_projection(self, measurements: pd.DataFrame) -> pd.DataFrame:
+    def _report_projection(
+        self, measurements: pd.DataFrame, *, display_end: object | None = None,
+    ) -> pd.DataFrame:
         displayed = self.data_forward_policy.shift_frame(measurements, ("start_time",))
-        displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(displayed, "start_time")
+        displayed = ConfigLoader.get_report_cutoff_policy().filter_frame(
+            displayed, "start_time", display_end=display_end,
+        )
         return apply_inline_date_exclusion(displayed)
 
     def _load_measurements(
@@ -133,6 +141,8 @@ class InlineMeasurementSnapshotRepository:
         prod_code: str,
         end_date: str,
         force_refresh: bool,
+        *,
+        refresh_days: int | None = None,
     ) -> MeasurementRefreshResult:
         end_timestamp = pd.Timestamp(end_date)
         window_start = inline_measurement_snapshot_window_start(prod_code, end_timestamp)
@@ -152,10 +162,14 @@ class InlineMeasurementSnapshotRepository:
                 except Exception:
                     logger.exception("Unreadable Inline snapshot; rebuilding %s", snapshot_path)
                     metadata = None
-            load_start = (
-                window_start
-                if force_refresh else incremental_start(metadata, end_timestamp, window_start=window_start)
-            )
+            if refresh_days is not None:
+                load_start = manual_tail_start(
+                    metadata, end_timestamp, refresh_days, window_start=window_start,
+                )
+            elif force_refresh:
+                load_start = window_start
+            else:
+                load_start = incremental_start(metadata, end_timestamp, window_start=window_start)
             try:
                 measurements = self.measurement_loader(
                     self.db_manager,
@@ -172,7 +186,8 @@ class InlineMeasurementSnapshotRepository:
             if self.measurement_corrector is not None and not measurements.empty:
                 measurements = self.measurement_corrector(measurements)
             measurements = replace_tail(
-                None if force_refresh else previous, measurements, load_start, end_timestamp,
+                previous if not force_refresh or refresh_days is not None else None,
+                measurements, load_start, end_timestamp,
                 window_start=window_start,
             )
             self.snapshot_dir.mkdir(parents=True, exist_ok=True)

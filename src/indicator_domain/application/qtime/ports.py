@@ -39,6 +39,7 @@ class QTimeDataPort(Protocol):
         *,
         as_of: date | None = None,
         full_refresh: bool = False,
+        refresh_days: int | None = None,
     ) -> QTimeSnapshotRefresh: ...
 
 

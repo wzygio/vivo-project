@@ -28,7 +28,9 @@ from src.equipment_domain.infrastructure.fake_data_updater import (
     ensure_fabricated_snapshot_file,
 )
 from src.shared_kernel.config import ConfigLoader
+from src.shared_kernel.infrastructure.parquet_snapshot import publish_parquet
 from src.shared_kernel.report_cutoff_config import load_report_cutoff_policy
+from src.shared_kernel.snapshot_window import manual_refresh_start
 
 if TYPE_CHECKING:
     from src.shared_kernel.infrastructure.db_handler import DatabaseManager
@@ -404,6 +406,9 @@ def _expand_baseline_rows_from_sheets(
 def _query_part_life_from_db(
     db_manager: "DatabaseManager",
     spec_df: pd.DataFrame,
+    *,
+    start: pd.Timestamp | None = None,
+    end: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Query eda.ARRAY_PDS_RESULT_T for part life data matching spec entries."""
     read_started_at = datetime.now().isoformat()
@@ -426,7 +431,9 @@ def _query_part_life_from_db(
         logger.warning("No valid pairs in spec table.")
         return pd.DataFrame()
     runtime_config = get_equipment_runtime_config()
-    cutoff_date = (datetime.now() - timedelta(days=runtime_config.query_lookback_days)).strftime("%Y-%m-%d")
+    cutoff = start if start is not None else datetime.now() - timedelta(days=runtime_config.query_lookback_days)
+    cutoff_date = cutoff.strftime("%Y-%m-%d")
+    end_filter = "AND glass_start_time < TO_DATE(:end_date, 'YYYY-MM-DD')" if end is not None else ""
     st_ph = ",".join([f":st{i}" for i in range(len(unique_stations))])
     mc_ph = ",".join([f":mc{i}" for i in range(len(unique_machines))])
 
@@ -452,6 +459,7 @@ def _query_part_life_from_db(
             WHERE step_id IN ({st_ph})
               AND sub_equip_id IN ({mc_ph})
               AND glass_start_time >= TO_DATE(:cutoff_date, 'YYYY-MM-DD')
+              {end_filter}
               AND ({like_sql})
               AND value IS NOT NULL AND value <> 'NaN'
         )
@@ -461,6 +469,8 @@ def _query_part_life_from_db(
         ORDER BY glass_start_time DESC
     """
     params = {"cutoff_date": cutoff_date}
+    if end is not None:
+        params["end_date"] = end.strftime("%Y-%m-%d")
     for i, st in enumerate(unique_stations):
         params[f"st{i}"] = st
     for i, mc in enumerate(unique_machines):
@@ -556,7 +566,7 @@ class PartsRepository:
 
         self._snapshot_path = self._snapshot_dir / f"part_life_snapshot_{self._spec_hash}.parquet"
 
-    def get_snapshot(self, force_refresh: bool = False) -> pd.DataFrame:
+    def get_snapshot(self, force_refresh: bool = False, *, refresh_days: int | None = None) -> pd.DataFrame:
         """
         获取快照数据。
 
@@ -571,6 +581,8 @@ class PartsRepository:
         Returns:
             pd.DataFrame: 快照数据
         """
+        if refresh_days is not None:
+            return self._refresh_recent(refresh_days)
         if not force_refresh and self._snapshot_valid():
             logger.info(f"Loading from snapshot: {self._snapshot_path}")
             df = compact_part_snapshot(self._snapshot_path)
@@ -588,6 +600,33 @@ class PartsRepository:
             logger.warning("No data from DB, snapshot not updated.")
 
         return df
+
+    def _refresh_recent(self, days: int) -> pd.DataFrame:
+        time_col = "glass_start_time"
+        today = pd.Timestamp.now().normalize()
+        window_start = today - pd.Timedelta(days=get_equipment_runtime_config().query_lookback_days)
+        window_end = today + pd.Timedelta(days=1)
+        previous = pd.DataFrame()
+        covered_until = None
+        if self._snapshot_path.exists():
+            try:
+                modified = self._snapshot_path.stat().st_mtime
+                previous = latest_part_measurements(pd.read_parquet(self._snapshot_path))
+                # The file may have been produced during the day, so reread that day if filling a gap.
+                covered_until = pd.Timestamp.fromtimestamp(modified).normalize()
+            except (OSError, ValueError, KeyError):
+                logger.exception("Unreadable parts snapshot; rebuilding %s", self._snapshot_path)
+        start = manual_refresh_start(window_start, window_end, covered_until, days)
+        refreshed = _query_part_life_from_db(self._db, self._spec_df, start=start, end=window_end)
+        if refreshed.attrs.get("parts_source_read", {}).get("status") != "success":
+            return refreshed
+        result = refreshed
+        if not previous.empty:
+            retained = previous.loc[previous[time_col].ge(window_start) & previous[time_col].lt(start)]
+            result = latest_part_measurements(pd.concat([retained, refreshed], ignore_index=True))
+            result.attrs = refreshed.attrs
+        publish_parquet(self._snapshot_path, result)
+        return result
 
     def invalidate(self) -> None:
         """删除快照文件，强制下次重新查询。"""

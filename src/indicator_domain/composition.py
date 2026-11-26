@@ -82,7 +82,7 @@ def build_qtime_alert_results(*, workbook_reader=None) -> "QTimeAlertResults":
 
     return QTimeAlertResults(
         QTimeAlertWorkbook(ConfigLoader.get_domain_resource_path("indicator_domain", "qtime_alerts"), **kwargs),
-        ttl_seconds=ConfigLoader.get_cache_ttl_seconds(),
+        ttl_seconds=ConfigLoader.get_cache_ttl_seconds,
         policy_signature=policy_signature,
         legacy_policy_matches=lambda digest: any(
             digest == policy_signature(version) for version in

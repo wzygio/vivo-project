@@ -187,7 +187,8 @@ def render_page_header(
     product_cache_indicators: tuple[str, ...] = (),
     show_cache_refresh: bool = True,
     show_data_refresh: bool = True,
-    product_refresh_handler: Callable[[str], bool] | None = None,
+    product_refresh_handler: Callable[[str, int], bool] | None = None,
+    data_refresh_handler: Callable[[int], bool] | None = None,
 ) -> str | None:
     """Render report controls. Product-filtered pages resume only after submission."""
     # 每个报表页面都会经过统一页头；在渲染或查询数据前完成项目变更的被动检测。
@@ -225,8 +226,9 @@ def render_page_header(
             st.session_state.pop(product_query_key, None)
             product_cache_scope = None
         refresh_handlers = []
+        data_refresh_handler = None
         if product_cache_scope is not None and product_refresh_handler is not None:
-            refresh_handlers = [partial(product_refresh_handler, product_cache_scope)]
+            data_refresh_handler = partial(product_refresh_handler, product_cache_scope)
         reset_options["update_session_product"] = False
 
     def _can_refresh() -> bool:
@@ -240,12 +242,22 @@ def render_page_header(
     def _refresh_data_callback():
         if not _can_refresh():
             return
-        if not refresh_handlers:
+        if not refresh_handlers and data_refresh_handler is None:
             st.toast("当前页面没有独立的数据快照刷新任务。", icon="ℹ️")
             return
 
+        handlers = list(refresh_handlers or ())
+        if data_refresh_handler is not None:
+            try:
+                refresh_days = ConfigLoader.get_manual_refresh_days()
+            except ValueError:
+                logging.exception("页头数据刷新窗口配置无效。")
+                st.toast("❌ 数据刷新窗口配置无效。", icon="🚨")
+                return
+            handlers.append(partial(data_refresh_handler, refresh_days))
+
         all_success = True
-        for handler in refresh_handlers:
+        for handler in handlers:
             if callable(handler):
                 try:
                     is_success = handler()
@@ -305,9 +317,9 @@ def render_page_header(
                             disabled=refresh_disabled,
                             width="stretch",
                             help=(
-                                f"刷新底层数据快照，成功后刷新产品 {product_cache_scope} 的页面缓存，并重载代码、重读配置。"
+                                f"按配置回刷近期数据，成功后刷新产品 {product_cache_scope} 的页面缓存，并重载代码、重读配置。"
                                 if product_cache_scope
-                                else "刷新底层数据快照，成功后刷新当前页面缓存，并重载代码、重读配置。"
+                                else "按配置回刷近期数据，成功后刷新当前页面缓存，并重载代码、重读配置。"
                             ),
                         )
                     if show_cache_refresh:

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import io
 import json
 from pathlib import Path
@@ -89,6 +89,80 @@ def test_written_points_include_both_requested_times_and_exclude_other_rows(tmp_
     assert points['param_value'].tolist() == [3, 4]
     manifest = json.loads((output / 'manifest.json').read_text(encoding='utf-8'))
     assert manifest['rows'][0]['row_count'] == 2
+
+
+def test_forwarded_export_splits_files_and_replays_by_product(tmp_path, monkeypatch):
+    from src.shared_kernel.config import ConfigLoader
+    from src.shared_kernel.data_forward import DataForwardPolicy
+    from tools.spc_point_export import workbook
+
+    monkeypatch.setattr(ConfigLoader, 'get_data_forward_policy', lambda: DataForwardPolicy(True, 4))
+    monkeypatch.setattr(workbook, 'MAX_FILE_ROWS', 2)
+    today = date(2026, 11, 26)
+    args = ['--product', 'P1', '--start-time', '2026-11-26 12:00:00',
+            '--end-time', '2026-11-27 12:00:00']
+    with pytest.raises(ExportError, match='include-forwarded-future'):
+        make_plan(args, today=today)
+
+    def loader(product, _start, _end):
+        return pd.DataFrame({
+            'prod_code': [product] * 4,
+            'sheet_start_time': pd.to_datetime(['2026-11-26 12:00:00', '2026-11-26 12:01:00',
+                                               '2026-11-27 12:00:00', '2026-11-27 12:00:01']),
+            'param_value': [1, 2, 3, 4],
+        })
+
+    output = tmp_path / 'export'
+    assert main([*args, '--include-forwarded-future', '--output-dir', str(output)],
+                loader=loader, today=today) == 0
+    replay = tmp_path / 'replay'
+    assert main(['--from-export', str(output), '--output-dir', str(replay)], today=today) == 0
+    for result in (output, replay):
+        manifest = json.loads((result / 'manifest.json').read_text(encoding='utf-8'))
+        assert manifest['forwarded_future'] is True
+        row, = manifest['rows']
+        assert row['row_count'] == 3
+        assert [file['row_count'] for file in row['files']] == [2, 1]
+        assert [file['file'].split('_')[-1] for file in row['files']] == ['part01.xlsx', 'part02.xlsx']
+        values = []
+        for file in row['files']:
+            book = openpyxl.load_workbook(result / file['file'], read_only=True)
+            values.extend(record[-1] for record in list(book['P1'].values)[1:])
+            book.close()
+        assert values == [1, 2, 3]
+
+
+def test_forwarded_source_uses_verified_raw_coverage_and_exact_cutoff(tmp_path, monkeypatch):
+    from src.inline_domain.infrastructure.shared.measurement_snapshot_repository import InlineMeasurementSnapshotRepository
+    from src.inline_domain.infrastructure.shared.rolling_snapshot import publish_snapshots
+    from src.shared_kernel.config import ConfigLoader
+    from src.shared_kernel.data_forward import DataForwardPolicy
+    from tools.spc_point_export.source import MeasurementSource
+
+    monkeypatch.setattr(ConfigLoader, 'get_data_forward_policy', lambda: DataForwardPolicy(True, 4))
+    monkeypatch.setattr(ConfigLoader, 'get_inline_data_exclusion', lambda: None)
+
+    def forbidden(*args):
+        pytest.fail('forwarded measurement export must use the verified snapshot')
+
+    adapter = InlineMeasurementSnapshotRepository(tmp_path, None, measurement_loader=forbidden)
+    source_day = pd.Timestamp.now(tz='Asia/Shanghai').normalize().tz_localize(None) - pd.Timedelta(days=1)
+    raw_end = source_day + pd.Timedelta(hours=12)
+    display_end = raw_end + pd.Timedelta(days=4)
+    frame = pd.DataFrame({'start_time': [raw_end, raw_end + pd.Timedelta(seconds=1)], 'param_value': [1, 2]})
+    snapshot = tmp_path / 'inline_measurements_P1.parquet'
+    publish_snapshots([(snapshot, frame, adapter.SNAPSHOT_POLICY_VERSION, source_day, True)],
+                      window_start=source_day)
+
+    def source(end):
+        return MeasurementSource(adapter, display_end.date(), end.date(), query_manager=None,
+                                 display_end=end.to_pydatetime())
+
+    projected = source(display_end).get_measurements('P1', display_end.date().isoformat())
+    assert projected['start_time'].tolist() == [display_end]
+    later = display_end + timedelta(days=1)
+    with pytest.raises(ExportError, match='snapshot does not cover'):
+        source(later).get_measurements('P1', later.date().isoformat())
 
 
 def test_pds_read_guard_requires_the_bounded_adapter_filters():

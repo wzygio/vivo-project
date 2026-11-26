@@ -36,9 +36,11 @@ class ReportCutoffPolicy:
 
     def filter_frame(
         self, frame: pd.DataFrame, time_column: str, *, now: object | None = None,
+        display_end: object | None = None,
     ) -> pd.DataFrame:
         """Copy report facts; raw snapshots and their coverage remain untouched."""
         if frame.empty:
             return frame.copy()
         timestamps = pd.to_datetime(frame[time_column], errors="coerce")
-        return frame.loc[timestamps.le(self.boundary(now))].copy()
+        boundary = self.boundary(now) if display_end is None else pd.Timestamp(display_end)
+        return frame.loc[timestamps.le(boundary)].copy()

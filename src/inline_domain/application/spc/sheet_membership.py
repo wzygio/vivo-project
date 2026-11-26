@@ -157,7 +157,7 @@ class SpcSheetMembershipQuery:
     """Read-only capability membership; never reconstruct absent data from a producer."""
 
     def __init__(self, store: SpcSheetMembershipStore, *,
-                 policy_signature: str | Callable[[], str] = MEMBERSHIP_POLICY) -> None:
+                 policy_signature: str | Callable[[], str] | None = MEMBERSHIP_POLICY) -> None:
         self._store = store
         self._policy_signature = policy_signature
 
@@ -181,16 +181,18 @@ class SpcSheetMembershipQuery:
         snapshot = self._store.read(product, start)
         policy = self._policy_signature() if callable(self._policy_signature) else self._policy_signature
         if (not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1
-                or snapshot.get("product") != product or snapshot.get("policy_signature") != policy
-                or not policy or snapshot.get("coverage_start") != start.isoformat()
-                or snapshot.get("coverage_end_exclusive") != (end + timedelta(days=1)).isoformat()
-                or not isinstance(snapshot.get("source_generation"), str)
-                or len(snapshot["source_generation"]) != 64):
+                or snapshot.get("product") != product
+                or (policy is not None and (not policy or snapshot.get("policy_signature") != policy))
+                or snapshot.get("coverage_start") != start.isoformat()
+                or snapshot.get("coverage_end_exclusive") != (end + timedelta(days=1)).isoformat()):
             raise ValueError("Membership metadata unavailable")
         iso = start.isocalendar()
         if snapshot.get("period_label") != f"{iso.year}-W{iso.week:02d}":
             raise ValueError("Membership period unavailable")
-        if expected_generation is not None and snapshot["source_generation"] != expected_generation:
+        if policy is not None and (not isinstance(snapshot.get("source_generation"), str)
+                                   or len(snapshot["source_generation"]) != 64):
+            raise ValueError("Membership generation unavailable")
+        if expected_generation is not None and snapshot.get("source_generation") != expected_generation:
             raise ValueError("Membership generation changed")
         groups = snapshot.get("groups")
         if not isinstance(groups, list):
@@ -201,14 +203,16 @@ class SpcSheetMembershipQuery:
         if len(matching) != 1:
             raise ValueError("Membership scope unavailable")
         group = matching[0]
-        data_start, data_end = _stamp(group["data_start"]), _stamp(group["data_end"])
-        if (data_start > data_end or data_start < pd.Timestamp(start)
-                or data_end >= pd.Timestamp(end + timedelta(days=1))):
-            raise ValueError("Membership data span is outside the requested week")
         ids = group.get("sheet_ids")
         if (not isinstance(ids, list) or not ids or any(not isinstance(value, str) or not value for value in ids)
                 or ids != sorted(set(ids))):
             raise ValueError("Membership identities unavailable")
+        if policy is None and metric is None and expected_start is None and expected_end is None:
+            return list(ids)
+        data_start, data_end = _stamp(group["data_start"]), _stamp(group["data_end"])
+        if (data_start > data_end or data_start < pd.Timestamp(start)
+                or data_end >= pd.Timestamp(end + timedelta(days=1))):
+            raise ValueError("Membership data span is outside the requested week")
         if (expected_start is None) != (expected_end is None):
             raise ValueError("Incomplete capability span")
         span = None

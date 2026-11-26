@@ -50,7 +50,7 @@ class QTimeAlertResults:
     """Publish complete shop projections; readers never fill missing shops by querying."""
 
     def __init__(
-        self, store: QTimeAlertStore, *, ttl_seconds: int,
+        self, store: QTimeAlertStore, *, ttl_seconds: int | Callable[[], int],
         policy_signature: Callable[[], str] = lambda: "qtime-published-v1",
         clock: Callable[[], datetime] = datetime.now,
         decisions_provider: Callable[[], pd.DataFrame] | None = None,
@@ -109,7 +109,7 @@ class QTimeAlertResults:
     def read(
         self, product: str, reference_date: date, *, shops: Sequence[str] = QTIME_SHOPS,
         step_descriptions: Sequence[str] = (), start_date: str | None = None,
-        end_date: str | None = None,
+        end_date: str | None = None, check_freshness: bool = True,
     ) -> dict:
         empty = pd.DataFrame(columns=QTIME_ALERT_COLUMNS)
         try:
@@ -144,9 +144,6 @@ class QTimeAlertResults:
             release_frames = []
             release_evidence = True
             lot_ids: set[str] = set()
-            now = pd.Timestamp(self.clock())
-            if now.tzinfo is not None:
-                now = now.tz_convert("Asia/Shanghai").tz_localize(None)
             for shop in dict.fromkeys(shops):
                 saved, products = sheets[f"alerts_{shop}"], sheets[f"products_{shop}"]
                 if (set(QTIME_ALERT_COLUMNS) - set(saved)
@@ -167,16 +164,8 @@ class QTimeAlertResults:
                     if (len(saved) != int(expected_count) or len(products) != int(row.product_count)
                             or row.status != "success" or row.source_status != "fresh"):
                         raise ValueError(f"Invalid Q-Time publication count/status: shop={shop}")
-                    if str(row.reference_date) != str(reference_date):
-                        raise ValueError(
-                            f"Q-Time publication reference date mismatch: shop={shop} "
-                            f"published={row.reference_date} requested={reference_date}"
-                        )
-                    policy_matches = row.policy_signature == self.policy_signature()
-                    if not policy_matches and not uses_decisions and self.legacy_policy_matches:
-                        policy_matches = self.legacy_policy_matches(row.policy_signature)
-                    if not policy_matches:
-                        raise ValueError(f"Q-Time publication policy changed: shop={shop}")
+                    if check_freshness:
+                        self._validate_freshness(row, reference_date, shop, uses_decisions)
                     if (pd.Timestamp(row.coverage_start) > start
                             or pd.Timestamp(row.coverage_end) < end - pd.Timedelta(days=1)):
                         raise ValueError(
@@ -184,15 +173,6 @@ class QTimeAlertResults:
                             f"published={row.coverage_start}..{row.coverage_end} "
                             f"requested={start.date()}..{(end - pd.Timedelta(days=1)).date()}"
                         )
-                    for field in ("updated_at", "source_refreshed_at"):
-                        stamp = pd.Timestamp(row[field])
-                        if pd.isna(stamp):
-                            raise ValueError("Missing Q-Time publication time")
-                        if stamp.tzinfo is not None:
-                            stamp = stamp.tz_convert("Asia/Shanghai").tz_localize(None)
-                        age = (now - stamp).total_seconds()
-                        if age < 0 or age > self.ttl_seconds:
-                            raise ValueError("Expired Q-Time publication")
                 if not saved.empty and not saved["shop"].eq(shop).all():
                     raise ValueError("Q-Time shop sheet contains another shop")
                 if self.decisions_provider is not None and not saved.empty and "flag" in saved:
@@ -257,6 +237,31 @@ class QTimeAlertResults:
                     "alert_factories": [], "message": UNAVAILABLE, "metadata": {},
                     "release_records": pd.DataFrame(columns=QTIME_PUBLISHED_COLUMNS),
                     "release_evidence": False}
+
+    def _validate_freshness(self, row, reference_date, shop, uses_decisions):
+        if str(row.reference_date) != str(reference_date):
+            raise ValueError(
+                f"Q-Time publication reference date mismatch: shop={shop} "
+                f"published={row.reference_date} requested={reference_date}"
+            )
+        policy_matches = row.policy_signature == self.policy_signature()
+        if not policy_matches and not uses_decisions and self.legacy_policy_matches:
+            policy_matches = self.legacy_policy_matches(row.policy_signature)
+        if not policy_matches:
+            raise ValueError(f"Q-Time publication policy changed: shop={shop}")
+        now = pd.Timestamp(self.clock())
+        if now.tzinfo is not None:
+            now = now.tz_convert("Asia/Shanghai").tz_localize(None)
+        ttl = self.ttl_seconds() if callable(self.ttl_seconds) else self.ttl_seconds
+        for field in ("updated_at", "source_refreshed_at"):
+            stamp = pd.Timestamp(row[field])
+            if pd.isna(stamp):
+                raise ValueError("Missing Q-Time publication time")
+            if stamp.tzinfo is not None:
+                stamp = stamp.tz_convert("Asia/Shanghai").tz_localize(None)
+            age = (now - stamp).total_seconds()
+            if age < 0 or age > ttl:
+                raise ValueError("Expired Q-Time publication")
 
     def source_signature(self, product: str, reference_date: date, **selection) -> str:
         # Recheck validity outside the result cache so age expiry invalidates it.

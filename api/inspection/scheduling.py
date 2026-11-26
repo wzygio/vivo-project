@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from datetime import date, datetime, timedelta
 import json
 from math import isfinite
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -139,10 +140,12 @@ def build_task_specs(root: Path = ROOT, *, env_file: Path | None = None) -> list
          'triggers': [{'kind': 'weekly', 'weekday': 'Monday', 'time': '07:20'},
                       {'kind': 'weekly', 'weekday': 'Tuesday', 'time': '11:00'}]},
     ]
-    return [{**spec, 'execute': str(root / '.venv/Scripts/pythonw.exe'),
-             'working_directory': str(root),
-             'arguments': subprocess.list2cmdline(['-m', spec['module'], *spec['parameters']])}
-            for spec in specs]
+    inspection, mail = specs
+    inspection.update(execute=str(Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32/wscript.exe'),
+                      arguments=subprocess.list2cmdline([str(root / 'api/inspection/run_inspection.vbs')]))
+    mail.update(execute=str(root / '.venv/Scripts/pythonw.exe'),
+                arguments=subprocess.list2cmdline(['-m', mail['module'], *credentials]))
+    return [{**spec, 'working_directory': str(root)} for spec in specs]
 
 
 def main(argv: list[str] | None = None) -> int:

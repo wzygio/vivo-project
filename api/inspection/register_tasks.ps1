@@ -13,7 +13,7 @@ $ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 $Python = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 $PythonWindowless = Join-Path $ProjectRoot '.venv\Scripts\pythonw.exe'
 if (-not $EnvFile) { $EnvFile = Join-Path $ProjectRoot '.env' }
-foreach ($Target in @($Python, $PythonWindowless, $EnvFile)) {
+foreach ($Target in @($Python, $PythonWindowless, $EnvFile, (Join-Path $ProjectRoot 'api\inspection\run_inspection.vbs'))) {
     if (-not (Test-Path -LiteralPath $Target -PathType Leaf)) { throw 'Required runtime or environment file is missing.' }
 }
 $EnvFile = (Resolve-Path -LiteralPath $EnvFile).Path
@@ -85,10 +85,14 @@ foreach ($Spec in $Specs) {
         # Only replace the requested existing producer or a prior version of the
         # exact notification task. A same-name unrelated task is not ours.
         $Actions = @($Existing.Actions)
-        if ($Actions.Count -ne 1 -or $Actions[0].WorkingDirectory.TrimEnd('\') -ne $ProjectRoot.TrimEnd('\') -or
-            $Actions[0].Execute -ne $PythonWindowless -or
-            ($Actions[0].Arguments -notmatch 'publish_dashboard_alert_results\.py' -and
-             $Actions[0].Arguments -notmatch '^-m api\.(inspection|notification\.scheduled)(?:\s|$)')) {
+        $MatchesSpec = $Actions[0].Execute -eq $Spec.execute -and $Actions[0].Arguments -eq $Spec.arguments
+        $LegacyAction = $Actions[0].Execute -eq $PythonWindowless -and (
+            ($Spec.module -eq 'api.inspection' -and ($Actions[0].Arguments -eq '-m api.inspection' -or
+                $Actions[0].Arguments -match 'publish_dashboard_alert_results\.py"$')) -or
+            ($Spec.module -eq 'api.notification.scheduled' -and $Actions[0].Arguments -match '^-m api\.notification\.scheduled(?:\s|$)'))
+        if ($Existing.State -eq 'Running' -or $Actions.Count -ne 1 -or
+            $Actions[0].WorkingDirectory.TrimEnd('\') -ne $ProjectRoot.TrimEnd('\') -or
+            -not ($MatchesSpec -or $LegacyAction)) {
             throw 'Existing task identity does not match this project; nothing was registered.'
         }
         $Xml = Export-ScheduledTask -TaskName $Spec.name

@@ -148,8 +148,8 @@ class CapabilityRecord(_PublicRecordBase):
                 or self.occurred_at != self.period_end_date.isoformat()):
             raise ValueError('Capability dates must identify one complete ISO week')
         year, week, _ = self.period_start_date.isocalendar()
-        if self.period_label != f'{year}-W{week:02d}' or self.metric_value >= self.lower_bound:
-            raise ValueError('Invalid capability alert period or threshold')
+        if self.period_label != f'{year}-W{week:02d}':
+            raise ValueError('Invalid capability alert period')
         return self
 
 

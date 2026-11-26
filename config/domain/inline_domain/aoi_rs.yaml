@@ -1,6 +1,6 @@
 # AOI_RS 特殊顺序修饰：Sheet 按规格比例修饰 → Lot 归零 → 周/日限幅。
-# 默认关闭；enabled=true 时仅对列表中的厂别启用，[] 也关闭特殊修饰。
-# 关闭时及其他厂别沿用常规修饰。
+# 默认关闭；factories 为整厂，products_by_factory 为厂别的产品清单。
+# 关闭时及未选厂别/产品组合沿用常规修饰。
 aoi_rs:
   special_decoration:
     enabled: true
@@ -9,6 +9,8 @@ aoi_rs:
     sheet_replacement_ratio: 0.25
     factories:
       - "OLED"
+    products_by_factory:
+      ARRAY: ["Z622"]
     # 专用修饰按报表显示日期生效，首尾日期均包含；窗口外沿用常规修饰。
     start_date: "2026-09-21"
     end_date: "today"

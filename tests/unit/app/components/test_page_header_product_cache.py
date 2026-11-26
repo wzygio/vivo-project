@@ -202,6 +202,7 @@ def _render_header_and_get_refresh_callback(
     product_cache_indicators=(),
     session_state=None,
     events=None,
+    data_refresh_handler=None,
 ):
     """渲染页头并返回「刷新数据」按钮的 on_click 回调与 streamlit 替身。"""
     st_stub = _StreamlitStub(session_state)
@@ -228,12 +229,28 @@ def _render_header_and_get_refresh_callback(
         config=config,
         cached_funcs=cached_funcs,
         refresh_handlers=refresh_handlers,
+        data_refresh_handler=data_refresh_handler,
         show_product_filter=False,
         product_cache_scope=product_cache_scope,
         product_cache_indicators=product_cache_indicators,
     )
 
     return st_stub.button_callbacks["btn_refresh_测试页"], st_stub
+
+
+def test_windowed_header_refresh_reads_the_setting_at_click(monkeypatch):
+    events = []
+    current_days = 14
+    monkeypatch.setattr(page_header.ConfigLoader, "get_manual_refresh_days", lambda: current_days)
+    callback, st_stub = _render_header_and_get_refresh_callback(
+        monkeypatch, refresh_handlers=[], data_refresh_handler=lambda days: events.append(days) or True,
+    )
+    monkeypatch.setattr(page_header, "perform_hard_reset", lambda *a, **kw: events.append("reset"))
+    st_stub.button_callbacks["btn_clear_测试页"]()
+    assert events == ["reset"]
+    current_days = 21
+    callback()
+    assert events == ["reset", 21, "reset"]
 
 
 def _redirect_revision_writes_to_tmp(monkeypatch, tmp_path: Path) -> None:

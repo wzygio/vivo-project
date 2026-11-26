@@ -330,7 +330,7 @@ def build_spc_sheet_membership_query(product: str):
 
     return SpcSheetMembershipQuery(
         build_spc_sheet_membership_store(),
-        policy_signature=lambda: build_spc_sheet_membership_policy_signature(product),
+        policy_signature=None,
     )
 
 
@@ -451,6 +451,8 @@ def refresh_aoi_rs_snapshots(
     db_manager: DatabaseManager,
     prod_code: str,
     end_date: str,
+    *,
+    refresh_days: int | None = None,
 ) -> bool:
     repository = build_aoi_rs_repository(db_manager, prod_code)
     query = AoiRsQueryConfig(
@@ -458,13 +460,17 @@ def refresh_aoi_rs_snapshots(
         start_date=end_date,
         end_date=end_date,
     )
-    return repository.refresh(query)
+    if refresh_days is None:
+        return repository.refresh(query)
+    return repository.refresh(query, refresh_days=refresh_days)
 
 
 def refresh_raw_measurements(
     db_manager: DatabaseManager,
     prod_code: str,
     end_date: str,
+    *,
+    refresh_days: int | None = None,
 ) -> bool:
     """页头「刷新数据」L1 handler：仅在真实从数据库刷新成功时返回 True。
 
@@ -474,8 +480,32 @@ def refresh_raw_measurements(
     result = build_raw_measurement_repository(db_manager, prod_code).refresh_measurements(
         prod_code=prod_code,
         end_date=end_date,
+        **({"refresh_days": refresh_days} if refresh_days is not None else {}),
     )
     return result.refreshed_from_db
+
+
+def read_published_inline_alerts(product, scope, event, reference, *, workbook_reader,
+                                start_date=None, end_date=None):
+    """Read an inspection selection, applying the current release ledger and request window."""
+    import pandas as pd
+    from src.inline_domain.application.monitor.published_alert_rows import read_published_rows
+    from src.inline_domain.infrastructure.monitor.published_alert_rows import publication_path, release_controls
+    from src.inline_domain.infrastructure.shared.resource_paths import scope_decoration_path
+
+    workbook = (ConfigLoader.get_domain_resource_path("inline_domain", "spc_cpk_cpm_decoration")
+                if event in ("CPK", "CPM") else scope_decoration_path(scope, event))
+    stat = workbook.stat()
+    sheets = workbook_reader(str(workbook.resolve()), stat.st_mtime_ns, stat.st_size)
+    sheet = f"{product}_cpm" if event == "CPM" else product
+    if sheet not in sheets:
+        return pd.DataFrame(columns=["flag"])
+    keys, controls = release_controls(sheets, product, scope, event)
+    if controls.empty:
+        return pd.DataFrame(columns=["flag"])
+    rows = pd.read_parquet(publication_path(product, scope, event))
+    return read_published_rows(rows, keys, controls, scope=scope, product=product, event=event,
+                               reference=reference, start_date=start_date, end_date=end_date)
 
 
 def build_sheet_alert_query(

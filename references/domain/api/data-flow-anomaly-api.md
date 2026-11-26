@@ -1,15 +1,17 @@
 # 异常 API、巡检、邮件与报表页面的数据流
 
-核对日期为 2026-11-20。本文回答两个运维问题：8890 的异常明细从哪里来，以及打开报表时能复用巡检的哪些工作。
+核对日期为 2026-11-26。本文说明 8890 的异常明细来源，以及报表可以复用的巡检结果。
 
 ## 1. 一次发布，多处读取
 
-**定时邮件通过 HTTP 查询 API；API 通过各域只读 application 服务查询已经落盘的业务结果。** 巡检和 API 独立运行。即使当天无人打开页面，巡检也可以发布；收到 HTTP 请求只会读取和筛选结果。原报表运行到相应生产步骤时也可以发布，因此文件可能在两次巡检之间更新。
+**定时邮件通过 HTTP 查询 API；API 通过各域只读 application 服务查询已经落盘的业务结果。** 巡检和 API 独立运行。即使当天无人打开页面，巡检也可以发布；收到 HTTP 请求只会读取和筛选结果。日常报表仍可维护各域原有的工作簿。Inline 对外明细和 SPC 周片号由巡检或显式维护发布。
 
 ```mermaid
 flowchart TD
     T["Windows 任务 07:15、19:15"] --> I["api.inspection 调用各域生产流程"]
-    I --> F["各域发布工作簿、SPC 周成员快照"]
+    I --> F["领域发布工作簿"]
+    I --> C["Inline 已筛选的预警明细、SPC 周片号 JSON"]
+    C --> A
     I --> R["巡检回执 latest.json"]
     I --> W["巡检结束后预热矩阵"]
     F --> W --> M["矩阵状态 daily.json"]
@@ -23,7 +25,7 @@ flowchart TD
     N --> E["按责任人分派并通过 SMTP 发送"]
 ```
 
-图中三个落盘位置有不同用途。领域工作簿保存异常明细和发布依据；`output/logs/alert_inspection/latest.json` 记录本轮哪些模块、产品生产成功；`output/cache/alert_matrix/daily.json` 保存看板单元格状态。**8890 从第一类产物组装明细**，所以一张新生成的矩阵或一份成功回执，都不能单独证明某条 API 明细可读。[巡检入口](../../../api/inspection/__main__.py) · [API 读取装配](../../../api/composition.py) · [矩阵快照](../../../app/sections/inline_domain/monitor/alert_matrix_snapshot.py)
+巡检将 Inline 应用层筛选后的明细原子写入 `data/inline_domain/monitor/published_alerts/`。SPC 能力项目的完整片号单独按产品和周保存。API 读取明细及片号，按工作簿中的人工放行决定和调用方权限展示。Yield、Q-Time 已有独立的发布工作簿，API 直接读取其中覆盖查询日期的结果。巡检回执记录生产成败，矩阵快照保存看板状态。[巡检入口](../../../api/inspection/__main__.py) · [API 读取装配](../../../api/composition.py)
 
 ## 2. 从巡检到一封周报
 
@@ -40,12 +42,12 @@ flowchart TD
 
 | 对象 | 写入与复用 | 有效性 |
 |---|---|---|
-| 领域发布结果 | 巡检或正常报表流程写入。API 和页面可跨进程读取对应文件。 | 各域按各自契约校验。例如 Yield 已有发布同时校验来源刷新时间、发布时间、参考日、覆盖与策略；这两个时间都要落在全局 TTL 内。SPC 能力明细还须能按产品、完整 ISO 周和计算策略匹配片号成员快照。 |
+| 领域发布结果 | 巡检或显式维护发布 Inline 对外明细及片号。Yield、Q-Time 复用各自发布工作簿。 | 业务规则由生产方执行。HTTP 按产品、范围和周身份索引，保留发布覆盖、数据结构、公开权限及人工放行检查。 |
 | 自动预警矩阵状态 | 巡检预热写入 `daily.json`，自动预警看板复用命中的单元格。 | 检查参考日、全局 TTL、报表截止策略和单元格来源签名；未命中时可从发布文件读取。 |
 | API 工作簿解析与分页 | API 进程复用同一版本工作簿的解析结果；需要翻页时另存公开结果快照。 | 解析缓存按路径、修改时间及大小识别版本，受容量限制。分页快照默认 **300 秒**，服务重启后旧游标失效。二者均由 API 进程自行建立。 |
 | 页面预警选择缓存 | 报表和矩阵在同一 Streamlit 进程中可复用 `read_alert_result()` 的筛选结果。 | 键包含指标、产品、参考日、选择范围和来源签名等，TTL 来自全局配置。其他 Streamlit 进程和 8890 各自维护内存缓存。 |
 
-**本机巡检已配置每天 07:15 和 19:15 启动，两次相隔 12 小时。** 全局 `application.cache_ttl_hours` 当前为 12。晚间再生产一次，是为了让 Yield 等有时效要求的发布结果晚间也能及时更新。有效期按实际刷新和发布时间计算，任务触发时间只表示开始执行。若任务延迟、某域生产失败、源数据已经过期或参考日已切换，即使任务按时触发，也可能出现不可用时段。两次巡检无需重启 8890。[全局配置](../../../config/global.yaml) · [巡检调度说明](architecture-automatic-inspection.md) · [Yield 发布规则](../yield_domain/shared/rules-yield-alert-results.md) · [API 工作簿缓存](../../../src/shared_kernel/infrastructure/api_workbook_cache.py) · [分页配置](../../../api/settings.py)
+**本机巡检每天 07:15 和 19:15 启动。** 12 小时是两次计划运行的间隔。8890 在查询范围内继续提供上次成功发布的结果。规则调整由下次成功发布体现。巡检失败的模块、产品和错误码可在 `output/logs/alert_inspection/latest.json` 查看。矩阵和定时邮件有各自的时效检查。[巡检调度说明](architecture-automatic-inspection.md)
 
 ## 4. 各页面实际复用什么
 
@@ -53,7 +55,7 @@ flowchart TD
 
 | 页面 | 巡检产物的复用位置 | 其余数据从哪里来 |
 |---|---|---|
-| SPC、CTQ、AOI_TT、AOI_RS 监控报表（4 页） | 单片 OOS 预警读各域发布工作簿。SPC 还读 CPK、CPM 预警，两个 AOI 页面还读已发布趋势评估。 | 点位、报表图表和导出使用各域报表流程、测量数据及其快照。SPC 的 API 另核验周成员快照以返回完整 Sheet ID。 |
+| SPC、CTQ、AOI_TT、AOI_RS 监控报表（4 页） | 单片 OOS 预警读各域发布工作簿。SPC 还读 CPK、CPM 预警，两个 AOI 页面还读已发布趋势评估。 | 点位、报表图表和导出使用各域报表流程、测量数据及其快照。8890 另读周片号 JSON 返回完整 Sheet ID，普通 SPC 页面直接复用自身报表的点位。 |
 | 入库不良率分析看板 | 周度 Lot 超规和 Yield 趋势预警中心读取已发布结果。此页也是生产方，可通过 `generate_yield_alert_publications()` 更新发布。 | 不良率分析、Mapping、图表与按需详情走 Yield 报表流程。 |
 | 入库不良率 ByLot、BySheet 明细表（2 页） | 两张明细表直接调用 `YieldAnalysisService.get_lot_defect_rates()` 或 `get_sheet_defect_rates()`。 | 可复用 Yield 源快照与报表缓存；页面需要完整不良率明细，单靠超规 Lot 列表无法生成。 |
 | Q_Time、IJP 溢流、关键备件、IQC 蒸镀材料报表（4 页） | 各自预警区域读取已发布的厂别告警、IJP 区域告警、备件寿命超限或 IQC／COA NG 结果。这里只有 Q-Time OOS 也属于 HTTP 接口范围。 | Q-Time 站点／单腔、IJP 明细、备件测量和 IQC 测点仍由各自报表服务加载。 |

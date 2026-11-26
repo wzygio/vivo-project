@@ -138,9 +138,10 @@ def _format_history_date(value: object) -> str:
 class InlineMainProcessHistoryRepository:
     """Load only histories referenced by the routed measurement fact set."""
 
-    def __init__(self, db_manager: "DatabaseManager") -> None:
+    def __init__(self, db_manager: "DatabaseManager", *, display_end: object | None = None) -> None:
         self.db_manager = db_manager
         self.data_forward_policy = ConfigLoader.get_data_forward_policy()
+        self.display_end = display_end
 
     def get_main_process_history(
         self,
@@ -191,5 +192,5 @@ class InlineMainProcessHistoryRepository:
             (MAIN_PROCESS_EVENT_TIME_COLUMN,),
         )
         return ConfigLoader.get_report_cutoff_policy().filter_frame(
-            displayed, MAIN_PROCESS_EVENT_TIME_COLUMN,
+            displayed, MAIN_PROCESS_EVENT_TIME_COLUMN, display_end=self.display_end,
         )

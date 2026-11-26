@@ -33,7 +33,7 @@ def test_no_l1_source_translates_windows_filters_before_aggregation_and_limits_s
     ]))
     monkeypatch.setattr(ConfigLoader, "get_data_forward_policy", classmethod(lambda cls: DataForwardPolicy(True, 4)))
     monkeypatch.setattr(ConfigLoader, "get_inline_data_exclusion", classmethod(lambda cls: None))
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", classmethod(lambda cls: []))
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", classmethod(lambda cls, _product: []))
     source = module.AoiRsMonitorSource(lambda: SimpleNamespace())
     inputs = source.read_projected("M626", "ARRAY", str(day.date()), str(day.date()))
     assert calls[0].start_date == str(source_day.date())
@@ -72,3 +72,53 @@ def test_monitor_policy_signature_detects_both_sheet_ratio_changes(monkeypatch):
     second = source.policy_signature("M626")
     section["sheet_replacement_ratio"] = 0.1
     assert len({first, second, source.policy_signature("M626")}) == 3
+
+
+def test_product_scope_updates_only_the_affected_monitor_history_signature(monkeypatch):
+    section = {"enabled": True, "factories": ["OLED"]}
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "aoi_rs": {"special_decoration": section},
+    })
+    monkeypatch.setattr(module, "get_scope_decision_signature", lambda *args: "fixture")
+    source = module.AoiRsMonitorSource(lambda: SimpleNamespace())
+    products = ("Z622", "M626")
+    original = [source.policy_signature(product) for product in products]
+
+    section["products_by_factory"] = {"ARRAY": ["Z622"]}
+
+    assert source.policy_signature("Z622") != original[0]
+    assert source.policy_signature("M626") == original[1]
+
+
+def test_monitor_projects_array_only_for_the_configured_product(monkeypatch, tmp_path):
+    common = dict(factory="ARRAY", step_id="11629", rs_code="A1")
+    day = "2026-10-10"
+    details = pd.DataFrame([dict(
+        common, sheet_id="S1", lot_id="L1", start_time=pd.Timestamp(day), code_qty=8,
+    )])
+    section = {"enabled": True, "factories": ["OLED"], "products_by_factory": {"ARRAY": ["Z622"]},
+               "end_date": "2026-11-26"}
+    monkeypatch.setattr(ConfigLoader, "load_domain_config", lambda *_: {
+        "aoi_rs": {"special_decoration": section},
+    })
+    monkeypatch.setattr(ConfigLoader, "get_data_forward_policy", lambda: DataForwardPolicy(False, 0))
+    monkeypatch.setattr(ConfigLoader, "get_domain_resource_path", lambda *_: tmp_path / "decisions.xlsx")
+    monkeypatch.setattr(module, "load_rs_details", lambda _db, query, **_: details.assign(prod_code=query.prod_code))
+    monkeypatch.setattr(module, "load_pass_through", lambda _db, query, **_: details.assign(prod_code=query.prod_code))
+    monkeypatch.setattr(module, "load_rs_spec_limits", lambda _db, product, **_: pd.DataFrame([
+        dict(common, prod_code=product, type_flag="SHEET_ID", code_desc="Fixture", spec=2),
+    ]))
+    calls = []
+
+    def prepare(_lots, sheets, _specs, _directory, product, **kwargs):
+        assert kwargs["persist"] is False
+        calls.append(product)
+        return SimpleNamespace(sheet_points_df=sheets.assign(rs_qty=0.5))
+
+    monkeypatch.setattr(module, "prepare_aoi_rs_decoration", prepare)
+    source = module.AoiRsMonitorSource(lambda: SimpleNamespace())
+    z622 = source.read_projected("Z622", "ARRAY", day, day)
+    m626 = source.read_projected("M626", "ARRAY", day, day)
+    assert z622["rs_details_df"].code_qty.tolist() == [0.5]
+    assert m626["rs_details_df"].code_qty.tolist() == [8]
+    assert calls == ["Z622"]

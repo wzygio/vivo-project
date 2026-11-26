@@ -1,4 +1,4 @@
-"""Export final SPC plot points into a separate XLSX for each enabled product."""
+"""Export final SPC plot points into XLSX files grouped by product."""
 from __future__ import annotations
 
 import argparse
@@ -32,6 +32,7 @@ class Plan:
     check: bool
     start_time: datetime | None = None
     end_time: datetime | None = None
+    forwarded_future: bool = False
 
 
 def _project_path(value: str | Path) -> Path:
@@ -53,6 +54,8 @@ def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     parser.add_argument('--end-date', type=date.fromisoformat, help='YYYY-MM-DD, default today in Asia/Shanghai.')
     parser.add_argument('--start-time', type=_display_datetime, help='Inclusive display timestamp, YYYY-MM-DD HH:MM[:SS], Asia/Shanghai.')
     parser.add_argument('--end-time', type=_display_datetime, help='Inclusive display timestamp, YYYY-MM-DD HH:MM[:SS], Asia/Shanghai.')
+    parser.add_argument('--include-forwarded-future', action='store_true',
+                        help='Use verified snapshots for already captured facts displayed after the report cutoff.')
     parser.add_argument('--output-dir', help='New output directory; relative paths are project-relative.')
     parser.add_argument('--from-export', help='Replay a prior export directory containing manifest.json and prepared Parquet points.')
     parser.add_argument('--check', action='store_true', help='Validate arguments only; no database, business reads or output writes.')
@@ -67,17 +70,27 @@ def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     end = (args.end_time.date() if args.end_time else args.end_date) or (date.fromisoformat(saved['end_date']) if saved else current)
     default_start = (end.replace(day=1) - timedelta(days=1)).replace(day=1)
     start = (args.start_time.date() if args.start_time else args.start_date) or (date.fromisoformat(saved['start_date']) if saved else default_start)
-    if end > current or start > end or (end - start).days > 93:
-        raise ExportError('Use start <= end <= today and a window of at most 93 days')
+    if start > end or (end - start).days > 93:
+        raise ExportError('Use start <= end and a window of at most 93 days')
+    if end > current and not (saved or args.include_forwarded_future):
+        raise ExportError('Use --include-forwarded-future for a display date after today')
     if saved and (start.isoformat() != saved['start_date'] or end.isoformat() != saved['end_date']):
         raise ExportError('A replay must retain the original export dates')
     start_time = args.start_time or (datetime.fromisoformat(saved['display_start'])
         if saved and saved.get('display_start') else datetime.combine(start, datetime.min.time()))
     end_time = args.end_time or (datetime.fromisoformat(saved['display_end'])
         if saved and saved.get('display_end') else datetime.combine(end, datetime.max.time()))
-    if end == current and not saved:
-        cutoff = ConfigLoader.get_report_cutoff_policy().boundary(now=pd.Timestamp(current)).to_pydatetime()
-        end_time = min(end_time, cutoff)
+    cutoff = ConfigLoader.get_report_cutoff_policy().boundary(now=pd.Timestamp(current)).to_pydatetime()
+    forwarded_future = bool(saved and saved.get('forwarded_future'))
+    if not saved:
+        if args.include_forwarded_future and end_time > cutoff:
+            policy = ConfigLoader.get_data_forward_policy()
+            _, source_end = policy.to_source_window(pd.Timestamp(start_time), pd.Timestamp(end_time))
+            if not policy.effective_days or source_end.date() > current:
+                raise ExportError('Forwarded export must map to an elapsed source window')
+            forwarded_future = True
+        elif end == current:
+            end_time = min(end_time, cutoff)
     if start_time > end_time:
         raise ExportError('Display start must not exceed the effective display end')
     if saved and (saved.get('display_start') and start_time.isoformat() != saved['display_start']
@@ -92,7 +105,7 @@ def make_plan(argv: Sequence[str], *, today: date | None = None) -> Plan:
     output = _project_path(args.output_dir or f'output/reports/spc_point_export/{start}_{end}/{stamp}_{uuid4().hex[:8]}')
     if replay and (output == replay or output in replay.parents):
         raise ExportError('Use a new output directory separate from the replay source')
-    return Plan(products, start, end, output, replay, saved, args.check, start_time, end_time)
+    return Plan(products, start, end, output, replay, saved, args.check, start_time, end_time, forwarded_future)
 
 
 def _replay_product(plan: Plan, product: str) -> pd.DataFrame:
@@ -138,11 +151,13 @@ def _save_manifest(directory: Path, manifest: dict) -> None:
 
 def run(plan: Plan, *, loader: Callable | None = None) -> int:
     from src.inline_domain.core.spc.spc_calculator import get_period_window_start
+    display_end = plan.end_time if plan.forwarded_future else None
     if plan.check:
         print(json.dumps({'status': 'validated', 'products': plan.products,
                           'start_date': plan.start.isoformat(), 'end_date': plan.end.isoformat(),
                           'display_start': plan.start_time.isoformat() if plan.start_time else None,
                           'display_end': plan.end_time.isoformat() if plan.end_time else None,
+                          'forwarded_future': plan.forwarded_future,
                           'source': 'prepared-export' if plan.replay else 'current-snapshots',
                           'output': str(plan.output)}, ensure_ascii=False))
         return 0
@@ -161,7 +176,8 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
                 'display_end': (plan.end_time or datetime.combine(plan.end, datetime.max.time())).isoformat(),
                 'point_contract': 'prepare_decorated_data(scope=spc).raw_measurements_df after traditional OOS and central-band point decoration',
                 'export_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(),
-                'cutoff': saved['cutoff'] if 'cutoff' in saved else str(ConfigLoader.get_report_cutoff_policy().boundary()),
+                'cutoff': saved.get('cutoff', str(display_end or ConfigLoader.get_report_cutoff_policy().boundary())),
+                'forwarded_future': plan.forwarded_future,
                 'time_policy': saved['time_policy'] if 'time_policy' in saved else ConfigLoader.get_data_forward_policy().signature,
                 'source': str(plan.replay) if plan.replay else 'fresh snapshots or bounded read-only queries; read-only metadata/history',
                 'points_dir': 'points', 'rows': []}
@@ -180,7 +196,7 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
                 elif loader:
                     frame = loader(product, plan.start, plan.end)
                 else:
-                    frame = load_product(manager, product, plan.start, plan.end)
+                    frame = load_product(manager, product, plan.start, plan.end, display_end=display_end)
                 frame = _select_display_window(frame, plan)
                 _validate_points(frame, product, plan)
                 frame = frame.copy(deep=False)
@@ -189,7 +205,8 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
                 result = write_product(frame, product, plan.output, manifest, temporary)
                 manifest['rows'].append(result)
                 _save_manifest(plan.output, manifest)
-                print(f"SAVED {plan.output / result['file']} ({result['row_count']:,} rows)", flush=True)
+                for entry in result['files']:
+                    print(f"SAVED {plan.output / entry['file']} ({entry['row_count']:,} rows)", flush=True)
                 del frame
         manifest['status'] = 'success'
     except (Exception, KeyboardInterrupt) as exc:
@@ -199,7 +216,8 @@ def run(plan: Plan, *, loader: Callable | None = None) -> int:
         print(f"FAILED {manifest['error']}; see {plan.output / 'manifest.json'}", flush=True)
         return 130 if isinstance(exc, KeyboardInterrupt) else 2
     _save_manifest(plan.output, manifest)
-    print(f"COMPLETE {len(manifest['rows'])} product files: {plan.output}", flush=True)
+    count = sum(len(result['files']) for result in manifest['rows'])
+    print(f"COMPLETE {count} files for {len(manifest['rows'])} products: {plan.output}", flush=True)
     return 0
 
 

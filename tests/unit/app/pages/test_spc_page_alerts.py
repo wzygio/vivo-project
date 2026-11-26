@@ -103,7 +103,7 @@ def test_spc_page_renders_filters_below_header_and_before_auto_warning(monkeypat
 
     monkeypatch.setattr(alert_results, "read_alert_result", read_saved_result)
     monkeypatch.setattr(composition, "build_spc_repository", lambda *args: object())
-    monkeypatch.setattr(composition, "build_spc_sheet_membership_store", lambda: object())
+    monkeypatch.setattr(composition, "build_spc_sheet_membership_store", lambda: pytest.fail("SPC page accessed API membership"))
     monkeypatch.setattr(composition, "build_spc_sheet_membership_policy_signature", lambda _: "test-policy")
     monkeypatch.setattr(composition, "build_spc_sheet_membership_coverage", lambda *args: None)
     monkeypatch.setattr(composition, "build_spc_input_signature", lambda product: "snapshot-v1")

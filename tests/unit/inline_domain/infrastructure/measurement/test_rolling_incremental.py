@@ -86,6 +86,30 @@ def test_empty_query_is_persisted_and_reused_without_latest_fact(tmp_path):
     assert meta["refreshed_at"]
 
 
+@pytest.mark.parametrize("previous_end,expected_start", [
+    ("2026-09-08", "2026-08-26"),
+    ("2026-08-20", "2026-08-21"),
+])
+def test_manual_refresh_replaces_recent_tail_and_fills_coverage_gap(
+    tmp_path, monkeypatch, previous_end, expected_start,
+):
+    monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_inline_measurement_retention_start",
+                        lambda _: pd.Timestamp("2026-05-01"))
+    old = pd.DataFrame({"start_time": pd.to_datetime(["2026-06-10", previous_end]), "param_value": [1, 2]})
+    calls = []
+
+    def loader(_db, start, end, _prod):
+        calls.append((start, end))
+        return old if len(calls) == 1 else old.iloc[:0]
+
+    repo = InlineMeasurementSnapshotRepository(tmp_path, object(), loader)
+    repo.get_measurements("M1", previous_end)
+    assert repo.refresh_measurements("M1", "2026-09-08", refresh_days=14).refreshed_from_db
+    assert calls[-1] == (expected_start, "2026-09-08")
+    saved = pd.read_parquet(tmp_path / "inline_measurements_M1.parquet")
+    assert saved.param_value.tolist() == ([1] if previous_end == "2026-09-08" else [1, 2])
+
+
 def test_month_transition_prunes_old_month_and_replaces_empty_tail(tmp_path, monkeypatch):
     monkeypatch.setattr("src.shared_kernel.config.ConfigLoader.get_data_forward_policy", lambda: DataForwardPolicy(enabled=False))
     batches = [pd.DataFrame({"start_time": pd.to_datetime(["2026-05-20", "2026-06-20", "2026-08-31"])}), pd.DataFrame(columns=["start_time"])]

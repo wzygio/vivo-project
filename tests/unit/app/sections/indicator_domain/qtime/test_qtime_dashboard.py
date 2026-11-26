@@ -75,7 +75,7 @@ def test_qtime_dashboard_gates_results_until_the_user_queries() -> None:
 
 
 @pytest.mark.parametrize("success", [True, False])
-def test_refresh_reloads_full_window_and_clears_results_only_on_success(monkeypatch, success):
+def test_refresh_uses_configured_window_and_clears_results_only_on_success(monkeypatch, success):
     from app.sections.indicator_domain.qtime import dashboard
     state = {dashboard.RESULT_STATE_KEY: "old", dashboard.SIGNATURE_STATE_KEY: "old"}
     monkeypatch.setattr(dashboard.st, "session_state", state)
@@ -85,8 +85,8 @@ def test_refresh_reloads_full_window_and_clears_results_only_on_success(monkeypa
     service = SimpleNamespace(refresh_snapshots=lambda **kwargs: (
         calls.append(kwargs) or [SimpleNamespace(refreshed_from_database=success)]
     ))
-    assert dashboard.refresh_qtime_data(service) is success
-    assert calls == [{"full_refresh": True}]
+    assert dashboard.refresh_qtime_data(service, refresh_days=14) is success
+    assert calls == [{"refresh_days": 14}]
     assert publications == ([service] if success else [])
     assert bool(state) is not success
 
@@ -97,7 +97,7 @@ def test_refresh_does_not_claim_success_when_publication_fails(monkeypatch):
     monkeypatch.setattr(dashboard.st, "session_state", {})
     monkeypatch.setattr(dashboard, "publish_refreshed_qtime_alerts", lambda *_args: False)
     service = SimpleNamespace(refresh_snapshots=lambda **kwargs: [SimpleNamespace(refreshed_from_database=True)])
-    assert dashboard.refresh_qtime_data(service) is False
+    assert dashboard.refresh_qtime_data(service, refresh_days=14) is False
 
 
 def test_failed_manual_refresh_marks_previously_fresh_session_result_stale(monkeypatch):
@@ -113,7 +113,7 @@ def test_failed_manual_refresh_marks_previously_fresh_session_result_stale(monke
     state = {dashboard.RESULT_STATE_KEY: old, dashboard.SIGNATURE_STATE_KEY: "same"}
     monkeypatch.setattr(dashboard.st, "session_state", state)
     service = SimpleNamespace(refresh_snapshots=lambda **kwargs: [SimpleNamespace(refreshed_from_database=False)])
-    assert dashboard.refresh_qtime_data(service) is False
+    assert dashboard.refresh_qtime_data(service, refresh_days=14) is False
     assert state[dashboard.RESULT_STATE_KEY].data_health["status"] == "stale"
     assert state[dashboard.RESULT_STATE_KEY].data_health["refreshed_at"] == "2026-09-01"
     assert state[dashboard.RESULT_STATE_KEY].details["lot_id"].tolist() == ["L1"]

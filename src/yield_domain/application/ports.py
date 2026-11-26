@@ -14,7 +14,7 @@ class YieldDataPort(Protocol):
 
     def read_panel(
         self, query: YieldQueryConfig, policy: YieldDataPolicy,
-        *, force_refresh: bool = False,
+        *, force_refresh: bool = False, refresh_days: int | None = None,
     ) -> pd.DataFrame:
         """Return display-time facts with health attrs, including successful empty windows.
 

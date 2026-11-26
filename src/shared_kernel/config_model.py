@@ -24,6 +24,9 @@ class ApplicationConfig(BaseModel):
     incremental_refresh_days: int = Field(
         default=7, gt=0, strict=True, description="源快照增量回刷天数必须为正整数"
     )
+    manual_refresh_days: int = Field(
+        default=14, gt=0, strict=True, description="页头数据回刷天数必须为正整数"
+    )
 
 class LotWorkOrderScope(BaseModel):
     """Additional Yield work-order types restricted to specific Lot IDs."""

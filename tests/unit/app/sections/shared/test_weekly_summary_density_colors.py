@@ -28,7 +28,7 @@ def product_cells(content, offset):
 
 
 def test_rs_colors_match_week_spec_and_product_across_eight_column_boundary(monkeypatch):
-    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda: ())
+    monkeypatch.setattr(ConfigLoader, "get_aoi_rs_special_decoration_factories", lambda _product: ())
     products = tuple(f"M{i}" for i in range(9))
     quantities = (1, 1, 1, 0, 1, 1.00000001, 1, 1, 1)
     limits = (1, .5, None, 0, 1, 1, 2, .5, .25)

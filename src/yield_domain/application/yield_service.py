@@ -889,6 +889,8 @@ class YieldAnalysisService:
         _db_manager: Optional['DatabaseManager'],
         config: AppConfig,
         _data_port: YieldDataPort | None = None,
+        *,
+        refresh_days: int | None = None,
     ) -> bool:
         """
         [生命周期钩子] 代理 UI 的强刷指令，触发底层的安全覆写。
@@ -902,7 +904,10 @@ class YieldAnalysisService:
             logging.info(f"🔄 [YieldService] 向底层下发 {query.product_code} 强刷指令 (Force Refresh)...")
             
             # 穿透强刷指令
-            df = _resolve_data_port(_db_manager, _data_port).read_panel(query, data_policy, force_refresh=True)
+            df = _resolve_data_port(_db_manager, _data_port).read_panel(
+                query, data_policy, force_refresh=True,
+                **({"refresh_days": refresh_days} if refresh_days is not None else {}),
+            )
             
             return get_data_health(df)["status"] == "fresh"
             

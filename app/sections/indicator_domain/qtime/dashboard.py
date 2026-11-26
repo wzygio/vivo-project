@@ -220,10 +220,10 @@ def render_saved_qtime_alerts(
             maintenance()
 
 
-def refresh_qtime_data(service: QTimeReportService) -> bool:
+def refresh_qtime_data(service: QTimeReportService, *, refresh_days: int) -> bool:
     """Reload historical facts/specs; discard submitted results only on success."""
     try:
-        results = service.refresh_snapshots(full_refresh=True)
+        results = service.refresh_snapshots(refresh_days=refresh_days)
     except QTimeDataAccessError:
         _mark_displayed_result_stale()
         raise

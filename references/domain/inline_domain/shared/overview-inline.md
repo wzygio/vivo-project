@@ -308,7 +308,7 @@ Particle Size 的 S/M/L/H 按比例生成属于另一个数据生成步骤，见
 
 ### 7.5 AOI_RS：按图表口径的单边 spec 截断
 
-指定厂别在专用日期窗口内改用 Sheet 半规格 → Lot 归零 → 周/日限幅，默认 OLED、2026-09-21 至当天；跨窗口 Lot 和部分周期有保护边界。当前规则由 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md) 维护，以下为普通单边规格口径。
+符合厂别与产品范围的图点在专用日期窗口内使用 Sheet 半规格 → Lot 归零 → 周/日限幅。生效组合、日期及跨窗口 Lot 和周期的处理见 [AOI_RS 专用修饰](../aoi_rs/rules-aoi-rs-special-decoration.md)。以下为普通单边规格口径。
 
 规格来自 `mdw.dwd_imp_rs_code_xishu_fo_tzsbjx`，按产品查询，再按
 `factory + step_id + rs_code` 匹配；同一图表口径有多条规格时取最大 `spec`。

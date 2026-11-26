@@ -107,9 +107,9 @@ powershell.exe -NoProfile -File api/inspection/register_tasks.ps1 -InspectionOnl
 
 `python -m api.inspection`中的`-m`表示按Python模块名执行程序。
 `api.inspection`对应项目中的`api/inspection/`包，实际入口文件为
-`api/inspection/__main__.py`。Windows任务的启动程序是虚拟环境的`pythonw.exe`，
-参数是`-m api.inspection`，工作目录是项目根目录；`pythonw.exe`用于隐藏控制台窗口。
-所以它仍执行Python程序，只是使用包名定位入口，不需要另建bat文件。
+`api/inspection/__main__.py`。Windows 巡检任务通过 `wscript.exe api/inspection/run_inspection.vbs` 隐藏窗口。
+脚本在项目根目录运行虚拟环境的 `python.exe -m api.inspection`，等待进程退出，并将退出码传回任务计划程序。
+巡检成功后发布各 Inline 模块的应用层预警明细。检查失败会写入对应模块的巡检回执。
 
 合并验证：314项相关测试通过；禁止数据库连接的真实预热成功生成91格（79达标、
 3预警、9无数据、0加载失败）。已备份并撤销独立预热任务，保留的任务仍为每日07:15，
