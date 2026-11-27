@@ -524,7 +524,7 @@ def test_gui_timeout_is_forwarded_by_main(monkeypatch):
 def test_gui_debug_page_sends_all_api_fields_and_never_exports_a_page(monkeypatch, cursor):
     tk = pytest.importorskip('tkinter')
     from types import SimpleNamespace
-    from api.schemas import AnomalyQuery
+    from api.anomaly.schemas import AnomalyQuery
 
     filters = dict(product='Z576', sub_domain='SPC', event_type='CPM', factory='ARRAY', step_id='1W450',
                    parameter_name='OVL1_Y', entity_type='capability', entity_id='0001', layer='M3',

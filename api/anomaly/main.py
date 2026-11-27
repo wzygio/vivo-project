@@ -15,11 +15,11 @@ from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 from starlette.responses import Response
 
-from api.schemas import AnomalyQuery, AnomalyResponse, ResultMeta
-from api.settings import ApiClient, ApiSettings, load_clients
-from api.pagination import CursorError, PublicSnapshots, SnapshotExpired, SnapshotLimit
-from api.limits import BoundedReads, RateLimit, ReadBusy, ReadTimeout
-from api.query import AllSourcesUnavailable, ForbiddenQuery, InvalidQuery, resolve_query
+from api.anomaly.schemas import AnomalyQuery, AnomalyResponse, ResultMeta
+from api.anomaly.settings import ApiClient, ApiSettings, load_clients
+from api.anomaly.pagination import CursorError, PublicSnapshots, SnapshotExpired, SnapshotLimit
+from api.anomaly.limits import BoundedReads, RateLimit, ReadBusy, ReadTimeout
+from api.anomaly.query import AllSourcesUnavailable, ForbiddenQuery, InvalidQuery, resolve_query
 
 
 def create_app(*, service: Any = None, clients_provider: Callable = load_clients,
@@ -29,7 +29,7 @@ def create_app(*, service: Any = None, clients_provider: Callable = load_clients
         from src.shared_kernel.config import ConfigLoader
         enabled_products = lambda: ConfigLoader.get_enabled_products(strict=True)
     if service is None:
-        from api.composition import build_service
+        from api.anomaly.composition import build_service
         service = build_service()
     settings = settings or ApiSettings()
     snapshots = PublicSnapshots(settings)

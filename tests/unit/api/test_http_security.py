@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 import pytest
 
-from api.main import create_app
-from api.settings import ApiClient, ApiSettings
+from api.anomaly.main import create_app
+from api.anomaly.settings import ApiClient, ApiSettings
 
 ENDPOINT = "/api/v1/sheet-anomalies"
 KEY = "synthetic-security-test-key-not-a-real-credential"

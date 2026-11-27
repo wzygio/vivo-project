@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from tools import anomaly_api_service as host
+from api.anomaly import anomaly_api_service as host
 
 
 @pytest.fixture

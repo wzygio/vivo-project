@@ -237,8 +237,8 @@ def test_corrupt_shop_sheet_is_unavailable_without_a_query_fallback(tmp_path):
 
 
 def test_station_decisions_change_report_matrix_and_api_without_republication(tmp_path, monkeypatch):
-    from api.composition import build_service
-    from api.schemas import AnomalyQuery
+    from api.anomaly.composition import build_service
+    from api.anomaly.schemas import AnomalyQuery
     from app.sections.shared.alert_results import read_alert_result
     from src.indicator_domain import composition
     from src.indicator_domain.application.qtime.decoration_service import build_qtime_decoration_workbook

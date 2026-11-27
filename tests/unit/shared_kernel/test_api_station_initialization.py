@@ -60,7 +60,7 @@ class DictionaryEngine:
 
 
 def test_cli_initialize_fetches_all_stations_and_materializes_layers(tmp_path: Path, capsys):
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     path = tmp_path / 'metadata.xlsx'
     engine = DictionaryEngine()
@@ -119,7 +119,7 @@ def test_failed_full_read_never_replaces_existing_or_creates_empty_target(tmp_pa
 
 
 def test_full_initialization_keeps_source_layer_gaps_but_api_rejects_affected_record(tmp_path: Path, capsys):
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
     from src.shared_kernel.infrastructure.api_alert_metadata import ApiAlertMetadata
 
     path = tmp_path / 'metadata.xlsx'

@@ -7,9 +7,9 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 import pytest
 
-from api.query import resolve_query
-from api.schemas import AnomalyQuery
-from api.settings import ApiClient
+from api.anomaly.query import resolve_query
+from api.anomaly.schemas import AnomalyQuery
+from api.anomaly.settings import ApiClient
 from tests.integration.test_anomaly_api_capability import capability_files
 from tests.integration.test_anomaly_api_files import HEADERS, published_files
 from tests.e2e.test_anomaly_api_sheet_membership_e2e import _live_server

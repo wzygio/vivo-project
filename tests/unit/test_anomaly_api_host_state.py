@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from tools import anomaly_api_service as host
+from api.anomaly import anomaly_api_service as host
 
 
 def test_host_state_retries_transient_windows_sharing_violation(tmp_path, monkeypatch):

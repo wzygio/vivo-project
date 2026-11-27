@@ -11,8 +11,8 @@ import secrets
 from threading import RLock
 import time
 
-from api.schemas import AnomalyQuery
-from api.settings import ApiClient, ApiSettings
+from api.anomaly.schemas import AnomalyQuery
+from api.anomaly.settings import ApiClient, ApiSettings
 
 
 class CursorError(ValueError):

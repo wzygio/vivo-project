@@ -25,7 +25,7 @@ flowchart TD
     N --> E["按责任人分派并通过 SMTP 发送"]
 ```
 
-巡检将 Inline 应用层筛选后的明细原子写入 `data/inline_domain/monitor/published_alerts/`。SPC 能力项目的完整片号单独按产品和周保存。API 读取明细及片号，按工作簿中的人工放行决定和调用方权限展示。Yield、Q-Time 已有独立的发布工作簿，API 直接读取其中覆盖查询日期的结果。巡检回执记录生产成败，矩阵快照保存看板状态。[巡检入口](../../../api/inspection/__main__.py) · [API 读取装配](../../../api/composition.py)
+巡检将 Inline 应用层筛选后的明细原子写入 `data/inline_domain/monitor/published_alerts/`。SPC 能力项目的完整片号单独按产品和周保存。API 读取明细及片号，按工作簿中的人工放行决定和调用方权限展示。Yield、Q-Time 已有独立的发布工作簿，API 直接读取其中覆盖查询日期的结果。巡检回执记录生产成败，矩阵快照保存看板状态。[巡检入口](../../../api/inspection/__main__.py) · [API 读取装配](../../../api/anomaly/composition.py)
 
 ## 2. 从巡检到一封周报
 
@@ -33,10 +33,10 @@ flowchart TD
 |---|---|
 | 生产 | 计划任务 `vivo-project Alert Inspection` 执行 `-m api.inspection`。按启用产品调用 SPC、CTQ、AOI、Yield、Q-Time、IJP、关键备件和 IQC 蒸镀的既有生产服务，按需读取源数据、计算并校验落盘结果。各模块分别记录成败，本轮生产后再预热矩阵。 |
 | 定时邮件取数 | 周一 07:20、周二 11:00 的邮件任务进入 `api.notification.scheduled`，先核对当天、有效期内、覆盖应检范围的成功回执。巡检仍在运行就等待，通过后才调用 HTTP 客户端。直接查询 8890 的普通客户端无需经过邮件的回执检查。 |
-| HTTP 查询 | 服务管理入口是 `tools/anomaly_api_service.py`，业务路由是 `GET /api/v1/sheet-anomalies`。邮件带凭证但不传查询参数，默认取上海时区上一完整 ISO 周、已启用且获授权的产品及所支持的事件，默认不分页。API 按产品、分类和事件逐项读取，再按厂别权限、公开策略与释放条件筛选、汇总。 |
+| HTTP 查询 | 服务管理入口是 `api/anomaly/anomaly_api_service.py`，业务路由是 `GET /api/v1/sheet-anomalies`。邮件带凭证但不传查询参数，默认取上海时区上一完整 ISO 周、已启用且获授权的产品及所支持的事件，默认不分页。API 按产品、分类和事件逐项读取，再按厂别权限、公开策略与释放条件筛选、汇总。 |
 | 返回与投递 | 正常无异常的来源贡献零行。部分来源不可用时返回 HTTP 200、`complete=false` 和 `failed_sources`；选中来源全部读取失败时返回 503。邮件对 HTTP 结果另行应用不完整结果策略，并按责任人合并投递；完整且零条时不发邮件。 |
 
-巡检范围大于 HTTP 范围。API 目前支持 SPC 的 OOS、OOC、CPK、CPM，CTQ、AOI_TT、AOI_RS 的 OOS、OOC，以及 Yield 的 Lot OOS 和 Q-Time 的 OOS。IJP、备件、IQC 蒸镀、AOI 趋势和 Yield 趋势虽由巡检生产，零参数邮件也不会从此接口取到这些项目。[事件范围与聚合](../../../api/query.py) · [HTTP 路由](../../../api/main.py) · [邮件取数](../../../api/notification/infrastructure.py) · [定时邮件门禁](../../../api/notification/scheduled.py) · [邮件规则](notification/rules-alert-notification.md)
+巡检范围大于 HTTP 范围。API 目前支持 SPC 的 OOS、OOC、CPK、CPM，CTQ、AOI_TT、AOI_RS 的 OOS、OOC，以及 Yield 的 Lot OOS 和 Q-Time 的 OOS。IJP、备件、IQC 蒸镀、AOI 趋势和 Yield 趋势虽由巡检生产，零参数邮件也不会从此接口取到这些项目。[事件范围与聚合](../../../api/anomaly/query.py) · [HTTP 路由](../../../api/anomaly/main.py) · [邮件取数](../../../api/notification/infrastructure.py) · [定时邮件门禁](../../../api/notification/scheduled.py) · [邮件规则](notification/rules-alert-notification.md)
 
 ## 3. 12 小时具体约束什么
 

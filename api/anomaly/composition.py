@@ -7,8 +7,8 @@ from typing import Any
 
 import pandas as pd
 
-from api.schemas import AnomalyQuery
-from api.service import PublishedAnomalyService
+from api.anomaly.schemas import AnomalyQuery
+from api.anomaly.service import PublishedAnomalyService
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.core.alert_visibility import parse_matrix_config
 from src.shared_kernel.infrastructure.api_alert_metadata import ApiAlertMetadata

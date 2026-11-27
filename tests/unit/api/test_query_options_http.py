@@ -7,9 +7,9 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 import pytest
 
-from api.main import create_app
-from api.schemas import AnomalyQuery
-from api.settings import ApiClient, ApiSettings
+from api.anomaly.main import create_app
+from api.anomaly.schemas import AnomalyQuery
+from api.anomaly.settings import ApiClient, ApiSettings
 
 KEY = 'synthetic-query-options-not-a-real-key'
 HEADERS = {'X-API-Key': KEY}

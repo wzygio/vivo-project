@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from tools import anomaly_api_service as host
+from api.anomaly import anomaly_api_service as host
 
 pytestmark = pytest.mark.skipif(os.name != 'nt', reason='Windows user-session host')
 

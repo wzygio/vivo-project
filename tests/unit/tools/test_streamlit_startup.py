@@ -40,14 +40,25 @@ def test_hidden_launcher_waits_and_returns_batch_exit_code(tmp_path, exit_code):
     assert result.returncode == exit_code, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize("exit_code", [0, 23])
-def test_batch_launcher_returns_powershell_exit_code(tmp_path, exit_code):
+@pytest.mark.parametrize("streamlit_exit, api_exit, expected", [(0, 0, 0), (23, 0, 23), (0, 2, 2), (23, 2, 23)])
+def test_batch_launcher_restarts_both_services_and_returns_failure(tmp_path, streamlit_exit, api_exit, expected):
     project = tmp_path / "project with spaces"
     (project / "tools").mkdir(parents=True)
+    (project / "api/anomaly").mkdir(parents=True)
     shutil.copyfile(ROOT / "start_streamlit.bat", project / "start_streamlit.bat")
-    (project / "tools/restart_streamlit.ps1").write_text(f"exit {exit_code}\n", encoding="ascii")
+    shutil.copyfile(ROOT / "start_anomaly_api.cmd", project / "start_anomaly_api.cmd")
+    for path, name, code in (
+        ("tools/restart_streamlit.ps1", "Streamlit", streamlit_exit),
+        ("api/anomaly/start_anomaly_api.ps1", "API", api_exit),
+    ):
+        (project / path).write_text(
+            f"Add-Content -LiteralPath 'calls.txt' -Value '{name}'\nexit {code}\n",
+            encoding="ascii",
+        )
     result = subprocess.run(
         [os.environ["ComSpec"], "/d", "/c", str(project / "start_streamlit.bat")],
-        capture_output=True, text=True, timeout=10,
+        cwd=tmp_path, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=10,
     )
-    assert result.returncode == exit_code, result.stdout + result.stderr
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert (tmp_path / "calls.txt").read_text().splitlines() == ["Streamlit", "API"]
+    assert "Press any key" not in result.stdout

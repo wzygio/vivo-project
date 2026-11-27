@@ -1,1 +1,1 @@
-"""Independent HTTP presentation adapter for published quality results."""
+"""Project APIs and related operational subdomains."""

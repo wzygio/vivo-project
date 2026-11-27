@@ -45,19 +45,20 @@ flowchart TD
 
 | 层次 | 主要位置 | 职责 |
 |---|---|---|
-| HTTP 入口 | `api/main.py`、`api/schemas.py` | 定义路由、校验参数、鉴权、统一状态码和响应字段 |
-| 查询协调 | `api/query.py`、`api/limits.py` | 解析授权与默认日期，拆分产品／分类查询，控制读取并发和部分失败 |
-| 公开投影 | `api/service.py` | 读取公开可见的、已明确释放的记录，统一对象身份、字段和筛选 |
-| 跨域装配 | `api/composition.py` | 连接各领域现有结果读取器、站点字典和公开政策 |
-| 分页管理 | `api/pagination.py` | 保存有界公开快照、签发和校验下一页游标 |
-| 配置与共享读取 | `api/settings.py`、`src/shared_kernel/infrastructure/` | 调用方配置、有界工作簿缓存、本地站点字典 |
+| HTTP 入口 | `api/anomaly/main.py`、`api/anomaly/schemas.py` | 定义路由、校验参数、鉴权、统一状态码和响应字段 |
+| 查询协调 | `api/anomaly/query.py`、`api/anomaly/limits.py` | 解析授权与默认日期，拆分产品／分类查询，控制读取并发和部分失败 |
+| 公开投影 | `api/anomaly/service.py` | 读取公开可见的、已明确释放的记录，统一对象身份、字段和筛选 |
+| 跨域装配 | `api/anomaly/composition.py` | 连接各领域现有结果读取器、站点字典和公开政策 |
+| 分页管理 | `api/anomaly/pagination.py` | 保存有界公开快照、签发和校验下一页游标 |
+| 配置与共享读取 | `api/anomaly/settings.py`、`src/shared_kernel/infrastructure/` | 调用方配置、有界工作簿缓存、本地站点字典 |
 | 领域能力 | Inline monitor、Indicator qtime、Yield 发布结果模块 | 各自维护发布协议、日期覆盖及来源有效性 |
 | 能力项查询 | `src/inline_domain/application/monitor/capability_alert_query.py` | 只读已维护 CPK／CPM 台账，复用核心规则筛选完整 ISO 周，不维护汇总 |
 | 能力项片号 | `src/inline_domain/application/spc/sheet_membership.py` | 从 SPC 制备点位发布完整周成员；HTTP 只读已发布成员，按业务键和目标周查询 |
-| Windows 托管 | `tools/anomaly_api_service.py` | 注入凭证摘要、启动和监督单个 API worker、管理本次进程及日志 |
-| 一键入口 | `start_anomaly_api.cmd`、`tools/start_anomaly_api.ps1` | 验证部署配置，停止本部署旧进程，启动新实例并核实服务就绪 |
+| Windows 托管 | `api/anomaly/anomaly_api_service.py` | 注入凭证摘要、启动和监督单个 API worker、管理本次进程及日志 |
+| 部署与维护 | `api/anomaly/setup_anomaly_api_credentials.ps1`、`api/anomaly/sync_api_alert_metadata.py` | 配置本机调用方凭证，维护站点字典 |
+| 一键入口 | `start_anomaly_api.cmd`、`api/anomaly/start_anomaly_api.ps1` | 验证部署配置，停止本部署旧进程，启动新实例并核实服务就绪 |
 
-`api/` 是独立的接口与装配层。各领域继续拥有自己的发布规则，公共查询入口不会把 Yield 或 Q-Time 的业务所有权转给 Inline。
+`api/anomaly/` 是异常查询的接口与装配层。各领域继续拥有自己的发布规则，公共查询入口不会把 Yield 或 Q-Time 的业务所有权转给 Inline。
 
 ## 3. 一次请求怎样处理
 
@@ -136,9 +137,9 @@ API Key 是本项目选择的认证方式，用于绑定调用方、数据授权
 
 | 目的 | 入口 |
 |---|---|
-| 查看接口和错误处理 | [main.py](../../../api/main.py)、[schemas.py](../../../api/schemas.py) |
-| 查看查询与公开字段 | [query.py](../../../api/query.py)、[service.py](../../../api/service.py) |
-| 查看跨领域装配 | [composition.py](../../../api/composition.py) |
+| 查看接口和错误处理 | [main.py](../../../api/anomaly/main.py)、[schemas.py](../../../api/anomaly/schemas.py) |
+| 查看查询与公开字段 | [query.py](../../../api/anomaly/query.py)、[service.py](../../../api/anomaly/service.py) |
+| 查看跨领域装配 | [composition.py](../../../api/anomaly/composition.py) |
 | 查看缓存和元数据 | [工作簿缓存](../../../src/shared_kernel/infrastructure/api_workbook_cache.py)、[站点元数据](../../../src/shared_kernel/infrastructure/api_alert_metadata.py) |
 | 验证真实临时文件到 HTTP | [文件集成测试](../../../tests/integration/test_anomaly_api_files.py) |
 | 验证查询选项 | [HTTP 查询测试](../../../tests/unit/api/test_query_options_http.py) |

@@ -57,7 +57,7 @@ capability_metadata/
 | `groups[]` | 键为 `factory`、`step_id`、`parameter_name`。`sheet_ids` 是去重并按文本排序的字符串数组。`data_start`、`data_end` 为组内点位的最早及最晚显示时间。 |
 | `groups[].anchors` | 可含 `cpk`、`cpm` 键，每个键对应锚点对象数组。每个对象包含数值 `value` 和时间 `period_start`、`period_end`，用于验证能力结果与成员集合是否匹配。 |
 
-每组保存 Sheet 集合、组级时间边界和能力记录校验字段。读取时校验产品、完整周、策略及组内身份。API 还用能力记录的实际数据跨度和指标值核对锚点。缺失或校验失败时，该来源不可用。见 [成员发布与读取校验](../../../../src/inline_domain/application/spc/sheet_membership.py)、[API 读取接线](../../../../api/composition.py)和[成员契约](../../../../docs/ADR/0042-api-sheet-membership-delivery-2026-11-04.md)。
+每组保存 Sheet 集合、组级时间边界和能力记录校验字段。读取时校验产品、完整周、策略及组内身份。API 还用能力记录的实际数据跨度和指标值核对锚点。缺失或校验失败时，该来源不可用。见 [成员发布与读取校验](../../../../src/inline_domain/application/spc/sheet_membership.py)、[API 读取接线](../../../../api/anomaly/composition.py)和[成员契约](../../../../docs/ADR/0042-api-sheet-membership-delivery-2026-11-04.md)。
 
 跨周重测在点位制备阶段按 ISO 周保留每个 Sheet／点位的最新量测。成员快照保存已经制备好的周内名单，让异常 API 直接复用能力记录对应的数据范围。对制备完毕的点位分组和去重，成本取决于扫描的点位行数。请求时从量测重算，还要完成时移、周内去重、参数分类、排除规则和点位修饰，并核对历史能力记录。以本次 M626 的六周回放为例，离线从原始快照制备约 79 万个最终点位，耗时约 21 秒。
 

@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 import pandas as pd
 import pytest
 
-from api.main import create_app
-from api.settings import ApiClient
+from api.anomaly.main import create_app
+from api.anomaly.settings import ApiClient
 from src.shared_kernel.config import ConfigLoader
 from tests.integration.test_anomaly_api_files import (
     FIXTURE_KEY, HEADERS, NOW, _write, published_files,

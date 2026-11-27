@@ -40,7 +40,7 @@ flowchart TD
     Api --> Client[获授权调用系统]
 ```
 
-HTTP入口为 `api.main:create_app`，由 [api/composition.py](../../../../../api/composition.py) 装配不同域的已发布结果消费者。不会把整个Streamlit页面当作API，也不把跨域发布职责下沉给Inline。
+HTTP入口为 `api.anomaly.main:create_app`，由 [api/anomaly/composition.py](../../api/anomaly/composition.py) 装配不同域的已发布结果消费者。不会把整个Streamlit页面当作API，也不把跨域发布职责下沉给Inline。
 
 Inline应用层的 [SheetAlertQuery](../../../../../src/inline_domain/application/monitor/sheet_alert_query.py) 消费现有ExcelAlarmReader，复用False、上一完整周、SPC参数排除、TT分类和infrastructure日期排除。原 `app/sections/shared/alert_results.py` 保留兼容包装，公开表列和页面状态语义保持。
 
@@ -100,9 +100,9 @@ Yield优先精确匹配产品＋异常Code＋Lot，没有专用Lot时再匹配lo
 
 维护工具明确区分完整初始化、离线模板与定向同步：
 
-- `tools/sync_api_alert_metadata.py --initialize`：探查规模后读取完整工序字典，初始化或刷新站点、描述及层别，保留其它工作表和历史站点。
-- `tools/sync_api_alert_metadata.py --template-only`：仅离线创建或检查空模板，不连接数据库。
-- `tools/sync_api_alert_metadata.py --step ...`：操作人员同步指定站点，API不会执行。
+- `api/anomaly/sync_api_alert_metadata.py --initialize`：探查规模后读取完整工序字典，初始化或刷新站点、描述及层别，保留其它工作表和历史站点。
+- `api/anomaly/sync_api_alert_metadata.py --template-only`：仅离线创建或检查空模板，不连接数据库。
+- `api/anomaly/sync_api_alert_metadata.py --step ...`：操作人员同步指定站点，API不会执行。
 - `tools/initialize_yield_alert_controls.py --product ...`：对启用产品旧发布初始化默认拒绝的持久决定，不刷新原发布时间。
 
 这些命令不是API GET的副作用，本次开发不自动运行它们迁移用户维护资料。正式操作需按使用说明核对维护范围。

@@ -247,7 +247,7 @@ def test_formula_like_source_values_are_not_published(tmp_path: Path) -> None:
 def test_cli_offline_template_never_constructs_database_and_preserves_existing(tmp_path: Path, monkeypatch, capsys) -> None:
     import json
     from src.shared_kernel.infrastructure import db_handler
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     def forbidden():
         raise AssertionError("Database must not be created for initialization")
@@ -273,7 +273,7 @@ def test_cli_offline_template_never_constructs_database_and_preserves_existing(t
 
 def test_cli_initialization_reports_populated_dictionary_without_rewriting(tmp_path: Path, capsys) -> None:
     import json
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     path = tmp_path / 'metadata.xlsx'
     _write(path, [{'step_id': '00100', 'description': 'PI2_CURE'}], [
@@ -299,7 +299,7 @@ def test_cli_initialization_rejects_invalid_existing_dictionary_without_database
 ) -> None:
     import json
     from src.shared_kernel.infrastructure import db_handler
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     def forbidden():
         raise AssertionError('Initialization must not access database')
@@ -314,7 +314,7 @@ def test_cli_initialization_rejects_invalid_existing_dictionary_without_database
 
 
 def test_cli_rejects_combining_full_initialization_with_partial_selection(tmp_path: Path) -> None:
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     path = tmp_path / 'metadata.xlsx'
     with pytest.raises(SystemExit) as error:
@@ -341,7 +341,7 @@ def forbidden():
     raise AssertionError("Initialization must not construct database")
 db_handler.DatabaseManager = forbidden
 sys.argv = ["sync_api_alert_metadata", "--template-only"]
-runpy.run_module("tools.sync_api_alert_metadata", run_name="__main__")
+runpy.run_module("api.anomaly.sync_api_alert_metadata", run_name="__main__")
 '''
     result = subprocess.run([sys.executable, '-c', code, str(path)],
                             cwd=Path(__file__).resolve().parents[3],
@@ -357,7 +357,7 @@ runpy.run_module("tools.sync_api_alert_metadata", run_name="__main__")
 def test_cli_resolves_registry_and_uses_explicit_engine(tmp_path: Path, monkeypatch, capsys) -> None:
     import json
     from src.shared_kernel.config import ConfigLoader
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     path = tmp_path / "metadata.xlsx"
     initialize(path)
@@ -373,7 +373,7 @@ def test_cli_resolves_registry_and_uses_explicit_engine(tmp_path: Path, monkeypa
 
 @pytest.mark.parametrize("arguments", [[], ["--step", ""], ["--step", "001", "--max-rows", "0"], ["--step", "001", "--timeout-ms", "60001"]])
 def test_cli_rejects_unbounded_or_invalid_request(tmp_path: Path, arguments) -> None:
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     path = tmp_path / "metadata.xlsx"
     with pytest.raises(SystemExit) as result:
@@ -385,7 +385,7 @@ def test_cli_rejects_unbounded_or_invalid_request(tmp_path: Path, arguments) -> 
 def test_cli_does_not_query_database_if_template_is_missing(tmp_path: Path, monkeypatch, capsys) -> None:
     import json
     from src.shared_kernel.infrastructure import db_handler
-    from tools.sync_api_alert_metadata import main
+    from api.anomaly.sync_api_alert_metadata import main
 
     def forbidden():
         raise AssertionError("Database must not be created without an initialized target")

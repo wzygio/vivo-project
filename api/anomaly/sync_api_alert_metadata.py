@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 for import_path in (ROOT, ROOT / "src"):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))

@@ -11,7 +11,7 @@ for import_path in (ROOT, ROOT / "src"):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from api.main import create_app
+from api.anomaly.main import create_app
 
 
 class EmptyService:

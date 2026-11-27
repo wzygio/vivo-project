@@ -18,8 +18,8 @@ import psutil
 import pytest
 import uvicorn
 
-from api.main import create_app
-from api.settings import ApiClient
+from api.anomaly.main import create_app
+from api.anomaly.settings import ApiClient
 from src.shared_kernel.config import ConfigLoader
 from src.shared_kernel.infrastructure.db_handler import DatabaseManager
 from tests.integration.test_anomaly_api_capability import (
@@ -204,6 +204,7 @@ def test_published_member_files_reach_real_http_caller_and_complete_exports(capa
         oos_rows.iloc[[0]].assign(sheet_id='NULL_BOUNDARY', oos_type=None),
         oos_rows.iloc[[0]].assign(sheet_id='LOWER_BOUNDARY', oos_type='lower'),
     ], ignore_index=True)})
+    files.publish('spc', 'OOS')
     # P2 has no publication decision. A query spanning both products must report its missing policy.
     _write(files.policy_path, {'全指标预警看板': files.policy.drop(columns='P2', errors='ignore')})
     monkeypatch.setattr(ConfigLoader, 'get_enabled_products', lambda **_: ['P1', 'P2'])

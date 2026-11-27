@@ -8,10 +8,10 @@ from fastapi.testclient import TestClient
 import pandas as pd
 import pytest
 
-from api.main import create_app
-from api.schemas import AnomalyQuery
-from api.service import PublishedAnomalyService, ResultUnavailable
-from api.settings import ApiClient, ApiSettings
+from api.anomaly.main import create_app
+from api.anomaly.schemas import AnomalyQuery
+from api.anomaly.service import PublishedAnomalyService, ResultUnavailable
+from api.anomaly.settings import ApiClient, ApiSettings
 
 
 DAY = date(2026, 11, 4)

@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from api.schemas import AnomalyQuery, AnomalyRecord
-from api.service import PublishedAnomalyService
+from api.anomaly.schemas import AnomalyQuery, AnomalyRecord
+from api.anomaly.service import PublishedAnomalyService
 from src.shared_kernel.infrastructure.api_alert_metadata import (
     STATION_COLUMNS,
     ApiAlertMetadata,

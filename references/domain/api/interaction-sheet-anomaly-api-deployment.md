@@ -35,7 +35,9 @@ API 与 Streamlit 报表独立运行。关闭报表页面不等于关闭 API；�
 
 ### 3.1 已完成首次配置：双击启动／重启
 
-在项目根目录双击 [start_anomaly_api.cmd](../../../start_anomaly_api.cmd)。它会调用 [PowerShell 启动脚本](../../../tools/start_anomaly_api.ps1)，自动定位项目虚拟环境，并复用 [后台托管工具](../../../tools/anomaly_api_service.py)。不需要先激活环境，也不需要管理员权限。
+异常查询服务及部署脚本集中在 `api/anomaly/`。已有计划任务和登录快捷方式可通过 `tools/` 中的兼容入口调用迁移后的服务。
+
+在项目根目录双击 [start_anomaly_api.cmd](../../../start_anomaly_api.cmd)。它会调用 [PowerShell 启动脚本](../../../api/anomaly/start_anomaly_api.ps1)，自动定位项目虚拟环境，并复用 [后台托管工具](../../../api/anomaly/anomaly_api_service.py)。不需要先激活环境，也不需要管理员权限。
 
 启动脚本执行以下操作：
 
@@ -52,7 +54,7 @@ API 与 Streamlit 报表独立运行。关闭报表页面不等于关闭 API；�
 也可在项目根目录的 PowerShell 中执行，便于看到退出状态：
 
 ```powershell
-.\tools\start_anomaly_api.ps1
+.\api\anomaly\start_anomaly_api.ps1
 ```
 
 脚本退出码：`0` 表示本次已核实服务就绪，`2` 表示启动或核实失败。CMD 窗口会保留提示，按任意键后关闭。若企业策略阻止运行 PowerShell 脚本，请由 IT 按策略处理；不要为了启动服务全局放宽脚本执行策略。
@@ -62,7 +64,7 @@ API 与 Streamlit 报表独立运行。关闭报表页面不等于关闭 API；�
 如果提示缺少 `deployment.json`，先在项目根目录运行：
 
 ```powershell
-powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
+powershell.exe -NoProfile -STA -File api/anomaly/setup_anomaly_api_credentials.ps1
 ```
 
 窗口要求输入并确认自行保管的随机密钥，范围为 32～256 个无空格 ASCII 字符。请先在密码管理器中生成并保存。现有设置窗口使用已批准的 7 个产品、ARRAY／OLED／TP 和全部 6 类来源；新部署范围不同，应先由维护者调整授权方案。
@@ -74,7 +76,7 @@ powershell.exe -NoProfile -STA -File tools/setup_anomaly_api_credentials.ps1
 从项目根目录查看状态：
 
 ```powershell
-uv run --no-sync python tools/anomaly_api_service.py status
+uv run --no-sync python api/anomaly/anomaly_api_service.py status
 ```
 
 重点看 `supervisor_alive`、`listener_owned`、`ready` 是否均为 `true`；`status=running` 单独不能证明服务正常。`ready=true` 只检查服务配置，不保证每个业务来源可用。
@@ -119,13 +121,13 @@ Get-NetTCPConnection -State Listen -LocalPort 8890 |
 维护时如需停止，由维护者执行：
 
 ```powershell
-uv run --no-sync python tools/anomaly_api_service.py stop
+uv run --no-sync python api/anomaly/anomaly_api_service.py stop
 ```
 
 更新程序或调用方授权后，安排维护时间，双击一键脚本即可完成停止和重新启动，无需先手动停止。也可以在项目根目录执行：
 
 ```powershell
-uv run --no-sync python tools/anomaly_api_service.py restart
+uv run --no-sync python api/anomaly/anomaly_api_service.py restart
 ```
 
 托管工具核实部署身份、PID 与创建时间后只处理自己记录的 API 进程，不停止 Streamlit。重启会使旧分页游标失效。
@@ -133,7 +135,7 @@ uv run --no-sync python tools/anomaly_api_service.py restart
 首次设置会创建当前用户启动目录下的 `Tianzhu Anomaly API.lnk`。已有配置但尚未安装登录启动项时，可在确认没有同名启动项且服务已停止后执行：
 
 ```powershell
-uv run --no-sync python tools/anomaly_api_service.py start --install-startup
+uv run --no-sync python api/anomaly/anomaly_api_service.py start --install-startup
 ```
 
 该选项用于新启动流程，服务已运行时不会补装，需由维护者安排停止后再执行。已有同名项时先核实，不要重复安装。
@@ -247,7 +249,7 @@ API Key 不是 HTTP／API 技术上的必选项，而是当前服务采用的认
 确认 8890 未被正式实例或其它程序占用，并在当前终端准备好第 4.2 节的 `VIVO_API_CLIENTS` 后，从项目根目录执行：
 
 ```powershell
-uv run --no-sync python -m uvicorn api.main:create_app --factory --host 127.0.0.1 --port 8890 --workers 1 --no-access-log
+uv run --no-sync python -m uvicorn api.anomaly.main:create_app --factory --host 127.0.0.1 --port 8890 --workers 1 --no-access-log
 ```
 
 你看到的旧写法 `.venv/Scripts/python.exe -m uvicorn ...` 也是同样的启动方式，只是直接指定项目 Python 的路径；本文现已统一使用上面的 uv 写法。
@@ -256,7 +258,7 @@ uv run --no-sync python -m uvicorn api.main:create_app --factory --host 127.0.0.
 |---|---|
 | `uv run --no-sync python` | 使用已经准备好的项目 Python 环境，不在本次启动时同步依赖 |
 | `-m uvicorn` | 运行 Uvicorn。它负责监听网络请求，并将请求交给 API 程序处理；uv 与 Uvicorn 是两个不同工具 |
-| `api.main:create_app` | 在 `api/main.py` 中找到创建 API 应用的 `create_app` 函数 |
+| `api.anomaly.main:create_app` | 在 `api/anomaly/main.py` 中找到创建 API 应用的 `create_app` 函数 |
 | `--factory` | 调用这个函数，得到本次要运行的 API 应用 |
 | `--host 127.0.0.1` | 只接受这台电脑上的访问，其它电脑无法通过此监听地址调用 |
 | `--port 8890` | 使用 8890 端口；同一监听地址的该端口不能再被其它实例占用 |
@@ -285,7 +287,7 @@ uv run --no-sync python -m uvicorn api.main:create_app --factory --host 127.0.0.
 ### 5.1 初始化本地元数据
 
 ```powershell
-uv run --no-sync python tools/sync_api_alert_metadata.py --initialize
+uv run --no-sync python api/anomaly/sync_api_alert_metadata.py --initialize
 ```
 
 这个命令会连接数据库，**读取完整工序字典并生成本地站点、描述、层别映射**，不再只是创建空模板。文件不存在时创建；已有文件时刷新匹配站点，保留其它工作表及本次源字典未包含的历史站点，并在替换前备份。配置键为 `resources.shared_kernel.files.api_alert_metadata`，默认位置为 `resources/shared_kernel/shared/api_alert_metadata.xlsx`，这是需要保留的维护资料。
@@ -328,7 +330,7 @@ HTTP 请求仍只读本地文件，不连接数据库。`layer` 为派生列，A
 已完成全量初始化后，只想更新个别站点时，可以执行下面的定向同步命令，无需每次重新读取完整字典。它和 5.1 都会访问数据库，但都独立于 API 请求：
 
 ```powershell
-uv run --no-sync python tools/sync_api_alert_metadata.py --step "00100" --step "00200" --timeout-ms 10000 --max-rows 10000
+uv run --no-sync python api/anomaly/sync_api_alert_metadata.py --step "00100" --step "00200" --timeout-ms 10000 --max-rows 10000
 ```
 
 先查询 `mdw.dwr_mes_processoperationspec_v`，SQL 执行失败才回退 `mdw.dwr_mes_processoperationspec`，按 `oper_code` 与 `description` 形成映射。查询使用明确站点集合、参数绑定、返回条数上限和事务内超时；每次最多指定 1,000 个站点，返回上限最多 10,000 行，超时范围 1～60,000 毫秒。

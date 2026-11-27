@@ -22,15 +22,17 @@ pytestmark = pytest.mark.skipif(os.name != 'nt', reason='Windows API launcher')
 def isolated_host(monkeypatch):
     directory = ROOT / 'output/test-results/api-one-click-restart' / uuid4().hex
     project = directory / 'isolated project'
-    scripts, tools, api = (project / name for name in ('.venv/Scripts', 'tools', 'api'))
+    scripts, tools, api = (project / name for name in ('.venv/Scripts', 'tools', 'api/anomaly'))
     for path in (scripts, tools, api):
         path.mkdir(parents=True)
     shutil.copy2(sys.executable, scripts / 'python.exe')
     shutil.copy2(Path(sys.executable).parents[1] / 'pyvenv.cfg', project / '.venv/pyvenv.cfg')
     for name in ('anomaly_api_service.py', 'start_anomaly_api.ps1'):
-        shutil.copy2(ROOT / 'tools' / name, tools / name)
+        shutil.copy2(ROOT / 'api/anomaly' / name, api / name)
     shutil.copy2(ROOT / 'start_anomaly_api.cmd', project / 'start_anomaly_api.cmd')
-    shutil.copy2(ROOT / 'api/settings.py', api / 'settings.py')
+    shutil.copy2(ROOT / 'api/anomaly/settings.py', api / 'settings.py')
+    shutil.copy2(ROOT / 'tools/anomaly_api_service.py', tools / 'anomaly_api_service.py')
+    (api.parent / '__init__.py').write_text('', encoding='utf-8')
     (api / '__init__.py').write_text('', encoding='utf-8')
     (api / 'main.py').write_text('''from fastapi import FastAPI
 def create_app():
@@ -56,7 +58,7 @@ def create_app():
     }), encoding='utf-8')
     original_path = list(sys.path)
     spec = importlib.util.spec_from_file_location('isolated_host_' + uuid4().hex,
-                                                 tools / 'anomaly_api_service.py')
+                                                 api / 'anomaly_api_service.py')
     host = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(host)
     records = {}
@@ -84,7 +86,7 @@ def create_app():
 
     def run_launcher():
         # Record the command process immediately, before waiting for its children.
-        process = subprocess.Popen(['powershell.exe', '-NoProfile', '-File', str(tools / 'start_anomaly_api.ps1')],
+        process = subprocess.Popen(['powershell.exe', '-NoProfile', '-File', str(api / 'start_anomaly_api.ps1')],
                                    cwd=project, env=os.environ.copy(), stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
         record([host.identity(psutil.Process(process.pid))])
@@ -128,7 +130,9 @@ def create_app():
 def test_one_click_replaces_old_process_family_and_keeps_profile(isolated_host):
     fixture = isolated_host
     before = fixture.profile.read_bytes()
-    fixture.run_launcher()
+    subprocess.run([str(fixture.project / '.venv/Scripts/python.exe'),
+                    str(fixture.project / 'tools/anomaly_api_service.py'), 'start'],
+                   cwd=fixture.project, capture_output=True, check=True, timeout=40)
     previous = json.loads(fixture.host.STATE.read_text(encoding='utf-8'))
     fixture.remember()
     fixture.run_launcher()

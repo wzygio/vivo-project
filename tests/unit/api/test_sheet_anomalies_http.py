@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 
 def test_authorized_caller_gets_only_public_fields():
-    from api.main import create_app
-    from api.settings import ApiClient
+    from api.anomaly.main import create_app
+    from api.anomaly.settings import ApiClient
 
     key = 'synthetic-test-credential-not-a-real-key'
     principal = ApiClient('demo', sha256(key.encode()).hexdigest(), ('P1',), ('ARRAY',), ('SPC',))
@@ -38,9 +38,9 @@ def test_authorized_caller_gets_only_public_fields():
 
 def test_spc_file_to_http_shares_existing_filters_and_never_writes(tmp_path, monkeypatch):
     import pandas as pd
-    from api.main import create_app
-    from api.service import PublishedAnomalyService
-    from api.settings import ApiClient
+    from api.anomaly.main import create_app
+    from api.anomaly.service import PublishedAnomalyService
+    from api.anomaly.settings import ApiClient
     from src.inline_domain.application.monitor.excel_alarm_reader import ExcelAlarmReader
     from src.inline_domain.application.monitor.sheet_alert_query import SheetAlertQuery
     from src.inline_domain.infrastructure.monitor.excel_alarm_store import ExcelAlarmStore
@@ -78,8 +78,8 @@ def test_spc_file_to_http_shares_existing_filters_and_never_writes(tmp_path, mon
 
 
 def test_cursor_pages_one_public_snapshot_and_rejects_changed_results():
-    from api.main import create_app
-    from api.settings import ApiClient
+    from api.anomaly.main import create_app
+    from api.anomaly.settings import ApiClient
     key='synthetic-pagination-key'
     principal=ApiClient('pages',sha256(key.encode()).hexdigest(),('P1',),('ARRAY',),('SPC',))
     rows=[dict(分类='SPC',发生站点='100',部门='ARRAY',层别='PI2',监控参数='THK',异常事件='OOS',
@@ -101,8 +101,8 @@ def test_cursor_pages_one_public_snapshot_and_rejects_changed_results():
 
 
 def test_unavailable_source_is_safe_json_and_does_not_echo_technical_details():
-    from api.main import create_app
-    from api.settings import ApiClient
+    from api.anomaly.main import create_app
+    from api.anomaly.settings import ApiClient
     key='synthetic-error-key'
     principal=ApiClient('errors',sha256(key.encode()).hexdigest(),('P1',),('ARRAY',),('SPC',))
     class Source:
@@ -117,8 +117,8 @@ def test_unavailable_source_is_safe_json_and_does_not_echo_technical_details():
 
 def test_client_limit_and_read_timeout_are_enforced(caplog):
     import time
-    from api.main import create_app
-    from api.settings import ApiClient, ApiSettings
+    from api.anomaly.main import create_app
+    from api.anomaly.settings import ApiClient, ApiSettings
     key='synthetic-limits-key'
     principal=ApiClient('limits',sha256(key.encode()).hexdigest(),('P1',),('ARRAY',),('SPC',))
     class SlowSource:
@@ -138,7 +138,7 @@ def test_client_limit_and_read_timeout_are_enforced(caplog):
 
 
 def test_default_all_source_budget_fits_within_portable_client_wait(monkeypatch):
-    from api.settings import ApiSettings
+    from api.anomaly.settings import ApiSettings
     from tools import fetch_sheet_anomalies as caller
 
     # The previous 30s server / 45s caller budget failed on a cold 84-source read.

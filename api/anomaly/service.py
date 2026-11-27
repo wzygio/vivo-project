@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from api.schemas import (
+from api.anomaly.schemas import (
     AnomalyQuery, AnomalyRecord, CapabilityRecord, normalize_sheet_ids,
     public_record_sort_key,
 )

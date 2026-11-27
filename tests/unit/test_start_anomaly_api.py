@@ -11,7 +11,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-LAUNCHER = ROOT / 'tools/start_anomaly_api.ps1'
+LAUNCHER = ROOT / 'api/anomaly/start_anomaly_api.ps1'
 pytestmark = pytest.mark.skipif(os.name != 'nt', reason='Windows PowerShell launcher')
 
 
@@ -22,9 +22,9 @@ def deployment(tmp_path):
     scripts.mkdir(parents=True)
     shutil.copy2(sys.executable, scripts / 'python.exe')
     shutil.copy2(Path(sys.executable).parents[1] / 'pyvenv.cfg', project / '.venv/pyvenv.cfg')
-    tools = project / 'tools'
-    tools.mkdir()
-    (tools / 'anomaly_api_service.py').write_text('''import json, os, sys
+    anomaly = project / 'api/anomaly'
+    anomaly.mkdir(parents=True)
+    (anomaly / 'anomaly_api_service.py').write_text('''import json, os, sys
 from pathlib import Path
 action = sys.argv[1]
 with Path(os.environ['HOST_TEST_CALLS']).open('a') as stream:
@@ -67,7 +67,7 @@ def test_launcher_checks_owned_readiness_and_preserves_cli_failure(deployment, m
 def test_launcher_missing_prerequisite_does_not_start_or_configure(deployment, missing):
     project, profile, calls, local = deployment
     target = {'profile': profile, 'python': project / '.venv/Scripts/python.exe',
-              'host': project / 'tools/anomaly_api_service.py'}[missing]
+              'host': project / 'api/anomaly/anomaly_api_service.py'}[missing]
     target.unlink()
     result = subprocess.run(['powershell.exe', '-NoProfile', '-File', str(LAUNCHER),
                              '-ProjectRoot', str(project)], env=dict(os.environ, LOCALAPPDATA=str(local),
@@ -79,12 +79,19 @@ def test_launcher_missing_prerequisite_does_not_start_or_configure(deployment, m
 
 
 @pytest.mark.parametrize('mode,expected', [('ready', 0), ('unready', 2)])
-def test_double_click_entry_finds_its_project_and_preserves_exit_code(deployment, mode, expected):
+@pytest.mark.parametrize('legacy', [False, True])
+def test_launcher_from_another_directory_preserves_exit_code(deployment, mode, expected, legacy):
     project, profile, calls, local = deployment
-    shutil.copy2(LAUNCHER, project / 'tools/start_anomaly_api.ps1')
+    shutil.copy2(LAUNCHER, project / 'api/anomaly/start_anomaly_api.ps1')
     entry = project / 'start_anomaly_api.cmd'
     shutil.copy2(ROOT / 'start_anomaly_api.cmd', entry)
-    result = subprocess.run(['cmd.exe', '/d', '/c', str(entry)], cwd=local,
+    command = ['cmd.exe', '/d', '/c', str(entry)]
+    if legacy:
+        old_launcher = project / 'tools/start_anomaly_api.ps1'
+        old_launcher.parent.mkdir()
+        shutil.copy2(ROOT / 'tools/start_anomaly_api.ps1', old_launcher)
+        command = ['powershell.exe', '-NoProfile', '-File', str(old_launcher)]
+    result = subprocess.run(command, cwd=local,
                             env=dict(os.environ, LOCALAPPDATA=str(local),
                             HOST_TEST_CALLS=str(calls), HOST_TEST_MODE=mode),
                             input='\n', capture_output=True, text=True, timeout=20)

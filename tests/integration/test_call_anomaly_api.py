@@ -7,8 +7,8 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 import pytest
 
-from api.main import create_app
-from api.settings import ApiClient
+from api.anomaly.main import create_app
+from api.anomaly.settings import ApiClient
 from tools import call_anomaly_api
 
 

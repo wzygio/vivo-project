@@ -23,7 +23,7 @@
 | Q-Time 计划任务注册脚本 | `tools/register_qtime_snapshot_task.ps1` 默认每天 07:00 调用上述 CLI；可通过 `-At` 调整 |
 | 预警矩阵预计算 | `tools/warm_alert_matrix.py` 计算矩阵并发布状态 JSON；`register_alert_matrix_task.ps1` 默认每天 09:02，安排在 09:00 服务重启后；固定时间触发，调用现有读取链路，不强刷所有原始快照 |
 | Inline 重建工具 | `tools/refresh_inline_snapshots.py` 是停写后的原始快照重建工具；默认只列计划，`--apply --writers-stopped` 才删除识别出的原始快照并重建，不是日常增量调度器 |
-| Streamlit 启动脚本 | `run_hidden.vbs → start_streamlit.bat → tools/restart_streamlit.ps1` 验证旧进程退出并重启服务，清空进程内存缓存；本身没有调用原始快照刷新脚本 |
+| 项目重启脚本 | `run_hidden.vbs` 调用 `start_streamlit.bat`。批处理先运行 `tools/restart_streamlit.ps1`，再调用 `start_anomaly_api.cmd --no-pause` |
 
 页头“刷新数据”在快照任务全部成功后，继续刷新缓存、重载代码、重读配置；
 “刷新缓存”直接执行后三项。两者共用同一收尾流程，详见
@@ -63,9 +63,9 @@
 磁盘原始快照、修饰工作簿与矩阵状态文件继续遵循各自的持久化和 TTL 规则。
 健康接口验证服务已就绪，不会为所有页面执行查询或预热缓存。
 
-运维命令 `powershell -File tools/restart_streamlit.ps1` 与 BAT 使用同一流程；
-日常计划任务仍使用 `run_hidden.vbs`。脚本不在启动时自动同步或升级依赖，
-依赖更新由部署时的 `uv sync` 完成。
+运维命令 `powershell -File tools/restart_streamlit.ps1` 可单独重启 Streamlit。双击
+`start_anomaly_api.cmd` 可单独重启异常查询 API，完成后保留窗口供查看结果。
+项目依赖由部署时的 `uv sync` 更新。
 
 #### Windows 部署与回归验证
 
@@ -73,10 +73,9 @@
 `Process identity changed before shutdown` 且没有新进程 PID。该错误可在旧进程
 已关闭之后中断重启；逐个复核、逐个结束的旧流程不能作为安全关闭整个进程组的依据。
 
-2026-11-20 读回本机任务 `3.天柱北极星专项报表`，两个触发器为每天 07:00 和 13:00。任务按顺序执行两个动作，工作目录均为项目根目录。
-
-1. 系统 `wscript.exe` 调用 `run_hidden.vbs`。VBS 等待 `start_streamlit.bat` 完成 Streamlit 启动检查后退出。
-2. 系统 PowerShell 隐藏、非交互执行 `tools/start_anomaly_api.ps1`，重启 8890 并核对 API 就绪状态。手动入口 `start_anomaly_api.cmd` 调用同一个脚本，随后等待按键。
+本机任务 `3.天柱北极星专项报表` 每天 07:00 和 13:00 由 `wscript.exe` 调用 `run_hidden.vbs`。
+VBS 等待 `start_streamlit.bat` 依次执行 Streamlit 和 API 的重启及就绪检查，并将退出码传回计划任务。
+两项重启都会尝试执行。任一失败时批处理返回失败，两项均失败时返回 Streamlit 的退出码。
 
 任务使用原账户的 `InteractiveToken` 登录方式，账户必须已登录（可锁屏）。启用错过后尽快执行和唤醒设置，
 保留失败重试和原有并发策略。此配置不宣称支持账户已注销或电脑已关机时启动。

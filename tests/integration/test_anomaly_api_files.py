@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 import pandas as pd
 import pytest
 
-from api.composition import DISPLAY_NAMES
-from api.main import create_app
-from api.settings import ApiClient
+from api.anomaly.composition import DISPLAY_NAMES
+from api.anomaly.main import create_app
+from api.anomaly.settings import ApiClient
 from src.indicator_domain.application.qtime.alert_results import QTimeAlertResults
 from src.indicator_domain.infrastructure.qtime.alert_workbook import QTimeAlertWorkbook
 from src.shared_kernel.config import ConfigLoader

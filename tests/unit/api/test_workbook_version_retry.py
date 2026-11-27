@@ -8,9 +8,9 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 import pytest
 
-from api.main import create_app
-from api.service import PublishedAnomalyService, ResultUnavailable
-from api.settings import ApiClient
+from api.anomaly.main import create_app
+from api.anomaly.service import PublishedAnomalyService, ResultUnavailable
+from api.anomaly.settings import ApiClient
 from src.shared_kernel.infrastructure.api_workbook_cache import (
     WorkbookLimitError, WorkbookReadError, WorkbookVersionError,
 )

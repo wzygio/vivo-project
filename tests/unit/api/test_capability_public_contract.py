@@ -4,7 +4,7 @@ from datetime import date
 from pydantic import ValidationError
 import pytest
 
-from api.schemas import CapabilityRecord, PUBLIC_RECORD_ADAPTER
+from api.anomaly.schemas import CapabilityRecord, PUBLIC_RECORD_ADAPTER
 
 
 def record(**changes):

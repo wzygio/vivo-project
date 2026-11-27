@@ -1,4 +1,4 @@
-﻿param([string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot))
+﻿param([string]$ProjectRoot = (Join-Path $PSScriptRoot '..\..'))
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -73,7 +73,7 @@ $button.Add_Click({
         } finally { $stream.Dispose() }
         $status.Text = '正在启动后台 API，请稍候……'
         $form.Refresh()
-        & (Join-Path $ProjectRoot '.venv\Scripts\python.exe') (Join-Path $ProjectRoot 'tools\anomaly_api_service.py') start --install-startup
+        & (Join-Path $ProjectRoot '.venv\Scripts\python.exe') (Join-Path $ProjectRoot 'api\anomaly\anomaly_api_service.py') start --install-startup
         if ($LASTEXITCODE -ne 0) { throw 'API startup failed; the digest profile is retained for recovery.' }
         $request = [Net.HttpWebRequest]::Create('http://127.0.0.1:8890/openapi.json')
         $request.Proxy = $null
